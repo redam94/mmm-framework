@@ -1,11 +1,14 @@
 """
-MMM Framework - Streamlit Web Application
+MMM Framework - Streamlit Web Application (Enhanced v2)
 
 A user-friendly interface for:
 - Uploading MFF data
 - Configuring model settings
 - Running Bayesian MMM
 - Visualizing results with counterfactual contributions
+- Prior vs Posterior analysis
+- Component decomposition (base, trend, seasonality, media, controls)
+- Trend analysis
 - Scenario planning and what-if analysis
 """
 
@@ -174,7 +177,9 @@ def init_session_state():
         'mmm': None,
         'results': None,
         'fitted': False,
-        'contributions': None,  # Store computed contributions
+        'contributions': None,
+        'component_decomposition': None,
+        'prior_samples': None,
         # Config state
         'kpi_name': 'Sales',
         'kpi_dimensions': 'National',
@@ -343,7 +348,7 @@ def render_sidebar():
         
         # Info
         st.caption("Built with PyMC & Streamlit")
-        st.caption("v0.2.0 - Counterfactual Contributions")
+        st.caption("v0.3.0 - Component Decomposition")
 
 
 # =============================================================================
@@ -751,6 +756,7 @@ def render_model_tab():
             0, 5, 2,
             help="Number of Fourier terms for yearly seasonality (0 = disabled)"
         )
+        st.session_state.yearly_order = yearly_order
         
         st.markdown("---")
         
@@ -898,7 +904,8 @@ def fit_model(n_chains, n_draws, n_tune, target_accept, trend_type, trend_settin
         
         st.session_state.results = results
         st.session_state.fitted = True
-        st.session_state.contributions = None  # Reset contributions
+        st.session_state.contributions = None
+        st.session_state.component_decomposition = None
         
         # Show quick diagnostics
         st.success("✓ Model fitted successfully!")
@@ -949,36 +956,71 @@ def render_results_tab():
     results = st.session_state.results
     mmm = st.session_state.mmm
     
-    # Sub-tabs for different result views
-    result_tabs = st.tabs([
+    # Determine which tabs to show based on model configuration
+    tab_list = [
         "📊 Diagnostics", 
         "🎯 Model Fit",
+        "🔄 Prior vs Posterior",
         "📉 Posteriors", 
         "📈 Response Curves", 
-        "💰 Contributions",
+        "🧩 Component Breakdown",
+        "💰 Channel Contributions",
+    ]
+    
+    # Add Trend Analysis tab if trend/seasonality is enabled
+    trend_type = st.session_state.get('trend_type', 'None')
+    yearly_order = st.session_state.get('yearly_order', 0)
+    if trend_type != 'None' or yearly_order > 0:
+        tab_list.append("📈 Trend Analysis")
+    
+    tab_list.extend([
         "🔮 Scenario Planning",
         "📋 Summary"
     ])
     
-    with result_tabs[0]:
+    result_tabs = st.tabs(tab_list)
+    
+    tab_idx = 0
+    
+    with result_tabs[tab_idx]:
         render_diagnostics(results)
+    tab_idx += 1
     
-    with result_tabs[1]:
+    with result_tabs[tab_idx]:
         render_model_fit(results, mmm)
+    tab_idx += 1
     
-    with result_tabs[2]:
+    with result_tabs[tab_idx]:
+        render_prior_vs_posterior(results, mmm)
+    tab_idx += 1
+    
+    with result_tabs[tab_idx]:
         render_posteriors(results, mmm)
+    tab_idx += 1
     
-    with result_tabs[3]:
+    with result_tabs[tab_idx]:
         render_response_curves(results, mmm)
+    tab_idx += 1
     
-    with result_tabs[4]:
+    with result_tabs[tab_idx]:
+        render_component_breakdown(results, mmm)
+    tab_idx += 1
+    
+    with result_tabs[tab_idx]:
         render_contributions(results, mmm)
+    tab_idx += 1
     
-    with result_tabs[5]:
+    # Trend Analysis tab (conditional)
+    if trend_type != 'None' or yearly_order > 0:
+        with result_tabs[tab_idx]:
+            render_trend_analysis(results, mmm)
+        tab_idx += 1
+    
+    with result_tabs[tab_idx]:
         render_scenario_planning(results, mmm)
+    tab_idx += 1
     
-    with result_tabs[6]:
+    with result_tabs[tab_idx]:
         render_summary(results, mmm)
 
 
@@ -1023,18 +1065,14 @@ def render_diagnostics(results):
     import arviz as az
     
     try:
-        # Get rhat as xarray Dataset and convert properly
         rhat_data = az.rhat(results.trace)
         
-        # Build a list of (parameter, rhat_value) tuples
         rhat_records = []
         for var_name in rhat_data.data_vars:
             values = rhat_data[var_name].values
-            # Handle scalar vs array values
             if np.ndim(values) == 0:
                 rhat_records.append({'Parameter': var_name, 'R-hat': float(values)})
             else:
-                # For array variables, flatten and create indexed names
                 flat_values = np.atleast_1d(values).flatten()
                 for i, val in enumerate(flat_values):
                     param_name = f"{var_name}[{i}]" if len(flat_values) > 1 else var_name
@@ -1097,7 +1135,6 @@ def render_model_fit(results, mmm):
     
     # For panel data, aggregate by period
     if dim_info['has_geo'] or dim_info['has_product']:
-        # Sum predictions and observed over geos/products
         y_obs_by_period = []
         y_pred_by_period = []
         y_hdi_low_by_period = []
@@ -1211,6 +1248,151 @@ def render_model_fit(results, mmm):
         
         fig_resid.update_layout(height=350, showlegend=False)
         st.plotly_chart(fig_resid, use_container_width=True)
+
+
+def render_prior_vs_posterior(results, mmm):
+    """Render prior vs posterior comparison plots."""
+    st.subheader("🔄 Prior vs Posterior")
+    
+    st.markdown("""
+    Compare how the data updated our prior beliefs. 
+    Significant differences indicate the data is informative about the parameter.
+    """)
+    
+    posterior = results.trace.posterior
+    channel_names = mmm.channel_names
+    
+    # Sample from prior if not already done
+    if st.session_state.prior_samples is None:
+        with st.spinner("Sampling from prior distribution..."):
+            try:
+                st.session_state.prior_samples = mmm.sample_prior_predictive(samples=1000)
+            except Exception as e:
+                st.error(f"Error sampling prior: {e}")
+                return
+    
+    prior = st.session_state.prior_samples
+    
+    # Parameter selection
+    param_categories = {
+        'Media Coefficients (β)': [f"beta_{ch}" for ch in channel_names],
+        'Adstock Parameters': [f"adstock_{ch}" for ch in channel_names],
+        'Saturation Parameters (λ)': [f"sat_lam_{ch}" for ch in channel_names],
+        'Other': ['intercept', 'sigma']
+    }
+    
+    # Add trend parameters if present
+    trend_params = []
+    for var in posterior.data_vars:
+        if 'trend' in var or 'spline' in var or 'gp' in var:
+            trend_params.append(var)
+    if trend_params:
+        param_categories['Trend Parameters'] = trend_params
+    
+    # Add seasonality if present
+    season_params = [v for v in posterior.data_vars if 'season' in v]
+    if season_params:
+        param_categories['Seasonality'] = season_params
+    
+    selected_category = st.selectbox(
+        "Parameter Category",
+        options=list(param_categories.keys())
+    )
+    
+    params_to_plot = param_categories[selected_category]
+    
+    # Filter to available parameters
+    available_params = [p for p in params_to_plot if p in posterior and p in prior.prior]
+    
+    if not available_params:
+        st.info("No parameters available for comparison in this category.")
+        return
+    
+    # Create comparison plots
+    n_params = len(available_params)
+    n_cols = min(3, n_params)
+    n_rows = (n_params + n_cols - 1) // n_cols
+    
+    fig = make_subplots(
+        rows=n_rows, cols=n_cols,
+        subplot_titles=[p.replace('_', ' ').title() for p in available_params]
+    )
+    
+    for idx, param in enumerate(available_params):
+        row = idx // n_cols + 1
+        col = idx % n_cols + 1
+        
+        # Get prior samples
+        prior_samples = prior.prior[param].values.flatten()
+        
+        # Get posterior samples
+        posterior_samples = posterior[param].values.flatten()
+        
+        # Add prior histogram
+        fig.add_trace(
+            go.Histogram(
+                x=prior_samples,
+                name='Prior',
+                opacity=0.5,
+                marker_color='blue',
+                nbinsx=50,
+                histnorm='probability density',
+                showlegend=(idx == 0)
+            ),
+            row=row, col=col
+        )
+        
+        # Add posterior histogram
+        fig.add_trace(
+            go.Histogram(
+                x=posterior_samples,
+                name='Posterior',
+                opacity=0.5,
+                marker_color='red',
+                nbinsx=50,
+                histnorm='probability density',
+                showlegend=(idx == 0)
+            ),
+            row=row, col=col
+        )
+    
+    fig.update_layout(
+        height=300 * n_rows,
+        barmode='overlay',
+        title="Prior (blue) vs Posterior (red) Distributions",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Summary statistics table
+    st.markdown("### Prior vs Posterior Summary")
+    
+    summary_data = []
+    for param in available_params:
+        prior_samples = prior.prior[param].values.flatten()
+        posterior_samples = posterior[param].values.flatten()
+        
+        summary_data.append({
+            'Parameter': param.replace('_', ' ').title(),
+            'Prior Mean': prior_samples.mean(),
+            'Prior Std': prior_samples.std(),
+            'Posterior Mean': posterior_samples.mean(),
+            'Posterior Std': posterior_samples.std(),
+            'Std Reduction (%)': (1 - posterior_samples.std() / (prior_samples.std() + 1e-8)) * 100
+        })
+    
+    summary_df = pd.DataFrame(summary_data)
+    summary_df = summary_df.round(4)
+    
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    
+    st.info("""
+    💡 **Interpretation:**
+    - **Std Reduction %**: Higher values indicate the data is more informative for that parameter.
+    - If prior and posterior are similar, the data provides little information about that parameter.
+    - Large shifts from prior to posterior mean indicate strong evidence from the data.
+    """)
 
 
 @st.fragment
@@ -1332,58 +1514,6 @@ def render_posteriors(results, mmm):
         st.plotly_chart(fig, use_container_width=True)
 
 
-@st.cache_resource
-def plot_all_channels(response_data, colors, show_observed):
-    """Create response curves plot for all channels."""
-    fig = go.Figure()
-    
-    for i, data in enumerate(response_data):
-        color = colors[i % len(colors)]
-        color_rgba = rgb_to_rgba(color, 0.2)
-        
-        # HDI band
-        fig.add_trace(go.Scatter(
-            x=np.concatenate([data['x'], data['x'][::-1]]),
-            y=np.concatenate([data['hdi_high'], data['hdi_low'][::-1]]),
-            fill='toself',
-            fillcolor=color_rgba,
-            line=dict(color='rgba(0,0,0,0)'),
-            name=f"{data['channel']} HDI",
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Mean curve
-        fig.add_trace(go.Scatter(
-            x=data['x'],
-            y=data['mean'],
-            mode='lines',
-            name=data['channel'],
-            line=dict(color=color, width=2)
-        ))
-        
-        # Observed spend range
-        if show_observed:
-            fig.add_vline(
-                x=data['spend_max'],
-                line_dash="dash",
-                line_color=color,
-                opacity=0.5,
-                annotation_text=f"{data['channel']} max",
-                annotation_position="top"
-            )
-    
-    fig.update_layout(
-        title="Response Curves by Channel",
-        xaxis_title="Media Spend",
-        yaxis_title="Contribution to Sales",
-        height=500,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        hovermode='x unified'
-    )
-    return fig
-
-
 @st.fragment
 def render_response_curves(results, mmm):
     """Render response curves with HDI bands."""
@@ -1411,7 +1541,7 @@ def render_response_curves(results, mmm):
         show_observed = st.checkbox("Show Observed Spend", value=True,
                                    help="Mark the range of observed spend values", key="rc_observed")
     
-    # Compute response curves for each channel with caching
+    # Compute response curves for each channel
     response_data = []
     
     for c, channel in enumerate(channel_names):
@@ -1460,7 +1590,53 @@ def render_response_curves(results, mmm):
     # Plot
     with col2:
         colors = px.colors.qualitative.Set2
-        fig = plot_all_channels(response_data, colors, show_observed)
+        
+        fig = go.Figure()
+        
+        for i, data in enumerate(response_data):
+            color = colors[i % len(colors)]
+            color_rgba = rgb_to_rgba(color, 0.2)
+            
+            # HDI band
+            fig.add_trace(go.Scatter(
+                x=np.concatenate([data['x'], data['x'][::-1]]),
+                y=np.concatenate([data['hdi_high'], data['hdi_low'][::-1]]),
+                fill='toself',
+                fillcolor=color_rgba,
+                line=dict(color='rgba(0,0,0,0)'),
+                name=f"{data['channel']} HDI",
+                showlegend=False,
+                hoverinfo='skip'
+            ))
+            
+            # Mean curve
+            fig.add_trace(go.Scatter(
+                x=data['x'],
+                y=data['mean'],
+                mode='lines',
+                name=data['channel'],
+                line=dict(color=color, width=2)
+            ))
+            
+            # Observed spend range
+            if show_observed:
+                fig.add_vline(
+                    x=data['spend_max'],
+                    line_dash="dash",
+                    line_color=color,
+                    opacity=0.5,
+                    annotation_text=f"{data['channel']} max",
+                    annotation_position="top"
+                )
+        
+        fig.update_layout(
+            title="Response Curves by Channel",
+            xaxis_title="Media Spend",
+            yaxis_title="Contribution to Sales",
+            height=500,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            hovermode='x unified'
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     # Diminishing returns analysis
@@ -1472,20 +1648,16 @@ def render_response_curves(results, mmm):
         spend_mean = data['spend_mean']
         spend_max = data['spend_max']
         
-        # Find indices
         mean_idx = np.argmin(np.abs(data['x'] - spend_mean))
         max_idx = np.argmin(np.abs(data['x'] - spend_max))
         
-        # Compute metrics
         effect_at_mean = data['mean'][mean_idx]
         effect_at_max = data['mean'][max_idx]
         max_possible = data['mean'][-1]
         
-        # Saturation %
         saturation_mean = effect_at_mean / max_possible * 100 if max_possible > 0 else 0
         saturation_max = effect_at_max / max_possible * 100 if max_possible > 0 else 0
         
-        # Marginal effect at mean (derivative)
         if mean_idx > 0 and mean_idx < len(data['x']) - 1:
             dx = data['x'][mean_idx + 1] - data['x'][mean_idx - 1]
             dy = data['mean'][mean_idx + 1] - data['mean'][mean_idx - 1]
@@ -1503,6 +1675,574 @@ def render_response_curves(results, mmm):
         })
     
     st.dataframe(pd.DataFrame(analysis_data), use_container_width=True)
+
+
+def render_component_breakdown(results, mmm):
+    """Render full component decomposition of the model."""
+    st.subheader("🧩 Component Breakdown")
+    
+    st.markdown("""
+    This analysis breaks down the model's predictions into individual components:
+    base (intercept), trend, seasonality, media effects, and control variables.
+    """)
+    
+    panel = st.session_state.panel
+    dim_info = get_dimension_info(mmm, panel)
+    
+    # Compute component decomposition if not already done
+    if st.session_state.component_decomposition is None:
+        with st.spinner("Computing component decomposition..."):
+            try:
+                st.session_state.component_decomposition = mmm.compute_component_decomposition()
+            except Exception as e:
+                st.error(f"Error computing decomposition: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+                return
+    
+    decomp = st.session_state.component_decomposition
+    
+    # Component summary pie chart
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("### Component Summary")
+        
+        summary_df = decomp.summary()
+        
+        # Filter to non-zero components
+        summary_df = summary_df[summary_df['Total Contribution'].abs() > 1e-6]
+        
+        fig_pie = px.pie(
+            summary_df,
+            values='Total Contribution',
+            names='Component',
+            title="Share of Total Predicted Outcome",
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    with col2:
+        st.markdown("### Component Table")
+        
+        display_df = summary_df.copy()
+        display_df['Total Contribution'] = display_df['Total Contribution'].apply(lambda x: f"{x:,.0f}")
+        display_df['Contribution %'] = display_df['Contribution %'].apply(lambda x: f"{x:.1f}%")
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        # Media breakdown
+        st.markdown("### Media Channel Breakdown")
+        media_summary = decomp.media_summary()
+        media_summary['Total Contribution'] = media_summary['Total Contribution'].apply(lambda x: f"{x:,.0f}")
+        media_summary['Share of Media %'] = media_summary['Share of Media %'].apply(lambda x: f"{x:.1f}%")
+        st.dataframe(media_summary, use_container_width=True, hide_index=True)
+    
+    # Stacked area chart over time
+    st.markdown("---")
+    st.markdown("### Component Contributions Over Time")
+    
+    # Build time series of components
+    periods = dim_info['periods']
+    
+    # Aggregate by period if panel data
+    if dim_info['has_geo'] or dim_info['has_product']:
+        # Sum over geos/products
+        component_ts = {'Period': periods}
+        
+        for t in range(len(periods)):
+            mask = mmm.time_idx == t
+            
+            if t == 0:
+                component_ts['Base'] = [decomp.intercept[mask].sum()]
+                component_ts['Trend'] = [decomp.trend[mask].sum()]
+                component_ts['Seasonality'] = [decomp.seasonality[mask].sum()]
+                component_ts['Media'] = [decomp.media_total[mask].sum()]
+                component_ts['Controls'] = [decomp.controls_total[mask].sum()]
+            else:
+                component_ts['Base'].append(decomp.intercept[mask].sum())
+                component_ts['Trend'].append(decomp.trend[mask].sum())
+                component_ts['Seasonality'].append(decomp.seasonality[mask].sum())
+                component_ts['Media'].append(decomp.media_total[mask].sum())
+                component_ts['Controls'].append(decomp.controls_total[mask].sum())
+        
+        ts_df = pd.DataFrame(component_ts)
+    else:
+        ts_df = pd.DataFrame({
+            'Period': periods[:len(decomp.intercept)],
+            'Base': decomp.intercept,
+            'Trend': decomp.trend,
+            'Seasonality': decomp.seasonality,
+            'Media': decomp.media_total,
+            'Controls': decomp.controls_total
+        })
+    
+    # Stacked area chart
+    fig_stack = go.Figure()
+    
+    colors = {
+        'Base': '#3498db',
+        'Trend': '#e74c3c',
+        'Seasonality': '#2ecc71',
+        'Media': '#9b59b6',
+        'Controls': '#f39c12'
+    }
+    
+    for component in ['Base', 'Trend', 'Seasonality', 'Media', 'Controls']:
+        if component in ts_df.columns:
+            fig_stack.add_trace(go.Scatter(
+                x=ts_df['Period'],
+                y=ts_df[component],
+                name=component,
+                mode='lines',
+                stackgroup='one',
+                line=dict(color=colors.get(component, 'gray'))
+            ))
+    
+    # Add observed data line
+    if dim_info['has_geo'] or dim_info['has_product']:
+        y_obs_by_period = []
+        for t in range(len(periods)):
+            mask = mmm.time_idx == t
+            y_obs_by_period.append(mmm.y_raw[mask].sum())
+        observed = y_obs_by_period
+    else:
+        observed = mmm.y_raw
+    
+    fig_stack.add_trace(go.Scatter(
+        x=ts_df['Period'],
+        y=observed[:len(ts_df)],
+        name='Observed',
+        mode='markers',
+        marker=dict(color='black', size=4)
+    ))
+    
+    fig_stack.update_layout(
+        title="Stacked Component Contributions vs Observed",
+        xaxis_title="Period",
+        yaxis_title=mmm.mff_config.kpi.name,
+        height=500,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_stack, use_container_width=True)
+    
+    # Individual component time series
+    st.markdown("### Individual Component Time Series")
+    
+    selected_components = st.multiselect(
+        "Select components to visualize",
+        options=['Base', 'Trend', 'Seasonality', 'Media', 'Controls'],
+        default=['Trend', 'Seasonality', 'Media']
+    )
+    
+    if selected_components:
+        fig_individual = go.Figure()
+        
+        for component in selected_components:
+            if component in ts_df.columns:
+                fig_individual.add_trace(go.Scatter(
+                    x=ts_df['Period'],
+                    y=ts_df[component],
+                    name=component,
+                    mode='lines',
+                    line=dict(color=colors.get(component, 'gray'), width=2)
+                ))
+        
+        fig_individual.update_layout(
+            title="Selected Component Contributions",
+            xaxis_title="Period",
+            yaxis_title="Contribution",
+            height=400,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig_individual, use_container_width=True)
+
+
+def render_trend_analysis(results, mmm):
+    """Render detailed trend and seasonality analysis."""
+    st.subheader("📈 Trend & Seasonality Analysis")
+    
+    panel = st.session_state.panel
+    dim_info = get_dimension_info(mmm, panel)
+    posterior = results.trace.posterior
+    
+    # Get decomposition
+    if st.session_state.component_decomposition is None:
+        with st.spinner("Computing component decomposition..."):
+            st.session_state.component_decomposition = mmm.compute_component_decomposition()
+    
+    decomp = st.session_state.component_decomposition
+    
+    # Tab for different analyses
+    trend_tabs = st.tabs(["🔄 Trend Component", "🌊 Seasonality", "📊 Combined"])
+    
+    with trend_tabs[0]:
+        render_trend_tab(results, mmm, decomp, dim_info, posterior)
+    
+    with trend_tabs[1]:
+        render_seasonality_tab(results, mmm, decomp, dim_info, posterior)
+    
+    with trend_tabs[2]:
+        render_combined_trend_seasonality(results, mmm, decomp, dim_info)
+
+
+def render_trend_tab(results, mmm, decomp, dim_info, posterior):
+    """Render trend component analysis."""
+    st.markdown("### Trend Component Analysis")
+    
+    trend_type = st.session_state.get('trend_type', 'Linear')
+    
+    st.info(f"**Trend Type:** {trend_type}")
+    
+    # Build trend time series
+    periods = dim_info['periods']
+    
+    if dim_info['has_geo'] or dim_info['has_product']:
+        trend_by_period = []
+        for t in range(len(periods)):
+            mask = mmm.time_idx == t
+            trend_by_period.append(decomp.trend[mask].mean())  # Average across groups
+        trend_values = trend_by_period
+    else:
+        trend_values = decomp.trend
+    
+    # Plot trend
+    fig_trend = go.Figure()
+    
+    fig_trend.add_trace(go.Scatter(
+        x=periods[:len(trend_values)],
+        y=trend_values,
+        name='Trend',
+        mode='lines',
+        line=dict(color='#e74c3c', width=3)
+    ))
+    
+    fig_trend.update_layout(
+        title="Estimated Trend Over Time",
+        xaxis_title="Period",
+        yaxis_title="Trend Contribution",
+        height=400,
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_trend, use_container_width=True)
+    
+    # Trend statistics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    trend_arr = np.array(trend_values)
+    
+    with col1:
+        st.metric("Mean Trend", f"{trend_arr.mean():,.1f}")
+    with col2:
+        st.metric("Trend Std", f"{trend_arr.std():,.1f}")
+    with col3:
+        # Overall slope (linear approximation)
+        if len(trend_arr) > 1:
+            slope = (trend_arr[-1] - trend_arr[0]) / len(trend_arr)
+            st.metric("Avg Weekly Change", f"{slope:+.1f}")
+        else:
+            st.metric("Avg Weekly Change", "N/A")
+    with col4:
+        st.metric("Total Trend Effect", f"{decomp.total_trend:,.0f}")
+    
+    # Trend-specific parameter analysis
+    st.markdown("---")
+    st.markdown("### Trend Parameters")
+    
+    if trend_type == 'Linear':
+        if 'trend_slope' in posterior:
+            slope_samples = posterior['trend_slope'].values.flatten()
+            
+            fig_slope = go.Figure()
+            fig_slope.add_trace(go.Histogram(
+                x=slope_samples * mmm.y_std,  # Original scale
+                nbinsx=50,
+                name='Trend Slope'
+            ))
+            fig_slope.add_vline(x=0, line_dash="dash", line_color="gray")
+            fig_slope.update_layout(
+                title="Posterior Distribution of Trend Slope",
+                xaxis_title="Weekly Growth Rate (original scale)",
+                height=300
+            )
+            st.plotly_chart(fig_slope, use_container_width=True)
+            
+            st.markdown(f"""
+            **Interpretation:**
+            - Mean slope: {slope_samples.mean() * mmm.y_std:+.2f} per week
+            - {(slope_samples > 0).mean() * 100:.1f}% probability of positive trend
+            """)
+    
+    elif trend_type == 'Piecewise (Prophet-style)':
+        if 'trend_delta' in posterior:
+            delta_samples = posterior['trend_delta'].values
+            delta_mean = delta_samples.mean(axis=(0, 1))
+            
+            # Changepoint magnitudes
+            changepoints = mmm.trend_features.get('changepoints', [])
+            
+            if len(changepoints) > 0:
+                cp_df = pd.DataFrame({
+                    'Changepoint': [f"CP {i+1}" for i in range(len(changepoints))],
+                    'Location (%)': changepoints * 100,
+                    'Magnitude': delta_mean * mmm.y_std
+                })
+                
+                fig_cp = go.Figure()
+                fig_cp.add_trace(go.Bar(
+                    x=cp_df['Changepoint'],
+                    y=cp_df['Magnitude'],
+                    marker_color=['green' if m > 0 else 'red' for m in cp_df['Magnitude']]
+                ))
+                fig_cp.update_layout(
+                    title="Changepoint Magnitudes",
+                    xaxis_title="Changepoint",
+                    yaxis_title="Rate Change",
+                    height=350
+                )
+                st.plotly_chart(fig_cp, use_container_width=True)
+                
+                st.dataframe(cp_df.round(3), use_container_width=True, hide_index=True)
+    
+    elif trend_type == 'Gaussian Process':
+        if 'gp_lengthscale' in posterior:
+            ls_samples = posterior['gp_lengthscale'].values.flatten()
+            amp_samples = posterior['gp_amplitude'].values.flatten() if 'gp_amplitude' in posterior else None
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_ls = go.Figure()
+                fig_ls.add_trace(go.Histogram(x=ls_samples, nbinsx=50))
+                fig_ls.update_layout(
+                    title="GP Lengthscale Posterior",
+                    xaxis_title="Lengthscale (proportion of time series)",
+                    height=300
+                )
+                st.plotly_chart(fig_ls, use_container_width=True)
+            
+            with col2:
+                if amp_samples is not None:
+                    fig_amp = go.Figure()
+                    fig_amp.add_trace(go.Histogram(x=amp_samples, nbinsx=50))
+                    fig_amp.update_layout(
+                        title="GP Amplitude Posterior",
+                        xaxis_title="Amplitude",
+                        height=300
+                    )
+                    st.plotly_chart(fig_amp, use_container_width=True)
+            
+            st.markdown(f"""
+            **GP Interpretation:**
+            - Mean lengthscale: {ls_samples.mean():.3f} (≈ {ls_samples.mean() * mmm.n_periods:.1f} weeks)
+            - Longer lengthscale = smoother trend
+            """)
+
+
+def render_seasonality_tab(results, mmm, decomp, dim_info, posterior):
+    """Render seasonality analysis."""
+    st.markdown("### Seasonality Analysis")
+    
+    yearly_order = st.session_state.get('yearly_order', 0)
+    
+    if yearly_order == 0:
+        st.info("No yearly seasonality was included in this model.")
+        return
+    
+    periods = dim_info['periods']
+    
+    # Build seasonality time series
+    if dim_info['has_geo'] or dim_info['has_product']:
+        season_by_period = []
+        for t in range(len(periods)):
+            mask = mmm.time_idx == t
+            season_by_period.append(decomp.seasonality[mask].mean())
+        season_values = season_by_period
+    else:
+        season_values = decomp.seasonality
+    
+    # Plot seasonality
+    fig_season = go.Figure()
+    
+    fig_season.add_trace(go.Scatter(
+        x=periods[:len(season_values)],
+        y=season_values,
+        name='Seasonality',
+        mode='lines',
+        line=dict(color='#2ecc71', width=2)
+    ))
+    
+    fig_season.add_hline(y=0, line_dash="dash", line_color="gray")
+    
+    fig_season.update_layout(
+        title="Seasonal Pattern Over Time",
+        xaxis_title="Period",
+        yaxis_title="Seasonal Effect",
+        height=400,
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_season, use_container_width=True)
+    
+    # Extract average seasonal pattern by week of year
+    if len(periods) >= 52:
+        st.markdown("### Average Weekly Seasonal Pattern")
+        
+        # Calculate week of year for each period
+        period_dates = pd.to_datetime(periods[:len(season_values)])
+        weeks = period_dates.isocalendar().week.values
+        
+        season_df = pd.DataFrame({
+            'week': weeks,
+            'seasonality': season_values
+        })
+        
+        weekly_pattern = season_df.groupby('week')['seasonality'].mean().reset_index()
+        
+        fig_weekly = go.Figure()
+        fig_weekly.add_trace(go.Bar(
+            x=weekly_pattern['week'],
+            y=weekly_pattern['seasonality'],
+            marker_color=['green' if s > 0 else 'red' for s in weekly_pattern['seasonality']]
+        ))
+        fig_weekly.add_hline(y=0, line_dash="dash", line_color="gray")
+        fig_weekly.update_layout(
+            title="Average Seasonal Effect by Week of Year",
+            xaxis_title="Week of Year",
+            yaxis_title="Average Seasonal Effect",
+            height=350
+        )
+        st.plotly_chart(fig_weekly, use_container_width=True)
+        
+        # Peak/trough analysis
+        peak_week = weekly_pattern.loc[weekly_pattern['seasonality'].idxmax(), 'week']
+        trough_week = weekly_pattern.loc[weekly_pattern['seasonality'].idxmin(), 'week']
+        peak_value = weekly_pattern['seasonality'].max()
+        trough_value = weekly_pattern['seasonality'].min()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Peak Week", f"Week {int(peak_week)}")
+        with col2:
+            st.metric("Peak Effect", f"{peak_value:+,.0f}")
+        with col3:
+            st.metric("Trough Week", f"Week {int(trough_week)}")
+        with col4:
+            st.metric("Trough Effect", f"{trough_value:+,.0f}")
+    
+    # Fourier coefficient analysis
+    st.markdown("---")
+    st.markdown("### Seasonality Coefficients")
+    
+    season_coefs = []
+    for var in posterior.data_vars:
+        if 'season_yearly' in var:
+            samples = posterior[var].values.flatten()
+            season_coefs.append({
+                'Coefficient': var,
+                'Mean': samples.mean() * mmm.y_std,
+                'Std': samples.std() * mmm.y_std,
+                'HDI 3%': np.percentile(samples, 3) * mmm.y_std,
+                'HDI 97%': np.percentile(samples, 97) * mmm.y_std
+            })
+    
+    if season_coefs:
+        coef_df = pd.DataFrame(season_coefs).round(3)
+        st.dataframe(coef_df, use_container_width=True, hide_index=True)
+
+
+def render_combined_trend_seasonality(results, mmm, decomp, dim_info):
+    """Render combined trend and seasonality analysis."""
+    st.markdown("### Combined Trend & Seasonality")
+    
+    periods = dim_info['periods']
+    
+    # Build time series
+    if dim_info['has_geo'] or dim_info['has_product']:
+        trend_by_period = []
+        season_by_period = []
+        for t in range(len(periods)):
+            mask = mmm.time_idx == t
+            trend_by_period.append(decomp.trend[mask].mean())
+            season_by_period.append(decomp.seasonality[mask].mean())
+        trend_values = trend_by_period
+        season_values = season_by_period
+    else:
+        trend_values = decomp.trend
+        season_values = decomp.seasonality
+    
+    combined = np.array(trend_values) + np.array(season_values)
+    
+    fig_combined = go.Figure()
+    
+    fig_combined.add_trace(go.Scatter(
+        x=periods[:len(trend_values)],
+        y=trend_values,
+        name='Trend',
+        mode='lines',
+        line=dict(color='#e74c3c', width=2)
+    ))
+    
+    fig_combined.add_trace(go.Scatter(
+        x=periods[:len(season_values)],
+        y=season_values,
+        name='Seasonality',
+        mode='lines',
+        line=dict(color='#2ecc71', width=2)
+    ))
+    
+    fig_combined.add_trace(go.Scatter(
+        x=periods[:len(combined)],
+        y=combined,
+        name='Trend + Seasonality',
+        mode='lines',
+        line=dict(color='#3498db', width=3)
+    ))
+    
+    fig_combined.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+    
+    fig_combined.update_layout(
+        title="Trend and Seasonality Components",
+        xaxis_title="Period",
+        yaxis_title="Effect",
+        height=500,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_combined, use_container_width=True)
+    
+    # Variance decomposition
+    st.markdown("### Variance Decomposition")
+    
+    trend_var = np.var(trend_values)
+    season_var = np.var(season_values)
+    total_var = trend_var + season_var
+    
+    if total_var > 0:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Trend Variance", f"{trend_var:,.1f}")
+        with col2:
+            st.metric("Seasonality Variance", f"{season_var:,.1f}")
+        with col3:
+            trend_pct = trend_var / total_var * 100
+            st.metric("Trend % of Variation", f"{trend_pct:.1f}%")
+        
+        # Pie chart
+        fig_var = px.pie(
+            values=[trend_var, season_var],
+            names=['Trend', 'Seasonality'],
+            title="Variance Attribution",
+            color_discrete_sequence=['#e74c3c', '#2ecc71']
+        )
+        st.plotly_chart(fig_var, use_container_width=True)
 
 
 def render_contributions(results, mmm):
@@ -1538,7 +2278,6 @@ def render_contributions(results, mmm):
             help="Width of the credible interval"
         ) if compute_uncertainty else 0.94
         
-        # Time period selection
         use_time_period = st.checkbox("Filter by Time Period", value=False)
         
         if use_time_period:
@@ -1558,7 +2297,6 @@ def render_contributions(results, mmm):
         else:
             time_period = None
     
-    # Compute contributions
     with col2:
         if st.button("🔄 Compute Contributions", type="primary", use_container_width=True):
             with st.spinner("Computing counterfactual contributions..."):
@@ -1577,19 +2315,16 @@ def render_contributions(results, mmm):
                     st.code(traceback.format_exc())
                     return
     
-    # Display results
     if st.session_state.contributions is not None:
         contrib = st.session_state.contributions
         
         st.markdown("---")
         
-        # Summary metrics
         st.markdown("### Contribution Summary")
         
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            # Pie chart
             fig_pie = px.pie(
                 values=contrib.total_contributions.values,
                 names=contrib.total_contributions.index,
@@ -1600,7 +2335,6 @@ def render_contributions(results, mmm):
             st.plotly_chart(fig_pie, use_container_width=True)
         
         with col2:
-            # Summary table
             summary_df = contrib.summary()
             summary_df['Total Contribution'] = summary_df['Total Contribution'].apply(lambda x: f"{x:,.0f}")
             summary_df['Contribution %'] = summary_df['Contribution %'].apply(lambda x: f"{x:.1f}%")
@@ -1614,7 +2348,6 @@ def render_contributions(results, mmm):
         # Time series of contributions
         st.markdown("### Contributions Over Time")
         
-        # Aggregate by period if panel data
         if dim_info['has_geo'] or dim_info['has_product']:
             contrib_by_period = []
             for t, period in enumerate(dim_info['periods']):
@@ -1677,7 +2410,6 @@ def render_contributions(results, mmm):
         
         roas_df = pd.DataFrame(roas_data)
         
-        # ROAS bar chart with error bars
         fig_roas = go.Figure()
         
         if 'ROAS HDI Low' in roas_df.columns:
@@ -1719,7 +2451,6 @@ def render_contributions(results, mmm):
         )
         st.plotly_chart(fig_roas, use_container_width=True)
         
-        # Format ROAS table for display
         display_df = roas_df.copy()
         display_df['Total Spend'] = display_df['Total Spend'].apply(lambda x: f"${x:,.0f}")
         display_df['Total Contribution'] = display_df['Total Contribution'].apply(lambda x: f"{x:,.0f}")
@@ -1729,17 +2460,6 @@ def render_contributions(results, mmm):
             display_df['ROAS HDI High'] = display_df['ROAS HDI High'].apply(lambda x: f"{x:.3f}")
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
-        st.info("""
-        💡 **Understanding Counterfactual ROAS:**
-        
-        Unlike simple coefficient-based ROAS, counterfactual ROAS accounts for:
-        - **Saturation effects**: Diminishing returns at high spend levels
-        - **Adstock effects**: Carryover from previous periods
-        - **Interaction effects**: How channels interact with the overall model
-        
-        This provides a more accurate picture of each channel's true return.
-        """)
 
 
 def render_scenario_planning(results, mmm):
@@ -1755,7 +2475,6 @@ def render_scenario_planning(results, mmm):
     channel_names = mmm.channel_names
     dim_info = get_dimension_info(mmm, panel)
     
-    # Tabs for different analyses
     scenario_tabs = st.tabs(["📊 Marginal Analysis", "🎯 What-If Scenario", "📈 Budget Optimization"])
     
     with scenario_tabs[0]:
@@ -1772,12 +2491,6 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
     """Render marginal contribution analysis."""
     st.markdown("### Marginal Analysis")
     
-    st.markdown("""
-    See how additional spend in each channel would translate to incremental outcomes,
-    accounting for saturation effects.
-    """)
-    
-    # Settings
     col1, col2 = st.columns([1, 2])
     
     with col1:
@@ -1805,7 +2518,6 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
     if 'marginal_results' in st.session_state and st.session_state.marginal_results is not None:
         marginal_df = st.session_state.marginal_results
         
-        # Marginal ROAS chart
         fig = go.Figure()
         
         colors = ['#2ecc71' if x >= 1 else '#e74c3c' for x in marginal_df['Marginal ROAS']]
@@ -1830,7 +2542,6 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Summary table
         display_df = marginal_df.copy()
         for col in ['Current Spend', f'Spend Increase ({spend_increase_pct}%)', 'Marginal Contribution']:
             if col in display_df.columns:
@@ -1838,32 +2549,12 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
         display_df['Marginal ROAS'] = display_df['Marginal ROAS'].apply(lambda x: f"{x:.3f}")
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
-        # Interpretation
-        best_channel = marginal_df.loc[marginal_df['Marginal ROAS'].idxmax(), 'Channel']
-        best_roas = marginal_df['Marginal ROAS'].max()
-        
-        if best_roas > 1:
-            st.success(f"""
-            💡 **Recommendation**: {best_channel} has the highest marginal ROAS ({best_roas:.2f}). 
-            Additional investment here would yield the best incremental return.
-            """)
-        else:
-            st.warning("""
-            ⚠️ All channels have marginal ROAS below 1.0, indicating high saturation. 
-            Consider reducing overall spend or reallocating to emerging channels.
-            """)
 
 
 def render_what_if_scenario(mmm, channel_names, dim_info):
     """Render what-if scenario analysis."""
     st.markdown("### What-If Scenario")
     
-    st.markdown("""
-    Create custom budget scenarios to see how changes would affect outcomes.
-    """)
-    
-    # Build scenario inputs
     st.markdown("**Set spend multipliers for each channel:**")
     st.caption("1.0 = no change, 1.2 = +20%, 0.8 = -20%")
     
@@ -1903,7 +2594,6 @@ def render_what_if_scenario(mmm, channel_names, dim_info):
         st.markdown("---")
         st.markdown("### Scenario Results")
         
-        # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -1922,7 +2612,6 @@ def render_what_if_scenario(mmm, channel_names, dim_info):
                 delta_color=delta_color
             )
         
-        # Spend changes table
         spend_data = []
         for ch, details in results['spend_changes'].items():
             spend_data.append({
@@ -1936,49 +2625,6 @@ def render_what_if_scenario(mmm, channel_names, dim_info):
         if spend_data:
             st.markdown("**Spend Changes:**")
             st.dataframe(pd.DataFrame(spend_data), use_container_width=True, hide_index=True)
-        
-        # Prediction comparison plot
-        fig = go.Figure()
-        
-        periods = dim_info['periods']
-        
-        # Aggregate predictions by period if needed
-        if dim_info['has_geo'] or dim_info['has_product']:
-            baseline_by_period = []
-            scenario_by_period = []
-            for t in range(dim_info['n_periods']):
-                mask = mmm.time_idx == t
-                baseline_by_period.append(results['baseline_prediction'][mask].sum())
-                scenario_by_period.append(results['scenario_prediction'][mask].sum())
-            baseline_plot = baseline_by_period
-            scenario_plot = scenario_by_period
-        else:
-            baseline_plot = results['baseline_prediction']
-            scenario_plot = results['scenario_prediction']
-        
-        fig.add_trace(go.Scatter(
-            x=periods[:len(baseline_plot)],
-            y=baseline_plot,
-            name='Baseline',
-            line=dict(color='blue', width=2)
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=periods[:len(scenario_plot)],
-            y=scenario_plot,
-            name='Scenario',
-            line=dict(color='green', width=2, dash='dash')
-        ))
-        
-        fig.update_layout(
-            title="Baseline vs Scenario Prediction",
-            xaxis_title="Period",
-            yaxis_title="Predicted Outcome",
-            height=400,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
     
     elif run_scenario and not spend_changes:
         st.info("No changes specified. Adjust the sliders to create a scenario.")
@@ -1988,12 +2634,6 @@ def render_budget_optimization(mmm, channel_names, dim_info):
     """Render budget optimization analysis."""
     st.markdown("### Budget Optimization")
     
-    st.markdown("""
-    Find the optimal budget allocation across channels to maximize outcomes.
-    This analysis uses marginal returns to suggest budget reallocation.
-    """)
-    
-    # Current spend
     X_media_raw = mmm.X_media_raw
     current_spend = {ch: X_media_raw[:, i].sum() for i, ch in enumerate(channel_names)}
     total_budget = sum(current_spend.values())
@@ -2021,18 +2661,13 @@ def render_budget_optimization(mmm, channel_names, dim_info):
     if st.button("Suggest Optimal Allocation", type="primary"):
         with st.spinner("Computing optimal allocation..."):
             try:
-                # Compute marginal returns at different spend levels
                 marginal_10 = mmm.compute_marginal_contributions(spend_increase_pct=10.0, random_seed=42)
-                marginal_20 = mmm.compute_marginal_contributions(spend_increase_pct=20.0, random_seed=42)
                 
-                # Simple heuristic: allocate more to high marginal ROAS channels
                 marginal_roas = marginal_10.set_index('Channel')['Marginal ROAS']
                 
-                # Normalize to get allocation weights
-                weights = marginal_roas.clip(lower=0.1)  # Minimum allocation
+                weights = marginal_roas.clip(lower=0.1)
                 weights = weights / weights.sum()
                 
-                # Calculate suggested allocation
                 suggested_allocation = {}
                 for ch in channel_names:
                     suggested_allocation[ch] = {
@@ -2054,7 +2689,6 @@ def render_budget_optimization(mmm, channel_names, dim_info):
         st.markdown("---")
         st.markdown("### Suggested Allocation")
         
-        # Table
         alloc_data = []
         for ch, details in alloc.items():
             alloc_data.append({
@@ -2067,7 +2701,6 @@ def render_budget_optimization(mmm, channel_names, dim_info):
         
         st.dataframe(pd.DataFrame(alloc_data), use_container_width=True, hide_index=True)
         
-        # Visual comparison
         fig = go.Figure()
         
         current_vals = [alloc[ch]['current'] for ch in channel_names]
@@ -2097,24 +2730,14 @@ def render_budget_optimization(mmm, channel_names, dim_info):
         )
         
         st.plotly_chart(fig, use_container_width=True)
-        
-        st.info("""
-        💡 **Note**: This optimization is based on marginal ROAS at current spend levels.
-        For more sophisticated optimization, consider:
-        - Multi-period optimization with carryover effects
-        - Budget constraints and minimum allocations
-        - Non-linear optimization with saturation curves
-        """)
 
 
 def render_summary(results, mmm):
     """Render model summary."""
     st.subheader("📋 Full Model Summary")
     
-    # ArviZ summary
     summary = results.summary()
     
-    # Filter to key parameters
     key_params = [p for p in summary.index if any(x in p for x in ['beta', 'sigma', 'adstock', 'sat_lam', 'trend', 'geo'])]
     
     if key_params:
@@ -2124,14 +2747,12 @@ def render_summary(results, mmm):
     st.markdown("### Full Parameter Summary")
     st.dataframe(summary.round(4), use_container_width=True)
     
-    # Export options
     st.markdown("---")
     st.markdown("### Export Results")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Summary CSV
         csv_summary = summary.to_csv()
         st.download_button(
             "📥 Download Summary (CSV)",
@@ -2142,7 +2763,6 @@ def render_summary(results, mmm):
         )
     
     with col2:
-        # Contributions CSV
         if st.session_state.contributions is not None:
             csv_contrib = st.session_state.contributions.channel_contributions.to_csv()
             st.download_button(
@@ -2154,8 +2774,16 @@ def render_summary(results, mmm):
             )
     
     with col3:
-        # Full trace (NetCDF)
-        st.info("💡 Full trace can be saved with arviz.to_netcdf()")
+        if st.session_state.component_decomposition is not None:
+            decomp = st.session_state.component_decomposition
+            summary_csv = decomp.summary().to_csv(index=False)
+            st.download_button(
+                "📥 Download Decomposition (CSV)",
+                summary_csv,
+                "mmm_decomposition.csv",
+                "text/csv",
+                use_container_width=True
+            )
 
 
 # =============================================================================
@@ -2166,7 +2794,6 @@ def main():
     """Main application entry point."""
     render_sidebar()
     
-    # Main content tabs
     tabs = st.tabs(["📁 Data", "⚙️ Configure", "🔬 Model", "📈 Results"])
     
     with tabs[0]:

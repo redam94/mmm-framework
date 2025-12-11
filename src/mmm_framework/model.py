@@ -326,6 +326,83 @@ class ContributionResults:
             data['HDI 97%'] = self.contribution_hdi_high.values
         return pd.DataFrame(data)
 
+@dataclass
+class ComponentDecomposition:
+    """Container for full component decomposition results."""
+    
+    # Component contributions (original scale, per observation)
+    intercept: np.ndarray
+    trend: np.ndarray
+    seasonality: np.ndarray
+    media_total: np.ndarray
+    media_by_channel: pd.DataFrame
+    controls_total: np.ndarray
+    controls_by_var: pd.DataFrame | None
+    geo_effects: np.ndarray | None
+    product_effects: np.ndarray | None
+    
+    # Aggregated totals
+    total_intercept: float
+    total_trend: float
+    total_seasonality: float
+    total_media: float
+    total_controls: float
+    total_geo: float | None
+    total_product: float | None
+    
+    # Scaling parameters for reference
+    y_mean: float
+    y_std: float
+    
+    def summary(self) -> pd.DataFrame:
+        """Get summary of component contributions."""
+        components = {
+            'Base (Intercept)': self.total_intercept,
+            'Trend': self.total_trend,
+            'Seasonality': self.total_seasonality,
+            'Media (Total)': self.total_media,
+            'Controls (Total)': self.total_controls,
+        }
+        
+        if self.total_geo is not None:
+            components['Geo Effects'] = self.total_geo
+        if self.total_product is not None:
+            components['Product Effects'] = self.total_product
+        
+        total = sum(components.values())
+        
+        df = pd.DataFrame({
+            'Component': list(components.keys()),
+            'Total Contribution': list(components.values()),
+            'Contribution %': [v / total * 100 if total != 0 else 0 for v in components.values()]
+        })
+        
+        return df
+    
+    def media_summary(self) -> pd.DataFrame:
+        """Get detailed media channel breakdown."""
+        totals = self.media_by_channel.sum()
+        total_media = totals.sum()
+        
+        return pd.DataFrame({
+            'Channel': totals.index,
+            'Total Contribution': totals.values,
+            'Share of Media %': (totals / total_media * 100).values if total_media != 0 else [0] * len(totals)
+        })
+    
+    def controls_summary(self) -> pd.DataFrame | None:
+        """Get detailed control variable breakdown."""
+        if self.controls_by_var is None:
+            return None
+        
+        totals = self.controls_by_var.sum()
+        total_controls = totals.sum()
+        
+        return pd.DataFrame({
+            'Variable': totals.index,
+            'Total Contribution': totals.values,
+            'Share of Controls %': (totals / total_controls * 100).values if total_controls != 0 else [0] * len(totals)
+        })
 
 # =============================================================================
 # Main Model Class
@@ -1254,6 +1331,118 @@ class BayesianMMM:
             y_pred_hdi_low=y_pred_hdi_low,
             y_pred_hdi_high=y_pred_hdi_high,
             y_pred_samples=y_pred_samples,
+        )
+    def compute_component_decomposition(
+        self,
+        hdi_prob: float = 0.94,
+    ) -> ComponentDecomposition:
+        """
+        Compute full component decomposition of the model.
+        
+        Returns contribution from each component:
+        - Intercept (base)
+        - Trend
+        - Seasonality
+        - Media (total and by channel)
+        - Controls (total and by variable)
+        - Geo effects (if applicable)
+        - Product effects (if applicable)
+        
+        Parameters
+        ----------
+        hdi_prob : float
+            HDI probability (not currently used, for future extension).
+        
+        Returns
+        -------
+        ComponentDecomposition
+            Full breakdown of model components.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        
+        posterior = self._trace.posterior
+        
+        # Helper to get mean across chains and draws
+        def get_mean(var_name: str) -> np.ndarray:
+            if var_name in posterior:
+                return posterior[var_name].mean(dim=["chain", "draw"]).values
+            return np.zeros(self.n_obs)
+        
+        # Extract all components (standardized scale)
+        intercept_std = get_mean("intercept_component")
+        trend_std = get_mean("trend_component")
+        seasonality_std = get_mean("seasonality_component")
+        media_total_std = get_mean("media_total")
+        controls_total_std = get_mean("controls_total")
+        geo_std = get_mean("geo_component") if self.has_geo else None
+        product_std = get_mean("product_component") if self.has_product else None
+        
+        # Channel-level media
+        channel_contrib_std = get_mean("channel_contributions")
+        
+        # Control-level contributions
+        if self.n_controls > 0 and "control_contributions" in posterior:
+            control_contrib_std = get_mean("control_contributions")
+        else:
+            control_contrib_std = None
+        
+        # Convert to original scale
+        intercept = intercept_std * self.y_std + self.y_mean
+        trend = trend_std * self.y_std
+        seasonality = seasonality_std * self.y_std
+        media_total = media_total_std * self.y_std
+        controls_total = controls_total_std * self.y_std
+        
+        # Channel contributions (original scale)
+        media_by_channel = pd.DataFrame(
+            channel_contrib_std * self.y_std,
+            index=self.panel.index,
+            columns=self.channel_names
+        )
+        
+        # Control contributions (original scale)
+        if control_contrib_std is not None:
+            controls_by_var = pd.DataFrame(
+                control_contrib_std * self.y_std,
+                index=self.panel.index,
+                columns=self.control_names
+            )
+        else:
+            controls_by_var = None
+        
+        # Geo/product effects
+        geo_effects = geo_std * self.y_std if geo_std is not None else None
+        product_effects = product_std * self.y_std if product_std is not None else None
+        
+        # Compute totals
+        total_intercept = float(intercept.sum())
+        total_trend = float(trend.sum())
+        total_seasonality = float(seasonality.sum())
+        total_media = float(media_total.sum())
+        total_controls = float(controls_total.sum())
+        total_geo = float(geo_effects.sum()) if geo_effects is not None else None
+        total_product = float(product_effects.sum()) if product_effects is not None else None
+        
+        return ComponentDecomposition(
+            intercept=intercept,
+            trend=trend,
+            seasonality=seasonality,
+            media_total=media_total,
+            media_by_channel=media_by_channel,
+            controls_total=controls_total,
+            controls_by_var=controls_by_var,
+            geo_effects=geo_effects,
+            product_effects=product_effects,
+            total_intercept=total_intercept,
+            total_trend=total_trend,
+            total_seasonality=total_seasonality,
+            total_media=total_media,
+            total_controls=total_controls,
+            total_geo=total_geo,
+            total_product=total_product,
+            y_mean=self.y_mean,
+            y_std=self.y_std,
         )
     
     def compute_counterfactual_contributions(

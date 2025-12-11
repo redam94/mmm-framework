@@ -78,6 +78,7 @@ from .model import (
     MMMResults,
     PredictionResults,
     ContributionResults,
+    ComponentDecomposition,
     BayesianMMM,
     # Helper functions
     create_fourier_features,
@@ -151,6 +152,7 @@ __all__ = [
     "MMMResults",
     "PredictionResults",
     "ContributionResults",
+    "ComponentDecomposition",
     "BayesianMMM",
     "TrendType",
     "TrendConfig",
