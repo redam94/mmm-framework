@@ -9,13 +9,19 @@ Key design principles for stability:
 5. Use logistic saturation (numerically stable)
 6. Flexible trend modeling with GP and spline options
 7. Support for prediction and counterfactual analysis via Data
+8. Save/load functionality for model persistence
 """
 
 from __future__ import annotations
 
+import json
+import os
+import pickle
+import shutil
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import arviz as az
@@ -114,6 +120,32 @@ class TrendConfig:
     # Linear trend parameters
     growth_prior_mu: float = 0.0
     growth_prior_sigma: float = 0.1
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for serialization."""
+        return {
+            'type': self.type.value,
+            'n_changepoints': self.n_changepoints,
+            'changepoint_range': self.changepoint_range,
+            'changepoint_prior_scale': self.changepoint_prior_scale,
+            'n_knots': self.n_knots,
+            'spline_degree': self.spline_degree,
+            'spline_prior_sigma': self.spline_prior_sigma,
+            'gp_lengthscale_prior_mu': self.gp_lengthscale_prior_mu,
+            'gp_lengthscale_prior_sigma': self.gp_lengthscale_prior_sigma,
+            'gp_amplitude_prior_sigma': self.gp_amplitude_prior_sigma,
+            'gp_n_basis': self.gp_n_basis,
+            'gp_c': self.gp_c,
+            'growth_prior_mu': self.growth_prior_mu,
+            'growth_prior_sigma': self.growth_prior_sigma,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> TrendConfig:
+        """Create from dictionary."""
+        data = data.copy()
+        data['type'] = TrendType(data['type'])
+        return cls(**data)
 
 
 # =============================================================================
@@ -419,6 +451,7 @@ class BayesianMMM:
     - Priors are carefully scaled for standardized data
     - Flexible trend modeling with GP, spline, and piecewise options
     - Support for prediction and counterfactual analysis
+    - Save/load functionality for model persistence
     
     Parameters
     ----------
@@ -431,6 +464,9 @@ class BayesianMMM:
     adstock_alphas : list[float], optional
         Fixed adstock decay values to pre-compute.
     """
+    
+    # Version for save/load compatibility
+    _VERSION = "1.0.0"
     
     def __init__(
         self,
@@ -1820,3 +1856,388 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
         return az.summary(self._trace, var_names=var_names)
+    
+    # =========================================================================
+    # Save and Load Methods
+    # =========================================================================
+    
+    def save(
+        self,
+        path: str | Path,
+        save_trace: bool = True,
+        compress: bool = True,
+    ) -> None:
+        """
+        Save the fitted model to disk.
+        
+        This saves all necessary components to reconstruct and use the model:
+        - Model configuration (MFFConfig, ModelConfig, TrendConfig)
+        - Fitted trace (ArviZ InferenceData)
+        - Scaling parameters for predictions
+        - Adstock alphas
+        
+        The model can be loaded later with `BayesianMMM.load()`.
+        
+        Parameters
+        ----------
+        path : str or Path
+            Directory path to save the model. Will be created if it doesn't exist.
+        save_trace : bool, default True
+            Whether to save the fitted trace. If False, only configs and
+            scaling parameters are saved (useful for just saving the setup).
+        compress : bool, default True
+            Whether to compress the saved files (uses gzip for NetCDF).
+        
+        Examples
+        --------
+        >>> # Fit and save a model
+        >>> mmm = BayesianMMM(panel, model_config, trend_config)
+        >>> results = mmm.fit()
+        >>> mmm.save("models/my_mmm_model")
+        
+        >>> # Load and use later
+        >>> mmm_loaded = BayesianMMM.load("models/my_mmm_model", panel)
+        >>> predictions = mmm_loaded.predict()
+        
+        Notes
+        -----
+        The saved model does NOT include the panel data. When loading,
+        you must provide compatible panel data (same structure, channels, etc.).
+        """
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Save metadata and version info
+        metadata = {
+            'version': self._VERSION,
+            'fitted': self._trace is not None,
+            'n_obs': self.n_obs,
+            'n_channels': self.n_channels,
+            'n_controls': self.n_controls,
+            'channel_names': self.channel_names,
+            'control_names': self.control_names,
+            'has_geo': self.has_geo,
+            'has_product': self.has_product,
+            'n_geos': self.n_geos,
+            'n_products': self.n_products,
+            'n_periods': self.n_periods,
+            'adstock_alphas': self.adstock_alphas,
+        }
+        
+        if self.has_geo:
+            metadata['geo_names'] = self.geo_names
+        if self.has_product:
+            metadata['product_names'] = self.product_names
+        
+        with open(path / "metadata.json", 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        # 2. Save configurations
+        configs = {
+            'model_config': self.model_config.model_dump(),
+            'trend_config': self.trend_config.to_dict(),
+            'mff_config': self.mff_config.model_dump(),
+        }
+        
+        with open(path / "configs.json", 'w') as f:
+            json.dump(configs, f, indent=2, default=str)
+        
+        # 3. Save scaling parameters
+        scaling_params = {
+            'y_mean': self.y_mean,
+            'y_std': self.y_std,
+            'media_max': {k: float(v) for k, v in self._media_max.items()},
+        }
+        
+        if self.X_controls_raw is not None:
+            scaling_params['control_mean'] = self.control_mean.tolist()
+            scaling_params['control_std'] = self.control_std.tolist()
+        
+        with open(path / "scaling_params.json", 'w') as f:
+            json.dump(scaling_params, f, indent=2)
+        
+        # 4. Save trace (if fitted and requested)
+        if save_trace and self._trace is not None:
+            trace_path = path / "trace.nc"
+            self._trace.to_netcdf(str(trace_path))
+            
+            if compress:
+                import gzip
+                import shutil
+                
+                with open(trace_path, 'rb') as f_in:
+                    with gzip.open(str(trace_path) + '.gz', 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                trace_path.unlink()  # Remove uncompressed file
+        
+        # 5. Save trend features if they exist
+        trend_features_to_save = {}
+        for key, value in self.trend_features.items():
+            if isinstance(value, np.ndarray):
+                trend_features_to_save[key] = value.tolist()
+            elif isinstance(value, dict):
+                trend_features_to_save[key] = value
+            else:
+                trend_features_to_save[key] = value
+        
+        if trend_features_to_save:
+            with open(path / "trend_features.json", 'w') as f:
+                json.dump(trend_features_to_save, f, indent=2)
+        
+        # 6. Save seasonality features
+        season_features_to_save = {}
+        for key, value in self.seasonality_features.items():
+            if isinstance(value, np.ndarray):
+                season_features_to_save[key] = value.tolist()
+        
+        if season_features_to_save:
+            with open(path / "seasonality_features.json", 'w') as f:
+                json.dump(season_features_to_save, f, indent=2)
+        
+        print(f"Model saved to {path}")
+    
+    @classmethod
+    def load(
+        cls,
+        path: str | Path,
+        panel: PanelDataset,
+        rebuild_model: bool = True,
+    ) -> BayesianMMM:
+        """
+        Load a saved model from disk.
+        
+        Parameters
+        ----------
+        path : str or Path
+            Directory path where the model was saved.
+        panel : PanelDataset
+            Panel data to use with the loaded model. Must be compatible
+            with the original data (same channels, controls, dimensions).
+        rebuild_model : bool, default True
+            Whether to rebuild the PyMC model. Set to False if you only
+            need access to the trace and don't need to make predictions.
+        
+        Returns
+        -------
+        BayesianMMM
+            Loaded model instance with fitted trace (if available).
+        
+        Examples
+        --------
+        >>> # Load a saved model
+        >>> panel = load_mff(data, config)
+        >>> mmm = BayesianMMM.load("models/my_mmm_model", panel)
+        
+        >>> # Make predictions
+        >>> predictions = mmm.predict()
+        
+        >>> # Access the trace
+        >>> summary = mmm.summary()
+        
+        Raises
+        ------
+        ValueError
+            If the panel data is incompatible with the saved model.
+        FileNotFoundError
+            If the model files are not found.
+        """
+        path = Path(path)
+        
+        if not path.exists():
+            raise FileNotFoundError(f"Model directory not found: {path}")
+        
+        # 1. Load metadata
+        with open(path / "metadata.json", 'r') as f:
+            metadata = json.load(f)
+        
+        # Version check
+        saved_version = metadata.get('version', '0.0.0')
+        if saved_version != cls._VERSION:
+            warnings.warn(
+                f"Model was saved with version {saved_version}, "
+                f"current version is {cls._VERSION}. "
+                "There may be compatibility issues."
+            )
+        
+        # 2. Load configurations
+        with open(path / "configs.json", 'r') as f:
+            configs = json.load(f)
+        
+        # Reconstruct configs
+        from .config import ModelConfig, MFFConfig
+        
+        model_config = ModelConfig(**configs['model_config'])
+        trend_config = TrendConfig.from_dict(configs['trend_config'])
+        
+        # 3. Validate panel compatibility
+        if panel.coords.channels != metadata['channel_names']:
+            raise ValueError(
+                f"Panel channels {panel.coords.channels} don't match "
+                f"saved model channels {metadata['channel_names']}"
+            )
+        
+        if panel.coords.controls != metadata['control_names']:
+            raise ValueError(
+                f"Panel controls {panel.coords.controls} don't match "
+                f"saved model controls {metadata['control_names']}"
+            )
+        
+        # 4. Create instance
+        adstock_alphas = metadata.get('adstock_alphas', [0.0, 0.3, 0.5, 0.7, 0.9])
+        
+        instance = cls(
+            panel=panel,
+            model_config=model_config,
+            trend_config=trend_config,
+            adstock_alphas=adstock_alphas,
+        )
+        
+        # 5. Load scaling parameters
+        with open(path / "scaling_params.json", 'r') as f:
+            scaling_params = json.load(f)
+        
+        # Override scaling params with saved values (for consistent predictions)
+        instance.y_mean = scaling_params['y_mean']
+        instance.y_std = scaling_params['y_std']
+        instance._media_max = scaling_params['media_max']
+        instance._scaling_params['y_mean'] = scaling_params['y_mean']
+        instance._scaling_params['y_std'] = scaling_params['y_std']
+        instance._scaling_params['media_max'] = scaling_params['media_max']
+        
+        if 'control_mean' in scaling_params:
+            instance.control_mean = np.array(scaling_params['control_mean'])
+            instance.control_std = np.array(scaling_params['control_std'])
+            instance._scaling_params['control_mean'] = instance.control_mean
+            instance._scaling_params['control_std'] = instance.control_std
+        
+        # Re-standardize y with loaded params
+        instance.y = (instance.y_raw - instance.y_mean) / instance.y_std
+        
+        # Re-normalize media with loaded max values
+        for alpha in instance.adstock_alphas:
+            adstocked = geometric_adstock_2d(instance.X_media_raw, alpha)
+            normalized = np.zeros_like(adstocked)
+            for c, ch_name in enumerate(instance.channel_names):
+                normalized[:, c] = adstocked[:, c] / (instance._media_max[ch_name] + 1e-8)
+            instance.X_media_adstocked[alpha] = normalized
+        
+        # Re-standardize controls with loaded params
+        if instance.X_controls_raw is not None and 'control_mean' in scaling_params:
+            instance.X_controls = (instance.X_controls_raw - instance.control_mean) / instance.control_std
+        
+        # 6. Load trend features if present
+        trend_features_path = path / "trend_features.json"
+        if trend_features_path.exists():
+            with open(trend_features_path, 'r') as f:
+                trend_features = json.load(f)
+            
+            # Convert lists back to numpy arrays
+            for key, value in trend_features.items():
+                if isinstance(value, list):
+                    instance.trend_features[key] = np.array(value)
+                else:
+                    instance.trend_features[key] = value
+        
+        # 7. Load seasonality features if present
+        season_features_path = path / "seasonality_features.json"
+        if season_features_path.exists():
+            with open(season_features_path, 'r') as f:
+                season_features = json.load(f)
+            
+            for key, value in season_features.items():
+                if isinstance(value, list):
+                    instance.seasonality_features[key] = np.array(value)
+        
+        # 8. Load trace (if available)
+        trace_path_gz = path / "trace.nc.gz"
+        trace_path = path / "trace.nc"
+        
+        if trace_path_gz.exists():
+            import gzip
+            import tempfile
+            
+            # Decompress to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as tmp:
+                tmp_path = tmp.name
+            
+            with gzip.open(trace_path_gz, 'rb') as f_in:
+                with open(tmp_path, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            
+            instance._trace = az.from_netcdf(tmp_path)
+            os.unlink(tmp_path)  # Clean up temp file
+            
+        elif trace_path.exists():
+            instance._trace = az.from_netcdf(str(trace_path))
+        
+        # 9. Build model if requested
+        if rebuild_model:
+            instance._model = instance._build_model()
+        
+        print(f"Model loaded from {path}")
+        if instance._trace is not None:
+            print(f"  Trace loaded: {instance._trace.posterior.dims['chain']} chains, "
+                  f"{instance._trace.posterior.dims['draw']} draws")
+        
+        return instance
+    
+    def save_trace_only(self, path: str | Path) -> None:
+        """
+        Save only the fitted trace to a file.
+        
+        This is useful for quick saves when you don't need to save
+        the full model configuration.
+        
+        Parameters
+        ----------
+        path : str or Path
+            File path for the trace (should end in .nc or .nc.gz).
+        """
+        if self._trace is None:
+            raise ValueError("No trace to save. Fit the model first.")
+        
+        path = Path(path)
+        
+        if str(path).endswith('.gz'):
+            # Save compressed
+            base_path = Path(str(path)[:-3])  # Remove .gz
+            self._trace.to_netcdf(str(base_path))
+            
+            import gzip
+            with open(base_path, 'rb') as f_in:
+                with gzip.open(path, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            base_path.unlink()
+        else:
+            self._trace.to_netcdf(str(path))
+        
+        print(f"Trace saved to {path}")
+    
+    def load_trace_only(self, path: str | Path) -> None:
+        """
+        Load a trace from a file into the current model.
+        
+        Parameters
+        ----------
+        path : str or Path
+            File path to the trace (.nc or .nc.gz).
+        """
+        path = Path(path)
+        
+        if str(path).endswith('.gz'):
+            import gzip
+            import tempfile
+            
+            with tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as tmp:
+                tmp_path = tmp.name
+            
+            with gzip.open(path, 'rb') as f_in:
+                with open(tmp_path, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            
+            self._trace = az.from_netcdf(tmp_path)
+            os.unlink(tmp_path)
+        else:
+            self._trace = az.from_netcdf(str(path))
+        
+        print(f"Trace loaded from {path}")

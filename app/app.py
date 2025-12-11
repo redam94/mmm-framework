@@ -870,7 +870,7 @@ def fit_model(n_chains, n_draws, n_tune, target_accept, trend_type, trend_settin
                 trend_builder.with_spline_degree(trend_settings['spline_degree'])
             if 'spline_prior_sigma' in trend_settings:
                 trend_builder.with_spline_prior_sigma(trend_settings['spline_prior_sigma'])
-                
+
         elif trend_type == 'Gaussian Process':
             trend_builder.gaussian_process()
             if 'gp_lengthscale_mu' in trend_settings:
@@ -2753,7 +2753,7 @@ def render_summary(results, mmm):
     st.markdown("---")
     st.markdown("### Export Results")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         csv_summary = summary.to_csv()
@@ -2787,7 +2787,21 @@ def render_summary(results, mmm):
                 "text/csv",
                 use_container_width=True
             )
-
+    with col4:
+        if st.session_state.mmm is not None:
+            mmm = st.session_state.mmm
+            mmm.save("/tmp/mmm_model", compress=True)
+            import shutil
+            out_file = "mmm_model"
+            shutil.make_archive(out_file, 'zip', "/tmp/mmm_model")
+            zip_path = out_file + ".zip"
+            with open(zip_path, "rb") as file:
+                st.download_button(
+                    label="Download ZIP Archive",
+                    data=file, # The file data to download
+                    file_name="mmm_model.zip", # The name the user's downloaded file will have
+                    mime="application/zip" # The MIME type for a zip file
+                )
 
 # =============================================================================
 # Main App
