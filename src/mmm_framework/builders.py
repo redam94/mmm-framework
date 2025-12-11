@@ -1178,14 +1178,42 @@ class ModelConfigBuilder:
 
 class TrendConfigBuilder:
     """
-    Builder for TrendConfig objects.
+    Builder for TrendConfig objects with support for various trend types.
+    
+    Supports:
+    - None (intercept only)
+    - Linear (simple linear trend)
+    - Piecewise (Prophet-style changepoint detection)
+    - Spline (B-spline flexible trend)
+    - Gaussian Process (HSGP approximation for smooth trends)
     
     Examples
     --------
+    >>> # Simple linear trend
+    >>> trend = TrendConfigBuilder().linear().build()
+    
+    >>> # Piecewise linear with changepoints
     >>> trend = (TrendConfigBuilder()
     ...     .piecewise()
     ...     .with_n_changepoints(10)
     ...     .with_changepoint_range(0.8)
+    ...     .with_changepoint_prior_scale(0.05)
+    ...     .build())
+    
+    >>> # B-spline trend
+    >>> trend = (TrendConfigBuilder()
+    ...     .spline()
+    ...     .with_n_knots(15)
+    ...     .with_spline_degree(3)
+    ...     .with_spline_prior_sigma(1.0)
+    ...     .build())
+    
+    >>> # Gaussian Process trend
+    >>> trend = (TrendConfigBuilder()
+    ...     .gaussian_process()
+    ...     .with_gp_lengthscale(mu=0.3, sigma=0.2)
+    ...     .with_gp_amplitude(sigma=0.5)
+    ...     .with_gp_n_basis(25)
     ...     .build())
     """
     
@@ -1193,14 +1221,33 @@ class TrendConfigBuilder:
         from .model import TrendType
         self._TrendType = TrendType
         
+        # Type
         self._type = TrendType.LINEAR
+        
+        # Piecewise parameters
         self._n_changepoints: int = 10
         self._changepoint_range: float = 0.8
         self._changepoint_prior_scale: float = 0.05
+        
+        # Spline parameters
         self._n_knots: int = 10
         self._spline_degree: int = 3
+        self._spline_prior_sigma: float = 1.0
+        
+        # GP parameters
+        self._gp_lengthscale_prior_mu: float = 0.3
+        self._gp_lengthscale_prior_sigma: float = 0.2
+        self._gp_amplitude_prior_sigma: float = 0.5
+        self._gp_n_basis: int = 20
+        self._gp_c: float = 1.5
+        
+        # Linear parameters
         self._growth_prior_mu: float = 0.0
         self._growth_prior_sigma: float = 0.1
+    
+    # =========================================================================
+    # Trend Type Selection
+    # =========================================================================
     
     def none(self) -> Self:
         """No trend (intercept only)."""
@@ -1213,7 +1260,7 @@ class TrendConfigBuilder:
         return self
     
     def piecewise(self) -> Self:
-        """Prophet-style piecewise linear trend."""
+        """Prophet-style piecewise linear trend with changepoints."""
         self._type = self._TrendType.PIECEWISE
         return self
     
@@ -1222,38 +1269,258 @@ class TrendConfigBuilder:
         self._type = self._TrendType.SPLINE
         return self
     
+    def gaussian_process(self) -> Self:
+        """Gaussian Process trend using HSGP approximation."""
+        self._type = self._TrendType.GP
+        return self
+    
+    # Alias for GP
+    def gp(self) -> Self:
+        """Alias for gaussian_process()."""
+        return self.gaussian_process()
+    
+    # =========================================================================
+    # Piecewise Trend Parameters
+    # =========================================================================
+    
     def with_n_changepoints(self, n: int) -> Self:
-        """Set number of changepoints for piecewise trend."""
+        """
+        Set number of changepoints for piecewise trend.
+        
+        Parameters
+        ----------
+        n : int
+            Number of potential changepoints. These are placed uniformly
+            in the first `changepoint_range` proportion of the data.
+        """
+        if n < 0:
+            raise ValueError(f"n_changepoints must be non-negative, got {n}")
         self._n_changepoints = n
         return self
     
     def with_changepoint_range(self, range_pct: float) -> Self:
-        """Set range (0-1) for placing changepoints."""
+        """
+        Set range (0-1) for placing changepoints.
+        
+        Parameters
+        ----------
+        range_pct : float
+            Proportion of the time series to place changepoints in.
+            Default 0.8 means changepoints only in first 80% of data.
+            This prevents overfitting to recent data.
+        """
         if not 0 < range_pct <= 1:
             raise ValueError(f"Changepoint range must be in (0, 1], got {range_pct}")
         self._changepoint_range = range_pct
         return self
     
     def with_changepoint_prior_scale(self, scale: float) -> Self:
-        """Set prior scale for changepoint magnitudes."""
+        """
+        Set prior scale for changepoint magnitudes.
+        
+        Parameters
+        ----------
+        scale : float
+            Scale parameter for Laplace prior on changepoint magnitudes.
+            Smaller values = more regularization (smoother trends).
+            Typical values: 0.01 (very smooth) to 0.5 (flexible).
+        """
+        if scale <= 0:
+            raise ValueError(f"Changepoint prior scale must be positive, got {scale}")
         self._changepoint_prior_scale = scale
         return self
     
+    # =========================================================================
+    # Spline Trend Parameters
+    # =========================================================================
+    
     def with_n_knots(self, n: int) -> Self:
-        """Set number of knots for spline trend."""
+        """
+        Set number of knots for spline trend.
+        
+        Parameters
+        ----------
+        n : int
+            Number of interior knots for B-spline basis.
+            More knots = more flexible trend.
+            Typical values: 5-20 depending on data length.
+        """
+        if n < 1:
+            raise ValueError(f"n_knots must be at least 1, got {n}")
         self._n_knots = n
         return self
     
     def with_spline_degree(self, degree: int) -> Self:
-        """Set B-spline degree (default 3 = cubic)."""
+        """
+        Set B-spline degree (default 3 = cubic).
+        
+        Parameters
+        ----------
+        degree : int
+            Polynomial degree of B-spline:
+            - 1: Linear splines (piecewise linear)
+            - 2: Quadratic splines
+            - 3: Cubic splines (recommended, smooth)
+        """
+        if degree < 1:
+            raise ValueError(f"Spline degree must be at least 1, got {degree}")
         self._spline_degree = degree
         return self
     
+    def with_spline_prior_sigma(self, sigma: float) -> Self:
+        """
+        Set prior sigma for spline coefficients.
+        
+        Parameters
+        ----------
+        sigma : float
+            Scale for HalfNormal prior on spline coefficient variance.
+            Smaller = smoother trends. Larger = more flexible.
+        """
+        if sigma <= 0:
+            raise ValueError(f"Spline prior sigma must be positive, got {sigma}")
+        self._spline_prior_sigma = sigma
+        return self
+    
+    # =========================================================================
+    # Gaussian Process Parameters
+    # =========================================================================
+    
+    def with_gp_lengthscale(
+        self,
+        mu: float = 0.3,
+        sigma: float = 0.2
+    ) -> Self:
+        """
+        Set prior for GP lengthscale.
+        
+        Parameters
+        ----------
+        mu : float
+            Prior mean for lengthscale (LogNormal prior).
+            Value is in proportion of total time range [0, 1].
+            Larger = smoother trends.
+            Typical values: 0.1-0.5
+        sigma : float
+            Prior sigma for lengthscale uncertainty.
+        """
+        if mu <= 0:
+            raise ValueError(f"GP lengthscale mu must be positive, got {mu}")
+        if sigma <= 0:
+            raise ValueError(f"GP lengthscale sigma must be positive, got {sigma}")
+        self._gp_lengthscale_prior_mu = mu
+        self._gp_lengthscale_prior_sigma = sigma
+        return self
+    
+    def with_gp_amplitude(self, sigma: float = 0.5) -> Self:
+        """
+        Set prior sigma for GP amplitude.
+        
+        Parameters
+        ----------
+        sigma : float
+            HalfNormal sigma for GP output scale.
+            Controls how much the trend can vary.
+        """
+        if sigma <= 0:
+            raise ValueError(f"GP amplitude sigma must be positive, got {sigma}")
+        self._gp_amplitude_prior_sigma = sigma
+        return self
+    
+    def with_gp_n_basis(self, n: int) -> Self:
+        """
+        Set number of basis functions for HSGP approximation.
+        
+        Parameters
+        ----------
+        n : int
+            Number of spectral basis functions.
+            More = better approximation but slower.
+            Typical values: 15-30 for most time series.
+        """
+        if n < 5:
+            raise ValueError(f"GP n_basis should be at least 5, got {n}")
+        self._gp_n_basis = n
+        return self
+    
+    def with_gp_boundary_factor(self, c: float) -> Self:
+        """
+        Set boundary factor for HSGP.
+        
+        Parameters
+        ----------
+        c : float
+            Boundary factor for Hilbert space GP approximation.
+            Typical values: 1.2-2.0
+            Larger = better accuracy at boundaries but more computation.
+        """
+        if c < 1.0:
+            raise ValueError(f"GP boundary factor should be >= 1.0, got {c}")
+        self._gp_c = c
+        return self
+    
+    # =========================================================================
+    # Linear Trend Parameters
+    # =========================================================================
+    
     def with_growth_prior(self, mu: float = 0.0, sigma: float = 0.1) -> Self:
-        """Set prior for growth rate."""
+        """
+        Set prior for linear growth rate.
+        
+        Parameters
+        ----------
+        mu : float
+            Prior mean for growth rate.
+        sigma : float
+            Prior sigma for growth rate uncertainty.
+        """
         self._growth_prior_mu = mu
         self._growth_prior_sigma = sigma
         return self
+    
+    # =========================================================================
+    # Preset Configurations
+    # =========================================================================
+    
+    def smooth(self) -> Self:
+        """
+        Preset: Very smooth trend (good for long-term patterns).
+        
+        Uses GP with long lengthscale.
+        """
+        self._type = self._TrendType.GP
+        self._gp_lengthscale_prior_mu = 0.5
+        self._gp_lengthscale_prior_sigma = 0.2
+        self._gp_amplitude_prior_sigma = 0.3
+        self._gp_n_basis = 15
+        return self
+    
+    def flexible(self) -> Self:
+        """
+        Preset: Flexible trend (good for capturing shifts).
+        
+        Uses spline with many knots.
+        """
+        self._type = self._TrendType.SPLINE
+        self._n_knots = 15
+        self._spline_prior_sigma = 1.5
+        return self
+    
+    def changepoint_detection(self) -> Self:
+        """
+        Preset: Good for detecting structural breaks.
+        
+        Uses piecewise with moderate regularization.
+        """
+        self._type = self._TrendType.PIECEWISE
+        self._n_changepoints = 15
+        self._changepoint_range = 0.9
+        self._changepoint_prior_scale = 0.1
+        return self
+    
+    # =========================================================================
+    # Build
+    # =========================================================================
     
     def build(self):
         """Build the TrendConfig object."""
@@ -1265,6 +1532,12 @@ class TrendConfigBuilder:
             changepoint_prior_scale=self._changepoint_prior_scale,
             n_knots=self._n_knots,
             spline_degree=self._spline_degree,
+            spline_prior_sigma=self._spline_prior_sigma,
+            gp_lengthscale_prior_mu=self._gp_lengthscale_prior_mu,
+            gp_lengthscale_prior_sigma=self._gp_lengthscale_prior_sigma,
+            gp_amplitude_prior_sigma=self._gp_amplitude_prior_sigma,
+            gp_n_basis=self._gp_n_basis,
+            gp_c=self._gp_c,
             growth_prior_mu=self._growth_prior_mu,
             growth_prior_sigma=self._growth_prior_sigma,
         )
