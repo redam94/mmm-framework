@@ -944,7 +944,7 @@ def fit_model(n_chains, n_draws, n_tune, target_accept, trend_type, trend_settin
 # =============================================================================
 # Tab 4: Results
 # =============================================================================
-
+@st.fragment
 def render_results_tab():
     """Render the results and visualization tab."""
     st.header("📈 Results & Analysis")
@@ -1096,7 +1096,7 @@ def render_diagnostics(results):
     except Exception as e:
         st.warning(f"Could not generate R-hat plot: {e}")
 
-
+@st.fragment
 def render_model_fit(results, mmm):
     """Render posterior predictive model fit."""
     st.subheader("🎯 Model Fit")
@@ -1249,7 +1249,7 @@ def render_model_fit(results, mmm):
         fig_resid.update_layout(height=350, showlegend=False)
         st.plotly_chart(fig_resid, use_container_width=True)
 
-
+@st.fragment
 def render_prior_vs_posterior(results, mmm):
     """Render prior vs posterior comparison plots."""
     st.subheader("🔄 Prior vs Posterior")
@@ -1676,7 +1676,7 @@ def render_response_curves(results, mmm):
     
     st.dataframe(pd.DataFrame(analysis_data), use_container_width=True)
 
-
+@st.fragment
 def render_component_breakdown(results, mmm):
     """Render full component decomposition of the model."""
     st.subheader("🧩 Component Breakdown")
@@ -1862,7 +1862,7 @@ def render_component_breakdown(results, mmm):
         
         st.plotly_chart(fig_individual, use_container_width=True)
 
-
+@st.fragment
 def render_trend_analysis(results, mmm):
     """Render detailed trend and seasonality analysis."""
     st.subheader("📈 Trend & Seasonality Analysis")
@@ -1890,7 +1890,7 @@ def render_trend_analysis(results, mmm):
     with trend_tabs[2]:
         render_combined_trend_seasonality(results, mmm, decomp, dim_info)
 
-
+@st.fragment
 def render_trend_tab(results, mmm, decomp, dim_info, posterior):
     """Render trend component analysis."""
     st.markdown("### Trend Component Analysis")
@@ -2044,7 +2044,7 @@ def render_trend_tab(results, mmm, decomp, dim_info, posterior):
             - Longer lengthscale = smoother trend
             """)
 
-
+@st.fragment
 def render_seasonality_tab(results, mmm, decomp, dim_info, posterior):
     """Render seasonality analysis."""
     st.markdown("### Seasonality Analysis")
@@ -2156,7 +2156,7 @@ def render_seasonality_tab(results, mmm, decomp, dim_info, posterior):
         coef_df = pd.DataFrame(season_coefs).round(3)
         st.dataframe(coef_df, use_container_width=True, hide_index=True)
 
-
+@st.fragment
 def render_combined_trend_seasonality(results, mmm, decomp, dim_info):
     """Render combined trend and seasonality analysis."""
     st.markdown("### Combined Trend & Seasonality")
@@ -2244,7 +2244,7 @@ def render_combined_trend_seasonality(results, mmm, decomp, dim_info):
         )
         st.plotly_chart(fig_var, use_container_width=True)
 
-
+@st.fragment
 def render_contributions(results, mmm):
     """Render channel contributions using counterfactual analysis."""
     st.subheader("💰 Channel Contributions (Counterfactual)")
@@ -2461,7 +2461,7 @@ def render_contributions(results, mmm):
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-
+@st.fragment
 def render_scenario_planning(results, mmm):
     """Render scenario planning and what-if analysis."""
     st.subheader("🔮 Scenario Planning")
@@ -2486,7 +2486,7 @@ def render_scenario_planning(results, mmm):
     with scenario_tabs[2]:
         render_budget_optimization(mmm, channel_names, dim_info)
 
-
+@st.fragment
 def render_marginal_analysis(mmm, channel_names, dim_info):
     """Render marginal contribution analysis."""
     st.markdown("### Marginal Analysis")
@@ -2550,7 +2550,7 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-
+@st.fragment
 def render_what_if_scenario(mmm, channel_names, dim_info):
     """Render what-if scenario analysis."""
     st.markdown("### What-If Scenario")
@@ -2629,7 +2629,7 @@ def render_what_if_scenario(mmm, channel_names, dim_info):
     elif run_scenario and not spend_changes:
         st.info("No changes specified. Adjust the sliders to create a scenario.")
 
-
+@st.fragment
 def render_budget_optimization(mmm, channel_names, dim_info):
     """Render budget optimization analysis."""
     st.markdown("### Budget Optimization")
@@ -2731,7 +2731,7 @@ def render_budget_optimization(mmm, channel_names, dim_info):
         
         st.plotly_chart(fig, use_container_width=True)
 
-
+@st.fragment
 def render_summary(results, mmm):
     """Render model summary."""
     st.subheader("📋 Full Model Summary")

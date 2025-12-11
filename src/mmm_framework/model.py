@@ -970,7 +970,9 @@ class BayesianMMM:
             # =================================================================
             # SEASONALITY
             # =================================================================
-            seasonality = pt.zeros(n_obs_data)
+            n_periods = self.n_periods
+            seasonality_at_periods = pt.zeros(n_periods)
+            
             for name, features in self.seasonality_features.items():
                 n_features = features.shape[1]
                 season_coef = pm.Normal(
@@ -978,11 +980,37 @@ class BayesianMMM:
                     mu=0,
                     sigma=0.3,
                     shape=n_features,
+                    dims=f"{name}_fourier"
                 )
-                # FIX: Convert features to PyTensor tensor
+                # Explicitly convert features to tensor for proper computation
                 features_tensor = pt.as_tensor_variable(features)
+                # Compute seasonal effect at each unique time period
                 season_effect = pt.dot(features_tensor, season_coef)
-                seasonality = seasonality + season_effect[time_idx_data]
+                seasonality_at_periods = seasonality_at_periods + season_effect
+            
+            # Map from unique periods to observations using time index
+            # Use subtensor for explicit advanced indexing
+            seasonality = seasonality_at_periods[time_idx_data]
+            
+            # Store seasonality component
+            pm.Deterministic("seasonality_component", seasonality)
+            
+            # Also store seasonality at unique periods for diagnostics
+            pm.Deterministic("seasonality_by_period", seasonality_at_periods)
+            # ###
+            # seasonality = pt.zeros(n_obs_data)
+            # for name, features in self.seasonality_features.items():
+            #     n_features = features.shape[1]
+            #     season_coef = pm.Normal(
+            #         f"season_{name}",
+            #         mu=0,
+            #         sigma=0.3,
+            #         shape=n_features,
+            #     )
+            #     # FIX: Convert features to PyTensor tensor
+            #     features_tensor = pt.as_tensor_variable(features)
+            #     season_effect = pt.dot(features_tensor, season_coef)
+            #     seasonality = seasonality + season_effect[time_idx_data]
             
             # =================================================================
             # GEO EFFECTS (if applicable)
