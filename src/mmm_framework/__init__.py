@@ -76,11 +76,16 @@ from .model import (
     TrendType,
     TrendConfig,
     MMMResults,
+    PredictionResults,
+    ContributionResults,
     BayesianMMM,
     # Helper functions
     create_fourier_features,
     geometric_adstock_np,
+    geometric_adstock_2d,
     logistic_saturation_np,
+    create_bspline_basis,
+    create_piecewise_trend_matrix,
 )
 
 
@@ -144,10 +149,15 @@ __all__ = [
     "mff_from_wide_format",
     # Model
     "MMMResults",
+    "PredictionResults",
+    "ContributionResults",
     "BayesianMMM",
     "TrendType",
     "TrendConfig",
     "create_fourier_features",
     "geometric_adstock_np",
+    "geometric_adstock_2d",
     "logistic_saturation_np",
+    "create_bspline_basis",
+    "create_piecewise_trend_matrix",
 ]

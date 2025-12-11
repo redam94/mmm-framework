@@ -1,5 +1,5 @@
 """
-Bayesian MMM model class - Robust Implementation v4.
+Bayesian MMM model class - Robust Implementation v5 with Prediction Support.
 
 Key design principles for stability:
 1. Standardize all data (y, X_media, X_controls)
@@ -8,6 +8,7 @@ Key design principles for stability:
 4. Pre-compute adstock outside the model
 5. Use logistic saturation (numerically stable)
 6. Flexible trend modeling with GP and spline options
+7. Support for prediction and counterfactual analysis via Data
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import arviz as az
 import numpy as np
@@ -144,6 +145,14 @@ def geometric_adstock_np(x: np.ndarray, alpha: float) -> np.ndarray:
     return result
 
 
+def geometric_adstock_2d(X: np.ndarray, alpha: float) -> np.ndarray:
+    """Apply geometric adstock to 2D array (n_obs, n_channels)."""
+    result = np.zeros_like(X)
+    for c in range(X.shape[1]):
+        result[:, c] = geometric_adstock_np(X[:, c], alpha)
+    return result
+
+
 def logistic_saturation_np(x: np.ndarray, lam: float) -> np.ndarray:
     """Logistic saturation: 1 - exp(-lam * x)"""
     return 1.0 - np.exp(-lam * np.clip(x, 0, None))
@@ -260,13 +269,71 @@ class MMMResults:
         return az.plot_posterior(self.trace, var_names=var_names, **kwargs)
 
 
+@dataclass
+class PredictionResults:
+    """Container for prediction results."""
+    posterior_predictive: az.InferenceData
+    y_pred_mean: np.ndarray
+    y_pred_std: np.ndarray
+    y_pred_hdi_low: np.ndarray
+    y_pred_hdi_high: np.ndarray
+    y_pred_samples: np.ndarray  # Shape: (n_samples, n_obs)
+    
+    @property
+    def n_samples(self) -> int:
+        return self.y_pred_samples.shape[0]
+    
+    @property
+    def n_obs(self) -> int:
+        return self.y_pred_samples.shape[1]
+
+
+@dataclass
+class ContributionResults:
+    """Container for counterfactual contribution results."""
+    
+    # Per-channel contributions (original scale)
+    channel_contributions: pd.DataFrame  # (n_obs, n_channels)
+    
+    # Total contributions over time or for specified period
+    total_contributions: pd.Series  # Indexed by channel
+    
+    # Percentage of total effect
+    contribution_pct: pd.Series
+    
+    # Baseline prediction (all channels present)
+    baseline_prediction: np.ndarray
+    
+    # Counterfactual predictions (each channel zeroed)
+    counterfactual_predictions: dict[str, np.ndarray]
+    
+    # Time period used for calculation (None = all)
+    time_period: tuple[int, int] | None = None
+    
+    # Uncertainty (if computed with multiple samples)
+    contribution_hdi_low: pd.Series | None = None
+    contribution_hdi_high: pd.Series | None = None
+    
+    def summary(self) -> pd.DataFrame:
+        """Get summary DataFrame."""
+        data = {
+            'Channel': self.total_contributions.index,
+            'Total Contribution': self.total_contributions.values,
+            'Contribution %': self.contribution_pct.values,
+        }
+        if self.contribution_hdi_low is not None:
+            data['HDI 3%'] = self.contribution_hdi_low.values
+            data['HDI 97%'] = self.contribution_hdi_high.values
+        return pd.DataFrame(data)
+
+
 # =============================================================================
 # Main Model Class
 # =============================================================================
 
 class BayesianMMM:
     """
-    Bayesian Marketing Mix Model - Robust Implementation.
+    Bayesian Marketing Mix Model - Robust Implementation with Prediction Support.
     
     This implementation prioritizes numerical stability:
     - All data is standardized before modeling
@@ -274,6 +341,7 @@ class BayesianMMM:
     - Logistic saturation is used (more stable than Hill)
     - Priors are carefully scaled for standardized data
     - Flexible trend modeling with GP, spline, and piecewise options
+    - Support for prediction and counterfactual analysis
     
     Parameters
     ----------
@@ -306,6 +374,9 @@ class BayesianMMM:
         self._model: pm.Model | None = None
         self._trace: az.InferenceData | None = None
         
+        # Store scaling parameters for prediction
+        self._scaling_params: dict[str, Any] = {}
+        
         self._prepare_data()
     
     def _prepare_data(self):
@@ -332,22 +403,43 @@ class BayesianMMM:
         self.y_std = float(self.y_raw.std()) + 1e-8
         self.y = (self.y_raw - self.y_mean) / self.y_std
         
+        # Store scaling parameters
+        self._scaling_params['y_mean'] = self.y_mean
+        self._scaling_params['y_std'] = self.y_std
+        
         # === Pre-compute adstocked media at fixed alphas ===
-        # This avoids putting adstock in the PyMC graph
+        # Store max values for each channel for normalization
+        self._media_max = {}
         self.X_media_adstocked = {}
+        
         for alpha in self.adstock_alphas:
-            adstocked = np.zeros_like(self.X_media_raw)
+            adstocked = geometric_adstock_2d(self.X_media_raw, alpha)
+            # Store max values (use maximum across all alphas for consistent scaling)
             for c in range(self.n_channels):
-                adstocked[:, c] = geometric_adstock_np(self.X_media_raw[:, c], alpha)
-            # Scale to [0, 1] range
-            adstocked_max = adstocked.max(axis=0, keepdims=True) + 1e-8
-            self.X_media_adstocked[alpha] = adstocked / adstocked_max
+                key = self.channel_names[c]
+                current_max = adstocked[:, c].max()
+                if key not in self._media_max:
+                    self._media_max[key] = current_max
+                else:
+                    self._media_max[key] = max(self._media_max[key], current_max)
+        
+        # Normalize using consistent max values
+        for alpha in self.adstock_alphas:
+            adstocked = geometric_adstock_2d(self.X_media_raw, alpha)
+            normalized = np.zeros_like(adstocked)
+            for c, ch_name in enumerate(self.channel_names):
+                normalized[:, c] = adstocked[:, c] / (self._media_max[ch_name] + 1e-8)
+            self.X_media_adstocked[alpha] = normalized
+        
+        self._scaling_params['media_max'] = self._media_max.copy()
         
         # === Standardize controls ===
         if self.X_controls_raw is not None:
             self.control_mean = self.X_controls_raw.mean(axis=0)
             self.control_std = self.X_controls_raw.std(axis=0) + 1e-8
             self.X_controls = (self.X_controls_raw - self.control_mean) / self.control_std
+            self._scaling_params['control_mean'] = self.control_mean.copy()
+            self._scaling_params['control_std'] = self.control_std.copy()
         else:
             self.X_controls = None
         
@@ -360,15 +452,19 @@ class BayesianMMM:
         if self.has_geo:
             self.geo_names = list(self.panel.coords.geographies)
             self.geo_idx = self._get_group_indices('geography')
+        else:
+            self.geo_idx = np.zeros(self.n_obs, dtype=np.int32)
         
         if self.has_product:
             self.product_names = list(self.panel.coords.products)
             self.product_idx = self._get_group_indices('product')
+        else:
+            self.product_idx = np.zeros(self.n_obs, dtype=np.int32)
         
         # === Time index ===
         self.n_periods = self.panel.coords.n_periods
         self.time_idx = self._get_time_index()
-        self.t_scaled = self.time_idx / max(self.n_periods - 1, 1)  # [0, 1]
+        self.t_scaled = np.linspace(0, 1, self.n_periods)  # Unique time points [0, 1]
         
         # === Seasonality features ===
         self._prepare_seasonality()
@@ -391,8 +487,8 @@ class BayesianMMM:
                 categories = self.geo_names
             else:
                 categories = self.product_names
-            return pd.Categorical(values, categories=categories).codes
-        return np.zeros(self.n_obs, dtype=int)
+            return pd.Categorical(values, categories=categories).codes.astype(np.int32)
+        return np.zeros(self.n_obs, dtype=np.int32)
     
     def _get_time_index(self) -> np.ndarray:
         """Get time index for each observation."""
@@ -401,8 +497,8 @@ class BayesianMMM:
         if isinstance(self.panel.index, pd.MultiIndex):
             period_values = self.panel.index.get_level_values(cols.period)
             periods_unique = list(self.panel.coords.periods)
-            return pd.Categorical(period_values, categories=periods_unique).codes
-        return np.arange(self.n_obs)
+            return pd.Categorical(period_values, categories=periods_unique).codes.astype(np.int32)
+        return np.arange(self.n_obs, dtype=np.int32)
     
     def _prepare_seasonality(self):
         """Prepare Fourier features for seasonality."""
@@ -483,11 +579,11 @@ class BayesianMMM:
         
         return coords
     
-    def _build_trend_component(self, model: pm.Model) -> pt.TensorVariable:
+    def _build_trend_component(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build the trend component based on configuration."""
         
         if self.trend_config.type == TrendType.NONE:
-            return pt.zeros(self.n_obs)
+            return pt.zeros(time_idx.shape[0])
         
         elif self.trend_config.type == TrendType.LINEAR:
             trend_slope = pm.Normal(
@@ -495,23 +591,23 @@ class BayesianMMM:
                 mu=self.trend_config.growth_prior_mu,
                 sigma=self.trend_config.growth_prior_sigma
             )
-            return trend_slope * self.t_scaled[self.time_idx]
+            return trend_slope * self.t_scaled[time_idx]
         
         elif self.trend_config.type == TrendType.PIECEWISE:
-            return self._build_piecewise_trend(model)
+            return self._build_piecewise_trend(model, time_idx)
         
         elif self.trend_config.type == TrendType.SPLINE:
-            return self._build_spline_trend(model)
+            return self._build_spline_trend(model, time_idx)
         
         elif self.trend_config.type == TrendType.GP:
-            return self._build_gp_trend(model)
+            return self._build_gp_trend(model, time_idx)
         
         else:
             warnings.warn(f"Unknown trend type: {self.trend_config.type}, using linear")
             trend_slope = pm.Normal("trend_slope", mu=0, sigma=0.5)
-            return trend_slope * self.t_scaled[self.time_idx]
+            return trend_slope * self.t_scaled[time_idx]
     
-    def _build_piecewise_trend(self, model: pm.Model) -> pt.TensorVariable:
+    def _build_piecewise_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build Prophet-style piecewise linear trend."""
         
         s = self.trend_features["changepoints"]
@@ -547,9 +643,9 @@ class BayesianMMM:
         trend_unique = k * t_unique + pt.dot(A, delta) + m + pt.dot(A, gamma)
         
         # Map to observations
-        return trend_unique[self.time_idx]
+        return trend_unique[time_idx]
     
-    def _build_spline_trend(self, model: pm.Model) -> pt.TensorVariable:
+    def _build_spline_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build B-spline trend."""
         
         basis = self.trend_features["spline_basis"]
@@ -585,9 +681,9 @@ class BayesianMMM:
         trend_unique = trend_unique - trend_unique.mean()
         
         # Map to observations
-        return trend_unique[self.time_idx]
+        return trend_unique[time_idx]
     
-    def _build_gp_trend(self, model: pm.Model) -> pt.TensorVariable:
+    def _build_gp_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build Gaussian Process trend using HSGP approximation."""
         
         gp_config = self.trend_features["gp_config"]
@@ -629,19 +725,20 @@ class BayesianMMM:
             trend_unique = gp.prior("trend_gp", X=t_unique)
             
             # Map to observations
-            return trend_unique[self.time_idx]
+            return trend_unique[time_idx]
             
         except (ImportError, AttributeError) as e:
             warnings.warn(
                 f"HSGP not available ({e}), falling back to basis function GP"
             )
-            return self._build_gp_trend_basis(model, gp_lengthscale, gp_amplitude)
+            return self._build_gp_trend_basis(model, gp_lengthscale, gp_amplitude, time_idx)
     
     def _build_gp_trend_basis(
         self,
         model: pm.Model,
         lengthscale: pt.TensorVariable,
-        amplitude: pt.TensorVariable
+        amplitude: pt.TensorVariable,
+        time_idx
     ) -> pt.TensorVariable:
         """
         Build GP trend using explicit basis function approximation.
@@ -692,13 +789,78 @@ class BayesianMMM:
         trend_unique = trend_unique - trend_unique.mean()
         
         # Map to observations
-        return trend_unique[self.time_idx]
+        return trend_unique[time_idx]
+    
+    def _prepare_media_data_for_model(
+        self,
+        X_media_raw: np.ndarray | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Prepare media data for model (compute adstock at low/high alpha).
+        
+        Parameters
+        ----------
+        X_media_raw : np.ndarray, optional
+            Raw media data. If None, uses training data.
+        
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            (X_adstock_low, X_adstock_high) - normalized adstocked media
+        """
+        if X_media_raw is None:
+            X_media_raw = self.X_media_raw
+        
+        alpha_low = self.adstock_alphas[0]
+        alpha_high = self.adstock_alphas[-1]
+        
+        # Compute adstock
+        adstock_low = geometric_adstock_2d(X_media_raw, alpha_low)
+        adstock_high = geometric_adstock_2d(X_media_raw, alpha_high)
+        
+        # Normalize using training data max values
+        for c, ch_name in enumerate(self.channel_names):
+            max_val = self._media_max[ch_name] + 1e-8
+            adstock_low[:, c] = adstock_low[:, c] / max_val
+            adstock_high[:, c] = adstock_high[:, c] / max_val
+        
+        return adstock_low, adstock_high
     
     def _build_model(self) -> pm.Model:
-        """Build the PyMC model."""
+        """Build the PyMC model with Data for prediction support."""
         coords = self._build_coords()
         
+        # Prepare media data
+        X_adstock_low, X_adstock_high = self._prepare_media_data_for_model()
+        
         with pm.Model(coords=coords) as model:
+            # =================================================================
+            # MUTABLE DATA (for prediction)
+            # =================================================================
+            X_media_low_data = pm.Data(
+                "X_media_low",
+                X_adstock_low,
+                dims=("obs", "channel")
+            )
+            X_media_high_data = pm.Data(
+                "X_media_high",
+                X_adstock_high,
+                dims=("obs", "channel")
+            )
+            
+            if self.X_controls is not None:
+                X_controls_data = pm.Data(
+                    "X_controls",
+                    self.X_controls,
+                    dims=("obs", "control")
+                )
+            
+            time_idx_data = pm.Data("time_idx", self.time_idx)
+            geo_idx_data = pm.Data("geo_idx", self.geo_idx)
+            product_idx_data = pm.Data("product_idx", self.product_idx)
+            
+            n_obs_data = X_media_low_data.shape[0]
+            
             # =================================================================
             # INTERCEPT
             # =================================================================
@@ -708,7 +870,7 @@ class BayesianMMM:
             # =================================================================
             # TREND
             # =================================================================
-            trend = self._build_trend_component(model)
+            trend = self._build_trend_component(model, time_idx_data)
             
             # Store trend for diagnostics
             pm.Deterministic("trend_component", trend)
@@ -716,7 +878,7 @@ class BayesianMMM:
             # =================================================================
             # SEASONALITY
             # =================================================================
-            seasonality = pt.zeros(self.n_obs)
+            seasonality = pt.zeros(n_obs_data)
             for name, features in self.seasonality_features.items():
                 n_features = features.shape[1]
                 season_coef = pm.Normal(
@@ -726,7 +888,7 @@ class BayesianMMM:
                     shape=n_features,
                 )
                 season_effect = pt.dot(features, season_coef)
-                seasonality = seasonality + season_effect[self.time_idx]
+                seasonality = seasonality + season_effect[time_idx_data]
             
             # =================================================================
             # GEO EFFECTS (if applicable)
@@ -735,9 +897,9 @@ class BayesianMMM:
                 geo_sigma = pm.HalfNormal("geo_sigma", sigma=0.3)
                 geo_offset = pm.Normal("geo_offset", mu=0, sigma=1, shape=self.n_geos)
                 geo_effect = geo_sigma * geo_offset
-                geo_contribution = geo_effect[self.geo_idx]
+                geo_contribution = geo_effect[geo_idx_data]
             else:
-                geo_contribution = pt.zeros(self.n_obs)
+                geo_contribution = pt.zeros(n_obs_data)
             
             # =================================================================
             # PRODUCT EFFECTS (if applicable)
@@ -746,9 +908,9 @@ class BayesianMMM:
                 product_sigma = pm.HalfNormal("product_sigma", sigma=0.3)
                 product_offset = pm.Normal("product_offset", mu=0, sigma=1, shape=self.n_products)
                 product_effect = product_sigma * product_offset
-                product_contribution = product_effect[self.product_idx]
+                product_contribution = product_effect[product_idx_data]
             else:
-                product_contribution = pt.zeros(self.n_obs)
+                product_contribution = pt.zeros(n_obs_data)
             
             # =================================================================
             # MEDIA EFFECTS
@@ -760,8 +922,8 @@ class BayesianMMM:
             
             for c, channel_name in enumerate(self.channel_names):
                 # Get pre-computed adstock at low and high alpha
-                x_low = self.X_media_adstocked[self.adstock_alphas[0]][:, c]
-                x_high = self.X_media_adstocked[self.adstock_alphas[-1]][:, c]
+                x_low = X_media_low_data[:, c]
+                x_high = X_media_high_data[:, c]
                 
                 # Adstock mixing parameter
                 adstock_mix = pm.Beta(f"adstock_{channel_name}", alpha=2, beta=2)
@@ -803,9 +965,9 @@ class BayesianMMM:
                     sigma=0.5,
                     shape=self.n_controls,
                 )
-                control_contribution = pt.dot(self.X_controls, beta_controls)
+                control_contribution = pt.dot(X_controls_data, beta_controls)
             else:
-                control_contribution = pt.zeros(self.n_obs)
+                control_contribution = pt.zeros(n_obs_data)
             
             # =================================================================
             # COMBINE AND LIKELIHOOD
@@ -934,6 +1096,485 @@ class BayesianMMM:
             warnings.warn(f"Could not compute contributions: {e}")
         
         return results
+    
+    def predict(
+        self,
+        X_media: np.ndarray | None = None,
+        X_controls: np.ndarray | None = None,
+        time_idx: np.ndarray | None = None,
+        geo_idx: np.ndarray | None = None,
+        product_idx: np.ndarray | None = None,
+        return_original_scale: bool = True,
+        hdi_prob: float = 0.94,
+        random_seed: int | None = None,
+    ) -> PredictionResults:
+        """
+        Generate predictions with optionally modified input data.
+        
+        This method allows running posterior predictive sampling with modified
+        inputs, enabling counterfactual analysis and contribution calculation.
+        
+        Parameters
+        ----------
+        X_media : np.ndarray, optional
+            Media data of shape (n_obs, n_channels). If None, uses training data.
+            Should be in **original scale** (not adstocked or normalized).
+        X_controls : np.ndarray, optional
+            Control data of shape (n_obs, n_controls). If None, uses training data.
+            Should be in **original scale** (not standardized).
+        time_idx : np.ndarray, optional
+            Time indices. If None, uses training data indices.
+        geo_idx : np.ndarray, optional
+            Geography indices. If None, uses training data indices.
+        product_idx : np.ndarray, optional
+            Product indices. If None, uses training data indices.
+        return_original_scale : bool
+            If True (default), predictions are returned in original scale.
+            If False, predictions are in standardized scale.
+        hdi_prob : float
+            Probability mass for HDI calculation (default 0.94).
+        random_seed : int, optional
+            Random seed for reproducibility.
+        
+        Returns
+        -------
+        PredictionResults
+            Container with predictions, including mean, std, HDI, and samples.
+        
+        Examples
+        --------
+        >>> # Get baseline predictions (same as training)
+        >>> pred = mmm.predict()
+        
+        >>> # Prediction with TV spend zeroed out
+        >>> X_media_no_tv = panel.X_media.values.copy()
+        >>> X_media_no_tv[:, 0] = 0  # Zero out first channel (TV)
+        >>> pred_no_tv = mmm.predict(X_media=X_media_no_tv)
+        
+        >>> # TV contribution = baseline - counterfactual
+        >>> tv_contrib = pred.y_pred_mean - pred_no_tv.y_pred_mean
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        
+        # Use training data as defaults
+        if X_media is None:
+            X_media = self.X_media_raw
+        if time_idx is None:
+            time_idx = self.time_idx
+        if geo_idx is None:
+            geo_idx = self.geo_idx
+        if product_idx is None:
+            product_idx = self.product_idx
+        
+        # Prepare media data (compute adstock and normalize)
+        X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(X_media)
+        
+        # Prepare controls (standardize)
+        if X_controls is not None:
+            X_controls_std = (X_controls - self.control_mean) / self.control_std
+        elif self.X_controls is not None:
+            X_controls_std = self.X_controls
+        else:
+            X_controls_std = None
+        
+        # Update model data
+        with self.model:
+            pm.set_data({
+                "X_media_low": X_adstock_low,
+                "X_media_high": X_adstock_high,
+                "time_idx": time_idx.astype(np.int32),
+                "geo_idx": geo_idx.astype(np.int32),
+                "product_idx": product_idx.astype(np.int32),
+            })
+            
+            if X_controls_std is not None and self.n_controls > 0:
+                pm.set_data({"X_controls": X_controls_std})
+            
+            # Sample posterior predictive
+            ppc = pm.sample_posterior_predictive(
+                self._trace,
+                var_names=["y_obs"],
+                random_seed=random_seed,
+            )
+        
+        # Reset model data to training values
+        with self.model:
+            X_adstock_low_train, X_adstock_high_train = self._prepare_media_data_for_model()
+            pm.set_data({
+                "X_media_low": X_adstock_low_train,
+                "X_media_high": X_adstock_high_train,
+                "time_idx": self.time_idx,
+                "geo_idx": self.geo_idx,
+                "product_idx": self.product_idx,
+            })
+            if self.X_controls is not None:
+                pm.set_data({"X_controls": self.X_controls})
+        
+        # Extract predictions
+        y_pred_samples = ppc.posterior_predictive["y_obs"].values
+        # Flatten chains and draws: (n_chains, n_draws, n_obs) -> (n_samples, n_obs)
+        n_chains, n_draws, n_obs = y_pred_samples.shape
+        y_pred_samples = y_pred_samples.reshape(n_chains * n_draws, n_obs)
+        
+        # Convert to original scale if requested
+        if return_original_scale:
+            y_pred_samples = y_pred_samples * self.y_std + self.y_mean
+        
+        # Compute statistics
+        y_pred_mean = y_pred_samples.mean(axis=0)
+        y_pred_std = y_pred_samples.std(axis=0)
+        
+        hdi_low_pct = (1 - hdi_prob) / 2 * 100
+        hdi_high_pct = (1 + hdi_prob) / 2 * 100
+        y_pred_hdi_low = np.percentile(y_pred_samples, hdi_low_pct, axis=0)
+        y_pred_hdi_high = np.percentile(y_pred_samples, hdi_high_pct, axis=0)
+        
+        return PredictionResults(
+            posterior_predictive=ppc,
+            y_pred_mean=y_pred_mean,
+            y_pred_std=y_pred_std,
+            y_pred_hdi_low=y_pred_hdi_low,
+            y_pred_hdi_high=y_pred_hdi_high,
+            y_pred_samples=y_pred_samples,
+        )
+    
+    def compute_counterfactual_contributions(
+        self,
+        time_period: tuple[int, int] | None = None,
+        channels: list[str] | None = None,
+        compute_uncertainty: bool = True,
+        hdi_prob: float = 0.94,
+        random_seed: int | None = None,
+    ) -> ContributionResults:
+        """
+        Compute channel contributions using counterfactual analysis.
+        
+        For each channel, this method:
+        1. Gets baseline prediction (all channels present)
+        2. Gets counterfactual prediction (channel zeroed out)
+        3. Computes contribution as: baseline - counterfactual
+        
+        This approach properly accounts for saturation and adstock effects.
+        
+        Parameters
+        ----------
+        time_period : tuple[int, int], optional
+            Time period (start_idx, end_idx) for contribution calculation.
+            If None, uses entire time series.
+            Indices are inclusive on both ends.
+        channels : list[str], optional
+            List of channel names to compute contributions for.
+            If None, computes for all channels.
+        compute_uncertainty : bool
+            If True, computes HDI for contributions using posterior samples.
+        hdi_prob : float
+            Probability mass for HDI calculation (default 0.94).
+        random_seed : int, optional
+            Random seed for reproducibility.
+        
+        Returns
+        -------
+        ContributionResults
+            Container with per-observation and total contributions.
+        
+        Examples
+        --------
+        >>> # Total contributions over entire period
+        >>> contrib = mmm.compute_counterfactual_contributions()
+        >>> print(contrib.summary())
+        
+        >>> # Contributions for specific time period (weeks 50-100)
+        >>> contrib_period = mmm.compute_counterfactual_contributions(
+        ...     time_period=(50, 100)
+        ... )
+        
+        >>> # Contributions for specific channels
+        >>> contrib_tv = mmm.compute_counterfactual_contributions(
+        ...     channels=["TV", "Digital"]
+        ... )
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        
+        channels = channels or self.channel_names
+        
+        # Validate channels
+        invalid_channels = [c for c in channels if c not in self.channel_names]
+        if invalid_channels:
+            raise ValueError(f"Unknown channels: {invalid_channels}")
+        
+        # Determine observation mask for time period
+        if time_period is not None:
+            start_idx, end_idx = time_period
+            time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+        else:
+            time_mask = np.ones(self.n_obs, dtype=bool)
+        
+        # Get baseline prediction
+        baseline_pred = self.predict(
+            return_original_scale=True,
+            hdi_prob=hdi_prob,
+            random_seed=random_seed,
+        )
+        
+        # Store counterfactual predictions
+        counterfactual_preds = {}
+        
+        # Compute counterfactual for each channel
+        for channel in channels:
+            # Create media data with this channel zeroed out
+            X_media_counterfactual = self.X_media_raw.copy()
+            ch_idx = self.channel_names.index(channel)
+            X_media_counterfactual[:, ch_idx] = 0.0
+            
+            # Get counterfactual prediction
+            cf_pred = self.predict(
+                X_media=X_media_counterfactual,
+                return_original_scale=True,
+                hdi_prob=hdi_prob,
+                random_seed=random_seed,
+            )
+            
+            counterfactual_preds[channel] = cf_pred
+        
+        # Compute contributions
+        # Contribution = baseline - counterfactual
+        contribution_data = {}
+        contribution_samples = {}  # For uncertainty
+        
+        for channel in channels:
+            cf_pred = counterfactual_preds[channel]
+            
+            # Per-observation contribution
+            contrib = baseline_pred.y_pred_mean - cf_pred.y_pred_mean
+            contribution_data[channel] = contrib
+            
+            if compute_uncertainty:
+                # Contribution samples for uncertainty
+                contrib_samples = baseline_pred.y_pred_samples - cf_pred.y_pred_samples
+                contribution_samples[channel] = contrib_samples
+        
+        # Create DataFrame
+        channel_contributions = pd.DataFrame(
+            contribution_data,
+            index=self.panel.index,
+        )
+        
+        # Apply time mask for totals
+        if time_period is not None:
+            contrib_masked = channel_contributions.iloc[time_mask]
+        else:
+            contrib_masked = channel_contributions
+        
+        # Total contributions
+        total_contributions = contrib_masked.sum()
+        
+        # Percentage of total
+        total_effect = total_contributions.sum()
+        contribution_pct = (total_contributions / total_effect * 100) if total_effect != 0 else total_contributions * 0
+        
+        # HDI for totals
+        contribution_hdi_low = None
+        contribution_hdi_high = None
+        
+        if compute_uncertainty:
+            hdi_low_pct = (1 - hdi_prob) / 2 * 100
+            hdi_high_pct = (1 + hdi_prob) / 2 * 100
+            
+            hdi_low_values = {}
+            hdi_high_values = {}
+            
+            for channel in channels:
+                samples = contribution_samples[channel]
+                if time_period is not None:
+                    samples = samples[:, time_mask]
+                
+                # Sum over time for each sample
+                total_samples = samples.sum(axis=1)
+                
+                hdi_low_values[channel] = np.percentile(total_samples, hdi_low_pct)
+                hdi_high_values[channel] = np.percentile(total_samples, hdi_high_pct)
+            
+            contribution_hdi_low = pd.Series(hdi_low_values)
+            contribution_hdi_high = pd.Series(hdi_high_values)
+        
+        # Store counterfactual predictions as arrays
+        cf_pred_arrays = {
+            ch: pred.y_pred_mean for ch, pred in counterfactual_preds.items()
+        }
+        
+        return ContributionResults(
+            channel_contributions=channel_contributions,
+            total_contributions=total_contributions,
+            contribution_pct=contribution_pct,
+            baseline_prediction=baseline_pred.y_pred_mean,
+            counterfactual_predictions=cf_pred_arrays,
+            time_period=time_period,
+            contribution_hdi_low=contribution_hdi_low,
+            contribution_hdi_high=contribution_hdi_high,
+        )
+    
+    def compute_marginal_contributions(
+        self,
+        spend_increase_pct: float = 10.0,
+        time_period: tuple[int, int] | None = None,
+        channels: list[str] | None = None,
+        random_seed: int | None = None,
+    ) -> pd.DataFrame:
+        """
+        Compute marginal contributions for a given spend increase.
+        
+        This shows how much additional outcome we'd get from increasing
+        spend by a given percentage, accounting for saturation.
+        
+        Parameters
+        ----------
+        spend_increase_pct : float
+            Percentage increase in spend to simulate (default 10%).
+        time_period : tuple[int, int], optional
+            Time period for calculation. If None, uses entire series.
+        channels : list[str], optional
+            Channels to analyze. If None, uses all channels.
+        random_seed : int, optional
+            Random seed for reproducibility.
+        
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with marginal contribution analysis.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        
+        channels = channels or self.channel_names
+        multiplier = 1.0 + spend_increase_pct / 100.0
+        
+        # Determine time mask
+        if time_period is not None:
+            start_idx, end_idx = time_period
+            time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+        else:
+            time_mask = np.ones(self.n_obs, dtype=bool)
+        
+        # Get baseline prediction
+        baseline_pred = self.predict(random_seed=random_seed)
+        baseline_total = baseline_pred.y_pred_mean[time_mask].sum()
+        
+        results = []
+        
+        for channel in channels:
+            ch_idx = self.channel_names.index(channel)
+            
+            # Create media data with increased spend for this channel
+            X_media_increased = self.X_media_raw.copy()
+            X_media_increased[:, ch_idx] *= multiplier
+            
+            # Get prediction with increased spend
+            increased_pred = self.predict(
+                X_media=X_media_increased,
+                random_seed=random_seed,
+            )
+            increased_total = increased_pred.y_pred_mean[time_mask].sum()
+            
+            # Compute marginal contribution
+            marginal_contrib = increased_total - baseline_total
+            
+            # Current spend
+            current_spend = self.X_media_raw[time_mask, ch_idx].sum()
+            spend_increase = current_spend * (multiplier - 1)
+            
+            # Marginal ROAS
+            marginal_roas = marginal_contrib / spend_increase if spend_increase > 0 else 0
+            
+            results.append({
+                'Channel': channel,
+                'Current Spend': current_spend,
+                f'Spend Increase ({spend_increase_pct}%)': spend_increase,
+                'Marginal Contribution': marginal_contrib,
+                'Marginal ROAS': marginal_roas,
+            })
+        
+        return pd.DataFrame(results)
+    
+    def what_if_scenario(
+        self,
+        spend_changes: dict[str, float],
+        time_period: tuple[int, int] | None = None,
+        random_seed: int | None = None,
+    ) -> dict:
+        """
+        Run a what-if scenario with custom spend changes.
+        
+        Parameters
+        ----------
+        spend_changes : dict[str, float]
+            Dictionary mapping channel names to spend multipliers.
+            E.g., {"TV": 1.2, "Digital": 0.8} means +20% TV, -20% Digital.
+        time_period : tuple[int, int], optional
+            Time period for calculation.
+        random_seed : int, optional
+            Random seed for reproducibility.
+        
+        Returns
+        -------
+        dict
+            Dictionary with scenario analysis results.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        
+        # Determine time mask
+        if time_period is not None:
+            start_idx, end_idx = time_period
+            time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+        else:
+            time_mask = np.ones(self.n_obs, dtype=bool)
+        
+        # Get baseline
+        baseline_pred = self.predict(random_seed=random_seed)
+        baseline_total = baseline_pred.y_pred_mean[time_mask].sum()
+        
+        # Create scenario media data
+        X_media_scenario = self.X_media_raw.copy()
+        
+        spend_summary = {}
+        for channel, multiplier in spend_changes.items():
+            if channel not in self.channel_names:
+                raise ValueError(f"Unknown channel: {channel}")
+            
+            ch_idx = self.channel_names.index(channel)
+            original_spend = X_media_scenario[time_mask, ch_idx].sum()
+            X_media_scenario[:, ch_idx] *= multiplier
+            new_spend = X_media_scenario[time_mask, ch_idx].sum()
+            
+            spend_summary[channel] = {
+                'original': original_spend,
+                'scenario': new_spend,
+                'change': new_spend - original_spend,
+                'change_pct': (multiplier - 1) * 100,
+            }
+        
+        # Get scenario prediction
+        scenario_pred = self.predict(
+            X_media=X_media_scenario,
+            random_seed=random_seed,
+        )
+        scenario_total = scenario_pred.y_pred_mean[time_mask].sum()
+        
+        # Compute impact
+        outcome_change = scenario_total - baseline_total
+        outcome_change_pct = (outcome_change / baseline_total * 100) if baseline_total != 0 else 0
+        
+        return {
+            'baseline_outcome': baseline_total,
+            'scenario_outcome': scenario_total,
+            'outcome_change': outcome_change,
+            'outcome_change_pct': outcome_change_pct,
+            'spend_changes': spend_summary,
+            'baseline_prediction': baseline_pred.y_pred_mean,
+            'scenario_prediction': scenario_pred.y_pred_mean,
+        }
     
     def sample_prior_predictive(self, samples: int = 500) -> az.InferenceData:
         """Sample from prior predictive distribution."""

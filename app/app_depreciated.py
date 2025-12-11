@@ -2704,8 +2704,335 @@ def _render_contributions_total(contrib, channel_names, dim_info, mmm, panel):
     )
     st.plotly_chart(fig, use_container_width=True)
     
+    # Media vs Non-Media Breakout
+    st.markdown("### Media vs Non-Media Contribution Breakdown")
+    _render_media_vs_nonmedia(mmm, panel, dim_info)
+    
+    # Year-over-Year Analysis
+    st.markdown("### Year-over-Year Contribution Analysis")
+    _render_yoy_contributions(period_contrib, channel_names, mmm, panel, dim_info)
+    
     # ROAS estimation
     _render_roas_analysis(totals, channel_names, mmm, panel)
+
+
+def _render_media_vs_nonmedia(mmm, panel, dim_info):
+    """Render media vs non-media contribution breakdown."""
+    results = st.session_state.results
+    posterior = results.trace.posterior
+    
+    # Extract components
+    components = _extract_model_components(posterior, mmm, results, dim_info)
+    
+    # Categorize components
+    media_total = 0
+    baseline_total = 0
+    trend_total = 0
+    seasonality_total = 0
+    control_total = 0
+    
+    for name, data in components.items():
+        total = np.sum(data['mean'])
+        if 'Media:' in name:
+            media_total += total
+        elif 'Baseline' in name or data.get('is_baseline', False):
+            baseline_total += total
+        elif 'Trend' in name:
+            trend_total += total
+        elif 'Seasonality' in name:
+            seasonality_total += total
+        elif 'Control:' in name:
+            control_total += total
+    
+    # Create breakdown data
+    breakdown_data = {
+        'Category': ['Baseline', 'Trend', 'Seasonality', 'Media (Total)', 'Controls'],
+        'Contribution': [baseline_total, trend_total, seasonality_total, media_total, control_total],
+        'Type': ['Non-Media', 'Non-Media', 'Non-Media', 'Media', 'Non-Media']
+    }
+    breakdown_df = pd.DataFrame(breakdown_data)
+    
+    # Filter out zero/negligible contributions
+    breakdown_df = breakdown_df[breakdown_df['Contribution'].abs() > 1]
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Pie chart - Media vs Non-Media
+        media_sum = breakdown_df[breakdown_df['Type'] == 'Media']['Contribution'].sum()
+        nonmedia_sum = breakdown_df[breakdown_df['Type'] == 'Non-Media']['Contribution'].sum()
+        
+        fig_pie = px.pie(
+            values=[media_sum, nonmedia_sum],
+            names=['Media', 'Non-Media'],
+            title="Media vs Non-Media Split",
+            color_discrete_sequence=['#66c2a5', '#fc8d62'],
+            hole=0.4
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    with col2:
+        # Bar chart - Component breakdown
+        fig_bar = px.bar(
+            breakdown_df,
+            x='Category',
+            y='Contribution',
+            color='Type',
+            title="Contribution by Component Type",
+            color_discrete_map={'Media': '#66c2a5', 'Non-Media': '#fc8d62'}
+        )
+        fig_bar.update_layout(height=400)
+        st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # Summary metrics
+    total_all = breakdown_df['Contribution'].sum()
+    media_pct = (media_sum / total_all * 100) if total_all != 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Media Contribution", f"{media_sum:,.0f}")
+    with col2:
+        st.metric("Total Non-Media", f"{nonmedia_sum:,.0f}")
+    with col3:
+        st.metric("Media %", f"{media_pct:.1f}%")
+    with col4:
+        st.metric("Baseline %", f"{(baseline_total / total_all * 100) if total_all != 0 else 0:.1f}%")
+    
+    # Detailed breakdown table
+    with st.expander("View Detailed Component Breakdown"):
+        breakdown_df['Contribution'] = breakdown_df['Contribution'].apply(lambda x: f"{x:,.0f}")
+        breakdown_df['% of Total'] = pd.DataFrame(breakdown_data)['Contribution'].apply(
+            lambda x: f"{(x / total_all * 100) if total_all != 0 else 0:.1f}%"
+        )
+        st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+
+
+def _render_yoy_contributions(period_contrib, channel_names, mmm, panel, dim_info):
+    """Render Year-over-Year contribution analysis."""
+    
+    # Ensure Period is datetime
+    period_contrib = period_contrib.copy()
+    period_contrib['Period'] = pd.to_datetime(period_contrib['Period'])
+    
+    # Extract year
+    period_contrib['Year'] = period_contrib['Period'].dt.year
+    
+    # Check if we have multiple years
+    years = sorted(period_contrib['Year'].unique())
+    
+    if len(years) < 2:
+        st.info("📅 YoY analysis requires at least 2 years of data. Current data spans only 1 year.")
+        
+        # Show single year summary instead
+        year_totals = period_contrib[channel_names].sum()
+        fig = px.bar(
+            x=channel_names,
+            y=year_totals.values,
+            labels={'x': 'Channel', 'y': 'Total Contribution'},
+            title=f"Total Contributions for {years[0]}",
+            color=channel_names,
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        return
+    
+    # Aggregate by year
+    yearly_contrib = period_contrib.groupby('Year')[channel_names].sum().reset_index()
+    
+    # Calculate YoY changes
+    yoy_changes = []
+    for i in range(1, len(yearly_contrib)):
+        current_year = yearly_contrib.iloc[i]['Year']
+        prev_year = yearly_contrib.iloc[i-1]['Year']
+        
+        for ch in channel_names:
+            current_val = yearly_contrib.iloc[i][ch]
+            prev_val = yearly_contrib.iloc[i-1][ch]
+            
+            abs_change = current_val - prev_val
+            pct_change = ((current_val - prev_val) / prev_val * 100) if prev_val != 0 else 0
+            
+            yoy_changes.append({
+                'Channel': ch,
+                'Year': f"{int(prev_year)} → {int(current_year)}",
+                'Previous': prev_val,
+                'Current': current_val,
+                'Abs Change': abs_change,
+                'Pct Change': pct_change
+            })
+    
+    yoy_df = pd.DataFrame(yoy_changes)
+    
+    # View selector
+    view_type = st.radio(
+        "YoY View",
+        ["Absolute Values", "Year-over-Year Change", "Growth Rate"],
+        horizontal=True,
+        key="yoy_view_type"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if view_type == "Absolute Values":
+            # Grouped bar chart by year
+            fig = go.Figure()
+            
+            colors = px.colors.qualitative.Set2
+            for i, ch in enumerate(channel_names):
+                fig.add_trace(go.Bar(
+                    x=yearly_contrib['Year'],
+                    y=yearly_contrib[ch],
+                    name=ch,
+                    marker_color=colors[i % len(colors)]
+                ))
+            
+            fig.update_layout(
+                title="Channel Contributions by Year",
+                xaxis_title="Year",
+                yaxis_title="Total Contribution",
+                barmode='group',
+                height=450,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif view_type == "Year-over-Year Change":
+            # Bar chart of absolute changes
+            if not yoy_df.empty:
+                # Get most recent YoY comparison
+                latest_comparison = yoy_df[yoy_df['Year'] == yoy_df['Year'].iloc[-1]]
+                
+                fig = go.Figure()
+                
+                colors = ['#2ecc71' if x >= 0 else '#e74c3c' for x in latest_comparison['Abs Change']]
+                
+                fig.add_trace(go.Bar(
+                    x=latest_comparison['Channel'],
+                    y=latest_comparison['Abs Change'],
+                    marker_color=colors,
+                    text=latest_comparison['Abs Change'].apply(lambda x: f"{x:+,.0f}"),
+                    textposition='outside'
+                ))
+                
+                fig.add_hline(y=0, line_color="gray", line_dash="dash")
+                
+                fig.update_layout(
+                    title=f"YoY Change: {latest_comparison['Year'].iloc[0]}",
+                    xaxis_title="Channel",
+                    yaxis_title="Absolute Change",
+                    height=450
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        else:  # Growth Rate
+            if not yoy_df.empty:
+                latest_comparison = yoy_df[yoy_df['Year'] == yoy_df['Year'].iloc[-1]]
+                
+                fig = go.Figure()
+                
+                colors = ['#2ecc71' if x >= 0 else '#e74c3c' for x in latest_comparison['Pct Change']]
+                
+                fig.add_trace(go.Bar(
+                    x=latest_comparison['Channel'],
+                    y=latest_comparison['Pct Change'],
+                    marker_color=colors,
+                    text=latest_comparison['Pct Change'].apply(lambda x: f"{x:+.1f}%"),
+                    textposition='outside'
+                ))
+                
+                fig.add_hline(y=0, line_color="gray", line_dash="dash")
+                
+                fig.update_layout(
+                    title=f"YoY Growth Rate: {latest_comparison['Year'].iloc[0]}",
+                    xaxis_title="Channel",
+                    yaxis_title="Growth Rate (%)",
+                    height=450
+                )
+                st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Stacked area by year showing channel mix evolution
+        yearly_pct = yearly_contrib.copy()
+        yearly_pct['Total'] = yearly_pct[channel_names].sum(axis=1)
+        for ch in channel_names:
+            yearly_pct[f'{ch}_pct'] = yearly_pct[ch] / yearly_pct['Total'] * 100
+        
+        fig = go.Figure()
+        colors = px.colors.qualitative.Set2
+        
+        for i, ch in enumerate(channel_names):
+            fig.add_trace(go.Bar(
+                x=yearly_pct['Year'],
+                y=yearly_pct[f'{ch}_pct'],
+                name=ch,
+                marker_color=colors[i % len(colors)]
+            ))
+        
+        fig.update_layout(
+            title="Channel Mix by Year (%)",
+            xaxis_title="Year",
+            yaxis_title="Share of Total (%)",
+            barmode='stack',
+            height=450,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # YoY Summary Table
+    st.markdown("#### YoY Summary Table")
+    
+    if not yoy_df.empty:
+        # Pivot for display
+        summary_pivot = yearly_contrib.set_index('Year').T
+        summary_pivot.index.name = 'Channel'
+        
+        # Add totals row
+        summary_pivot.loc['Total'] = summary_pivot.sum()
+        
+        # Format
+        summary_display = summary_pivot.applymap(lambda x: f"{x:,.0f}")
+        
+        # Add YoY change column for most recent comparison
+        if len(years) >= 2:
+            latest_year = years[-1]
+            prev_year = years[-2]
+            summary_pivot['YoY Change'] = summary_pivot[latest_year] - summary_pivot[prev_year]
+            summary_pivot['YoY %'] = ((summary_pivot[latest_year] - summary_pivot[prev_year]) / summary_pivot[prev_year] * 100).round(1)
+            
+            # Format for display
+            summary_display = summary_pivot.copy()
+            for col in years:
+                summary_display[col] = summary_pivot[col].apply(lambda x: f"{x:,.0f}")
+            summary_display['YoY Change'] = summary_pivot['YoY Change'].apply(lambda x: f"{x:+,.0f}")
+            summary_display['YoY %'] = summary_pivot['YoY %'].apply(lambda x: f"{x:+.1f}%")
+        
+        st.dataframe(summary_display, use_container_width=True)
+        
+        # Key insights
+        if len(yoy_df) > 0:
+            latest = yoy_df[yoy_df['Year'] == yoy_df['Year'].iloc[-1]]
+            best_performer = latest.loc[latest['Pct Change'].idxmax()]
+            worst_performer = latest.loc[latest['Pct Change'].idxmin()]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                delta_color = "normal" if best_performer['Pct Change'] >= 0 else "inverse"
+                st.metric(
+                    f"🏆 Best Performer: {best_performer['Channel']}",
+                    f"{best_performer['Current']:,.0f}",
+                    f"{best_performer['Pct Change']:+.1f}% YoY",
+                    delta_color=delta_color
+                )
+            with col2:
+                delta_color = "normal" if worst_performer['Pct Change'] >= 0 else "inverse"
+                st.metric(
+                    f"📉 Needs Attention: {worst_performer['Channel']}",
+                    f"{worst_performer['Current']:,.0f}",
+                    f"{worst_performer['Pct Change']:+.1f}% YoY",
+                    delta_color=delta_color
+                )
 
 
 def _render_contributions_by_dimension(contrib, channel_names, dim_col, dim_values, dim_info, mmm, panel):
@@ -2808,40 +3135,117 @@ def _render_contributions_single(contrib_df, channel_names, title, dim_info, mmm
 
 
 def _render_roas_analysis(totals, channel_names, mmm, panel):
-    """Render ROAS analysis section."""
+    """Render ROAS analysis section with error bars."""
     st.markdown("### ROAS Estimates")
     
     if panel.X_media is not None:
         spend_totals = panel.X_media.sum()
+        
+        # Get posterior samples for contribution uncertainty
+        results = st.session_state.results
+        posterior = results.trace.posterior
         
         roas_data = []
         for ch in channel_names:
             if ch in totals.index and ch in spend_totals.index:
                 contrib_val = totals[ch]
                 spend_val = spend_totals[ch]
-                roas = contrib_val / spend_val if spend_val > 0 else 0
+                roas_mean = contrib_val / spend_val if spend_val > 0 else 0
+                
+                # Compute ROAS uncertainty from beta posterior
+                # Use coefficient of variation from beta to scale ROAS uncertainty
+                beta_var = f"beta_{ch}"
+                if beta_var in posterior and roas_mean > 0:
+                    beta_samples = posterior[beta_var].values.flatten()
+                    beta_mean = beta_samples.mean()
+                    
+                    if beta_mean > 0:
+                        # Compute HDI percentiles of beta
+                        beta_hdi_low = np.percentile(beta_samples, 3)
+                        beta_hdi_high = np.percentile(beta_samples, 97)
+                        
+                        # Scale ROAS by the ratio of beta HDI to beta mean
+                        # This preserves the relative uncertainty from the posterior
+                        roas_hdi_low = roas_mean * (beta_hdi_low / beta_mean)
+                        roas_hdi_high = roas_mean * (beta_hdi_high / beta_mean)
+                        roas_std = roas_mean * (beta_samples.std() / beta_mean)
+                    else:
+                        roas_hdi_low = roas_mean
+                        roas_hdi_high = roas_mean
+                        roas_std = 0
+                else:
+                    roas_std = 0
+                    roas_hdi_low = roas_mean
+                    roas_hdi_high = roas_mean
+                
+                # Error bar distances from the mean
+                error_minus = max(0, roas_mean - roas_hdi_low)
+                error_plus = max(0, roas_hdi_high - roas_mean)
+                
                 roas_data.append({
                     'Channel': ch,
                     'Total Contribution': contrib_val,
                     'Total Spend': spend_val,
-                    'ROAS': roas
+                    'ROAS': roas_mean,
+                    'ROAS_std': roas_std,
+                    'ROAS_low': roas_hdi_low,
+                    'ROAS_high': roas_hdi_high,
+                    'Error_minus': error_minus,
+                    'Error_plus': error_plus
                 })
         
         if roas_data:
             roas_df = pd.DataFrame(roas_data)
             
-            fig = px.bar(
-                roas_df,
-                x='Channel',
-                y='ROAS',
-                color='Channel',
-                title="Return on Ad Spend (ROAS) by Channel",
-                color_discrete_sequence=px.colors.qualitative.Set2
+            # Bar chart with error bars
+            fig = go.Figure()
+            
+            colors = px.colors.qualitative.Set2
+            
+            fig.add_trace(go.Bar(
+                x=roas_df['Channel'],
+                y=roas_df['ROAS'],
+                error_y=dict(
+                    type='data',
+                    symmetric=False,
+                    array=roas_df['Error_plus'].values,
+                    arrayminus=roas_df['Error_minus'].values,
+                    color='rgba(0,0,0,0.5)',
+                    thickness=2,
+                    width=6
+                ),
+                marker_color=[colors[i % len(colors)] for i in range(len(roas_df))],
+                name='ROAS'
+            ))
+            
+            fig.add_hline(y=1.0, line_dash="dash", line_color="gray", 
+                         annotation_text="Break-even", annotation_position="right")
+            
+            fig.update_layout(
+                title="Return on Ad Spend (ROAS) by Channel with 94% HDI",
+                xaxis_title="Channel",
+                yaxis_title="ROAS",
+                height=450,
+                showlegend=False
             )
-            fig.add_hline(y=1.0, line_dash="dash", line_color="gray", annotation_text="Break-even")
             st.plotly_chart(fig, use_container_width=True)
             
-            st.dataframe(roas_df.round(2), use_container_width=True)
+            # Summary table
+            display_df = roas_df[['Channel', 'Total Contribution', 'Total Spend', 'ROAS', 'ROAS_low', 'ROAS_high']].copy()
+            display_df.columns = ['Channel', 'Total Contribution', 'Total Spend', 'ROAS (Mean)', 'ROAS (3%)', 'ROAS (97%)']
+            display_df['Total Contribution'] = display_df['Total Contribution'].apply(lambda x: f"{x:,.0f}")
+            display_df['Total Spend'] = display_df['Total Spend'].apply(lambda x: f"${x:,.0f}")
+            display_df['ROAS (Mean)'] = display_df['ROAS (Mean)'].apply(lambda x: f"{x:.3f}")
+            display_df['ROAS (3%)'] = display_df['ROAS (3%)'].apply(lambda x: f"{x:.3f}")
+            display_df['ROAS (97%)'] = display_df['ROAS (97%)'].apply(lambda x: f"{x:.3f}")
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+            st.info("""
+            💡 **Interpreting ROAS with Uncertainty:**
+            - Error bars show the 94% Highest Density Interval (HDI)
+            - If the lower bound is above 1.0, the channel is confidently profitable
+            - Wide intervals indicate high uncertainty in the estimate
+            """)
 
 
 def render_summary(results, mmm):
