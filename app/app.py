@@ -852,6 +852,7 @@ def fit_model(n_chains, n_draws, n_tune, target_accept, trend_type, trend_settin
                     mu=trend_settings.get('growth_prior_mu', 0.0),
                     sigma=trend_settings.get('growth_prior_sigma', 0.1)
                 )
+
         elif trend_type == 'Piecewise (Prophet-style)':
             trend_builder.piecewise()
             if 'n_changepoints' in trend_settings:
@@ -860,6 +861,7 @@ def fit_model(n_chains, n_draws, n_tune, target_accept, trend_type, trend_settin
                 trend_builder.with_changepoint_range(trend_settings['changepoint_range'])
             if 'changepoint_prior_scale' in trend_settings:
                 trend_builder.with_changepoint_prior_scale(trend_settings['changepoint_prior_scale'])
+
         elif trend_type == 'Spline':
             trend_builder.spline()
             if 'n_knots' in trend_settings:
@@ -868,6 +870,7 @@ def fit_model(n_chains, n_draws, n_tune, target_accept, trend_type, trend_settin
                 trend_builder.with_spline_degree(trend_settings['spline_degree'])
             if 'spline_prior_sigma' in trend_settings:
                 trend_builder.with_spline_prior_sigma(trend_settings['spline_prior_sigma'])
+                
         elif trend_type == 'Gaussian Process':
             trend_builder.gaussian_process()
             if 'gp_lengthscale_mu' in trend_settings:
