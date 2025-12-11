@@ -1115,6 +1115,7 @@ name = "mmm-framework"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cloudpickle" },
     { name = "numba" },
     { name = "numpy" },
     { name = "numpyro" },
@@ -1137,6 +1138,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cloudpickle", specifier = ">=3.1.2" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "numpyro", specifier = ">=0.19.0" },

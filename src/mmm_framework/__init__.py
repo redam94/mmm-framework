@@ -89,6 +89,21 @@ from .model import (
     create_piecewise_trend_matrix,
 )
 
+from .jobs import (
+    # Job status
+    JobStatus,
+    # Job data classes
+    JobProgress,
+    JobConfig,
+    JobResult,
+    Job,
+    # Job manager
+    JobManager,
+    # Convenience functions
+    get_job_manager,
+    submit_model_job,
+)
+
 
 __version__ = "0.1.0"
 
@@ -162,4 +177,13 @@ __all__ = [
     "logistic_saturation_np",
     "create_bspline_basis",
     "create_piecewise_trend_matrix",
+    # Jobs
+    "JobStatus",
+    "JobProgress",
+    "JobConfig",
+    "JobResult",
+    "Job",
+    "JobManager",
+    "get_job_manager",
+    "submit_model_job",
 ]

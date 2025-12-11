@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "cloudpickle>=3.1.2",
     "numba>=0.63.1",
     "numpy>=2.3.5",
     "numpyro>=0.19.0",
