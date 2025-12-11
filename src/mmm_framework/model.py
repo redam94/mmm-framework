@@ -582,6 +582,9 @@ class BayesianMMM:
     def _build_trend_component(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build the trend component based on configuration."""
         
+        # FIX: Convert t_scaled to PyTensor tensor for indexing with PyTensor variables
+        t_scaled_tensor = pt.as_tensor_variable(self.t_scaled)
+        
         if self.trend_config.type == TrendType.NONE:
             return pt.zeros(time_idx.shape[0])
         
@@ -591,7 +594,7 @@ class BayesianMMM:
                 mu=self.trend_config.growth_prior_mu,
                 sigma=self.trend_config.growth_prior_sigma
             )
-            return trend_slope * self.t_scaled[time_idx]
+            return trend_slope * t_scaled_tensor[time_idx]
         
         elif self.trend_config.type == TrendType.PIECEWISE:
             return self._build_piecewise_trend(model, time_idx)
@@ -605,7 +608,7 @@ class BayesianMMM:
         else:
             warnings.warn(f"Unknown trend type: {self.trend_config.type}, using linear")
             trend_slope = pm.Normal("trend_slope", mu=0, sigma=0.5)
-            return trend_slope * self.t_scaled[time_idx]
+            return trend_slope * t_scaled_tensor[time_idx]
     
     def _build_piecewise_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build Prophet-style piecewise linear trend."""
@@ -636,11 +639,16 @@ class BayesianMMM:
         # Build trend at unique time points
         t_unique = np.linspace(0, 1, self.n_periods)
         
+        # FIX: Convert numpy arrays to PyTensor tensors
+        t_unique_tensor = pt.as_tensor_variable(t_unique)
+        A_tensor = pt.as_tensor_variable(A)
+        s_tensor = pt.as_tensor_variable(s)
+        
         # gamma ensures continuity at changepoints
-        gamma = -s * delta
+        gamma = -s_tensor * delta
         
         # Trend at unique times
-        trend_unique = k * t_unique + pt.dot(A, delta) + m + pt.dot(A, gamma)
+        trend_unique = k * t_unique_tensor + pt.dot(A_tensor, delta) + m + pt.dot(A_tensor, gamma)
         
         # Map to observations
         return trend_unique[time_idx]
@@ -674,8 +682,11 @@ class BayesianMMM:
             dims="spline_coef"
         )
         
+        # FIX: Convert basis to PyTensor tensor
+        basis_tensor = pt.as_tensor_variable(basis)
+        
         # Compute trend at unique time points
-        trend_unique = pt.dot(basis, spline_coef)
+        trend_unique = pt.dot(basis_tensor, spline_coef)
         
         # Center the trend (remove mean)
         trend_unique = trend_unique - trend_unique.mean()
@@ -761,9 +772,13 @@ class BayesianMMM:
         basis_cos = np.cos(2 * np.pi * np.outer(t_unique, frequencies))
         basis = np.hstack([basis_sin, basis_cos])  # (n_periods, 2*n_basis)
         
+        # FIX: Convert to PyTensor tensor
+        basis_tensor = pt.as_tensor_variable(basis)
+        
         # Spectral density weights (approximate Matern 3/2)
         # S(w) ∝ (1 + (w*l)^2)^(-2) for Matern 3/2
         omega = 2 * np.pi * frequencies
+        omega_tensor = pt.as_tensor_variable(omega)
         
         # GP basis coefficients
         gp_coef = pm.Normal(
@@ -775,15 +790,15 @@ class BayesianMMM:
         
         # Compute spectral weights (need to be differentiable)
         # Use a simpler squared exponential approximation for stability
-        spectral_weights_sin = pt.exp(-0.5 * (omega * lengthscale)**2)
-        spectral_weights_cos = pt.exp(-0.5 * (omega * lengthscale)**2)
+        spectral_weights_sin = pt.exp(-0.5 * (omega_tensor * lengthscale)**2)
+        spectral_weights_cos = pt.exp(-0.5 * (omega_tensor * lengthscale)**2)
         spectral_weights = pt.concatenate([spectral_weights_sin, spectral_weights_cos])
         
         # Scale coefficients by spectral weights and amplitude
         scaled_coef = amplitude * gp_coef * pt.sqrt(spectral_weights / n_basis)
         
         # Compute trend
-        trend_unique = pt.dot(basis, scaled_coef)
+        trend_unique = pt.dot(basis_tensor, scaled_coef)
         
         # Center
         trend_unique = trend_unique - trend_unique.mean()
@@ -887,7 +902,9 @@ class BayesianMMM:
                     sigma=0.3,
                     shape=n_features,
                 )
-                season_effect = pt.dot(features, season_coef)
+                # FIX: Convert features to PyTensor tensor
+                features_tensor = pt.as_tensor_variable(features)
+                season_effect = pt.dot(features_tensor, season_coef)
                 seasonality = seasonality + season_effect[time_idx_data]
             
             # =================================================================
