@@ -2734,6 +2734,13 @@ def render_budget_optimization(mmm, channel_names, dim_info):
         
         st.plotly_chart(fig, use_container_width=True)
 
+def save_mmm(mmm, path="/tmp/mmm_model"):
+    mmm.save(path, compress=True)
+    import shutil
+    out_file = "mmm_model"
+    shutil.make_archive(out_file, 'zip', path)
+    return out_file+".zip"
+
 @st.fragment
 def render_summary(results, mmm):
     """Render model summary."""
@@ -2790,11 +2797,7 @@ def render_summary(results, mmm):
     with col4:
         if st.session_state.mmm is not None:
             mmm = st.session_state.mmm
-            mmm.save("/tmp/mmm_model", compress=True)
-            import shutil
-            out_file = "mmm_model"
-            shutil.make_archive(out_file, 'zip', "/tmp/mmm_model")
-            zip_path = out_file + ".zip"
+            zip_path = save_mmm(mmm, "/tmp/mmm_model")
             with open(zip_path, "rb") as file:
                 st.download_button(
                     label="Download ZIP Archive",
