@@ -8,19 +8,21 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "arq>=0.25.0",
     "cloudpickle>=3.1.2",
+    "fastapi>=0.124.2",
     "numba>=0.63.1",
     "numpy>=2.3.5",
     "numpyro>=0.19.0",
     "nutpie>=0.16.4",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
     "pymc>=5.26.1",
+    "python-multipart>=0.0.20",
+    "redis>=7.1.0",
+    "uvicorn>=0.38.0",
 ]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -35,3 +37,5 @@ app = [
 
 [tool.uv.sources]
 mmm-framework = { workspace = true }
+
+
