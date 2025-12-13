@@ -219,7 +219,7 @@ def render_job_monitor():
             st.error(f"❌ Error: {model.error_message}")
         
         # Diagnostics preview (if completed)
-        if model.is_complete and model.diagnostics:
+        if model.progress == "completed" and model.diagnostics:
             st.markdown("#### Quick Diagnostics")
             col1, col2, col3 = st.columns(3)
             
@@ -237,13 +237,13 @@ def render_job_monitor():
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if model.is_complete:
+            if model.progress == "completed":
                 if st.button("📈 View Results", type="primary", use_container_width=True):
                     st.session_state.selected_model_id = model.model_id
                     st.switch_page("pages/4_Results.py")
         
         with col2:
-            if getattr(model, "is_active", False):
+            if model.progress in {"pending", "queued", "running"}:
                 if st.button("⏹️ Cancel", use_container_width=True):
                     st.info("Cancel functionality would go here")
         
@@ -348,11 +348,11 @@ def render_job_list():
                     st.markdown(f"{status_icon(model.status.value)} {model.status.value.capitalize()}")
                 
                 with col4:
-                    if model.is_active:
+                    if model.progress == 'running':
                         st.progress(model.progress / 100)
-                    elif model.is_complete:
+                    elif model.progress == 'completed':
                         st.success("Complete", icon="✅")
-                    elif model.is_failed:
+                    elif model.progress == 'failed':
                         st.error("Failed", icon="❌")
                     else:
                         st.caption(model.status.value)

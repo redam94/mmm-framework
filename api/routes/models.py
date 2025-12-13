@@ -499,9 +499,17 @@ async def get_model_fit(
                 rmse_geo = np.sqrt(np.mean((y_obs_geo - y_pred_geo) ** 2))
                 mape_geo = np.mean(np.abs((y_obs_geo - y_pred_geo) / (y_obs_geo + 1e-8))) * 100
                 
+                # Compute std for this geo (sum over products in quadrature)
+                y_pred_std_geo = None
+                if y_pred_std is not None:
+                    y_pred_std_reshaped = y_pred_std.reshape(n_periods, n_geos, n_products) if (has_geo or has_product) else y_pred_std.reshape(n_periods, 1, 1)
+                    # For summed values, std combines in quadrature
+                    y_pred_std_geo = np.sqrt((y_pred_std_reshaped[:, g_idx, :] ** 2).sum(axis=1)).tolist()
+                
                 geo_data[geo] = {
                     "observed": y_obs_geo.tolist(),
                     "predicted_mean": y_pred_geo.tolist(),
+                    "predicted_std": y_pred_std_geo,
                     "r2": float(r2_geo),
                     "rmse": float(rmse_geo),
                     "mape": float(mape_geo),
@@ -624,6 +632,178 @@ async def get_posteriors(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error computing posteriors: {str(e)}",
+        )
+
+
+@router.get(
+    "/{model_id}/prior-posterior",
+    responses={
+        404: {"model": ErrorResponse},
+        400: {"model": ErrorResponse},
+    },
+)
+async def get_prior_vs_posterior(
+    model_id: str,
+    n_samples: int = Query(500, ge=100, le=2000, description="Number of samples to return"),
+    storage: StorageService = Depends(get_storage),
+):
+    """
+    Get prior vs posterior comparison for model parameters.
+    
+    Returns prior and posterior samples with shrinkage metrics for each parameter.
+    """
+    _check_model_completed(storage, model_id)
+    
+    try:
+        # Try to load cached prior-posterior data
+        try:
+            prior_posterior = storage.load_results(model_id, "prior_posterior")
+            return SafeJSONResponse(content=prior_posterior)
+        except StorageError:
+            pass
+        
+        # Compute from model artifacts
+        logger.info(f"Computing prior vs posterior for model {model_id}")
+        mmm = storage.load_model_artifact(model_id, "mmm")
+        
+        if mmm._trace is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Model trace not available",
+            )
+        
+        import pymc as pm
+        
+        trace = mmm._trace
+        posterior = trace.posterior
+        
+        # Sample from prior
+        with mmm._model:
+            prior = pm.sample_prior_predictive(samples=n_samples, random_seed=42)
+        
+        prior_data = prior.prior
+        
+        result = {
+            "model_id": model_id,
+            "parameters": {},
+            "channel_names": mmm.channel_names,
+        }
+        
+        # Key parameters to compare
+        key_params = []
+        
+        # Add beta parameters
+        for ch in mmm.channel_names:
+            for prefix in ["beta_", "beta_media_"]:
+                param = f"{prefix}{ch}"
+                if param in posterior:
+                    key_params.append(param)
+                    break
+        
+        # Add adstock parameters
+        for ch in mmm.channel_names:
+            for prefix in ["adstock_", "adstock_alpha_"]:
+                param = f"{prefix}{ch}"
+                if param in posterior:
+                    key_params.append(param)
+                    break
+        
+        # Add saturation parameters
+        for ch in mmm.channel_names:
+            for prefix in ["sat_lam_", "saturation_lam_"]:
+                param = f"{prefix}{ch}"
+                if param in posterior:
+                    key_params.append(param)
+                    break
+        
+        # Add other key parameters
+        for param in ["intercept", "sigma", "trend_slope", "trend_intercept"]:
+            if param in posterior:
+                key_params.append(param)
+        
+        # Also include any trend/seasonality parameters
+        for var in posterior.data_vars:
+            if any(x in var for x in ["trend", "season", "gp_", "spline"]):
+                if var not in key_params:
+                    key_params.append(var)
+        
+        for param in key_params:
+            if param not in posterior:
+                continue
+            
+            try:
+                # Get posterior samples
+                post_samples = posterior[param].values.flatten()
+                if len(post_samples) > n_samples:
+                    idx = np.random.choice(len(post_samples), n_samples, replace=False)
+                    post_samples = post_samples[idx]
+                
+                # Get prior samples (if available)
+                prior_samples = None
+                prior_mean = None
+                prior_std = None
+                shrinkage = None
+                
+                if param in prior_data:
+                    prior_samples = prior_data[param].values.flatten()
+                    if len(prior_samples) > n_samples:
+                        idx = np.random.choice(len(prior_samples), n_samples, replace=False)
+                        prior_samples = prior_samples[idx]
+                    
+                    prior_mean = float(np.mean(prior_samples))
+                    prior_std = float(np.std(prior_samples))
+                    
+                    # Compute shrinkage (reduction in standard deviation)
+                    post_std = float(np.std(post_samples))
+                    if prior_std > 1e-8:
+                        shrinkage = float((1 - post_std / prior_std) * 100)
+                    else:
+                        shrinkage = 0.0
+                
+                post_mean = float(np.mean(post_samples))
+                post_std = float(np.std(post_samples))
+                
+                # Compute HDI
+                hdi_low = float(np.percentile(post_samples, 3))
+                hdi_high = float(np.percentile(post_samples, 97))
+                
+                param_data = {
+                    "posterior_samples": post_samples.tolist(),
+                    "posterior_mean": post_mean,
+                    "posterior_std": post_std,
+                    "posterior_hdi_3": hdi_low,
+                    "posterior_hdi_97": hdi_high,
+                }
+                
+                if prior_samples is not None:
+                    param_data.update({
+                        "prior_samples": prior_samples.tolist(),
+                        "prior_mean": prior_mean,
+                        "prior_std": prior_std,
+                        "shrinkage_pct": shrinkage,
+                    })
+                
+                result["parameters"][param] = param_data
+                
+            except Exception as e:
+                logger.warning(f"Could not process parameter {param}: {e}")
+                continue
+        
+        # Sanitize for JSON serialization
+        result = _sanitize_for_json(result)
+        
+        # Cache the results
+        storage.save_results(model_id, "prior_posterior", result)
+        
+        return SafeJSONResponse(content=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error computing prior vs posterior: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error computing prior vs posterior: {str(e)}",
         )
 
 

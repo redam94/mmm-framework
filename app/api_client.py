@@ -113,18 +113,6 @@ class ModelInfo:
     completed_at: datetime | None = None
     error_message: str | None = None
     diagnostics: dict | None = None
-
-    @property
-    def is_complete(self) -> bool:
-        return self.status == JobStatus.COMPLETED
-    
-    @property
-    def is_active(self) -> bool:
-        return self.status in {JobStatus.PENDING, JobStatus.QUEUED, JobStatus.RUNNING}
-    
-    @property
-    def is_failed(self) -> bool:
-        return self.status == JobStatus.FAILED
     
     @classmethod
     def from_dict(cls, data: dict) -> "ModelInfo":
@@ -198,6 +186,7 @@ class MMMClient:
     
     def __init__(self, base_url: str = API_BASE_URL, timeout: float = API_TIMEOUT):
         self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
         self._client = httpx.Client(
             base_url=self.base_url,
             timeout=timeout,
@@ -250,12 +239,22 @@ class MMMClient:
     
     def upload_data(self, file_content: bytes, filename: str) -> DatasetInfo:
         """Upload a dataset file."""
-        files = {"file": (filename, file_content)}
-        response = self._client.post(
-            "/data/upload",
-            files=files,
-            headers={},  # Let httpx set content-type for multipart
-        )
+        import io
+        
+        # Validate input
+        if file_content is None:
+            raise ValueError("File content is None")
+        if not isinstance(file_content, bytes):
+            raise ValueError(f"File content must be bytes, got {type(file_content)}")
+        if len(file_content) == 0:
+            raise ValueError("File content is empty (0 bytes)")
+        
+        # Create a fresh client for uploads to avoid any connection state issues
+        with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
+            file_obj = io.BytesIO(file_content)
+            files = {"file": (filename, file_obj)}
+            response = client.post("/data/upload", files=files)
+        
         data = self._handle_response(response)
         return DatasetInfo.from_dict(data)
     
@@ -465,6 +464,27 @@ class MMMClient:
         response = self._client.get(f"/models/{model_id}/posteriors", params=params)
         return self._handle_response(response)
     
+    def get_prior_posterior(
+        self,
+        model_id: str,
+        n_samples: int = 500,
+    ) -> dict[str, Any]:
+        """
+        Get prior vs posterior comparison data.
+        
+        Args:
+            model_id: Model identifier
+            n_samples: Number of samples per parameter (default 500)
+        
+        Returns:
+            dict with parameters mapping to prior/posterior samples and shrinkage metrics
+        """
+        response = self._client.get(
+            f"/models/{model_id}/prior-posterior",
+            params={"n_samples": n_samples},
+        )
+        return self._handle_response(response)
+    
     def get_response_curves(
         self,
         model_id: str,
@@ -648,6 +668,12 @@ def fetch_model_fit(_client: MMMClient, model_id: str) -> dict[str, Any]:
 def fetch_posteriors(_client: MMMClient, model_id: str, n_samples: int = 500) -> dict[str, Any]:
     """Fetch posterior samples with 5-minute cache."""
     return _client.get_posteriors(model_id, n_samples=n_samples)
+
+
+@st.cache_data(ttl=300)
+def fetch_prior_posterior(_client: MMMClient, model_id: str, n_samples: int = 500) -> dict[str, Any]:
+    """Fetch prior vs posterior comparison with 5-minute cache."""
+    return _client.get_prior_posterior(model_id, n_samples=n_samples)
 
 
 @st.cache_data(ttl=300)

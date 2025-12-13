@@ -15,6 +15,7 @@ from api_client import (
     fetch_model_results,
     fetch_model_fit,
     fetch_posteriors,
+    fetch_prior_posterior,
     fetch_response_curves,
     fetch_decomposition,
     fetch_marginal_roas,
@@ -260,7 +261,15 @@ def render_geo_comparison(fit_data: dict, periods: list, geographies: list):
 @st.fragment
 def render_model_fit_tab(model_id: str):
     """Render model fit visualization with aggregation controls."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
     st.markdown("### Model Fit")
+    
+    st.markdown("""
+    The model fit shows observed data against posterior predictions. The **shaded band** represents 
+    the prediction uncertainty (±1 std), capturing both parameter uncertainty and residual variance.
+    """)
     
     try:
         client = get_api_client()
@@ -317,7 +326,7 @@ def render_model_fit_tab(model_id: str):
             
             observed = geo_data.get("observed", [])
             predicted_mean = geo_data.get("predicted_mean", [])
-            predicted_std = None  # Not typically available at geo level
+            predicted_std = geo_data.get("predicted_std")  # Now available at geo level
             r2 = geo_data.get("r2")
             rmse = geo_data.get("rmse")
             mape = geo_data.get("mape")
@@ -331,34 +340,142 @@ def render_model_fit_tab(model_id: str):
         if has_geo:
             st.caption(view_title)
         
-        # Fit metrics
-        col1, col2, col3 = st.columns(3)
+        # Fit metrics with context
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             if r2 is not None:
-                st.metric("R²", f"{r2:.4f}")
+                # Color code R² based on quality
+                if r2 >= 0.9:
+                    st.metric("R²", f"{r2:.4f}", delta="Excellent", delta_color="normal")
+                elif r2 >= 0.7:
+                    st.metric("R²", f"{r2:.4f}", delta="Good", delta_color="normal")
+                else:
+                    st.metric("R²", f"{r2:.4f}", delta="Check", delta_color="inverse")
         with col2:
             if rmse is not None:
                 st.metric("RMSE", f"{rmse:,.2f}")
         with col3:
             if mape is not None:
-                st.metric("MAPE", f"{mape:.2f}%")
+                if mape < 10:
+                    st.metric("MAPE", f"{mape:.2f}%", delta="Excellent", delta_color="normal")
+                elif mape < 20:
+                    st.metric("MAPE", f"{mape:.2f}%", delta="Good", delta_color="normal")
+                else:
+                    st.metric("MAPE", f"{mape:.2f}%", delta="High", delta_color="inverse")
+        with col4:
+            # Coverage metric if std available
+            if predicted_std:
+                # Calculate how many observations fall within prediction interval
+                within_band = sum(
+                    1 for o, m, s in zip(observed, predicted_mean, predicted_std)
+                    if m - 1.96 * s <= o <= m + 1.96 * s
+                )
+                coverage = within_band / len(observed) * 100
+                st.metric("95% Coverage", f"{coverage:.0f}%")
         
-        # Plot
-        plot_model_fit(
-            periods=periods,
-            observed=observed,
-            predicted_mean=predicted_mean,
-            predicted_std=predicted_std if predicted_std else None,
-            y_label="Sales" if selected_view == "Aggregated (Total)" else f"Sales ({geo_name})" if has_geo else "Sales",
+        # Create model fit plot with uncertainty
+        fig = go.Figure()
+        
+        # Add uncertainty band if std is available
+        if predicted_std and len(predicted_std) == len(predicted_mean):
+            upper = [m + 1.96 * s for m, s in zip(predicted_mean, predicted_std)]
+            lower = [m - 1.96 * s for m, s in zip(predicted_mean, predicted_std)]
+            
+            fig.add_trace(go.Scatter(
+                x=periods + periods[::-1],
+                y=upper + lower[::-1],
+                fill='toself',
+                fillcolor='rgba(99, 110, 250, 0.2)',
+                line=dict(color='rgba(0,0,0,0)'),
+                name='95% Prediction Interval',
+                hoverinfo='skip',
+            ))
+        
+        # Predicted mean
+        fig.add_trace(go.Scatter(
+            x=periods,
+            y=predicted_mean,
+            mode='lines',
+            name='Predicted (Mean)',
+            line=dict(color='rgb(99, 110, 250)', width=2),
+            hovertemplate="Predicted: %{y:,.0f}<extra></extra>",
+        ))
+        
+        # Observed data
+        fig.add_trace(go.Scatter(
+            x=periods,
+            y=observed,
+            mode='markers',
+            name='Observed',
+            marker=dict(color='rgb(239, 85, 59)', size=6),
+            hovertemplate="Observed: %{y:,.0f}<extra></extra>",
+        ))
+        
+        fig.update_layout(
+            title="Posterior Predictive Fit",
+            xaxis_title="Period",
+            yaxis_title="Sales" if selected_view == "Aggregated (Total)" else f"Sales ({geo_name})" if has_geo else "Sales",
+            height=450,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+            ),
+            hovermode='x unified',
         )
+        
+        st.plotly_chart(fig, use_container_width=True, key=f"fit_plot_{selected_view}")
         
         # Residual analysis
         if predicted_mean:
             residuals = [o - p for o, p in zip(observed, predicted_mean)]
             
             with st.expander("📊 Residual Analysis", expanded=False):
-                plot_residuals(periods, residuals)
+                # Create subplot with residuals and histogram
+                fig_resid = make_subplots(
+                    rows=1, cols=2,
+                    subplot_titles=["Residuals Over Time", "Residual Distribution"],
+                    column_widths=[0.65, 0.35],
+                )
+                
+                # Residuals over time
+                fig_resid.add_trace(go.Scatter(
+                    x=periods,
+                    y=residuals,
+                    mode='markers+lines',
+                    marker=dict(size=4, color='rgb(99, 110, 250)'),
+                    line=dict(width=1, color='rgb(99, 110, 250)'),
+                    name='Residuals',
+                    showlegend=False,
+                ), row=1, col=1)
+                
+                fig_resid.add_hline(y=0, line_dash="dash", line_color="gray", row=1, col=1)
+                
+                # Residual histogram
+                fig_resid.add_trace(go.Histogram(
+                    x=residuals,
+                    nbinsx=25,
+                    marker_color='rgb(99, 110, 250)',
+                    name='Distribution',
+                    showlegend=False,
+                ), row=1, col=2)
+                
+                fig_resid.update_layout(height=300)
+                st.plotly_chart(fig_resid, use_container_width=True, key=f"resid_{selected_view}")
+                
+                # Residual statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Mean Residual", f"{np.mean(residuals):,.1f}")
+                with col2:
+                    st.metric("Std Residual", f"{np.std(residuals):,.1f}")
+                with col3:
+                    st.metric("Min", f"{min(residuals):,.1f}")
+                with col4:
+                    st.metric("Max", f"{max(residuals):,.1f}")
         
         # Show geo comparison chart if aggregated view
         if selected_view == "Aggregated (Total)" and has_geo and geographies:
@@ -450,13 +567,331 @@ def render_posteriors_tab(model_id: str):
 
 
 # =============================================================================
+# Prior vs Posterior Tab
+# =============================================================================
+
+def rgb_to_rgba(rgb: str, alpha: float = 1.0) -> str:
+    """Convert RGB color to RGBA format."""
+    # Handle different color formats
+    if rgb.startswith("rgba"):
+        return rgb
+    if rgb.startswith("rgb("):
+        r, g, b = rgb.strip("rgb(").strip(")").split(",")
+        return f"rgba({r},{g},{b},{alpha})"
+    if rgb.startswith("#"):
+        # Hex to RGBA
+        hex_color = rgb.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return f"rgba({r},{g},{b},{alpha})"
+    return rgb
+
+
+@st.fragment
+def render_prior_posterior_tab(model_id: str):
+    """Render prior vs posterior comparison with shrinkage metrics."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    st.markdown("### Prior vs Posterior Analysis")
+    
+    st.markdown("""
+    Compare how the data updated our prior beliefs. **Shrinkage** measures how much the posterior 
+    standard deviation has reduced compared to the prior—higher shrinkage indicates the data is 
+    more informative about that parameter.
+    """)
+    
+    try:
+        client = get_api_client()
+        
+        with st.spinner("Loading prior vs posterior data..."):
+            pp_data = fetch_prior_posterior(client, model_id)
+        
+        if not pp_data or "parameters" not in pp_data:
+            st.info("Prior vs posterior data not available.")
+            return
+        
+        parameters = pp_data.get("parameters", {})
+        channel_names = pp_data.get("channel_names", [])
+        
+        if not parameters:
+            st.info("No parameters available for comparison.")
+            return
+        
+        # Organize parameters by category
+        param_categories = {
+            "Media Coefficients (β)": [],
+            "Adstock Parameters": [],
+            "Saturation Parameters (λ)": [],
+            "Trend & Seasonality": [],
+            "Other": [],
+        }
+        
+        for param in parameters.keys():
+            if "beta" in param.lower():
+                param_categories["Media Coefficients (β)"].append(param)
+            elif "adstock" in param.lower() or "alpha" in param.lower():
+                param_categories["Adstock Parameters"].append(param)
+            elif "sat" in param.lower() or "lam" in param.lower():
+                param_categories["Saturation Parameters (λ)"].append(param)
+            elif any(x in param.lower() for x in ["trend", "season", "gp_", "spline"]):
+                param_categories["Trend & Seasonality"].append(param)
+            else:
+                param_categories["Other"].append(param)
+        
+        # Remove empty categories
+        param_categories = {k: v for k, v in param_categories.items() if v}
+        
+        # Category selector
+        selected_category = st.selectbox(
+            "Parameter Category",
+            options=list(param_categories.keys()),
+            key="pp_category_select",
+        )
+        
+        params_to_plot = param_categories[selected_category]
+        
+        # Filter to params that have both prior and posterior
+        params_with_prior = [p for p in params_to_plot 
+                           if parameters.get(p, {}).get("prior_samples") is not None]
+        
+        if not params_with_prior:
+            st.warning(f"No parameters in '{selected_category}' have prior samples available.")
+            # Show posteriors only
+            params_with_prior = params_to_plot
+        
+        # Create comparison plots
+        n_params = len(params_with_prior)
+        n_cols = min(3, n_params)
+        n_rows = (n_params + n_cols - 1) // n_cols
+        
+        # Create subplot titles
+        subplot_titles = [p.replace('_', ' ').title() for p in params_with_prior]
+        
+        fig = make_subplots(
+            rows=n_rows, 
+            cols=n_cols,
+            subplot_titles=subplot_titles,
+            vertical_spacing=0.12,
+            horizontal_spacing=0.08,
+        )
+        
+        for idx, param in enumerate(params_with_prior):
+            row = idx // n_cols + 1
+            col = idx % n_cols + 1
+            
+            param_data = parameters.get(param, {})
+            
+            # Get posterior samples
+            post_samples = param_data.get("posterior_samples", [])
+            
+            # Get prior samples (if available)
+            prior_samples = param_data.get("prior_samples", [])
+            
+            # Add prior histogram (if available)
+            if prior_samples:
+                fig.add_trace(
+                    go.Histogram(
+                        x=prior_samples,
+                        name='Prior',
+                        opacity=0.5,
+                        marker_color='rgba(99, 110, 250, 0.6)',
+                        nbinsx=40,
+                        histnorm='probability density',
+                        showlegend=(idx == 0),
+                        legendgroup='prior',
+                    ),
+                    row=row, col=col
+                )
+            
+            # Add posterior histogram
+            if post_samples:
+                fig.add_trace(
+                    go.Histogram(
+                        x=post_samples,
+                        name='Posterior',
+                        opacity=0.6,
+                        marker_color='rgba(239, 85, 59, 0.7)',
+                        nbinsx=40,
+                        histnorm='probability density',
+                        showlegend=(idx == 0),
+                        legendgroup='posterior',
+                    ),
+                    row=row, col=col
+                )
+                
+                # Add vertical line for posterior mean
+                post_mean = param_data.get("posterior_mean", np.mean(post_samples))
+                fig.add_vline(
+                    x=post_mean,
+                    line_dash="dash",
+                    line_color="rgba(239, 85, 59, 0.8)",
+                    line_width=2,
+                    row=row, col=col
+                )
+        
+        fig.update_layout(
+            height=280 * n_rows,
+            barmode='overlay',
+            title=dict(
+                text="Prior (Blue) vs Posterior (Red) Distributions",
+                font=dict(size=16),
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+            ),
+            margin=dict(t=80, b=40),
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key=f"pp_plot_{selected_category}")
+        
+        # Summary statistics table with shrinkage
+        st.markdown("---")
+        st.markdown("### Prior vs Posterior Summary Statistics")
+        
+        summary_data = []
+        for param in params_with_prior:
+            param_data = parameters.get(param, {})
+            
+            row = {
+                "Parameter": param.replace('_', ' ').title(),
+                "Posterior Mean": param_data.get("posterior_mean"),
+                "Posterior Std": param_data.get("posterior_std"),
+                "94% HDI Low": param_data.get("posterior_hdi_3"),
+                "94% HDI High": param_data.get("posterior_hdi_97"),
+            }
+            
+            if param_data.get("prior_mean") is not None:
+                row["Prior Mean"] = param_data.get("prior_mean")
+                row["Prior Std"] = param_data.get("prior_std")
+                row["Shrinkage (%)"] = param_data.get("shrinkage_pct")
+            
+            summary_data.append(row)
+        
+        summary_df = pd.DataFrame(summary_data)
+        
+        # Format the dataframe for display
+        format_cols = ["Posterior Mean", "Posterior Std", "Prior Mean", "Prior Std", 
+                       "94% HDI Low", "94% HDI High"]
+        for col in format_cols:
+            if col in summary_df.columns:
+                summary_df[col] = summary_df[col].apply(
+                    lambda x: f"{x:.4f}" if pd.notna(x) else "N/A"
+                )
+        
+        if "Shrinkage (%)" in summary_df.columns:
+            summary_df["Shrinkage (%)"] = summary_df["Shrinkage (%)"].apply(
+                lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
+            )
+        
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        
+        # Shrinkage interpretation
+        st.markdown("---")
+        st.markdown("### 📊 Shrinkage Analysis")
+        
+        # Create shrinkage bar chart for parameters with prior data
+        shrinkage_data = []
+        for param in params_with_prior:
+            param_data = parameters.get(param, {})
+            shrinkage = param_data.get("shrinkage_pct")
+            if shrinkage is not None:
+                shrinkage_data.append({
+                    "Parameter": param.replace('_', ' ').title(),
+                    "Shrinkage (%)": shrinkage,
+                })
+        
+        if shrinkage_data:
+            shrinkage_df = pd.DataFrame(shrinkage_data)
+            shrinkage_df = shrinkage_df.sort_values("Shrinkage (%)", ascending=True)
+            
+            # Color based on shrinkage level
+            colors = []
+            for s in shrinkage_df["Shrinkage (%)"]:
+                if s >= 70:
+                    colors.append("#2ecc71")  # Green - high information
+                elif s >= 40:
+                    colors.append("#f39c12")  # Orange - moderate information
+                else:
+                    colors.append("#e74c3c")  # Red - low information
+            
+            fig_shrinkage = go.Figure()
+            fig_shrinkage.add_trace(go.Bar(
+                x=shrinkage_df["Shrinkage (%)"],
+                y=shrinkage_df["Parameter"],
+                orientation='h',
+                marker_color=colors,
+                text=shrinkage_df["Shrinkage (%)"].apply(lambda x: f"{x:.1f}%"),
+                textposition='outside',
+            ))
+            
+            fig_shrinkage.update_layout(
+                title="Posterior Shrinkage by Parameter",
+                xaxis_title="Shrinkage (%)",
+                yaxis_title="",
+                height=max(300, len(shrinkage_data) * 35),
+                xaxis=dict(range=[0, 105]),
+                margin=dict(l=150, r=50),
+            )
+            
+            # Add reference lines
+            fig_shrinkage.add_vline(x=40, line_dash="dash", line_color="gray", opacity=0.5)
+            fig_shrinkage.add_vline(x=70, line_dash="dash", line_color="gray", opacity=0.5)
+            
+            st.plotly_chart(fig_shrinkage, use_container_width=True, key=f"shrinkage_{selected_category}")
+            
+            # Interpretation guide
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("🟢 **High (>70%)**")
+                st.caption("Data strongly informs this parameter")
+            with col2:
+                st.markdown("🟠 **Moderate (40-70%)**")
+                st.caption("Data provides useful information")
+            with col3:
+                st.markdown("🔴 **Low (<40%)**")
+                st.caption("Prior dominates; consider more data")
+        else:
+            st.info("Shrinkage data not available for these parameters.")
+        
+        # Key insights
+        st.markdown("---")
+        st.info("""
+        💡 **Interpretation Guide:**
+        - **Shrinkage** = (1 - Posterior Std / Prior Std) × 100%
+        - Higher shrinkage means the data is more informative about that parameter
+        - If prior and posterior are similar (low shrinkage), the data provides little information
+        - Large shifts from prior to posterior mean indicate strong evidence from the data
+        - Parameters with low shrinkage may benefit from more informative priors or additional data
+        """)
+    
+    except APIError as e:
+        display_api_error(e)
+    except Exception as e:
+        st.error(f"Error loading prior vs posterior data: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+# =============================================================================
 # Response Curves Tab
 # =============================================================================
 
 @st.fragment
 def render_response_curves_tab(model_id: str):
-    """Render response curves."""
+    """Render response curves with uncertainty bands."""
+    import plotly.graph_objects as go
+    
     st.markdown("### Response Curves")
+    
+    st.markdown("""
+    Response curves show how media spend translates to sales effect after accounting for 
+    saturation (diminishing returns). The **shaded bands** represent the 94% HDI (Highest Density Interval),
+    capturing the uncertainty in the relationship.
+    """)
     
     try:
         client = get_api_client()
@@ -470,26 +905,227 @@ def render_response_curves_tab(model_id: str):
         
         channels = curves_data.get("channels", {})
         
-        # Transform to expected format for plot function
-        curves_for_plot = {}
-        for channel, data in channels.items():
-            curves_for_plot[channel] = {
-                "spend": data.get("spend", []),
-                "response": data.get("response", []),
-                "current_spend": data.get("current_spend", 0),
-            }
+        # Settings
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            show_observed = st.checkbox("Show Observed Spend", value=True, key="rc_show_observed",
+                                       help="Mark the range of observed spend values")
         
-        plot_response_curves(curves_for_plot, title="Channel Response Curves")
+        # Create response curves plot with HDI bands
+        fig = go.Figure()
+        
+        colors = [
+            '#4285f4', '#ea4335', '#fbbc04', '#34a853', 
+            '#ff6d01', '#46bdc6', '#9334e6', '#e91e63'
+        ]
+        
+        for i, (channel, data) in enumerate(channels.items()):
+            color = colors[i % len(colors)]
+            color_rgba = rgb_to_rgba(color, 0.2)
+            
+            spend = data.get("spend", [])
+            response = data.get("response", [])
+            hdi_low = data.get("response_hdi_low", [])
+            hdi_high = data.get("response_hdi_high", [])
+            current_spend = data.get("current_spend", 0)
+            spend_max = data.get("spend_max", max(spend) if spend else 0)
+            
+            # Add HDI band if available
+            if hdi_low and hdi_high and len(hdi_low) == len(spend):
+                fig.add_trace(go.Scatter(
+                    x=spend + spend[::-1],
+                    y=hdi_high + hdi_low[::-1],
+                    fill='toself',
+                    fillcolor=color_rgba,
+                    line=dict(color='rgba(0,0,0,0)'),
+                    name=f"{channel} 94% HDI",
+                    showlegend=False,
+                    hoverinfo='skip',
+                ))
+            
+            # Mean response curve
+            fig.add_trace(go.Scatter(
+                x=spend,
+                y=response,
+                mode='lines',
+                name=channel,
+                line=dict(color=color, width=2.5),
+                hovertemplate=f"<b>{channel}</b><br>Spend: $%{{x:,.0f}}<br>Response: %{{y:,.0f}}<extra></extra>",
+            ))
+            
+            # Mark current/observed spend
+            if show_observed and spend_max > 0:
+                fig.add_vline(
+                    x=spend_max,
+                    line_dash="dot",
+                    line_color=color,
+                    opacity=0.6,
+                    annotation_text=f"{channel} max",
+                    annotation_position="top",
+                    annotation_font_size=10,
+                )
+        
+        fig.update_layout(
+            title="Response Curves by Channel (with 94% HDI)",
+            xaxis_title="Media Spend ($)",
+            yaxis_title="Contribution to Sales",
+            height=500,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+            ),
+            hovermode='x unified',
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="response_curves_main")
+        
+        # Saturation analysis
+        st.markdown("---")
+        st.markdown("### 📊 Diminishing Returns Analysis")
+        
+        saturation_data = []
+        for channel, data in channels.items():
+            spend = data.get("spend", [])
+            response = data.get("response", [])
+            current_spend = data.get("current_spend", 0)
+            spend_max = data.get("spend_max", max(spend) if spend else 0)
+            
+            if not spend or not response:
+                continue
+            
+            # Find saturation level at current spend
+            max_response = response[-1] if response else 0
+            
+            # Find response at current spend
+            current_idx = min(range(len(spend)), key=lambda i: abs(spend[i] - current_spend))
+            response_at_current = response[current_idx] if current_idx < len(response) else 0
+            
+            # Find response at max observed spend  
+            max_idx = min(range(len(spend)), key=lambda i: abs(spend[i] - spend_max))
+            response_at_max = response[max_idx] if max_idx < len(response) else 0
+            
+            saturation_at_current = (response_at_current / max_response * 100) if max_response > 0 else 0
+            saturation_at_max = (response_at_max / max_response * 100) if max_response > 0 else 0
+            
+            saturation_data.append({
+                "Channel": channel,
+                "Current Spend": f"${current_spend:,.0f}",
+                "Max Spend": f"${spend_max:,.0f}",
+                "Saturation @ Current": f"{saturation_at_current:.0f}%",
+                "Saturation @ Max": f"{saturation_at_max:.0f}%",
+                "Room to Grow": f"{100 - saturation_at_max:.0f}%",
+            })
+        
+        if saturation_data:
+            st.dataframe(pd.DataFrame(saturation_data), use_container_width=True, hide_index=True)
+            
+            st.info("""
+            💡 **Interpretation:**
+            - **Saturation @ Current**: How much of the channel's potential is being utilized at average spend
+            - **Saturation @ Max**: Saturation level at maximum observed spend
+            - **Room to Grow**: Remaining potential before full saturation
+            - Channels with low saturation and high ROAS are good candidates for budget increases
+            """)
         
         # ROAS analysis
         st.markdown("---")
-        st.markdown("### Marginal ROAS")
+        st.markdown("### 💰 Marginal ROAS with Uncertainty")
         
         with st.spinner("Loading ROAS data..."):
             roas_data = fetch_marginal_roas(client, model_id)
         
         if roas_data and roas_data.get("channels"):
-            plot_marginal_roas(roas_data.get("channels", {}))
+            roas_channels = roas_data.get("channels", {})
+            
+            # Create ROAS bar chart with error bars
+            fig_roas = go.Figure()
+            
+            channel_names = list(roas_channels.keys())
+            means = []
+            errors_minus = []
+            errors_plus = []
+            bar_colors = []
+            
+            for i, (ch, data) in enumerate(roas_channels.items()):
+                mean = data.get("mean", 0)
+                hdi_low = data.get("hdi_low", mean)
+                hdi_high = data.get("hdi_high", mean)
+                
+                means.append(mean)
+                errors_minus.append(mean - hdi_low)
+                errors_plus.append(hdi_high - mean)
+                
+                # Color based on whether ROAS > 1 (break-even)
+                if hdi_low > 1:
+                    bar_colors.append("#2ecc71")  # Green - confident above break-even
+                elif hdi_high < 1:
+                    bar_colors.append("#e74c3c")  # Red - confident below break-even
+                else:
+                    bar_colors.append("#f39c12")  # Orange - uncertain
+            
+            fig_roas.add_trace(go.Bar(
+                x=channel_names,
+                y=means,
+                error_y=dict(
+                    type='data',
+                    symmetric=False,
+                    array=errors_plus,
+                    arrayminus=errors_minus,
+                    color='rgba(0,0,0,0.5)',
+                    thickness=2,
+                    width=6,
+                ),
+                marker_color=bar_colors,
+                text=[f"{m:.2f}" for m in means],
+                textposition='outside',
+            ))
+            
+            fig_roas.add_hline(
+                y=1.0, 
+                line_dash="dash", 
+                line_color="gray",
+                annotation_text="Break-even (ROAS = 1.0)",
+                annotation_position="right",
+            )
+            
+            fig_roas.update_layout(
+                title="Marginal ROAS by Channel (with 94% HDI)",
+                xaxis_title="Channel",
+                yaxis_title="ROAS",
+                height=400,
+                showlegend=False,
+            )
+            
+            st.plotly_chart(fig_roas, use_container_width=True, key="roas_bars")
+            
+            # ROAS table
+            roas_table = []
+            for ch, data in roas_channels.items():
+                roas_table.append({
+                    "Channel": ch,
+                    "Mean ROAS": f"{data.get('mean', 0):.3f}",
+                    "Std": f"{data.get('std', 0):.3f}",
+                    "94% HDI Low": f"{data.get('hdi_low', 0):.3f}",
+                    "94% HDI High": f"{data.get('hdi_high', 0):.3f}",
+                    "Total Spend": f"${data.get('total_spend', 0):,.0f}",
+                })
+            
+            st.dataframe(pd.DataFrame(roas_table), use_container_width=True, hide_index=True)
+            
+            # Color legend
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("🟢 **Confident Above Break-even**")
+                st.caption("94% HDI entirely above 1.0")
+            with col2:
+                st.markdown("🟠 **Uncertain**")
+                st.caption("94% HDI spans break-even")
+            with col3:
+                st.markdown("🔴 **Confident Below Break-even**")
+                st.caption("94% HDI entirely below 1.0")
         else:
             st.info("ROAS data not available.")
     
@@ -752,6 +1388,7 @@ def main():
     tabs = st.tabs([
         "📊 Diagnostics",
         "🎯 Model Fit",
+        "🔄 Prior vs Posterior",
         "📉 Posteriors",
         "📈 Response Curves",
         "💰 Contributions",
@@ -766,18 +1403,21 @@ def main():
         render_model_fit_tab(model_id)
     
     with tabs[2]:
-        render_posteriors_tab(model_id)
+        render_prior_posterior_tab(model_id)
     
     with tabs[3]:
-        render_response_curves_tab(model_id)
+        render_posteriors_tab(model_id)
     
     with tabs[4]:
-        render_contributions_tab(model_id)
+        render_response_curves_tab(model_id)
     
     with tabs[5]:
-        render_decomposition_tab(model_id)
+        render_contributions_tab(model_id)
     
     with tabs[6]:
+        render_decomposition_tab(model_id)
+    
+    with tabs[7]:
         render_summary_tab(model_id)
 
 
