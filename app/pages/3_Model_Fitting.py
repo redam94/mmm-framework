@@ -195,7 +195,6 @@ def render_job_monitor():
         
         # Status display
         job_progress_display(
-            status=model.status.value,
             progress=model.progress,
             message=model.progress_message,
         )
@@ -241,10 +240,10 @@ def render_job_monitor():
             if model.is_complete:
                 if st.button("📈 View Results", type="primary", use_container_width=True):
                     st.session_state.selected_model_id = model.model_id
-                    st.switch_page("pages/4_📈_Results.py")
+                    st.switch_page("pages/4_Results.py")
         
         with col2:
-            if model.is_active:
+            if getattr(model, "is_active", False):
                 if st.button("⏹️ Cancel", use_container_width=True):
                     st.info("Cancel functionality would go here")
         
@@ -275,7 +274,7 @@ def render_job_monitor():
                     st.rerun()
         
         # Auto-refresh for active jobs
-        if model.is_active:
+        if getattr(model, "is_active", False):
             st.caption("⏳ Auto-refreshing every 5 seconds...")
             time.sleep(5)
             st.rerun()

@@ -1,13 +1,11 @@
 """
-Common UI Components and Utilities.
+Common UI Components for MMM Framework.
 
-Shared components used across multiple pages.
+Provides reusable UI utilities and styling.
 """
 
 import streamlit as st
-import pandas as pd
-import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 
@@ -15,53 +13,41 @@ from typing import Any
 # Color Utilities
 # =============================================================================
 
-def rgb_to_rgba(rgb: str, alpha: float = 1.0) -> str:
-    """Convert RGB color to RGBA."""
-    r, g, b = rgb.strip("rgb(").strip(")").split(",")
-    return f"rgba({r},{g},{b},{alpha})"
-
-
-# Default color palette for charts
 CHART_COLORS = [
     "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
     "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
 ]
 
 COMPONENT_COLORS = {
-    "Base": "#1f77b4",
-    "Trend": "#ff7f0e",
-    "Seasonality": "#2ca02c",
-    "Media": "#d62728",
-    "Controls": "#9467bd",
-    "Observed": "#17becf",
-    "Predicted": "#e377c2",
-    "Residual": "#7f7f7f",
+    "baseline": "#636EFA",
+    "trend": "#EF553B",
+    "seasonality": "#00CC96",
+    "media": "#AB63FA",
+    "control": "#FFA15A",
+    "residual": "#19D3F3",
 }
 
 
-# =============================================================================
-# Status Indicators
-# =============================================================================
+def rgb_to_rgba(color: str, alpha: float = 0.3) -> str:
+    """Convert hex or rgb color to rgba with specified alpha."""
+    if color.startswith("#"):
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+    elif color.startswith("rgb"):
+        return color.replace("rgb", "rgba").replace(")", f",{alpha})")
+    return color
 
-def status_badge(status: str) -> str:
-    """Get status badge HTML."""
-    status_colors = {
-        "pending": ("⏳", "#FFA500"),
-        "queued": ("📋", "#6495ED"),
-        "running": ("🔄", "#32CD32"),
-        "completed": ("✅", "#228B22"),
-        "failed": ("❌", "#DC143C"),
-        "cancelled": ("🚫", "#808080"),
-    }
-    emoji, color = status_colors.get(status.lower(), ("❓", "#808080"))
-    return f'<span style="color: {color}; font-weight: bold;">{emoji} {status.capitalize()}</span>'
 
+# =============================================================================
+# Status Helpers
+# =============================================================================
 
 def status_icon(status: str) -> str:
-    """Get status icon emoji."""
+    """Get status icon for job status."""
     icons = {
         "pending": "⏳",
-        "queued": "📋",
         "running": "🔄",
         "completed": "✅",
         "failed": "❌",
@@ -70,49 +56,74 @@ def status_icon(status: str) -> str:
     return icons.get(status.lower(), "❓")
 
 
+def status_badge(status: str) -> str:
+    """Get styled status badge."""
+    colors = {
+        "pending": "gray",
+        "running": "blue",
+        "completed": "green",
+        "failed": "red",
+        "cancelled": "orange",
+    }
+    color = colors.get(status.lower(), "gray")
+    return f":{color}[{status_icon(status)} {status.title()}]"
+
+
 # =============================================================================
-# Formatting Utilities
+# Formatting
 # =============================================================================
 
-def format_bytes(size_bytes: int) -> str:
+def format_bytes(size_bytes: int | None) -> str:
     """Format bytes to human readable string."""
+    if size_bytes is None:
+        return "N/A"
+    
     for unit in ["B", "KB", "MB", "GB"]:
-        if abs(size_bytes) < 1024:
+        if abs(size_bytes) < 1024.0:
             return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
+        size_bytes /= 1024.0
     return f"{size_bytes:.1f} TB"
 
 
 def format_duration(seconds: float | None) -> str:
-    """Format duration to human readable string."""
+    """Format duration in seconds to human readable string."""
     if seconds is None:
         return "N/A"
+    
     if seconds < 60:
         return f"{seconds:.1f}s"
     elif seconds < 3600:
-        minutes = seconds / 60
-        return f"{minutes:.1f}m"
+        return f"{seconds/60:.1f}m"
     else:
-        hours = seconds / 3600
-        return f"{hours:.1f}h"
+        return f"{seconds/3600:.1f}h"
 
 
 def format_datetime(dt: datetime | str | None) -> str:
-    """Format datetime to human readable string."""
+    """Format datetime to readable string."""
     if dt is None:
         return "N/A"
+    
     if isinstance(dt, str):
-        dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        try:
+            dt = datetime.fromisoformat(dt)
+        except ValueError:
+            return dt
+    
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
-def format_percentage(value: float, decimals: int = 1) -> str:
-    """Format value as percentage."""
+def format_percentage(value: float | None, decimals: int = 1) -> str:
+    """Format float as percentage."""
+    if value is None:
+        return "N/A"
     return f"{value * 100:.{decimals}f}%"
 
 
-def format_number(value: float, decimals: int = 2) -> str:
-    """Format number with thousands separator."""
+def format_number(value: float | int | None, decimals: int = 2) -> str:
+    """Format number with appropriate suffix."""
+    if value is None:
+        return "N/A"
+    
     if abs(value) >= 1e9:
         return f"{value/1e9:.{decimals}f}B"
     elif abs(value) >= 1e6:
@@ -124,7 +135,7 @@ def format_number(value: float, decimals: int = 2) -> str:
 
 
 # =============================================================================
-# Session State Helpers
+# Session State
 # =============================================================================
 
 def init_session_state(**defaults):
@@ -135,12 +146,12 @@ def init_session_state(**defaults):
 
 
 def get_session(key: str, default: Any = None) -> Any:
-    """Get session state value with default."""
+    """Get value from session state."""
     return st.session_state.get(key, default)
 
 
 def set_session(key: str, value: Any):
-    """Set session state value."""
+    """Set value in session state."""
     st.session_state[key] = value
 
 
@@ -148,31 +159,35 @@ def set_session(key: str, value: Any):
 # UI Components
 # =============================================================================
 
-def metric_card(label: str, value: str | float, delta: str | None = None, delta_color: str = "normal"):
-    """Display a metric in a styled card."""
-    with st.container():
-        st.metric(label=label, value=value, delta=delta, delta_color=delta_color)
+def metric_card(label: str, value: Any, delta: Any = None, help_text: str | None = None):
+    """Display a styled metric card."""
+    st.metric(label=label, value=value, delta=delta, help=help_text)
 
 
-def info_box(message: str, type: str = "info"):
-    """Display an info box."""
+def info_box(title: str, content: str, type: str = "info"):
+    """Display an info box with title and content."""
     if type == "info":
-        st.info(message)
-    elif type == "success":
-        st.success(message)
+        st.info(f"**{title}**\n\n{content}")
     elif type == "warning":
-        st.warning(message)
+        st.warning(f"**{title}**\n\n{content}")
     elif type == "error":
-        st.error(message)
+        st.error(f"**{title}**\n\n{content}")
+    elif type == "success":
+        st.success(f"**{title}**\n\n{content}")
 
 
-def confirm_dialog(message: str, key: str) -> bool:
+def confirm_dialog(title: str, message: str, confirm_label: str = "Confirm") -> bool:
     """Display a confirmation dialog."""
-    col1, col2 = st.columns([3, 1])
-    with col1:
+    with st.expander(title, expanded=True):
         st.warning(message)
-    with col2:
-        return st.button("Confirm", key=key, type="primary")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(confirm_label, type="primary", use_container_width=True):
+                return True
+        with col2:
+            if st.button("Cancel", use_container_width=True):
+                return False
+    return False
 
 
 def loading_placeholder(message: str = "Loading..."):
@@ -180,100 +195,48 @@ def loading_placeholder(message: str = "Loading..."):
     return st.empty()
 
 
-# =============================================================================
-# Data Display Components
-# =============================================================================
-
-@st.fragment
-def data_preview_table(df: pd.DataFrame, max_rows: int = 10):
-    """Display a data preview table (fragment for isolation)."""
-    st.dataframe(df.head(max_rows), use_container_width=True)
+def data_preview_table(data: list[dict], max_rows: int = 10):
+    """Display a preview table of data."""
+    import pandas as pd
+    df = pd.DataFrame(data[:max_rows])
+    st.dataframe(df, use_container_width=True)
 
 
-@st.fragment
-def summary_statistics(df: pd.DataFrame):
-    """Display summary statistics for a dataframe (fragment for isolation)."""
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    if len(numeric_cols) > 0:
-        st.dataframe(df[numeric_cols].describe().round(2), use_container_width=True)
-    else:
-        st.info("No numeric columns found.")
-
-
-# =============================================================================
-# Progress Components
-# =============================================================================
-
-@st.fragment
-def job_progress_display(
-    status: str,
-    progress: float,
-    message: str | None = None,
-    show_spinner: bool = True
-):
-    """Display job progress (fragment for isolated updates)."""
-    col1, col2 = st.columns([1, 4])
+def summary_statistics(data: dict[str, Any]):
+    """Display summary statistics in columns."""
+    n_cols = min(4, len(data))
+    cols = st.columns(n_cols)
     
-    with col1:
-        st.markdown(f"### {status_icon(status)}")
-    
-    with col2:
-        st.markdown(f"**Status:** {status.capitalize()}")
-        
-        if status == "running":
-            st.progress(progress / 100, text=message or f"{progress:.0f}%")
-        elif status == "completed":
-            st.progress(1.0, text="Complete!")
-        elif status == "failed":
-            st.error(message or "Job failed")
-        else:
-            st.progress(0, text=message or "Waiting...")
+    for i, (label, value) in enumerate(data.items()):
+        with cols[i % n_cols]:
+            st.metric(label, value)
 
 
-# =============================================================================
-# Navigation Helpers
-# =============================================================================
+def job_progress_display(progress: float, message: str | None = None):
+    """Display job progress with optional message."""
+    st.progress(progress / 100)
+    if message:
+        st.caption(message)
 
-def page_header(title: str, description: str | None = None):
-    """Display a page header."""
+
+def page_header(title: str, subtitle: str | None = None):
+    """Display a consistent page header."""
     st.title(title)
-    if description:
-        st.markdown(description)
-    st.markdown("---")
+    if subtitle:
+        st.markdown(f"*{subtitle}*")
 
 
-def sidebar_status(
-    data_loaded: bool,
-    config_loaded: bool,
-    model_fitted: bool,
-    results_loaded: bool
-):
-    """Display sidebar status indicators."""
-    st.sidebar.markdown("### Status")
+def sidebar_status():
+    """Display API connection status in sidebar."""
+    from api_client import check_api_connection
     
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        if data_loaded:
-            st.success("✓ Data")
+    with st.sidebar:
+        if check_api_connection():
+            st.success("✅ API Connected")
+            st.session_state.api_connected = True
         else:
-            st.warning("○ Data")
-    with col2:
-        if config_loaded:
-            st.success("✓ Config")
-        else:
-            st.warning("○ Config")
-    
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        if model_fitted:
-            st.success("✓ Model")
-        else:
-            st.warning("○ Model")
-    with col2:
-        if results_loaded:
-            st.success("✓ Results")
-        else:
-            st.warning("○ Results")
+            st.error("❌ API Disconnected")
+            st.session_state.api_connected = False
 
 
 # =============================================================================
@@ -281,93 +244,88 @@ def sidebar_status(
 # =============================================================================
 
 def display_api_error(error: Exception):
-    """Display API error in a user-friendly way."""
-    error_msg = str(error)
+    """Display API error with details."""
+    from api_client import APIError, ConnectionError, NotFoundError, ValidationError
     
-    if "Connection refused" in error_msg or "ConnectError" in error_msg:
-        st.error("🔌 **Connection Error**: Cannot connect to the API server. Please ensure the backend is running.")
-        with st.expander("Technical Details"):
-            st.code(error_msg)
-    elif "404" in error_msg:
-        st.error("🔍 **Not Found**: The requested resource was not found.")
-        with st.expander("Technical Details"):
-            st.code(error_msg)
-    elif "500" in error_msg:
-        st.error("🔥 **Server Error**: An internal server error occurred.")
-        with st.expander("Technical Details"):
-            st.code(error_msg)
+    if isinstance(error, ConnectionError):
+        st.error(f"🔌 Connection Error: {error.message}")
+        st.info("Please ensure the API server is running.")
+    elif isinstance(error, NotFoundError):
+        st.warning(f"🔍 Not Found: {error.detail}")
+    elif isinstance(error, ValidationError):
+        st.error(f"⚠️ Validation Error: {error.detail}")
+    elif isinstance(error, APIError):
+        st.error(f"❌ API Error ({error.status_code}): {error.message}")
     else:
-        st.error(f"❌ **Error**: {error_msg}")
+        st.error(f"❌ Error: {str(error)}")
 
 
-def handle_api_call(func, *args, error_message: str = "Operation failed", **kwargs):
-    """Execute API call with error handling."""
+def handle_api_call(func, *args, **kwargs):
+    """Wrapper for API calls with error handling."""
     try:
-        return func(*args, **kwargs), None
+        return func(*args, **kwargs)
     except Exception as e:
-        return None, e
+        display_api_error(e)
+        return None
 
 
 # =============================================================================
-# Custom CSS
+# CSS Styling
 # =============================================================================
 
 CUSTOM_CSS = """
 <style>
+    /* Reduce padding for denser layout */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Style metric cards */
+    [data-testid="stMetric"] {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+    }
+    
+    /* Style expanders */
+    .streamlit-expanderHeader {
+        font-weight: 600;
+    }
+    
+    /* Style tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
+        gap: 8px;
     }
+    
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        padding-left: 20px;
-        padding-right: 20px;
-    }
-    .job-card {
+        padding: 8px 16px;
         background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 10px 0;
-        border-left: 4px solid #3498db;
+        border-radius: 4px;
     }
-    .job-card.running {
-        border-left-color: #f39c12;
-        animation: pulse 2s infinite;
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #e0e2e6;
     }
-    .job-card.completed {
-        border-left-color: #27ae60;
+    
+    /* Improve table styling */
+    .dataframe {
+        font-size: 0.9rem;
     }
-    .job-card.failed {
-        border-left-color: #e74c3c;
+    
+    /* Style buttons */
+    .stButton > button {
+        border-radius: 4px;
     }
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.7; }
-        100% { opacity: 1; }
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 10px 0;
-    }
-    .success-box {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 5px;
-        padding: 10px;
-        margin: 10px 0;
-    }
-    .warning-box {
-        background-color: #fff3cd;
-        border: 1px solid #ffeeba;
-        border-radius: 5px;
-        padding: 10px;
-        margin: 10px 0;
+    
+    /* Style download buttons */
+    .stDownloadButton > button {
+        width: 100%;
     }
 </style>
 """
 
 
 def apply_custom_css():
-    """Apply custom CSS styles."""
+    """Apply custom CSS styling."""
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)

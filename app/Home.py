@@ -66,24 +66,24 @@ def render_sidebar():
             
             col1, col2 = st.columns(2)
             with col1:
-                if health.status == "healthy":
+                if health.get("status") == "healthy":
                     st.success("✓ API")
                 else:
                     st.warning("⚠ API")
             with col2:
-                if health.redis_connected:
+                if health.get("redis_connected"):
                     st.success("✓ Redis")
                 else:
                     st.warning("○ Redis")
             
             col1, col2 = st.columns(2)
             with col1:
-                if health.worker_active:
+                if health.get("worker_active"):
                     st.success("✓ Worker")
                 else:
                     st.warning("○ Worker")
             with col2:
-                st.caption(f"v{health.version}")
+                st.caption(f"v{health.get('version')}")
                 
         except Exception as e:
             st.session_state.api_connected = False
@@ -253,11 +253,11 @@ def main():
                     st.markdown(f"{status_icon(model.status.value)} {model.status.value.capitalize()}")
                 
                 with col4:
-                    if model.is_active:
+                    if model.status.value == "active":
                         st.progress(model.progress / 100)
-                    elif model.is_complete:
+                    elif model.status.value == "completed":
                         st.success("Complete")
-                    elif model.is_failed:
+                    elif model.status.value == "failed":
                         st.error("Failed")
                 
                 with col5:

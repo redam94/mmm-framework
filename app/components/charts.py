@@ -1,19 +1,43 @@
 """
-Chart Components for MMM Visualization.
+Chart Components for MMM Framework.
 
-Provides reusable Plotly chart components for model results visualization.
-All chart functions are designed to work with st.fragment for isolated reruns.
+Provides reusable Plotly chart components with consistent styling.
 """
 
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import streamlit as st
 from typing import Any
 
-from components.common import CHART_COLORS, COMPONENT_COLORS, rgb_to_rgba
+
+# =============================================================================
+# Color Utilities
+# =============================================================================
+
+CHART_COLORS = px.colors.qualitative.Set2
+COMPONENT_COLORS = {
+    "baseline": "#636EFA",
+    "trend": "#EF553B",
+    "seasonality": "#00CC96",
+    "media": "#AB63FA",
+    "control": "#FFA15A",
+    "residual": "#19D3F3",
+}
+
+
+def rgb_to_rgba(color: str, alpha: float = 0.3) -> str:
+    """Convert hex or rgb color to rgba with specified alpha."""
+    if color.startswith("#"):
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+    elif color.startswith("rgb"):
+        return color.replace("rgb", "rgba").replace(")", f",{alpha})")
+    return color
 
 
 # =============================================================================
@@ -26,44 +50,44 @@ def plot_model_fit(
     observed: list[float],
     predicted_mean: list[float],
     predicted_std: list[float] | None = None,
-    title: str = "Model Fit: Observed vs Predicted",
     y_label: str = "Value",
+    title: str = "Model Fit: Observed vs Predicted",
 ):
-    """Plot observed vs predicted values with uncertainty bands."""
+    """Plot observed vs predicted values with uncertainty band."""
     fig = go.Figure()
     
-    # Add uncertainty band if available
-    if predicted_std is not None:
-        upper = np.array(predicted_mean) + 1.96 * np.array(predicted_std)
-        lower = np.array(predicted_mean) - 1.96 * np.array(predicted_std)
+    # Uncertainty band
+    if predicted_std:
+        upper = [m + 2*s for m, s in zip(predicted_mean, predicted_std)]
+        lower = [m - 2*s for m, s in zip(predicted_mean, predicted_std)]
         
         fig.add_trace(go.Scatter(
-            x=list(periods) + list(periods)[::-1],
-            y=list(upper) + list(lower)[::-1],
+            x=periods + periods[::-1],
+            y=upper + lower[::-1],
             fill='toself',
-            fillcolor=rgb_to_rgba(COMPONENT_COLORS["Predicted"], 0.2),
+            fillcolor=rgb_to_rgba(CHART_COLORS[0], 0.2),
             line=dict(color='rgba(0,0,0,0)'),
             name='95% CI',
             showlegend=True,
         ))
     
-    # Observed values
+    # Observed
     fig.add_trace(go.Scatter(
         x=periods,
         y=observed,
         mode='lines+markers',
         name='Observed',
-        line=dict(color=COMPONENT_COLORS["Observed"], width=2),
+        line=dict(color=CHART_COLORS[1], width=2),
         marker=dict(size=4),
     ))
     
-    # Predicted values
+    # Predicted
     fig.add_trace(go.Scatter(
         x=periods,
         y=predicted_mean,
         mode='lines',
         name='Predicted',
-        line=dict(color=COMPONENT_COLORS["Predicted"], width=2, dash='dash'),
+        line=dict(color=CHART_COLORS[0], width=2),
     ))
     
     fig.update_layout(
@@ -75,86 +99,81 @@ def plot_model_fit(
         hovermode='x unified',
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"model_fit_{hash(str(periods[:5]))}")
 
 
 @st.fragment
-def plot_residuals(
-    periods: list,
-    residuals: list[float],
-    title: str = "Model Residuals",
-):
-    """Plot model residuals over time."""
+def plot_residuals(periods: list, residuals: list[float], title: str = "Residual Analysis"):
+    """Plot residuals with diagnostic subplots."""
     fig = make_subplots(
         rows=2, cols=2,
-        subplot_titles=("Residuals Over Time", "Residual Distribution", "Residual ACF", "Q-Q Plot"),
-        specs=[[{}, {}], [{}, {}]],
+        subplot_titles=("Residuals Over Time", "Residual Distribution", "Q-Q Plot", "ACF"),
     )
     
-    # Residuals over time
+    # Time series
     fig.add_trace(go.Scatter(
         x=periods,
         y=residuals,
-        mode='markers',
-        marker=dict(color=COMPONENT_COLORS["Residual"], size=5),
+        mode='lines+markers',
         name='Residuals',
+        line=dict(color=CHART_COLORS[0]),
+        marker=dict(size=3),
     ), row=1, col=1)
-    
     fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=1)
     
-    # Residual histogram
+    # Histogram
     fig.add_trace(go.Histogram(
         x=residuals,
-        nbinsx=30,
-        marker_color=COMPONENT_COLORS["Residual"],
         name='Distribution',
+        marker_color=CHART_COLORS[1],
+        nbinsx=30,
     ), row=1, col=2)
     
-    # Simple ACF (first 20 lags)
-    residuals_array = np.array(residuals)
-    n = len(residuals_array)
-    acf_values = [1.0]
-    for lag in range(1, min(21, n)):
-        acf = np.corrcoef(residuals_array[lag:], residuals_array[:-lag])[0, 1]
-        acf_values.append(acf)
+    # Q-Q plot (approximate)
+    sorted_res = np.sort(residuals)
+    n = len(sorted_res)
+    theoretical = np.percentile(np.random.normal(0, np.std(residuals), 10000), 
+                                 np.linspace(0, 100, n))
     
-    fig.add_trace(go.Bar(
-        x=list(range(len(acf_values))),
-        y=acf_values,
-        marker_color=COMPONENT_COLORS["Residual"],
-        name='ACF',
+    fig.add_trace(go.Scatter(
+        x=theoretical,
+        y=sorted_res,
+        mode='markers',
+        name='Q-Q',
+        marker=dict(color=CHART_COLORS[2], size=4),
     ), row=2, col=1)
     
-    # Confidence bounds for ACF
-    conf = 1.96 / np.sqrt(n)
-    fig.add_hline(y=conf, line_dash="dash", line_color="red", row=2, col=1)
-    fig.add_hline(y=-conf, line_dash="dash", line_color="red", row=2, col=1)
-    
-    # Q-Q Plot
-    sorted_residuals = np.sort(residuals)
-    theoretical_quantiles = np.linspace(0.01, 0.99, len(sorted_residuals))
-    from scipy import stats
-    theoretical_values = stats.norm.ppf(theoretical_quantiles)
-    
+    # 45-degree line for Q-Q
+    line_range = [min(theoretical), max(theoretical)]
     fig.add_trace(go.Scatter(
-        x=theoretical_values,
-        y=sorted_residuals,
-        mode='markers',
-        marker=dict(color=COMPONENT_COLORS["Residual"], size=4),
-        name='Q-Q',
-    ), row=2, col=2)
-    
-    # Add reference line
-    min_val = min(theoretical_values.min(), sorted_residuals.min())
-    max_val = max(theoretical_values.max(), sorted_residuals.max())
-    fig.add_trace(go.Scatter(
-        x=[min_val, max_val],
-        y=[min_val, max_val],
+        x=line_range,
+        y=line_range,
         mode='lines',
         line=dict(color='red', dash='dash'),
-        name='Reference',
         showlegend=False,
+    ), row=2, col=1)
+    
+    # ACF (simple implementation)
+    n_lags = min(20, len(residuals) // 4)
+    acf_values = []
+    for lag in range(n_lags):
+        if lag == 0:
+            acf_values.append(1.0)
+        else:
+            acf = np.corrcoef(residuals[lag:], residuals[:-lag])[0, 1]
+            acf_values.append(acf)
+    
+    fig.add_trace(go.Bar(
+        x=list(range(n_lags)),
+        y=acf_values,
+        name='ACF',
+        marker_color=CHART_COLORS[3],
     ), row=2, col=2)
+    
+    # Confidence bands for ACF
+    conf = 1.96 / np.sqrt(len(residuals))
+    fig.add_hline(y=conf, line_dash="dash", line_color="gray", row=2, col=2)
+    fig.add_hline(y=-conf, line_dash="dash", line_color="gray", row=2, col=2)
     
     fig.update_layout(
         title=title,
@@ -162,7 +181,7 @@ def plot_residuals(
         showlegend=False,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"residuals_{hash(str(residuals[:5]))}")
 
 
 # =============================================================================
@@ -172,37 +191,33 @@ def plot_residuals(
 @st.fragment
 def plot_channel_contributions(
     contributions: dict[str, float],
-    title: str = "Channel Contributions",
     show_percentage: bool = True,
+    title: str = "Channel Contributions",
 ):
-    """Plot channel contributions as a bar chart."""
+    """Plot bar chart of channel contributions."""
     channels = list(contributions.keys())
     values = list(contributions.values())
-    total = sum(values)
     
-    if show_percentage:
-        percentages = [v / total * 100 for v in values]
-        text = [f"{p:.1f}%" for p in percentages]
-    else:
-        text = [f"{v:,.0f}" for v in values]
+    total = sum(values) if sum(values) > 0 else 1
     
-    fig = go.Figure(go.Bar(
-        x=values,
-        y=channels,
-        orientation='h',
-        text=text,
-        textposition='auto',
-        marker_color=CHART_COLORS[:len(channels)],
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=channels,
+        y=values,
+        text=[f"{v:,.0f}<br>({v/total*100:.1f}%)" if show_percentage else f"{v:,.0f}" for v in values],
+        textposition='outside',
+        marker_color=[CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(channels))],
     ))
     
     fig.update_layout(
         title=title,
-        xaxis_title="Contribution",
-        yaxis_title="Channel",
-        height=max(300, len(channels) * 40),
+        xaxis_title="Channel",
+        yaxis_title="Contribution",
+        height=400,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"contrib_bar_{hash(str(channels))}")
 
 
 @st.fragment
@@ -211,32 +226,37 @@ def plot_contribution_waterfall(
     baseline: float = 0,
     title: str = "Contribution Waterfall",
 ):
-    """Plot contributions as a waterfall chart."""
+    """Plot waterfall chart of contributions."""
     channels = list(contributions.keys())
     values = list(contributions.values())
     
-    # Build waterfall data
-    measure = ["absolute"] + ["relative"] * len(channels) + ["total"]
-    x = ["Baseline"] + channels + ["Total"]
-    y = [baseline] + values + [None]
+    # Add baseline if provided
+    if baseline > 0:
+        channels = ["Baseline"] + channels + ["Total"]
+        values = [baseline] + values + [baseline + sum(values)]
+        measures = ["absolute"] + ["relative"] * (len(values) - 2) + ["total"]
+    else:
+        channels = channels + ["Total"]
+        values = values + [sum(values)]
+        measures = ["relative"] * (len(values) - 1) + ["total"]
     
     fig = go.Figure(go.Waterfall(
-        measure=measure,
-        x=x,
-        y=y,
+        name="Contributions",
+        orientation="v",
+        measure=measures,
+        x=channels,
+        y=values,
+        textposition="outside",
+        text=[f"{v:,.0f}" for v in values],
         connector={"line": {"color": "rgb(63, 63, 63)"}},
-        increasing={"marker": {"color": CHART_COLORS[0]}},
-        decreasing={"marker": {"color": CHART_COLORS[1]}},
-        totals={"marker": {"color": CHART_COLORS[2]}},
     ))
     
     fig.update_layout(
         title=title,
-        showlegend=False,
         height=400,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"contrib_waterfall_{hash(str(channels))}")
 
 
 @st.fragment
@@ -244,15 +264,15 @@ def plot_contribution_pie(
     contributions: dict[str, float],
     title: str = "Contribution Share",
 ):
-    """Plot contributions as a pie chart."""
+    """Plot pie chart of contributions."""
     channels = list(contributions.keys())
     values = list(contributions.values())
     
     fig = go.Figure(go.Pie(
         labels=channels,
         values=values,
-        hole=0.4,
-        marker_colors=CHART_COLORS[:len(channels)],
+        textinfo='label+percent',
+        marker_colors=[CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(channels))],
     ))
     
     fig.update_layout(
@@ -260,17 +280,17 @@ def plot_contribution_pie(
         height=400,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"contrib_pie_{hash(str(channels))}")
 
 
 @st.fragment
 def plot_contribution_timeseries(
     periods: list,
     contributions_by_channel: dict[str, list[float]],
-    title: str = "Channel Contributions Over Time",
     stacked: bool = True,
+    title: str = "Contributions Over Time",
 ):
-    """Plot channel contributions over time."""
+    """Plot time series of contributions by channel."""
     fig = go.Figure()
     
     for i, (channel, values) in enumerate(contributions_by_channel.items()):
@@ -293,7 +313,7 @@ def plot_contribution_timeseries(
         hovermode='x unified',
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"contrib_ts_{hash(str(periods[:5]))}")
 
 
 # =============================================================================
@@ -311,6 +331,10 @@ def plot_response_curves(
     curves: dict mapping channel name to {spend, response, current_spend}
     """
     n_channels = len(curves)
+    if n_channels == 0:
+        st.info("No response curve data available.")
+        return
+    
     n_cols = min(3, n_channels)
     n_rows = (n_channels + n_cols - 1) // n_cols
     
@@ -324,21 +348,29 @@ def plot_response_curves(
         row = i // n_cols + 1
         col = i % n_cols + 1
         
+        spend = data.get("spend", [])
+        response = data.get("response", [])
+        
+        if not spend or not response:
+            continue
+        
         fig.add_trace(go.Scatter(
-            x=data["spend"],
-            y=data["response"],
+            x=spend,
+            y=response,
             mode='lines',
             line=dict(color=CHART_COLORS[i % len(CHART_COLORS)], width=2),
             name=channel,
             showlegend=False,
         ), row=row, col=col)
         
-        # Mark current spend
-        if "current_spend" in data:
-            current_idx = np.argmin(np.abs(np.array(data["spend"]) - data["current_spend"]))
+        # Mark current spend if available
+        current_spend = data.get("current_spend")
+        if current_spend is not None and spend:
+            spend_arr = np.array(spend)
+            current_idx = int(np.argmin(np.abs(spend_arr - current_spend)))
             fig.add_trace(go.Scatter(
-                x=[data["spend"][current_idx]],
-                y=[data["response"][current_idx]],
+                x=[spend[current_idx]],
+                y=[response[current_idx]],
                 mode='markers',
                 marker=dict(color='red', size=10, symbol='star'),
                 name='Current',
@@ -350,7 +382,7 @@ def plot_response_curves(
         height=300 * n_rows,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"response_curves_{hash(str(list(curves.keys())))}")
 
 
 @st.fragment
@@ -361,29 +393,35 @@ def plot_marginal_roas(
     """
     Plot marginal ROAS for each channel with uncertainty.
     
-    roas_data: dict mapping channel to {mean, lower, upper}
+    roas_data: dict mapping channel name to {mean, std, hdi_low, hdi_high}
     """
     channels = list(roas_data.keys())
-    means = [roas_data[c]["mean"] for c in channels]
-    lowers = [roas_data[c].get("lower", roas_data[c]["mean"]) for c in channels]
-    uppers = [roas_data[c].get("upper", roas_data[c]["mean"]) for c in channels]
     
-    errors_lower = [m - l for m, l in zip(means, lowers)]
-    errors_upper = [u - m for m, u in zip(means, uppers)]
+    if not channels:
+        st.info("No ROAS data available.")
+        return
     
-    fig = go.Figure(go.Bar(
+    means = [roas_data[ch].get("mean", 0) for ch in channels]
+    errors_low = [roas_data[ch].get("mean", 0) - roas_data[ch].get("hdi_low", 0) for ch in channels]
+    errors_high = [roas_data[ch].get("hdi_high", 0) - roas_data[ch].get("mean", 0) for ch in channels]
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
         x=channels,
         y=means,
         error_y=dict(
             type='data',
             symmetric=False,
-            array=errors_upper,
-            arrayminus=errors_lower,
+            array=errors_high,
+            arrayminus=errors_low,
         ),
-        marker_color=CHART_COLORS[:len(channels)],
+        marker_color=[CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(channels))],
+        text=[f"{m:.2f}" for m in means],
+        textposition='outside',
     ))
     
-    fig.add_hline(y=1, line_dash="dash", line_color="red", annotation_text="Break-even")
+    fig.add_hline(y=1.0, line_dash="dash", line_color="red", annotation_text="Break-even")
     
     fig.update_layout(
         title=title,
@@ -392,11 +430,11 @@ def plot_marginal_roas(
         height=400,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"roas_{hash(str(channels))}")
 
 
 # =============================================================================
-# Component Decomposition
+# Decomposition Charts
 # =============================================================================
 
 @st.fragment
@@ -406,12 +444,21 @@ def plot_component_decomposition(
     observed: list[float] | None = None,
     title: str = "Component Decomposition",
 ):
-    """Plot stacked component decomposition."""
+    """Plot stacked area chart of component decomposition."""
     fig = go.Figure()
     
     # Add component traces
-    for component, values in components.items():
-        color = COMPONENT_COLORS.get(component, CHART_COLORS[len(fig.data) % len(CHART_COLORS)])
+    for i, (component, values) in enumerate(components.items()):
+        # Determine color
+        if component.lower() in COMPONENT_COLORS:
+            color = COMPONENT_COLORS[component.lower()]
+        elif "media" in component.lower():
+            color = COMPONENT_COLORS["media"]
+        elif "control" in component.lower():
+            color = COMPONENT_COLORS["control"]
+        else:
+            color = CHART_COLORS[i % len(CHART_COLORS)]
+        
         fig.add_trace(go.Scatter(
             x=periods,
             y=values,
@@ -419,18 +466,17 @@ def plot_component_decomposition(
             mode='lines',
             line=dict(width=0),
             stackgroup='one',
-            fillcolor=rgb_to_rgba(color, 0.6),
+            fillcolor=rgb_to_rgba(color, 0.7),
         ))
     
-    # Add observed line
-    if observed is not None:
+    # Add observed line if provided
+    if observed:
         fig.add_trace(go.Scatter(
             x=periods,
             y=observed,
             name='Observed',
-            mode='lines+markers',
-            line=dict(color='black', width=2),
-            marker=dict(size=4),
+            mode='lines',
+            line=dict(color='black', width=2, dash='dot'),
         ))
     
     fig.update_layout(
@@ -442,11 +488,11 @@ def plot_component_decomposition(
         hovermode='x unified',
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"decomposition_{hash(str(periods[:5]))}")
 
 
 # =============================================================================
-# Posterior Distribution Charts
+# Posterior Charts
 # =============================================================================
 
 @st.fragment
@@ -457,10 +503,14 @@ def plot_posterior_distributions(
     """
     Plot posterior distributions for parameters.
     
-    posteriors: dict mapping param name to {samples, mean, hdi_low, hdi_high}
+    posteriors: dict mapping parameter name to {samples, mean, std} or just list of samples
     """
     n_params = len(posteriors)
-    n_cols = min(4, n_params)
+    if n_params == 0:
+        st.info("No posterior data to display.")
+        return
+    
+    n_cols = min(3, n_params)
     n_rows = (n_params + n_cols - 1) // n_cols
     
     fig = make_subplots(
@@ -473,37 +523,36 @@ def plot_posterior_distributions(
         row = i // n_cols + 1
         col = i % n_cols + 1
         
+        # Handle different data formats
+        if isinstance(data, dict):
+            samples = data.get("samples", [])
+            mean_val = data.get("mean")
+        elif isinstance(data, list):
+            samples = data
+            mean_val = np.mean(samples) if samples else None
+        else:
+            continue
+        
+        if not samples:
+            continue
+        
+        samples = np.array(samples).flatten()
+        
+        # Histogram
         fig.add_trace(go.Histogram(
-            x=data["samples"],
-            nbinsx=50,
+            x=samples,
+            name=param,
             marker_color=CHART_COLORS[i % len(CHART_COLORS)],
-            opacity=0.7,
+            nbinsx=50,
             showlegend=False,
         ), row=row, col=col)
         
         # Add mean line
-        if "mean" in data:
+        if mean_val is not None:
             fig.add_vline(
-                x=data["mean"],
-                line_dash="solid",
+                x=mean_val,
+                line_dash="dash",
                 line_color="red",
-                row=row,
-                col=col,
-            )
-        
-        # Add HDI lines
-        if "hdi_low" in data and "hdi_high" in data:
-            fig.add_vline(
-                x=data["hdi_low"],
-                line_dash="dash",
-                line_color="gray",
-                row=row,
-                col=col,
-            )
-            fig.add_vline(
-                x=data["hdi_high"],
-                line_dash="dash",
-                line_color="gray",
                 row=row,
                 col=col,
             )
@@ -514,7 +563,7 @@ def plot_posterior_distributions(
         showlegend=False,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"posteriors_{hash(str(list(posteriors.keys())))}")
 
 
 @st.fragment
@@ -523,128 +572,108 @@ def plot_trace(
     param_name: str,
     n_chains: int = 4,
 ):
-    """Plot MCMC trace for a parameter."""
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=["Trace", "Density"],
-    )
+    """Plot trace plot for a parameter."""
+    fig = make_subplots(rows=1, cols=2, subplot_titles=["Trace", "Distribution"])
     
-    # Reshape samples to (chains, draws)
-    n_total = len(samples)
-    n_draws = n_total // n_chains
-    samples_by_chain = samples.reshape(n_chains, n_draws)
+    # Assume samples are (chains * draws,) and reshape
+    total_samples = len(samples)
+    draws_per_chain = total_samples // n_chains
     
-    # Trace plot
     for i in range(n_chains):
+        chain_samples = samples[i * draws_per_chain:(i + 1) * draws_per_chain]
         fig.add_trace(go.Scatter(
-            y=samples_by_chain[i],
+            y=chain_samples,
             mode='lines',
+            name=f'Chain {i+1}',
             line=dict(width=0.5),
             opacity=0.7,
-            name=f'Chain {i+1}',
         ), row=1, col=1)
     
-    # Density plot
+    # Distribution
     fig.add_trace(go.Histogram(
         x=samples,
-        nbinsx=50,
-        opacity=0.7,
+        name='Posterior',
+        marker_color=CHART_COLORS[0],
         showlegend=False,
     ), row=1, col=2)
     
     fig.update_layout(
-        title=f"Trace Plot: {param_name}",
+        title=f"Trace: {param_name}",
         height=300,
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"trace_{param_name}")
 
 
 # =============================================================================
-# Scenario Planning Charts
+# Scenario Charts
 # =============================================================================
 
 @st.fragment
 def plot_scenario_comparison(
-    baseline: float,
-    scenario: float,
-    channel_effects: dict[str, float],
+    baseline: dict[str, float],
+    scenario: dict[str, float],
+    labels: tuple[str, str] = ("Baseline", "Scenario"),
     title: str = "Scenario Comparison",
 ):
-    """Plot scenario comparison showing baseline vs scenario outcome."""
-    change = scenario - baseline
-    change_pct = change / baseline * 100 if baseline != 0 else 0
-    
-    # Create comparison bar chart
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=["Baseline", "Scenario"],
-        y=[baseline, scenario],
-        marker_color=[CHART_COLORS[0], CHART_COLORS[1]],
-        text=[f"{baseline:,.0f}", f"{scenario:,.0f}"],
-        textposition='outside',
-    ))
-    
-    # Add change annotation
-    fig.add_annotation(
-        x=1,
-        y=max(baseline, scenario) * 1.1,
-        text=f"Change: {change:+,.0f} ({change_pct:+.1f}%)",
-        showarrow=False,
-        font=dict(size=14, color='green' if change >= 0 else 'red'),
-    )
-    
-    fig.update_layout(
-        title=title,
-        yaxis_title="Outcome",
-        height=400,
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Channel effects breakdown
-    if channel_effects:
-        st.markdown("### Channel Effects")
-        effect_df = pd.DataFrame([
-            {"Channel": k, "Effect": v}
-            for k, v in channel_effects.items()
-        ])
-        st.dataframe(effect_df, use_container_width=True, hide_index=True)
-
-
-@st.fragment
-def plot_budget_optimization(
-    current_allocation: dict[str, float],
-    optimal_allocation: dict[str, float],
-    title: str = "Budget Allocation Comparison",
-):
-    """Plot current vs optimal budget allocation."""
-    channels = list(current_allocation.keys())
+    """Plot side-by-side comparison of baseline and scenario."""
+    metrics = list(baseline.keys())
     
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
-        name='Current',
-        x=channels,
-        y=[current_allocation[c] for c in channels],
+        name=labels[0],
+        x=metrics,
+        y=[baseline[m] for m in metrics],
         marker_color=CHART_COLORS[0],
     ))
     
     fig.add_trace(go.Bar(
-        name='Optimal',
-        x=channels,
-        y=[optimal_allocation[c] for c in channels],
+        name=labels[1],
+        x=metrics,
+        y=[scenario[m] for m in metrics],
         marker_color=CHART_COLORS[1],
     ))
     
     fig.update_layout(
         title=title,
         barmode='group',
-        xaxis_title="Channel",
-        yaxis_title="Budget",
         height=400,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"scenario_{hash(str(metrics))}")
+
+
+@st.fragment
+def plot_budget_optimization(
+    current_allocation: dict[str, float],
+    optimal_allocation: dict[str, float],
+    title: str = "Budget Optimization",
+):
+    """Plot current vs optimal budget allocation."""
+    channels = list(current_allocation.keys())
+    
+    fig = make_subplots(
+        rows=1, cols=2,
+        specs=[[{"type": "pie"}, {"type": "pie"}]],
+        subplot_titles=["Current Allocation", "Optimal Allocation"],
+    )
+    
+    fig.add_trace(go.Pie(
+        labels=channels,
+        values=[current_allocation[ch] for ch in channels],
+        name="Current",
+    ), row=1, col=1)
+    
+    fig.add_trace(go.Pie(
+        labels=channels,
+        values=[optimal_allocation[ch] for ch in channels],
+        name="Optimal",
+    ), row=1, col=2)
+    
+    fig.update_layout(
+        title=title,
+        height=400,
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, key=f"optimization_{hash(str(channels))}")
