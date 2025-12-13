@@ -1215,13 +1215,447 @@ def render_contributions_tab(model_id: str):
 
 
 # =============================================================================
+# Trend & Seasonality Analysis Tab
+# =============================================================================
+
+@st.fragment
+def render_trend_seasonality_tab(model_id: str):
+    """Render trend and seasonality analysis with detailed visualizations."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    st.markdown("### Trend & Seasonality Analysis")
+    
+    st.markdown("""
+    Analyze the **time-varying components** of your model: underlying **trend** (long-term growth/decline) 
+    and **seasonality** (cyclical patterns). These components capture systematic time effects independent 
+    of marketing activities.
+    """)
+    
+    try:
+        client = get_api_client()
+        
+        with st.spinner("Loading trend and seasonality data..."):
+            decomposition = fetch_decomposition(client, model_id)
+        
+        if not decomposition:
+            st.info("Decomposition data not available.")
+            return
+        
+        periods = decomposition.get("periods", [])
+        components = decomposition.get("components", {})
+        observed = decomposition.get("observed", [])
+        metadata = decomposition.get("metadata", {})
+        by_geography = decomposition.get("by_geography", {})
+        
+        n_periods = len(periods)
+        
+        # Convert periods to datetime if possible
+        try:
+            period_dates = pd.to_datetime(periods)
+            periods_display = period_dates
+        except:
+            period_dates = None
+            periods_display = list(range(n_periods))
+        
+        # Get trend and seasonality data
+        trend_data = components.get("trend", [0] * n_periods)
+        seasonality_data = components.get("seasonality", [0] * n_periods)
+        baseline_data = components.get("baseline", [0] * n_periods)
+        
+        has_trend = metadata.get("has_trend", False) or np.any(np.array(trend_data) != 0)
+        has_seasonality = metadata.get("has_seasonality", False) or np.any(np.array(seasonality_data) != 0)
+        trend_type = metadata.get("trend_type", "unknown")
+        
+        # Info cards
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Trend Type", trend_type.replace("_", " ").title())
+        with col2:
+            if has_trend:
+                trend_change = trend_data[-1] - trend_data[0] if len(trend_data) > 1 else 0
+                st.metric("Total Trend Change", f"{trend_change:,.0f}", 
+                         delta=f"{(trend_change/abs(trend_data[0])*100) if trend_data[0] != 0 else 0:.1f}%")
+            else:
+                st.metric("Trend", "Not included")
+        with col3:
+            if has_seasonality:
+                seas_range = max(seasonality_data) - min(seasonality_data)
+                st.metric("Seasonality Range", f"±{seas_range/2:,.0f}")
+            else:
+                st.metric("Seasonality", "Not included")
+        
+        st.markdown("---")
+        
+        # Sub-tabs for different views
+        ts_tabs = st.tabs([
+            "📈 Trend Analysis",
+            "🔄 Seasonality Analysis", 
+            "🌍 Geographic View",
+            "📊 Combined View"
+        ])
+        
+        # =================================================================
+        # Tab 1: Trend Analysis
+        # =================================================================
+        with ts_tabs[0]:
+            st.markdown("#### Trend Component")
+            
+            if not has_trend:
+                st.info("No trend component was included in this model (trend_type = 'none').")
+            else:
+                # Trend over time
+                fig_trend = go.Figure()
+                
+                fig_trend.add_trace(go.Scatter(
+                    x=periods_display,
+                    y=trend_data,
+                    mode='lines',
+                    name='Trend',
+                    line=dict(color='#e74c3c', width=3),
+                    hovertemplate="<b>Trend</b><br>%{x}<br>%{y:,.0f}<extra></extra>",
+                ))
+                
+                # Add baseline for reference
+                if baseline_data and np.any(np.array(baseline_data) != 0):
+                    mean_baseline = np.mean(baseline_data)
+                    fig_trend.add_hline(y=0, line_dash="dash", line_color="gray", 
+                                       annotation_text="Zero line")
+                
+                fig_trend.update_layout(
+                    title=f"Trend Component Over Time ({trend_type.replace('_', ' ').title()})",
+                    xaxis_title="Period",
+                    yaxis_title="Trend Effect (Sales Units)",
+                    height=400,
+                    hovermode='x unified',
+                )
+                
+                st.plotly_chart(fig_trend, use_container_width=True, key="trend_main")
+                
+                # Trend statistics
+                st.markdown("##### Trend Statistics")
+                
+                trend_arr = np.array(trend_data)
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Start Value", f"{trend_arr[0]:,.0f}")
+                with col2:
+                    st.metric("End Value", f"{trend_arr[-1]:,.0f}")
+                with col3:
+                    avg_change = (trend_arr[-1] - trend_arr[0]) / max(n_periods - 1, 1)
+                    st.metric("Avg Period Change", f"{avg_change:+,.1f}")
+                with col4:
+                    total_contrib = np.sum(trend_arr)
+                    st.metric("Total Contribution", f"{total_contrib:,.0f}")
+                
+                # Interpretation
+                with st.expander("📖 Trend Interpretation", expanded=False):
+                    if trend_type == "linear":
+                        st.markdown("""
+                        **Linear Trend**: A simple straight-line trend capturing overall growth or decline.
+                        - Positive slope = steady growth over time
+                        - Negative slope = steady decline over time
+                        - The slope coefficient indicates the average change per period
+                        """)
+                    elif trend_type == "piecewise":
+                        st.markdown("""
+                        **Piecewise Linear Trend** (Prophet-style): Allows the trend to change at 
+                        multiple "changepoints" throughout the time series.
+                        - Changepoints indicate where the growth rate shifted
+                        - Useful for capturing market changes, product launches, etc.
+                        """)
+                    elif trend_type == "spline":
+                        st.markdown("""
+                        **B-Spline Trend**: A smooth, flexible trend using spline basis functions.
+                        - Can capture complex non-linear patterns
+                        - Smoother than piecewise trends
+                        - Number of knots controls flexibility
+                        """)
+                    elif trend_type == "gaussian_process":
+                        st.markdown("""
+                        **Gaussian Process Trend**: A fully flexible, probabilistic trend component.
+                        - Captures any smooth underlying pattern
+                        - Includes uncertainty in the trend estimate
+                        - Lengthscale controls how quickly the trend can change
+                        """)
+        
+        # =================================================================
+        # Tab 2: Seasonality Analysis
+        # =================================================================
+        with ts_tabs[1]:
+            st.markdown("#### Seasonality Component")
+            
+            if not has_seasonality:
+                st.info("No seasonality component was included in this model (yearly_seasonality = 0).")
+            else:
+                # Seasonality over time
+                fig_seas = go.Figure()
+                
+                fig_seas.add_trace(go.Scatter(
+                    x=periods_display,
+                    y=seasonality_data,
+                    mode='lines',
+                    name='Seasonality',
+                    line=dict(color='#2ecc71', width=2),
+                    fill='tozeroy',
+                    fillcolor='rgba(46, 204, 113, 0.2)',
+                    hovertemplate="<b>Seasonality</b><br>%{x}<br>%{y:,.0f}<extra></extra>",
+                ))
+                
+                fig_seas.add_hline(y=0, line_dash="dash", line_color="gray")
+                
+                fig_seas.update_layout(
+                    title="Seasonality Component Over Time",
+                    xaxis_title="Period",
+                    yaxis_title="Seasonal Effect (Sales Units)",
+                    height=400,
+                    hovermode='x unified',
+                )
+                
+                st.plotly_chart(fig_seas, use_container_width=True, key="seasonality_main")
+                
+                # Seasonal pattern (one cycle)
+                if n_periods >= 52:
+                    st.markdown("##### Annual Seasonal Pattern")
+                    
+                    # Aggregate to get average seasonal pattern
+                    seasonal_arr = np.array(seasonality_data)
+                    n_complete_years = n_periods // 52
+                    
+                    if n_complete_years >= 1:
+                        # Average across years
+                        seasonal_pattern = np.zeros(52)
+                        for i in range(n_complete_years):
+                            seasonal_pattern += seasonal_arr[i*52:(i+1)*52]
+                        seasonal_pattern /= n_complete_years
+                        
+                        # Create week labels
+                        week_labels = [f"Week {i+1}" for i in range(52)]
+                        
+                        fig_pattern = go.Figure()
+                        
+                        fig_pattern.add_trace(go.Bar(
+                            x=week_labels,
+                            y=seasonal_pattern,
+                            marker_color=['#2ecc71' if v >= 0 else '#e74c3c' for v in seasonal_pattern],
+                            hovertemplate="<b>%{x}</b><br>Effect: %{y:,.0f}<extra></extra>",
+                        ))
+                        
+                        fig_pattern.update_layout(
+                            title="Average Weekly Seasonal Pattern (52 Weeks)",
+                            xaxis_title="Week of Year",
+                            yaxis_title="Seasonal Effect",
+                            height=350,
+                            xaxis=dict(tickangle=45, dtick=4),
+                        )
+                        
+                        st.plotly_chart(fig_pattern, use_container_width=True, key="seasonal_pattern")
+                        
+                        # Peak and trough weeks
+                        peak_week = np.argmax(seasonal_pattern) + 1
+                        trough_week = np.argmin(seasonal_pattern) + 1
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.success(f"📈 **Peak Season**: Week {peak_week} (+{seasonal_pattern[peak_week-1]:,.0f})")
+                        with col2:
+                            st.error(f"📉 **Low Season**: Week {trough_week} ({seasonal_pattern[trough_week-1]:,.0f})")
+                
+                # Interpretation
+                with st.expander("📖 Seasonality Interpretation", expanded=False):
+                    st.markdown("""
+                    **Fourier Seasonality**: Cyclical patterns captured using sine and cosine basis functions.
+                    
+                    - **Positive values**: Time periods where sales are above the baseline trend
+                    - **Negative values**: Time periods where sales are below the baseline trend
+                    - **Amplitude**: The strength of seasonal effects (larger = more seasonality)
+                    - **Order**: Higher orders capture more complex seasonal patterns
+                    
+                    Common seasonal patterns:
+                    - Holiday spikes (Q4 for retail)
+                    - Summer/winter patterns
+                    - Back-to-school periods
+                    - Industry-specific cycles
+                    """)
+        
+        # =================================================================
+        # Tab 3: Geographic View
+        # =================================================================
+        with ts_tabs[2]:
+            st.markdown("#### Geographic Breakdown")
+            
+            geo_names = metadata.get("geo_names", ["National"])
+            
+            if len(geo_names) <= 1:
+                st.info("This model has only one geography. Geographic breakdown is not applicable.")
+            else:
+                # Select component to view
+                available_geo_components = list(by_geography.keys())
+                
+                if not available_geo_components:
+                    st.warning("Geographic breakdown not available for this model.")
+                else:
+                    component_select = st.selectbox(
+                        "Select Component",
+                        options=["trend", "seasonality", "baseline"],
+                        format_func=lambda x: x.title(),
+                        key="geo_component_select"
+                    )
+                    
+                    if component_select in by_geography:
+                        geo_data = by_geography[component_select]
+                        
+                        # Line chart by geography
+                        fig_geo = go.Figure()
+                        
+                        colors = [
+                            '#4285f4', '#ea4335', '#fbbc04', '#34a853', 
+                            '#ff6d01', '#46bdc6', '#9334e6', '#e91e63'
+                        ]
+                        
+                        for i, (geo, values) in enumerate(geo_data.items()):
+                            fig_geo.add_trace(go.Scatter(
+                                x=periods_display,
+                                y=values,
+                                mode='lines',
+                                name=geo,
+                                line=dict(color=colors[i % len(colors)], width=2),
+                            ))
+                        
+                        fig_geo.update_layout(
+                            title=f"{component_select.title()} by Geography",
+                            xaxis_title="Period",
+                            yaxis_title=f"{component_select.title()} Effect",
+                            height=450,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                            hovermode='x unified',
+                        )
+                        
+                        st.plotly_chart(fig_geo, use_container_width=True, key="geo_trend_seas")
+                        
+                        # Summary table
+                        st.markdown("##### Geographic Summary")
+                        
+                        geo_summary = []
+                        for geo, values in geo_data.items():
+                            arr = np.array(values)
+                            geo_summary.append({
+                                "Geography": geo,
+                                "Total": f"{np.sum(arr):,.0f}",
+                                "Mean": f"{np.mean(arr):,.0f}",
+                                "Std Dev": f"{np.std(arr):,.0f}",
+                                "Min": f"{np.min(arr):,.0f}",
+                                "Max": f"{np.max(arr):,.0f}",
+                            })
+                        
+                        st.dataframe(pd.DataFrame(geo_summary), use_container_width=True, hide_index=True)
+                    else:
+                        st.warning(f"{component_select.title()} not available by geography.")
+        
+        # =================================================================
+        # Tab 4: Combined View
+        # =================================================================
+        with ts_tabs[3]:
+            st.markdown("#### Trend + Seasonality Combined")
+            
+            # Combined effect
+            combined = np.array(trend_data) + np.array(seasonality_data)
+            
+            fig_combined = make_subplots(
+                rows=3, cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.08,
+                subplot_titles=("Trend", "Seasonality", "Combined (Trend + Seasonality)"),
+                row_heights=[0.3, 0.3, 0.4]
+            )
+            
+            # Trend
+            fig_combined.add_trace(
+                go.Scatter(x=periods_display, y=trend_data, mode='lines',
+                          name='Trend', line=dict(color='#e74c3c', width=2)),
+                row=1, col=1
+            )
+            
+            # Seasonality
+            fig_combined.add_trace(
+                go.Scatter(x=periods_display, y=seasonality_data, mode='lines',
+                          name='Seasonality', line=dict(color='#2ecc71', width=2),
+                          fill='tozeroy', fillcolor='rgba(46, 204, 113, 0.2)'),
+                row=2, col=1
+            )
+            
+            # Combined
+            fig_combined.add_trace(
+                go.Scatter(x=periods_display, y=combined, mode='lines',
+                          name='Combined', line=dict(color='#3498db', width=2)),
+                row=3, col=1
+            )
+            
+            # Add baseline reference
+            fig_combined.add_trace(
+                go.Scatter(x=periods_display, y=baseline_data, mode='lines',
+                          name='Baseline', line=dict(color='gray', width=1, dash='dot')),
+                row=3, col=1
+            )
+            
+            fig_combined.update_layout(
+                height=650,
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                hovermode='x unified',
+            )
+            
+            # Add zero lines
+            for i in range(1, 4):
+                fig_combined.add_hline(y=0, line_dash="dash", line_color="lightgray", row=i, col=1)
+            
+            st.plotly_chart(fig_combined, use_container_width=True, key="combined_view")
+            
+            # Contribution summary
+            st.markdown("##### Component Contribution Summary")
+            
+            total_observed = np.sum(observed) if observed else 0
+            total_baseline = np.sum(baseline_data)
+            total_trend = np.sum(trend_data)
+            total_seasonality = np.sum(seasonality_data)
+            
+            summary_data = [
+                {"Component": "Baseline", "Total": f"{total_baseline:,.0f}", 
+                 "% of Observed": f"{total_baseline/total_observed*100:.1f}%" if total_observed else "N/A"},
+                {"Component": "Trend", "Total": f"{total_trend:,.0f}", 
+                 "% of Observed": f"{total_trend/total_observed*100:.1f}%" if total_observed else "N/A"},
+                {"Component": "Seasonality", "Total": f"{total_seasonality:,.0f}", 
+                 "% of Observed": f"{total_seasonality/total_observed*100:.1f}%" if total_observed else "N/A"},
+            ]
+            
+            st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+    
+    except APIError as e:
+        display_api_error(e)
+    except Exception as e:
+        st.error(f"Error loading trend/seasonality data: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+# =============================================================================
 # Component Decomposition Tab
 # =============================================================================
 
 @st.fragment
 def render_decomposition_tab(model_id: str):
-    """Render component decomposition."""
+    """Render comprehensive component decomposition with stacked area and YoY waterfall."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
     st.markdown("### Component Decomposition")
+    
+    st.markdown("""
+    Break down the model's predictions into individual components: **baseline** (intercept), 
+    **trend**, **seasonality**, **media effects**, and **control variables**. This shows how 
+    each factor contributes to the overall outcome.
+    """)
     
     try:
         client = get_api_client()
@@ -1236,32 +1670,798 @@ def render_decomposition_tab(model_id: str):
         periods = decomposition.get("periods", [])
         components = decomposition.get("components", {})
         observed = decomposition.get("observed", [])
+        metadata = decomposition.get("metadata", {})
+        by_geography = decomposition.get("by_geography", {})
+        by_product = decomposition.get("by_product", {})
+        observed_by_geo = decomposition.get("observed_by_geography", {})
+        observed_by_prod = decomposition.get("observed_by_product", {})
         
         if not periods or not components:
             st.warning("Insufficient data for decomposition visualization.")
             return
         
-        # Component selection
-        available_components = list(components.keys())
-        selected_components = st.multiselect(
-            "Select Components",
-            options=available_components,
-            default=available_components,
-            key="decomposition_component_select",
-        )
+        n_periods = len(periods)
         
-        if selected_components:
-            filtered_components = {k: components[k] for k in selected_components}
-            plot_component_decomposition(
-                periods=periods,
-                components=filtered_components,
-                observed=observed if observed else None,
+        # Get available geo and product names
+        geo_names = metadata.get("geo_names", ["National"])
+        product_names = metadata.get("product_names", ["All"])
+        has_geo = metadata.get("has_geo", False) or len(geo_names) > 1
+        has_product = metadata.get("has_product", False) or len(product_names) > 1
+        
+        # =================================================================
+        # FILTER CONTROLS
+        # =================================================================
+        st.markdown("---")
+        
+        filter_cols = st.columns([2, 2, 2])
+        
+        with filter_cols[0]:
+            view_level = st.radio(
+                "View Level",
+                options=["Aggregate", "By Geography", "By Product"] if (has_geo or has_product) else ["Aggregate"],
+                horizontal=True,
+                key="decomp_view_level"
             )
+        
+        selected_geo = None
+        selected_product = None
+        
+        with filter_cols[1]:
+            if view_level == "By Geography" and has_geo:
+                selected_geo = st.selectbox(
+                    "Select Geography",
+                    options=geo_names,
+                    key="decomp_geo_filter"
+                )
+            elif has_geo:
+                st.caption(f"📍 Aggregated over {len(geo_names)} geographies")
+        
+        with filter_cols[2]:
+            if view_level == "By Product" and has_product:
+                selected_product = st.selectbox(
+                    "Select Product",
+                    options=product_names,
+                    key="decomp_product_filter"
+                )
+            elif has_product:
+                st.caption(f"📦 Aggregated over {len(product_names)} products")
+        
+        st.markdown("---")
+        
+        # =================================================================
+        # GET COMPONENTS BASED ON FILTER SELECTION
+        # =================================================================
+        def get_component_data(comp_name):
+            """Get component data based on current filter selection."""
+            if view_level == "By Geography" and selected_geo and comp_name in by_geography:
+                geo_data = by_geography[comp_name]
+                if selected_geo in geo_data:
+                    return np.array(geo_data[selected_geo])
+            elif view_level == "By Product" and selected_product and comp_name in by_product:
+                prod_data = by_product[comp_name]
+                if selected_product in prod_data:
+                    return np.array(prod_data[selected_product])
+            
+            # Default to aggregate
+            if comp_name in components:
+                return np.array(components[comp_name])
+            return np.zeros(n_periods)
+        
+        def get_observed_data():
+            """Get observed data based on current filter selection."""
+            if view_level == "By Geography" and selected_geo and selected_geo in observed_by_geo:
+                return np.array(observed_by_geo[selected_geo])
+            elif view_level == "By Product" and selected_product and selected_product in observed_by_prod:
+                return np.array(observed_by_prod[selected_product])
+            return np.array(observed)
+        
+        # Get filtered data
+        baseline_comp = get_component_data("baseline").tolist()
+        trend_comp = get_component_data("trend").tolist()
+        seasonality_comp = get_component_data("seasonality").tolist()
+        observed = get_observed_data().tolist()
+        
+        # Debug expander to show available components
+        with st.expander("🔍 Debug: Available Components", expanded=False):
+            st.write(f"**View Level:** {view_level}")
+            if selected_geo:
+                st.write(f"**Selected Geo:** {selected_geo}")
+            if selected_product:
+                st.write(f"**Selected Product:** {selected_product}")
+            st.write(f"**Periods:** {n_periods}")
+            st.write(f"**Aggregate Components:** {list(components.keys())}")
+            st.write(f"**By Geography Components:** {list(by_geography.keys())}")
+            st.write(f"**By Product Components:** {list(by_product.keys())}")
+            for k, v in components.items():
+                if isinstance(v, list):
+                    st.write(f"  - {k}: {len(v)} values, range [{min(v):.2f}, {max(v):.2f}]")
+        
+        # Convert periods to datetime if possible
+        try:
+            period_dates = pd.to_datetime(periods)
+            periods_display = period_dates
+        except:
+            period_dates = None
+            periods_display = periods
+        
+        # Aggregate media components (individual channels prefixed with media_)
+        media_components = {}
+        for k in components.keys():
+            if k.startswith("media_") and k != "media_total":
+                media_components[k] = get_component_data(k).tolist()
+        
+        # If we have a pre-computed media_total, use that; otherwise sum individual channels
+        if "media_total" in components and not media_components:
+            media_total = get_component_data("media_total")
+        else:
+            media_total = np.zeros(n_periods)
+            for comp_values in media_components.values():
+                if len(comp_values) == n_periods:
+                    media_total += np.array(comp_values)
+        
+        # Aggregate control components
+        control_components = {}
+        for k in components.keys():
+            if k.startswith("control_") and k != "controls_total":
+                control_components[k] = get_component_data(k).tolist()
+        
+        # If we have a pre-computed controls_total, use that; otherwise sum individual controls
+        if "controls_total" in components and not control_components:
+            controls_total = get_component_data("controls_total")
+        else:
+            controls_total = np.zeros(n_periods)
+            for comp_values in control_components.values():
+                if len(comp_values) == n_periods:
+                    controls_total += np.array(comp_values)
+        
+        # Get geo and product effects if available (these are already filtered by get_component_data)
+        geo_effects = get_component_data("geo_effects").tolist()
+        product_effects = get_component_data("product_effects").tolist()
+        
+        # Calculate predicted total from components
+        predicted = (np.array(baseline_comp) + np.array(trend_comp) + 
+                    np.array(seasonality_comp) + media_total + controls_total +
+                    np.array(geo_effects) + np.array(product_effects))
+        
+        # Check which components actually have non-zero values
+        has_trend_data = np.any(np.array(trend_comp) != 0)
+        has_seasonality_data = np.any(np.array(seasonality_comp) != 0)
+        has_media_data = np.any(media_total != 0)
+        has_controls_data = np.any(controls_total != 0)
+        has_geo_effects = np.any(np.array(geo_effects) != 0)
+        has_product_effects = np.any(np.array(product_effects) != 0)
+        
+        # Warn if missing expected components
+        if not has_media_data and not media_components:
+            st.warning("⚠️ No media channel contributions found in the decomposition. This may indicate the model's media contribution variables aren't being captured correctly.")
+        
+        # Sub-tabs for different views
+        decomp_tabs = st.tabs([
+            "📊 Summary", 
+            "📈 Stacked Area Chart", 
+            "📉 Component Time Series",
+            "🌍 Geographic View",
+            "📅 Year-over-Year Waterfall",
+            "🥧 Relative Breakdown"
+        ])
+        
+        # =================================================================
+        # Tab 1: Summary
+        # =================================================================
+        with decomp_tabs[0]:
+            st.markdown("#### Component Contribution Summary")
+            
+            # Calculate total contributions
+            summary_data = []
+            total_predicted = np.sum(predicted)
+            
+            components_summary = {
+                "Baseline": np.sum(baseline_comp),
+                "Trend": np.sum(trend_comp),
+                "Seasonality": np.sum(seasonality_comp),
+                "Media (Total)": np.sum(media_total),
+                "Controls (Total)": np.sum(controls_total),
+            }
+            
+            for name, value in components_summary.items():
+                pct = (value / total_predicted * 100) if total_predicted != 0 else 0
+                summary_data.append({
+                    "Component": name,
+                    "Total Contribution": value,
+                    "% of Predicted": pct,
+                })
+            
+            summary_df = pd.DataFrame(summary_data)
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                # Pie chart
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=summary_df["Component"],
+                    values=summary_df["Total Contribution"].abs(),
+                    hole=0.4,
+                    marker_colors=['#3498db', '#e74c3c', '#2ecc71', '#9b59b6', '#f39c12'],
+                    textinfo='label+percent',
+                    textposition='outside',
+                )])
+                fig_pie.update_layout(
+                    title="Share of Predicted Outcome",
+                    height=400,
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_pie, use_container_width=True, key="decomp_pie")
+            
+            with col2:
+                # Summary table
+                display_df = summary_df.copy()
+                display_df["Total Contribution"] = display_df["Total Contribution"].apply(lambda x: f"{x:,.0f}")
+                display_df["% of Predicted"] = display_df["% of Predicted"].apply(lambda x: f"{x:.1f}%")
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                
+                # Media channel breakdown
+                if media_components:
+                    st.markdown("##### Media Channel Breakdown")
+                    media_summary = []
+                    for name, values in media_components.items():
+                        channel_name = name.replace("media_", "")
+                        total = np.sum(values)
+                        pct_of_media = (total / np.sum(media_total) * 100) if np.sum(media_total) != 0 else 0
+                        media_summary.append({
+                            "Channel": channel_name,
+                            "Contribution": f"{total:,.0f}",
+                            "% of Media": f"{pct_of_media:.1f}%",
+                        })
+                    st.dataframe(pd.DataFrame(media_summary), use_container_width=True, hide_index=True)
+        
+        # =================================================================
+        # Tab 2: Stacked Area Chart
+        # =================================================================
+        with decomp_tabs[1]:
+            st.markdown("#### Stacked Component Contributions Over Time")
+            
+            # Color scheme for components
+            colors = {
+                'baseline': '#3498db',
+                'trend': '#e74c3c', 
+                'seasonality': '#2ecc71',
+                'media': '#9b59b6',
+                'controls': '#f39c12',
+                'geo': '#1abc9c',
+                'product': '#e67e22',
+            }
+            
+            fig_stack = go.Figure()
+            
+            # Add components in stacking order (only those with non-zero values)
+            stack_order = [
+                ('Baseline', baseline_comp, colors['baseline']),
+                ('Trend', trend_comp, colors['trend']),
+                ('Seasonality', seasonality_comp, colors['seasonality']),
+                ('Media', media_total.tolist(), colors['media']),
+                ('Controls', controls_total.tolist(), colors['controls']),
+                ('Geography', geo_effects, colors['geo']),
+                ('Product', product_effects, colors['product']),
+            ]
+            
+            components_added = 0
+            for name, values, color in stack_order:
+                if np.any(np.array(values) != 0):
+                    fig_stack.add_trace(go.Scatter(
+                        x=periods_display,
+                        y=values,
+                        name=name,
+                        mode='lines',
+                        stackgroup='components',
+                        line=dict(width=0.5, color=color),
+                        fillcolor=color,
+                        hovertemplate=f"<b>{name}</b><br>%{{x}}<br>%{{y:,.0f}}<extra></extra>",
+                    ))
+                    components_added += 1
+            
+            if components_added == 0:
+                st.warning("No component data available for stacked area chart.")
+            else:
+                # Add observed as line
+                if observed:
+                    fig_stack.add_trace(go.Scatter(
+                        x=periods_display,
+                        y=observed,
+                        name='Observed',
+                        mode='markers',
+                        marker=dict(color='black', size=5, symbol='circle'),
+                        hovertemplate="<b>Observed</b><br>%{x}<br>%{y:,.0f}<extra></extra>",
+                    ))
+                
+                fig_stack.update_layout(
+                    title="Stacked Component Contributions vs Observed",
+                    xaxis_title="Period",
+                    yaxis_title="Sales",
+                    height=500,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="center",
+                        x=0.5,
+                    ),
+                    hovermode='x unified',
+                )
+                
+                st.plotly_chart(fig_stack, use_container_width=True, key="decomp_stacked")
+                
+                # Show individual media channels option
+                if media_components:
+                    with st.expander("📺 Show Individual Media Channels", expanded=False):
+                        fig_media_stack = go.Figure()
+                        
+                        media_colors = [
+                            '#4285f4', '#ea4335', '#fbbc04', '#34a853', 
+                            '#ff6d01', '#46bdc6', '#9334e6', '#e91e63'
+                        ]
+                        
+                        for i, (name, values) in enumerate(media_components.items()):
+                            channel_name = name.replace("media_", "")
+                            color = media_colors[i % len(media_colors)]
+                            
+                            fig_media_stack.add_trace(go.Scatter(
+                                x=periods_display,
+                                y=values,
+                                name=channel_name,
+                                mode='lines',
+                                stackgroup='media',
+                                line=dict(width=0.5),
+                                hovertemplate=f"<b>{channel_name}</b><br>%{{x}}<br>%{{y:,.0f}}<extra></extra>",
+                            ))
+                        
+                        fig_media_stack.update_layout(
+                            title="Media Channel Contributions (Stacked)",
+                            xaxis_title="Period",
+                            yaxis_title="Media Contribution",
+                            height=400,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                            hovermode='x unified',
+                        )
+                        
+                        st.plotly_chart(fig_media_stack, use_container_width=True, key="decomp_media_stack")
+        
+        # =================================================================
+        # Tab 3: Component Time Series (Individual Lines)
+        # =================================================================
+        with decomp_tabs[2]:
+            st.markdown("#### Individual Component Time Series")
+            
+            # Component selection
+            all_components = ["Baseline", "Trend", "Seasonality", "Media (Total)", "Controls (Total)"]
+            all_components.extend([f"Media: {k.replace('media_', '')}" for k in media_components.keys()])
+            all_components.extend([f"Control: {k.replace('control_', '')}" for k in control_components.keys()])
+            
+            selected = st.multiselect(
+                "Select Components to Display",
+                options=all_components,
+                default=["Trend", "Seasonality", "Media (Total)"],
+                key="decomp_ts_select",
+            )
+            
+            if selected:
+                fig_ts = go.Figure()
+                
+                component_map = {
+                    "Baseline": (baseline_comp, '#3498db'),
+                    "Trend": (trend_comp, '#e74c3c'),
+                    "Seasonality": (seasonality_comp, '#2ecc71'),
+                    "Media (Total)": (media_total.tolist(), '#9b59b6'),
+                    "Controls (Total)": (controls_total.tolist(), '#f39c12'),
+                }
+                
+                # Add individual media/control components
+                for k, v in media_components.items():
+                    component_map[f"Media: {k.replace('media_', '')}"] = (v, '#9b59b6')
+                for k, v in control_components.items():
+                    component_map[f"Control: {k.replace('control_', '')}"] = (v, '#f39c12')
+                
+                for name in selected:
+                    if name in component_map:
+                        values, color = component_map[name]
+                        fig_ts.add_trace(go.Scatter(
+                            x=periods_display,
+                            y=values,
+                            name=name,
+                            mode='lines',
+                            line=dict(width=2),
+                        ))
+                
+                fig_ts.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+                
+                fig_ts.update_layout(
+                    title="Component Contributions Over Time",
+                    xaxis_title="Period",
+                    yaxis_title="Contribution",
+                    height=450,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                    hovermode='x unified',
+                )
+                
+                st.plotly_chart(fig_ts, use_container_width=True, key="decomp_ts")
+        
+        # =================================================================
+        # Tab 4: Geographic View
+        # =================================================================
+        with decomp_tabs[3]:
+            st.markdown("#### Geographic Breakdown of Components")
+            
+            if len(geo_names) <= 1 or not by_geography:
+                st.info("Geographic breakdown requires multiple geographies and geo-level data from the model.")
+            else:
+                # Component selector for geo view
+                geo_component_options = []
+                if "baseline" in by_geography:
+                    geo_component_options.append("Baseline")
+                if "trend" in by_geography:
+                    geo_component_options.append("Trend")
+                if "seasonality" in by_geography:
+                    geo_component_options.append("Seasonality")
+                
+                # Add media channels
+                media_geo_keys = [k for k in by_geography.keys() if k.startswith("media_")]
+                for k in media_geo_keys:
+                    geo_component_options.append(f"Media: {k.replace('media_', '')}")
+                
+                # Add controls
+                control_geo_keys = [k for k in by_geography.keys() if k.startswith("control_")]
+                for k in control_geo_keys:
+                    geo_component_options.append(f"Control: {k.replace('control_', '')}")
+                
+                if not geo_component_options:
+                    st.warning("No geographic breakdown data available.")
+                else:
+                    selected_geo_comp = st.selectbox(
+                        "Select Component",
+                        options=geo_component_options,
+                        key="decomp_geo_component"
+                    )
+                    
+                    # Map selection to data key
+                    if selected_geo_comp == "Baseline":
+                        geo_key = "baseline"
+                    elif selected_geo_comp == "Trend":
+                        geo_key = "trend"
+                    elif selected_geo_comp == "Seasonality":
+                        geo_key = "seasonality"
+                    elif selected_geo_comp.startswith("Media:"):
+                        geo_key = f"media_{selected_geo_comp.replace('Media: ', '')}"
+                    elif selected_geo_comp.startswith("Control:"):
+                        geo_key = f"control_{selected_geo_comp.replace('Control: ', '')}"
+                    else:
+                        geo_key = None
+                    
+                    if geo_key and geo_key in by_geography:
+                        geo_data = by_geography[geo_key]
+                        
+                        # Plot by geography
+                        fig_geo_decomp = go.Figure()
+                        
+                        geo_colors = [
+                            '#4285f4', '#ea4335', '#fbbc04', '#34a853', 
+                            '#ff6d01', '#46bdc6', '#9334e6', '#e91e63'
+                        ]
+                        
+                        for i, (geo, values) in enumerate(geo_data.items()):
+                            fig_geo_decomp.add_trace(go.Scatter(
+                                x=periods_display,
+                                y=values,
+                                mode='lines',
+                                name=geo,
+                                line=dict(color=geo_colors[i % len(geo_colors)], width=2),
+                                hovertemplate=f"<b>{geo}</b><br>%{{x}}<br>%{{y:,.0f}}<extra></extra>",
+                            ))
+                        
+                        fig_geo_decomp.update_layout(
+                            title=f"{selected_geo_comp} Contribution by Geography",
+                            xaxis_title="Period",
+                            yaxis_title="Contribution",
+                            height=450,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                            hovermode='x unified',
+                        )
+                        
+                        st.plotly_chart(fig_geo_decomp, use_container_width=True, key="decomp_geo_lines")
+                        
+                        # Summary table
+                        st.markdown("##### Geographic Contribution Summary")
+                        
+                        geo_summary = []
+                        total_all_geos = sum(np.sum(v) for v in geo_data.values())
+                        
+                        for geo, values in geo_data.items():
+                            arr = np.array(values)
+                            total = np.sum(arr)
+                            pct = (total / total_all_geos * 100) if total_all_geos != 0 else 0
+                            geo_summary.append({
+                                "Geography": geo,
+                                "Total": f"{total:,.0f}",
+                                "% Share": f"{pct:.1f}%",
+                                "Mean": f"{np.mean(arr):,.0f}",
+                                "Std Dev": f"{np.std(arr):,.0f}",
+                            })
+                        
+                        st.dataframe(pd.DataFrame(geo_summary), use_container_width=True, hide_index=True)
+                        
+                        # Stacked area by geo
+                        with st.expander("📊 Stacked Area by Geography", expanded=False):
+                            fig_geo_stack = go.Figure()
+                            
+                            for i, (geo, values) in enumerate(geo_data.items()):
+                                fig_geo_stack.add_trace(go.Scatter(
+                                    x=periods_display,
+                                    y=values,
+                                    name=geo,
+                                    mode='lines',
+                                    stackgroup='geos',
+                                    line=dict(width=0.5),
+                                    hovertemplate=f"<b>{geo}</b><br>%{{x}}<br>%{{y:,.0f}}<extra></extra>",
+                                ))
+                            
+                            fig_geo_stack.update_layout(
+                                title=f"Stacked {selected_geo_comp} by Geography",
+                                xaxis_title="Period",
+                                yaxis_title="Contribution",
+                                height=400,
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                            )
+                            
+                            st.plotly_chart(fig_geo_stack, use_container_width=True, key="decomp_geo_stack")
+                        
+                        # Observed by geography if available
+                        if observed_by_geo:
+                            with st.expander("📈 Observed Values by Geography", expanded=False):
+                                fig_obs_geo = go.Figure()
+                                
+                                for i, (geo, values) in enumerate(observed_by_geo.items()):
+                                    fig_obs_geo.add_trace(go.Scatter(
+                                        x=periods_display,
+                                        y=values,
+                                        mode='lines',
+                                        name=geo,
+                                        line=dict(width=2),
+                                    ))
+                                
+                                fig_obs_geo.update_layout(
+                                    title="Observed Sales by Geography",
+                                    xaxis_title="Period",
+                                    yaxis_title="Sales",
+                                    height=400,
+                                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                                    hovermode='x unified',
+                                )
+                                
+                                st.plotly_chart(fig_obs_geo, use_container_width=True, key="obs_by_geo")
+        
+        # =================================================================
+        # Tab 5: Year-over-Year Waterfall
+        # =================================================================
+        with decomp_tabs[4]:
+            st.markdown("#### Year-over-Year Change Analysis")
+            
+            if period_dates is None:
+                st.info("""
+                📅 **Date-formatted periods required**
+                
+                Year-over-year analysis requires periods that can be parsed as dates 
+                (e.g., '2023-01-01', '2023-W01', etc.).
+                
+                Your data has numeric or non-date period identifiers.
+                """)
+            else:
+                # Create DataFrame with all data
+                df = pd.DataFrame({
+                    'period': period_dates,
+                    'observed': observed,
+                    'baseline': baseline_comp,
+                    'trend': trend_comp,
+                    'seasonality': seasonality_comp,
+                    'media': media_total,
+                    'controls': controls_total,
+                })
+                df['year'] = df['period'].dt.year
+                
+                # Aggregate by year
+                yearly = df.groupby('year').agg({
+                    'observed': 'sum',
+                    'baseline': 'sum',
+                    'trend': 'sum',
+                    'seasonality': 'sum',
+                    'media': 'sum',
+                    'controls': 'sum',
+                }).reset_index()
+                
+                if len(yearly) < 2:
+                    st.info("Need at least 2 years of data for YoY analysis.")
+                else:
+                    # Year selector
+                    years = sorted(yearly['year'].unique())
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        base_year = st.selectbox("Base Year", options=years[:-1], index=0, key="yoy_base")
+                    with col2:
+                        compare_years = [y for y in years if y > base_year]
+                        if compare_years:
+                            compare_year = st.selectbox("Compare Year", options=compare_years, index=0, key="yoy_compare")
+                        else:
+                            st.warning("No years available for comparison.")
+                            compare_year = None
+                    
+                    if compare_year:
+                        base_data = yearly[yearly['year'] == base_year].iloc[0]
+                        compare_data = yearly[yearly['year'] == compare_year].iloc[0]
+                        
+                        # Calculate changes
+                        changes = {
+                            'Baseline': compare_data['baseline'] - base_data['baseline'],
+                            'Trend': compare_data['trend'] - base_data['trend'],
+                            'Seasonality': compare_data['seasonality'] - base_data['seasonality'],
+                            'Media': compare_data['media'] - base_data['media'],
+                            'Controls': compare_data['controls'] - base_data['controls'],
+                        }
+                        
+                        # Add individual media channel changes
+                        for k, v in media_components.items():
+                            channel_name = k.replace("media_", "")
+                            df[f'media_{channel_name}'] = v
+                        
+                        # Re-aggregate if we added media columns
+                        if media_components:
+                            df_media = df.copy()
+                            df_media['year'] = df_media['period'].dt.year
+                            media_yearly = df_media.groupby('year')[[f'media_{k.replace("media_", "")}' for k in media_components.keys()]].sum().reset_index()
+                        
+                        # Build waterfall
+                        base_total = base_data['observed']
+                        compare_total = compare_data['observed']
+                        
+                        waterfall_data = [
+                            {'x': f'{base_year} Total', 'y': base_total, 'measure': 'absolute'},
+                        ]
+                        
+                        for name, change in changes.items():
+                            waterfall_data.append({
+                                'x': f'Δ {name}',
+                                'y': change,
+                                'measure': 'relative',
+                            })
+                        
+                        waterfall_data.append({
+                            'x': f'{compare_year} Total',
+                            'y': compare_total,
+                            'measure': 'total',
+                        })
+                        
+                        wf_df = pd.DataFrame(waterfall_data)
+                        
+                        # Create waterfall chart
+                        fig_waterfall = go.Figure(go.Waterfall(
+                            name="YoY Change",
+                            orientation="v",
+                            measure=wf_df['measure'],
+                            x=wf_df['x'],
+                            y=wf_df['y'],
+                            textposition="outside",
+                            text=[f"{v:+,.0f}" if m == 'relative' else f"{v:,.0f}" 
+                                  for v, m in zip(wf_df['y'], wf_df['measure'])],
+                            connector={"line": {"color": "rgb(63, 63, 63)"}},
+                            increasing={"marker": {"color": "#2ecc71"}},
+                            decreasing={"marker": {"color": "#e74c3c"}},
+                            totals={"marker": {"color": "#3498db"}},
+                        ))
+                        
+                        fig_waterfall.update_layout(
+                            title=f"Year-over-Year Change: {base_year} → {compare_year}",
+                            xaxis_title="",
+                            yaxis_title="Sales",
+                            height=500,
+                            showlegend=False,
+                        )
+                        
+                        st.plotly_chart(fig_waterfall, use_container_width=True, key="yoy_waterfall")
+                        
+                        # Summary table
+                        st.markdown("##### Change Summary")
+                        
+                        change_summary = []
+                        for name, change in changes.items():
+                            pct_change = (change / base_data['observed'] * 100) if base_data['observed'] != 0 else 0
+                            change_summary.append({
+                                'Component': name,
+                                f'{base_year}': f"{base_data[name.lower().replace(' ', '_').replace('(total)', '').strip()]:,.0f}" if name.lower().replace(' ', '_').replace('(total)', '').strip() in base_data else "N/A",
+                                f'{compare_year}': f"{compare_data[name.lower().replace(' ', '_').replace('(total)', '').strip()]:,.0f}" if name.lower().replace(' ', '_').replace('(total)', '').strip() in compare_data else "N/A",
+                                'Change': f"{change:+,.0f}",
+                                '% Impact': f"{pct_change:+.1f}%",
+                            })
+                        
+                        # Simpler approach - just show the changes we calculated
+                        change_df = pd.DataFrame([
+                            {'Component': 'Baseline', f'{base_year}': f"{base_data['baseline']:,.0f}", f'{compare_year}': f"{compare_data['baseline']:,.0f}", 'Change': f"{changes['Baseline']:+,.0f}", '% of Total Change': f"{changes['Baseline']/(compare_total-base_total)*100:.1f}%" if (compare_total-base_total) != 0 else "0%"},
+                            {'Component': 'Trend', f'{base_year}': f"{base_data['trend']:,.0f}", f'{compare_year}': f"{compare_data['trend']:,.0f}", 'Change': f"{changes['Trend']:+,.0f}", '% of Total Change': f"{changes['Trend']/(compare_total-base_total)*100:.1f}%" if (compare_total-base_total) != 0 else "0%"},
+                            {'Component': 'Seasonality', f'{base_year}': f"{base_data['seasonality']:,.0f}", f'{compare_year}': f"{compare_data['seasonality']:,.0f}", 'Change': f"{changes['Seasonality']:+,.0f}", '% of Total Change': f"{changes['Seasonality']/(compare_total-base_total)*100:.1f}%" if (compare_total-base_total) != 0 else "0%"},
+                            {'Component': 'Media', f'{base_year}': f"{base_data['media']:,.0f}", f'{compare_year}': f"{compare_data['media']:,.0f}", 'Change': f"{changes['Media']:+,.0f}", '% of Total Change': f"{changes['Media']/(compare_total-base_total)*100:.1f}%" if (compare_total-base_total) != 0 else "0%"},
+                            {'Component': 'Controls', f'{base_year}': f"{base_data['controls']:,.0f}", f'{compare_year}': f"{compare_data['controls']:,.0f}", 'Change': f"{changes['Controls']:+,.0f}", '% of Total Change': f"{changes['Controls']/(compare_total-base_total)*100:.1f}%" if (compare_total-base_total) != 0 else "0%"},
+                        ])
+                        
+                        st.dataframe(change_df, use_container_width=True, hide_index=True)
+                        
+                        # Total change
+                        total_change = compare_total - base_total
+                        pct_total = (total_change / base_total * 100) if base_total != 0 else 0
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric(f"{base_year} Total", f"{base_total:,.0f}")
+                        with col2:
+                            st.metric(f"{compare_year} Total", f"{compare_total:,.0f}")
+                        with col3:
+                            st.metric("Change", f"{total_change:+,.0f}", delta=f"{pct_total:+.1f}%")
+        
+        # =================================================================
+        # Tab 6: Contribution Breakdown (Relative)
+        # =================================================================
+        with decomp_tabs[5]:
+            st.markdown("#### Relative Contribution Over Time")
+            
+            # Calculate relative contributions (percentage of total)
+            total_by_period = np.array(baseline_comp) + np.array(trend_comp) + np.array(seasonality_comp) + media_total + controls_total
+            
+            # Avoid division by zero
+            total_by_period = np.where(total_by_period == 0, 1, total_by_period)
+            
+            fig_relative = go.Figure()
+            
+            stack_order_rel = [
+                ('Baseline', np.array(baseline_comp) / total_by_period * 100, '#3498db'),
+                ('Trend', np.array(trend_comp) / total_by_period * 100, '#e74c3c'),
+                ('Seasonality', np.array(seasonality_comp) / total_by_period * 100, '#2ecc71'),
+                ('Media', media_total / total_by_period * 100, '#9b59b6'),
+                ('Controls', controls_total / total_by_period * 100, '#f39c12'),
+            ]
+            
+            for name, values, color in stack_order_rel:
+                if np.any(values != 0):
+                    fig_relative.add_trace(go.Scatter(
+                        x=periods_display,
+                        y=values,
+                        name=name,
+                        mode='lines',
+                        stackgroup='components',
+                        line=dict(width=0.5, color=color),
+                        fillcolor=color,
+                        hovertemplate=f"<b>{name}</b><br>%{{x}}<br>%{{y:.1f}}%<extra></extra>",
+                    ))
+            
+            fig_relative.update_layout(
+                title="Relative Component Contributions (%)",
+                xaxis_title="Period",
+                yaxis_title="% of Predicted",
+                height=450,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                hovermode='x unified',
+                yaxis=dict(range=[0, 100]),
+            )
+            
+            st.plotly_chart(fig_relative, use_container_width=True, key="decomp_relative")
+            
+            st.info("""
+            💡 **Interpretation:**
+            - This chart shows how the relative importance of each component changes over time
+            - A growing media share indicates increasing marketing effectiveness
+            - Seasonal patterns will show periodic fluctuations in the seasonality component
+            """)
     
     except APIError as e:
         display_api_error(e)
     except Exception as e:
         st.error(f"Error loading decomposition: {e}")
+        import traceback
+        st.code(traceback.format_exc())
 
 
 # =============================================================================
@@ -1391,6 +2591,7 @@ def main():
         "🔄 Prior vs Posterior",
         "📉 Posteriors",
         "📈 Response Curves",
+        "📅 Trend & Seasonality",
         "💰 Contributions",
         "🧩 Decomposition",
         "📋 Summary",
@@ -1412,12 +2613,15 @@ def main():
         render_response_curves_tab(model_id)
     
     with tabs[5]:
-        render_contributions_tab(model_id)
+        render_trend_seasonality_tab(model_id)
     
     with tabs[6]:
-        render_decomposition_tab(model_id)
+        render_contributions_tab(model_id)
     
     with tabs[7]:
+        render_decomposition_tab(model_id)
+    
+    with tabs[8]:
         render_summary_tab(model_id)
 
 

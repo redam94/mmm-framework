@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import numpy as np
+import pandas as pd
 from arq import ArqRedis, create_pool
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -927,22 +928,25 @@ async def get_response_curves(
 )
 async def get_decomposition(
     model_id: str,
+    force_recompute: bool = Query(False, description="Force recomputation of decomposition"),
     storage: StorageService = Depends(get_storage),
 ):
     """
     Get component decomposition (trend, seasonality, media contributions, etc.).
     
-    Returns time series of each component's contribution to the outcome.
+    Returns time series of each component's contribution to the outcome,
+    both aggregated and by geography.
     """
     _check_model_completed(storage, model_id)
     
     try:
         # Try to load cached decomposition
-        try:
-            decomposition = storage.load_results(model_id, "decomposition")
-            return decomposition
-        except StorageError:
-            pass
+        if not force_recompute:
+            try:
+                decomposition = storage.load_results(model_id, "decomposition")
+                return SafeJSONResponse(content=decomposition)
+            except StorageError:
+                pass
         
         # Compute from model artifacts
         logger.info(f"Computing decomposition for model {model_id}")
@@ -957,64 +961,507 @@ async def get_decomposition(
         
         posterior = mmm._trace.posterior
         
-        # Get observed values
-        y_obs = panel.y.values.flatten()
-        n_obs = len(y_obs)
+        # Log available variables for debugging
+        posterior_vars = list(posterior.data_vars.keys())
+        logger.info(f"Available posterior variables: {posterior_vars}")
         
-        # Get period labels
-        if hasattr(panel, 'periods') and panel.periods is not None:
-            periods = [str(p) for p in panel.periods]
+        # Get basic dimensions
+        n_obs = len(panel.y.values.flatten())
+        n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else n_obs
+        
+        # Get observed values (in original scale)
+        y_obs_standardized = panel.y.values.flatten()
+        y_obs = y_obs_standardized * mmm.y_std + mmm.y_mean
+        
+        # Get period labels - try multiple sources
+        periods = None
+        unique_periods = None
+        
+        # Method 1: From panel.coords.periods (preferred - contains DatetimeIndex)
+        if hasattr(panel, 'coords') and hasattr(panel.coords, 'periods') and panel.coords.periods is not None:
+            datetime_periods = panel.coords.periods
+            # These are unique periods
+            unique_periods = [p.strftime("%Y-%m-%d") if hasattr(p, 'strftime') else str(p) for p in datetime_periods]
+            logger.info(f"Got {len(unique_periods)} unique periods from coords.periods")
+            
+            # Now we need to map each observation to its period
+            # If panel has time_idx, use that; otherwise derive from index
+            if hasattr(panel, 'time_idx') and panel.time_idx is not None:
+                # time_idx maps each obs to its period index
+                time_idx = np.array(panel.time_idx)
+                periods = [unique_periods[min(t, len(unique_periods)-1)] for t in time_idx]
+            elif hasattr(panel, 'index') and panel.index is not None:
+                # Try to get period from multi-index
+                if isinstance(panel.index, pd.MultiIndex):
+                    # First level should be date
+                    date_level = panel.index.get_level_values(0)
+                    periods = [d.strftime("%Y-%m-%d") if hasattr(d, 'strftime') else str(d) for d in date_level]
+                    unique_periods = sorted(set(periods))
+                elif isinstance(panel.index, pd.DatetimeIndex):
+                    periods = [d.strftime("%Y-%m-%d") for d in panel.index]
+                    unique_periods = sorted(set(periods))
+                else:
+                    # Fall back to repeating unique periods
+                    n_reps = n_obs // len(unique_periods)
+                    periods = unique_periods * n_reps
+                    if len(periods) < n_obs:
+                        periods = periods + unique_periods[:n_obs - len(periods)]
+            else:
+                # Assume observations are in period order, possibly with geo/product repeats
+                n_geos = len(mmm.geo_names) if hasattr(mmm, 'geo_names') and mmm.geo_names else 1
+                n_prods = getattr(mmm, 'n_products', 1) or 1
+                periods = []
+                for p in unique_periods:
+                    periods.extend([p] * (n_geos * n_prods))
+                periods = periods[:n_obs]
+        
+        # Method 2: From panel.periods directly
+        elif hasattr(panel, 'periods') and panel.periods is not None:
+            raw_periods = panel.periods
+            if hasattr(raw_periods, '__iter__'):
+                periods = [p.strftime("%Y-%m-%d") if hasattr(p, 'strftime') else str(p) for p in raw_periods]
+            else:
+                periods = [str(raw_periods)]
+            unique_periods = sorted(set(periods))
+            logger.info(f"Got {len(unique_periods)} unique periods from panel.periods")
+        
+        # Method 3: Fall back to numeric indices
+        if periods is None or unique_periods is None:
+            logger.warning("Could not extract date periods, using numeric indices")
+            periods = [str(i) for i in range(n_obs)]
+            unique_periods = [str(i) for i in range(n_periods)]
+        
+        logger.info(f"Period info: n_obs={n_obs}, n_unique_periods={len(unique_periods)}, sample periods={unique_periods[:3]}")
+        
+        # Get geo and time indices
+        has_geo = hasattr(panel, 'geo_idx') and panel.geo_idx is not None
+        geo_idx = np.array(panel.geo_idx) if has_geo else np.zeros(n_obs, dtype=int)
+        geo_names = list(mmm.geo_names) if hasattr(mmm, 'geo_names') and mmm.geo_names else ["National"]
+        n_geos = len(geo_names)
+        
+        # Get product indices if available
+        has_product = hasattr(panel, 'product_idx') and panel.product_idx is not None
+        product_idx = np.array(panel.product_idx) if has_product else np.zeros(n_obs, dtype=int)
+        product_names = list(mmm.product_names) if hasattr(mmm, 'product_names') and mmm.product_names else ["All"]
+        n_products = len(product_names)
+        
+        # Get time_idx for mapping period-level arrays to obs-level
+        if hasattr(panel, 'time_idx') and panel.time_idx is not None:
+            time_idx = np.array(panel.time_idx)
         else:
-            periods = list(range(n_obs))
+            # Create time_idx from periods list
+            period_to_idx = {p: i for i, p in enumerate(unique_periods)}
+            time_idx = np.array([period_to_idx.get(p, 0) for p in periods])
         
+        # SAFETY: Ensure time_idx is within valid bounds for period-level arrays
+        n_unique_periods = len(unique_periods)
+        if time_idx is not None and len(time_idx) > 0:
+            max_time_idx = int(np.max(time_idx))
+            min_time_idx = int(np.min(time_idx))
+            logger.info(f"time_idx range: [{min_time_idx}, {max_time_idx}], n_unique_periods: {n_unique_periods}")
+            
+            # Clip time_idx to valid range
+            time_idx = np.clip(time_idx, 0, n_unique_periods - 1)
+        
+        logger.info(f"Panel structure: n_obs={n_obs}, n_periods={n_unique_periods}, n_geos={n_geos}, n_products={n_products}")
+        
+        # Initialize decomposition structure
         decomposition = {
             "model_id": model_id,
-            "periods": periods,
-            "observed": y_obs.tolist(),
-            "components": {},
+            "periods": unique_periods,
+            "n_periods": n_unique_periods,
+            "n_obs": n_obs,
+            "components": {},           # Aggregated (summed over geo/product)
+            "by_geography": {},         # Per-geo time series
+            "by_product": {},           # Per-product time series  
+            "by_geo_product": {},       # Geo x Product breakdown
+            "observed": [],             # Will be set after aggregation
+            "observed_by_geography": {},
+            "observed_by_product": {},
+            "metadata": {
+                "geo_names": geo_names,
+                "product_names": product_names,
+                "channel_names": mmm.channel_names,
+                "control_names": mmm.control_names if hasattr(mmm, 'control_names') else [],
+                "has_geo": n_geos > 1,
+                "has_product": n_products > 1,
+                "has_trend": False,
+                "has_seasonality": False,
+                "trend_type": mmm.trend_config.type.value if hasattr(mmm, 'trend_config') else "unknown",
+                "posterior_variables": posterior_vars,
+            },
         }
         
-        # Intercept/baseline component
+        # =================================================================
+        # AGGREGATION HELPER FUNCTIONS
+        # =================================================================
+        
+        def aggregate_to_period(values, agg_func='sum'):
+            """Aggregate observation-level values to period level (summing over geo/product)."""
+            values = np.array(values)
+            if len(values) == n_unique_periods:
+                return values  # Already at period level
+            
+            df = pd.DataFrame({'period': periods, 'value': values})
+            if agg_func == 'sum':
+                agg = df.groupby('period')['value'].sum()
+            else:
+                agg = df.groupby('period')['value'].mean()
+            return agg.reindex(unique_periods).fillna(0).values
+        
+        def aggregate_by_geo(values):
+            """Aggregate to geo x period level."""
+            values = np.array(values)
+            result = {}
+            df = pd.DataFrame({
+                'period': periods,
+                'geo': [geo_names[int(g)] for g in geo_idx],
+                'value': values
+            })
+            for geo in geo_names:
+                geo_df = df[df['geo'] == geo]
+                if len(geo_df) > 0:
+                    agg = geo_df.groupby('period')['value'].sum()
+                    result[geo] = agg.reindex(unique_periods).fillna(0).values.tolist()
+            return result
+        
+        def aggregate_by_product(values):
+            """Aggregate to product x period level."""
+            values = np.array(values)
+            result = {}
+            df = pd.DataFrame({
+                'period': periods,
+                'product': [product_names[int(p)] for p in product_idx],
+                'value': values
+            })
+            for prod in product_names:
+                prod_df = df[df['product'] == prod]
+                if len(prod_df) > 0:
+                    agg = prod_df.groupby('period')['value'].sum()
+                    result[prod] = agg.reindex(unique_periods).fillna(0).values.tolist()
+            return result
+        
+        def store_component(name, obs_values, scale_factor=1.0):
+            """Store a component with all aggregation levels."""
+            obs_values = np.array(obs_values) * scale_factor
+            
+            # Aggregate to period level (sum over geo/product)
+            period_values = aggregate_to_period(obs_values, 'sum')
+            decomposition["components"][name] = period_values.tolist()
+            
+            # By geography
+            if n_geos > 1:
+                decomposition["by_geography"][name] = aggregate_by_geo(obs_values)
+            
+            # By product
+            if n_products > 1:
+                decomposition["by_product"][name] = aggregate_by_product(obs_values)
+        
+        # =================================================================
+        # OBSERVED VALUES (in original scale)
+        # =================================================================
+        # y_obs is already in original scale from earlier
+        decomposition["observed"] = aggregate_to_period(y_obs, 'sum').tolist()
+        if n_geos > 1:
+            decomposition["observed_by_geography"] = aggregate_by_geo(y_obs)
+        if n_products > 1:
+            decomposition["observed_by_product"] = aggregate_by_product(y_obs)
+        
+        # =================================================================
+        # INTERCEPT / BASELINE
+        # The baseline represents the expected value when all effects are zero.
+        # In standardized space: y = intercept + effects
+        # In original space: Y = (intercept + effects) * y_std + y_mean
+        # So baseline contribution per obs = intercept * y_std + y_mean
+        # But y_mean is the grand mean, so we attribute it to baseline.
+        # =================================================================
         if "intercept" in posterior:
             intercept = float(posterior["intercept"].mean().values)
-            baseline = np.full(n_obs, intercept * mmm.y_std + mmm.y_mean)
-            decomposition["components"]["baseline"] = baseline.tolist()
+            # Per-observation baseline in original scale
+            baseline_per_obs = intercept * mmm.y_std + mmm.y_mean
+            baseline_obs = np.full(n_obs, baseline_per_obs)
+            store_component("baseline", baseline_obs)
+        else:
+            baseline_obs = np.full(n_obs, float(mmm.y_mean))
+            store_component("baseline", baseline_obs)
         
-        # Trend component
-        if "trend" in posterior:
-            trend = posterior["trend"].mean(dim=["chain", "draw"]).values
-            if len(trend) == n_obs:
-                decomposition["components"]["trend"] = (trend * mmm.y_std).tolist()
+        # =================================================================
+        # TREND - Try multiple extraction methods
+        # =================================================================
+        trend_extracted = False
+        trend_obs = np.zeros(n_obs)
         
-        # Seasonality component
-        if "seasonality" in posterior:
-            seasonality = posterior["seasonality"].mean(dim=["chain", "draw"]).values
-            if len(seasonality) == n_obs:
-                decomposition["components"]["seasonality"] = (seasonality * mmm.y_std).tolist()
+        # Method 1: Look for trend_slope with t_scaled
+        if "trend_slope" in posterior and hasattr(mmm, 't_scaled'):
+            try:
+                trend_slope = float(posterior["trend_slope"].mean().values)
+                t_scaled = np.array(mmm.t_scaled)
+                # t_scaled should have length n_periods (unique periods)
+                trend_at_periods = trend_slope * t_scaled
+                # Safely index - clip time_idx to valid range
+                safe_time_idx = np.clip(time_idx, 0, len(trend_at_periods) - 1)
+                trend_obs = trend_at_periods[safe_time_idx] * mmm.y_std
+                trend_extracted = True
+                logger.info(f"Extracted linear trend with slope={trend_slope:.4f}, t_scaled len={len(t_scaled)}")
+            except Exception as e:
+                logger.warning(f"Failed to extract linear trend: {e}")
         
-        # Media channel contributions
-        channel_names = mmm.channel_names
-        for channel in channel_names:
-            contrib_var = f"channel_contribution_{channel}"
-            if contrib_var not in posterior:
-                contrib_var = f"media_contribution_{channel}"
+        # Method 2: Look for deterministic trend variables
+        if not trend_extracted:
+            trend_var_names = [
+                "trend", "trend_component", "trend_contribution", 
+                "trend_effect", "trend_unique"
+            ]
+            for var in trend_var_names:
+                if var in posterior:
+                    try:
+                        trend_vals = posterior[var].mean(dim=["chain", "draw"]).values.flatten()
+                        if len(trend_vals) == n_obs:
+                            trend_obs = trend_vals * mmm.y_std
+                            trend_extracted = True
+                            logger.info(f"Extracted trend from {var} (n_obs={n_obs})")
+                            break
+                        elif len(trend_vals) >= n_unique_periods:
+                            # Map from periods to observations with safe indexing
+                            safe_time_idx = np.clip(time_idx, 0, len(trend_vals) - 1)
+                            trend_obs = (trend_vals * mmm.y_std)[safe_time_idx]
+                            trend_extracted = True
+                            logger.info(f"Extracted trend from {var} (len={len(trend_vals)})")
+                            break
+                    except Exception as e:
+                        logger.warning(f"Failed to extract trend from {var}: {e}")
+        
+        # Method 3: Look for spline coefficients
+        if not trend_extracted and "spline_coef" in posterior:
+            if hasattr(mmm, 'trend_features') and 'spline_basis' in mmm.trend_features:
+                try:
+                    spline_coef = posterior["spline_coef"].mean(dim=["chain", "draw"]).values
+                    basis = mmm.trend_features['spline_basis']
+                    trend_at_periods = basis @ spline_coef
+                    trend_at_periods = trend_at_periods - trend_at_periods.mean()  # Center
+                    # Safe indexing
+                    safe_time_idx = np.clip(time_idx, 0, len(trend_at_periods) - 1)
+                    trend_obs = (trend_at_periods * mmm.y_std)[safe_time_idx]
+                    trend_extracted = True
+                    logger.info(f"Extracted spline trend from coefficients, basis shape={basis.shape}")
+                except Exception as e:
+                    logger.warning(f"Failed to extract spline trend: {e}")
+        
+        # Method 4: Look for piecewise trend components
+        if not trend_extracted and "trend_k" in posterior:
+            if hasattr(mmm, 'trend_features'):
+                try:
+                    k = float(posterior["trend_k"].mean().values)
+                    m = float(posterior["trend_m"].mean().values) if "trend_m" in posterior else 0
+                    t_unique = np.linspace(0, 1, n_unique_periods)
+                    
+                    if "trend_delta" in posterior and "changepoint_matrix" in mmm.trend_features:
+                        delta = posterior["trend_delta"].mean(dim=["chain", "draw"]).values
+                        A = mmm.trend_features["changepoint_matrix"]
+                        s = mmm.trend_features["changepoints"]
+                        gamma = -s * delta
+                        trend_at_periods = k * t_unique + A @ delta + m + A @ gamma
+                    else:
+                        trend_at_periods = k * t_unique + m
+                    
+                    # Safe indexing
+                    safe_time_idx = np.clip(time_idx, 0, len(trend_at_periods) - 1)
+                    trend_obs = (trend_at_periods * mmm.y_std)[safe_time_idx]
+                    trend_extracted = True
+                    logger.info(f"Extracted piecewise trend, k={k:.4f}")
+                except Exception as e:
+                    logger.warning(f"Failed to extract piecewise trend: {e}")
+        
+        if trend_extracted:
+            store_component("trend", trend_obs)
+            decomposition["metadata"]["has_trend"] = True
+        
+        # =================================================================
+        # SEASONALITY - Try multiple extraction methods
+        # =================================================================
+        seasonality_extracted = False
+        seasonality_obs = np.zeros(n_obs)
+        
+        # Method 1: Look for seasonality_component (obs-level)
+        seasonality_var_names = [
+            "seasonality_component", "seasonality", "seasonal_effect",
+            "seasonality_contribution"
+        ]
+        for var in seasonality_var_names:
+            if var in posterior:
+                try:
+                    seas_vals = posterior[var].mean(dim=["chain", "draw"]).values.flatten()
+                    if len(seas_vals) == n_obs:
+                        seasonality_obs = seas_vals * mmm.y_std
+                        seasonality_extracted = True
+                        logger.info(f"Extracted seasonality from {var} (n_obs={n_obs})")
+                        break
+                    elif len(seas_vals) >= n_unique_periods:
+                        # Safe indexing
+                        safe_time_idx = np.clip(time_idx, 0, len(seas_vals) - 1)
+                        seasonality_obs = (seas_vals * mmm.y_std)[safe_time_idx]
+                        seasonality_extracted = True
+                        logger.info(f"Extracted seasonality from {var} (len={len(seas_vals)})")
+                        break
+                except Exception as e:
+                    logger.warning(f"Failed to extract seasonality from {var}: {e}")
+        
+        # Method 2: Look for seasonality_by_period
+        if not seasonality_extracted and "seasonality_by_period" in posterior:
+            try:
+                seas_by_period = posterior["seasonality_by_period"].mean(dim=["chain", "draw"]).values.flatten()
+                if len(seas_by_period) >= n_unique_periods:
+                    safe_time_idx = np.clip(time_idx, 0, len(seas_by_period) - 1)
+                    seasonality_obs = (seas_by_period * mmm.y_std)[safe_time_idx]
+                    seasonality_extracted = True
+                    logger.info(f"Extracted seasonality from seasonality_by_period (len={len(seas_by_period)})")
+            except Exception as e:
+                logger.warning(f"Failed to extract seasonality from seasonality_by_period: {e}")
+        
+        # Method 3: Compute from Fourier coefficients
+        if not seasonality_extracted and hasattr(mmm, 'seasonality_features'):
+            for name, features in mmm.seasonality_features.items():
+                coef_var = f"season_{name}"
+                if coef_var in posterior:
+                    try:
+                        coef = posterior[coef_var].mean(dim=["chain", "draw"]).values
+                        if len(coef) == features.shape[1]:
+                            seas_at_periods = features @ coef
+                            safe_time_idx = np.clip(time_idx, 0, len(seas_at_periods) - 1)
+                            seasonality_obs = (seas_at_periods * mmm.y_std)[safe_time_idx]
+                            seasonality_extracted = True
+                            logger.info(f"Computed seasonality from {coef_var}, features shape={features.shape}")
+                            break
+                    except Exception as e:
+                        logger.warning(f"Failed to compute seasonality from {coef_var}: {e}")
+        
+        if seasonality_extracted:
+            store_component("seasonality", seasonality_obs)
+            decomposition["metadata"]["has_seasonality"] = True
             
-            if contrib_var in posterior:
-                contrib = posterior[contrib_var].mean(dim=["chain", "draw"]).values
-                if len(contrib.flatten()) == n_obs:
-                    decomposition["components"][f"media_{channel}"] = (contrib.flatten() * mmm.y_std).tolist()
+            # Also store seasonality pattern (one cycle for visualization)
+            # Assuming weekly data with 52-week cycle
+            period_seasonality = aggregate_to_period(seasonality_obs)
+            if len(unique_periods) >= 52:
+                decomposition["metadata"]["seasonality_pattern"] = period_seasonality[:52].tolist()
         
-        # Control variable contributions
-        if hasattr(mmm, 'control_names') and mmm.control_names:
-            for control in mmm.control_names:
-                contrib_var = f"control_contribution_{control}"
-                if contrib_var in posterior:
-                    contrib = posterior[contrib_var].mean(dim=["chain", "draw"]).values
-                    if len(contrib.flatten()) == n_obs:
-                        decomposition["components"][f"control_{control}"] = (contrib.flatten() * mmm.y_std).tolist()
+        # =================================================================
+        # MEDIA CHANNEL CONTRIBUTIONS
+        # All media contributions should be in original scale and summed
+        # =================================================================
+        channel_names = mmm.channel_names
+        media_obs_total = np.zeros(n_obs)
+        
+        # Method 1: Look for channel_contributions matrix
+        if "channel_contributions" in posterior:
+            contrib_matrix = posterior["channel_contributions"].mean(dim=["chain", "draw"]).values
+            logger.info(f"channel_contributions shape: {contrib_matrix.shape}")
+            
+            # Handle different shapes
+            if len(contrib_matrix.shape) == 2:
+                if contrib_matrix.shape[0] == n_obs and contrib_matrix.shape[1] == len(channel_names):
+                    for i, channel in enumerate(channel_names):
+                        ch_obs = contrib_matrix[:, i] * mmm.y_std
+                        store_component(f"media_{channel}", ch_obs)
+                        media_obs_total += ch_obs
+                elif contrib_matrix.shape[0] >= n_unique_periods:
+                    # Contributions at period level, need to map to obs with safe indexing
+                    for i, channel in enumerate(channel_names):
+                        ch_periods = contrib_matrix[:, i] * mmm.y_std
+                        safe_time_idx = np.clip(time_idx, 0, len(ch_periods) - 1)
+                        ch_obs = ch_periods[safe_time_idx]
+                        store_component(f"media_{channel}", ch_obs)
+                        media_obs_total += ch_obs
+        
+        # Method 2: Look for media_total
+        if "media_total" in posterior and not any(k.startswith("media_") for k in decomposition["components"]):
+            media_total_vals = posterior["media_total"].mean(dim=["chain", "draw"]).values.flatten()
+            if len(media_total_vals) == n_obs:
+                media_obs_total = media_total_vals * mmm.y_std
+            elif len(media_total_vals) >= n_unique_periods:
+                safe_time_idx = np.clip(time_idx, 0, len(media_total_vals) - 1)
+                media_obs_total = (media_total_vals * mmm.y_std)[safe_time_idx]
+            store_component("media_total", media_obs_total)
+        
+        # Store total media contribution if we have individual channels
+        if np.any(media_obs_total != 0) and any(k.startswith("media_") and k != "media_total" for k in decomposition["components"]):
+            store_component("media_total", media_obs_total)
+        
+        # =================================================================
+        # CONTROL VARIABLE CONTRIBUTIONS  
+        # =================================================================
+        controls_obs_total = np.zeros(n_obs)
+        control_names = mmm.control_names if hasattr(mmm, 'control_names') and mmm.control_names else []
+        
+        # Method 1: Compute from beta_controls
+        if "beta_controls" in posterior and len(control_names) > 0:
+            try:
+                beta_controls = posterior["beta_controls"].mean(dim=["chain", "draw"]).values
+                X_controls = panel.X_controls.values if hasattr(panel, 'X_controls') else None
+                
+                if X_controls is not None:
+                    for i, control in enumerate(control_names):
+                        if i < len(beta_controls) and i < X_controls.shape[1]:
+                            ctrl_obs = X_controls[:, i] * beta_controls[i] * mmm.y_std
+                            store_component(f"control_{control}", ctrl_obs)
+                            controls_obs_total += ctrl_obs
+            except Exception as e:
+                logger.warning(f"Could not compute control contributions: {e}")
+        
+        if np.any(controls_obs_total != 0):
+            store_component("controls_total", controls_obs_total)
+        
+        # =================================================================
+        # GEO AND PRODUCT EFFECTS (hierarchical random effects)
+        # =================================================================
+        if "geo_effects" in posterior or "geo_contribution" in posterior:
+            var_name = "geo_effects" if "geo_effects" in posterior else "geo_contribution"
+            geo_vals = posterior[var_name].mean(dim=["chain", "draw"]).values.flatten()
+            if len(geo_vals) == n_obs:
+                geo_obs = geo_vals * mmm.y_std
+                store_component("geo_effects", geo_obs)
+        
+        if "product_effects" in posterior or "product_contribution" in posterior:
+            var_name = "product_effects" if "product_effects" in posterior else "product_contribution"
+            prod_vals = posterior[var_name].mean(dim=["chain", "draw"]).values.flatten()
+            if len(prod_vals) == n_obs:
+                prod_obs = prod_vals * mmm.y_std
+                store_component("product_effects", prod_obs)
+        
+        # =================================================================
+        # COMPUTE PREDICTED AND RESIDUAL
+        # =================================================================
+        try:
+            observed_period = np.array(decomposition["observed"])
+            predicted_period = np.zeros(n_unique_periods)
+            
+            for key, values in decomposition["components"].items():
+                if isinstance(values, list) and len(values) == n_unique_periods:
+                    # Avoid double-counting totals
+                    if key == "media_total" and any(k.startswith("media_") and k != "media_total" for k in decomposition["components"]):
+                        continue
+                    if key == "controls_total" and any(k.startswith("control_") and k != "controls_total" for k in decomposition["components"]):
+                        continue
+                    predicted_period += np.array(values)
+            
+            decomposition["predicted"] = predicted_period.tolist()
+            decomposition["residual"] = (observed_period - predicted_period).tolist()
+            
+            # R-squared
+            ss_res = np.sum((observed_period - predicted_period) ** 2)
+            ss_tot = np.sum((observed_period - np.mean(observed_period)) ** 2)
+            decomposition["metadata"]["r_squared"] = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
+            
+        except Exception as e:
+            logger.warning(f"Could not compute predicted/residual: {e}")
         
         # Sanitize for JSON serialization
         decomposition = _sanitize_for_json(decomposition)
+        
+        # Log summary
+        logger.info(f"Decomposition components: {list(decomposition['components'].keys())}")
+        logger.info(f"Decomposition by_geography keys: {list(decomposition.get('by_geography', {}).keys())}")
+        logger.info(f"Decomposition by_product keys: {list(decomposition.get('by_product', {}).keys())}")
         
         # Cache the results
         storage.save_results(model_id, "decomposition", decomposition)
@@ -1025,6 +1472,8 @@ async def get_decomposition(
         raise
     except Exception as e:
         logger.error(f"Error computing decomposition: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error computing decomposition: {str(e)}",
