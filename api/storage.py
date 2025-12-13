@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import pickle
+import cloudpickle as pickle
 import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
+import mmm_framework
 
 import pandas as pd
 

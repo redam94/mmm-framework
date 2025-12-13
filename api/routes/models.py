@@ -11,6 +11,7 @@ from typing import Annotated, Any
 from arq import ArqRedis, create_pool
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
+from loguru import logger
 
 from config import Settings, get_settings
 from redis_service import RedisService, get_redis
@@ -387,9 +388,9 @@ async def compute_contributions(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Model not found: {model_id}",
         )
-    
+    logger.info('Fetching data')
     metadata = storage.get_model_metadata(model_id)
-    
+    logger.info(metadata)
     if metadata.get("status") != JobStatus.COMPLETED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -422,6 +423,9 @@ async def compute_contributions(
         return response
         
     except Exception as e:
+        logger.error(f"Error computing contributions: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error computing contributions: {str(e)}",

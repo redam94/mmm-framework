@@ -5,6 +5,11 @@ Run with: arq api.worker.WorkerSettings
 """
 
 from __future__ import annotations
+import sys
+from pathlib import Path
+
+# Add the parent directory containing mmm_framework to the path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
 import sys
@@ -21,6 +26,8 @@ from arq.connections import RedisSettings
 from config import get_settings
 from schemas import JobStatus
 from storage import get_storage
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 
 # =============================================================================
@@ -56,9 +63,17 @@ async def fit_model_task(
         Results summary.
     """
     import redis.asyncio as aioredis
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     storage = get_storage()
     redis_client: aioredis.Redis = ctx["redis"]
+
+    # DEBUG: Log storage path and model existence
+    logger.info(f"Worker storage base path: {storage}")
+    logger.info(f"Looking for model_id: {model_id}")
+    logger.info(f"Model exists check: {storage.model_exists(model_id)}")
     
     async def update_status(status: JobStatus, progress: float = 0.0, message: str | None = None, **extra):
         """Update job status in Redis."""
@@ -255,95 +270,122 @@ async def fit_model_task(
         random_seed = model_settings_dict.get("random_seed", 42)
         results = mmm.fit(random_seed=random_seed)
         
+        print("DEBUG: Model fitted successfully")
+        
         await update_status(JobStatus.RUNNING, 85.0, "Processing results...")
         
         # Extract diagnostics
-        diagnostics = {
-            "divergences": int(results.diagnostics.get("divergences", 0)),
-            "rhat_max": float(results.diagnostics.get("rhat_max", 1.0)),
-            "ess_bulk_min": float(results.diagnostics.get("ess_bulk_min", 0)),
-        }
+        print("DEBUG: Extracting diagnostics...")
+        try:
+            diagnostics = {
+                "divergences": int(results.diagnostics.get("divergences", 0)),
+                "rhat_max": float(results.diagnostics.get("rhat_max", 1.0)),
+                "ess_bulk_min": float(results.diagnostics.get("ess_bulk_min", 0)),
+            }
+            print(f"DEBUG: Diagnostics extracted: {diagnostics}")
+        except Exception as e:
+            print(f"DEBUG: Failed at diagnostics: {e}")
+            raise
         
         # Get parameter summary
-        summary_df = results.summary()
-        param_summary = []
-        for idx in summary_df.index:
-            row = summary_df.loc[idx]
-            param_summary.append({
-                "parameter": str(idx),
-                "mean": float(row.get("mean", 0)),
-                "sd": float(row.get("sd", 0)),
-                "hdi_3%": float(row.get("hdi_3%", 0)),
-                "hdi_97%": float(row.get("hdi_97%", 0)),
-                "r_hat": float(row.get("r_hat", 1.0)) if "r_hat" in row else None,
-            })
+        print("DEBUG: Getting parameter summary...")
+        try:
+            summary_df = results.summary()
+            print(f"DEBUG: Summary df type: {type(summary_df)}")
+        except Exception as e:
+            print(f"DEBUG: Failed at results.summary(): {e}")
+            raise
+        
+        print("DEBUG: Building param_summary list...")
+        try:
+            param_summary = []
+            for idx in summary_df.index:
+                row = summary_df.loc[idx]
+                param_summary.append({
+                    "parameter": str(idx),
+                    "mean": float(row.get("mean", 0)),
+                    "sd": float(row.get("sd", 0)),
+                    "hdi_3%": float(row.get("hdi_3%", 0)),
+                    "hdi_97%": float(row.get("hdi_97%", 0)),
+                    "r_hat": float(row.get("r_hat", 1.0)) if "r_hat" in row else None,
+                })
+            print(f"DEBUG: param_summary built, {len(param_summary)} params")
+        except Exception as e:
+            print(f"DEBUG: Failed building param_summary: {e}")
+            raise
         
         # Save artifacts
         await update_status(JobStatus.RUNNING, 90.0, "Saving model artifacts...")
         
-        # Save the MMM object (including trace)
-        storage.save_model_artifact(model_id, "mmm", mmm)
-        storage.save_model_artifact(model_id, "results", results)
-        storage.save_model_artifact(model_id, "panel", panel)
+        print("DEBUG: Saving mmm artifact...")
+        try:
+            storage.save_model_artifact(model_id, "mmm", mmm)
+            print("DEBUG: mmm saved")
+        except Exception as e:
+            print(f"DEBUG: Failed saving mmm: {e}")
+            raise
+        
+        print("DEBUG: Saving results artifact...")
+        try:
+            storage.save_model_artifact(model_id, "results", results)
+            print("DEBUG: results saved")
+        except Exception as e:
+            print(f"DEBUG: Failed saving results: {e}")
+            raise
+        
+        print("DEBUG: Saving panel artifact...")
+        try:
+            storage.save_model_artifact(model_id, "panel", panel)
+            print("DEBUG: panel saved")
+        except Exception as e:
+            print(f"DEBUG: Failed saving panel: {e}")
+            raise
         
         # Save results summary
-        results_summary = {
-            "model_id": model_id,
-            "diagnostics": diagnostics,
-            "parameter_summary": param_summary,
-            "n_obs": int(mmm.n_obs),
-            "n_channels": int(mmm.n_channels),
-            "n_controls": int(mmm.n_controls),
-            "channel_names": mmm.channel_names,
-            "control_names": mmm.control_names,
-            "y_mean": float(mmm.y_mean),
-            "y_std": float(mmm.y_std),
-        }
-        
-        storage.save_results(model_id, "summary", results_summary)
+        print("DEBUG: Saving results summary...")
+        try:
+            results_summary = {
+                "model_id": model_id,
+                "diagnostics": diagnostics,
+                "parameter_summary": param_summary,
+                "n_obs": int(mmm.n_obs),
+                "n_channels": int(mmm.n_channels),
+                "n_controls": int(mmm.n_controls),
+                "channel_names": mmm.channel_names,
+                "control_names": mmm.control_names,
+                "y_mean": float(mmm.y_mean),
+                "y_std": float(mmm.y_std),
+            }
+            storage.save_results(model_id, "summary", results_summary)
+            print("DEBUG: results_summary saved")
+        except Exception as e:
+            print(f"DEBUG: Failed saving results_summary: {e}")
+            raise
         
         # Update final status
+        print("DEBUG: Updating final status...")
         await update_status(
             JobStatus.COMPLETED,
             100.0,
             "Model fitting completed successfully",
         )
         
+        print("DEBUG: Updating model metadata...")
         storage.update_model_metadata(model_id, {
             "status": JobStatus.COMPLETED.value,
             "completed_at": datetime.utcnow().isoformat(),
             "diagnostics": diagnostics,
         })
         
+        print("DEBUG: All done, returning result")
         return {
             "model_id": model_id,
             "status": "completed",
             "diagnostics": diagnostics,
         }
-        
     except Exception as e:
-        error_msg = str(e)
-        error_traceback = traceback.format_exc()
-        
-        await update_status(
-            JobStatus.FAILED,
-            0.0,
-            "Model fitting failed",
-            error_message=error_msg,
-        )
-        
-        storage.update_model_metadata(model_id, {
-            "status": JobStatus.FAILED.value,
-            "completed_at": datetime.utcnow().isoformat(),
-            "error_message": error_msg,
-            "error_traceback": error_traceback,
-        })
-        
-        return {
-            "model_id": model_id,
-            "status": "failed",
-            "error": error_msg,
-        }
+        print(f"DEBUG: Failed saving results_summary: {e}")
+        raise
 
 
 async def compute_contributions_task(
@@ -479,14 +521,18 @@ async def shutdown(ctx: dict):
 class WorkerSettings:
     """ARQ worker settings."""
     
-    settings = get_settings()
-    
+     
     redis_settings = RedisSettings(
-        host=settings.redis_url.replace("redis://", "").split(":")[0].split("/")[0],
-        port=int(settings.redis_url.split(":")[-1].split("/")[0]) if ":" in settings.redis_url else 6379,
-        database=settings.redis_db,
-        password=settings.redis_password,
+        host="localhost",
+        port=6379,
     )
+    
+    # redis_settings = RedisSettings(
+    #     host=settings.redis_url.replace("redis://", "").split(":")[0].split("/")[0],
+    #     port=int(settings.redis_url.split(":")[-1].split("/")[0]) if ":" in settings.redis_url else 6379,
+    #     database=settings.redis_db,
+    #     password=settings.redis_password,
+    # )
     
     functions = [
         fit_model_task,
@@ -494,16 +540,16 @@ class WorkerSettings:
         run_scenario_task,
     ]
     
-    cron_jobs = [
-        cron(cleanup_old_jobs, hour=3, minute=0),  # Run at 3 AM daily
-    ]
+    # cron_jobs = [
+    #     cron(cleanup_old_jobs, hour=3, minute=0),  # Run at 3 AM daily
+    # ]
     
     on_startup = startup
     on_shutdown = shutdown
     
     max_jobs = 4
-    job_timeout = settings.job_timeout
-    max_tries = settings.job_max_retries + 1
+    job_timeout = 10000
+    max_tries = 3
     
     # Health check
     health_check_interval = 30

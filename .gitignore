@@ -9,3 +9,7 @@ wheels/
 # Virtual environments
 .venv
 *.zip
+*.json
+*.pkl
+*.csv
+.DS_Store
