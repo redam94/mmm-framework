@@ -735,6 +735,229 @@
             font-size: 0.85rem;
         }
 
+        /* Advanced Models Section */
+        .advanced-models {
+            background: var(--color-bg);
+        }
+
+        .advanced-header {
+            text-align: center;
+            margin-bottom: 5rem;
+        }
+
+        .model-section {
+            margin-bottom: 6rem;
+        }
+
+        .model-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .model-content.reverse {
+            direction: rtl;
+        }
+
+        .model-content.reverse > * {
+            direction: ltr;
+        }
+
+        .model-text h3 {
+            font-size: 1.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .model-text p {
+            margin-bottom: 1.25rem;
+        }
+
+        .model-benefits {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+
+        .model-benefits li {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            color: var(--color-text-muted);
+        }
+
+        .benefit-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 8px;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .benefit-icon.direct {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--color-primary);
+        }
+
+        .benefit-icon.indirect {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+        }
+
+        .benefit-icon.cannib {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--color-danger);
+        }
+
+        .benefit-icon.halo {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--color-success);
+        }
+
+        .model-benefits li strong {
+            color: var(--color-text);
+        }
+
+        .insight-box {
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 3px solid var(--color-primary);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.95rem;
+        }
+
+        .insight-box strong {
+            color: var(--color-primary);
+        }
+
+        .model-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .model-diagram {
+            width: 100%;
+            max-width: 450px;
+            height: auto;
+            background: var(--color-bg-card);
+            border-radius: 16px;
+            padding: 1rem;
+            border: 1px solid var(--color-border);
+        }
+
+        .model-diagram.large {
+            max-width: 100%;
+        }
+
+        /* Cross-Effect Demo */
+        .cross-effect-demo {
+            background: var(--color-bg-card);
+            border-radius: 20px;
+            padding: 3rem;
+            border: 1px solid var(--color-border);
+            margin-top: 4rem;
+        }
+
+        .cross-effect-demo h3 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .cross-effect-demo > p {
+            text-align: center;
+            margin-bottom: 0;
+        }
+
+        .demo-insight {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .insight-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            background: rgba(0,0,0,0.2);
+            padding: 1.25rem;
+            border-radius: 12px;
+        }
+
+        .insight-card .insight-icon {
+            font-size: 1.5rem;
+        }
+
+        .insight-card strong {
+            display: block;
+            color: var(--color-text);
+            margin-bottom: 0.25rem;
+        }
+
+        /* Combined Model Summary */
+        .combined-summary {
+            background: var(--color-bg-card);
+            border-radius: 20px;
+            padding: 3rem;
+            border: 1px solid var(--color-border);
+            text-align: center;
+        }
+
+        .combined-summary h3 {
+            margin-bottom: 1rem;
+        }
+
+        .combined-summary > p {
+            max-width: 700px;
+            margin: 0 auto 2rem;
+        }
+
+        .combined-diagram {
+            margin: 2rem 0;
+        }
+
+        .combined-benefits {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-top: 2.5rem;
+            text-align: left;
+        }
+
+        .benefit-item {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .benefit-number {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--color-bg);
+            flex-shrink: 0;
+        }
+
+        .benefit-item strong {
+            display: block;
+            color: var(--color-text);
+            margin-bottom: 0.25rem;
+        }
+
+        .benefit-item p {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
         /* Animations */
         @keyframes fadeInUp {
             from {
@@ -813,6 +1036,32 @@
             .workflow::before {
                 display: none;
             }
+
+            .model-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .model-content.reverse {
+                direction: ltr;
+            }
+
+            .model-visual {
+                order: -1;
+            }
+
+            .demo-insight {
+                grid-template-columns: 1fr;
+            }
+
+            .combined-benefits {
+                grid-template-columns: 1fr;
+            }
+
+            .combined-diagram svg {
+                max-width: 100%;
+                height: auto;
+            }
         }
 
         @media (max-width: 768px) {
@@ -826,6 +1075,18 @@
 
             .container {
                 padding: 0 1.25rem;
+            }
+
+            .cross-effect-demo {
+                padding: 1.5rem;
+            }
+
+            .combined-summary {
+                padding: 1.5rem;
+            }
+
+            .model-diagram {
+                padding: 0.5rem;
             }
         }
     </style>
@@ -843,6 +1104,7 @@
                 <li><a href="#solution">Our Approach</a></li>
                 <li><a href="#demo">Interactive Demo</a></li>
                 <li><a href="#features">Features</a></li>
+                <li><a href="#advanced">Advanced Models</a></li>
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
@@ -1112,6 +1374,452 @@
                         JAX-accelerated sampling (NumPyro) provides 4-10x speedups. Iterate quickly during 
                         development, then run full inference for final results.
                     </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advanced Models Section -->
+    <section class="advanced-models" id="advanced">
+        <div class="container">
+            <div class="advanced-header fade-in">
+                <h2>Beyond Simple Attribution</h2>
+                <p style="font-size: 1.1rem; max-width: 800px; margin: 0 auto;">
+                    Real marketing doesn't happen in silos. Media builds brand awareness. Products compete for share. 
+                    Our framework captures these complex relationships—even when you can only measure some of them directly.
+                </p>
+            </div>
+
+            <!-- Nested Models -->
+            <div class="model-section fade-in">
+                <div class="model-content">
+                    <div class="model-text">
+                        <h3>Nested Models: Understanding <em>How</em> Media Works</h3>
+                        <p>
+                            Traditional MMM tells you that TV drives sales. But <em>how</em>? Does it work immediately 
+                            through promotional response, or does it build brand awareness that converts over time?
+                        </p>
+                        <p>
+                            <strong>Nested models</strong> decompose the total effect into pathways:
+                        </p>
+                        <ul class="model-benefits">
+                            <li>
+                                <span class="benefit-icon direct">→</span>
+                                <div>
+                                    <strong>Direct Effect:</strong> Media drives immediate sales response
+                                </div>
+                            </li>
+                            <li>
+                                <span class="benefit-icon indirect">⤴</span>
+                                <div>
+                                    <strong>Indirect Effect:</strong> Media builds awareness, which drives future sales
+                                </div>
+                            </li>
+                        </ul>
+                        <p class="insight-box">
+                            <strong>Why it matters:</strong> If 60% of TV's effect flows through awareness, cutting TV 
+                            won't just reduce this quarter's sales—it will erode the brand health that drives next year's baseline.
+                        </p>
+                    </div>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 400 280" class="model-diagram">
+                            <!-- Background -->
+                            <defs>
+                                <linearGradient id="mediaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+                                </linearGradient>
+                                <linearGradient id="mediatorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+                                </linearGradient>
+                                <linearGradient id="outcomeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+                                </linearGradient>
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" />
+                                </marker>
+                                <marker id="arrowheadGold" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+                                </marker>
+                            </defs>
+                            
+                            <!-- Media Node -->
+                            <rect x="20" y="100" width="100" height="60" rx="12" fill="url(#mediaGrad)" />
+                            <text x="70" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media</text>
+                            <text x="70" y="142" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">TV, Digital, etc.</text>
+                            
+                            <!-- Mediator Node -->
+                            <rect x="150" y="20" width="100" height="60" rx="12" fill="url(#mediatorGrad)" />
+                            <text x="200" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Awareness</text>
+                            <text x="200" y="62" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">(mediator)</text>
+                            
+                            <!-- Outcome Node -->
+                            <rect x="280" y="100" width="100" height="60" rx="12" fill="url(#outcomeGrad)" />
+                            <text x="330" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
+                            <text x="330" y="142" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">(outcome)</text>
+                            
+                            <!-- Indirect Path: Media → Awareness -->
+                            <path d="M 120 100 Q 150 60 150 50" stroke="#9ca3af" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+                            
+                            <!-- Indirect Path: Awareness → Sales -->
+                            <path d="M 250 50 Q 280 60 280 100" stroke="#9ca3af" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+                            
+                            <!-- Direct Path: Media → Sales -->
+                            <path d="M 120 130 L 275 130" stroke="#f59e0b" stroke-width="3" fill="none" marker-end="url(#arrowheadGold)" stroke-dasharray="8,4" />
+                            
+                            <!-- Labels -->
+                            <text x="130" y="65" fill="#9ca3af" font-size="10">β₁</text>
+                            <text x="265" y="65" fill="#9ca3af" font-size="10">γ</text>
+                            <text x="195" y="120" fill="#f59e0b" font-size="10" font-weight="600">Direct (β₃)</text>
+                            
+                            <!-- Legend -->
+                            <line x1="30" y1="220" x2="60" y2="220" stroke="#f59e0b" stroke-width="3" stroke-dasharray="8,4" />
+                            <text x="70" y="224" fill="#9ca3af" font-size="11">Direct effect</text>
+                            
+                            <line x1="30" y1="245" x2="60" y2="245" stroke="#9ca3af" stroke-width="2" />
+                            <text x="70" y="249" fill="#9ca3af" font-size="11">Indirect effect (β₁ × γ)</text>
+                            
+                            <!-- Effect equation -->
+                            <text x="200" y="270" text-anchor="middle" fill="#e8eaed" font-size="12" font-weight="500">Total Effect = Direct + Indirect</text>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Partial Observation -->
+            <div class="model-section fade-in">
+                <div class="model-content reverse">
+                    <div class="model-visual">
+                        <svg viewBox="0 0 400 300" class="model-diagram">
+                            <!-- Timeline -->
+                            <line x1="40" y1="150" x2="360" y2="150" stroke="#374151" stroke-width="2" />
+                            
+                            <!-- Week markers -->
+                            <g fill="#6b7280" font-size="10">
+                                <text x="40" y="170">W1</text>
+                                <text x="90" y="170">W4</text>
+                                <text x="140" y="170">W8</text>
+                                <text x="190" y="170">W12</text>
+                                <text x="240" y="170">W16</text>
+                                <text x="290" y="170">W20</text>
+                                <text x="340" y="170">W24</text>
+                            </g>
+                            
+                            <!-- Latent awareness line (continuous) -->
+                            <path d="M 40 100 Q 80 85 120 90 T 200 70 T 280 85 T 360 75" 
+                                  stroke="#8b5cf6" stroke-width="2" fill="none" opacity="0.4" stroke-dasharray="4,4" />
+                            
+                            <!-- Survey observation points -->
+                            <circle cx="90" cy="88" r="8" fill="#8b5cf6" />
+                            <circle cx="190" cy="70" r="8" fill="#8b5cf6" />
+                            <circle cx="290" cy="82" r="8" fill="#8b5cf6" />
+                            
+                            <!-- Error bars on observations -->
+                            <line x1="90" y1="75" x2="90" y2="101" stroke="#8b5cf6" stroke-width="2" />
+                            <line x1="85" y1="75" x2="95" y2="75" stroke="#8b5cf6" stroke-width="2" />
+                            <line x1="85" y1="101" x2="95" y2="101" stroke="#8b5cf6" stroke-width="2" />
+                            
+                            <line x1="190" y1="57" x2="190" y2="83" stroke="#8b5cf6" stroke-width="2" />
+                            <line x1="185" y1="57" x2="195" y2="57" stroke="#8b5cf6" stroke-width="2" />
+                            <line x1="185" y1="83" x2="195" y2="83" stroke="#8b5cf6" stroke-width="2" />
+                            
+                            <line x1="290" y1="69" x2="290" y2="95" stroke="#8b5cf6" stroke-width="2" />
+                            <line x1="285" y1="69" x2="295" y2="69" stroke="#8b5cf6" stroke-width="2" />
+                            <line x1="285" y1="95" x2="295" y2="95" stroke="#8b5cf6" stroke-width="2" />
+                            
+                            <!-- Media spend bars (bottom) -->
+                            <rect x="45" y="190" width="30" height="40" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="85" y="200" width="30" height="30" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="125" y="185" width="30" height="45" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="165" y="195" width="30" height="35" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="205" y="210" width="30" height="20" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="245" y="200" width="30" height="30" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="285" y="190" width="30" height="40" fill="#3b82f6" opacity="0.6" rx="2" />
+                            <rect x="325" y="205" width="30" height="25" fill="#3b82f6" opacity="0.6" rx="2" />
+                            
+                            <!-- Labels -->
+                            <text x="200" y="30" text-anchor="middle" fill="#e8eaed" font-size="13" font-weight="600">Partial Observation: Monthly Surveys in Weekly Model</text>
+                            
+                            <text x="30" y="55" fill="#8b5cf6" font-size="11" font-weight="500">Awareness</text>
+                            <text x="30" y="68" fill="#6b7280" font-size="9">(latent)</text>
+                            
+                            <text x="30" y="210" fill="#3b82f6" font-size="11" font-weight="500">Media</text>
+                            <text x="30" y="223" fill="#6b7280" font-size="9">(observed)</text>
+                            
+                            <!-- Annotation -->
+                            <rect x="100" y="250" width="200" height="40" rx="6" fill="rgba(139, 92, 246, 0.1)" stroke="#8b5cf6" stroke-width="1" />
+                            <text x="200" y="268" text-anchor="middle" fill="#8b5cf6" font-size="10">Survey data anchors estimates;</text>
+                            <text x="200" y="282" text-anchor="middle" fill="#8b5cf6" font-size="10">model infers values between surveys</text>
+                        </svg>
+                    </div>
+                    <div class="model-text">
+                        <h3>Partial Observation: Work With What You Have</h3>
+                        <p>
+                            Brand tracking surveys are expensive. You might only measure awareness monthly—but your 
+                            sales data is weekly. Traditional approaches force you to aggregate or ignore the mismatch.
+                        </p>
+                        <p>
+                            <strong>Our framework handles this naturally:</strong>
+                        </p>
+                        <ul class="model-benefits">
+                            <li>
+                                <span class="benefit-icon">📅</span>
+                                <div>
+                                    <strong>Sparse observations are OK:</strong> Survey data anchors the model at measured points
+                                </div>
+                            </li>
+                            <li>
+                                <span class="benefit-icon">📈</span>
+                                <div>
+                                    <strong>Structure fills gaps:</strong> Media effects imply awareness trajectory between surveys
+                                </div>
+                            </li>
+                            <li>
+                                <span class="benefit-icon">📊</span>
+                                <div>
+                                    <strong>Uncertainty propagates:</strong> Less data = wider intervals (as it should be)
+                                </div>
+                            </li>
+                        </ul>
+                        <p class="insight-box">
+                            <strong>The math:</strong> This is a state-space model where the observation equation only applies 
+                            at survey times. The Bayesian framework naturally handles the missing data through marginalization.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Multivariate Models -->
+            <div class="model-section fade-in">
+                <div class="model-content">
+                    <div class="model-text">
+                        <h3>Multivariate Models: Products Don't Exist in Isolation</h3>
+                        <p>
+                            When you promote multipacks, single-pack sales drop. When your premium brand grows, 
+                            value brand gets a halo lift. These <strong>cross-effects</strong> are real—ignoring them 
+                            means misattributing what's actually driving your business.
+                        </p>
+                        <ul class="model-benefits">
+                            <li>
+                                <span class="benefit-icon cannib">⊖</span>
+                                <div>
+                                    <strong>Cannibalization:</strong> Multipack promos steal from single-pack (negative cross-effect)
+                                </div>
+                            </li>
+                            <li>
+                                <span class="benefit-icon halo">⊕</span>
+                                <div>
+                                    <strong>Halo Effects:</strong> Premium brand advertising lifts the whole portfolio (positive cross-effect)
+                                </div>
+                            </li>
+                            <li>
+                                <span class="benefit-icon">🔗</span>
+                                <div>
+                                    <strong>Correlated Errors:</strong> Weather affects all products—the model accounts for shared shocks
+                                </div>
+                            </li>
+                        </ul>
+                        <p class="insight-box">
+                            <strong>Why it matters:</strong> A model that ignores cannibalization will overstate the 
+                            incremental value of promotions. You'll optimize toward tactics that just shift share internally.
+                        </p>
+                    </div>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 400 300" class="model-diagram">
+                            <!-- Media node -->
+                            <rect x="150" y="20" width="100" height="50" rx="10" fill="url(#mediaGrad)" />
+                            <text x="200" y="50" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media Spend</text>
+                            
+                            <!-- Product A -->
+                            <rect x="40" y="140" width="120" height="60" rx="10" fill="url(#outcomeGrad)" />
+                            <text x="100" y="165" text-anchor="middle" fill="white" font-size="11" font-weight="600">Single-Pack</text>
+                            <text x="100" y="182" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">Sales</text>
+                            
+                            <!-- Product B -->
+                            <rect x="240" y="140" width="120" height="60" rx="10" fill="url(#outcomeGrad)" />
+                            <text x="300" y="165" text-anchor="middle" fill="white" font-size="11" font-weight="600">Multipack</text>
+                            <text x="300" y="182" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">Sales</text>
+                            
+                            <!-- Media to products -->
+                            <path d="M 175 70 L 115 135" stroke="#9ca3af" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+                            <path d="M 225 70 L 285 135" stroke="#9ca3af" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+                            
+                            <!-- Cross-effect: Cannibalization (B → A, negative) -->
+                            <defs>
+                                <marker id="arrowRed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+                                </marker>
+                            </defs>
+                            <path d="M 240 160 C 200 140 200 180 160 170" stroke="#ef4444" stroke-width="2.5" fill="none" marker-end="url(#arrowRed)" />
+                            <text x="200" y="148" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="600">Cannibalization</text>
+                            
+                            <!-- Correlated errors -->
+                            <ellipse cx="200" cy="250" rx="150" ry="30" fill="none" stroke="#6b7280" stroke-width="1" stroke-dasharray="4,4" />
+                            <text x="200" y="255" text-anchor="middle" fill="#6b7280" font-size="10">Correlated residuals (weather, holidays, etc.)</text>
+                            
+                            <!-- Arrows from products to error ellipse -->
+                            <line x1="100" y1="200" x2="100" y2="220" stroke="#6b7280" stroke-width="1" stroke-dasharray="2,2" />
+                            <line x1="300" y1="200" x2="300" y2="220" stroke="#6b7280" stroke-width="1" stroke-dasharray="2,2" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Cross-Effect Demo -->
+            <div class="cross-effect-demo fade-in">
+                <h3>See Cross-Effects in Action</h3>
+                <p>Adjust the cannibalization strength to see how it affects attribution:</p>
+                
+                <div class="demo-container" style="margin-top: 2rem;">
+                    <div class="demo-controls">
+                        <h4>Cross-Effect Controls</h4>
+                        
+                        <div class="control-group">
+                            <label>Cannibalization Strength</label>
+                            <input type="range" id="cannib-strength" min="0" max="0.5" step="0.05" value="0.2">
+                            <div class="control-value">ψ = -<span id="cannib-strength-value">0.20</span></div>
+                        </div>
+
+                        <div class="control-group">
+                            <label>Multipack Promo Lift</label>
+                            <input type="range" id="promo-lift" min="1.0" max="2.0" step="0.1" value="1.5">
+                            <div class="control-value"><span id="promo-lift-value">1.5</span>x</div>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="updateCrossEffectDemo()" style="width: 100%; margin-top: 1rem;">
+                            Update Analysis
+                        </button>
+                    </div>
+
+                    <div class="demo-chart">
+                        <div id="cross-effect-chart" style="width: 100%; height: 400px;"></div>
+                    </div>
+                </div>
+                
+                <div class="demo-insight fade-in">
+                    <div class="insight-card">
+                        <div class="insight-icon">⚠️</div>
+                        <div>
+                            <strong>Without cross-effects:</strong> Multipack promotion looks like pure incremental gain
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">✓</div>
+                        <div>
+                            <strong>With cross-effects:</strong> Net portfolio impact is lower—some "lift" was just shifted from single-pack
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Combined Model Summary -->
+            <div class="model-section fade-in">
+                <div class="combined-summary">
+                    <h3>The Full Picture: Combined Models</h3>
+                    <p>
+                        For complex businesses, you need both: nested pathways (media → awareness → sales) 
+                        <em>and</em> multivariate outcomes (product interactions). Our <strong>CombinedMMM</strong> 
+                        handles everything in a single, coherent framework.
+                    </p>
+                    
+                    <div class="combined-diagram">
+                        <svg viewBox="0 0 600 350" class="model-diagram large">
+                            <!-- Media channels -->
+                            <rect x="20" y="120" width="80" height="40" rx="8" fill="url(#mediaGrad)" />
+                            <text x="60" y="145" text-anchor="middle" fill="white" font-size="10" font-weight="600">TV</text>
+                            
+                            <rect x="20" y="170" width="80" height="40" rx="8" fill="url(#mediaGrad)" />
+                            <text x="60" y="195" text-anchor="middle" fill="white" font-size="10" font-weight="600">Digital</text>
+                            
+                            <rect x="20" y="220" width="80" height="40" rx="8" fill="url(#mediaGrad)" />
+                            <text x="60" y="245" text-anchor="middle" fill="white" font-size="10" font-weight="600">Social</text>
+                            
+                            <!-- Mediator -->
+                            <rect x="180" y="80" width="100" height="50" rx="10" fill="url(#mediatorGrad)" />
+                            <text x="230" y="100" text-anchor="middle" fill="white" font-size="10" font-weight="600">Brand</text>
+                            <text x="230" y="115" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">Awareness</text>
+                            
+                            <!-- Partial observation indicator -->
+                            <circle cx="280" y="85" r="12" fill="#1a2332" stroke="#8b5cf6" stroke-width="2" />
+                            <text x="280" y="89" text-anchor="middle" fill="#8b5cf6" font-size="10">👁</text>
+                            <text x="310" y="75" fill="#8b5cf6" font-size="8">Monthly</text>
+                            <text x="310" y="85" fill="#8b5cf6" font-size="8">surveys</text>
+                            
+                            <!-- Outcomes -->
+                            <rect x="380" y="100" width="100" height="50" rx="10" fill="url(#outcomeGrad)" />
+                            <text x="430" y="120" text-anchor="middle" fill="white" font-size="10" font-weight="600">Single-Pack</text>
+                            <text x="430" y="135" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">Sales</text>
+                            
+                            <rect x="380" y="200" width="100" height="50" rx="10" fill="url(#outcomeGrad)" />
+                            <text x="430" y="220" text-anchor="middle" fill="white" font-size="10" font-weight="600">Multipack</text>
+                            <text x="430" y="235" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">Sales</text>
+                            
+                            <!-- Promo indicator -->
+                            <rect x="500" y="205" width="60" height="40" rx="6" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1" />
+                            <text x="530" y="222" text-anchor="middle" fill="#10b981" font-size="8" font-weight="600">PROMO</text>
+                            <text x="530" y="235" text-anchor="middle" fill="#10b981" font-size="8">indicator</text>
+                            
+                            <!-- Arrows: Media → Mediator -->
+                            <path d="M 100 140 L 175 105" stroke="#9ca3af" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
+                            <path d="M 100 190 L 175 115" stroke="#9ca3af" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
+                            
+                            <!-- Arrows: Mediator → Outcomes -->
+                            <path d="M 280 105 L 375 120" stroke="#9ca3af" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
+                            <path d="M 280 115 L 375 215" stroke="#9ca3af" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
+                            
+                            <!-- Direct effects: Media → Outcomes -->
+                            <path d="M 100 160 C 200 160 300 130 375 125" stroke="#f59e0b" stroke-width="1.5" fill="none" marker-end="url(#arrowheadGold)" stroke-dasharray="4,3" opacity="0.6" />
+                            <path d="M 100 230 C 200 250 300 240 375 225" stroke="#f59e0b" stroke-width="1.5" fill="none" marker-end="url(#arrowheadGold)" stroke-dasharray="4,3" opacity="0.6" />
+                            
+                            <!-- Cross-effect: Cannibalization -->
+                            <path d="M 430 200 C 430 175 430 175 430 150" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrowRed)" />
+                            <text x="445" y="175" fill="#ef4444" font-size="8" font-weight="600">ψ &lt; 0</text>
+                            
+                            <!-- Promo modulation arrow -->
+                            <path d="M 500 225 L 445 225" stroke="#10b981" stroke-width="1" fill="none" stroke-dasharray="3,2" />
+                            
+                            <!-- Legend -->
+                            <rect x="20" y="290" width="560" height="50" rx="8" fill="rgba(255,255,255,0.03)" />
+                            
+                            <line x1="40" y1="310" x2="70" y2="310" stroke="#9ca3af" stroke-width="2" />
+                            <text x="80" y="314" fill="#9ca3af" font-size="9">Indirect (via awareness)</text>
+                            
+                            <line x1="200" y1="310" x2="230" y2="310" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,3" />
+                            <text x="240" y="314" fill="#9ca3af" font-size="9">Direct effects</text>
+                            
+                            <line x1="340" y1="310" x2="370" y2="310" stroke="#ef4444" stroke-width="2" />
+                            <text x="380" y="314" fill="#9ca3af" font-size="9">Cross-effects (promo-modulated)</text>
+                            
+                            <!-- Title -->
+                            <text x="300" y="35" text-anchor="middle" fill="#e8eaed" font-size="14" font-weight="600">Combined Model: Full Marketing System</text>
+                        </svg>
+                    </div>
+                    
+                    <div class="combined-benefits">
+                        <div class="benefit-item">
+                            <div class="benefit-number">1</div>
+                            <div>
+                                <strong>Single coherent model</strong>
+                                <p>All effects estimated jointly—no need to stitch together separate analyses</p>
+                            </div>
+                        </div>
+                        <div class="benefit-item">
+                            <div class="benefit-number">2</div>
+                            <div>
+                                <strong>Proper uncertainty propagation</strong>
+                                <p>Uncertainty in awareness flows through to final attribution</p>
+                            </div>
+                        </div>
+                        <div class="benefit-item">
+                            <div class="benefit-number">3</div>
+                            <div>
+                                <strong>Testable decomposition</strong>
+                                <p>Direct vs. indirect vs. cross-effects—each can be validated</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1611,6 +2319,123 @@
         }
 
         // =====================================================
+        // Cross-Effect Demo
+        // =====================================================
+        function updateCrossEffectDemo() {
+            const cannibStrength = parseFloat(document.getElementById('cannib-strength').value);
+            const promoLift = parseFloat(document.getElementById('promo-lift').value);
+            
+            // Base sales without any effects
+            const baseSinglePack = 100;
+            const baseMultipack = 80;
+            
+            // Promo weeks (simulated)
+            const weeks = 12;
+            const promoWeeks = [3, 4, 5, 9, 10]; // Weeks with multipack promo
+            
+            // Calculate sales with and without cross-effects
+            const singlePackNoCross = [];
+            const singlePackWithCross = [];
+            const multipackSales = [];
+            const weekLabels = [];
+            
+            for (let w = 1; w <= weeks; w++) {
+                weekLabels.push(`W${w}`);
+                const isPromo = promoWeeks.includes(w);
+                
+                // Multipack sales (with promo lift)
+                const multiSale = isPromo ? baseMultipack * promoLift : baseMultipack;
+                multipackSales.push(multiSale);
+                
+                // Single-pack WITHOUT cross-effect modeling
+                singlePackNoCross.push(baseSinglePack + (Math.random() - 0.5) * 10);
+                
+                // Single-pack WITH cross-effect (cannibalization from multipack promo)
+                const cannibEffect = isPromo ? -cannibStrength * multiSale : 0;
+                singlePackWithCross.push(baseSinglePack + cannibEffect + (Math.random() - 0.5) * 10);
+            }
+            
+            // Calculate totals
+            const totalMultipack = multipackSales.reduce((a, b) => a + b, 0);
+            const totalSingleNoCross = singlePackNoCross.reduce((a, b) => a + b, 0);
+            const totalSingleWithCross = singlePackWithCross.reduce((a, b) => a + b, 0);
+            
+            const portfolioNoCross = totalMultipack + totalSingleNoCross;
+            const portfolioWithCross = totalMultipack + totalSingleWithCross;
+            
+            const data = [
+                {
+                    x: ['Multipack<br>(with promo)', 'Single-Pack<br>(no cross-effect)', 'Single-Pack<br>(with cannib.)', 'Portfolio<br>(naive)', 'Portfolio<br>(accurate)'],
+                    y: [totalMultipack, totalSingleNoCross, totalSingleWithCross, portfolioNoCross, portfolioWithCross],
+                    type: 'bar',
+                    marker: {
+                        color: [
+                            chartColors.accent,
+                            'rgba(245, 158, 11, 0.4)',
+                            chartColors.primary,
+                            'rgba(156, 163, 175, 0.4)',
+                            chartColors.success
+                        ]
+                    },
+                    text: [
+                        `$${totalMultipack.toFixed(0)}`,
+                        `$${totalSingleNoCross.toFixed(0)}`,
+                        `$${totalSingleWithCross.toFixed(0)}`,
+                        `$${portfolioNoCross.toFixed(0)}`,
+                        `$${portfolioWithCross.toFixed(0)}`
+                    ],
+                    textposition: 'outside',
+                    textfont: { color: chartColors.text, size: 12 }
+                }
+            ];
+            
+            const cannibLoss = totalSingleNoCross - totalSingleWithCross;
+            const overstatement = ((portfolioNoCross - portfolioWithCross) / portfolioWithCross * 100).toFixed(1);
+
+            const layout = {
+                ...chartLayout,
+                title: {
+                    text: 'Impact of Modeling Cross-Effects',
+                    font: { size: 16, color: chartColors.text }
+                },
+                xaxis: {
+                    ...chartLayout.xaxis,
+                    title: '',
+                },
+                yaxis: {
+                    ...chartLayout.yaxis,
+                    title: 'Total Sales ($)',
+                },
+                showlegend: false,
+                annotations: [
+                    {
+                        x: 0.5,
+                        y: 1.12,
+                        xref: 'paper',
+                        yref: 'paper',
+                        text: `Cannibalization loss: $${cannibLoss.toFixed(0)} | Naive model overstates portfolio by ${overstatement}%`,
+                        showarrow: false,
+                        font: { color: chartColors.danger, size: 12 },
+                        bgcolor: 'rgba(239, 68, 68, 0.1)',
+                        borderpad: 8
+                    }
+                ],
+                shapes: [
+                    {
+                        type: 'line',
+                        x0: 2.5,
+                        x1: 2.5,
+                        y0: 0,
+                        y1: Math.max(...data[0].y) * 1.1,
+                        line: { color: chartColors.border, width: 1, dash: 'dot' }
+                    }
+                ]
+            };
+
+            Plotly.newPlot('cross-effect-chart', data, layout, chartConfig);
+        }
+
+        // =====================================================
         // Control Updates
         // =====================================================
         document.getElementById('prior-mean').addEventListener('input', function() {
@@ -1629,6 +2454,15 @@
             document.getElementById('data-noise-value').textContent = this.value;
         });
 
+        // Cross-effect demo controls
+        document.getElementById('cannib-strength').addEventListener('input', function() {
+            document.getElementById('cannib-strength-value').textContent = parseFloat(this.value).toFixed(2);
+        });
+
+        document.getElementById('promo-lift').addEventListener('input', function() {
+            document.getElementById('promo-lift-value').textContent = this.value;
+        });
+
         // =====================================================
         // Initialize - Wait for Plotly to be ready
         // =====================================================
@@ -1636,6 +2470,7 @@
             if (typeof Plotly !== 'undefined') {
                 initHeroChart();
                 runSimulation();
+                updateCrossEffectDemo();
             } else {
                 // Retry after a short delay if Plotly isn't loaded yet
                 setTimeout(initCharts, 100);
