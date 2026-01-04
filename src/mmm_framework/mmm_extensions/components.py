@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytensor.tensor as pt
 import pymc as pm
+from pytensor import scan as pytensor_scan
 from dataclasses import dataclass, field
 from typing import Protocol, Callable, Any
 from enum import Enum
@@ -28,14 +29,50 @@ class TransformFn(Protocol):
 # Atomic Transformation Functions
 # =============================================================================
 
-def geometric_adstock(
+def geometric_adstock_np(
+    x: np.ndarray,
+    alpha: float,
+    l_max: int = 8,
+    normalize: bool = True,
+) -> np.ndarray:
+    """
+    Apply geometric adstock transformation (NumPy version).
+    
+    Use this for data preprocessing before model building.
+    
+    Parameters
+    ----------
+    x : np.ndarray
+        Input media variable (n_obs,)
+    alpha : float
+        Decay rate [0, 1]
+    l_max : int
+        Maximum lag length
+    normalize : bool
+        Whether to normalize weights to sum to 1
+    
+    Returns
+    -------
+    np.ndarray
+        Adstocked media variable
+    """
+    weights = np.power(alpha, np.arange(l_max))
+    if normalize:
+        weights = weights / weights.sum()
+    
+    # Convolve with zero-padding
+    result = np.convolve(x, weights[::-1], mode='full')[:len(x)]
+    return result
+
+
+def geometric_adstock_pt(
     x: pt.TensorVariable,
     alpha: pt.TensorVariable,
     l_max: int = 8,
     normalize: bool = True,
 ) -> pt.TensorVariable:
     """
-    Apply geometric adstock transformation.
+    Apply geometric adstock transformation (PyTensor version with scan).
     
     Parameters
     ----------
@@ -53,22 +90,89 @@ def geometric_adstock(
     TensorVariable
         Adstocked media variable
     """
+    # Build weights
     weights = pt.power(alpha, pt.arange(l_max))
     if normalize:
         weights = weights / weights.sum()
     
-    # Pad and convolve
+    # Use scan for proper gradient flow
+    def step(x_t, carry, w):
+        # Shift carry and add new value
+        new_carry = pt.concatenate([[x_t], carry[:-1]])
+        # Weighted sum
+        y_t = pt.dot(new_carry, w)
+        return y_t, new_carry
+    
+    # Initial carry (zeros)
+    init_carry = pt.zeros(l_max)
+    
+    outputs, _ = pytensor_scan(
+        fn=step,
+        sequences=[x],
+        outputs_info=[None, init_carry],
+        non_sequences=[weights],
+    )
+    
+    return outputs[0]
+
+
+def geometric_adstock_convolution(
+    x: pt.TensorVariable,
+    alpha: pt.TensorVariable,
+    l_max: int = 8,
+    normalize: bool = True,
+) -> pt.TensorVariable:
+    """
+    Apply geometric adstock using matrix multiplication (no scan).
+    
+    This is often more efficient and avoids scan complexity.
+    Requires knowing n_obs at graph construction time.
+    
+    Parameters
+    ----------
+    x : TensorVariable
+        Input media variable (n_obs,)
+    alpha : TensorVariable
+        Decay rate [0, 1]
+    l_max : int
+        Maximum lag length
+    normalize : bool
+        Whether to normalize weights to sum to 1
+    
+    Returns
+    -------
+    TensorVariable
+        Adstocked media variable
+    """
+    # Build weights
+    weights = pt.power(alpha, pt.arange(l_max))
+    if normalize:
+        weights = weights / weights.sum()
+    
+    # Pad input
     x_padded = pt.concatenate([pt.zeros(l_max - 1), x])
     
-    def scan_fn(idx, x_pad, w):
-        return pt.dot(x_pad[idx:idx + l_max][::-1], w)
+    # Build convolution using indexing (simpler than scan)
+    n = x.shape[0]
     
-    result, _ = pt.scan(
-        fn=scan_fn,
-        sequences=[pt.arange(len(x))],
-        non_sequences=[x_padded, weights],
-    )
-    return result
+    # Create indices for convolution
+    # Result[i] = sum(x_padded[i:i+l_max] * weights[::-1])
+    indices = pt.arange(l_max)
+    
+    def convolve_at(i):
+        window = x_padded[i:i + l_max]
+        return pt.dot(window, weights[::-1])
+    
+    # Vectorized using advanced indexing
+    # Build a matrix where each row is a window
+    row_indices = pt.arange(n)[:, None] + indices[None, :]
+    windows = x_padded[row_indices]  # (n, l_max)
+    
+    return pt.dot(windows, weights[::-1])
+
+
+# Alias for most common use case
+geometric_adstock = geometric_adstock_convolution
 
 
 def geometric_adstock_matrix(
@@ -93,7 +197,7 @@ def geometric_adstock_matrix(
     TensorVariable
         Adstocked media matrix (n_obs, n_channels)
     """
-    n_channels = X.shape[1]
+    n_channels = X.shape[1].eval().astype(int)
     results = []
     for i in range(n_channels):
         results.append(geometric_adstock(X[:, i], alphas[i], l_max))

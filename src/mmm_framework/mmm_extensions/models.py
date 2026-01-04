@@ -124,7 +124,7 @@ class BaseExtendedMMM:
         self.X_media = X_media
         self.y = y
         self.channel_names = channel_names
-        self.index = index or pd.RangeIndex(len(y))
+        self.index = index if index is not None else pd.RangeIndex(len(y))
         
         self.n_obs = len(y)
         self.n_channels = len(channel_names)

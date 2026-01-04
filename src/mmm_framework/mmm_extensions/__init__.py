@@ -122,6 +122,10 @@ def __getattr__(name: str):
     # Components module
     components_exports = {
         "geometric_adstock",
+        "geometric_adstock_np",
+        "geometric_adstock_pt",
+        "geometric_adstock_convolution",
+        "geometric_adstock_matrix",
         "logistic_saturation",
         "hill_saturation",
         "apply_transformation_pipeline",
