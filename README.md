@@ -1165,6 +1165,136 @@ Extended models have more parameters and thus higher risk of weak identification
 
 For complex models, use `nuts_sampler="numpyro"` for 4-10x speedup.
 
+## Mathematical Specification: Variable Selection Priors
+
+This section provides the formal mathematical specification for the variable selection priors available in `mmm_extensions`. For the complete technical document with proofs and implementation details, see `variable_selection_specification.pdf`.
+
+### Causal Constraints
+
+Variable selection priors should **only** be applied to **precision control variables**—variables that affect outcome $Y$ but do *not* affect treatment $X$ (media spending).
+
+**Bias from Confounder Exclusion**: For a confounder $C$ affecting both media $X$ and outcome $Y$:
+
+$$\hat{\beta}_{OLS} \xrightarrow{p} \beta + \gamma \cdot \frac{\text{Cov}(X, C)}{\text{Var}(X)}$$
+
+The bias depends on the *correlation* between treatment and confounder, not just the confounder's effect magnitude. Shrinking $\gamma$ toward zero does not remove this bias.
+
+---
+
+### Regularized Horseshoe Prior
+
+The regularized horseshoe (Piironen & Vehtari, 2017) provides adaptive shrinkage with a regularized slab.
+
+**Model Specification**:
+
+$$\gamma_j = z_j \cdot \tau \cdot \tilde{\lambda}_j$$
+
+where:
+- $z_j \sim \mathcal{N}(0, 1)$ — standardized coefficient
+- $\tau \sim \text{Half-}t_{\nu_\tau}(0, \tau_0)$ — global shrinkage
+- $\lambda_j \sim \text{Half-}t_{\nu_\lambda}(0, 1)$ — local shrinkage
+- $c^2 \sim \text{Inv-Gamma}(\nu_s/2, \nu_s s^2/2)$ — slab variance
+
+**Regularized Local Shrinkage**:
+
+$$\tilde{\lambda}_j = \frac{c \cdot \lambda_j}{\sqrt{c^2 + \tau^2 \lambda_j^2}}$$
+
+**Global Shrinkage Calibration**:
+
+$$\tau_0 = \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}}$$
+
+where $D_0$ is the expected number of nonzero coefficients.
+
+**Shrinkage Factor**:
+
+$$\kappa_j = \frac{1}{1 + \tau^2 \lambda_j^2}$$
+
+- $\kappa_j \approx 1$: Strong shrinkage (coefficient → 0)
+- $\kappa_j \approx 0$: Minimal shrinkage (coefficient preserved)
+
+**Effective Number of Nonzero**:
+
+$$m_{\text{eff}} = \sum_{j=1}^{D} (1 - \kappa_j)$$
+
+---
+
+### Spike-and-Slab Prior
+
+The spike-and-slab provides explicit posterior inclusion probabilities.
+
+**Continuous Relaxation** (for NUTS compatibility):
+
+$$\gamma_j = \eta_j \cdot \beta_{\text{slab},j} + (1 - \eta_j) \cdot \beta_{\text{spike},j}$$
+
+where:
+- $\eta_j = \text{sigmoid}(\omega_j / T)$ — soft inclusion indicator
+- $\omega_j \sim \mathcal{N}(\text{logit}(\pi), 1)$
+- $\beta_{\text{slab},j} \sim \mathcal{N}(0, \sigma_{\text{slab}}^2)$
+- $\beta_{\text{spike},j} \sim \mathcal{N}(0, \sigma_{\text{spike}}^2)$ with $\sigma_{\text{spike}} \ll \sigma_{\text{slab}}$
+- $T$ = temperature (lower = sharper selection)
+
+**Posterior Inclusion Probability**:
+
+$$\Pr(\text{included}_j | \mathbf{y}) = \mathbb{E}[\eta_j | \mathbf{y}]$$
+
+---
+
+### Bayesian LASSO
+
+The Bayesian LASSO places Laplace priors on coefficients via a scale mixture representation.
+
+**Scale Mixture Representation**:
+
+$$\gamma_j | \tau_j \sim \mathcal{N}(0, \tau_j), \quad \tau_j \sim \text{Exponential}\left(\frac{\lambda^2}{2}\right)$$
+
+This is equivalent to:
+
+$$\gamma_j \sim \text{Laplace}\left(0, \frac{1}{\lambda}\right)$$
+
+**Shrinkage Properties**: Unlike the horseshoe, LASSO provides *uniform* shrinkage—all coefficients are shrunk by similar proportions.
+
+---
+
+### Method Selection Guide
+
+| Scenario | Recommended Prior | Reason |
+|----------|-------------------|--------|
+| Few large effects, many zeros | Regularized Horseshoe | Adaptive shrinkage preserves signals |
+| Many small effects | Bayesian LASSO | Uniform shrinkage appropriate |
+| Need inclusion probabilities | Spike-and-Slab | Direct interpretation |
+| Unknown sparsity structure | Regularized Horseshoe | Most robust |
+
+---
+
+### Hyperparameter Guidance
+
+| Parameter | Symbol | Default | Selection Guidance |
+|-----------|--------|---------|-------------------|
+| Expected nonzero | $D_0$ | 3 | Domain knowledge; err toward larger |
+| Slab scale | $s$ | 2.0 | Max plausible effect in std units |
+| Slab df | $\nu_s$ | 4.0 | Lower = heavier tails |
+| Local df | $\nu_\lambda$ | 5.0 | Lower = heavier tails |
+| Prior inclusion | $\pi$ | 0.5 | 0.5 = maximum uncertainty |
+| Temperature | $T$ | 0.1 | Lower = sharper selection |
+| LASSO penalty | $\lambda$ | 1.0 | Higher = more shrinkage |
+
+---
+
+### Diagnostics
+
+**Inclusion Probability** (Horseshoe):
+$$\Pr(\text{included}_j | \mathbf{y}) \approx \mathbb{E}[1 - \kappa_j | \mathbf{y}]$$
+
+**Inclusion Probability** (Spike-Slab):
+$$\Pr(\text{included}_j | \mathbf{y}) = \mathbb{E}[\eta_j | \mathbf{y}]$$
+
+**Report for each analysis**:
+1. Variable classification (confounder vs precision)
+2. Selection method and all hyperparameters  
+3. Posterior inclusion probabilities
+4. Effective number of nonzero ($m_{\text{eff}}$)
+5. Sensitivity to hyperparameter choices
+
 ## Data Format
 
 The framework expects data in **Master Flat File (MFF) format**—a fully normalized long-format structure with 8 columns:
@@ -1434,6 +1564,10 @@ mmm-framework/
   
 ### Variable Selection
 
+- Piironen, J., & Vehtari, A. (2017). Sparsity information and regularization in the horseshoe and other shrinkage priors. *Electronic Journal of Statistics*, 11(2), 5018-5051.
+- Carvalho, C. M., Polson, N. G., & Scott, J. G. (2010). The horseshoe estimator for sparse signals. *Biometrika*, 97(2), 465-480.
+- George, E. I., & McCulloch, R. E. (1993). Variable selection via Gibbs sampling. *JASA*, 88(423), 881-889.
+- Park, T., & Casella, G. (2008). The Bayesian Lasso. *JASA*, 103(482), 681-686.
 - Piironen, J., & Vehtari, A. (2017). Sparsity information and regularization in the horseshoe and other shrinkage priors. *Electronic Journal of Statistics*, 11(2), 5018-5051.
 - Carvalho, C. M., Polson, N. G., & Scott, J. G. (2010). The horseshoe estimator for sparse signals. *Biometrika*, 97(2), 465-480.
 - George, E. I., & McCulloch, R. E. (1993). Variable selection via Gibbs sampling. *JASA*, 88(423), 881-889.
