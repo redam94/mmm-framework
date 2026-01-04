@@ -1,0 +1,633 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[margin=1.25in]{geometry}
+\usepackage{palatino}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage[round]{natbib}
+\bibliographystyle{plainnat}
+
+% Define colors
+\definecolor{accentblue}{RGB}{0,70,127}
+\definecolor{darkgray}{RGB}{64,64,64}
+\definecolor{alertred}{RGB}{180,0,0}
+\definecolor{warningyellow}{RGB}{200,150,0}
+\definecolor{codegreen}{RGB}{0,120,0}
+
+% Section formatting
+\titleformat{\section}
+  {\Large\bfseries\color{accentblue}}
+  {\thesection}
+  {1em}
+  {}
+
+\titleformat{\subsection}
+  {\large\bfseries\color{darkgray}}
+  {\thesubsection}
+  {1em}
+  {}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{darkgray}}
+  {\thesubsubsection}
+  {1em}
+  {}
+
+% Header/footer
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\color{darkgray} Variable Selection for Precision Controls}
+\fancyhead[R]{\small\color{darkgray} Technical Documentation}
+\fancyfoot[C]{\thepage}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    urlcolor=accentblue
+}
+
+% Code listings
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{accentblue}\bfseries,
+    commentstyle=\color{codegreen},
+    stringstyle=\color{alertred},
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!5},
+}
+
+% Warning box
+\newcommand{\warningbox}[1]{%
+\begin{center}
+\fcolorbox{alertred}{alertred!10}{%
+\begin{minipage}{0.9\textwidth}
+\textcolor{alertred}{\textbf{CAUTION:}} #1
+\end{minipage}
+}
+\end{center}
+}
+
+% Info box
+\newcommand{\infobox}[1]{%
+\begin{center}
+\fcolorbox{accentblue}{accentblue!10}{%
+\begin{minipage}{0.9\textwidth}
+\textcolor{accentblue}{\textbf{Note:}} #1
+\end{minipage}
+}
+\end{center}
+}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries\color{accentblue} Bayesian Variable Selection for Precision Controls}\\[0.5em]
+{\large Regularized Horseshoe and Spike-and-Slab Priors in Marketing Mix Models}\\[1.5em]
+{\small TECHNICAL DOCUMENTATION}\\[0.5em]
+{\small \today}
+\end{center}
+
+\vspace{1em}
+
+\section*{Executive Summary}
+
+This document describes the implementation of Bayesian variable selection methods for \textbf{precision control variables} in Marketing Mix Models. These methods---regularized horseshoe, Finnish horseshoe, spike-and-slab, and Bayesian LASSO---provide principled approaches to handling uncertainty about which control variables should be included in a model.
+
+\warningbox{Variable selection priors should \textbf{only} be applied to precision control variables---variables that improve estimation precision but are not confounders, mediators, or otherwise on the causal path between media and outcomes. Applying these methods incorrectly can \textbf{severely bias causal effect estimates}.}
+
+\tableofcontents
+\newpage
+
+\section{Motivation and Use Cases}
+
+\subsection{The Problem: Uncertainty About Control Inclusion}
+
+In MMM practice, analysts often face uncertainty about which control variables to include:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item Weather variables may or may not affect foot traffic for a particular retailer
+    \item Economic indicators like gas prices may have varying relevance by category
+    \item Competitor activities may or may not be adequately captured in the data
+    \item Calendar effects (holidays, events) may have heterogeneous impacts
+\end{itemize}
+
+Traditional approaches handle this through:
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{Include all}: Risk overfitting, especially with many controls
+    \item \textbf{Stepwise selection}: Invalidates inference through specification shopping
+    \item \textbf{Domain expertise}: Subjective, non-reproducible, may miss relevant variables
+    \item \textbf{Regularization (Ridge/LASSO)}: Point estimates only, no uncertainty quantification
+\end{enumerate}
+
+\subsection{The Solution: Bayesian Variable Selection}
+
+Bayesian variable selection priors provide a principled alternative:
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{Adaptive shrinkage}: Small effects shrunk toward zero; large effects preserved
+    \item \textbf{Uncertainty quantification}: Full posterior distributions, not point estimates
+    \item \textbf{Pre-specification}: Prior beliefs encoded before seeing results
+    \item \textbf{Soft selection}: No hard include/exclude decisions; continuous shrinkage
+\end{itemize}
+
+\subsection{Appropriate Use Cases}
+
+Variable selection is appropriate for \textbf{precision control variables}:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Variable Type} & \textbf{Variable Selection?} & \textbf{Rationale} \\
+\midrule
+Weather (temperature, precipitation) & \checkmark Yes & Precision variable \\
+Economic indicators (gas prices, CPI) & \checkmark Yes & Precision variable \\
+Calendar effects (minor holidays) & \checkmark Yes & Precision variable \\
+Distribution/ACV & \textbf{$\times$ No} & Potential confounder \\
+Price/promotion & \textbf{$\times$ No} & Causal variable \\
+Competitive media & \textbf{$\times$ No} & Potential confounder \\
+Trend/seasonality & \textbf{$\times$ No} & Core model component \\
+\bottomrule
+\end{tabular}
+\caption{Variable selection applicability by control type}
+\end{table}
+
+\newpage
+\section{Causal Considerations}
+
+\warningbox{This section is \textbf{critical}. Misapplication of variable selection can introduce severe bias into media effect estimates. Read carefully before implementing.}
+
+\subsection{The Causal Structure of MMM}
+
+Consider the simplified causal graph for MMM:
+
+\begin{center}
+\begin{tabular}{c}
+\includegraphics[width=0.6\textwidth]{dag_placeholder.png}
+\end{tabular}
+\end{center}
+
+\noindent \textit{(Note: A proper DAG would show: Media $\rightarrow$ Sales, Confounders $\rightarrow$ Media and Confounders $\rightarrow$ Sales, Precision Variables $\rightarrow$ Sales only)}
+
+Variables fall into distinct causal categories:
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.5em]
+    \item \textbf{Treatment (Media)}: The causal effect we want to estimate
+    \item \textbf{Outcome (Sales)}: What we're modeling
+    \item \textbf{Confounders}: Affect \textit{both} media spending and sales
+    \begin{itemize}[leftmargin=1em]
+        \item Example: Seasonality drives both media planning and consumer behavior
+        \item \textit{Must} be controlled for to identify causal effects
+    \end{itemize}
+    \item \textbf{Precision variables}: Affect sales \textit{only}, not media spending
+    \begin{itemize}[leftmargin=1em]
+        \item Example: Daily weather affects store visits but not media budgets
+        \item Inclusion improves precision but doesn't affect consistency
+    \end{itemize}
+    \item \textbf{Mediators}: On the causal path from media to sales
+    \begin{itemize}[leftmargin=1em]
+        \item Example: Brand awareness (media $\rightarrow$ awareness $\rightarrow$ sales)
+        \item Controlling for mediators blocks the causal effect
+    \end{itemize}
+    \item \textbf{Colliders}: Caused by both media and sales
+    \begin{itemize}[leftmargin=1em]
+        \item Example: Survey response (respondents who both saw ads and bought)
+        \item Controlling for colliders introduces spurious associations
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Why Variable Selection Must Be Restricted}
+
+\subsubsection{Confounders Must Be Included}
+
+If a confounder $C$ affects both media $M$ and sales $Y$:
+\begin{equation}
+M \leftarrow C \rightarrow Y
+\end{equation}
+
+Failing to control for $C$ creates omitted variable bias:
+\begin{equation}
+\text{Bias}(\hat{\beta}_M) = \beta_C \cdot \frac{\text{Cov}(M, C)}{\text{Var}(M)}
+\end{equation}
+
+If variable selection shrinks $\beta_C$ toward zero (because $C$'s direct effect on $Y$ is small), the bias in $\hat{\beta}_M$ remains. The confounder's \textit{correlation} with media, not its \textit{effect} on sales, determines bias.
+
+\textbf{Example}: Suppose seasonality has a modest direct effect on sales (captured mostly by trend/Fourier terms) but strongly drives media flighting. Variable selection might shrink the seasonality control, leaving confounding bias in media estimates.
+
+\subsubsection{Mediators Must Be Excluded}
+
+If brand awareness $A$ mediates the effect of media $M$ on sales $Y$:
+\begin{equation}
+M \rightarrow A \rightarrow Y
+\end{equation}
+
+Controlling for $A$ blocks the indirect effect, leading to underestimation of media's total effect. Variable selection on mediators could partially block causal paths.
+
+\subsubsection{Colliders Must Be Excluded}
+
+If both media $M$ and sales $Y$ cause variable $Z$:
+\begin{equation}
+M \rightarrow Z \leftarrow Y
+\end{equation}
+
+Controlling for $Z$ induces spurious correlation between $M$ and $Y$. Variable selection that partially controls for $Z$ creates partial collider bias.
+
+\subsection{Safe Application: Precision Variables Only}
+
+Variable selection is safe when restricted to \textbf{precision variables}---variables that:
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item Affect the outcome (sales)
+    \item Do \textbf{not} affect treatment (media spending)
+    \item Are \textbf{not} affected by treatment or outcome
+\end{itemize}
+
+For such variables, inclusion improves efficiency (tighter posteriors) but non-inclusion doesn't bias causal estimates.
+
+\warningbox{When in doubt about a variable's causal role, \textbf{do not apply variable selection}. Include it with a standard (non-shrinkage) prior, or exclude it entirely based on pre-specified criteria.}
+
+\newpage
+\section{Method Descriptions}
+
+\subsection{Regularized Horseshoe Prior}
+
+The regularized horseshoe \citep{piironen2017sparsity} is the recommended default for most applications.
+
+\subsubsection{Mathematical Formulation}
+
+For coefficient $\beta_j$ with $j = 1, \ldots, D$ control variables:
+
+\begin{align}
+\beta_j &= z_j \cdot \tau \cdot \tilde{\lambda}_j \\
+\tilde{\lambda}_j &= \frac{c \cdot \lambda_j}{\sqrt{c^2 + \tau^2 \lambda_j^2}} \\
+\lambda_j &\sim \text{HalfStudentT}(\nu_\lambda) \quad \text{(local shrinkage)} \\
+\tau &\sim \text{HalfStudentT}(\nu_\tau, \tau_0) \quad \text{(global shrinkage)} \\
+c^2 &\sim \text{InverseGamma}\left(\frac{\nu_c}{2}, \frac{\nu_c s^2}{2}\right) \quad \text{(slab)} \\
+z_j &\sim \text{Normal}(0, 1)
+\end{align}
+
+where the global shrinkage scale $\tau_0$ is set based on expected sparsity:
+\begin{equation}
+\tau_0 = \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}}
+\end{equation}
+
+with $D_0$ = expected number of nonzero coefficients, $D$ = total coefficients, $N$ = observations.
+
+\subsubsection{Interpretation}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item $\tau$: Global shrinkage---controls overall sparsity
+    \item $\lambda_j$: Local shrinkage---allows individual coefficients to escape shrinkage
+    \item $c$: Slab scale---prevents non-zero coefficients from being too large
+    \item $\tilde{\lambda}_j$: Regularized local shrinkage---bounded version of $\tau \cdot \lambda_j$
+\end{itemize}
+
+\subsubsection{Hyperparameter Recommendations}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Guidance} \\
+\midrule
+$D_0$ (expected\_nonzero) & 3 & Your prior belief about \# relevant controls \\
+$s$ (slab\_scale) & 2.0 & Max expected coefficient magnitude (in std units) \\
+$\nu_c$ (slab\_df) & 4.0 & Lower = heavier tails, larger effects allowed \\
+$\nu_\lambda$ (local\_df) & 5.0 & Lower = more aggressive shrinkage \\
+$\nu_\tau$ (global\_df) & 1.0 & Standard half-Cauchy \\
+\bottomrule
+\end{tabular}
+\caption{Regularized horseshoe hyperparameters}
+\end{table}
+
+\subsection{Finnish Horseshoe Prior}
+
+The Finnish horseshoe is mathematically identical to the regularized horseshoe. The name emphasizes the slab regularization component and comes from the Finnish authors \citep{piironen2017sparsity}.
+
+Use the same implementation and hyperparameters as the regularized horseshoe.
+
+\subsection{Spike-and-Slab Prior}
+
+The spike-and-slab \citep{george1993variable} uses a discrete mixture of two distributions.
+
+\subsubsection{Mathematical Formulation}
+
+\begin{align}
+\beta_j &= \gamma_j \cdot \beta_j^{\text{slab}} + (1 - \gamma_j) \cdot \beta_j^{\text{spike}} \\
+\gamma_j &\sim \text{Bernoulli}(\pi) \\
+\beta_j^{\text{slab}} &\sim \text{Normal}(0, \sigma_{\text{slab}}^2) \\
+\beta_j^{\text{spike}} &\sim \text{Normal}(0, \sigma_{\text{spike}}^2)
+\end{align}
+
+where $\sigma_{\text{spike}} \ll \sigma_{\text{slab}}$ (e.g., 0.01 vs 1.0).
+
+\subsubsection{Continuous Relaxation}
+
+For gradient-based samplers (NUTS), we use a continuous relaxation:
+\begin{align}
+\gamma_j &= \sigma\left(\frac{\text{logit}_j}{T}\right) \\
+\text{logit}_j &\sim \text{Normal}(\text{logit}(\pi), 1)
+\end{align}
+
+where $T$ is a temperature parameter controlling sharpness of selection.
+
+\subsubsection{Hyperparameter Recommendations}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Guidance} \\
+\midrule
+$\pi$ (prior\_inclusion\_prob) & 0.5 & Prior probability of inclusion \\
+$\sigma_{\text{spike}}$ (spike\_scale) & 0.01 & Should be small (near-zero) \\
+$\sigma_{\text{slab}}$ (slab\_scale) & 1.0 & Expected magnitude of true effects \\
+$T$ (temperature) & 0.1 & Lower = sharper selection \\
+\bottomrule
+\end{tabular}
+\caption{Spike-and-slab hyperparameters}
+\end{table}
+
+\subsection{Bayesian LASSO}
+
+The Bayesian LASSO \citep{park2008bayesian} uses a Laplace prior, represented as a scale mixture:
+
+\begin{align}
+\beta_j | \tau_j &\sim \text{Normal}(0, \tau_j) \\
+\tau_j &\sim \text{Exponential}(\lambda^2 / 2)
+\end{align}
+
+This is equivalent to a Laplace prior: $\beta_j \sim \text{Laplace}(0, 1/\lambda)$.
+
+\subsubsection{Comparison with Horseshoe}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item LASSO shrinks all coefficients uniformly toward zero
+    \item Horseshoe allows large coefficients to escape shrinkage
+    \item Horseshoe generally preferred for variable selection
+    \item LASSO useful when expecting many small effects (not sparse)
+\end{itemize}
+
+\newpage
+\section{Implementation}
+
+\subsection{Configuration}
+
+\begin{lstlisting}[language=Python, caption={Variable selection configuration}]
+from variable_selection import (
+    VariableSelectionConfig,
+    VariableSelectionMethod,
+    HorseshoeConfig,
+)
+
+# Regularized horseshoe (recommended)
+config = VariableSelectionConfig(
+    method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
+    horseshoe=HorseshoeConfig(
+        expected_nonzero=3,  # Prior: ~3 controls are relevant
+        slab_scale=2.0,      # Max ~2 std effect size
+        slab_df=4.0,         # Moderate tail weight
+    ),
+    # IMPORTANT: Exclude known confounders from selection
+    exclude_variables=["distribution", "price", "competitor_media"],
+)
+\end{lstlisting}
+
+\subsection{Model Integration}
+
+\begin{lstlisting}[language=Python, caption={Integrating with model building}]
+import pymc as pm
+from variable_selection import create_control_selection_prior
+
+with pm.Model(coords={"control": control_names}) as model:
+    # Observation noise (needed for horseshoe scaling)
+    sigma = pm.HalfNormal("sigma", sigma=0.5)
+    
+    # Variable selection prior for controls
+    result = create_control_selection_prior(
+        name="beta_controls",
+        n_variables=len(control_names),
+        n_obs=n_observations,
+        sigma=sigma,
+        config=config,
+        dims="control",
+    )
+    
+    # Use result.beta in the model
+    control_contribution = pm.math.dot(X_controls, result.beta)
+    
+    # ... rest of model specification
+\end{lstlisting}
+
+\subsection{Diagnostics}
+
+\begin{lstlisting}[language=Python, caption={Post-fit diagnostics}]
+from variable_selection import summarize_variable_selection
+
+# After fitting
+summary = summarize_variable_selection(
+    trace=idata,
+    control_names=control_names,
+    config=config,
+    name="beta_controls",
+)
+
+print(summary)
+# Shows: variable, mean, std, HDI, inclusion_prob, selected
+\end{lstlisting}
+
+\newpage
+\section{Best Practices}
+
+\subsection{Pre-Specification Checklist}
+
+Before applying variable selection:
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.5em]
+    \item \textbf{Classify all variables} into causal categories (confounder, precision, etc.)
+    \item \textbf{Document rationale} for each classification
+    \item \textbf{Exclude from selection}: all confounders, mediators, colliders
+    \item \textbf{Specify hyperparameters} based on domain knowledge, not data
+    \item \textbf{Set expected\_nonzero} conservatively (err toward larger values)
+\end{enumerate}
+
+\subsection{Hyperparameter Selection}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item \textbf{expected\_nonzero}: If unsure, set to $D/2$ (weak sparsity prior)
+    \item \textbf{slab\_scale}: Consider the scale of your outcome; 2.0 works for standardized data
+    \item \textbf{Do not} tune hyperparameters based on fit metrics---this is specification shopping
+\end{itemize}
+
+\subsection{Reporting Results}
+
+When reporting models with variable selection:
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.3em]
+    \item State which variables were subject to selection
+    \item Report inclusion probabilities, not just point estimates
+    \item Show sensitivity to expected\_nonzero specification
+    \item Acknowledge uncertainty about variable importance
+\end{enumerate}
+
+\subsection{What NOT to Do}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item[\textcolor{alertred}{$\times$}] Apply selection to confounders or core controls
+    \item[\textcolor{alertred}{$\times$}] Tune hyperparameters to improve fit or coefficient signs
+    \item[\textcolor{alertred}{$\times$}] Use selection as a substitute for thoughtful model specification
+    \item[\textcolor{alertred}{$\times$}] Interpret zero coefficients as ``proof'' of no effect
+    \item[\textcolor{alertred}{$\times$}] Apply selection to media variables (unless comparing channel subsets)
+\end{itemize}
+
+\newpage
+\section{Mathematical Details}
+
+\subsection{Shrinkage Factor Interpretation}
+
+The effective shrinkage for coefficient $\beta_j$ in the horseshoe is:
+\begin{equation}
+\kappa_j = \frac{1}{1 + \tau^2 \lambda_j^2}
+\end{equation}
+
+where $\kappa_j \approx 1$ implies strong shrinkage (toward zero) and $\kappa_j \approx 0$ implies weak shrinkage (coefficient preserved).
+
+The \textbf{effective number of nonzero coefficients} is:
+\begin{equation}
+m_{\text{eff}} = \sum_{j=1}^{D} (1 - \kappa_j)
+\end{equation}
+
+This provides a continuous measure of model complexity.
+
+\subsection{Global Shrinkage Calibration}
+
+The global shrinkage $\tau$ controls overall sparsity. The recommended scale:
+\begin{equation}
+\tau_0 = \frac{p_0}{1 - p_0} \cdot \frac{\sigma}{\sqrt{N}}
+\end{equation}
+
+where $p_0 = D_0/D$ is the prior probability that a coefficient is nonzero.
+
+This calibration ensures:
+\begin{itemize}[leftmargin=1.5em, itemsep=0.3em]
+    \item Prior expected number of nonzero coefficients $\approx D_0$
+    \item Shrinkage scales appropriately with sample size
+    \item Coefficients are measured in the right units relative to $\sigma$
+\end{itemize}
+
+\subsection{Slab Regularization}
+
+The slab component prevents coefficients from being too large:
+\begin{equation}
+\tilde{\lambda}_j = \frac{c \cdot \lambda_j}{\sqrt{c^2 + \tau^2 \lambda_j^2}}
+\end{equation}
+
+As $\tau \lambda_j \rightarrow \infty$:
+\begin{equation}
+\tilde{\lambda}_j \rightarrow c \cdot \frac{1}{\tau}
+\end{equation}
+
+This bounds the effective coefficient scale by $c$, preventing unrealistic effect sizes.
+
+\newpage
+\section{References}
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=0.5em]
+    \item Piironen, J., \& Vehtari, A. (2017). Sparsity information and regularization in the horseshoe and other shrinkage priors. \textit{Electronic Journal of Statistics}, 11(2), 5018-5051.
+    
+    \item Carvalho, C. M., Polson, N. G., \& Scott, J. G. (2010). The horseshoe estimator for sparse signals. \textit{Biometrika}, 97(2), 465-480.
+    
+    \item George, E. I., \& McCulloch, R. E. (1993). Variable selection via Gibbs sampling. \textit{Journal of the American Statistical Association}, 88(423), 881-889.
+    
+    \item Park, T., \& Casella, G. (2008). The Bayesian Lasso. \textit{Journal of the American Statistical Association}, 103(482), 681-686.
+    
+    \item Hernán, M. A., \& Robins, J. M. (2020). \textit{Causal Inference: What If}. Boca Raton: Chapman \& Hall/CRC.
+    
+    \item Pearl, J. (2009). \textit{Causality: Models, Reasoning and Inference} (2nd ed.). Cambridge University Press.
+    
+    \item Westfall, J., \& Yarkoni, T. (2016). Statistically controlling for confounding constructs is harder than you think. \textit{PLoS ONE}, 11(3), e0152719.
+\end{enumerate}
+
+\newpage
+\appendix
+\section{Quick Reference Card}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Method} & \textbf{When to Use} \\
+\midrule
+Regularized Horseshoe & Default choice; sparse effects expected \\
+Finnish Horseshoe & Same as regularized; emphasizes slab \\
+Spike-and-Slab & When hard selection probabilities needed \\
+Bayesian LASSO & Many small effects; less sparse \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Variable Type} & \textbf{Selection OK?} & \textbf{Standard Prior?} & \textbf{Exclude?} \\
+\midrule
+Weather & \checkmark & \checkmark & -- \\
+Economic indicators & \checkmark & \checkmark & -- \\
+Minor calendar effects & \checkmark & \checkmark & -- \\
+Distribution/ACV & -- & \checkmark & -- \\
+Price & -- & \checkmark & -- \\
+Competitor media & -- & \checkmark & -- \\
+Mediators (awareness) & -- & -- & \checkmark \\
+\bottomrule
+\end{tabular}
+\caption{Variable handling recommendations}
+\end{table}
+
+\section{Code Templates}
+
+\subsection{Horseshoe with Excluded Confounders}
+
+\begin{lstlisting}[language=Python]
+# Split controls into selectable and non-selectable
+confounders = ["distribution", "price", "competitor_media"]
+precision_vars = [c for c in control_names if c not in confounders]
+
+with pm.Model() as model:
+    sigma = pm.HalfNormal("sigma", 0.5)
+    
+    # Standard priors for confounders (must include)
+    beta_confounders = pm.Normal(
+        "beta_confounders", 
+        mu=0, sigma=0.5, 
+        shape=len(confounders)
+    )
+    
+    # Selection priors for precision variables
+    config = VariableSelectionConfig(
+        method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
+        horseshoe=HorseshoeConfig(expected_nonzero=3),
+    )
+    result = create_control_selection_prior(
+        "beta_precision", len(precision_vars), n_obs, sigma, config
+    )
+    
+    # Combine contributions
+    control_contrib = (
+        pm.math.dot(X_confounders, beta_confounders) +
+        pm.math.dot(X_precision, result.beta)
+    )
+\end{lstlisting}
+
+\end{document}
