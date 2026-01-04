@@ -314,7 +314,7 @@
                         <td><strong>Mediators</strong></td>
                         <td>Brand awareness, consideration</td>
                         <td><span class="badge badge-danger">✗ Never</span></td>
-                        <td>On causal path—shrinking blocks true media effect</td>
+                        <td>On causal path—if included, use standard priors (never shrink)</td>
                     </tr>
                     <tr>
                         <td><strong>Media Variables</strong></td>
@@ -330,6 +330,294 @@
                 <h4>💡 The Key Question</h4>
                 <p>
                     Ask yourself: "Does this variable influence how we allocate our media budget?" If yes, it's likely a confounder and must be excluded from selection.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Specification Shopping vs Principled Selection -->
+    <section>
+        <div class="container">
+            <h2>Why This Beats Specification Shopping</h2>
+            <p>
+                Traditional MMM practice often involves running many model specifications and selecting the one with "sensible" results. This <strong>specification shopping</strong> destroys statistical validity. Bayesian variable selection provides a principled alternative—but only when variables are correctly classified <em>before</em> analysis.
+            </p>
+
+            <!-- Side by side comparison -->
+            <div class="dag-container">
+                <div class="dag-box bad">
+                    <h4>❌ Specification Shopping</h4>
+                    <div style="text-align: left; padding: 1rem;">
+                        <ol style="margin: 0; padding-left: 1.5rem; color: var(--color-text-muted);">
+                            <li>Run model with all variables</li>
+                            <li>See negative media coefficient 😟</li>
+                            <li>Remove variables until coefficient is positive</li>
+                            <li>Justify removals post-hoc as "not significant"</li>
+                            <li>Report the "good" model only</li>
+                        </ol>
+                    </div>
+                    <div class="warning-box" style="margin: 1rem 0 0 0; text-align: left;">
+                        <p style="margin: 0; font-size: 0.9rem;"><strong>Problem:</strong> You're painting targets around arrows. The "good" results are an artifact of selection, not evidence of true effects.</p>
+                    </div>
+                </div>
+
+                <div class="dag-box good">
+                    <h4>✅ Principled Bayesian Selection</h4>
+                    <div style="text-align: left; padding: 1rem;">
+                        <ol style="margin: 0; padding-left: 1.5rem; color: var(--color-text-muted);">
+                            <li>Classify all variables <em>before</em> seeing data</li>
+                            <li>Protect confounders & mediators from selection</li>
+                            <li>Apply selection only to precision controls</li>
+                            <li>Run model once with pre-specified structure</li>
+                            <li>Report full posterior with uncertainty</li>
+                        </ol>
+                    </div>
+                    <div class="success-box" style="margin: 1rem 0 0 0; text-align: left;">
+                        <p style="margin: 0; font-size: 0.9rem;"><strong>Benefit:</strong> Valid inference. Uncertainty is quantified honestly. Results can be trusted for decision-making.</p>
+                    </div>
+                </div>
+            </div>
+
+            <h3>The Confounder Problem: Why Dropping Variables Biases Effects</h3>
+            <p>
+                A classic specification shopping pattern is dropping <strong>confounder variables</strong> (like distribution) because they "reduce" media effects or have unexpected signs. But confounders affect both your media spending and your outcomes—dropping them doesn't remove their influence, it just hides it while biasing your estimates.
+            </p>
+
+            <!-- Confounder DAG Diagram -->
+            <div class="dag-container">
+                <div class="dag-box" style="border-top: 4px solid var(--color-success);">
+                    <h4>✓ Confounder Included (Correct)</h4>
+                    <svg class="dag-svg" viewBox="0 0 320 180">
+                        <!-- Distribution node (confounder) -->
+                        <rect x="125" y="10" width="70" height="36" rx="8" fill="#c97067" opacity="0.9"/>
+                        <text x="160" y="32" text-anchor="middle" fill="white" font-size="10" font-weight="600">Distribution</text>
+                        
+                        <!-- Media node -->
+                        <rect x="20" y="90" width="70" height="40" rx="8" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="115" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="230" y="90" width="70" height="40" rx="8" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="265" y="115" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows -->
+                        <defs>
+                            <marker id="arr-c1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                <path d="M0,0 L0,6 L8,3 z" fill="#5a6b5a"/>
+                            </marker>
+                            <marker id="arr-c2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                <path d="M0,0 L0,6 L8,3 z" fill="#c97067"/>
+                            </marker>
+                        </defs>
+                        <!-- Distribution to Media -->
+                        <path d="M 135 46 L 75 85" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arr-c2)"/>
+                        <!-- Distribution to Sales -->
+                        <path d="M 185 46 L 250 85" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arr-c2)"/>
+                        <!-- Media to Sales (true effect) -->
+                        <path d="M 93 110 L 227 110" stroke="#8fa86a" stroke-width="2" fill="none" marker-end="url(#arr-c1)"/>
+                        <text x="160" y="102" font-size="10" fill="#3d8b5a" font-weight="bold">True Effect = 0.25</text>
+                        
+                        <text x="160" y="168" text-anchor="middle" font-size="10" fill="#3d8b5a">✓ Unbiased estimate of media effect</text>
+                    </svg>
+                </div>
+
+                <div class="dag-box" style="border-top: 4px solid var(--color-danger);">
+                    <h4>✗ Confounder Dropped (Biased)</h4>
+                    <svg class="dag-svg" viewBox="0 0 320 180">
+                        <!-- Distribution node (ghosted) -->
+                        <rect x="125" y="10" width="70" height="36" rx="8" fill="#cccccc" opacity="0.3" stroke="#999" stroke-dasharray="4,2"/>
+                        <text x="160" y="32" text-anchor="middle" fill="#999" font-size="10">Distribution</text>
+                        <line x1="120" y1="5" x2="200" y2="50" stroke="#c97067" stroke-width="2"/>
+                        <line x1="200" y1="5" x2="120" y2="50" stroke="#c97067" stroke-width="2"/>
+                        
+                        <!-- Media node -->
+                        <rect x="20" y="90" width="70" height="40" rx="8" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="115" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="230" y="90" width="70" height="40" rx="8" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="265" y="115" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Biased arrow -->
+                        <path d="M 93 110 L 227 110" stroke="#c97067" stroke-width="3" fill="none" marker-end="url(#arr-c2)"/>
+                        <text x="160" y="102" font-size="10" fill="#c97067" font-weight="bold">"Effect" = 0.45 ⚠️</text>
+                        
+                        <!-- Ghost confounding path -->
+                        <path d="M 55 90 Q 160 20 265 90" stroke="#c97067" stroke-width="1.5" stroke-dasharray="4,3" fill="none" opacity="0.5"/>
+                        <text x="160" y="55" font-size="8" fill="#c97067">Confounding absorbed</text>
+                        
+                        <text x="160" y="168" text-anchor="middle" font-size="10" fill="#c97067">⚠️ 80% inflated! Includes spurious correlation</text>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>⚠️ This Is What Specification Shopping Looks Like</h4>
+                <p>
+                    When analysts drop distribution because "the sign doesn't make sense" or "it reduces media ROI," they're not finding the true media effect—they're creating a biased estimate that includes spurious correlation from the confounder. The inflated coefficient <em>looks</em> better but is <em>wrong</em>.
+                </p>
+            </div>
+
+            <!-- Interactive Confounder Demo -->
+            <div class="interactive-section">
+                <h4 style="margin-bottom: 1rem;">Interactive: What Happens When You Drop a Confounder</h4>
+                <div class="control-row">
+                    <label>Include distribution confounder:</label>
+                    <div style="display: flex; gap: 1rem;">
+                        <label style="min-width: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="confounder-toggle" value="yes" checked onchange="updateConfounderDemo(true)"> Yes (Correct)
+                        </label>
+                        <label style="min-width: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="confounder-toggle" value="no" onchange="updateConfounderDemo(false)"> No (Biased)
+                        </label>
+                    </div>
+                </div>
+                <div id="confounder-demo-chart" class="chart-container chart-container-lg"></div>
+                <div id="confounder-interpretation" class="info-box" style="margin-top: 1rem;">
+                    <h4>📊 Interpretation</h4>
+                    <p id="confounder-message">With the confounder included, we isolate the true causal effect of media (0.25). Distribution's effect on sales is properly attributed to distribution, not media.</p>
+                </div>
+            </div>
+
+            <h3>Mediators and Total Effects</h3>
+            <p>
+                <strong>Mediators</strong> (like brand awareness) lie on the causal path between media and sales. When you're interested in the <strong>total effect</strong> of media, you should <em>not</em> control for mediators—doing so would block the indirect pathway and underestimate media's true impact.
+            </p>
+
+            <!-- Mediator DAG Diagram -->
+            <div class="dag-container">
+                <div class="dag-box" style="border-top: 4px solid var(--color-success);">
+                    <h4>✓ Total Effect (Don't Control for Mediator)</h4>
+                    <svg class="dag-svg" viewBox="0 0 320 180">
+                        <!-- Media node -->
+                        <rect x="20" y="70" width="70" height="40" rx="8" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="95" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Awareness node (on path, not controlled) -->
+                        <rect x="125" y="20" width="70" height="40" rx="8" fill="#6a8fa8" opacity="0.6"/>
+                        <text x="160" y="45" text-anchor="middle" fill="white" font-size="10" font-weight="600">Awareness</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="230" y="70" width="70" height="40" rx="8" fill="#d4a86a" opacity="0.9"/>
+                        <text x="265" y="95" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows showing full path -->
+                        <defs>
+                            <marker id="arr-m2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                <path d="M0,0 L0,6 L8,3 z" fill="#3d8b5a"/>
+                            </marker>
+                        </defs>
+                        <!-- Media to Awareness (indirect path) -->
+                        <path d="M 75 70 Q 100 40 122 40" stroke="#3d8b5a" stroke-width="2" fill="none" marker-end="url(#arr-m2)"/>
+                        <!-- Awareness to Sales (indirect path) -->
+                        <path d="M 198 40 Q 220 40 245 68" stroke="#3d8b5a" stroke-width="2" fill="none" marker-end="url(#arr-m2)"/>
+                        <!-- Media to Sales (direct) -->
+                        <path d="M 93 95 L 227 95" stroke="#3d8b5a" stroke-width="2" fill="none" marker-end="url(#arr-m2)"/>
+                        
+                        <text x="160" y="130" font-size="10" fill="#3d8b5a" font-weight="bold">Total Effect = 0.40</text>
+                        <text x="160" y="148" font-size="9" fill="#5a6b5a">(Direct + Indirect, both pathways open)</text>
+                    </svg>
+                </div>
+
+                <div class="dag-box" style="border-top: 4px solid var(--color-warning);">
+                    <h4>⚠️ Direct Effect Only (Control for Mediator)</h4>
+                    <svg class="dag-svg" viewBox="0 0 320 180">
+                        <!-- Media node -->
+                        <rect x="20" y="70" width="70" height="40" rx="8" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="95" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Awareness node (controlled - blocked) -->
+                        <rect x="125" y="20" width="70" height="40" rx="8" fill="#6a8fa8" opacity="0.9" stroke="#d4a86a" stroke-width="3"/>
+                        <text x="160" y="45" text-anchor="middle" fill="white" font-size="10" font-weight="600">Awareness</text>
+                        <text x="160" y="75" text-anchor="middle" fill="#b8860b" font-size="8" font-weight="bold">CONTROLLED</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="230" y="70" width="70" height="40" rx="8" fill="#d4a86a" opacity="0.9"/>
+                        <text x="265" y="95" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Blocked paths -->
+                        <path d="M 75 70 Q 100 40 122 40" stroke="#999" stroke-width="1.5" stroke-dasharray="4,3" fill="none" opacity="0.4"/>
+                        <path d="M 198 40 Q 220 40 245 68" stroke="#999" stroke-width="1.5" stroke-dasharray="4,3" fill="none" opacity="0.4"/>
+                        <!-- Direct path only -->
+                        <path d="M 93 95 L 227 95" stroke="#b8860b" stroke-width="2" fill="none" marker-end="url(#arr-m2)"/>
+                        
+                        <text x="160" y="130" font-size="10" fill="#b8860b" font-weight="bold">Direct Effect Only = 0.20</text>
+                        <text x="160" y="148" font-size="9" fill="#5a6b5a">(Indirect pathway blocked by controlling)</text>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <h4>💡 When to Control for Mediators</h4>
+                <p>
+                    <strong>Want total effect?</strong> Don't include mediators in the model. The coefficient on media captures both direct and indirect effects.<br>
+                    <strong>Want to decompose effects?</strong> Include mediators to separate direct from indirect effects—but understand you're now estimating different quantities.
+                </p>
+                <p style="margin-bottom: 0;">
+                    The key insight: controlling for a mediator isn't "wrong"—it just answers a different question. Specification shopping happens when analysts switch between these approaches based on which gives "better" numbers.
+                </p>
+            </div>
+
+            <!-- Interactive Total vs Direct Effect Demo -->
+            <div class="interactive-section">
+                <h4 style="margin-bottom: 1rem;">Interactive: Total Effect vs. Direct Effect</h4>
+                <div class="control-row">
+                    <label>What do you want to estimate?</label>
+                    <div style="display: flex; gap: 1rem;">
+                        <label style="min-width: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="effect-toggle" value="total" checked onchange="updateEffectDemo('total')"> Total Effect
+                        </label>
+                        <label style="min-width: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="effect-toggle" value="direct" onchange="updateEffectDemo('direct')"> Direct Effect Only
+                        </label>
+                    </div>
+                </div>
+                <div id="effect-demo-chart" class="chart-container chart-container-lg"></div>
+                <div id="effect-interpretation" class="success-box" style="margin-top: 1rem;">
+                    <h4>✓ Correct Approach</h4>
+                    <p id="effect-message">To estimate the total effect of media, don't control for mediators like awareness. Your media coefficient (0.40) captures the full causal impact through all pathways.</p>
+                </div>
+            </div>
+
+            <h3>Why Pre-Classification Matters</h3>
+            <p>
+                The fundamental difference between specification shopping and principled analysis is <strong>when</strong> decisions are made. Pre-classification commits you to a causal structure before seeing results, preventing the temptation to adjust based on what "looks right."
+            </p>
+
+            <div class="card-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="card" style="border-top: 4px solid var(--color-danger);">
+                    <h4>🎯 Confounders</h4>
+                    <p><strong>Affect:</strong> Both media spending AND sales</p>
+                    <p><strong>Action:</strong> Always include with standard priors</p>
+                    <p><strong>If dropped:</strong> Media effects biased upward</p>
+                </div>
+                <div class="card" style="border-top: 4px solid var(--color-accent);">
+                    <h4>🔗 Mediators</h4>
+                    <p><strong>Affect:</strong> Lie on path from media to sales</p>
+                    <p><strong>Action:</strong> Exclude for total effect; include to decompose</p>
+                    <p><strong>Key:</strong> Decide BEFORE analysis which you want</p>
+                </div>
+                <div class="card" style="border-top: 4px solid var(--color-success);">
+                    <h4>🎚️ Precision Controls</h4>
+                    <p><strong>Affect:</strong> Sales only, not media allocation</p>
+                    <p><strong>Action:</strong> Can apply Bayesian selection</p>
+                    <p><strong>If dropped:</strong> Increased noise, wider CIs</p>
+                </div>
+            </div>
+
+            <div class="success-box">
+                <h4>✓ The Pre-Registration Principle</h4>
+                <p>
+                    Document your variable classifications in a pre-analysis plan <em>before</em> fitting any models. Include:
+                </p>
+                <ul style="margin: 0.5rem 0 0 1.5rem;">
+                    <li>Which variables are confounders and why (cite business process)</li>
+                    <li>Which variables are mediators and the causal pathway</li>
+                    <li>Which variables are precision controls eligible for selection</li>
+                    <li>Your prior beliefs about sparsity (expected number of relevant controls)</li>
+                </ul>
+                <p style="margin-top: 1rem;">
+                    This commitment device prevents the unconscious drift toward "finding" results that confirm expectations.
                 </p>
             </div>
         </div>
@@ -579,6 +867,160 @@
             updateBiasDemo(parseInt(this.value));
         });
 
+        // Confounder Demo Chart
+        function updateConfounderDemo(includeConfounder) {
+            const msgEl = document.getElementById('confounder-message');
+            const infoBox = document.getElementById('confounder-interpretation');
+            
+            if (includeConfounder) {
+                // Correct model with confounder
+                const data = [{
+                    x: ['Media Effect<br>(True Causal)', 'Distribution Effect', 'Residual Variance'],
+                    y: [0.25, 0.35, 0.15],
+                    type: 'bar',
+                    marker: { 
+                        color: [colors.success, colors.danger, colors.textMuted],
+                        line: { color: ['#4a8f5f', '#a85550', '#4a5a4a'], width: 2 }
+                    },
+                    text: ['0.25', '0.35', '0.15'],
+                    textposition: 'outside',
+                    hovertemplate: '%{x}<br>Effect: %{y:.2f}<extra></extra>'
+                }];
+
+                const layout = {
+                    ...baseLayout,
+                    yaxis: { title: 'Effect Size', range: [0, 0.55], gridcolor: colors.border },
+                    xaxis: { gridcolor: colors.border },
+                    annotations: [{
+                        x: 0, y: 0.32,
+                        text: '✓ Unbiased',
+                        showarrow: false,
+                        font: { color: colors.success, size: 11 }
+                    }]
+                };
+
+                Plotly.react('confounder-demo-chart', data, layout, config);
+                
+                infoBox.className = 'info-box';
+                infoBox.querySelector('h4').textContent = '📊 Interpretation';
+                msgEl.innerHTML = 'With the confounder included, we isolate the <strong>true causal effect of media (0.25)</strong>. Distribution\'s effect on sales is properly attributed to distribution, not media. This is the correct estimate for decision-making.';
+            } else {
+                // Biased model without confounder
+                const data = [{
+                    x: ['Media "Effect"<br>(Biased!)', 'Distribution Effect<br>(Omitted)', 'Residual Variance'],
+                    y: [0.45, 0, 0.30],
+                    type: 'bar',
+                    marker: { 
+                        color: [colors.danger, '#cccccc', colors.textMuted],
+                        line: { color: ['#a85550', '#999999', '#4a5a4a'], width: 2 }
+                    },
+                    text: ['0.45 ⚠️', 'Hidden', '0.30'],
+                    textposition: 'outside',
+                    hovertemplate: '%{x}<br>Effect: %{y:.2f}<extra></extra>'
+                }];
+
+                const layout = {
+                    ...baseLayout,
+                    yaxis: { title: 'Effect Size', range: [0, 0.55], gridcolor: colors.border },
+                    xaxis: { gridcolor: colors.border },
+                    annotations: [{
+                        x: 0, y: 0.52,
+                        text: '⚠️ 80% inflated!',
+                        showarrow: false,
+                        font: { color: colors.danger, size: 12, weight: 'bold' }
+                    }, {
+                        x: 1, y: 0.08,
+                        text: 'Absorbed into media',
+                        showarrow: false,
+                        font: { color: '#999', size: 9 }
+                    }]
+                };
+
+                Plotly.react('confounder-demo-chart', data, layout, config);
+                
+                infoBox.className = 'warning-box';
+                infoBox.querySelector('h4').textContent = '⚠️ Biased Results';
+                msgEl.innerHTML = 'Without the confounder, the media "effect" appears to be <strong>0.45</strong>—80% higher than the true value! The spurious correlation from distribution (high-distribution markets get more media AND have higher sales) has been absorbed into the media coefficient. <strong>This estimate is wrong and will lead to overinvestment in media.</strong>';
+            }
+        }
+
+        // Total vs Direct Effect Demo
+        function updateEffectDemo(effectType) {
+            const msgEl = document.getElementById('effect-message');
+            const infoBox = document.getElementById('effect-interpretation');
+            
+            if (effectType === 'total') {
+                // Total effect - don't control for mediator
+                const data = [{
+                    x: ['Direct Pathway<br>(Media → Sales)', 'Indirect Pathway<br>(Media → Awareness → Sales)', 'Total Media Effect'],
+                    y: [0.20, 0.20, 0.40],
+                    type: 'bar',
+                    marker: { 
+                        color: [colors.primary, colors.accent, colors.success],
+                        line: { color: ['#6d8a4a', '#4a6d8a', '#4a8f5f'], width: 2 }
+                    },
+                    text: ['0.20', '0.20', '0.40'],
+                    textposition: 'outside',
+                    hovertemplate: '%{x}<br>Effect: %{y:.2f}<extra></extra>'
+                }];
+
+                const layout = {
+                    ...baseLayout,
+                    yaxis: { title: 'Effect Size', range: [0, 0.55], gridcolor: colors.border },
+                    xaxis: { gridcolor: colors.border },
+                    annotations: [{
+                        x: 2, y: 0.47,
+                        text: '✓ Full causal impact',
+                        showarrow: false,
+                        font: { color: colors.success, size: 11 }
+                    }]
+                };
+
+                Plotly.react('effect-demo-chart', data, layout, config);
+                
+                infoBox.className = 'success-box';
+                infoBox.querySelector('h4').textContent = '✓ Correct Approach';
+                msgEl.innerHTML = 'To estimate the <strong>total effect</strong> of media, don\'t control for mediators like awareness. Your media coefficient (<strong>0.40</strong>) captures the full causal impact through all pathways. This is what you want for budget allocation decisions.';
+            } else {
+                // Direct effect only - control for mediator
+                const data = [{
+                    x: ['Direct Effect<br>(Estimated)', 'Indirect Effect<br>(Blocked by Control)', 'What You Get'],
+                    y: [0.20, 0, 0.20],
+                    type: 'bar',
+                    marker: { 
+                        color: [colors.warning, '#cccccc', colors.warning],
+                        line: { color: ['#b8860b', '#999999', '#b8860b'], width: 2 }
+                    },
+                    text: ['0.20', 'Blocked', '0.20'],
+                    textposition: 'outside',
+                    hovertemplate: '%{x}<br>Effect: %{y:.2f}<extra></extra>'
+                }];
+
+                const layout = {
+                    ...baseLayout,
+                    yaxis: { title: 'Effect Size', range: [0, 0.55], gridcolor: colors.border },
+                    xaxis: { gridcolor: colors.border },
+                    annotations: [{
+                        x: 1, y: 0.08,
+                        text: 'Pathway closed',
+                        showarrow: false,
+                        font: { color: '#999', size: 9 }
+                    }, {
+                        x: 2, y: 0.27,
+                        text: '50% of total effect',
+                        showarrow: false,
+                        font: { color: colors.warning, size: 10 }
+                    }]
+                };
+
+                Plotly.react('effect-demo-chart', data, layout, config);
+                
+                infoBox.className = 'info-box';
+                infoBox.querySelector('h4').textContent = '📊 Different Question';
+                msgEl.innerHTML = 'Controlling for awareness gives you the <strong>direct effect only (0.20)</strong>—the part of media\'s impact that doesn\'t go through awareness. This is useful for understanding mechanisms, but <strong>don\'t use this for budget decisions</strong>. You\'d underestimate media\'s true value by 50%.';
+            }
+        }
+
         // 2. Shrinkage Comparison Chart
         function initShrinkageComparison() {
             const x = [];
@@ -706,6 +1148,8 @@
         // Initialize all charts
         document.addEventListener('DOMContentLoaded', function() {
             updateBiasDemo(0);
+            updateConfounderDemo(true);
+            updateEffectDemo('total');
             initShrinkageComparison();
             initPIPChart();
             initEffectPIPScatter();
