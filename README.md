@@ -994,7 +994,7 @@ When modeling multiple outcomes simultaneously (e.g., sales of different product
 
 #### Core Structure
 
-For $K$ outcomes $\mathbf{y}_t = (y_{1,t}, \ldots, y_{K,t})'$:
+For $K$ outcomes $\mathbf{y}_t = (y_{1,t}, \ldots, y_{K,t})'$ :
 
 $$\mathbf{y}_t = \boldsymbol{\alpha} + \mathbf{B} \cdot \mathbf{f}(x_t) + \boldsymbol{\Psi} \cdot \mathbf{y}_t + \boldsymbol{\epsilon}_t$$
 
