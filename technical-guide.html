@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Guide | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
+            font-size: 17px;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.5rem;
+            color: var(--color-primary-dark);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--color-primary);
+        }
+
+        /* Layout */
+        .page-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-top: 5rem;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: sticky;
+            top: 5rem;
+            height: calc(100vh - 5rem);
+            overflow-y: auto;
+            padding: 2rem;
+            border-right: 1px solid var(--color-border);
+            background: var(--color-bg);
+        }
+
+        .sidebar h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-text-muted);
+            margin-bottom: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .sidebar h3:first-child {
+            margin-top: 0;
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav a {
+            display: block;
+            padding: 0.5rem 0;
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: var(--transition-smooth);
+            border-left: 2px solid transparent;
+            padding-left: 1rem;
+            margin-left: -1rem;
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            color: var(--color-primary);
+            border-left-color: var(--color-primary);
+        }
+
+        .sidebar-nav .sub-item a {
+            padding-left: 2rem;
+            font-size: 0.9rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 3rem 4rem;
+            max-width: 900px;
+        }
+
+        .main-content h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        .main-content h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--color-border);
+            color: var(--color-text);
+        }
+
+        .main-content h2:first-of-type {
+            border-top: none;
+            padding-top: 0;
+            margin-top: 2rem;
+        }
+
+        .main-content h3 {
+            font-size: 1.3rem;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-text);
+        }
+
+        .main-content h4 {
+            font-size: 1.1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+        }
+
+        .main-content p {
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        .lead {
+            font-size: 1.2rem;
+            color: var(--color-text-muted);
+            margin-bottom: 2rem;
+        }
+
+        /* Math blocks */
+        .math-block {
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        .math-block .katex {
+            font-size: 1.1em;
+        }
+
+        .equation-label {
+            float: right;
+            color: var(--color-text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        /* Definition boxes */
+        .definition {
+            background: rgba(143, 168, 106, 0.1);
+            border-left: 4px solid var(--color-primary);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .definition h4 {
+            color: var(--color-primary-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Warning/Note boxes */
+        .warning {
+            background: rgba(201, 112, 103, 0.1);
+            border-left: 4px solid var(--color-danger);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .warning h4 {
+            color: var(--color-danger);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        .note {
+            background: rgba(106, 143, 168, 0.1);
+            border-left: 4px solid var(--color-accent);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .note h4 {
+            color: var(--color-accent-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Code blocks */
+        pre {
+            background: #2d3a2d;
+            color: #e8ebe8;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--color-bg-alt);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        tr:hover {
+            background: rgba(143, 168, 106, 0.05);
+        }
+
+        /* Model diagrams */
+        .model-diagram {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .model-diagram svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* When to use cards */
+        .use-case-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .use-case-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+
+        .use-case-card.good {
+            border-left: 3px solid var(--color-success);
+        }
+
+        .use-case-card.bad {
+            border-left: 3px solid var(--color-danger);
+        }
+
+        .use-case-card h5 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .use-case-card p {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-bottom: 0;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 1rem 0 1rem 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Links */
+        a {
+            color: var(--color-primary);
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .page-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: relative;
+                top: auto;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            .main-content {
+                padding: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .use-case-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="index.html#demo">Interactive Demo</a></li>
+                <li><a href="#" class="active">Technical Guide</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="page-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h3>Getting Started</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#bayesian-basics">Bayesian Basics</a></li>
+                <li><a href="#choosing-model">Choosing a Model</a></li>
+            </ul>
+
+            <h3>Standard MMM</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#standard">Model Structure</a></li>
+                <li><a href="#standard-adstock">Adstock Transformation</a></li>
+                <li><a href="#standard-saturation">Saturation Functions</a></li>
+                <li><a href="#standard-priors">Prior Specification</a></li>
+            </ul>
+
+            <h3>Nested Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#nested">Model Structure</a></li>
+                <li><a href="#nested-mediators">Mediator Types</a></li>
+                <li><a href="#nested-identification">Identification</a></li>
+            </ul>
+
+            <h3>Multivariate Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#multivariate">Model Structure</a></li>
+                <li><a href="#cross-effects">Cross-Effects</a></li>
+                <li><a href="#multivariate-correlation">Correlated Errors</a></li>
+            </ul>
+
+            <h3>Advanced Topics</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#combined">Combined Model</a></li>
+                <li><a href="#hierarchical">Hierarchical Structure</a></li>
+                <li><a href="#diagnostics">Model Diagnostics</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <h1>Technical Guide</h1>
+            <p class="lead">
+                A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models.
+                This guide covers the mathematical foundations, model specifications, and practical considerations
+                for each model type.
+            </p>
+
+            <!-- Overview -->
+            <h2 id="overview">Overview</h2>
+            <p>
+                Marketing Mix Modeling (MMM) estimates the incremental impact of marketing activities on business
+                outcomes like sales or conversions. This framework implements a Bayesian approach, which offers
+                several advantages over traditional frequentist methods:
+            </p>
+            <ul>
+                <li><strong>Uncertainty quantification:</strong> Full posterior distributions instead of point estimates</li>
+                <li><strong>Prior incorporation:</strong> Encode domain knowledge and business constraints</li>
+                <li><strong>Regularization:</strong> Priors naturally prevent overfitting</li>
+                <li><strong>Decision-theoretic framework:</strong> Directly compute probability statements about ROI</li>
+            </ul>
+
+            <div class="note">
+                <h4>📚 Prerequisites</h4>
+                <p>
+                    This guide assumes familiarity with linear regression, probability distributions, and basic
+                    calculus. For a refresher on Bayesian statistics, we recommend 
+                    <em>Statistical Rethinking</em> by Richard McElreath or 
+                    <em>Bayesian Data Analysis</em> by Gelman et al.
+                </p>
+            </div>
+
+            <!-- Bayesian Basics -->
+            <h2 id="bayesian-basics">Bayesian Fundamentals</h2>
+            <p>
+                At its core, Bayesian inference applies Bayes' theorem to update our beliefs about model
+                parameters given observed data:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(1)</span>
+                $$P(\theta | y) = \frac{P(y | \theta) \cdot P(\theta)}{P(y)}$$
+            </div>
+
+            <p>Where:</p>
+            <ul>
+                <li>$P(\theta | y)$ is the <strong>posterior</strong>: our updated belief about parameters after seeing data</li>
+                <li>$P(y | \theta)$ is the <strong>likelihood</strong>: probability of data given parameters</li>
+                <li>$P(\theta)$ is the <strong>prior</strong>: our belief about parameters before seeing data</li>
+                <li>$P(y)$ is the <strong>evidence</strong>: normalizing constant (often ignored in computation)</li>
+            </ul>
+
+            <h3>Why Priors Matter in MMM</h3>
+            <p>
+                In MMM, priors serve critical functions beyond just "regularization":
+            </p>
+
+            <div class="definition">
+                <h4>Sign Constraints</h4>
+                <p>
+                    Marketing investments should generally have non-negative effects on sales. Rather than
+                    post-hoc filtering (which invalidates inference), we encode this through priors that
+                    concentrate probability mass on positive values.
+                </p>
+            </div>
+
+            <p>
+                For a media coefficient $\beta$, we might use a half-normal prior:
+            </p>
+
+            <div class="math-block">
+                $$\beta \sim \text{HalfNormal}(\sigma = 0.5)$$
+            </div>
+
+            <p>
+                This prior allows positive effects while gently discouraging implausibly large values. The
+                posterior will still be able to indicate near-zero effects if the data warrant it—but the
+                prior makes it harder for noise to produce spurious negative estimates.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Specification Shopping</h4>
+                <p>
+                    Running multiple models and selecting one with "reasonable" coefficients is specification
+                    shopping. This practice destroys the statistical properties of your estimates. Instead,
+                    encode constraints through priors <em>before</em> seeing the data, then report
+                    the single resulting posterior.
+                </p>
+            </div>
+
+            <!-- Choosing a Model -->
+            <h2 id="choosing-model">Choosing a Model</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Use When</th>
+                        <th>Complexity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Standard MMM</strong></td>
+                        <td>Single outcome, no intermediate metrics, simple attribution</td>
+                        <td>Low</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nested MMM</strong></td>
+                        <td>Upper-funnel metrics available (awareness, consideration), want direct/indirect decomposition</td>
+                        <td>Medium</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Multivariate MMM</strong></td>
+                        <td>Multiple outcomes that may interact (product portfolio, cannibalization)</td>
+                        <td>Medium</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Combined MMM</strong></td>
+                        <td>Both mediators AND multiple interacting outcomes</td>
+                        <td>High</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Standard MMM -->
+            <h2 id="standard">Standard MMM</h2>
+            <p>
+                The standard model relates marketing inputs to a single outcome through transformed 
+                media variables.
+            </p>
+
+            <div class="model-diagram">
+                <svg viewBox="0 0 500 120" width="100%">
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
+                        </marker>
+                    </defs>
+                    
+                    <!-- Media inputs -->
+                    <rect x="20" y="40" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
+                    <text x="60" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media Spend</text>
+                    
+                    <!-- Transformation -->
+                    <rect x="150" y="30" width="100" height="60" rx="8" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="2"/>
+                    <text x="200" y="55" text-anchor="middle" fill="#5a6b5a" font-size="10" font-weight="600">Adstock</text>
+                    <text x="200" y="70" text-anchor="middle" fill="#5a6b5a" font-size="10" font-weight="600">+ Saturation</text>
+                    
+                    <!-- Coefficients -->
+                    <rect x="300" y="40" width="60" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
+                    <text x="330" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">β</text>
+                    
+                    <!-- Outcome -->
+                    <rect x="410" y="40" width="70" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
+                    <text x="445" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
+                    
+                    <!-- Arrows -->
+                    <path d="M 105 60 L 145 60" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <path d="M 255 60 L 295 60" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <path d="M 365 60 L 405 60" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                </svg>
+            </div>
+
+            <h3>Model Specification</h3>
+            <p>The full generative model is:</p>
+
+            <div class="math-block">
+                <span class="equation-label">(2)</span>
+                $$y_t = \alpha + \sum_{m=1}^{M} \beta_m \cdot f_{\text{sat}}\left(g_{\text{adstock}}(x_{m,t})\right) + \gamma' \mathbf{z}_t + \epsilon_t$$
+            </div>
+
+            <p>Where:</p>
+            <ul>
+                <li>$y_t$ is the outcome at time $t$ (typically log-transformed sales)</li>
+                <li>$x_{m,t}$ is spend for media channel $m$ at time $t$</li>
+                <li>$g_{\text{adstock}}(\cdot)$ is the adstock transformation</li>
+                <li>$f_{\text{sat}}(\cdot)$ is the saturation function</li>
+                <li>$\mathbf{z}_t$ is a vector of control variables (trend, seasonality, etc.)</li>
+                <li>$\epsilon_t \sim \mathcal{N}(0, \sigma^2)$ is the error term</li>
+            </ul>
+
+            <h3 id="standard-adstock">Adstock Transformation</h3>
+            <p>
+                Adstock captures carryover effects—the idea that today's advertising continues to 
+                influence sales in future periods.
+            </p>
+
+            <div class="definition">
+                <h4>Geometric Adstock</h4>
+                <p>The simplest form, with a single decay parameter $\lambda \in [0, 1)$:</p>
+            </div>
+
+            <div class="math-block">
+                <span class="equation-label">(3)</span>
+                $$\tilde{x}_t = x_t + \lambda \cdot \tilde{x}_{t-1}$$
+            </div>
+
+            <p>
+                A decay of $\lambda = 0.7$ means 70% of yesterday's adstocked value carries forward.
+                The half-life (time for effect to decay by 50%) is:
+            </p>
+
+            <div class="math-block">
+                $$t_{1/2} = \frac{\log(0.5)}{\log(\lambda)}$$
+            </div>
+
+            <p>
+                For $\lambda = 0.7$, this gives a half-life of approximately 1.9 periods.
+            </p>
+
+            <h4>Delayed Adstock</h4>
+            <p>
+                For channels where peak effect is delayed (e.g., TV branding campaigns), we use a
+                Weibull-parameterized adstock:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(4)</span>
+                $$w_l = \exp\left(-\left(\frac{l}{\theta}\right)^k\right) - \exp\left(-\left(\frac{l+1}{\theta}\right)^k\right)$$
+            </div>
+
+            <p>
+                Where $\theta$ controls the scale (timing of peak) and $k$ controls the shape
+                (concentration of effect).
+            </p>
+
+            <h3 id="standard-saturation">Saturation Functions</h3>
+            <p>
+                Saturation captures diminishing returns—each additional dollar of spend produces 
+                less incremental effect than the previous one.
+            </p>
+
+            <div class="definition">
+                <h4>Logistic Saturation (Recommended)</h4>
+                <p>Numerically stable and interpretable:</p>
+            </div>
+
+            <div class="math-block">
+                <span class="equation-label">(5)</span>
+                $$f_{\text{sat}}(x) = \frac{1 - \exp(-\lambda x)}{1 + \exp(-\lambda x)}$$
+            </div>
+
+            <p>
+                The parameter $\lambda$ controls how quickly saturation sets in. Larger $\lambda$
+                means faster saturation.
+            </p>
+
+            <h4>Hill Function</h4>
+            <p>
+                More flexible but can be numerically unstable:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(6)</span>
+                $$f_{\text{Hill}}(x) = \frac{x^S}{K^S + x^S}$$
+            </div>
+
+            <p>
+                Where $K$ is the half-saturation point (spend level at 50% of maximum effect) and $S$
+                is the slope parameter.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Identification Warning</h4>
+                <p>
+                    The Hill function parameters $K$ and $S$ can be weakly identified, especially with
+                    limited spend variation. Consider using informative priors or the simpler logistic
+                    saturation if you encounter divergences during sampling.
+                </p>
+            </div>
+
+            <h3 id="standard-priors">Recommended Priors</h3>
+
+            <pre><code># Media coefficients (positive, moderate magnitude)
+beta ~ HalfNormal(sigma=0.5)
+
+# Adstock decay (most mass between 0.3-0.9)
+lambda ~ Beta(alpha=3, beta=2)
+
+# Saturation (weakly informative)
+sat_lambda ~ Gamma(alpha=2, beta=1)
+
+# Intercept (standardized data)
+alpha ~ Normal(mu=0, sigma=1)
+
+# Noise
+sigma ~ HalfNormal(sigma=0.5)</code></pre>
+
+            <!-- Nested MMM -->
+            <h2 id="nested">Nested Model</h2>
+            <p>
+                The nested model extends the standard MMM to capture indirect effects through 
+                intermediate variables (mediators) like brand awareness or consideration.
+            </p>
+
+            <div class="model-diagram">
+                <svg viewBox="0 0 500 180" width="100%">
+                    <defs>
+                        <marker id="arrowhead2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
+                        </marker>
+                        <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#8fa86a"/>
+                        </marker>
+                    </defs>
+                    
+                    <!-- Media -->
+                    <rect x="20" y="70" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
+                    <text x="60" y="95" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media</text>
+                    
+                    <!-- Awareness -->
+                    <rect x="180" y="20" width="90" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
+                    <text x="225" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Awareness</text>
+                    
+                    <!-- Sales -->
+                    <rect x="380" y="70" width="80" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
+                    <text x="420" y="95" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
+                    
+                    <!-- Indirect path -->
+                    <path d="M 105 80 Q 140 40 175 40" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
+                    <path d="M 275 40 Q 310 40 375 80" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
+                    
+                    <!-- Direct path -->
+                    <path d="M 105 95 L 375 95" stroke="#8fa86a" stroke-width="3" stroke-dasharray="8,4" fill="none" marker-end="url(#arrowhead-green)"/>
+                    
+                    <!-- Labels -->
+                    <text x="140" y="55" fill="#5a6b5a" font-size="11">β₁</text>
+                    <text x="325" y="55" fill="#5a6b5a" font-size="11">γ</text>
+                    <text x="240" y="115" fill="#8fa86a" font-size="11">β₂ (direct)</text>
+                    
+                    <!-- Legend -->
+                    <text x="250" y="160" text-anchor="middle" fill="#5a6b5a" font-size="10">
+                        Total Effect = Direct (β₂) + Indirect (β₁ × γ)
+                    </text>
+                </svg>
+            </div>
+
+            <h3>Model Specification</h3>
+            <p>The nested model consists of two linked equations:</p>
+
+            <div class="math-block">
+                <span class="equation-label">(7)</span>
+                $$\text{Mediator:} \quad M_t = \alpha_M + \beta_1 \cdot \tilde{x}_t + \epsilon_{M,t}$$
+            </div>
+
+            <div class="math-block">
+                <span class="equation-label">(8)</span>
+                $$\text{Outcome:} \quad y_t = \alpha_y + \beta_2 \cdot \tilde{x}_t + \gamma \cdot M_t + \epsilon_{y,t}$$
+            </div>
+
+            <p>Effect decomposition:</p>
+            <ul>
+                <li><strong>Direct effect:</strong> $\beta_2$ (media → sales, bypassing awareness)</li>
+                <li><strong>Indirect effect:</strong> $\beta_1 \times \gamma$ (media → awareness → sales)</li>
+                <li><strong>Total effect:</strong> $\beta_2 + \beta_1 \times \gamma$</li>
+            </ul>
+
+            <h3 id="nested-mediators">Mediator Types</h3>
+            <p>
+                The framework supports three mediator observation patterns:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Fully Observed</strong></td>
+                        <td>Mediator measured at same frequency as outcome</td>
+                        <td>Weekly web traffic alongside weekly sales</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Partially Observed</strong></td>
+                        <td>Mediator measured less frequently</td>
+                        <td>Monthly brand tracking survey with weekly sales</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Latent</strong></td>
+                        <td>Mediator never directly observed</td>
+                        <td>Unobserved "brand equity" concept</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Partially Observed Mediators</h4>
+            <p>
+                When a mediator (like brand awareness from surveys) is observed only at certain time
+                points, we model it as a latent process with noisy observations:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(9)</span>
+                $$M_t^{\text{obs}} = M_t^{\text{true}} + \eta_t, \quad \eta_t \sim \mathcal{N}(0, \sigma_{\text{obs}}^2)$$
+            </div>
+
+            <p>
+                The framework uses Gaussian Process interpolation to infer the latent mediator trajectory
+                between observation points.
+            </p>
+
+            <h3 id="nested-identification">Identification Considerations</h3>
+
+            <div class="warning">
+                <h4>⚠️ Identification Requirements</h4>
+                <p>
+                    For the direct and indirect effects to be separately identified, you need
+                    sufficient variation in both media spend AND the mediator that is not perfectly
+                    explained by media. Common identification aids:
+                </p>
+                <ul>
+                    <li>Exogenous variation in awareness (e.g., PR events, competitor actions)</li>
+                    <li>Temporal lags between media and awareness versus awareness and sales</li>
+                    <li>Informative priors based on experimental or survey evidence</li>
+                </ul>
+            </div>
+
+            <!-- Multivariate MMM -->
+            <h2 id="multivariate">Multivariate Model</h2>
+            <p>
+                The multivariate model handles multiple outcomes simultaneously, capturing interactions
+                like cannibalization and halo effects between products.
+            </p>
+
+            <div class="model-diagram">
+                <svg viewBox="0 0 500 160" width="100%">
+                    <defs>
+                        <marker id="arrowhead3" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
+                        </marker>
+                        <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#6abf8a"/>
+                        </marker>
+                        <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#c97067"/>
+                        </marker>
+                    </defs>
+                    
+                    <!-- Promotion -->
+                    <rect x="20" y="60" width="90" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
+                    <text x="65" y="82" text-anchor="middle" fill="white" font-size="11" font-weight="600">Multipack</text>
+                    <text x="65" y="94" text-anchor="middle" fill="white" font-size="10">Promo</text>
+                    
+                    <!-- Product A -->
+                    <rect x="300" y="20" width="100" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
+                    <text x="350" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Single-Pack</text>
+                    
+                    <!-- Product B -->
+                    <rect x="300" y="100" width="100" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
+                    <text x="350" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Multipack</text>
+                    
+                    <!-- Own effect -->
+                    <path d="M 115 90 L 295 120" stroke="#6abf8a" stroke-width="2.5" fill="none" marker-end="url(#arrow-green)"/>
+                    
+                    <!-- Cross effect -->
+                    <path d="M 115 70 L 295 40" stroke="#c97067" stroke-width="2.5" fill="none" marker-end="url(#arrow-red)"/>
+                    
+                    <!-- Cross-product link -->
+                    <path d="M 350 65 L 350 95" stroke="#5a6b5a" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+                    
+                    <!-- Labels -->
+                    <text x="205" y="70" fill="#c97067" font-size="11" font-weight="600">-δ (cannibalization)</text>
+                    <text x="200" y="125" fill="#6abf8a" font-size="11" font-weight="600">+β (own effect)</text>
+                </svg>
+            </div>
+
+            <h3>Model Specification</h3>
+            <p>
+                For $K$ outcomes, we model them jointly:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(10)</span>
+                $$\mathbf{y}_t = \boldsymbol{\alpha} + \mathbf{B}\tilde{\mathbf{x}}_t + \boldsymbol{\Delta}\mathbf{p}_t + \boldsymbol{\epsilon}_t$$
+            </div>
+
+            <p>Where:</p>
+            <ul>
+                <li>$\mathbf{y}_t \in \mathbb{R}^K$ is the vector of outcomes</li>
+                <li>$\mathbf{B} \in \mathbb{R}^{K \times M}$ contains own-effects of media on each outcome</li>
+                <li>$\boldsymbol{\Delta} \in \mathbb{R}^{K \times K}$ is the cross-effects matrix</li>
+                <li>$\mathbf{p}_t$ is a vector of promotional indicators</li>
+            </ul>
+
+            <h3 id="cross-effects">Cross-Effects Matrix</h3>
+            <p>
+                The cross-effects matrix $\boldsymbol{\Delta}$ captures how promotions for one product
+                affect sales of others:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(11)</span>
+                $$\boldsymbol{\Delta} = \begin{pmatrix}
+                0 & \delta_{12} & \cdots & \delta_{1K} \\
+                \delta_{21} & 0 & \cdots & \delta_{2K} \\
+                \vdots & \vdots & \ddots & \vdots \\
+                \delta_{K1} & \delta_{K2} & \cdots & 0
+                \end{pmatrix}$$
+            </div>
+
+            <p>Interpretation:</p>
+            <ul>
+                <li>$\delta_{ij} < 0$: Promoting product $j$ <strong>cannibalizes</strong> product $i$</li>
+                <li>$\delta_{ij} > 0$: Promoting product $j$ creates a <strong>halo effect</strong> for product $i$</li>
+                <li>$\delta_{ij} = 0$: Products are independent</li>
+            </ul>
+
+            <div class="definition">
+                <h4>Net Portfolio Effect</h4>
+                <p>
+                    The true incremental value of promoting product $j$ is not just its own-effect,
+                    but the sum across the portfolio:
+                </p>
+            </div>
+
+            <div class="math-block">
+                <span class="equation-label">(12)</span>
+                $$\text{Net Effect}_j = \beta_{jj} + \sum_{i \neq j} \delta_{ij}$$
+            </div>
+
+            <h3 id="multivariate-correlation">Correlated Errors</h3>
+            <p>
+                Even after accounting for cross-effects, outcomes often have correlated errors due to
+                shared unobserved factors (weather, economic conditions, etc.). We model this with a
+                multivariate normal:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(13)</span>
+                $$\boldsymbol{\epsilon}_t \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Sigma})$$
+            </div>
+
+            <p>
+                The covariance matrix $\boldsymbol{\Sigma}$ is typically parameterized using an LKJ
+                prior on the correlation matrix:
+            </p>
+
+            <pre><code># Correlation matrix prior (regularizes toward independence)
+corr ~ LKJCorr(eta=2.0)
+
+# Outcome-specific scales
+sigma ~ HalfNormal(sigma=0.5, dims="outcome")
+
+# Full covariance
+Sigma = diag(sigma) @ corr @ diag(sigma)</code></pre>
+
+            <!-- Combined Model -->
+            <h2 id="combined">Combined Model</h2>
+            <p>
+                The combined model handles the most complex scenarios: mediators (indirect effects)
+                AND multiple interacting outcomes.
+            </p>
+
+            <div class="use-case-grid">
+                <div class="use-case-card good">
+                    <h5>✓ Good Use Case</h5>
+                    <p>
+                        CPG company with brand tracking data, multiple SKUs in the same category,
+                        wanting to understand how TV affects awareness, which drives trial across
+                        products with potential cannibalization.
+                    </p>
+                </div>
+                <div class="use-case-card bad">
+                    <h5>✗ Avoid When</h5>
+                    <p>
+                        Single product, no mediator data available. The added complexity won't
+                        be identified and will just inflate uncertainty. Use Standard MMM instead.
+                    </p>
+                </div>
+            </div>
+
+            <h3>Model Structure</h3>
+            <p>
+                The combined model links three layers:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(14)</span>
+                $$\text{Mediator:} \quad M_t = \alpha_M + \beta_1 \tilde{x}_t + \epsilon_{M,t}$$
+            </div>
+
+            <div class="math-block">
+                <span class="equation-label">(15)</span>
+                $$\text{Outcomes:} \quad \mathbf{y}_t = \boldsymbol{\alpha} + \mathbf{B}_2\tilde{\mathbf{x}}_t + \boldsymbol{\gamma}M_t + \boldsymbol{\Delta}\mathbf{p}_t + \boldsymbol{\epsilon}_t$$
+            </div>
+
+            <!-- Hierarchical Structure -->
+            <h2 id="hierarchical">Hierarchical Structure</h2>
+            <p>
+                For data with geographic or product groupings, hierarchical (multilevel) models
+                provide partial pooling—sharing information across groups while allowing heterogeneity.
+            </p>
+
+            <h3>Geographic Hierarchy</h3>
+            <p>
+                With data from $G$ geographic regions, we model region-specific coefficients as
+                draws from a common distribution:
+            </p>
+
+            <div class="math-block">
+                <span class="equation-label">(16)</span>
+                $$\beta_g \sim \mathcal{N}(\bar{\beta}, \tau^2)$$
+            </div>
+
+            <p>
+                This provides partial pooling: regions with less data borrow strength from the
+                overall mean $\bar{\beta}$, while regions with more data can deviate.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ National Media Limitation</h4>
+                <p>
+                    Geo-level random effects on <strong>national</strong> media coefficients cannot be
+                    interpreted as differential causal response—national media provides no geo-level
+                    exposure variation. The "effects" merely reflect correlations with timing patterns.
+                    Only use geo-level variation for media with actual geographic variation in exposure.
+                </p>
+            </div>
+
+            <!-- Model Diagnostics -->
+            <h2 id="diagnostics">Model Diagnostics</h2>
+            <p>
+                Bayesian models require careful diagnostics to ensure valid inference.
+            </p>
+
+            <h3>MCMC Diagnostics</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Diagnostic</th>
+                        <th>Target</th>
+                        <th>Interpretation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>$\hat{R}$ (R-hat)</td>
+                        <td>< 1.01</td>
+                        <td>Chains have converged to same distribution</td>
+                    </tr>
+                    <tr>
+                        <td>ESS Bulk</td>
+                        <td>> 400</td>
+                        <td>Sufficient samples for central tendency</td>
+                    </tr>
+                    <tr>
+                        <td>ESS Tail</td>
+                        <td>> 400</td>
+                        <td>Sufficient samples for uncertainty intervals</td>
+                    </tr>
+                    <tr>
+                        <td>Divergences</td>
+                        <td>0</td>
+                        <td>No problematic posterior geometry</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Posterior Predictive Checks</h3>
+            <p>
+                Generate predictions from the posterior and compare to observed data:
+            </p>
+
+            <pre><code># Generate posterior predictions
+with model:
+    ppc = pm.sample_posterior_predictive(trace)
+
+# Compare to observed
+az.plot_ppc(trace, data_pairs={"y": "y_obs"})</code></pre>
+
+            <p>
+                Look for systematic discrepancies—if the model consistently misses certain patterns
+                (e.g., seasonality spikes), the specification needs adjustment.
+            </p>
+
+            <h3>Prior Sensitivity</h3>
+            <p>
+                Check how much your conclusions depend on prior choices:
+            </p>
+            <ol>
+                <li>Fit the model with your chosen priors</li>
+                <li>Fit again with weakened priors (e.g., double the variance)</li>
+                <li>Compare posterior distributions</li>
+            </ol>
+            <p>
+                If posteriors change dramatically, either you need more data or your priors are
+                doing too much work. This isn't necessarily bad—strong priors can be appropriate—but
+                you should be transparent about it.
+            </p>
+
+            <div class="note">
+                <h4>📖 Further Reading</h4>
+                <ul>
+                    <li>Jin et al. (2017) - Bayesian Methods for Media Mix Modeling</li>
+                    <li>Chan & Perry (2017) - Challenges and Opportunities in Media Mix Modeling</li>
+                    <li>Google's Lightweight MMM - Open-source reference implementation</li>
+                    <li>PyMC-Marketing documentation - Framework this builds on</li>
+                </ul>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // Initialize KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ],
+                throwOnError: false
+            });
+        });
+
+        // Active sidebar link highlighting
+        const sections = document.querySelectorAll('h2[id], h3[id]');
+        const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

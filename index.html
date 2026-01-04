@@ -3,107 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MMM Framework | Rigorous Marketing Mix Modeling</title>
-    <meta name="description" content="A Bayesian Marketing Mix Model framework with uncertainty quantification, experimental validation, and methodological rigor.">
-    
-    <!-- Fonts -->
+    <title>MMM Framework | Modern Marketing Measurement</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         :root {
-            --color-bg: #0f1210;
-            --color-bg-elevated: #161a17;
-            --color-bg-card: #1c211d;
-            --color-text: #e8ebe9;
-            --color-text-muted: #a3a99f;
-            --color-text-dim: #6b726a;
             --color-primary: #8fa86a;
-            --color-primary-dim: #7a9455;
-            --color-primary-bright: #a4bf7d;
+            --color-primary-dark: #6d8a4a;
             --color-accent: #6a8fa8;
-            --color-accent-dim: #557a8f;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-surface-elevated: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
             --color-success: #6abf8a;
+            --color-warning: #d4a86a;
             --color-danger: #c97067;
-            --color-warning: #bfa86a;
-            --color-border: #2d332e;
-            --color-border-light: #3d4540;
-            --font-display: 'DM Serif Display', Georgia, serif;
-            --font-body: 'Source Sans 3', -apple-system, sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --shadow-lg: 0 16px 48px rgba(45, 58, 45, 0.12);
             --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        *, *::before, *::after {
-            box-sizing: border-box;
+        * {
             margin: 0;
             padding: 0;
-        }
-
-        html {
-            scroll-behavior: smooth;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: var(--font-body);
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--color-bg);
             color: var(--color-text);
             line-height: 1.7;
             font-size: 17px;
-            overflow-x: hidden;
         }
 
-        /* Noise texture overlay */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-            opacity: 0.02;
-            pointer-events: none;
-            z-index: 1000;
-        }
-
-        /* Typography */
-        h1, h2, h3, h4 {
-            font-family: var(--font-display);
-            font-weight: 400;
-            letter-spacing: -0.01em;
-        }
-
-        h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); line-height: 1.1; }
-        h2 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.2; margin-bottom: 1.5rem; }
-        h3 { font-size: clamp(1.5rem, 2.5vw, 1.875rem); line-height: 1.3; }
-
-        p {
-            color: var(--color-text-muted);
-            max-width: 65ch;
-        }
-
-        a {
-            color: var(--color-primary);
-            text-decoration: none;
-            transition: var(--transition-smooth);
-        }
-
-        a:hover {
-            color: var(--color-text);
-        }
-
-        /* Layout */
         .container {
-            max-width: 1280px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 0 2rem;
-        }
-
-        section {
-            padding: 8rem 0;
-            position: relative;
         }
 
         /* Navigation */
@@ -112,70 +56,41 @@
             top: 0;
             left: 0;
             right: 0;
-            z-index: 100;
-            padding: 1.25rem 0;
-            background: var(--color-bg);
+            z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--color-border);
-            transition: var(--transition-smooth);
+            padding: 1rem 0;
         }
 
-        nav .container {
+        .nav-content {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .logo {
-            font-family: var(--font-display);
+            font-family: 'DM Serif Display', serif;
             font-size: 1.5rem;
-            color: var(--color-text);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .logo-icon {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
+            color: var(--color-primary-dark);
+            text-decoration: none;
         }
 
         .nav-links {
             display: flex;
-            gap: 2.5rem;
+            gap: 2rem;
             list-style: none;
         }
 
         .nav-links a {
             color: var(--color-text-muted);
-            font-size: 0.95rem;
+            text-decoration: none;
             font-weight: 500;
-            position: relative;
-        }
-
-        .nav-links a::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--color-primary);
             transition: var(--transition-smooth);
         }
 
         .nav-links a:hover {
-            color: var(--color-text);
-        }
-
-        .nav-links a:hover::after {
-            width: 100%;
+            color: var(--color-primary);
         }
 
         /* Hero */
@@ -195,18 +110,7 @@
             right: -20%;
             width: 80%;
             height: 150%;
-            background: radial-gradient(ellipse at center, rgba(106, 143, 168, 0.08) 0%, transparent 70%);
-            pointer-events: none;
-        }
-
-        .hero::after {
-            content: '';
-            position: absolute;
-            bottom: -30%;
-            left: -10%;
-            width: 60%;
-            height: 100%;
-            background: radial-gradient(ellipse at center, rgba(143, 168, 106, 0.06) 0%, transparent 70%);
+            background: radial-gradient(ellipse at center, rgba(143, 168, 106, 0.08) 0%, transparent 70%);
             pointer-events: none;
         }
 
@@ -231,14 +135,16 @@
             padding: 0.5rem 1rem;
             border-radius: 100px;
             font-size: 0.85rem;
-            color: var(--color-primary);
+            color: var(--color-primary-dark);
             margin-bottom: 1.5rem;
-            animation: fadeInUp 0.8s ease-out;
         }
 
         .hero h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 3.5rem;
+            line-height: 1.15;
             margin-bottom: 1.5rem;
-            animation: fadeInUp 0.8s ease-out 0.1s both;
+            color: var(--color-text);
         }
 
         .hero h1 span {
@@ -250,14 +156,13 @@
 
         .hero-description {
             font-size: 1.25rem;
+            color: var(--color-text-muted);
             margin-bottom: 2.5rem;
-            animation: fadeInUp 0.8s ease-out 0.2s both;
         }
 
         .hero-cta {
             display: flex;
             gap: 1rem;
-            animation: fadeInUp 0.8s ease-out 0.3s both;
         }
 
         .btn {
@@ -271,70 +176,96 @@
             cursor: pointer;
             transition: var(--transition-smooth);
             border: none;
+            text-decoration: none;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dim));
+            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
             color: white;
+            box-shadow: var(--shadow-md);
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 40px rgba(143, 168, 106, 0.3);
-            color: var(--color-bg);
+            box-shadow: var(--shadow-lg);
         }
 
         .btn-secondary {
-            background: transparent;
-            border: 1px solid var(--color-border);
+            background: var(--color-surface);
             color: var(--color-text);
+            border: 2px solid var(--color-border);
         }
 
         .btn-secondary:hover {
-            background: var(--color-bg-card);
-            border-color: var(--color-text-muted);
+            border-color: var(--color-primary);
+            color: var(--color-primary);
         }
 
         .hero-visual {
             position: relative;
-            z-index: 1;
-            animation: fadeIn 1s ease-out 0.4s both;
         }
 
         .hero-chart {
-            background: var(--color-bg-card);
+            background: var(--color-surface);
             border-radius: 16px;
-            padding: 1.5rem;
+            box-shadow: var(--shadow-lg);
+            padding: 2rem;
             border: 1px solid var(--color-border);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
         }
 
-        /* Problem Section */
-        .problem {
-            background: var(--color-bg-elevated);
-            position: relative;
+        /* Section Styling */
+        section {
+            padding: 6rem 0;
         }
 
-        .problem::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
         }
 
-        /* Dartboard Demo */
-        .dartboard-demo {
+        .section-header h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        .section-header p {
+            font-size: 1.2rem;
+            color: var(--color-text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* The Problem Section */
+        .problem-section {
+            background: var(--color-bg-alt);
+        }
+
+        .problem-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1.2fr;
             gap: 4rem;
-            align-items: center;
-            margin: 4rem 0;
-            padding: 3rem;
-            background: var(--color-bg);
-            border-radius: 20px;
+            align-items: start;
+        }
+
+        .problem-content h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .problem-content p {
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Dartboard Animation */
+        .dartboard-demo {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
             border: 1px solid var(--color-border);
         }
 
@@ -347,338 +278,250 @@
 
         .dartboard-svg {
             width: 100%;
-            max-width: 300px;
+            max-width: 280px;
             height: auto;
         }
 
         .dartboard-stats {
             display: flex;
-            gap: 2rem;
+            gap: 1.5rem;
             margin-top: 1.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .stat-item {
             text-align: center;
+            padding: 0.75rem 1.25rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
         }
 
         .stat-label {
             display: block;
-            font-size: 0.8rem;
-            color: var(--color-text-dim);
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
 
         .stat-value {
             display: block;
-            font-family: var(--font-mono);
-            font-size: 1.75rem;
-            font-weight: 600;
+            font-size: 1.5rem;
+            font-weight: 700;
             color: var(--color-text);
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .stat-value.accuracy {
-            color: var(--color-success);
-        }
-
-        .dartboard-explanation h3 {
-            margin-bottom: 1rem;
             color: var(--color-danger);
-        }
-
-        .dartboard-explanation p {
-            margin-bottom: 1.5rem;
-        }
-
-        .dartboard-stages {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stage {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            opacity: 0.4;
-            transition: var(--transition-smooth);
-        }
-
-        .stage.active {
-            opacity: 1;
-        }
-
-        .stage-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--color-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: var(--transition-smooth);
-        }
-
-        .stage.active .stage-icon {
-            background: var(--color-danger);
-            color: white;
-        }
-
-        .stage.completed .stage-icon {
-            background: var(--color-success);
-        }
-
-        .dartboard-punchline {
-            background: rgba(201, 112, 103, 0.1);
-            border: 1px solid rgba(201, 112, 103, 0.3);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: var(--transition-smooth);
-        }
-
-        .dartboard-punchline.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .dartboard-punchline .punchline-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .dartboard-punchline p {
-            color: var(--color-text);
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .punchline-subtext {
-            font-size: 0.9rem;
-            color: var(--color-danger);
-            font-style: italic;
-        }
-
-        /* Dart styles */
-        .dart {
-            transition: opacity 0.5s ease-out;
-        }
-
-        .dart-hit {
-            animation: dartHit 0.3s ease-out;
-        }
-
-        .dart-miss {
-            animation: dartMiss 0.8s ease-out forwards;
-        }
-
-        @keyframes dartHit {
-            0% { transform: scale(1.5); opacity: 0; }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes dartMiss {
-            0% { opacity: 1; }
-            70% { opacity: 0.5; }
-            100% { opacity: 0; }
         }
 
         .hidden {
             display: none !important;
         }
 
-        .problem-grid {
+        .dartboard-explanation {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--color-border);
+        }
+
+        .dartboard-explanation h4 {
+            color: var(--color-danger);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .dartboard-explanation p {
+            font-size: 0.95rem;
+            color: var(--color-text-muted);
+        }
+
+        #punchline {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(201, 112, 103, 0.1);
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #punchline.visible {
+            opacity: 1;
+        }
+
+        #punchline p {
+            color: var(--color-danger);
+            font-weight: 600;
+        }
+
+        .restart-btn {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: var(--transition-smooth);
+        }
+
+        .restart-btn:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        /* Dart animations */
+        .dart {
+            animation: dartThrow 0.3s ease-out forwards;
+        }
+
+        .dart-miss {
+            animation: dartFade 1s ease-out 0.3s forwards;
+        }
+
+        @keyframes dartThrow {
+            from {
+                opacity: 0;
+                transform: scale(2);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes dartFade {
+            to {
+                opacity: 0.15;
+            }
+        }
+
+        /* Models Section */
+        .models-section {
+            background: var(--color-bg);
+        }
+
+        .model-cards {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 2rem;
-            margin-top: 4rem;
         }
 
-        .problem-card {
-            background: var(--color-bg-card);
+        .model-card {
+            background: var(--color-surface);
             border-radius: 16px;
             padding: 2rem;
             border: 1px solid var(--color-border);
             transition: var(--transition-smooth);
+            cursor: pointer;
         }
 
-        .problem-card:hover {
+        .model-card:hover {
             transform: translateY(-4px);
-            border-color: var(--color-danger);
-            box-shadow: 0 20px 40px rgba(201, 112, 103, 0.1);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
         }
 
-        .problem-icon {
-            width: 56px;
-            height: 56px;
-            background: rgba(201, 112, 103, 0.1);
+        .model-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, rgba(143, 168, 106, 0.1), rgba(106, 143, 168, 0.1));
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
             margin-bottom: 1.5rem;
         }
 
-        .problem-card h3 {
-            margin-bottom: 1rem;
-            font-size: 1.25rem;
+        .model-icon svg {
+            width: 32px;
+            height: 32px;
         }
 
-        .problem-card p {
-            font-size: 0.95rem;
+        .model-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-text);
         }
 
-        /* Solution Section */
-        .solution {
-            position: relative;
+        .model-card .use-case {
+            font-size: 0.9rem;
+            color: var(--color-primary-dark);
+            font-weight: 600;
+            margin-bottom: 0.75rem;
         }
 
-        .solution-header {
-            text-align: center;
-            max-width: 800px;
-            margin: 0 auto 5rem;
-        }
-
-        .solution-header p {
-            margin: 0 auto;
-        }
-
-        .comparison {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 2rem;
-            align-items: stretch;
-        }
-
-        .comparison-card {
-            background: var(--color-bg-card);
-            border-radius: 16px;
-            padding: 2.5rem;
-            border: 1px solid var(--color-border);
-        }
-
-        .comparison-card.traditional {
-            opacity: 0.7;
-        }
-
-        .comparison-card.bayesian {
-            border-color: var(--color-primary);
-            box-shadow: 0 0 60px rgba(143, 168, 106, 0.1);
-        }
-
-        .comparison-label {
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--color-text-dim);
-            margin-bottom: 0.5rem;
-        }
-
-        .comparison-card h3 {
-            margin-bottom: 1.5rem;
-        }
-
-        .comparison-list {
-            list-style: none;
-        }
-
-        .comparison-list li {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
+        .model-card p {
             color: var(--color-text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
         }
 
-        .comparison-list .icon {
-            flex-shrink: 0;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
+        .model-visual {
+            margin-top: 1.5rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 120px;
+        }
+
+        .learn-more {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            margin-top: 2px;
+            gap: 0.25rem;
+            color: var(--color-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
         }
 
-        .comparison-card.traditional .icon {
-            background: rgba(201, 112, 103, 0.2);
-            color: var(--color-danger);
+        .learn-more:hover {
+            text-decoration: underline;
         }
 
-        .comparison-card.bayesian .icon {
-            background: rgba(106, 191, 138, 0.2);
-            color: var(--color-success);
+        /* Interactive Demo Section */
+        .demo-section {
+            background: var(--color-bg-alt);
         }
 
-        .comparison-arrow {
-            display: flex;
-            align-items: center;
-            font-size: 2rem;
-            color: var(--color-text-dim);
-        }
-
-        /* Interactive Demo */
-        .demo {
-            background: var(--color-bg-elevated);
-        }
-
-        .demo-header {
-            text-align: center;
-            max-width: 800px;
-            margin: 0 auto 4rem;
-        }
-
-        .demo-container {
+        .demo-grid {
             display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 2rem;
-            background: var(--color-bg-card);
-            border-radius: 20px;
-            border: 1px solid var(--color-border);
-            overflow: hidden;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 3rem;
+            align-items: start;
         }
 
         .demo-controls {
+            background: var(--color-surface);
+            border-radius: 16px;
             padding: 2rem;
-            border-right: 1px solid var(--color-border);
-            background: var(--color-bg);
+            border: 1px solid var(--color-border);
         }
 
-        .demo-controls h4 {
-            font-family: var(--font-body);
-            font-weight: 600;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--color-text-dim);
+        .demo-controls h3 {
+            font-size: 1.2rem;
             margin-bottom: 1.5rem;
         }
 
         .control-group {
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
         }
 
         .control-group label {
             display: block;
-            font-size: 0.95rem;
-            margin-bottom: 0.75rem;
-            color: var(--color-text);
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-bottom: 0.5rem;
         }
 
         .control-group input[type="range"] {
             width: 100%;
             height: 6px;
-            background: var(--color-border);
             border-radius: 3px;
+            background: var(--color-bg-alt);
             outline: none;
             -webkit-appearance: none;
         }
@@ -687,26 +530,23 @@
             -webkit-appearance: none;
             width: 18px;
             height: 18px;
-            background: var(--color-primary);
             border-radius: 50%;
+            background: var(--color-primary);
             cursor: pointer;
-            transition: var(--transition-smooth);
-        }
-
-        .control-group input[type="range"]::-webkit-slider-thumb:hover {
-            transform: scale(1.2);
-            box-shadow: 0 0 10px rgba(92, 122, 58, 0.4);
         }
 
         .control-value {
-            font-family: var(--font-mono);
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 0.85rem;
-            color: var(--color-primary);
-            margin-top: 0.5rem;
+            color: var(--color-primary-dark);
         }
 
-        .demo-chart {
-            padding: 2rem;
+        .demo-chart-area {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
         }
 
         .chart-tabs {
@@ -717,172 +557,119 @@
 
         .chart-tab {
             padding: 0.5rem 1rem;
-            background: transparent;
             border: 1px solid var(--color-border);
+            background: var(--color-bg);
             border-radius: 6px;
-            color: var(--color-text-muted);
-            font-size: 0.9rem;
             cursor: pointer;
+            font-size: 0.9rem;
             transition: var(--transition-smooth);
         }
 
         .chart-tab.active {
             background: var(--color-primary);
-            border-color: var(--color-primary);
             color: white;
+            border-color: var(--color-primary);
         }
 
-        .chart-tab:hover:not(.active) {
-            border-color: var(--color-text-muted);
-            color: var(--color-text);
+        .chart-container {
+            height: 350px;
         }
 
-        /* Features */
-        .features {
-            position: relative;
+        /* Cross Effects Demo */
+        .cross-effects-section {
+            background: var(--color-bg);
         }
 
-        .features-header {
-            text-align: center;
-            max-width: 700px;
-            margin: 0 auto 5rem;
-        }
-
-        .features-grid {
+        .cross-effects-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 2rem;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
         }
 
-        .feature-card {
-            background: var(--color-bg-card);
+        .cross-effects-visual {
+            background: var(--color-surface);
             border-radius: 16px;
-            padding: 2.5rem;
+            padding: 2rem;
             border: 1px solid var(--color-border);
-            transition: var(--transition-smooth);
         }
 
-        .feature-card:hover {
-            border-color: var(--color-accent);
-            transform: translateY(-4px);
+        .cross-effects-insight {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
-        .feature-icon {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, rgba(106, 143, 168, 0.2), rgba(143, 168, 106, 0.2));
+        .insight-card {
+            background: var(--color-surface);
             border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.25rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .feature-card h3 {
-            font-size: 1.25rem;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
             margin-bottom: 1rem;
-        }
-
-        /* How It Works */
-        .how-it-works {
-            background: var(--color-bg-elevated);
-        }
-
-        .how-header {
-            text-align: center;
-            max-width: 700px;
-            margin: 0 auto 5rem;
-        }
-
-        .workflow {
             display: flex;
-            justify-content: space-between;
-            position: relative;
+            gap: 1rem;
+            align-items: flex-start;
         }
 
-        .workflow::before {
-            content: '';
-            position: absolute;
-            top: 40px;
-            left: 10%;
-            right: 10%;
-            height: 2px;
-            background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
-            opacity: 0.3;
-        }
-
-        .workflow-step {
-            text-align: center;
-            flex: 1;
-            position: relative;
-            z-index: 1;
-        }
-
-        .step-number {
-            width: 80px;
-            height: 80px;
-            background: var(--color-bg-card);
-            border: 2px solid var(--color-primary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 1.5rem;
-            font-family: var(--font-display);
+        .insight-icon {
             font-size: 1.5rem;
-            color: var(--color-primary);
+            flex-shrink: 0;
         }
 
-        .workflow-step h4 {
-            font-family: var(--font-body);
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .workflow-step p {
-            font-size: 0.9rem;
-            margin: 0 auto;
-            max-width: 200px;
+        .insight-card strong {
+            display: block;
+            margin-bottom: 0.25rem;
         }
 
         /* CTA Section */
-        .cta {
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            color: white;
             text-align: center;
-            position: relative;
+            padding: 5rem 0;
         }
 
-        .cta::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(143, 168, 106, 0.1) 0%, transparent 70%);
-            pointer-events: none;
+        .cta-section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
         }
 
-        .cta-content {
-            position: relative;
-            z-index: 1;
-            max-width: 700px;
-            margin: 0 auto;
+        .cta-section p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
-        .cta h2 {
-            margin-bottom: 1.5rem;
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
         }
 
-        .cta p {
-            margin: 0 auto 2.5rem;
+        .btn-white {
+            background: white;
+            color: var(--color-primary-dark);
+        }
+
+        .btn-outline-white {
+            background: transparent;
+            color: white;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+
+        .btn-outline-white:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: white;
         }
 
         /* Footer */
         footer {
-            padding: 4rem 0 2rem;
+            background: var(--color-surface);
             border-top: 1px solid var(--color-border);
+            padding: 3rem 0;
         }
 
         .footer-content {
@@ -898,259 +685,19 @@
 
         .footer-links a {
             color: var(--color-text-muted);
+            text-decoration: none;
             font-size: 0.9rem;
         }
 
-        .footer-credit {
-            color: var(--color-text-dim);
-            font-size: 0.85rem;
-        }
-
-        /* Advanced Models Section */
-        .advanced-models {
-            background: var(--color-bg);
-        }
-
-        .advanced-header {
-            text-align: center;
-            margin-bottom: 5rem;
-        }
-
-        .model-section {
-            margin-bottom: 6rem;
-        }
-
-        .model-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 4rem;
-            align-items: center;
-        }
-
-        .model-content.reverse {
-            direction: rtl;
-        }
-
-        .model-content.reverse > * {
-            direction: ltr;
-        }
-
-        .model-text h3 {
-            font-size: 1.75rem;
-            margin-bottom: 1.25rem;
-        }
-
-        .model-text p {
-            margin-bottom: 1.25rem;
-        }
-
-        .model-benefits {
-            list-style: none;
-            margin: 1.5rem 0;
-        }
-
-        .model-benefits li {
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            color: var(--color-text-muted);
-        }
-
-        .benefit-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            background: rgba(106, 143, 168, 0.1);
-            border-radius: 8px;
-            font-size: 1rem;
-            flex-shrink: 0;
-        }
-
-        .benefit-icon.direct {
-            background: rgba(143, 168, 106, 0.2);
+        .footer-links a:hover {
             color: var(--color-primary);
-        }
-
-        .benefit-icon.indirect {
-            background: rgba(106, 143, 168, 0.2);
-            color: #6a8fa8;
-        }
-
-        .benefit-icon.cannib {
-            background: rgba(201, 112, 103, 0.2);
-            color: var(--color-danger);
-        }
-
-        .benefit-icon.halo {
-            background: rgba(106, 191, 138, 0.2);
-            color: var(--color-success);
-        }
-
-        .model-benefits li strong {
-            color: var(--color-text);
-        }
-
-        .insight-box {
-            background: rgba(143, 168, 106, 0.08);
-            border-left: 3px solid var(--color-primary);
-            padding: 1rem 1.25rem;
-            border-radius: 0 8px 8px 0;
-            font-size: 0.95rem;
-        }
-
-        .insight-box strong {
-            color: var(--color-primary);
-        }
-
-        .model-visual {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .model-diagram {
-            width: 100%;
-            max-width: 450px;
-            height: auto;
-            background: var(--color-bg);
-            border-radius: 16px;
-            padding: 1rem;
-            border: 1px solid var(--color-border);
-        }
-
-        .model-diagram.large {
-            max-width: 100%;
-        }
-
-        /* Cross-Effect Demo */
-        .cross-effect-demo {
-            background: var(--color-bg);
-            border-radius: 20px;
-            padding: 3rem;
-            border: 1px solid var(--color-border);
-            margin-top: 4rem;
-        }
-
-        .cross-effect-demo h3 {
-            text-align: center;
-            margin-bottom: 0.5rem;
-        }
-
-        .cross-effect-demo > p {
-            text-align: center;
-            margin-bottom: 0;
-        }
-
-        .demo-insight {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-top: 2rem;
-        }
-
-        .insight-card {
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
-            background: var(--color-bg);
-            padding: 1.25rem;
-            border-radius: 12px;
-            border: 1px solid var(--color-border);
-        }
-
-        .insight-card .insight-icon {
-            font-size: 1.5rem;
-        }
-
-        .insight-card strong {
-            display: block;
-            color: var(--color-text);
-            margin-bottom: 0.25rem;
-        }
-
-        /* Combined Model Summary */
-        .combined-summary {
-            background: var(--color-bg);
-            border-radius: 20px;
-            padding: 3rem;
-            border: 1px solid var(--color-border);
-            text-align: center;
-        }
-
-        .combined-summary h3 {
-            margin-bottom: 1rem;
-        }
-
-        .combined-summary > p {
-            max-width: 700px;
-            margin: 0 auto 2rem;
-        }
-
-        .combined-diagram {
-            margin: 2rem 0;
-        }
-
-        .combined-benefits {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 2rem;
-            margin-top: 2.5rem;
-            text-align: left;
-        }
-
-        .benefit-item {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .benefit-number {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: var(--color-bg);
-            flex-shrink: 0;
-        }
-
-        .benefit-item strong {
-            display: block;
-            color: var(--color-text);
-            margin-bottom: 0.25rem;
-        }
-
-        .benefit-item p {
-            font-size: 0.9rem;
-            margin: 0;
         }
 
         /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
         .fade-in {
             opacity: 0;
-            transform: translateY(30px);
-            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+            transform: translateY(20px);
+            transition: all 0.6s ease-out;
         }
 
         .fade-in.visible {
@@ -1160,123 +707,34 @@
 
         /* Responsive */
         @media (max-width: 1024px) {
-            .hero-content {
-                grid-template-columns: 1fr;
-                text-align: center;
-            }
-
-            .hero-cta {
-                justify-content: center;
-            }
-
-            .hero-visual {
-                max-width: 600px;
-                margin: 0 auto;
-            }
-
-            .problem-grid {
+            .hero-content,
+            .problem-grid,
+            .demo-grid,
+            .cross-effects-grid {
                 grid-template-columns: 1fr;
             }
 
-            .dartboard-demo {
-                grid-template-columns: 1fr;
-                gap: 2rem;
-            }
-
-            .dartboard-stats {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-
-            .comparison {
+            .model-cards {
                 grid-template-columns: 1fr;
             }
 
-            .comparison-arrow {
-                transform: rotate(90deg);
-                justify-content: center;
-            }
-
-            .demo-container {
-                grid-template-columns: 1fr;
-            }
-
-            .demo-controls {
-                border-right: none;
-                border-bottom: 1px solid var(--color-border);
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .workflow {
-                flex-direction: column;
-                gap: 3rem;
-            }
-
-            .workflow::before {
-                display: none;
-            }
-
-            .model-content {
-                grid-template-columns: 1fr;
-                gap: 2rem;
-            }
-
-            .model-content.reverse {
-                direction: ltr;
-            }
-
-            .model-visual {
-                order: -1;
-            }
-
-            .demo-insight {
-                grid-template-columns: 1fr;
-            }
-
-            .combined-benefits {
-                grid-template-columns: 1fr;
-            }
-
-            .combined-diagram svg {
-                max-width: 100%;
-                height: auto;
+            .hero h1 {
+                font-size: 2.5rem;
             }
         }
 
         @media (max-width: 768px) {
-            section {
-                padding: 5rem 0;
-            }
-
             .nav-links {
                 display: none;
             }
 
-            .container {
-                padding: 0 1.25rem;
+            .hero {
+                padding-top: 8rem;
             }
 
-            .dartboard-demo {
-                padding: 1.5rem;
-            }
-
-            .dartboard-stages {
-                font-size: 0.9rem;
-            }
-
-            .cross-effect-demo {
-                padding: 1.5rem;
-            }
-
-            .combined-summary {
-                padding: 1.5rem;
-            }
-
-            .model-diagram {
-                padding: 0.5rem;
+            .hero-cta,
+            .cta-buttons {
+                flex-direction: column;
             }
         }
     </style>
@@ -1284,911 +742,641 @@
 <body>
     <!-- Navigation -->
     <nav>
-        <div class="container">
-            <a href="#" class="logo">
-                <div class="logo-icon">📊</div>
-                MMM Framework
-            </a>
+        <div class="container nav-content">
+            <a href="#" class="logo">MMM Framework</a>
             <ul class="nav-links">
                 <li><a href="#problem">The Problem</a></li>
-                <li><a href="#solution">Our Approach</a></li>
+                <li><a href="#models">Models</a></li>
                 <li><a href="#demo">Interactive Demo</a></li>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#advanced">Advanced Models</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Hero -->
+    <!-- Hero Section -->
     <section class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <div class="hero-text">
-                    <div class="hero-badge">
-                        <span>🔬</span> Open Source Bayesian MMM
-                    </div>
-                    <h1>Marketing Mix Modeling <span>You Can Trust</span></h1>
-                    <p class="hero-description">
-                        Stop guessing. Start measuring. Our framework delivers honest uncertainty estimates, 
-                        not false precision—so you can make budget decisions with real confidence.
-                    </p>
-                    <div class="hero-cta">
-                        <a href="https://github.com/redam94/mmm-framework" class="btn btn-primary">
-                            Get Started →
-                        </a>
-                        <a href="#demo" class="btn btn-secondary">
-                            See It In Action
-                        </a>
-                    </div>
+        <div class="container hero-content">
+            <div class="hero-text">
+                <span class="hero-badge">🎯 Open Source</span>
+                <h1>Marketing Measurement <span>You Can Trust</span></h1>
+                <p class="hero-description">
+                    Move beyond point estimates and gut feelings. Our Bayesian framework gives you honest uncertainty ranges so you can make decisions with confidence.
+                </p>
+                <div class="hero-cta">
+                    <a href="#demo" class="btn btn-primary">Try Interactive Demo</a>
+                    <a href="technical-guide.html" class="btn btn-secondary">Technical Guide</a>
                 </div>
-                <div class="hero-visual">
-                    <div class="hero-chart">
-                        <div id="hero-posterior-chart" style="width: 100%; height: 320px;"></div>
-                    </div>
+            </div>
+            <div class="hero-visual">
+                <div class="hero-chart">
+                    <div id="hero-chart" style="height: 300px;"></div>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Problem Section -->
-    <section class="problem" id="problem">
+    <section class="problem-section" id="problem">
         <div class="container">
-            <div class="fade-in">
+            <div class="section-header fade-in">
                 <h2>The Hidden Problem with Traditional MMM</h2>
-                <p style="font-size: 1.1rem; max-width: 700px;">
-                    Most marketing mix models give you precise-looking numbers. But that precision is often an illusion—
-                    the result of practices that inflate confidence and hide uncertainty.
-                </p>
-            </div>
-
-            <!-- Specification Shopping Animation -->
-            <div class="dartboard-demo fade-in">
-                <div class="dartboard-container">
-                    <svg viewBox="0 0 300 300" class="dartboard-svg">
-                        <!-- Dartboard rings -->
-                        <circle cx="150" cy="150" r="140" fill="#1c211d" stroke="#2d332e" stroke-width="2"/>
-                        <circle cx="150" cy="150" r="110" fill="#252b26" stroke="#2d332e" stroke-width="1"/>
-                        <circle cx="150" cy="150" r="80" fill="#1c211d" stroke="#2d332e" stroke-width="1"/>
-                        <circle cx="150" cy="150" r="50" fill="#252b26" stroke="#2d332e" stroke-width="1"/>
-                        <circle cx="150" cy="150" r="25" fill="#9e5a52" stroke="#8a4d46" stroke-width="2"/>
-                        <circle cx="150" cy="150" r="8" fill="#8fa86a" stroke="#7a9455" stroke-width="2"/>
-                        
-                        <!-- Crosshairs -->
-                        <line x1="150" y1="10" x2="150" y2="290" stroke="#2d332e" stroke-width="1" opacity="0.5"/>
-                        <line x1="10" y1="150" x2="290" y2="150" stroke="#2d332e" stroke-width="1" opacity="0.5"/>
-                        
-                        <!-- Dart group - darts will be added here -->
-                        <g id="darts-group"></g>
-                    </svg>
-                    
-                    <!-- Stats overlay -->
-                    <div class="dartboard-stats">
-                        <div class="stat-item">
-                            <span class="stat-label">Models Run</span>
-                            <span class="stat-value" id="models-run">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Models Reported</span>
-                            <span class="stat-value" id="models-kept">0</span>
-                        </div>
-                        <div class="stat-item hidden" id="accuracy-stat">
-                            <span class="stat-label">Reported "Accuracy"</span>
-                            <span class="stat-value accuracy" id="fake-accuracy">100%</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="dartboard-explanation">
-                    <h3>This Is Specification Shopping</h3>
-                    <p>
-                        Watch what happens when you run many model specifications and only report the ones 
-                        that "work." The darts that miss? Those are the models with negative coefficients, 
-                        poor fit, or "unrealistic" results—quietly discarded.
-                    </p>
-                    <div class="dartboard-stages">
-                        <div class="stage" id="stage-1">
-                            <div class="stage-icon active">1</div>
-                            <span>Run 20+ model specs</span>
-                        </div>
-                        <div class="stage" id="stage-2">
-                            <div class="stage-icon">2</div>
-                            <span>Discard "bad" results</span>
-                        </div>
-                        <div class="stage" id="stage-3">
-                            <div class="stage-icon">3</div>
-                            <span>Report only bullseyes</span>
-                        </div>
-                        <div class="stage" id="stage-4">
-                            <div class="stage-icon">4</div>
-                            <span>Claim high accuracy</span>
-                        </div>
-                    </div>
-                    <div class="dartboard-punchline hidden" id="punchline">
-                        <div class="punchline-icon">🎯</div>
-                        <p>"Our model has positive, significant TV effects!"</p>
-                        <span class="punchline-subtext">(...we just don't mention the 95% we threw away)</span>
-                    </div>
-                    <button class="btn btn-secondary" id="restart-demo" onclick="restartDartboard()">
-                        ↻ Run Again
-                    </button>
-                </div>
+                <p>When you run many models and only report the "good" ones, you're painting targets around arrows.</p>
             </div>
             
             <div class="problem-grid">
-                <div class="problem-card fade-in">
-                    <div class="problem-icon">🎯</div>
+                <div class="problem-content fade-in">
                     <h3>Specification Shopping</h3>
                     <p>
-                        Testing dozens of model configurations and picking the one with "best" results inflates 
-                        false positive rates from 5% to over 60%. Your confidence intervals are lying to you.
+                        Traditional approaches often involve running dozens of model variations and selecting the one with results that "make sense." This feels rigorous but actually destroys statistical validity.
+                    </p>
+                    <p>
+                        Watch the dartboard: each throw represents a model specification. Only the bullseyes (models with "good" results) get reported. The misses? Quietly discarded.
+                    </p>
+                    <p>
+                        <strong>The result:</strong> Your reported 100% accuracy is an illusion. The real accuracy is much lower, but you'll never know because you only see the "winners."
                     </p>
                 </div>
-                <div class="problem-card fade-in">
-                    <div class="problem-icon">📉</div>
-                    <h3>Unstable Estimates</h3>
-                    <p>
-                        When TV ROI jumps from 1.2 to 2.8 year-over-year with no strategy change, something is wrong. 
-                        Clients notice—and trust erodes with every unexplained shift.
-                    </p>
-                </div>
-                <div class="problem-card fade-in">
-                    <div class="problem-icon">🎭</div>
-                    <h3>False Precision</h3>
-                    <p>
-                        Single-point estimates like "TV ROI = 1.47" imply certainty that doesn't exist. 
-                        Without understanding the range of plausible values, optimization becomes guesswork.
-                    </p>
+                
+                <div class="dartboard-demo fade-in">
+                    <div class="dartboard-container">
+                        <svg viewBox="0 0 300 300" class="dartboard-svg">
+                            <circle cx="150" cy="150" r="140" fill="#f0f2ed" stroke="#d4ddd4" stroke-width="2"/>
+                            <circle cx="150" cy="150" r="110" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="1"/>
+                            <circle cx="150" cy="150" r="80" fill="#f0f2ed" stroke="#d4ddd4" stroke-width="1"/>
+                            <circle cx="150" cy="150" r="50" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="1"/>
+                            <circle cx="150" cy="150" r="25" fill="#c97067" stroke="#b35a52" stroke-width="2"/>
+                            <circle cx="150" cy="150" r="8" fill="#8fa86a" stroke="#6d8a4a" stroke-width="2"/>
+                            <line x1="150" y1="10" x2="150" y2="290" stroke="#d4ddd4" stroke-width="1" opacity="0.5"/>
+                            <line x1="10" y1="150" x2="290" y2="150" stroke="#d4ddd4" stroke-width="1" opacity="0.5"/>
+                            <g id="darts-group"></g>
+                        </svg>
+                        
+                        <div class="dartboard-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Models Run</span>
+                                <span class="stat-value" id="models-run">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Models Reported</span>
+                                <span class="stat-value" id="models-kept">0</span>
+                            </div>
+                            <div class="stat-item hidden" id="accuracy-stat">
+                                <span class="stat-label">Reported "Accuracy"</span>
+                                <span class="stat-value accuracy" id="fake-accuracy">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dartboard-explanation">
+                        <h4>This Is Specification Shopping</h4>
+                        <p>The darts that miss are models with "unrealistic" results—quietly discarded.</p>
+                        <div id="punchline" class="hidden">
+                            <p>🎯 Real accuracy: 15% | Reported: 100%</p>
+                        </div>
+                        <button class="restart-btn" onclick="restartDartboard()">↻ Replay Animation</button>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Solution Section -->
-    <section class="solution" id="solution">
+    <!-- Models Section -->
+    <section class="models-section" id="models">
         <div class="container">
-            <div class="solution-header fade-in">
-                <h2>A Better Approach: Honest Uncertainty</h2>
-                <p style="font-size: 1.1rem;">
-                    The Bayesian framework doesn't just give you estimates—it tells you how confident to be 
-                    in those estimates. When you're uncertain, you know it. When you're confident, you can prove it.
-                </p>
+            <div class="section-header fade-in">
+                <h2>Three Models for Different Needs</h2>
+                <p>Choose the right level of complexity for your measurement challenge.</p>
             </div>
-
-            <div class="comparison fade-in">
-                <div class="comparison-card traditional">
-                    <div class="comparison-label">Traditional Approach</div>
-                    <h3>Point Estimates & P-Values</h3>
-                    <ul class="comparison-list">
-                        <li>
-                            <span class="icon">✕</span>
-                            <span>Single "best" estimate hides uncertainty</span>
-                        </li>
-                        <li>
-                            <span class="icon">✕</span>
-                            <span>P-values misinterpreted as confidence</span>
-                        </li>
-                        <li>
-                            <span class="icon">✕</span>
-                            <span>Model selection invalidates inference</span>
-                        </li>
-                        <li>
-                            <span class="icon">✕</span>
-                            <span>Can't incorporate prior knowledge</span>
-                        </li>
-                        <li>
-                            <span class="icon">✕</span>
-                            <span>Overconfident when data is sparse</span>
-                        </li>
-                    </ul>
+            
+            <div class="model-cards">
+                <!-- Standard Model -->
+                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#standard'">
+                    <div class="model-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3v18h18" stroke="#8fa86a"/>
+                            <path d="M7 16l4-8 4 6 4-10" stroke="#6a8fa8"/>
+                        </svg>
+                    </div>
+                    <h3>Standard MMM</h3>
+                    <div class="use-case">Best for: Single outcome measurement</div>
+                    <p>
+                        The foundation. Measures how media drives a single outcome (sales, leads, etc.) with proper uncertainty quantification.
+                    </p>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 200 80" width="100%" height="80">
+                            <rect x="10" y="25" width="50" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
+                            <text x="35" y="44" text-anchor="middle" fill="white" font-size="10" font-weight="600">Media</text>
+                            <rect x="140" y="25" width="50" height="30" rx="6" fill="#6a8fa8" opacity="0.8"/>
+                            <text x="165" y="44" text-anchor="middle" fill="white" font-size="10" font-weight="600">Sales</text>
+                            <path d="M 65 40 L 135 40" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow1)"/>
+                            <defs>
+                                <marker id="arrow1" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L9,3 z" fill="#5a6b5a"/>
+                                </marker>
+                            </defs>
+                        </svg>
+                    </div>
+                    <a href="technical-guide.html#standard" class="learn-more">Learn more →</a>
                 </div>
 
-                <div class="comparison-arrow">→</div>
+                <!-- Nested Model -->
+                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#nested'">
+                    <div class="model-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="6" cy="12" r="3" stroke="#8fa86a"/>
+                            <circle cx="12" cy="6" r="3" stroke="#6a8fa8"/>
+                            <circle cx="18" cy="12" r="3" stroke="#d4a86a"/>
+                            <path d="M9 12h3M12 9v-3" stroke="#5a6b5a"/>
+                        </svg>
+                    </div>
+                    <h3>Nested Model</h3>
+                    <div class="use-case">Best for: Measuring indirect effects</div>
+                    <p>
+                        Captures how media works through intermediate steps like awareness or consideration before driving sales.
+                    </p>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 200 80" width="100%" height="80">
+                            <rect x="5" y="25" width="40" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
+                            <text x="25" y="44" text-anchor="middle" fill="white" font-size="8" font-weight="600">Media</text>
+                            <rect x="80" y="10" width="45" height="25" rx="6" fill="#6a8fa8" opacity="0.8"/>
+                            <text x="102" y="26" text-anchor="middle" fill="white" font-size="7" font-weight="600">Awareness</text>
+                            <rect x="155" y="25" width="40" height="30" rx="6" fill="#d4a86a" opacity="0.8"/>
+                            <text x="175" y="44" text-anchor="middle" fill="white" font-size="8" font-weight="600">Sales</text>
+                            <path d="M 48 35 Q 65 20 78 22" stroke="#5a6b5a" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+                            <path d="M 127 22 Q 140 20 153 35" stroke="#5a6b5a" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+                            <path d="M 48 45 L 153 45" stroke="#8fa86a" stroke-width="2" stroke-dasharray="4,2" fill="none" marker-end="url(#arrow2)"/>
+                            <defs>
+                                <marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L8,3 z" fill="#5a6b5a"/>
+                                </marker>
+                            </defs>
+                        </svg>
+                    </div>
+                    <a href="technical-guide.html#nested" class="learn-more">Learn more →</a>
+                </div>
 
-                <div class="comparison-card bayesian">
-                    <div class="comparison-label">Our Framework</div>
-                    <h3>Full Posterior Distributions</h3>
-                    <ul class="comparison-list">
-                        <li>
-                            <span class="icon">✓</span>
-                            <span>Complete range of plausible values</span>
-                        </li>
-                        <li>
-                            <span class="icon">✓</span>
-                            <span>94% credible intervals mean what they say</span>
-                        </li>
-                        <li>
-                            <span class="icon">✓</span>
-                            <span>Pre-specified models, no fishing</span>
-                        </li>
-                        <li>
-                            <span class="icon">✓</span>
-                            <span>Incorporate experiments & meta-analyses</span>
-                        </li>
-                        <li>
-                            <span class="icon">✓</span>
-                            <span>Honest about what data can't tell you</span>
-                        </li>
-                    </ul>
+                <!-- Multivariate Model -->
+                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#multivariate'">
+                    <div class="model-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7" rx="2" stroke="#8fa86a"/>
+                            <rect x="14" y="3" width="7" height="7" rx="2" stroke="#6a8fa8"/>
+                            <rect x="3" y="14" width="7" height="7" rx="2" stroke="#d4a86a"/>
+                            <rect x="14" y="14" width="7" height="7" rx="2" stroke="#c97067"/>
+                            <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4" stroke="#5a6b5a" stroke-dasharray="2,2"/>
+                        </svg>
+                    </div>
+                    <h3>Multivariate Model</h3>
+                    <div class="use-case">Best for: Product portfolio analysis</div>
+                    <p>
+                        Measures interactions between products—how promoting one SKU affects others (cannibalization or halo effects).
+                    </p>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 200 80" width="100%" height="80">
+                            <rect x="10" y="25" width="50" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
+                            <text x="35" y="44" text-anchor="middle" fill="white" font-size="9" font-weight="600">Promo</text>
+                            <rect x="120" y="10" width="70" height="22" rx="5" fill="#6a8fa8" opacity="0.8"/>
+                            <text x="155" y="24" text-anchor="middle" fill="white" font-size="8" font-weight="600">Product A</text>
+                            <rect x="120" y="48" width="70" height="22" rx="5" fill="#d4a86a" opacity="0.8"/>
+                            <text x="155" y="62" text-anchor="middle" fill="white" font-size="8" font-weight="600">Product B</text>
+                            <path d="M 62 35 L 118 21" stroke="#6abf8a" stroke-width="2" fill="none" marker-end="url(#arrow3g)"/>
+                            <path d="M 62 45 L 118 59" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arrow3r)"/>
+                            <path d="M 155 34 L 155 46" stroke="#5a6b5a" stroke-width="1" stroke-dasharray="3,2" fill="none"/>
+                            <defs>
+                                <marker id="arrow3g" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L8,3 z" fill="#6abf8a"/>
+                                </marker>
+                                <marker id="arrow3r" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L8,3 z" fill="#c97067"/>
+                                </marker>
+                            </defs>
+                        </svg>
+                    </div>
+                    <a href="technical-guide.html#multivariate" class="learn-more">Learn more →</a>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Interactive Demo -->
-    <section class="demo" id="demo">
+    <!-- Interactive Demo Section -->
+    <section class="demo-section" id="demo">
         <div class="container">
-            <div class="demo-header fade-in">
-                <h2>See the Difference</h2>
-                <p style="font-size: 1.1rem;">
-                    Watch how Bayesian inference updates beliefs as data arrives. The prior represents what we knew 
-                    before—the posterior shows what the data taught us.
-                </p>
+            <div class="section-header fade-in">
+                <h2>See Bayesian Updates in Action</h2>
+                <p>Watch how prior beliefs combine with data to produce honest uncertainty ranges.</p>
             </div>
-
-            <div class="demo-container fade-in">
+            
+            <div class="demo-grid fade-in">
                 <div class="demo-controls">
-                    <h4>Simulation Controls</h4>
+                    <h3>Adjust Parameters</h3>
                     
                     <div class="control-group">
-                        <label>Prior Belief (TV ROI)</label>
-                        <input type="range" id="prior-mean" min="0.5" max="2.5" step="0.1" value="1.5">
-                        <div class="control-value">μ = <span id="prior-mean-value">1.5</span></div>
+                        <label>Prior Mean (Your Initial Belief)</label>
+                        <input type="range" id="prior-mean" min="-0.5" max="1.5" step="0.1" value="0.3">
+                        <div class="control-value">Value: <span id="prior-mean-value">0.3</span></div>
                     </div>
-
+                    
                     <div class="control-group">
-                        <label>Prior Uncertainty</label>
-                        <input type="range" id="prior-sd" min="0.2" max="1.5" step="0.1" value="0.8">
-                        <div class="control-value">σ = <span id="prior-sd-value">0.8</span></div>
+                        <label>Prior Uncertainty (How Sure You Are)</label>
+                        <input type="range" id="prior-sd" min="0.1" max="1" step="0.1" value="0.5">
+                        <div class="control-value">Value: <span id="prior-sd-value">0.5</span></div>
                     </div>
-
+                    
                     <div class="control-group">
-                        <label>Sample Size (weeks)</label>
-                        <input type="range" id="sample-size" min="12" max="156" step="12" value="52">
-                        <div class="control-value">n = <span id="sample-size-value">52</span></div>
+                        <label>Sample Size (Amount of Data)</label>
+                        <input type="range" id="sample-size" min="10" max="200" step="10" value="50">
+                        <div class="control-value">Value: <span id="sample-size-value">50</span></div>
                     </div>
-
+                    
                     <div class="control-group">
-                        <label>Data Quality</label>
-                        <input type="range" id="data-noise" min="0.1" max="1.0" step="0.1" value="0.4">
-                        <div class="control-value">noise = <span id="data-noise-value">0.4</span></div>
+                        <label>Data Noise</label>
+                        <input type="range" id="data-noise" min="0.1" max="2" step="0.1" value="0.5">
+                        <div class="control-value">Value: <span id="data-noise-value">0.5</span></div>
                     </div>
-
+                    
                     <button class="btn btn-primary" onclick="runSimulation()" style="width: 100%; margin-top: 1rem;">
                         Run Simulation
                     </button>
                 </div>
-
-                <div class="demo-chart">
+                
+                <div class="demo-chart-area">
                     <div class="chart-tabs">
                         <button class="chart-tab active" onclick="showChart('distribution')">Prior vs Posterior</button>
-                        <button class="chart-tab" onclick="showChart('trace')">MCMC Trace</button>
-                        <button class="chart-tab" onclick="showChart('contribution')">Contributions</button>
+                        <button class="chart-tab" onclick="showChart('contributions')">Contributions</button>
                     </div>
-                    <div id="demo-distribution-chart" style="width: 100%; height: 400px;"></div>
-                    <div id="demo-trace-chart" style="width: 100%; height: 400px; display: none;"></div>
-                    <div id="demo-contribution-chart" style="width: 100%; height: 400px; display: none;"></div>
+                    <div id="distribution-chart" class="chart-container"></div>
+                    <div id="contribution-chart" class="chart-container" style="display: none;"></div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Features -->
-    <section class="features" id="features">
+    <!-- Cross Effects Demo -->
+    <section class="cross-effects-section" id="cross-effects">
         <div class="container">
-            <div class="features-header fade-in">
-                <h2>Built for Real Marketing Decisions</h2>
-                <p style="font-size: 1.1rem;">
-                    Every feature is designed to help you make better budget allocation decisions—
-                    with honest uncertainty quantification at every step.
-                </p>
+            <div class="section-header fade-in">
+                <h2>Why Cross-Effects Matter</h2>
+                <p>Promoting one product affects others. Ignoring this leads to inflated ROI estimates.</p>
             </div>
-
-            <div class="features-grid">
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">📊</div>
-                    <h3>Credible Intervals, Not Confidence Tricks</h3>
-                    <p>
-                        When we say "94% probability the true ROI is between 1.2 and 2.1," that's exactly what it means. 
-                        No asymptotic approximations, no misinterpretation required.
-                    </p>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">🧪</div>
-                    <h3>Calibrate with Experiments</h3>
-                    <p>
-                        Ran a geo-holdout test? Incorporate those results as informative priors. 
-                        Your model learns from experimental evidence, not just observational correlations.
-                    </p>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">🌍</div>
-                    <h3>Hierarchical Geographic Models</h3>
-                    <p>
-                        Partial pooling across DMAs borrows strength from the full dataset while allowing 
-                        regional variation. Better estimates for sparse markets, honest uncertainty for all.
-                    </p>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">🔄</div>
-                    <h3>Saturation & Carryover Effects</h3>
-                    <p>
-                        Logistic and Hill saturation curves capture diminishing returns. Geometric adstock 
-                        models carryover. All with uncertainty bounds on the transformation parameters.
-                    </p>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">🎯</div>
-                    <h3>Mediation Analysis</h3>
-                    <p>
-                        Does TV build awareness that drives sales? Decompose effects into direct and indirect 
-                        pathways. Understand not just <em>if</em> media works, but <em>how</em>.
-                    </p>
-                </div>
-
-                <div class="feature-card fade-in">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Fast Iteration, Rigorous Results</h3>
-                    <p>
-                        JAX-accelerated sampling (NumPyro) provides 4-10x speedups. Iterate quickly during 
-                        development, then run full inference for final results.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Advanced Models Section -->
-    <section class="advanced-models" id="advanced">
-        <div class="container">
-            <div class="advanced-header fade-in">
-                <h2>Beyond Simple Attribution</h2>
-                <p style="font-size: 1.1rem; max-width: 800px; margin: 0 auto;">
-                    Real marketing doesn't happen in silos. Media builds brand awareness. Products compete for share. 
-                    Our framework captures these complex relationships—even when you can only measure some of them directly.
-                </p>
-            </div>
-
-            <!-- Nested Models -->
-            <div class="model-section fade-in">
-                <div class="model-content">
-                    <div class="model-text">
-                        <h3>Nested Models: Understanding <em>How</em> Media Works</h3>
-                        <p>
-                            Traditional MMM tells you that TV drives sales. But <em>how</em>? Does it work immediately 
-                            through promotional response, or does it build brand awareness that converts over time?
-                        </p>
-                        <p>
-                            <strong>Nested models</strong> decompose the total effect into pathways:
-                        </p>
-                        <ul class="model-benefits">
-                            <li>
-                                <span class="benefit-icon direct">→</span>
-                                <div>
-                                    <strong>Direct Effect:</strong> Media drives immediate sales response
-                                </div>
-                            </li>
-                            <li>
-                                <span class="benefit-icon indirect">⤴</span>
-                                <div>
-                                    <strong>Indirect Effect:</strong> Media builds awareness, which drives future sales
-                                </div>
-                            </li>
-                        </ul>
-                        <p class="insight-box">
-                            <strong>Why it matters:</strong> If 60% of TV's effect flows through awareness, cutting TV 
-                            won't just reduce this quarter's sales—it will erode the brand health that drives next year's baseline.
-                        </p>
-                    </div>
-                    <div class="model-visual">
-                        <svg viewBox="0 0 400 280" class="model-diagram">
-                            <!-- Background -->
-                            <defs>
-                                <linearGradient id="mediaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" style="stop-color:#6a8fa8;stop-opacity:1" />
-                                    <stop offset="100%" style="stop-color:#557a8f;stop-opacity:1" />
-                                </linearGradient>
-                                <linearGradient id="mediatorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" style="stop-color:#7a9eb3;stop-opacity:1" />
-                                    <stop offset="100%" style="stop-color:#5a8599;stop-opacity:1" />
-                                </linearGradient>
-                                <linearGradient id="outcomeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" style="stop-color:#8fa86a;stop-opacity:1" />
-                                    <stop offset="100%" style="stop-color:#7a9455;stop-opacity:1" />
-                                </linearGradient>
-                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#6b726a" />
-                                </marker>
-                                <marker id="arrowheadGold" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#8fa86a" />
-                                </marker>
-                            </defs>
-                            
-                            <!-- Media Node -->
-                            <rect x="20" y="100" width="100" height="60" rx="12" fill="url(#mediaGrad)" />
-                            <text x="70" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media</text>
-                            <text x="70" y="142" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">TV, Digital, etc.</text>
-                            
-                            <!-- Mediator Node -->
-                            <rect x="150" y="20" width="100" height="60" rx="12" fill="url(#mediatorGrad)" />
-                            <text x="200" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Awareness</text>
-                            <text x="200" y="62" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">(mediator)</text>
-                            
-                            <!-- Outcome Node -->
-                            <rect x="280" y="100" width="100" height="60" rx="12" fill="url(#outcomeGrad)" />
-                            <text x="330" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
-                            <text x="330" y="142" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">(outcome)</text>
-                            
-                            <!-- Indirect Path: Media → Awareness -->
-                            <path d="M 120 100 Q 150 60 150 50" stroke="#a3a99f" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
-                            
-                            <!-- Indirect Path: Awareness → Sales -->
-                            <path d="M 250 50 Q 280 60 280 100" stroke="#a3a99f" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
-                            
-                            <!-- Direct Path: Media → Sales -->
-                            <path d="M 120 130 L 275 130" stroke="#8fa86a" stroke-width="3" fill="none" marker-end="url(#arrowheadGold)" stroke-dasharray="8,4" />
-                            
-                            <!-- Labels -->
-                            <text x="130" y="65" fill="#a3a99f" font-size="10">β₁</text>
-                            <text x="265" y="65" fill="#a3a99f" font-size="10">γ</text>
-                            <text x="195" y="120" fill="#8fa86a" font-size="10" font-weight="600">Direct (β₃)</text>
-                            
-                            <!-- Legend -->
-                            <line x1="30" y1="220" x2="60" y2="220" stroke="#8fa86a" stroke-width="3" stroke-dasharray="8,4" />
-                            <text x="70" y="224" fill="#a3a99f" font-size="11">Direct effect</text>
-                            
-                            <line x1="30" y1="245" x2="60" y2="245" stroke="#a3a99f" stroke-width="2" />
-                            <text x="70" y="249" fill="#a3a99f" font-size="11">Indirect effect (β₁ × γ)</text>
-                            
-                            <!-- Effect equation -->
-                            <text x="200" y="270" text-anchor="middle" fill="#e8ebe9" font-size="12" font-weight="500">Total Effect = Direct + Indirect</text>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Partial Observation -->
-            <div class="model-section fade-in">
-                <div class="model-content reverse">
-                    <div class="model-visual">
-                        <svg viewBox="0 0 400 300" class="model-diagram">
-                            <!-- Timeline -->
-                            <line x1="40" y1="150" x2="360" y2="150" stroke="#2d332e" stroke-width="2" />
-                            
-                            <!-- Week markers -->
-                            <g fill="#6b726a" font-size="10">
-                                <text x="40" y="170">W1</text>
-                                <text x="90" y="170">W4</text>
-                                <text x="140" y="170">W8</text>
-                                <text x="190" y="170">W12</text>
-                                <text x="240" y="170">W16</text>
-                                <text x="290" y="170">W20</text>
-                                <text x="340" y="170">W24</text>
-                            </g>
-                            
-                            <!-- Latent awareness line (continuous) -->
-                            <path d="M 40 100 Q 80 85 120 90 T 200 70 T 280 85 T 360 75" 
-                                  stroke="#7a9eb3" stroke-width="2" fill="none" opacity="0.4" stroke-dasharray="4,4" />
-                            
-                            <!-- Survey observation points -->
-                            <circle cx="90" cy="88" r="8" fill="#7a9eb3" />
-                            <circle cx="190" cy="70" r="8" fill="#7a9eb3" />
-                            <circle cx="290" cy="82" r="8" fill="#7a9eb3" />
-                            
-                            <!-- Error bars on observations -->
-                            <line x1="90" y1="75" x2="90" y2="101" stroke="#7a9eb3" stroke-width="2" />
-                            <line x1="85" y1="75" x2="95" y2="75" stroke="#7a9eb3" stroke-width="2" />
-                            <line x1="85" y1="101" x2="95" y2="101" stroke="#7a9eb3" stroke-width="2" />
-                            
-                            <line x1="190" y1="57" x2="190" y2="83" stroke="#7a9eb3" stroke-width="2" />
-                            <line x1="185" y1="57" x2="195" y2="57" stroke="#7a9eb3" stroke-width="2" />
-                            <line x1="185" y1="83" x2="195" y2="83" stroke="#7a9eb3" stroke-width="2" />
-                            
-                            <line x1="290" y1="69" x2="290" y2="95" stroke="#7a9eb3" stroke-width="2" />
-                            <line x1="285" y1="69" x2="295" y2="69" stroke="#7a9eb3" stroke-width="2" />
-                            <line x1="285" y1="95" x2="295" y2="95" stroke="#7a9eb3" stroke-width="2" />
-                            
-                            <!-- Media spend bars (bottom) -->
-                            <rect x="45" y="190" width="30" height="40" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="85" y="200" width="30" height="30" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="125" y="185" width="30" height="45" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="165" y="195" width="30" height="35" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="205" y="210" width="30" height="20" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="245" y="200" width="30" height="30" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="285" y="190" width="30" height="40" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            <rect x="325" y="205" width="30" height="25" fill="#6a8fa8" opacity="0.6" rx="2" />
-                            
-                            <!-- Labels -->
-                            <text x="200" y="30" text-anchor="middle" fill="#e8ebe9" font-size="13" font-weight="600">Partial Observation: Monthly Surveys in Weekly Model</text>
-                            
-                            <text x="30" y="55" fill="#7a9eb3" font-size="11" font-weight="500">Awareness</text>
-                            <text x="30" y="68" fill="#6b726a" font-size="9">(latent)</text>
-                            
-                            <text x="30" y="210" fill="#6a8fa8" font-size="11" font-weight="500">Media</text>
-                            <text x="30" y="223" fill="#6b726a" font-size="9">(observed)</text>
-                            
-                            <!-- Annotation -->
-                            <rect x="100" y="250" width="200" height="40" rx="6" fill="rgba(122, 158, 179, 0.1)" stroke="#7a9eb3" stroke-width="1" />
-                            <text x="200" y="268" text-anchor="middle" fill="#7a9eb3" font-size="10">Survey data anchors estimates;</text>
-                            <text x="200" y="282" text-anchor="middle" fill="#7a9eb3" font-size="10">model infers values between surveys</text>
-                        </svg>
-                    </div>
-                    <div class="model-text">
-                        <h3>Partial Observation: Work With What You Have</h3>
-                        <p>
-                            Brand tracking surveys are expensive. You might only measure awareness monthly—but your 
-                            sales data is weekly. Traditional approaches force you to aggregate or ignore the mismatch.
-                        </p>
-                        <p>
-                            <strong>Our framework handles this naturally:</strong>
-                        </p>
-                        <ul class="model-benefits">
-                            <li>
-                                <span class="benefit-icon">📅</span>
-                                <div>
-                                    <strong>Sparse observations are OK:</strong> Survey data anchors the model at measured points
-                                </div>
-                            </li>
-                            <li>
-                                <span class="benefit-icon">📈</span>
-                                <div>
-                                    <strong>Structure fills gaps:</strong> Media effects imply awareness trajectory between surveys
-                                </div>
-                            </li>
-                            <li>
-                                <span class="benefit-icon">📊</span>
-                                <div>
-                                    <strong>Uncertainty propagates:</strong> Less data = wider intervals (as it should be)
-                                </div>
-                            </li>
-                        </ul>
-                        <p class="insight-box">
-                            <strong>The math:</strong> This is a state-space model where the observation equation only applies 
-                            at survey times. The Bayesian framework naturally handles the missing data through marginalization.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Multivariate Models -->
-            <div class="model-section fade-in">
-                <div class="model-content">
-                    <div class="model-text">
-                        <h3>Multivariate Models: Products Don't Exist in Isolation</h3>
-                        <p>
-                            When you promote multipacks, single-pack sales drop. When your premium brand grows, 
-                            value brand gets a halo lift. These <strong>cross-effects</strong> are real—ignoring them 
-                            means misattributing what's actually driving your business.
-                        </p>
-                        <ul class="model-benefits">
-                            <li>
-                                <span class="benefit-icon cannib">⊖</span>
-                                <div>
-                                    <strong>Cannibalization:</strong> Multipack promos steal from single-pack (negative cross-effect)
-                                </div>
-                            </li>
-                            <li>
-                                <span class="benefit-icon halo">⊕</span>
-                                <div>
-                                    <strong>Halo Effects:</strong> Premium brand advertising lifts the whole portfolio (positive cross-effect)
-                                </div>
-                            </li>
-                            <li>
-                                <span class="benefit-icon">🔗</span>
-                                <div>
-                                    <strong>Correlated Errors:</strong> Weather affects all products—the model accounts for shared shocks
-                                </div>
-                            </li>
-                        </ul>
-                        <p class="insight-box">
-                            <strong>Why it matters:</strong> A model that ignores cannibalization will overstate the 
-                            incremental value of promotions. You'll optimize toward tactics that just shift share internally.
-                        </p>
-                    </div>
-                    <div class="model-visual">
-                        <svg viewBox="0 0 400 300" class="model-diagram">
-                            <!-- Media node -->
-                            <rect x="150" y="20" width="100" height="50" rx="10" fill="url(#mediaGrad)" />
-                            <text x="200" y="50" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media Spend</text>
-                            
-                            <!-- Product A -->
-                            <rect x="40" y="140" width="120" height="60" rx="10" fill="url(#outcomeGrad)" />
-                            <text x="100" y="165" text-anchor="middle" fill="white" font-size="11" font-weight="600">Single-Pack</text>
-                            <text x="100" y="182" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">Sales</text>
-                            
-                            <!-- Product B -->
-                            <rect x="240" y="140" width="120" height="60" rx="10" fill="url(#outcomeGrad)" />
-                            <text x="300" y="165" text-anchor="middle" fill="white" font-size="11" font-weight="600">Multipack</text>
-                            <text x="300" y="182" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="10">Sales</text>
-                            
-                            <!-- Media to products -->
-                            <path d="M 175 70 L 115 135" stroke="#a3a99f" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
-                            <path d="M 225 70 L 285 135" stroke="#a3a99f" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
-                            
-                            <!-- Cross-effect: Cannibalization (B → A, negative) -->
-                            <defs>
-                                <marker id="arrowRed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#c97067" />
-                                </marker>
-                            </defs>
-                            <path d="M 240 160 C 200 140 200 180 160 170" stroke="#c97067" stroke-width="2.5" fill="none" marker-end="url(#arrowRed)" />
-                            <text x="200" y="148" text-anchor="middle" fill="#c97067" font-size="10" font-weight="600">Cannibalization</text>
-                            
-                            <!-- Correlated errors -->
-                            <ellipse cx="200" cy="250" rx="150" ry="30" fill="none" stroke="#6b726a" stroke-width="1" stroke-dasharray="4,4" />
-                            <text x="200" y="255" text-anchor="middle" fill="#6b726a" font-size="10">Correlated residuals (weather, holidays, etc.)</text>
-                            
-                            <!-- Arrows from products to error ellipse -->
-                            <line x1="100" y1="200" x2="100" y2="220" stroke="#6b726a" stroke-width="1" stroke-dasharray="2,2" />
-                            <line x1="300" y1="200" x2="300" y2="220" stroke="#6b726a" stroke-width="1" stroke-dasharray="2,2" />
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Interactive Cross-Effect Demo -->
-            <div class="cross-effect-demo fade-in">
-                <h3>See Cross-Effects in Action</h3>
-                <p>Adjust the cannibalization strength to see how it affects attribution:</p>
-                
-                <div class="demo-container" style="margin-top: 2rem;">
-                    <div class="demo-controls">
-                        <h4>Cross-Effect Controls</h4>
-                        
-                        <div class="control-group">
-                            <label>Cannibalization Strength</label>
-                            <input type="range" id="cannib-strength" min="0" max="0.5" step="0.05" value="0.2">
-                            <div class="control-value">ψ = -<span id="cannib-strength-value">0.20</span></div>
-                        </div>
-
-                        <div class="control-group">
-                            <label>Multipack Promo Lift</label>
-                            <input type="range" id="promo-lift" min="1.0" max="2.0" step="0.1" value="1.5">
-                            <div class="control-value"><span id="promo-lift-value">1.5</span>x</div>
-                        </div>
-
-                        <button class="btn btn-primary" onclick="updateCrossEffectDemo()" style="width: 100%; margin-top: 1rem;">
-                            Update Analysis
-                        </button>
-                    </div>
-
-                    <div class="demo-chart">
-                        <div id="cross-effect-chart" style="width: 100%; height: 400px;"></div>
-                    </div>
+            
+            <div class="cross-effects-grid fade-in">
+                <div class="cross-effects-visual">
+                    <div id="cross-effect-chart" style="height: 300px;"></div>
                 </div>
                 
-                <div class="demo-insight fade-in">
+                <div class="cross-effects-insight">
                     <div class="insight-card">
                         <div class="insight-icon">⚠️</div>
                         <div>
-                            <strong>Without cross-effects:</strong> Multipack promotion looks like pure incremental gain
+                            <strong>Without cross-effects:</strong>
+                            Multipack promotion looks like pure incremental gain. Your ROI calculation overstates the true value.
                         </div>
                     </div>
                     <div class="insight-card">
                         <div class="insight-icon">✓</div>
                         <div>
-                            <strong>With cross-effects:</strong> Net portfolio impact is lower—some "lift" was just shifted from single-pack
+                            <strong>With cross-effects:</strong>
+                            Net portfolio impact is lower—some "lift" was shifted from single-pack, not created. Honest measurement leads to better decisions.
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Combined Model Summary -->
-            <div class="model-section fade-in">
-                <div class="combined-summary">
-                    <h3>The Full Picture: Combined Models</h3>
-                    <p>
-                        For complex businesses, you need both: nested pathways (media → awareness → sales) 
-                        <em>and</em> multivariate outcomes (product interactions). Our <strong>CombinedMMM</strong> 
-                        handles everything in a single, coherent framework.
-                    </p>
-                    
-                    <div class="combined-diagram">
-                        <svg viewBox="0 0 600 350" class="model-diagram large">
-                            <!-- Media channels -->
-                            <rect x="20" y="120" width="80" height="40" rx="8" fill="url(#mediaGrad)" />
-                            <text x="60" y="145" text-anchor="middle" fill="white" font-size="10" font-weight="600">TV</text>
-                            
-                            <rect x="20" y="170" width="80" height="40" rx="8" fill="url(#mediaGrad)" />
-                            <text x="60" y="195" text-anchor="middle" fill="white" font-size="10" font-weight="600">Digital</text>
-                            
-                            <rect x="20" y="220" width="80" height="40" rx="8" fill="url(#mediaGrad)" />
-                            <text x="60" y="245" text-anchor="middle" fill="white" font-size="10" font-weight="600">Social</text>
-                            
-                            <!-- Mediator -->
-                            <rect x="180" y="80" width="100" height="50" rx="10" fill="url(#mediatorGrad)" />
-                            <text x="230" y="100" text-anchor="middle" fill="white" font-size="10" font-weight="600">Brand</text>
-                            <text x="230" y="115" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">Awareness</text>
-                            
-                            <!-- Partial observation indicator -->
-                            <circle cx="280" y="85" r="12" fill="#1c211d" stroke="#7a9eb3" stroke-width="2" />
-                            <text x="280" y="89" text-anchor="middle" fill="#7a9eb3" font-size="10">👁</text>
-                            <text x="310" y="75" fill="#7a9eb3" font-size="8">Monthly</text>
-                            <text x="310" y="85" fill="#7a9eb3" font-size="8">surveys</text>
-                            
-                            <!-- Outcomes -->
-                            <rect x="380" y="100" width="100" height="50" rx="10" fill="url(#outcomeGrad)" />
-                            <text x="430" y="120" text-anchor="middle" fill="white" font-size="10" font-weight="600">Single-Pack</text>
-                            <text x="430" y="135" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">Sales</text>
-                            
-                            <rect x="380" y="200" width="100" height="50" rx="10" fill="url(#outcomeGrad)" />
-                            <text x="430" y="220" text-anchor="middle" fill="white" font-size="10" font-weight="600">Multipack</text>
-                            <text x="430" y="235" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">Sales</text>
-                            
-                            <!-- Promo indicator -->
-                            <rect x="500" y="205" width="60" height="40" rx="6" fill="rgba(106, 191, 138, 0.2)" stroke="#6abf8a" stroke-width="1" />
-                            <text x="530" y="222" text-anchor="middle" fill="#6abf8a" font-size="8" font-weight="600">PROMO</text>
-                            <text x="530" y="235" text-anchor="middle" fill="#6abf8a" font-size="8">indicator</text>
-                            
-                            <!-- Arrows: Media → Mediator -->
-                            <path d="M 100 140 L 175 105" stroke="#a3a99f" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
-                            <path d="M 100 190 L 175 115" stroke="#a3a99f" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
-                            
-                            <!-- Arrows: Mediator → Outcomes -->
-                            <path d="M 280 105 L 375 120" stroke="#a3a99f" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
-                            <path d="M 280 115 L 375 215" stroke="#a3a99f" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)" />
-                            
-                            <!-- Direct effects: Media → Outcomes -->
-                            <path d="M 100 160 C 200 160 300 130 375 125" stroke="#8fa86a" stroke-width="1.5" fill="none" marker-end="url(#arrowheadGold)" stroke-dasharray="4,3" opacity="0.6" />
-                            <path d="M 100 230 C 200 250 300 240 375 225" stroke="#8fa86a" stroke-width="1.5" fill="none" marker-end="url(#arrowheadGold)" stroke-dasharray="4,3" opacity="0.6" />
-                            
-                            <!-- Cross-effect: Cannibalization -->
-                            <path d="M 430 200 C 430 175 430 175 430 150" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arrowRed)" />
-                            <text x="445" y="175" fill="#c97067" font-size="8" font-weight="600">ψ &lt; 0</text>
-                            
-                            <!-- Promo modulation arrow -->
-                            <path d="M 500 225 L 445 225" stroke="#6abf8a" stroke-width="1" fill="none" stroke-dasharray="3,2" />
-                            
-                            <!-- Legend -->
-                            <rect x="20" y="290" width="560" height="50" rx="8" fill="rgba(0,0,0,0.03)" />
-                            
-                            <line x1="40" y1="310" x2="70" y2="310" stroke="#a3a99f" stroke-width="2" />
-                            <text x="80" y="314" fill="#a3a99f" font-size="9">Indirect (via awareness)</text>
-                            
-                            <line x1="200" y1="310" x2="230" y2="310" stroke="#8fa86a" stroke-width="2" stroke-dasharray="4,3" />
-                            <text x="240" y="314" fill="#a3a99f" font-size="9">Direct effects</text>
-                            
-                            <line x1="340" y1="310" x2="370" y2="310" stroke="#c97067" stroke-width="2" />
-                            <text x="380" y="314" fill="#a3a99f" font-size="9">Cross-effects (promo-modulated)</text>
-                            
-                            <!-- Title -->
-                            <text x="300" y="35" text-anchor="middle" fill="#e8ebe9" font-size="14" font-weight="600">Combined Model: Full Marketing System</text>
-                        </svg>
-                    </div>
-                    
-                    <div class="combined-benefits">
-                        <div class="benefit-item">
-                            <div class="benefit-number">1</div>
-                            <div>
-                                <strong>Single coherent model</strong>
-                                <p>All effects estimated jointly—no need to stitch together separate analyses</p>
-                            </div>
-                        </div>
-                        <div class="benefit-item">
-                            <div class="benefit-number">2</div>
-                            <div>
-                                <strong>Proper uncertainty propagation</strong>
-                                <p>Uncertainty in awareness flows through to final attribution</p>
-                            </div>
-                        </div>
-                        <div class="benefit-item">
-                            <div class="benefit-number">3</div>
-                            <div>
-                                <strong>Testable decomposition</strong>
-                                <p>Direct vs. indirect vs. cross-effects—each can be validated</p>
-                            </div>
-                        </div>
-                    </div>
+                    <a href="technical-guide.html#cross-effects" class="btn btn-secondary" style="margin-top: 1rem;">
+                        See the Math →
+                    </a>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- How It Works -->
-    <section class="how-it-works">
+    <!-- CTA Section -->
+    <section class="cta-section">
         <div class="container">
-            <div class="how-header fade-in">
-                <h2>From Data to Decisions</h2>
-                <p style="font-size: 1.1rem;">
-                    A streamlined workflow that prioritizes methodological rigor without sacrificing usability.
-                </p>
-            </div>
-
-            <div class="workflow fade-in">
-                <div class="workflow-step">
-                    <div class="step-number">1</div>
-                    <h4>Upload Data</h4>
-                    <p>Standard MFF format with flexible dimensions</p>
-                </div>
-                <div class="workflow-step">
-                    <div class="step-number">2</div>
-                    <h4>Configure Model</h4>
-                    <p>Set priors, transformations, and structure</p>
-                </div>
-                <div class="workflow-step">
-                    <div class="step-number">3</div>
-                    <h4>Fit & Diagnose</h4>
-                    <p>Full posterior with convergence checks</p>
-                </div>
-                <div class="workflow-step">
-                    <div class="step-number">4</div>
-                    <h4>Analyze Results</h4>
-                    <p>Contributions, scenarios, and recommendations</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CTA -->
-    <section class="cta">
-        <div class="container">
-            <div class="cta-content fade-in">
-                <h2>Ready for Rigorous Measurement?</h2>
-                <p style="font-size: 1.1rem;">
-                    The framework is open source and ready to use. Start building marketing mix models 
-                    that deliver honest uncertainty—not false precision.
-                </p>
-                <div style="display: flex; gap: 1rem; justify-content: center;">
-                    <a href="https://github.com/redam94/mmm-framework" class="btn btn-primary">
-                        View on GitHub →
-                    </a>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/README.md" class="btn btn-secondary">
-                        Read Documentation
-                    </a>
-                </div>
+            <h2>Ready for Honest Measurement?</h2>
+            <p>
+                The framework is open source and ready to use. Start with our documentation or dive straight into the code.
+            </p>
+            <div class="cta-buttons">
+                <a href="technical-guide.html" class="btn btn-white">Read Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
             </div>
         </div>
     </section>
 
     <!-- Footer -->
     <footer>
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-links">
-                    <a href="https://github.com/redam94/mmm-framework">GitHub</a>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/README.md">Documentation</a>
-                    <a href="https://github.com/redam94/mmm-framework/issues">Issues</a>
-                </div>
-                <div class="footer-credit">
-                    Built with PyMC & FastAPI • © 2025 Matthew Reda
-                </div>
+        <div class="container footer-content">
+            <span class="logo">MMM Framework</span>
+            <div class="footer-links">
+                <a href="technical-guide.html">Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
+                <a href="https://github.com/redam94/mmm-framework/issues" target="_blank">Report Issue</a>
             </div>
         </div>
     </footer>
 
-    <!-- Plotly for interactive charts -->
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    
     <script>
-        // =====================================================
-        // Scroll Animation
-        // =====================================================
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
+        // Chart colors
+        const chartColors = {
+            primary: '#8fa86a',
+            accent: '#6a8fa8',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#d4ddd4',
+            bg: '#fafbf9'
         };
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                    // Start dartboard animation when it comes into view
-                    if (entry.target.classList.contains('dartboard-demo')) {
-                        setTimeout(startDartboardAnimation, 500);
-                    }
+        const chartConfig = {
+            displayModeBar: false,
+            responsive: true
+        };
+
+        const chartLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: chartColors.text },
+            margin: { t: 40, r: 20, b: 40, l: 50 },
+            xaxis: {
+                gridcolor: chartColors.grid,
+                zerolinecolor: chartColors.grid
+            },
+            yaxis: {
+                gridcolor: chartColors.grid,
+                zerolinecolor: chartColors.grid
+            }
+        };
+
+        // Initialize hero chart
+        function initHeroChart() {
+            const x = [];
+            const posterior = [];
+            const prior = [];
+            
+            for (let i = -1; i <= 2; i += 0.02) {
+                x.push(i);
+                posterior.push(Math.exp(-Math.pow(i - 0.7, 2) / (2 * 0.15 * 0.15)));
+                prior.push(Math.exp(-Math.pow(i - 0.3, 2) / (2 * 0.4 * 0.4)) * 0.5);
+            }
+
+            const data = [
+                {
+                    x: x,
+                    y: prior,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Prior Belief',
+                    line: { color: chartColors.textMuted, width: 2, dash: 'dash' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(90, 107, 90, 0.1)'
+                },
+                {
+                    x: x,
+                    y: posterior,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'After Data',
+                    line: { color: chartColors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.3)'
                 }
-            });
-        }, observerOptions);
+            ];
 
-        document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+            const layout = {
+                ...chartLayout,
+                showlegend: true,
+                legend: { x: 0.7, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)' },
+                xaxis: { ...chartLayout.xaxis, title: 'Media Effect' },
+                yaxis: { ...chartLayout.yaxis, title: 'Probability', showticklabels: false },
+                annotations: [{
+                    x: 0.7,
+                    y: 1.05,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Most likely value',
+                    showarrow: true,
+                    arrowhead: 2,
+                    arrowcolor: chartColors.primary,
+                    font: { color: chartColors.primary, size: 11 }
+                }]
+            };
 
-        // =====================================================
-        // Dartboard Animation
-        // =====================================================
+            Plotly.newPlot('hero-chart', data, layout, chartConfig);
+        }
+
+        // Run simulation
+        function runSimulation() {
+            const priorMean = parseFloat(document.getElementById('prior-mean').value);
+            const priorSD = parseFloat(document.getElementById('prior-sd').value);
+            const sampleSize = parseInt(document.getElementById('sample-size').value);
+            const noise = parseFloat(document.getElementById('data-noise').value);
+            
+            // True effect
+            const trueEffect = 0.5;
+            
+            // Generate mock data likelihood
+            const dataSD = noise / Math.sqrt(sampleSize);
+            const dataMean = trueEffect + (Math.random() - 0.5) * dataSD;
+            
+            // Bayesian update (conjugate normal)
+            const priorPrecision = 1 / (priorSD * priorSD);
+            const dataPrecision = 1 / (dataSD * dataSD);
+            const postPrecision = priorPrecision + dataPrecision;
+            const postSD = Math.sqrt(1 / postPrecision);
+            const postMean = (priorMean * priorPrecision + dataMean * dataPrecision) / postPrecision;
+            
+            updateDistributionChart(priorMean, priorSD, postMean, postSD, trueEffect);
+            updateContributionChart();
+        }
+
+        function updateDistributionChart(priorMean, priorSD, postMean, postSD, trueEffect) {
+            const x = [];
+            const prior = [];
+            const posterior = [];
+            
+            for (let i = -1; i <= 2; i += 0.02) {
+                x.push(i);
+                prior.push(Math.exp(-Math.pow(i - priorMean, 2) / (2 * priorSD * priorSD)));
+                posterior.push(Math.exp(-Math.pow(i - postMean, 2) / (2 * postSD * postSD)));
+            }
+            
+            // Normalize
+            const priorMax = Math.max(...prior);
+            const postMax = Math.max(...posterior);
+            
+            const data = [
+                {
+                    x: x,
+                    y: prior.map(v => v / priorMax),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Prior',
+                    line: { color: chartColors.textMuted, width: 2, dash: 'dash' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(90, 107, 90, 0.1)'
+                },
+                {
+                    x: x,
+                    y: posterior.map(v => v / postMax),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Posterior',
+                    line: { color: chartColors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.3)'
+                }
+            ];
+
+            const layout = {
+                ...chartLayout,
+                showlegend: true,
+                legend: { x: 0.02, y: 0.98 },
+                xaxis: { ...chartLayout.xaxis, title: 'Media Effect' },
+                yaxis: { ...chartLayout.yaxis, title: 'Probability Density', showticklabels: false },
+                shapes: [{
+                    type: 'line',
+                    x0: trueEffect,
+                    x1: trueEffect,
+                    y0: 0,
+                    y1: 1.1,
+                    line: { color: chartColors.success, width: 2, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: trueEffect,
+                    y: 1.15,
+                    text: 'True Effect',
+                    showarrow: false,
+                    font: { color: chartColors.success, size: 11 }
+                }]
+            };
+
+            Plotly.newPlot('distribution-chart', data, layout, chartConfig);
+        }
+
+        function updateContributionChart() {
+            const channels = ['TV', 'Digital', 'Radio', 'Print', 'OOH'];
+            const means = [2.1, 1.8, 0.9, 0.5, 0.4];
+            const errors = [0.4, 0.35, 0.25, 0.2, 0.15];
+            
+            const data = [{
+                x: channels,
+                y: means,
+                type: 'bar',
+                marker: {
+                    color: [chartColors.primary, chartColors.accent, chartColors.warning, chartColors.danger, chartColors.success]
+                },
+                error_y: {
+                    type: 'data',
+                    array: errors,
+                    visible: true,
+                    color: chartColors.text,
+                    thickness: 2,
+                    width: 6
+                }
+            }];
+
+            const layout = {
+                ...chartLayout,
+                xaxis: { ...chartLayout.xaxis, title: '' },
+                yaxis: { ...chartLayout.yaxis, title: 'Contribution ($M)' },
+                annotations: [{
+                    x: 0.5,
+                    y: 1.1,
+                    xref: 'paper',
+                    yref: 'paper',
+                    text: 'Error bars show 90% credible intervals',
+                    showarrow: false,
+                    font: { color: chartColors.textMuted, size: 11 }
+                }]
+            };
+
+            Plotly.newPlot('contribution-chart', data, layout, chartConfig);
+        }
+
+        function initCrossEffectChart() {
+            const products = ['Single-Pack<br>(No Promo)', 'Multipack<br>(No Promo)', 'Single-Pack<br>(Promo Active)', 'Multipack<br>(Promo Active)'];
+            
+            const withoutCross = [1000, 800, 950, 1300];
+            const withCross = [1000, 800, 850, 1250];
+            
+            const data = [
+                {
+                    x: products,
+                    y: withoutCross,
+                    type: 'bar',
+                    name: 'Naive Model (No Cross-Effects)',
+                    marker: { color: chartColors.danger, opacity: 0.7 }
+                },
+                {
+                    x: products,
+                    y: withCross,
+                    type: 'bar',
+                    name: 'Proper Model (With Cross-Effects)',
+                    marker: { color: chartColors.primary }
+                }
+            ];
+
+            const cannibLoss = (950 - 850);
+            const overstatement = ((1300 - 1250) / 1250 * 100).toFixed(0);
+
+            const layout = {
+                ...chartLayout,
+                barmode: 'group',
+                xaxis: { ...chartLayout.xaxis, title: '' },
+                yaxis: { ...chartLayout.yaxis, title: 'Units Sold' },
+                legend: { x: 0.02, y: 0.98 },
+                annotations: [{
+                    x: 0.5,
+                    y: 1.12,
+                    xref: 'paper',
+                    yref: 'paper',
+                    text: `Cannibalization: ${cannibLoss} units | Naive model overstates lift by ${overstatement}%`,
+                    showarrow: false,
+                    font: { color: chartColors.danger, size: 11 },
+                    bgcolor: 'rgba(201, 112, 103, 0.1)',
+                    borderpad: 6
+                }],
+                shapes: [{
+                    type: 'line',
+                    x0: 1.5,
+                    x1: 1.5,
+                    y0: 0,
+                    y1: 1400,
+                    line: { color: chartColors.grid, width: 1, dash: 'dot' }
+                }]
+            };
+
+            Plotly.newPlot('cross-effect-chart', data, layout, chartConfig);
+        }
+
+        // Chart tab switching
+        function showChart(chartId) {
+            document.querySelectorAll('.chart-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.chart-container').forEach(chart => chart.style.display = 'none');
+            
+            event.target.classList.add('active');
+            document.getElementById(chartId + '-chart').style.display = 'block';
+            
+            // Resize charts
+            Plotly.Plots.resize(document.getElementById(chartId + '-chart'));
+        }
+
+        // Control updates
+        document.getElementById('prior-mean').addEventListener('input', function() {
+            document.getElementById('prior-mean-value').textContent = this.value;
+        });
+        document.getElementById('prior-sd').addEventListener('input', function() {
+            document.getElementById('prior-sd-value').textContent = this.value;
+        });
+        document.getElementById('sample-size').addEventListener('input', function() {
+            document.getElementById('sample-size-value').textContent = this.value;
+        });
+        document.getElementById('data-noise').addEventListener('input', function() {
+            document.getElementById('data-noise-value').textContent = this.value;
+        });
+
+        // Dartboard animation
         let dartboardAnimationRunning = false;
         let dartsThrown = 0;
         let dartsKept = 0;
@@ -2199,112 +1387,66 @@
             dartsThrown = 0;
             dartsKept = 0;
             
-            // Clear existing darts
             const dartsGroup = document.getElementById('darts-group');
             dartsGroup.innerHTML = '';
             
-            // Reset UI
             document.getElementById('models-run').textContent = '0';
             document.getElementById('models-kept').textContent = '0';
             document.getElementById('accuracy-stat').classList.add('hidden');
             document.getElementById('punchline').classList.remove('visible');
             document.getElementById('punchline').classList.add('hidden');
             
-            // Reset stages
-            document.querySelectorAll('.stage').forEach(s => {
-                s.classList.remove('active', 'completed');
-            });
-            document.getElementById('stage-1').classList.add('active');
-            
-            // Schedule darts
             const totalDarts = 20;
-            const bullseyeCount = 3; // Only 3 will be bullseyes
-            const bullseyeIndices = [7, 12, 18]; // Which throws are bullseyes
+            const bullseyeIndices = [7, 12, 18];
             
             for (let i = 0; i < totalDarts; i++) {
                 setTimeout(() => {
                     throwDart(i, bullseyeIndices.includes(i));
                     
-                    // Update stages based on progress
-                    if (i === 5) {
-                        document.getElementById('stage-1').classList.remove('active');
-                        document.getElementById('stage-1').classList.add('completed');
-                        document.getElementById('stage-2').classList.add('active');
-                    }
-                    if (i === 12) {
-                        document.getElementById('stage-2').classList.remove('active');
-                        document.getElementById('stage-2').classList.add('completed');
-                        document.getElementById('stage-3').classList.add('active');
-                    }
                     if (i === totalDarts - 1) {
-                        // Final stage
                         setTimeout(() => {
-                            document.getElementById('stage-3').classList.remove('active');
-                            document.getElementById('stage-3').classList.add('completed');
-                            document.getElementById('stage-4').classList.add('active');
-                            
-                            // Show punchline
-                            setTimeout(() => {
-                                document.getElementById('stage-4').classList.remove('active');
-                                document.getElementById('stage-4').classList.add('completed');
-                                document.getElementById('accuracy-stat').classList.remove('hidden');
-                                document.getElementById('punchline').classList.remove('hidden');
-                                setTimeout(() => {
-                                    document.getElementById('punchline').classList.add('visible');
-                                }, 50);
-                                dartboardAnimationRunning = false;
-                            }, 800);
+                            document.getElementById('accuracy-stat').classList.remove('hidden');
+                            document.getElementById('punchline').classList.remove('hidden');
+                            document.getElementById('punchline').classList.add('visible');
+                            dartboardAnimationRunning = false;
                         }, 500);
                     }
-                }, i * 250);
+                }, i * 200);
             }
         }
 
         function throwDart(index, isBullseye) {
             const dartsGroup = document.getElementById('darts-group');
-            const centerX = 150;
-            const centerY = 150;
             
             let x, y;
-            
             if (isBullseye) {
-                // Bullseye hit - within 8px of center
                 const angle = Math.random() * Math.PI * 2;
-                const distance = Math.random() * 6;
-                x = centerX + Math.cos(angle) * distance;
-                y = centerY + Math.sin(angle) * distance;
+                const r = Math.random() * 8;
+                x = 150 + Math.cos(angle) * r;
+                y = 150 + Math.sin(angle) * r;
             } else {
-                // Random position - mostly misses, some close
                 const angle = Math.random() * Math.PI * 2;
-                const distance = 30 + Math.random() * 100; // Outside bullseye
-                x = centerX + Math.cos(angle) * distance;
-                y = centerY + Math.sin(angle) * distance;
+                const r = 30 + Math.random() * 100;
+                x = 150 + Math.cos(angle) * r;
+                y = 150 + Math.sin(angle) * r;
             }
             
-            // Create dart SVG element
             const dart = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             dart.classList.add('dart');
             dart.innerHTML = `
                 <circle cx="${x}" cy="${y}" r="4" fill="${isBullseye ? '#6abf8a' : '#c97067'}" />
-                <circle cx="${x}" cy="${y}" r="6" fill="none" stroke="${isBullseye ? '#6abf8a' : '#c97067'}" stroke-width="1" opacity="0.5" />
             `;
             
             dartsGroup.appendChild(dart);
             
-            // Update counter
             dartsThrown++;
             document.getElementById('models-run').textContent = dartsThrown;
             
             if (isBullseye) {
-                dart.classList.add('dart-hit');
                 dartsKept++;
                 document.getElementById('models-kept').textContent = dartsKept;
             } else {
                 dart.classList.add('dart-miss');
-                // Remove after animation
-                setTimeout(() => {
-                    dart.style.opacity = '0';
-                }, 800);
             }
         }
 
@@ -2313,572 +1455,26 @@
             startDartboardAnimation();
         }
 
-        // =====================================================
-        // Chart Configuration
-        // =====================================================
-        const chartColors = {
-            primary: '#8fa86a',
-            primaryBright: '#a4bf7d',
-            accent: '#6a8fa8',
-            success: '#6abf8a',
-            danger: '#c97067',
-            warning: '#bfa86a',
-            text: '#e8ebe9',
-            textMuted: '#a3a99f',
-            bg: '#1c211d',
-            grid: '#2d332e'
-        };
-
-        const chartLayout = {
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { color: chartColors.textMuted, family: 'Source Sans 3' },
-            margin: { l: 50, r: 30, t: 40, b: 50 },
-            xaxis: {
-                gridcolor: chartColors.grid,
-                zerolinecolor: chartColors.grid,
-            },
-            yaxis: {
-                gridcolor: chartColors.grid,
-                zerolinecolor: chartColors.grid,
-            }
-        };
-
-        const chartConfig = {
-            displayModeBar: false,
-            responsive: true
-        };
-
-        // =====================================================
-        // Utility Functions
-        // =====================================================
-        function normalPDF(x, mean, sd) {
-            const coeff = 1 / (sd * Math.sqrt(2 * Math.PI));
-            const exponent = -0.5 * Math.pow((x - mean) / sd, 2);
-            return coeff * Math.exp(exponent);
-        }
-
-        function generateNormalSamples(mean, sd, n) {
-            const samples = [];
-            for (let i = 0; i < n; i++) {
-                // Box-Muller transform
-                const u1 = Math.random();
-                const u2 = Math.random();
-                const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-                samples.push(mean + sd * z);
-            }
-            return samples;
-        }
-
-        function linspace(start, end, n) {
-            const arr = [];
-            const step = (end - start) / (n - 1);
-            for (let i = 0; i < n; i++) {
-                arr.push(start + step * i);
-            }
-            return arr;
-        }
-
-        // =====================================================
-        // Hero Chart
-        // =====================================================
-        function initHeroChart() {
-            const x = linspace(-0.5, 3.5, 200);
-            
-            // Prior: wider, centered at 1.5
-            const priorY = x.map(xi => normalPDF(xi, 1.5, 0.7));
-            
-            // Posterior: narrower, shifted based on "data"
-            const posteriorY = x.map(xi => normalPDF(xi, 1.82, 0.28));
-            
-            const data = [
-                {
-                    x: x,
-                    y: priorY,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Prior Belief',
-                    line: { color: chartColors.textMuted, width: 2, dash: 'dash' },
-                    fill: 'tozeroy',
-                    fillcolor: 'rgba(163, 169, 159, 0.1)'
-                },
-                {
-                    x: x,
-                    y: posteriorY,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Posterior (After Data)',
-                    line: { color: chartColors.primary, width: 3 },
-                    fill: 'tozeroy',
-                    fillcolor: 'rgba(143, 168, 106, 0.2)'
-                }
-            ];
-
-            const layout = {
-                ...chartLayout,
-                title: {
-                    text: 'TV Channel ROI Distribution',
-                    font: { size: 16, color: chartColors.text }
-                },
-                xaxis: {
-                    ...chartLayout.xaxis,
-                    title: 'ROI Value',
-                    range: [-0.5, 3.5]
-                },
-                yaxis: {
-                    ...chartLayout.yaxis,
-                    title: 'Probability Density',
-                    showticklabels: false
-                },
-                legend: {
-                    x: 0.98,
-                    y: 0.98,
-                    xanchor: 'right',
-                    bgcolor: 'rgba(0,0,0,0.3)'
-                },
-                annotations: [
-                    {
-                        x: 1.82,
-                        y: normalPDF(1.82, 1.82, 0.28) * 0.5,
-                        text: '94% CI: [1.27, 2.37]',
-                        showarrow: true,
-                        arrowhead: 2,
-                        arrowcolor: chartColors.primary,
-                        font: { color: chartColors.primary, size: 12 },
-                        ax: 60,
-                        ay: -40
+        // Scroll animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    if (entry.target.classList.contains('dartboard-demo')) {
+                        setTimeout(startDartboardAnimation, 500);
                     }
-                ]
-            };
-
-            Plotly.newPlot('hero-posterior-chart', data, layout, chartConfig);
-        }
-
-        // =====================================================
-        // Demo Charts
-        // =====================================================
-        let currentChart = 'distribution';
-
-        function showChart(chartType) {
-            currentChart = chartType;
-            
-            // Update tabs
-            document.querySelectorAll('.chart-tab').forEach(tab => {
-                tab.classList.remove('active');
+                }
             });
-            event.target.classList.add('active');
-            
-            // Show/hide charts
-            document.getElementById('demo-distribution-chart').style.display = chartType === 'distribution' ? 'block' : 'none';
-            document.getElementById('demo-trace-chart').style.display = chartType === 'trace' ? 'block' : 'none';
-            document.getElementById('demo-contribution-chart').style.display = chartType === 'contribution' ? 'block' : 'none';
-        }
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
 
-        function runSimulation() {
-            const priorMean = parseFloat(document.getElementById('prior-mean').value);
-            const priorSD = parseFloat(document.getElementById('prior-sd').value);
-            const sampleSize = parseInt(document.getElementById('sample-size').value);
-            const dataNoise = parseFloat(document.getElementById('data-noise').value);
-            
-            // True value (simulated)
-            const trueValue = 1.65;
-            
-            // Posterior calculation (simplified conjugate update)
-            const dataVariance = dataNoise * dataNoise;
-            const priorVariance = priorSD * priorSD;
-            const posteriorVariance = 1 / (1/priorVariance + sampleSize/dataVariance);
-            const posteriorMean = posteriorVariance * (priorMean/priorVariance + sampleSize*trueValue/dataVariance);
-            const posteriorSD = Math.sqrt(posteriorVariance);
-            
-            updateDistributionChart(priorMean, priorSD, posteriorMean, posteriorSD, trueValue);
-            updateTraceChart(posteriorMean, posteriorSD);
-            updateContributionChart(posteriorMean, posteriorSD);
-        }
+        document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
 
-        function updateDistributionChart(priorMean, priorSD, postMean, postSD, trueValue) {
-            const xMin = Math.min(priorMean - 3*priorSD, postMean - 3*postSD, 0);
-            const xMax = Math.max(priorMean + 3*priorSD, postMean + 3*postSD, 3);
-            const x = linspace(xMin, xMax, 200);
-            
-            const priorY = x.map(xi => normalPDF(xi, priorMean, priorSD));
-            const postY = x.map(xi => normalPDF(xi, postMean, postSD));
-            
-            const data = [
-                {
-                    x: x,
-                    y: priorY,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Prior',
-                    line: { color: chartColors.textMuted, width: 2, dash: 'dash' },
-                    fill: 'tozeroy',
-                    fillcolor: 'rgba(163, 169, 159, 0.1)'
-                },
-                {
-                    x: x,
-                    y: postY,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Posterior',
-                    line: { color: chartColors.primary, width: 3 },
-                    fill: 'tozeroy',
-                    fillcolor: 'rgba(143, 168, 106, 0.2)'
-                },
-                {
-                    x: [trueValue, trueValue],
-                    y: [0, Math.max(...postY) * 1.1],
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'True Value',
-                    line: { color: chartColors.success, width: 2, dash: 'dot' }
-                }
-            ];
-
-            const ci_low = postMean - 1.96 * postSD;
-            const ci_high = postMean + 1.96 * postSD;
-
-            const layout = {
-                ...chartLayout,
-                title: {
-                    text: 'Prior vs Posterior Distribution',
-                    font: { size: 16, color: chartColors.text }
-                },
-                xaxis: {
-                    ...chartLayout.xaxis,
-                    title: 'TV ROI',
-                },
-                yaxis: {
-                    ...chartLayout.yaxis,
-                    title: 'Density',
-                    showticklabels: false
-                },
-                legend: {
-                    x: 0.98,
-                    y: 0.98,
-                    xanchor: 'right',
-                    bgcolor: 'rgba(0,0,0,0.3)'
-                },
-                annotations: [
-                    {
-                        x: postMean,
-                        y: Math.max(...postY) * 0.6,
-                        text: `Posterior: ${postMean.toFixed(2)} [${ci_low.toFixed(2)}, ${ci_high.toFixed(2)}]`,
-                        showarrow: false,
-                        font: { color: chartColors.primary, size: 13 },
-                        bgcolor: 'rgba(28, 33, 29, 0.8)',
-                        borderpad: 6
-                    }
-                ],
-                shapes: [
-                    {
-                        type: 'rect',
-                        x0: ci_low,
-                        x1: ci_high,
-                        y0: 0,
-                        y1: Math.max(...postY) * 0.15,
-                        fillcolor: 'rgba(143, 168, 106, 0.3)',
-                        line: { width: 0 }
-                    }
-                ]
-            };
-
-            Plotly.newPlot('demo-distribution-chart', data, layout, chartConfig);
-        }
-
-        function updateTraceChart(postMean, postSD) {
-            // Simulate MCMC trace (4 chains)
-            const nSamples = 500;
-            const chains = [];
-            const chainColors = [chartColors.primary, chartColors.accent, chartColors.success, chartColors.warning];
-            
-            for (let c = 0; c < 4; c++) {
-                const samples = [];
-                let current = postMean + (Math.random() - 0.5) * postSD * 2;
-                
-                for (let i = 0; i < nSamples; i++) {
-                    // Random walk with target distribution pull
-                    const proposal = current + (Math.random() - 0.5) * 0.1;
-                    const acceptance = Math.exp(
-                        -0.5 * Math.pow((proposal - postMean) / postSD, 2) +
-                        0.5 * Math.pow((current - postMean) / postSD, 2)
-                    );
-                    if (Math.random() < acceptance) {
-                        current = proposal;
-                    }
-                    samples.push(current);
-                }
-                
-                chains.push({
-                    y: samples,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: `Chain ${c + 1}`,
-                    line: { color: chainColors[c], width: 1 },
-                    opacity: 0.7
-                });
-            }
-
-            const layout = {
-                ...chartLayout,
-                title: {
-                    text: 'MCMC Trace Plot (4 Chains)',
-                    font: { size: 16, color: chartColors.text }
-                },
-                xaxis: {
-                    ...chartLayout.xaxis,
-                    title: 'Iteration',
-                },
-                yaxis: {
-                    ...chartLayout.yaxis,
-                    title: 'TV ROI',
-                },
-                legend: {
-                    x: 0.98,
-                    y: 0.98,
-                    xanchor: 'right',
-                    bgcolor: 'rgba(0,0,0,0.3)'
-                },
-                annotations: [
-                    {
-                        x: 0.02,
-                        y: 0.98,
-                        xref: 'paper',
-                        yref: 'paper',
-                        text: 'Chains mixing well = reliable inference ✓',
-                        showarrow: false,
-                        font: { color: chartColors.success, size: 12 },
-                        bgcolor: 'rgba(28, 33, 29, 0.8)',
-                        borderpad: 6
-                    }
-                ]
-            };
-
-            Plotly.newPlot('demo-trace-chart', chains, layout, chartConfig);
-        }
-
-        function updateContributionChart(tvROI, tvSD) {
-            // Simulated channel contributions with uncertainty
-            const channels = ['TV', 'Digital', 'Social', 'Search', 'Print'];
-            const means = [tvROI * 12, 1.8 * 8, 1.3 * 5, 2.1 * 4, 0.9 * 3];
-            const errors = [tvSD * 12, 0.4 * 8, 0.5 * 5, 0.3 * 4, 0.6 * 3];
-            
-            const data = [
-                {
-                    x: channels,
-                    y: means,
-                    type: 'bar',
-                    name: 'Contribution ($M)',
-                    marker: {
-                        color: [chartColors.primary, chartColors.accent, '#a855f7', chartColors.success, chartColors.textMuted]
-                    },
-                    error_y: {
-                        type: 'data',
-                        array: errors.map(e => e * 1.96),
-                        visible: true,
-                        color: chartColors.text,
-                        thickness: 2,
-                        width: 6
-                    }
-                }
-            ];
-
-            const layout = {
-                ...chartLayout,
-                title: {
-                    text: 'Channel Contributions with 95% Credible Intervals',
-                    font: { size: 16, color: chartColors.text }
-                },
-                xaxis: {
-                    ...chartLayout.xaxis,
-                    title: '',
-                },
-                yaxis: {
-                    ...chartLayout.yaxis,
-                    title: 'Revenue Contribution ($M)',
-                },
-                annotations: [
-                    {
-                        x: 0.98,
-                        y: 0.98,
-                        xref: 'paper',
-                        yref: 'paper',
-                        text: 'Error bars show uncertainty range',
-                        showarrow: false,
-                        font: { color: chartColors.textMuted, size: 11 },
-                        bgcolor: 'rgba(28, 33, 29, 0.8)',
-                        borderpad: 6
-                    }
-                ]
-            };
-
-            Plotly.newPlot('demo-contribution-chart', data, layout, chartConfig);
-        }
-
-        // =====================================================
-        // Cross-Effect Demo
-        // =====================================================
-        function updateCrossEffectDemo() {
-            const cannibStrength = parseFloat(document.getElementById('cannib-strength').value);
-            const promoLift = parseFloat(document.getElementById('promo-lift').value);
-            
-            // Base sales without any effects
-            const baseSinglePack = 100;
-            const baseMultipack = 80;
-            
-            // Promo weeks (simulated)
-            const weeks = 12;
-            const promoWeeks = [3, 4, 5, 9, 10]; // Weeks with multipack promo
-            
-            // Calculate sales with and without cross-effects
-            const singlePackNoCross = [];
-            const singlePackWithCross = [];
-            const multipackSales = [];
-            const weekLabels = [];
-            
-            for (let w = 1; w <= weeks; w++) {
-                weekLabels.push(`W${w}`);
-                const isPromo = promoWeeks.includes(w);
-                
-                // Multipack sales (with promo lift)
-                const multiSale = isPromo ? baseMultipack * promoLift : baseMultipack;
-                multipackSales.push(multiSale);
-                
-                // Single-pack WITHOUT cross-effect modeling
-                singlePackNoCross.push(baseSinglePack + (Math.random() - 0.5) * 10);
-                
-                // Single-pack WITH cross-effect (cannibalization from multipack promo)
-                const cannibEffect = isPromo ? -cannibStrength * multiSale : 0;
-                singlePackWithCross.push(baseSinglePack + cannibEffect + (Math.random() - 0.5) * 10);
-            }
-            
-            // Calculate totals
-            const totalMultipack = multipackSales.reduce((a, b) => a + b, 0);
-            const totalSingleNoCross = singlePackNoCross.reduce((a, b) => a + b, 0);
-            const totalSingleWithCross = singlePackWithCross.reduce((a, b) => a + b, 0);
-            
-            const portfolioNoCross = totalMultipack + totalSingleNoCross;
-            const portfolioWithCross = totalMultipack + totalSingleWithCross;
-            
-            const data = [
-                {
-                    x: ['Multipack<br>(with promo)', 'Single-Pack<br>(no cross-effect)', 'Single-Pack<br>(with cannib.)', 'Portfolio<br>(naive)', 'Portfolio<br>(accurate)'],
-                    y: [totalMultipack, totalSingleNoCross, totalSingleWithCross, portfolioNoCross, portfolioWithCross],
-                    type: 'bar',
-                    marker: {
-                        color: [
-                            chartColors.accent,
-                            'rgba(143, 168, 106, 0.4)',
-                            chartColors.primary,
-                            'rgba(163, 169, 159, 0.4)',
-                            chartColors.success
-                        ]
-                    },
-                    text: [
-                        `$${totalMultipack.toFixed(0)}`,
-                        `$${totalSingleNoCross.toFixed(0)}`,
-                        `$${totalSingleWithCross.toFixed(0)}`,
-                        `$${portfolioNoCross.toFixed(0)}`,
-                        `$${portfolioWithCross.toFixed(0)}`
-                    ],
-                    textposition: 'outside',
-                    textfont: { color: chartColors.text, size: 12 }
-                }
-            ];
-            
-            const cannibLoss = totalSingleNoCross - totalSingleWithCross;
-            const overstatement = ((portfolioNoCross - portfolioWithCross) / portfolioWithCross * 100).toFixed(1);
-
-            const layout = {
-                ...chartLayout,
-                title: {
-                    text: 'Impact of Modeling Cross-Effects',
-                    font: { size: 16, color: chartColors.text }
-                },
-                xaxis: {
-                    ...chartLayout.xaxis,
-                    title: '',
-                },
-                yaxis: {
-                    ...chartLayout.yaxis,
-                    title: 'Total Sales ($)',
-                },
-                showlegend: false,
-                annotations: [
-                    {
-                        x: 0.5,
-                        y: 1.12,
-                        xref: 'paper',
-                        yref: 'paper',
-                        text: `Cannibalization loss: $${cannibLoss.toFixed(0)} | Naive model overstates portfolio by ${overstatement}%`,
-                        showarrow: false,
-                        font: { color: chartColors.danger, size: 12 },
-                        bgcolor: 'rgba(201, 112, 103, 0.1)',
-                        borderpad: 8
-                    }
-                ],
-                shapes: [
-                    {
-                        type: 'line',
-                        x0: 2.5,
-                        x1: 2.5,
-                        y0: 0,
-                        y1: Math.max(...data[0].y) * 1.1,
-                        line: { color: chartColors.grid, width: 1, dash: 'dot' }
-                    }
-                ]
-            };
-
-            Plotly.newPlot('cross-effect-chart', data, layout, chartConfig);
-        }
-
-        // =====================================================
-        // Control Updates
-        // =====================================================
-        document.getElementById('prior-mean').addEventListener('input', function() {
-            document.getElementById('prior-mean-value').textContent = this.value;
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initHeroChart();
+            runSimulation();
+            initCrossEffectChart();
         });
-
-        document.getElementById('prior-sd').addEventListener('input', function() {
-            document.getElementById('prior-sd-value').textContent = this.value;
-        });
-
-        document.getElementById('sample-size').addEventListener('input', function() {
-            document.getElementById('sample-size-value').textContent = this.value;
-        });
-
-        document.getElementById('data-noise').addEventListener('input', function() {
-            document.getElementById('data-noise-value').textContent = this.value;
-        });
-
-        // Cross-effect demo controls
-        document.getElementById('cannib-strength').addEventListener('input', function() {
-            document.getElementById('cannib-strength-value').textContent = parseFloat(this.value).toFixed(2);
-        });
-
-        document.getElementById('promo-lift').addEventListener('input', function() {
-            document.getElementById('promo-lift-value').textContent = this.value;
-        });
-
-        // =====================================================
-        // Initialize - Wait for Plotly to be ready
-        // =====================================================
-        function initCharts() {
-            if (typeof Plotly !== 'undefined') {
-                initHeroChart();
-                runSimulation();
-                updateCrossEffectDemo();
-            } else {
-                // Retry after a short delay if Plotly isn't loaded yet
-                setTimeout(initCharts, 100);
-            }
-        }
-
-        // Start initialization when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initCharts);
-        } else {
-            initCharts();
-        }
     </script>
 </body>
 </html>
