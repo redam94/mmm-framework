@@ -800,6 +800,30 @@ for name, k in zip(precision_controls, kappa):
 ```
 
 ### Mathematical Specification
+This section provides the formal mathematical specification for the variable selection priors available in `mmm_extensions`. For the complete technical document with proofs and implementation details, see `variable_selection_specification.pdf`.
+
+### Causal Constraints
+
+Variable selection priors should **only** be applied to **precision control variables**—variables that affect outcome $Y$ but do *not* affect treatment $X$ (media spending).
+
+**Proposition (Bias from Shrinkage on Confounder Coefficients)**: Consider a confounder $C$ affecting both media $X$ and outcome $Y$:
+
+$$X = \delta C + \nu, \quad Y = \beta X + \gamma C + \epsilon$$
+
+where $\beta$ is the **true causal effect** of media. If we shrink the coefficient on $C$ by factor $s \in [0,1]$ (yielding $\tilde{\gamma} = s \cdot \gamma$), the estimated media effect satisfies:
+
+$$\hat{\beta} \xrightarrow{p} \beta + (1-s) \cdot \gamma \cdot \frac{\text{Cov}(X, C)}{\text{Var}(X)}$$
+
+**Key implications**:
+- **Complete shrinkage** ($s=0$): Full omitted variable bias
+- **Partial shrinkage** ($s=0.1$, 90% shrinkage): Still leaves 90% of the bias
+- **No shrinkage** ($s=1$): Bias eliminated
+
+The bias depends on $\text{Cov}(X,C)/\text{Var}(X)$—the structural correlation between treatment and confounder. This is **invariant to the estimator**. Shrinking $\gamma$ does not shrink this correlation.
+
+**Example**: Distribution (ACV) with $\gamma = 0.1$ (small direct effect) but $\text{Cov}(X,C)/\text{Var}(X) = 2.0$ (high correlation with media). Omitted variable bias = $0.1 \times 2.0 = 0.2$ (20% of media effect). A horseshoe prior seeing only small $\gamma = 0.1$ would shrink it, introducing nearly the full 0.2 bias into $\hat{\beta}$.
+
+---
 
 #### Regularized Horseshoe (Piironen & Vehtari, 2017)
 

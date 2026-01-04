@@ -1,0 +1,701 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[margin=1.25in]{geometry}
+\usepackage{palatino}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% Define colors
+\definecolor{accentblue}{RGB}{0,70,127}
+\definecolor{darkgray}{RGB}{64,64,64}
+\definecolor{alertred}{RGB}{180,0,0}
+\definecolor{successgreen}{RGB}{0,120,60}
+\definecolor{lightgray}{RGB}{245,245,245}
+
+% Section formatting
+\titleformat{\section}
+  {\Large\bfseries\color{accentblue}}
+  {\thesection}
+  {1em}
+  {}
+
+\titleformat{\subsection}
+  {\large\bfseries\color{darkgray}}
+  {\thesubsection}
+  {1em}
+  {}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{darkgray}}
+  {\thesubsubsection}
+  {1em}
+  {}
+
+% Header/footer
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\color{darkgray} Variable Selection in Marketing Mix Models}
+\fancyhead[R]{\small\color{darkgray} Technical Specification}
+\fancyfoot[C]{\thepage}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    urlcolor=accentblue,
+    citecolor=accentblue
+}
+
+% Theorem environments
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{proposition}{Proposition}[section]
+\newtheorem{remark}{Remark}[section]
+
+% Custom environments
+\newenvironment{caution}{%
+    \begin{quote}
+    \textbf{\color{alertred}Causal Warning}\\[0.3em]
+}{%
+    \end{quote}
+}
+
+% Math operators
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\logit}{logit}
+\DeclareMathOperator{\sigmoid}{sigmoid}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries\color{accentblue} Bayesian Variable Selection Priors}\\[0.5em]
+{\large Technical Specification for Marketing Mix Models}\\[1.5em]
+{\small MATHEMATICAL REFERENCE DOCUMENT}\\[0.5em]
+{\small \today}
+\end{center}
+
+\vspace{1em}
+
+\tableofcontents
+\newpage
+
+%==============================================================================
+\section{Introduction and Motivation}
+%==============================================================================
+
+Marketing mix models often include many potential control variables: weather indicators, economic indices, minor holidays, competitive activity proxies, and various categorical effects. While control variables can improve precision by absorbing residual variance, including irrelevant controls wastes degrees of freedom and can introduce noise into estimates.
+
+Variable selection addresses this challenge by learning from the data which controls are relevant. However, in causal inference settings, variable selection must be applied with extreme care. This document provides the mathematical specification for three families of Bayesian variable selection priors and establishes the conditions under which they can be safely applied in MMM.
+
+\subsection{The Variable Selection Problem}
+
+Consider a linear model with $D$ potential control variables:
+\begin{equation}
+y_t = \alpha + \sum_{m=1}^{M} \beta_m f_m(x_{mt}) + \sum_{j=1}^{D} \gamma_j z_{jt} + \epsilon_t
+\end{equation}
+where $f_m(\cdot)$ denotes media transformations (adstock, saturation) and $z_{jt}$ are control variables. The goal is to estimate $\boldsymbol{\beta}$ (media effects) while handling uncertainty about which $\gamma_j$ are nonzero.
+
+\subsection{Causal Constraints on Variable Selection}
+
+\begin{caution}
+Variable selection priors should \textbf{only} be applied to \textbf{precision control variables}---variables that affect the outcome $Y$ but do \emph{not} affect the treatment $X$ (media spending). Applying selection to confounders can introduce severe bias.
+\end{caution}
+
+\begin{definition}[Precision Control]
+A variable $Z$ is a \emph{precision control} if:
+\begin{enumerate}[leftmargin=2em]
+    \item $Z \rightarrow Y$ (may affect outcome)
+    \item $Z \not\rightarrow X$ (does not affect treatment)
+    \item $Z \not\leftarrow X$ (is not affected by treatment)
+\end{enumerate}
+Examples: weather, gas prices, minor calendar effects.
+\end{definition}
+
+\begin{definition}[Confounder]
+A variable $C$ is a \emph{confounder} if $C \rightarrow X$ and $C \rightarrow Y$, creating a backdoor path from treatment to outcome. Examples: distribution/ACV, pricing strategy, competitor activity.
+\end{definition}
+
+\begin{proposition}[Bias from Shrinkage on Confounder Coefficients]
+\label{prop:shrinkage_bias}
+Consider a confounder $C$ affecting both media $X$ and outcome $Y$ with the following data generating process:
+\begin{align}
+X &= \delta C + \nu, \quad \nu \perp C \label{eq:dgp_x}\\
+Y &= \beta X + \gamma C + \epsilon, \quad \epsilon \perp (X, C) \label{eq:dgp_y}
+\end{align}
+where $\beta$ is the \textbf{true causal effect} of media on outcome. Suppose we estimate a model where the coefficient on $C$ is shrunk by factor $s \in [0,1]$, yielding $\tilde{\gamma} = s \cdot \gamma$ instead of the true $\gamma$. Then the estimated media effect satisfies:
+\begin{equation}
+\hat{\beta} \xrightarrow{p} \beta + (1-s) \cdot \gamma \cdot \frac{\Cov(X, C)}{\Var(X)} \label{eq:shrinkage_bias}
+\end{equation}
+
+\textbf{Proof.} The partially-adjusted residual is:
+\begin{align}
+Y - \tilde{\gamma} C &= \beta X + \gamma C + \epsilon - s\gamma C \\
+&= \beta X + (1-s)\gamma C + \epsilon
+\end{align}
+Regressing this on $X$ yields:
+\begin{equation}
+\hat{\beta} = \frac{\Cov(Y - \tilde{\gamma}C, X)}{\Var(X)} = \beta + (1-s)\gamma \cdot \frac{\Cov(C, X)}{\Var(X)} \quad \square
+\end{equation}
+\end{proposition}
+
+\begin{remark}[Interpretation of Shrinkage Bias]
+Equation \eqref{eq:shrinkage_bias} reveals several critical insights:
+
+\begin{enumerate}[leftmargin=2em]
+    \item \textbf{Complete shrinkage ($s=0$):} When the confounder coefficient is fully shrunk to zero, the bias equals the classical omitted variable bias:
+    \begin{equation}
+    \text{Bias} = \gamma \cdot \frac{\Cov(X,C)}{\Var(X)}
+    \end{equation}
+    
+    \item \textbf{Partial shrinkage ($0 < s < 1$):} Any shrinkage introduces proportional bias. Even aggressive regularization that shrinks $\gamma$ by 90\% (i.e., $s = 0.1$) leaves 90\% of the original bias:
+    \begin{equation}
+    \text{Bias}_{s=0.1} = 0.9 \cdot \gamma \cdot \frac{\Cov(X,C)}{\Var(X)}
+    \end{equation}
+    
+    \item \textbf{No shrinkage ($s=1$):} Only when $\gamma$ is estimated without shrinkage is the bias eliminated.
+    
+    \item \textbf{Correlation determines bias magnitude:} The bias depends on $\Cov(X,C)/\Var(X)$---the structural relationship between treatment and confounder in the data. This is \emph{invariant to the estimator used}. Shrinking $\gamma$ does not shrink this correlation.
+\end{enumerate}
+\end{remark}
+
+\begin{remark}[Why Shrinkage Priors Fail for Confounders]
+Variable selection priors (horseshoe, spike-slab, LASSO) are designed to shrink small, noisy coefficients toward zero. When applied to a confounder:
+
+\begin{itemize}[leftmargin=2em]
+    \item If $\gamma$ is small (weak direct effect of $C$ on $Y$), the prior will shrink it aggressively
+    \item But the confounding bias $\gamma \cdot \Cov(X,C)/\Var(X)$ may still be large if $\Cov(X,C)$ is large
+    \item The shrinkage prior ``sees'' only $\gamma$, not the product $\gamma \cdot \Cov(X,C)/\Var(X)$
+\end{itemize}
+
+\noindent\textbf{Example:} Consider distribution (ACV) as a confounder with $\gamma = 0.1$ (small direct effect) but $\Cov(X,C)/\Var(X) = 2.0$ (high correlation with media). The omitted variable bias is $0.1 \times 2.0 = 0.2$, which could represent a 20\% bias in the media effect estimate. A horseshoe prior seeing only the small $\gamma = 0.1$ would shrink it toward zero, introducing nearly the full 0.2 bias into $\hat{\beta}$.
+\end{remark}
+
+%==============================================================================
+\section{The Regularized Horseshoe Prior}
+%==============================================================================
+
+The regularized horseshoe (Piironen \& Vehtari, 2017) is the recommended default for sparse variable selection. It provides strong shrinkage of small effects toward zero while preserving large effects, with a regularized slab to prevent unrealistically large coefficients.
+
+\subsection{Model Specification}
+
+For coefficient vector $\boldsymbol{\gamma} = (\gamma_1, \ldots, \gamma_D)^\top$:
+
+\begin{align}
+\gamma_j &= z_j \cdot \tau \cdot \tilde{\lambda}_j \label{eq:hs_beta}\\
+z_j &\sim \mathcal{N}(0, 1) \label{eq:hs_z}\\
+\lambda_j &\sim \text{Half-}t_{\nu_\lambda}(0, 1) \label{eq:hs_lambda}\\
+\tau &\sim \text{Half-}t_{\nu_\tau}(0, \tau_0) \label{eq:hs_tau}\\
+c^2 &\sim \text{Inv-Gamma}\left(\frac{\nu_s}{2}, \frac{\nu_s s^2}{2}\right) \label{eq:hs_c2}
+\end{align}
+
+where the regularized local shrinkage is:
+\begin{equation}
+\tilde{\lambda}_j = \frac{c \cdot \lambda_j}{\sqrt{c^2 + \tau^2 \lambda_j^2}} \label{eq:hs_lambda_tilde}
+\end{equation}
+
+\subsection{Hyperparameters}
+
+\begin{longtable}{p{2.5cm}p{2cm}p{8cm}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Interpretation} \\
+\midrule
+\endhead
+$\tau_0$ & Calibrated & Global shrinkage scale (see Section \ref{sec:tau_calibration}) \\
+\addlinespace
+$\nu_\tau$ & 1 & Global shrinkage df; $\nu_\tau=1$ gives half-Cauchy \\
+\addlinespace
+$\nu_\lambda$ & 5 & Local shrinkage df; lower = heavier tails \\
+\addlinespace
+$s$ & 2.0 & Slab scale (``slab\_scale''); expected max effect in std units \\
+\addlinespace
+$\nu_s$ & 4 & Slab df (``slab\_df''); lower = heavier tails, larger effects allowed \\
+\bottomrule
+\end{longtable}
+
+\subsection{Global Shrinkage Calibration}
+\label{sec:tau_calibration}
+
+The global shrinkage parameter $\tau$ controls overall sparsity. Piironen \& Vehtari (2017) recommend calibrating $\tau_0$ based on the expected number of nonzero coefficients $D_0$:
+
+\begin{equation}
+\tau_0 = \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}} \label{eq:tau0_calibration}
+\end{equation}
+
+where:
+\begin{itemize}[leftmargin=2em]
+    \item $D$ = total number of coefficients subject to selection
+    \item $D_0$ = prior expected number of nonzero coefficients (``expected\_nonzero'')
+    \item $\sigma$ = observation noise standard deviation
+    \item $N$ = number of observations
+\end{itemize}
+
+This calibration ensures that the prior expected number of ``effectively nonzero'' coefficients approximately equals $D_0$.
+
+\subsection{Shrinkage Properties}
+
+Define the shrinkage factor for coefficient $j$:
+\begin{equation}
+\kappa_j = \frac{1}{1 + \tau^2 \lambda_j^2} \label{eq:kappa}
+\end{equation}
+
+\begin{proposition}[Shrinkage Interpretation]
+The posterior mean of $\gamma_j$ can be approximated as:
+\begin{equation}
+\E[\gamma_j | \mathbf{y}] \approx (1 - \kappa_j) \cdot \hat{\gamma}_j^{OLS}
+\end{equation}
+where $\hat{\gamma}_j^{OLS}$ is the ordinary least squares estimate.
+\begin{itemize}[leftmargin=2em]
+    \item $\kappa_j \approx 1$: Strong shrinkage (coefficient shrunk toward zero)
+    \item $\kappa_j \approx 0$: Minimal shrinkage (coefficient preserved)
+\end{itemize}
+\end{proposition}
+
+The horseshoe's key property is \emph{adaptive shrinkage}: small signals are aggressively shrunk while large signals ``escape'' the horseshoe and are preserved.
+
+\subsection{Effective Number of Nonzero Coefficients}
+
+A diagnostic quantity tracking model complexity:
+\begin{equation}
+m_{\text{eff}} = \sum_{j=1}^{D} (1 - \kappa_j) \label{eq:m_eff}
+\end{equation}
+
+This represents the effective number of nonzero coefficients. Monitor $m_{\text{eff}}$ in the posterior to assess sparsity.
+
+\subsection{Role of the Slab}
+
+Without regularization, the horseshoe allows arbitrarily large coefficients. The regularized slab bounds the effective scale:
+
+\begin{equation}
+\tilde{\lambda}_j \leq c \quad \text{for all } j
+\end{equation}
+
+This prevents unrealistic coefficient magnitudes while preserving the shrinkage profile for small effects.
+
+\begin{remark}
+Set $s$ (slab\_scale) to reflect the maximum plausible standardized effect. For MMM control variables, $s = 2$ implies that no control should have an effect larger than 2 standard deviations of the outcome per standard deviation of the control.
+\end{remark}
+
+%==============================================================================
+\section{The Spike-and-Slab Prior}
+%==============================================================================
+
+The spike-and-slab prior provides explicit posterior inclusion probabilities for each variable, making it particularly interpretable for variable selection.
+
+\subsection{Discrete Formulation}
+
+The classical spike-and-slab uses a mixture:
+\begin{align}
+\gamma_j | \xi_j &\sim \xi_j \cdot \mathcal{N}(0, \sigma_{\text{slab}}^2) + (1-\xi_j) \cdot \delta_0 \\
+\xi_j &\sim \text{Bernoulli}(\pi) \label{eq:ss_discrete}
+\end{align}
+
+where $\delta_0$ is a point mass at zero, and $\pi$ is the prior inclusion probability.
+
+\textbf{Challenge}: Discrete $\xi_j$ creates discontinuities that prevent gradient-based sampling (NUTS/HMC).
+
+\subsection{Continuous Relaxation}
+
+For NUTS-compatible sampling, we use a continuous relaxation:
+\begin{align}
+\gamma_j &= \eta_j \cdot \beta_{\text{slab},j} + (1 - \eta_j) \cdot \beta_{\text{spike},j} \label{eq:ss_mixture}\\
+\eta_j &= \sigmoid\left(\frac{\omega_j}{T}\right) \label{eq:ss_eta}\\
+\omega_j &\sim \mathcal{N}(\logit(\pi), 1) \label{eq:ss_omega}\\
+\beta_{\text{slab},j} &\sim \mathcal{N}(0, \sigma_{\text{slab}}^2) \\
+\beta_{\text{spike},j} &\sim \mathcal{N}(0, \sigma_{\text{spike}}^2) \label{eq:ss_spike}
+\end{align}
+
+where:
+\begin{itemize}[leftmargin=2em]
+    \item $T$ is the temperature parameter (lower = sharper selection)
+    \item $\sigma_{\text{spike}} \ll \sigma_{\text{slab}}$ (typically $\sigma_{\text{spike}} = 0.01$)
+    \item $\eta_j \in (0,1)$ is the soft inclusion indicator
+\end{itemize}
+
+\subsection{Hyperparameters}
+
+\begin{longtable}{p{3cm}p{2cm}p{7.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Interpretation} \\
+\midrule
+\endhead
+$\pi$ & 0.5 & Prior inclusion probability \\
+\addlinespace
+$\sigma_{\text{spike}}$ & 0.01 & Spike scale (near-zero effects) \\
+\addlinespace
+$\sigma_{\text{slab}}$ & 1.0 & Slab scale (nonzero effects) \\
+\addlinespace
+$T$ & 0.1 & Temperature (lower = sharper selection) \\
+\bottomrule
+\end{longtable}
+
+\subsection{Posterior Inclusion Probability}
+
+The posterior inclusion probability for variable $j$ is:
+\begin{equation}
+\Pr(\text{included}_j | \mathbf{y}) = \E[\eta_j | \mathbf{y}]
+\end{equation}
+
+This is directly interpretable: ``the posterior probability that variable $j$ has a nonzero effect.''
+
+\subsection{Temperature and Selection Sharpness}
+
+The temperature $T$ controls the sharpness of selection:
+
+\begin{itemize}[leftmargin=2em]
+    \item $T \to 0$: $\eta_j \to \{0, 1\}$ (approaches discrete selection)
+    \item $T \to \infty$: $\eta_j \to 0.5$ (no selection, equal mixing)
+\end{itemize}
+
+\begin{remark}
+Lower temperatures give sharper selection but can cause sampling difficulties. $T = 0.1$ provides a good balance between interpretability and computational stability.
+\end{remark}
+
+%==============================================================================
+\section{The Bayesian LASSO}
+%==============================================================================
+
+The Bayesian LASSO (Park \& Casella, 2008) places a Laplace (double-exponential) prior on coefficients, providing uniform shrinkage rather than adaptive shrinkage.
+
+\subsection{Scale Mixture Representation}
+
+The Laplace prior can be represented as a scale mixture of normals:
+\begin{align}
+\gamma_j | \tau_j &\sim \mathcal{N}(0, \tau_j) \label{eq:lasso_normal}\\
+\tau_j &\sim \text{Exponential}\left(\frac{\lambda^2}{2}\right) \label{eq:lasso_exp}
+\end{align}
+
+This is equivalent to:
+\begin{equation}
+\gamma_j \sim \text{Laplace}\left(0, \frac{1}{\lambda}\right) = \frac{\lambda}{2} \exp(-\lambda |\gamma_j|)
+\end{equation}
+
+\subsection{Connection to Frequentist LASSO}
+
+The Bayesian LASSO posterior mode corresponds to the frequentist LASSO solution:
+\begin{equation}
+\hat{\boldsymbol{\gamma}}_{\text{LASSO}} = \arg\min_{\boldsymbol{\gamma}} \left\{ \sum_{t=1}^{N} (y_t - \mathbf{z}_t^\top \boldsymbol{\gamma})^2 + \lambda \sum_{j=1}^{D} |\gamma_j| \right\}
+\end{equation}
+
+However, the Bayesian approach provides full uncertainty quantification through the posterior distribution.
+
+\subsection{Hyperparameters}
+
+\begin{longtable}{p{3cm}p{2cm}p{7.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Interpretation} \\
+\midrule
+\endhead
+$\lambda$ & 1.0 & Regularization strength (higher = more shrinkage) \\
+\bottomrule
+\end{longtable}
+
+\subsection{Shrinkage Properties}
+
+Unlike the horseshoe, the LASSO provides \emph{uniform shrinkage}: all coefficients are shrunk by a similar proportion regardless of their magnitude.
+
+\begin{proposition}[LASSO Shrinkage]
+For the Bayesian LASSO, the posterior mean satisfies:
+\begin{equation}
+\E[\gamma_j | \mathbf{y}] \approx \text{sign}(\hat{\gamma}_j^{OLS}) \cdot \max(|\hat{\gamma}_j^{OLS}| - \lambda', 0)
+\end{equation}
+for some effective $\lambda'$ depending on the posterior.
+\end{proposition}
+
+This ``soft thresholding'' shrinks all coefficients toward zero by approximately the same amount, which is appropriate when expecting many small effects rather than sparse large effects.
+
+\subsection{When to Use LASSO vs Horseshoe}
+
+\begin{longtable}{p{4cm}p{4cm}p{4.5cm}}
+\toprule
+\textbf{Scenario} & \textbf{Recommended Prior} & \textbf{Reason} \\
+\midrule
+\endhead
+Few large effects, many zeros & Regularized Horseshoe & Adaptive shrinkage preserves signals \\
+\addlinespace
+Many small effects & Bayesian LASSO & Uniform shrinkage appropriate \\
+\addlinespace
+Need inclusion probabilities & Spike-and-Slab & Direct interpretation \\
+\addlinespace
+Unknown sparsity structure & Regularized Horseshoe & Most robust to misspecification \\
+\bottomrule
+\end{longtable}
+
+%==============================================================================
+\section{Comparison of Shrinkage Profiles}
+%==============================================================================
+
+\subsection{Marginal Prior on Coefficients}
+
+Each prior induces a different marginal distribution on $\gamma_j$:
+
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{Horseshoe}: Heavy tails with infinite spike at zero. Marginal density has both a pole at zero and Cauchy-like tails.
+    
+    \item \textbf{Spike-and-Slab}: Mixture of point mass (or near-point-mass) at zero and diffuse normal. Bimodal structure.
+    
+    \item \textbf{LASSO}: Laplace distribution. Peaked at zero with exponential tails (lighter than horseshoe).
+\end{itemize}
+
+\subsection{Posterior Shrinkage Comparison}
+
+Consider OLS estimate $\hat{\gamma}^{OLS}$ with standard error $\text{se}$:
+
+\begin{longtable}{p{3cm}p{9cm}}
+\toprule
+\textbf{Prior} & \textbf{Posterior Behavior} \\
+\midrule
+\endhead
+Horseshoe & Small $|\hat{\gamma}^{OLS}|/\text{se}$ $\Rightarrow$ strong shrinkage; large $\Rightarrow$ minimal shrinkage \\
+\addlinespace
+Spike-Slab & Binary decision boundary; posterior concentrates on spike or slab \\
+\addlinespace
+LASSO & Linear shrinkage toward zero; all coefficients shrunk similarly \\
+\bottomrule
+\end{longtable}
+
+\subsection{Degrees of Freedom}
+
+The effective degrees of freedom consumed by the model varies:
+
+\begin{equation}
+\text{df}_{\text{eff}} = \sum_{j=1}^{D} \E[\text{shrinkage contribution of } \gamma_j]
+\end{equation}
+
+For horseshoe: $\text{df}_{\text{eff}} \approx m_{\text{eff}}$ from Equation \eqref{eq:m_eff}.
+
+%==============================================================================
+\section{Implementation in MMM}
+%==============================================================================
+
+\subsection{Partitioning Control Variables}
+
+Given control variable set $\mathcal{Z} = \{Z_1, \ldots, Z_D\}$, partition into:
+\begin{align}
+\mathcal{C} &= \{Z_j : Z_j \text{ is a confounder}\} \\
+\mathcal{P} &= \{Z_j : Z_j \text{ is a precision control}\} = \mathcal{Z} \setminus \mathcal{C}
+\end{align}
+
+\subsection{Model Structure}
+
+\begin{equation}
+y_t = \alpha + \underbrace{\sum_{m=1}^{M} \beta_m f_m(x_{mt})}_{\text{media effects}} + \underbrace{\sum_{j \in \mathcal{C}} \gamma_j^{(c)} z_{jt}}_{\text{confounders (standard priors)}} + \underbrace{\sum_{j \in \mathcal{P}} \gamma_j^{(p)} z_{jt}}_{\text{precision (selection priors)}} + \epsilon_t
+\end{equation}
+
+\textbf{Confounder priors} (no selection):
+\begin{equation}
+\gamma_j^{(c)} \sim \mathcal{N}(0, \sigma_c^2) \quad \text{for } j \in \mathcal{C}
+\end{equation}
+
+\textbf{Precision control priors} (selection applied):
+\begin{equation}
+\boldsymbol{\gamma}^{(p)} \sim \text{SelectionPrior}(\cdot) \quad \text{(horseshoe, spike-slab, or LASSO)}
+\end{equation}
+
+\subsection{Non-Centered Parameterization}
+
+For efficient NUTS sampling, use non-centered parameterizations:
+
+\textbf{Horseshoe (non-centered):}
+\begin{align}
+z_j &\sim \mathcal{N}(0, 1) \\
+\gamma_j &= z_j \cdot \tau \cdot \tilde{\lambda}_j
+\end{align}
+
+\textbf{Spike-Slab (non-centered):}
+\begin{align}
+\beta_{\text{slab},j} &\sim \mathcal{N}(0, \sigma_{\text{slab}}) \\
+\beta_{\text{spike},j} &\sim \mathcal{N}(0, \sigma_{\text{spike}}) \\
+\gamma_j &= \eta_j \cdot \beta_{\text{slab},j} + (1-\eta_j) \cdot \beta_{\text{spike},j}
+\end{align}
+
+\subsection{PyMC Implementation}
+
+\begin{algorithm}
+\caption{Regularized Horseshoe in PyMC}
+\begin{algorithmic}[1]
+\State \textbf{Input:} $D$ (number of controls), $N$ (observations), $D_0$ (expected nonzero), $\sigma$ (noise)
+\State $\tau_0 \gets \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}}$ \Comment{Global shrinkage scale}
+\State $\tau \sim \text{HalfStudentT}(\nu=1, \sigma=\tau_0)$ \Comment{Global shrinkage}
+\State $\boldsymbol{\lambda} \sim \text{HalfStudentT}(\nu=5, \sigma=1)^D$ \Comment{Local shrinkage}
+\State $c^2 \sim \text{InvGamma}(\alpha=\nu_s/2, \beta=\nu_s s^2/2)$ \Comment{Slab variance}
+\State $\tilde{\boldsymbol{\lambda}} \gets \frac{\sqrt{c^2} \cdot \boldsymbol{\lambda}}{\sqrt{c^2 + \tau^2 \boldsymbol{\lambda}^2}}$ \Comment{Regularized local}
+\State $\mathbf{z} \sim \mathcal{N}(0, \mathbf{I}_D)$ \Comment{Standardized coefficients}
+\State $\boldsymbol{\gamma} \gets \mathbf{z} \cdot \tau \cdot \tilde{\boldsymbol{\lambda}}$ \Comment{Coefficients}
+\State \Return $\boldsymbol{\gamma}$
+\end{algorithmic}
+\end{algorithm}
+
+%==============================================================================
+\section{Diagnostics and Inference}
+%==============================================================================
+
+\subsection{Posterior Summaries}
+
+For each coefficient $\gamma_j$, report:
+
+\begin{enumerate}[leftmargin=2em]
+    \item Posterior mean $\E[\gamma_j | \mathbf{y}]$
+    \item Posterior standard deviation $\sqrt{\Var[\gamma_j | \mathbf{y}]}$
+    \item 94\% highest density interval (HDI)
+    \item Inclusion probability (method-dependent)
+\end{enumerate}
+
+\subsection{Inclusion Probability Calculation}
+
+\textbf{Spike-and-Slab:}
+\begin{equation}
+\Pr(\text{included}_j | \mathbf{y}) = \E[\eta_j | \mathbf{y}]
+\end{equation}
+
+\textbf{Horseshoe:}
+\begin{equation}
+\Pr(\text{included}_j | \mathbf{y}) \approx \E[1 - \kappa_j | \mathbf{y}]
+\end{equation}
+
+Alternatively, use a signal-to-noise heuristic:
+\begin{equation}
+\text{included}_j = \mathbf{1}\left[\frac{|\E[\gamma_j|\mathbf{y}]|}{\sqrt{\Var[\gamma_j|\mathbf{y}]}} > \theta\right]
+\end{equation}
+for threshold $\theta$ (typically 0.5 or 1.0).
+
+\textbf{LASSO:}
+Use credible interval exclusion of zero:
+\begin{equation}
+\text{included}_j = \mathbf{1}[\text{HDI}_{94\%}(\gamma_j) \not\ni 0]
+\end{equation}
+
+\subsection{Effective Number of Nonzero}
+
+For horseshoe:
+\begin{equation}
+m_{\text{eff}} = \sum_{j=1}^{D} (1 - \kappa_j)
+\end{equation}
+
+For spike-slab:
+\begin{equation}
+m_{\text{eff}} = \sum_{j=1}^{D} \eta_j
+\end{equation}
+
+Report posterior distribution of $m_{\text{eff}}$.
+
+\subsection{Model Comparison}
+
+When comparing selection methods or hyperparameter settings, use:
+
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{LOO-CV}: Leave-one-out cross-validation via Pareto-smoothed importance sampling
+    \item \textbf{WAIC}: Widely applicable information criterion
+    \item \textbf{Posterior predictive checks}: Compare observed vs predicted distributions
+\end{itemize}
+
+\begin{caution}
+Do \emph{not} select hyperparameters (e.g., $D_0$, $\pi$, $\lambda$) based on model fit metrics. This constitutes specification shopping and invalidates uncertainty quantification. Pre-specify hyperparameters based on domain knowledge.
+\end{caution}
+
+%==============================================================================
+\section{Best Practices}
+%==============================================================================
+
+\subsection{Pre-Specification Checklist}
+
+Before fitting any models:
+
+\begin{enumerate}[leftmargin=2em]
+    \item \textbf{Classify all variables} as confounder, precision control, or other
+    \item \textbf{Document classification rationale} for each variable
+    \item \textbf{Specify selection method} and hyperparameters
+    \item \textbf{Pre-register} the analysis plan
+\end{enumerate}
+
+\subsection{Hyperparameter Selection}
+
+\begin{longtable}{p{4cm}p{8.5cm}}
+\toprule
+\textbf{Hyperparameter} & \textbf{Selection Guidance} \\
+\midrule
+\endhead
+$D_0$ (expected nonzero) & Based on domain knowledge of how many controls typically matter. Err toward larger values (more conservative). \\
+\addlinespace
+$s$ (slab scale) & Maximum plausible effect size in standardized units. For controls, typically 1.5--3.0. \\
+\addlinespace
+$\pi$ (inclusion prob) & Prior belief about sparsity. $\pi = 0.5$ represents maximum uncertainty. \\
+\addlinespace
+$\lambda$ (LASSO penalty) & Trade-off between shrinkage and bias. Use cross-validation on held-out data if needed. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Sensitivity Analysis}
+
+Report results under:
+\begin{itemize}[leftmargin=2em]
+    \item Multiple values of $D_0$ (e.g., $D_0 \in \{2, 5, 10\}$)
+    \item Different selection methods (horseshoe vs spike-slab)
+    \item With and without selection (baseline comparison)
+\end{itemize}
+
+If conclusions are sensitive to these choices, report this uncertainty honestly.
+
+\subsection{Reporting Standards}
+
+Every analysis using variable selection should report:
+
+\begin{enumerate}[leftmargin=2em]
+    \item Variable classification (confounder vs precision)
+    \item Selection method and all hyperparameters
+    \item Posterior inclusion probabilities or shrinkage factors
+    \item Effective number of nonzero coefficients
+    \item Sensitivity to hyperparameter choices
+    \item Any deviations from pre-registered plan
+\end{enumerate}
+
+%==============================================================================
+\section{References}
+%==============================================================================
+
+\subsection*{Foundational Variable Selection}
+
+\hangindent=0.5cm \noindent Carvalho, C. M., Polson, N. G., \& Scott, J. G. (2010). The horseshoe estimator for sparse signals. \textit{Biometrika}, 97(2), 465--480.
+
+\hangindent=0.5cm \noindent George, E. I., \& McCulloch, R. E. (1993). Variable selection via Gibbs sampling. \textit{Journal of the American Statistical Association}, 88(423), 881--889.
+
+\hangindent=0.5cm \noindent Park, T., \& Casella, G. (2008). The Bayesian Lasso. \textit{Journal of the American Statistical Association}, 103(482), 681--686.
+
+\subsection*{Regularization and Shrinkage}
+
+\hangindent=0.5cm \noindent Piironen, J., \& Vehtari, A. (2017). Sparsity information and regularization in the horseshoe and other shrinkage priors. \textit{Electronic Journal of Statistics}, 11(2), 5018--5051.
+
+\hangindent=0.5cm \noindent Piironen, J., \& Vehtari, A. (2017). On the hyperprior choice for the global shrinkage parameter in the horseshoe prior. \textit{Proceedings of AISTATS}, 905--913.
+
+\hangindent=0.5cm \noindent Bhadra, A., Datta, J., Polson, N. G., \& Willard, B. (2019). Lasso meets horseshoe: A survey. \textit{Statistical Science}, 34(3), 405--427.
+
+\subsection*{Causal Inference and Confounding}
+
+\hangindent=0.5cm \noindent Pearl, J. (2009). \textit{Causality: Models, Reasoning, and Inference} (2nd ed.). Cambridge University Press.
+
+\hangindent=0.5cm \noindent Hernán, M. A., \& Robins, J. M. (2020). \textit{Causal Inference: What If}. Chapman \& Hall/CRC.
+
+\hangindent=0.5cm \noindent Cinelli, C., Forney, A., \& Pearl, J. (2022). A crash course in good and bad controls. \textit{Sociological Methods \& Research}.
+
+\subsection*{Bayesian Computation}
+
+\hangindent=0.5cm \noindent Betancourt, M. (2017). A conceptual introduction to Hamiltonian Monte Carlo. \textit{arXiv preprint arXiv:1701.02434}.
+
+\hangindent=0.5cm \noindent Vehtari, A., Gelman, A., \& Gabry, J. (2017). Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC. \textit{Statistics and Computing}, 27(5), 1413--1432.
+
+\end{document}
