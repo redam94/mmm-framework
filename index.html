@@ -322,6 +322,174 @@
             background: linear-gradient(90deg, transparent, var(--color-border), transparent);
         }
 
+        /* Dartboard Demo */
+        .dartboard-demo {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+            margin: 4rem 0;
+            padding: 3rem;
+            background: var(--color-bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--color-border);
+        }
+
+        .dartboard-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .dartboard-svg {
+            width: 100%;
+            max-width: 300px;
+            height: auto;
+        }
+
+        .dartboard-stats {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--color-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--color-text);
+        }
+
+        .stat-value.accuracy {
+            color: var(--color-success);
+        }
+
+        .dartboard-explanation h3 {
+            margin-bottom: 1rem;
+            color: var(--color-danger);
+        }
+
+        .dartboard-explanation p {
+            margin-bottom: 1.5rem;
+        }
+
+        .dartboard-stages {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stage {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            opacity: 0.4;
+            transition: var(--transition-smooth);
+        }
+
+        .stage.active {
+            opacity: 1;
+        }
+
+        .stage-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+
+        .stage.active .stage-icon {
+            background: var(--color-danger);
+            color: white;
+        }
+
+        .stage.completed .stage-icon {
+            background: var(--color-success);
+        }
+
+        .dartboard-punchline {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: var(--transition-smooth);
+        }
+
+        .dartboard-punchline.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .dartboard-punchline .punchline-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .dartboard-punchline p {
+            color: var(--color-text);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .punchline-subtext {
+            font-size: 0.9rem;
+            color: var(--color-danger);
+            font-style: italic;
+        }
+
+        /* Dart styles */
+        .dart {
+            transition: opacity 0.5s ease-out;
+        }
+
+        .dart-hit {
+            animation: dartHit 0.3s ease-out;
+        }
+
+        .dart-miss {
+            animation: dartMiss 0.8s ease-out forwards;
+        }
+
+        @keyframes dartHit {
+            0% { transform: scale(1.5); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes dartMiss {
+            0% { opacity: 1; }
+            70% { opacity: 0.5; }
+            100% { opacity: 0; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
         .problem-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -1006,6 +1174,16 @@
                 grid-template-columns: 1fr;
             }
 
+            .dartboard-demo {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .dartboard-stats {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
             .comparison {
                 grid-template-columns: 1fr;
             }
@@ -1075,6 +1253,14 @@
 
             .container {
                 padding: 0 1.25rem;
+            }
+
+            .dartboard-demo {
+                padding: 1.5rem;
+            }
+
+            .dartboard-stages {
+                font-size: 0.9rem;
             }
 
             .cross-effect-demo {
@@ -1150,6 +1336,79 @@
                     Most marketing mix models give you precise-looking numbers. But that precision is often an illusion—
                     the result of practices that inflate confidence and hide uncertainty.
                 </p>
+            </div>
+
+            <!-- Specification Shopping Animation -->
+            <div class="dartboard-demo fade-in">
+                <div class="dartboard-container">
+                    <svg viewBox="0 0 300 300" class="dartboard-svg">
+                        <!-- Dartboard rings -->
+                        <circle cx="150" cy="150" r="140" fill="#1a2332" stroke="#374151" stroke-width="2"/>
+                        <circle cx="150" cy="150" r="110" fill="#2d3748" stroke="#374151" stroke-width="1"/>
+                        <circle cx="150" cy="150" r="80" fill="#1a2332" stroke="#374151" stroke-width="1"/>
+                        <circle cx="150" cy="150" r="50" fill="#2d3748" stroke="#374151" stroke-width="1"/>
+                        <circle cx="150" cy="150" r="25" fill="#dc2626" stroke="#b91c1c" stroke-width="2"/>
+                        <circle cx="150" cy="150" r="8" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+                        
+                        <!-- Crosshairs -->
+                        <line x1="150" y1="10" x2="150" y2="290" stroke="#374151" stroke-width="1" opacity="0.5"/>
+                        <line x1="10" y1="150" x2="290" y2="150" stroke="#374151" stroke-width="1" opacity="0.5"/>
+                        
+                        <!-- Dart group - darts will be added here -->
+                        <g id="darts-group"></g>
+                    </svg>
+                    
+                    <!-- Stats overlay -->
+                    <div class="dartboard-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Models Run</span>
+                            <span class="stat-value" id="models-run">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Models Reported</span>
+                            <span class="stat-value" id="models-kept">0</span>
+                        </div>
+                        <div class="stat-item hidden" id="accuracy-stat">
+                            <span class="stat-label">Reported "Accuracy"</span>
+                            <span class="stat-value accuracy" id="fake-accuracy">100%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dartboard-explanation">
+                    <h3>This Is Specification Shopping</h3>
+                    <p>
+                        Watch what happens when you run many model specifications and only report the ones 
+                        that "work." The darts that miss? Those are the models with negative coefficients, 
+                        poor fit, or "unrealistic" results—quietly discarded.
+                    </p>
+                    <div class="dartboard-stages">
+                        <div class="stage" id="stage-1">
+                            <div class="stage-icon active">1</div>
+                            <span>Run 20+ model specs</span>
+                        </div>
+                        <div class="stage" id="stage-2">
+                            <div class="stage-icon">2</div>
+                            <span>Discard "bad" results</span>
+                        </div>
+                        <div class="stage" id="stage-3">
+                            <div class="stage-icon">3</div>
+                            <span>Report only bullseyes</span>
+                        </div>
+                        <div class="stage" id="stage-4">
+                            <div class="stage-icon">4</div>
+                            <span>Claim high accuracy</span>
+                        </div>
+                    </div>
+                    <div class="dartboard-punchline hidden" id="punchline">
+                        <div class="punchline-icon">🎯</div>
+                        <p>"Our model shows <strong>100% of retained specifications</strong> have positive, significant TV effects!"</p>
+                        <span class="punchline-subtext">(...we just don't mention the 85% we threw away)</span>
+                    </div>
+                    <button class="btn btn-secondary" id="restart-demo" onclick="restartDartboard()">
+                        ↻ Run Again
+                    </button>
+                </div>
             </div>
             
             <div class="problem-grid">
@@ -1913,11 +2172,142 @@
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('visible');
+                    // Start dartboard animation when it comes into view
+                    if (entry.target.classList.contains('dartboard-demo')) {
+                        setTimeout(startDartboardAnimation, 500);
+                    }
                 }
             });
         }, observerOptions);
 
         document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+        // =====================================================
+        // Dartboard Animation
+        // =====================================================
+        let dartboardAnimationRunning = false;
+        let dartsThrown = 0;
+        let dartsKept = 0;
+
+        function startDartboardAnimation() {
+            if (dartboardAnimationRunning) return;
+            dartboardAnimationRunning = true;
+            dartsThrown = 0;
+            dartsKept = 0;
+            
+            // Clear existing darts
+            const dartsGroup = document.getElementById('darts-group');
+            dartsGroup.innerHTML = '';
+            
+            // Reset UI
+            document.getElementById('models-run').textContent = '0';
+            document.getElementById('models-kept').textContent = '0';
+            document.getElementById('accuracy-stat').classList.add('hidden');
+            document.getElementById('punchline').classList.remove('visible');
+            document.getElementById('punchline').classList.add('hidden');
+            
+            // Reset stages
+            document.querySelectorAll('.stage').forEach(s => {
+                s.classList.remove('active', 'completed');
+            });
+            document.getElementById('stage-1').classList.add('active');
+            
+            // Schedule darts
+            const totalDarts = 20;
+            const bullseyeCount = 3; // Only 3 will be bullseyes
+            const bullseyeIndices = [7, 12, 18]; // Which throws are bullseyes
+            
+            for (let i = 0; i < totalDarts; i++) {
+                setTimeout(() => {
+                    throwDart(i, bullseyeIndices.includes(i));
+                    
+                    // Update stages based on progress
+                    if (i === 5) {
+                        document.getElementById('stage-1').classList.remove('active');
+                        document.getElementById('stage-1').classList.add('completed');
+                        document.getElementById('stage-2').classList.add('active');
+                    }
+                    if (i === 12) {
+                        document.getElementById('stage-2').classList.remove('active');
+                        document.getElementById('stage-2').classList.add('completed');
+                        document.getElementById('stage-3').classList.add('active');
+                    }
+                    if (i === totalDarts - 1) {
+                        // Final stage
+                        setTimeout(() => {
+                            document.getElementById('stage-3').classList.remove('active');
+                            document.getElementById('stage-3').classList.add('completed');
+                            document.getElementById('stage-4').classList.add('active');
+                            
+                            // Show punchline
+                            setTimeout(() => {
+                                document.getElementById('stage-4').classList.remove('active');
+                                document.getElementById('stage-4').classList.add('completed');
+                                document.getElementById('accuracy-stat').classList.remove('hidden');
+                                document.getElementById('punchline').classList.remove('hidden');
+                                setTimeout(() => {
+                                    document.getElementById('punchline').classList.add('visible');
+                                }, 50);
+                                dartboardAnimationRunning = false;
+                            }, 800);
+                        }, 500);
+                    }
+                }, i * 250);
+            }
+        }
+
+        function throwDart(index, isBullseye) {
+            const dartsGroup = document.getElementById('darts-group');
+            const centerX = 150;
+            const centerY = 150;
+            
+            let x, y;
+            
+            if (isBullseye) {
+                // Bullseye hit - within 8px of center
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 6;
+                x = centerX + Math.cos(angle) * distance;
+                y = centerY + Math.sin(angle) * distance;
+            } else {
+                // Random position - mostly misses, some close
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 30 + Math.random() * 100; // Outside bullseye
+                x = centerX + Math.cos(angle) * distance;
+                y = centerY + Math.sin(angle) * distance;
+            }
+            
+            // Create dart SVG element
+            const dart = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            dart.classList.add('dart');
+            dart.innerHTML = `
+                <circle cx="${x}" cy="${y}" r="4" fill="${isBullseye ? '#10b981' : '#ef4444'}" />
+                <circle cx="${x}" cy="${y}" r="6" fill="none" stroke="${isBullseye ? '#10b981' : '#ef4444'}" stroke-width="1" opacity="0.5" />
+            `;
+            
+            dartsGroup.appendChild(dart);
+            
+            // Update counter
+            dartsThrown++;
+            document.getElementById('models-run').textContent = dartsThrown;
+            
+            if (isBullseye) {
+                dart.classList.add('dart-hit');
+                dartsKept++;
+                document.getElementById('models-kept').textContent = dartsKept;
+            } else {
+                dart.classList.add('dart-miss');
+                // Remove after animation
+                setTimeout(() => {
+                    dart.style.opacity = '0';
+                }, 800);
+            }
+        }
+
+        function restartDartboard() {
+            dartboardAnimationRunning = false;
+            startDartboardAnimation();
+        }
 
         // =====================================================
         // Chart Configuration
