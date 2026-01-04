@@ -394,10 +394,79 @@
             <p>For $\alpha = 0.7$: half-life ≈ 1.9 periods. For $\alpha = 0.9$: half-life ≈ 6.6 periods.</p>
 
             <h4>Weibull/Delayed Adstock</h4>
-            <p>For channels where peak effect is delayed:</p>
+            <p>For channels where peak effect is delayed (e.g., brand campaigns, content marketing):</p>
             <div class="math-block">
                 <span class="equation-label">(3)</span>
                 $$w_l = \exp\left(-\left(\frac{l}{\theta}\right)^k\right) - \exp\left(-\left(\frac{l+1}{\theta}\right)^k\right)$$
+            </div>
+            <p>Where <strong>θ</strong> (scale) controls delay and <strong>k</strong> (shape) controls peak sharpness.</p>
+
+            <!-- Interactive Adstock Plots -->
+            <div class="interactive-box">
+                <h4>Interactive: Geometric Adstock Decay</h4>
+                <p style="margin-bottom: 1rem;">See how the decay parameter α affects carryover. Higher α = longer memory.</p>
+                <div class="control-row">
+                    <label>Decay (α):</label>
+                    <input type="range" id="adstock-alpha-slider" min="0.1" max="0.95" step="0.05" value="0.7">
+                    <span class="value" id="adstock-alpha-value">0.70</span>
+                    <span style="margin-left: 1rem; color: var(--color-text-muted);">Half-life: <span id="adstock-halflife">1.9</span> periods</span>
+                </div>
+                <div id="adstock-decay-chart" class="chart-container" style="height: 280px;"></div>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Interactive: Compare Adstock Types</h4>
+                <p style="margin-bottom: 1rem;">Geometric vs Weibull: see how delayed peak effects differ from immediate decay.</p>
+                <div class="two-col" style="margin: 0 0 1rem 0;">
+                    <div>
+                        <div class="control-row">
+                            <label>Geometric α:</label>
+                            <input type="range" id="adstock-compare-alpha" min="0.3" max="0.9" step="0.05" value="0.7">
+                            <span class="value" id="adstock-compare-alpha-value">0.70</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="control-row">
+                            <label>Weibull θ (scale):</label>
+                            <input type="range" id="adstock-weibull-theta" min="1" max="6" step="0.5" value="3">
+                            <span class="value" id="adstock-weibull-theta-value">3.0</span>
+                        </div>
+                        <div class="control-row">
+                            <label>Weibull k (shape):</label>
+                            <input type="range" id="adstock-weibull-k" min="1" max="4" step="0.25" value="2">
+                            <span class="value" id="adstock-weibull-k-value">2.0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="adstock-compare-chart" class="chart-container" style="height: 300px;"></div>
+                <div class="two-col" style="margin-top: 1rem;">
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>Geometric (k=1)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Peak effect is immediate, then decays exponentially. Best for performance media (search, social).
+                        </span>
+                    </div>
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>Weibull (k&gt;1)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Peak effect is delayed. Best for brand campaigns, TV, content where awareness builds over time.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Interactive: Adstock Applied to Media Spend</h4>
+                <p style="margin-bottom: 1rem;">See how a pulse of spend gets transformed by adstock:</p>
+                <div class="control-row">
+                    <label>Adstock type:</label>
+                    <select id="adstock-demo-type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="geometric">Geometric (α=0.7)</option>
+                        <option value="geometric-high">Geometric (α=0.9)</option>
+                        <option value="weibull">Weibull Delayed</option>
+                    </select>
+                </div>
+                <div id="adstock-demo-chart" class="chart-container" style="height: 300px;"></div>
             </div>
 
             <pre><code># Adstock configuration
@@ -1078,6 +1147,213 @@ beta_g = mu_beta + tau * offset_g</code></pre>
 
         const xVals = linspace(0, 1, 100);
 
+        // =====================================================================
+        // ADSTOCK VISUALIZATIONS
+        // =====================================================================
+        
+        // Geometric adstock weights
+        function geometricWeights(alpha, maxLag) {
+            const weights = [];
+            for (let l = 0; l <= maxLag; l++) {
+                weights.push(Math.pow(alpha, l));
+            }
+            // Normalize
+            const sum = weights.reduce((a, b) => a + b, 0);
+            return weights.map(w => w / sum);
+        }
+        
+        // Weibull adstock weights (delayed peak)
+        function weibullWeights(theta, k, maxLag) {
+            const weights = [];
+            for (let l = 0; l <= maxLag; l++) {
+                const w = Math.exp(-Math.pow(l / theta, k)) - Math.exp(-Math.pow((l + 1) / theta, k));
+                weights.push(Math.max(0, w));
+            }
+            // Normalize
+            const sum = weights.reduce((a, b) => a + b, 0);
+            return sum > 0 ? weights.map(w => w / sum) : weights;
+        }
+        
+        // Apply adstock to a time series
+        function applyAdstock(spend, weights) {
+            const n = spend.length;
+            const maxLag = weights.length - 1;
+            const adstocked = new Array(n).fill(0);
+            
+            for (let t = 0; t < n; t++) {
+                for (let l = 0; l <= Math.min(maxLag, t); l++) {
+                    adstocked[t] += weights[l] * spend[t - l];
+                }
+            }
+            return adstocked;
+        }
+        
+        // Calculate half-life from alpha
+        function halfLife(alpha) {
+            if (alpha <= 0 || alpha >= 1) return Infinity;
+            return -Math.log(2) / Math.log(alpha);
+        }
+        
+        function updateAdstockDecayChart() {
+            const alpha = parseFloat(document.getElementById('adstock-alpha-slider').value);
+            document.getElementById('adstock-alpha-value').textContent = alpha.toFixed(2);
+            document.getElementById('adstock-halflife').textContent = halfLife(alpha).toFixed(1);
+            
+            const maxLag = 15;
+            const lags = Array.from({length: maxLag + 1}, (_, i) => i);
+            const weights = geometricWeights(alpha, maxLag);
+            
+            // Also show cumulative
+            const cumulative = [];
+            let cum = 0;
+            for (const w of weights) {
+                cum += w;
+                cumulative.push(cum);
+            }
+            
+            const data = [
+                {
+                    x: lags, y: weights,
+                    name: 'Weight',
+                    type: 'bar',
+                    marker: { color: colors.primary, opacity: 0.8 }
+                },
+                {
+                    x: lags, y: cumulative,
+                    name: 'Cumulative',
+                    type: 'scatter', mode: 'lines+markers',
+                    line: { color: colors.accent, width: 2 },
+                    marker: { size: 6 },
+                    yaxis: 'y2'
+                }
+            ];
+            
+            const hl = halfLife(alpha);
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Lag (periods)', gridcolor: colors.border, dtick: 2 },
+                yaxis: { title: 'Weight', gridcolor: colors.border, zeroline: false },
+                yaxis2: { title: 'Cumulative', overlaying: 'y', side: 'right', range: [0, 1.05], showgrid: false },
+                shapes: [{
+                    type: 'line', x0: hl, x1: hl, y0: 0, y1: 0.5, yref: 'y2',
+                    line: { color: colors.warning, width: 2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: hl, y: 0.52, yref: 'y2', text: 'Half-life',
+                    showarrow: false, font: { size: 10, color: colors.warning }
+                }],
+                margin: { l: 50, r: 60, t: 30, b: 50 },
+                bargap: 0.3
+            };
+            
+            Plotly.react('adstock-decay-chart', data, layout, plotConfig);
+        }
+        
+        function updateAdstockCompareChart() {
+            const alpha = parseFloat(document.getElementById('adstock-compare-alpha').value);
+            const theta = parseFloat(document.getElementById('adstock-weibull-theta').value);
+            const k = parseFloat(document.getElementById('adstock-weibull-k').value);
+            
+            document.getElementById('adstock-compare-alpha-value').textContent = alpha.toFixed(2);
+            document.getElementById('adstock-weibull-theta-value').textContent = theta.toFixed(1);
+            document.getElementById('adstock-weibull-k-value').textContent = k.toFixed(2);
+            
+            const maxLag = 12;
+            const lags = Array.from({length: maxLag + 1}, (_, i) => i);
+            const geoWeights = geometricWeights(alpha, maxLag);
+            const weibWeights = weibullWeights(theta, k, maxLag);
+            
+            const data = [
+                {
+                    x: lags, y: geoWeights,
+                    name: `Geometric α=${alpha.toFixed(2)}`,
+                    type: 'scatter', mode: 'lines+markers',
+                    line: { color: colors.primary, width: 2.5 },
+                    marker: { size: 7 }
+                },
+                {
+                    x: lags, y: weibWeights,
+                    name: `Weibull θ=${theta.toFixed(1)}, k=${k.toFixed(1)}`,
+                    type: 'scatter', mode: 'lines+markers',
+                    line: { color: colors.accent, width: 2.5 },
+                    marker: { size: 7 }
+                }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Lag (periods)', gridcolor: colors.border, dtick: 2 },
+                yaxis: { title: 'Normalized Weight', gridcolor: colors.border, zeroline: false }
+            };
+            
+            Plotly.react('adstock-compare-chart', data, layout, plotConfig);
+        }
+        
+        function updateAdstockDemoChart() {
+            const adstockType = document.getElementById('adstock-demo-type').value;
+            
+            // Create sample spend pattern: pulse + steady + pulse
+            const n = 30;
+            const time = Array.from({length: n}, (_, i) => i);
+            const spend = new Array(n).fill(0);
+            // Pulse at t=3
+            spend[3] = 1;
+            // Steady spend t=10-12
+            spend[10] = 0.5; spend[11] = 0.5; spend[12] = 0.5;
+            // Pulse at t=20
+            spend[20] = 0.8;
+            
+            let weights;
+            let adstockLabel;
+            switch(adstockType) {
+                case 'geometric':
+                    weights = geometricWeights(0.7, 10);
+                    adstockLabel = 'Geometric (α=0.7)';
+                    break;
+                case 'geometric-high':
+                    weights = geometricWeights(0.9, 15);
+                    adstockLabel = 'Geometric (α=0.9)';
+                    break;
+                case 'weibull':
+                    weights = weibullWeights(3, 2, 10);
+                    adstockLabel = 'Weibull (θ=3, k=2)';
+                    break;
+            }
+            
+            const adstocked = applyAdstock(spend, weights);
+            
+            const data = [
+                {
+                    x: time, y: spend,
+                    name: 'Raw Spend',
+                    type: 'bar',
+                    marker: { color: colors.textMuted, opacity: 0.5 }
+                },
+                {
+                    x: time, y: adstocked,
+                    name: adstockLabel,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.2)'
+                }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (periods)', gridcolor: colors.border },
+                yaxis: { title: 'Effect', gridcolor: colors.border, zeroline: false },
+                bargap: 0.5,
+                annotations: [
+                    { x: 3, y: 1.1, text: 'Pulse', showarrow: false, font: { size: 10, color: colors.textMuted } },
+                    { x: 11, y: 0.6, text: 'Steady', showarrow: false, font: { size: 10, color: colors.textMuted } },
+                    { x: 20, y: 0.9, text: 'Pulse', showarrow: false, font: { size: 10, color: colors.textMuted } }
+                ]
+            };
+            
+            Plotly.react('adstock-demo-chart', data, layout, plotConfig);
+        }
+
         // Interactive comparison chart
         function updateSaturationChart() {
             const lambda = parseFloat(document.getElementById('lambda-slider').value);
@@ -1650,6 +1926,13 @@ beta_g = mu_beta + tau * offset_g</code></pre>
         document.getElementById('prior-dist-select').addEventListener('change', updatePriorParams);
         document.getElementById('prior-compare-select').addEventListener('change', updatePriorComparison);
         
+        // Adstock event listeners
+        document.getElementById('adstock-alpha-slider').addEventListener('input', updateAdstockDecayChart);
+        document.getElementById('adstock-compare-alpha').addEventListener('input', updateAdstockCompareChart);
+        document.getElementById('adstock-weibull-theta').addEventListener('input', updateAdstockCompareChart);
+        document.getElementById('adstock-weibull-k').addEventListener('input', updateAdstockCompareChart);
+        document.getElementById('adstock-demo-type').addEventListener('change', updateAdstockDemoChart);
+        
         // Trend & Seasonality event listeners
         document.getElementById('trend-slope-slider').addEventListener('input', updateTrendChart);
         document.getElementById('trend-cp-slider').addEventListener('input', updateTrendChart);
@@ -1670,6 +1953,9 @@ beta_g = mu_beta + tau * offset_g</code></pre>
             });
 
             // Initialize charts
+            updateAdstockDecayChart();
+            updateAdstockCompareChart();
+            updateAdstockDemoChart();
             updateSaturationChart();
             initHillParamsChart();
             updateTrendChart();
