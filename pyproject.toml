@@ -31,6 +31,8 @@ dev = [
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
     "mmm-framework",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
 ]
 app = [
     "plotly>=6.5.0",
