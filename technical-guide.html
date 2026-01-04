@@ -496,10 +496,89 @@ adstock = (AdstockConfigBuilder()
                 </tbody>
             </table>
 
+            <!-- Interactive Trend Comparison -->
+            <div class="interactive-box">
+                <h4>Interactive: Compare Trend Types</h4>
+                <p style="margin-bottom: 1rem;">See how different trend specifications capture underlying patterns:</p>
+                <div class="control-row">
+                    <label>Linear slope (δ):</label>
+                    <input type="range" id="trend-slope-slider" min="-0.5" max="0.5" step="0.05" value="0.2">
+                    <span class="value" id="trend-slope-value">0.20</span>
+                </div>
+                <div class="control-row">
+                    <label>Changepoint location:</label>
+                    <input type="range" id="trend-cp-slider" min="0.2" max="0.8" step="0.05" value="0.5">
+                    <span class="value" id="trend-cp-value">0.50</span>
+                </div>
+                <div class="control-row">
+                    <label>Spline flexibility:</label>
+                    <input type="range" id="trend-spline-slider" min="3" max="8" step="1" value="5">
+                    <span class="value" id="trend-spline-value">5 knots</span>
+                </div>
+                <div id="trend-chart" class="chart-container" style="height: 320px;"></div>
+                <div class="two-col" style="margin-top: 1rem;">
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>Linear & Piecewise</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Simple, interpretable. Use piecewise when you know structural breaks occurred (e.g., COVID, new product launch).
+                        </span>
+                    </div>
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>B-Spline & GP</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Flexible, data-driven. Risk overfitting short series. GP provides uncertainty bands but is computationally expensive.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <h4>Fourier Seasonality</h4>
             <div class="math-block">
                 <span class="equation-label">(6)</span>
                 $$s(t) = \sum_{n=1}^{N} \left[ a_n \sin\left(\frac{2\pi n t}{P}\right) + b_n \cos\left(\frac{2\pi n t}{P}\right) \right]$$
+            </div>
+
+            <!-- Interactive Seasonality Visualization -->
+            <div class="interactive-box">
+                <h4>Interactive: Fourier Seasonality Components</h4>
+                <p style="margin-bottom: 1rem;">Higher order N captures finer seasonal patterns. P is the period (e.g., 52 for weekly data with annual seasonality).</p>
+                <div class="control-row">
+                    <label>Order (N):</label>
+                    <input type="range" id="season-order-slider" min="1" max="6" step="1" value="2">
+                    <span class="value" id="season-order-value">2</span>
+                </div>
+                <div id="seasonality-chart" class="chart-container" style="height: 320px;"></div>
+                <table style="margin-top: 1rem;">
+                    <thead><tr><th>Order</th><th>Pattern Captured</th><th>Typical Use</th></tr></thead>
+                    <tbody>
+                        <tr><td>N = 1</td><td>Single annual wave</td><td>Simple annual cycle</td></tr>
+                        <tr><td>N = 2</td><td>+ Semi-annual</td><td>Summer/winter peaks</td></tr>
+                        <tr><td>N = 3</td><td>+ Quarterly</td><td>Q4 holiday spike</td></tr>
+                        <tr><td>N ≥ 4</td><td>+ Finer patterns</td><td>Complex seasonality</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Combined Trend + Seasonality -->
+            <div class="interactive-box">
+                <h4>Interactive: Combined Trend + Seasonality</h4>
+                <p style="margin-bottom: 1rem;">See how trend and seasonality combine to form the baseline (before media effects):</p>
+                <div class="control-row">
+                    <label>Trend type:</label>
+                    <select id="combined-trend-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="linear">Linear</option>
+                        <option value="piecewise">Piecewise</option>
+                        <option value="spline">B-Spline</option>
+                    </select>
+                    <label style="margin-left: 1rem;">Seasonality order:</label>
+                    <select id="combined-season-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="0">None</option>
+                        <option value="1">N = 1</option>
+                        <option value="2" selected>N = 2</option>
+                        <option value="3">N = 3</option>
+                    </select>
+                </div>
+                <div id="combined-trend-season-chart" class="chart-container" style="height: 320px;"></div>
             </div>
 
             <div class="note">
@@ -1100,6 +1179,188 @@ beta_g = mu_beta + tau * offset_g</code></pre>
         }
 
         // =====================================================================
+        // TREND & SEASONALITY VISUALIZATIONS
+        // =====================================================================
+        
+        // Generate time points (0 to 1 representing normalized time, e.g., 2 years)
+        const tVals = linspace(0, 1, 200);
+        
+        // Trend functions
+        function linearTrend(t, slope) {
+            return slope * t;
+        }
+        
+        function piecewiseTrend(t, slope1, slope2, changepoint) {
+            if (t < changepoint) {
+                return slope1 * t;
+            } else {
+                const y_cp = slope1 * changepoint;
+                return y_cp + slope2 * (t - changepoint);
+            }
+        }
+        
+        // Simple B-spline basis (cubic)
+        function bsplineBasis(t, knots) {
+            // Simplified: return weighted sum creating smooth curve
+            let result = 0;
+            const n = knots.length;
+            for (let i = 0; i < n; i++) {
+                const center = knots[i];
+                const width = 1.5 / n;
+                const weight = Math.exp(-Math.pow((t - center) / width, 2));
+                // Vary heights to create interesting pattern
+                const coef = 0.3 * Math.sin(2 * Math.PI * i / n + 0.5) + 0.1 * Math.cos(4 * Math.PI * i / n);
+                result += coef * weight;
+            }
+            return result;
+        }
+        
+        function splineTrend(t, numKnots) {
+            const knots = linspace(0.1, 0.9, numKnots);
+            return bsplineBasis(t, knots) + 0.15 * t; // Add slight upward trend
+        }
+        
+        // Fourier seasonality
+        function fourierSeasonality(t, order, period = 1, coeffs = null) {
+            let result = 0;
+            for (let n = 1; n <= order; n++) {
+                const freq = 2 * Math.PI * n * t / period;
+                // Default coefficients that create realistic seasonal pattern
+                const a_n = coeffs ? coeffs[n-1][0] : (n === 1 ? 0.3 : 0.15 / n);
+                const b_n = coeffs ? coeffs[n-1][1] : (n === 1 ? 0.1 : 0.1 / n);
+                result += a_n * Math.sin(freq) + b_n * Math.cos(freq);
+            }
+            return result;
+        }
+        
+        function updateTrendChart() {
+            const slope = parseFloat(document.getElementById('trend-slope-slider').value);
+            const cp = parseFloat(document.getElementById('trend-cp-slider').value);
+            const numKnots = parseInt(document.getElementById('trend-spline-slider').value);
+            
+            document.getElementById('trend-slope-value').textContent = slope.toFixed(2);
+            document.getElementById('trend-cp-value').textContent = cp.toFixed(2);
+            document.getElementById('trend-spline-value').textContent = numKnots + ' knots';
+            
+            const linearY = tVals.map(t => linearTrend(t, slope));
+            const piecewiseY = tVals.map(t => piecewiseTrend(t, slope, -slope * 0.5, cp));
+            const splineY = tVals.map(t => splineTrend(t, numKnots));
+            
+            const data = [
+                { x: tVals, y: linearY, name: 'Linear', type: 'scatter', mode: 'lines',
+                  line: { color: colors.primary, width: 2.5 } },
+                { x: tVals, y: piecewiseY, name: 'Piecewise', type: 'scatter', mode: 'lines',
+                  line: { color: colors.accent, width: 2.5 } },
+                { x: tVals, y: splineY, name: 'B-Spline', type: 'scatter', mode: 'lines',
+                  line: { color: colors.warning, width: 2.5 } }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (normalized)', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Trend τ(t)', gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                shapes: [{
+                    type: 'line', x0: cp, x1: cp, y0: -0.3, y1: 0.3,
+                    line: { color: colors.accent, width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: cp, y: 0.32, text: 'Changepoint', showarrow: false,
+                    font: { size: 10, color: colors.accent }
+                }]
+            };
+            
+            Plotly.react('trend-chart', data, layout, plotConfig);
+        }
+        
+        function updateSeasonalityChart() {
+            const order = parseInt(document.getElementById('season-order-slider').value);
+            document.getElementById('season-order-value').textContent = order;
+            
+            const data = [];
+            const seasonColors = [colors.primary, colors.accent, colors.warning, colors.danger, '#9b59b6', '#1abc9c'];
+            
+            // Show individual harmonics
+            for (let n = 1; n <= order; n++) {
+                const y = tVals.map(t => {
+                    const freq = 2 * Math.PI * n * t;
+                    const a_n = n === 1 ? 0.3 : 0.15 / n;
+                    const b_n = n === 1 ? 0.1 : 0.1 / n;
+                    return a_n * Math.sin(freq) + b_n * Math.cos(freq);
+                });
+                data.push({
+                    x: tVals, y: y,
+                    name: `n=${n}`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: seasonColors[n-1], width: 1.5, dash: 'dot' },
+                    opacity: 0.7
+                });
+            }
+            
+            // Show combined seasonality
+            const combinedY = tVals.map(t => fourierSeasonality(t, order));
+            data.push({
+                x: tVals, y: combinedY,
+                name: 'Combined',
+                type: 'scatter', mode: 'lines',
+                line: { color: colors.text, width: 3 }
+            });
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (1 period)', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Seasonality s(t)', gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                margin: { l: 50, r: 150, t: 30, b: 50 }
+            };
+            
+            Plotly.react('seasonality-chart', data, layout, plotConfig);
+        }
+        
+        function updateCombinedTrendSeasonChart() {
+            const trendType = document.getElementById('combined-trend-select').value;
+            const seasonOrder = parseInt(document.getElementById('combined-season-select').value);
+            
+            // Generate trend
+            let trendY;
+            switch(trendType) {
+                case 'linear':
+                    trendY = tVals.map(t => linearTrend(t, 0.2));
+                    break;
+                case 'piecewise':
+                    trendY = tVals.map(t => piecewiseTrend(t, 0.3, -0.1, 0.5));
+                    break;
+                case 'spline':
+                    trendY = tVals.map(t => splineTrend(t, 5));
+                    break;
+            }
+            
+            // Generate seasonality (2 full cycles to show pattern)
+            const seasonY = seasonOrder > 0 
+                ? tVals.map(t => fourierSeasonality(t * 2, seasonOrder))  // 2 cycles
+                : tVals.map(() => 0);
+            
+            // Combined
+            const combinedY = tVals.map((t, i) => trendY[i] + seasonY[i]);
+            
+            const data = [
+                { x: tVals, y: trendY, name: 'Trend', type: 'scatter', mode: 'lines',
+                  line: { color: colors.primary, width: 2, dash: 'dash' } },
+                { x: tVals, y: seasonY, name: 'Seasonality', type: 'scatter', mode: 'lines',
+                  line: { color: colors.accent, width: 2, dash: 'dot' } },
+                { x: tVals, y: combinedY, name: 'Baseline', type: 'scatter', mode: 'lines',
+                  line: { color: colors.text, width: 3 } }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (2 years)', range: [0, 1], gridcolor: colors.border, zeroline: false,
+                         tickvals: [0, 0.25, 0.5, 0.75, 1], ticktext: ['0', '6mo', '1yr', '18mo', '2yr'] },
+                yaxis: { title: 'Baseline (before media)', gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted }
+            };
+            
+            Plotly.react('combined-trend-season-chart', data, layout, plotConfig);
+        }
+
+        // =====================================================================
         // PRIOR EXPLORER
         // =====================================================================
         
@@ -1388,6 +1649,14 @@ beta_g = mu_beta + tau * offset_g</code></pre>
         document.getElementById('slope-slider').addEventListener('input', updateSaturationChart);
         document.getElementById('prior-dist-select').addEventListener('change', updatePriorParams);
         document.getElementById('prior-compare-select').addEventListener('change', updatePriorComparison);
+        
+        // Trend & Seasonality event listeners
+        document.getElementById('trend-slope-slider').addEventListener('input', updateTrendChart);
+        document.getElementById('trend-cp-slider').addEventListener('input', updateTrendChart);
+        document.getElementById('trend-spline-slider').addEventListener('input', updateTrendChart);
+        document.getElementById('season-order-slider').addEventListener('input', updateSeasonalityChart);
+        document.getElementById('combined-trend-select').addEventListener('change', updateCombinedTrendSeasonChart);
+        document.getElementById('combined-season-select').addEventListener('change', updateCombinedTrendSeasonChart);
 
         // Initialize on DOM ready
         document.addEventListener("DOMContentLoaded", function() {
@@ -1403,6 +1672,9 @@ beta_g = mu_beta + tau * offset_g</code></pre>
             // Initialize charts
             updateSaturationChart();
             initHillParamsChart();
+            updateTrendChart();
+            updateSeasonalityChart();
+            updateCombinedTrendSeasonChart();
             updatePriorParams();
             updatePriorComparison();
         });
