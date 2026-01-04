@@ -270,6 +270,20 @@
             margin-bottom: 0.5rem;
         }
 
+        .caution {
+            background: rgba(212, 168, 106, 0.15);
+            border-left: 4px solid var(--color-warning);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .caution h4 {
+            color: #b8860b;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
         /* Code blocks */
         pre {
             background: #2d3a2d;
@@ -295,6 +309,14 @@
             background: none;
             padding: 0;
         }
+
+        /* Syntax highlighting */
+        .keyword { color: #c792ea; }
+        .function { color: #82aaff; }
+        .string { color: #c3e88d; }
+        .number { color: #f78c6c; }
+        .comment { color: #676e95; font-style: italic; }
+        .class { color: #ffcb6b; }
 
         /* Tables */
         table {
@@ -389,6 +411,52 @@
             text-decoration: underline;
         }
 
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: rgba(106, 191, 138, 0.15);
+            color: #3d8b5a;
+        }
+
+        .badge-danger {
+            background: rgba(201, 112, 103, 0.15);
+            color: var(--color-danger);
+        }
+
+        /* Method comparison grid */
+        .method-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .method-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .method-card h4 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            color: var(--color-primary-dark);
+        }
+
+        .method-card .use-for {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-bottom: 1rem;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .page-layout {
@@ -413,7 +481,8 @@
                 display: none;
             }
 
-            .use-case-grid {
+            .use-case-grid,
+            .method-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -431,7 +500,7 @@
             <a href="index.html" class="logo">MMM Framework</a>
             <ul class="nav-links">
                 <li><a href="index.html">Home</a></li>
-                <li><a href="index.html#demo">Interactive Demo</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
                 <li><a href="#" class="active">Technical Guide</a></li>
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
@@ -470,6 +539,15 @@
                 <li><a href="#multivariate-correlation">Correlated Errors</a></li>
             </ul>
 
+            <h3>Variable Selection</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#variable-selection">Overview & Cautions</a></li>
+                <li><a href="#vs-horseshoe">Regularized Horseshoe</a></li>
+                <li><a href="#vs-spike-slab">Spike-and-Slab</a></li>
+                <li><a href="#vs-lasso">Bayesian LASSO</a></li>
+                <li><a href="#vs-interpretation">Interpretation</a></li>
+            </ul>
+
             <h3>Advanced Topics</h3>
             <ul class="sidebar-nav">
                 <li><a href="#combined">Combined Model</a></li>
@@ -491,87 +569,43 @@
             <h2 id="overview">Overview</h2>
             <p>
                 Marketing Mix Modeling (MMM) estimates the incremental impact of marketing activities on business
-                outcomes like sales or conversions. This framework implements a Bayesian approach, which offers
-                several advantages over traditional frequentist methods:
+                outcomes like sales or conversions. This framework implements MMM using Bayesian inference,
+                which provides several advantages over traditional frequentist approaches:
             </p>
             <ul>
-                <li><strong>Uncertainty quantification:</strong> Full posterior distributions instead of point estimates</li>
-                <li><strong>Prior incorporation:</strong> Encode domain knowledge and business constraints</li>
-                <li><strong>Regularization:</strong> Priors naturally prevent overfitting</li>
-                <li><strong>Decision-theoretic framework:</strong> Directly compute probability statements about ROI</li>
+                <li><strong>Uncertainty quantification:</strong> Full posterior distributions, not just point estimates</li>
+                <li><strong>Prior incorporation:</strong> Domain knowledge can be encoded in priors</li>
+                <li><strong>Regularization:</strong> Priors act as natural regularizers, preventing overfitting</li>
+                <li><strong>Decision-ready outputs:</strong> Credible intervals directly answer "how confident are we?"</li>
             </ul>
-
-            <div class="note">
-                <h4>📚 Prerequisites</h4>
-                <p>
-                    This guide assumes familiarity with linear regression, probability distributions, and basic
-                    calculus. For a refresher on Bayesian statistics, we recommend 
-                    <em>Statistical Rethinking</em> by Richard McElreath or 
-                    <em>Bayesian Data Analysis</em> by Gelman et al.
-                </p>
-            </div>
 
             <!-- Bayesian Basics -->
-            <h2 id="bayesian-basics">Bayesian Fundamentals</h2>
+            <h2 id="bayesian-basics">Bayesian Basics</h2>
             <p>
-                At its core, Bayesian inference applies Bayes' theorem to update our beliefs about model
-                parameters given observed data:
+                At its core, Bayesian inference combines prior beliefs with observed data to form posterior beliefs.
+                For a parameter θ given data y:
             </p>
-
             <div class="math-block">
-                <span class="equation-label">(1)</span>
-                $$P(\theta | y) = \frac{P(y | \theta) \cdot P(\theta)}{P(y)}$$
+                $$p(\theta | y) = \frac{p(y | \theta) \cdot p(\theta)}{p(y)} \propto p(y | \theta) \cdot p(\theta)$$
             </div>
-
             <p>Where:</p>
             <ul>
-                <li>$P(\theta | y)$ is the <strong>posterior</strong>: our updated belief about parameters after seeing data</li>
-                <li>$P(y | \theta)$ is the <strong>likelihood</strong>: probability of data given parameters</li>
-                <li>$P(\theta)$ is the <strong>prior</strong>: our belief about parameters before seeing data</li>
-                <li>$P(y)$ is the <strong>evidence</strong>: normalizing constant (often ignored in computation)</li>
+                <li><strong>p(θ)</strong> — Prior: what we believe before seeing data</li>
+                <li><strong>p(y|θ)</strong> — Likelihood: probability of data given parameters</li>
+                <li><strong>p(θ|y)</strong> — Posterior: updated beliefs after seeing data</li>
             </ul>
 
-            <h3>Why Priors Matter in MMM</h3>
-            <p>
-                In MMM, priors serve critical functions beyond just "regularization":
-            </p>
-
             <div class="definition">
-                <h4>Sign Constraints</h4>
+                <h4>Credible Intervals vs. Confidence Intervals</h4>
                 <p>
-                    Marketing investments should generally have non-negative effects on sales. Rather than
-                    post-hoc filtering (which invalidates inference), we encode this through priors that
-                    concentrate probability mass on positive values.
-                </p>
-            </div>
-
-            <p>
-                For a media coefficient $\beta$, we might use a half-normal prior:
-            </p>
-
-            <div class="math-block">
-                $$\beta \sim \text{HalfNormal}(\sigma = 0.5)$$
-            </div>
-
-            <p>
-                This prior allows positive effects while gently discouraging implausibly large values. The
-                posterior will still be able to indicate near-zero effects if the data warrant it—but the
-                prior makes it harder for noise to produce spurious negative estimates.
-            </p>
-
-            <div class="warning">
-                <h4>⚠️ Specification Shopping</h4>
-                <p>
-                    Running multiple models and selecting one with "reasonable" coefficients is specification
-                    shopping. This practice destroys the statistical properties of your estimates. Instead,
-                    encode constraints through priors <em>before</em> seeing the data, then report
-                    the single resulting posterior.
+                    A 95% credible interval means "there is a 95% probability the true parameter lies in this interval."
+                    This is the intuitive interpretation people often incorrectly apply to confidence intervals.
+                    Bayesian inference gives you what you actually want.
                 </p>
             </div>
 
             <!-- Choosing a Model -->
             <h2 id="choosing-model">Choosing a Model</h2>
-            
             <table>
                 <thead>
                     <tr>
@@ -582,24 +616,24 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>Standard MMM</strong></td>
-                        <td>Single outcome, no intermediate metrics, simple attribution</td>
+                        <td><strong>Standard</strong></td>
+                        <td>Single outcome, direct media effects only</td>
                         <td>Low</td>
                     </tr>
                     <tr>
-                        <td><strong>Nested MMM</strong></td>
-                        <td>Upper-funnel metrics available (awareness, consideration), want direct/indirect decomposition</td>
+                        <td><strong>Nested</strong></td>
+                        <td>You have funnel metrics (awareness, consideration)</td>
                         <td>Medium</td>
                     </tr>
                     <tr>
-                        <td><strong>Multivariate MMM</strong></td>
-                        <td>Multiple outcomes that may interact (product portfolio, cannibalization)</td>
-                        <td>Medium</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Combined MMM</strong></td>
-                        <td>Both mediators AND multiple interacting outcomes</td>
+                        <td><strong>Multivariate</strong></td>
+                        <td>Multiple products/categories with cross-effects</td>
                         <td>High</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Combined</strong></td>
+                        <td>Multiple products AND funnel metrics</td>
+                        <td>Very High</td>
                     </tr>
                 </tbody>
             </table>
@@ -607,599 +641,540 @@
             <!-- Standard MMM -->
             <h2 id="standard">Standard MMM</h2>
             <p>
-                The standard model relates marketing inputs to a single outcome through transformed 
-                media variables.
+                The standard model captures direct effects from media channels to a single outcome variable.
+                This is the workhorse model for most MMM applications.
             </p>
-
-            <div class="model-diagram">
-                <svg viewBox="0 0 500 120" width="100%">
-                    <defs>
-                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
-                        </marker>
-                    </defs>
-                    
-                    <!-- Media inputs -->
-                    <rect x="20" y="40" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
-                    <text x="60" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media Spend</text>
-                    
-                    <!-- Transformation -->
-                    <rect x="150" y="30" width="100" height="60" rx="8" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="2"/>
-                    <text x="200" y="55" text-anchor="middle" fill="#5a6b5a" font-size="10" font-weight="600">Adstock</text>
-                    <text x="200" y="70" text-anchor="middle" fill="#5a6b5a" font-size="10" font-weight="600">+ Saturation</text>
-                    
-                    <!-- Coefficients -->
-                    <rect x="300" y="40" width="60" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
-                    <text x="330" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">β</text>
-                    
-                    <!-- Outcome -->
-                    <rect x="410" y="40" width="70" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
-                    <text x="445" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
-                    
-                    <!-- Arrows -->
-                    <path d="M 105 60 L 145 60" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
-                    <path d="M 255 60 L 295 60" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
-                    <path d="M 365 60 L 405 60" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
-                </svg>
-            </div>
-
-            <h3>Model Specification</h3>
-            <p>The full generative model is:</p>
-
-            <div class="math-block">
-                <span class="equation-label">(2)</span>
-                $$y_t = \alpha + \sum_{m=1}^{M} \beta_m \cdot f_{\text{sat}}\left(g_{\text{adstock}}(x_{m,t})\right) + \gamma' \mathbf{z}_t + \epsilon_t$$
-            </div>
-
-            <p>Where:</p>
-            <ul>
-                <li>$y_t$ is the outcome at time $t$ (typically log-transformed sales)</li>
-                <li>$x_{m,t}$ is spend for media channel $m$ at time $t$</li>
-                <li>$g_{\text{adstock}}(\cdot)$ is the adstock transformation</li>
-                <li>$f_{\text{sat}}(\cdot)$ is the saturation function</li>
-                <li>$\mathbf{z}_t$ is a vector of control variables (trend, seasonality, etc.)</li>
-                <li>$\epsilon_t \sim \mathcal{N}(0, \sigma^2)$ is the error term</li>
-            </ul>
 
             <h3 id="standard-adstock">Adstock Transformation</h3>
             <p>
-                Adstock captures carryover effects—the idea that today's advertising continues to 
-                influence sales in future periods.
+                Media effects don't end when the ad stops running. Adstock captures the carryover effect
+                of advertising over time. We support two functional forms:
             </p>
 
-            <div class="definition">
-                <h4>Geometric Adstock</h4>
-                <p>The simplest form, with a single decay parameter $\lambda \in [0, 1)$:</p>
-            </div>
-
+            <h4>Geometric Adstock</h4>
             <div class="math-block">
-                <span class="equation-label">(3)</span>
-                $$\tilde{x}_t = x_t + \lambda \cdot \tilde{x}_{t-1}$$
+                $$A_t = x_t + \alpha \cdot A_{t-1}$$
             </div>
-
             <p>
-                A decay of $\lambda = 0.7$ means 70% of yesterday's adstocked value carries forward.
-                The half-life (time for effect to decay by 50%) is:
+                Where α ∈ [0, 1) is the decay rate. Higher α means longer-lasting effects.
+                The half-life is: <code>h = -log(2) / log(α)</code>
             </p>
 
+            <h4>Weibull Adstock</h4>
             <div class="math-block">
-                $$t_{1/2} = \frac{\log(0.5)}{\log(\lambda)}$$
+                $$A_t = \sum_{l=0}^{L} w_l \cdot x_{t-l}, \quad w_l = \exp\left(-\left(\frac{l}{\lambda}\right)^k\right)$$
             </div>
-
             <p>
-                For $\lambda = 0.7$, this gives a half-life of approximately 1.9 periods.
-            </p>
-
-            <h4>Delayed Adstock</h4>
-            <p>
-                For channels where peak effect is delayed (e.g., TV branding campaigns), we use a
-                Weibull-parameterized adstock:
-            </p>
-
-            <div class="math-block">
-                <span class="equation-label">(4)</span>
-                $$w_l = \exp\left(-\left(\frac{l}{\theta}\right)^k\right) - \exp\left(-\left(\frac{l+1}{\theta}\right)^k\right)$$
-            </div>
-
-            <p>
-                Where $\theta$ controls the scale (timing of peak) and $k$ controls the shape
-                (concentration of effect).
+                The Weibull form is more flexible, allowing for delayed peak effects (k > 1) or immediate
+                decay (k < 1). λ controls the scale of decay.
             </p>
 
             <h3 id="standard-saturation">Saturation Functions</h3>
             <p>
-                Saturation captures diminishing returns—each additional dollar of spend produces 
-                less incremental effect than the previous one.
+                Media effects exhibit diminishing returns. We implement two saturation functions:
             </p>
 
-            <div class="definition">
-                <h4>Logistic Saturation (Recommended)</h4>
-                <p>Numerically stable and interpretable:</p>
-            </div>
-
+            <h4>Logistic Saturation (Recommended)</h4>
             <div class="math-block">
-                <span class="equation-label">(5)</span>
-                $$f_{\text{sat}}(x) = \frac{1 - \exp(-\lambda x)}{1 + \exp(-\lambda x)}$$
+                $$f(x) = \frac{L}{1 + e^{-k(x - x_0)}}$$
             </div>
-
             <p>
-                The parameter $\lambda$ controls how quickly saturation sets in. Larger $\lambda$
-                means faster saturation.
+                Numerically stable and well-behaved. L is the maximum effect, k controls steepness,
+                and x₀ is the inflection point.
             </p>
 
             <h4>Hill Function</h4>
-            <p>
-                More flexible but can be numerically unstable:
-            </p>
-
             <div class="math-block">
-                <span class="equation-label">(6)</span>
-                $$f_{\text{Hill}}(x) = \frac{x^S}{K^S + x^S}$$
+                $$f(x) = \frac{S \cdot x^n}{K^n + x^n}$$
             </div>
-
             <p>
-                Where $K$ is the half-saturation point (spend level at 50% of maximum effect) and $S$
-                is the slope parameter.
+                Classic pharmacological model. S is saturation level, K is half-saturation constant,
+                n controls steepness. Can be numerically unstable for large n.
             </p>
 
-            <div class="warning">
-                <h4>⚠️ Identification Warning</h4>
-                <p>
-                    The Hill function parameters $K$ and $S$ can be weakly identified, especially with
-                    limited spend variation. Consider using informative priors or the simpler logistic
-                    saturation if you encounter divergences during sampling.
-                </p>
-            </div>
-
-            <h3 id="standard-priors">Recommended Priors</h3>
-
-            <pre><code># Media coefficients (positive, moderate magnitude)
-beta ~ HalfNormal(sigma=0.5)
-
-# Adstock decay (most mass between 0.3-0.9)
-lambda ~ Beta(alpha=3, beta=2)
-
-# Saturation (weakly informative)
-sat_lambda ~ Gamma(alpha=2, beta=1)
-
-# Intercept (standardized data)
-alpha ~ Normal(mu=0, sigma=1)
-
-# Noise
-sigma ~ HalfNormal(sigma=0.5)</code></pre>
-
-            <!-- Nested MMM -->
-            <h2 id="nested">Nested Model</h2>
+            <h3 id="standard-priors">Prior Specification</h3>
             <p>
-                The nested model extends the standard MMM to capture indirect effects through 
-                intermediate variables (mediators) like brand awareness or consideration.
+                Priors should encode your domain knowledge. Here are recommended defaults:
             </p>
-
-            <div class="model-diagram">
-                <svg viewBox="0 0 500 180" width="100%">
-                    <defs>
-                        <marker id="arrowhead2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
-                        </marker>
-                        <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#8fa86a"/>
-                        </marker>
-                    </defs>
-                    
-                    <!-- Media -->
-                    <rect x="20" y="70" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
-                    <text x="60" y="95" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media</text>
-                    
-                    <!-- Awareness -->
-                    <rect x="180" y="20" width="90" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
-                    <text x="225" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Awareness</text>
-                    
-                    <!-- Sales -->
-                    <rect x="380" y="70" width="80" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
-                    <text x="420" y="95" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
-                    
-                    <!-- Indirect path -->
-                    <path d="M 105 80 Q 140 40 175 40" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
-                    <path d="M 275 40 Q 310 40 375 80" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
-                    
-                    <!-- Direct path -->
-                    <path d="M 105 95 L 375 95" stroke="#8fa86a" stroke-width="3" stroke-dasharray="8,4" fill="none" marker-end="url(#arrowhead-green)"/>
-                    
-                    <!-- Labels -->
-                    <text x="140" y="55" fill="#5a6b5a" font-size="11">β₁</text>
-                    <text x="325" y="55" fill="#5a6b5a" font-size="11">γ</text>
-                    <text x="240" y="115" fill="#8fa86a" font-size="11">β₂ (direct)</text>
-                    
-                    <!-- Legend -->
-                    <text x="250" y="160" text-anchor="middle" fill="#5a6b5a" font-size="10">
-                        Total Effect = Direct (β₂) + Indirect (β₁ × γ)
-                    </text>
-                </svg>
-            </div>
-
-            <h3>Model Specification</h3>
-            <p>The nested model consists of two linked equations:</p>
-
-            <div class="math-block">
-                <span class="equation-label">(7)</span>
-                $$\text{Mediator:} \quad M_t = \alpha_M + \beta_1 \cdot \tilde{x}_t + \epsilon_{M,t}$$
-            </div>
-
-            <div class="math-block">
-                <span class="equation-label">(8)</span>
-                $$\text{Outcome:} \quad y_t = \alpha_y + \beta_2 \cdot \tilde{x}_t + \gamma \cdot M_t + \epsilon_{y,t}$$
-            </div>
-
-            <p>Effect decomposition:</p>
-            <ul>
-                <li><strong>Direct effect:</strong> $\beta_2$ (media → sales, bypassing awareness)</li>
-                <li><strong>Indirect effect:</strong> $\beta_1 \times \gamma$ (media → awareness → sales)</li>
-                <li><strong>Total effect:</strong> $\beta_2 + \beta_1 \times \gamma$</li>
-            </ul>
-
-            <h3 id="nested-mediators">Mediator Types</h3>
-            <p>
-                The framework supports three mediator observation patterns:
-            </p>
-
             <table>
                 <thead>
                     <tr>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Example</th>
+                        <th>Parameter</th>
+                        <th>Prior</th>
+                        <th>Rationale</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>Fully Observed</strong></td>
-                        <td>Mediator measured at same frequency as outcome</td>
-                        <td>Weekly web traffic alongside weekly sales</td>
+                        <td>Media coefficients (β)</td>
+                        <td>HalfNormal(σ=0.5)</td>
+                        <td>Positive effects, regularized</td>
                     </tr>
                     <tr>
-                        <td><strong>Partially Observed</strong></td>
-                        <td>Mediator measured less frequently</td>
-                        <td>Monthly brand tracking survey with weekly sales</td>
+                        <td>Adstock decay (α)</td>
+                        <td>Beta(2, 2)</td>
+                        <td>Centered at 0.5, avoids extremes</td>
                     </tr>
                     <tr>
-                        <td><strong>Latent</strong></td>
-                        <td>Mediator never directly observed</td>
-                        <td>Unobserved "brand equity" concept</td>
+                        <td>Saturation steepness (k)</td>
+                        <td>Gamma(2, 1)</td>
+                        <td>Positive, allows flexibility</td>
+                    </tr>
+                    <tr>
+                        <td>Control coefficients</td>
+                        <td>Normal(0, 1)</td>
+                        <td>Can be positive or negative</td>
                     </tr>
                 </tbody>
             </table>
 
-            <h4>Partially Observed Mediators</h4>
+            <!-- Nested Model -->
+            <h2 id="nested">Nested Model</h2>
             <p>
-                When a mediator (like brand awareness from surveys) is observed only at certain time
-                points, we model it as a latent process with noisy observations:
+                The nested model extends the standard MMM to capture indirect effects through
+                intermediate variables (mediators) like brand awareness or consideration.
             </p>
-
-            <div class="math-block">
-                <span class="equation-label">(9)</span>
-                $$M_t^{\text{obs}} = M_t^{\text{true}} + \eta_t, \quad \eta_t \sim \mathcal{N}(0, \sigma_{\text{obs}}^2)$$
-            </div>
-
-            <p>
-                The framework uses Gaussian Process interpolation to infer the latent mediator trajectory
-                between observation points.
-            </p>
-
-            <h3 id="nested-identification">Identification Considerations</h3>
-
-            <div class="warning">
-                <h4>⚠️ Identification Requirements</h4>
-                <p>
-                    For the direct and indirect effects to be separately identified, you need
-                    sufficient variation in both media spend AND the mediator that is not perfectly
-                    explained by media. Common identification aids:
-                </p>
-                <ul>
-                    <li>Exogenous variation in awareness (e.g., PR events, competitor actions)</li>
-                    <li>Temporal lags between media and awareness versus awareness and sales</li>
-                    <li>Informative priors based on experimental or survey evidence</li>
-                </ul>
-            </div>
-
-            <!-- Multivariate MMM -->
-            <h2 id="multivariate">Multivariate Model</h2>
-            <p>
-                The multivariate model handles multiple outcomes simultaneously, capturing interactions
-                like cannibalization and halo effects between products.
-            </p>
-
-            <div class="model-diagram">
-                <svg viewBox="0 0 500 160" width="100%">
-                    <defs>
-                        <marker id="arrowhead3" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
-                        </marker>
-                        <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#6abf8a"/>
-                        </marker>
-                        <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#c97067"/>
-                        </marker>
-                    </defs>
-                    
-                    <!-- Promotion -->
-                    <rect x="20" y="60" width="90" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
-                    <text x="65" y="82" text-anchor="middle" fill="white" font-size="11" font-weight="600">Multipack</text>
-                    <text x="65" y="94" text-anchor="middle" fill="white" font-size="10">Promo</text>
-                    
-                    <!-- Product A -->
-                    <rect x="300" y="20" width="100" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
-                    <text x="350" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Single-Pack</text>
-                    
-                    <!-- Product B -->
-                    <rect x="300" y="100" width="100" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
-                    <text x="350" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Multipack</text>
-                    
-                    <!-- Own effect -->
-                    <path d="M 115 90 L 295 120" stroke="#6abf8a" stroke-width="2.5" fill="none" marker-end="url(#arrow-green)"/>
-                    
-                    <!-- Cross effect -->
-                    <path d="M 115 70 L 295 40" stroke="#c97067" stroke-width="2.5" fill="none" marker-end="url(#arrow-red)"/>
-                    
-                    <!-- Cross-product link -->
-                    <path d="M 350 65 L 350 95" stroke="#5a6b5a" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
-                    
-                    <!-- Labels -->
-                    <text x="205" y="70" fill="#c97067" font-size="11" font-weight="600">-δ (cannibalization)</text>
-                    <text x="200" y="125" fill="#6abf8a" font-size="11" font-weight="600">+β (own effect)</text>
-                </svg>
-            </div>
-
-            <h3>Model Specification</h3>
-            <p>
-                For $K$ outcomes, we model them jointly:
-            </p>
-
-            <div class="math-block">
-                <span class="equation-label">(10)</span>
-                $$\mathbf{y}_t = \boldsymbol{\alpha} + \mathbf{B}\tilde{\mathbf{x}}_t + \boldsymbol{\Delta}\mathbf{p}_t + \boldsymbol{\epsilon}_t$$
-            </div>
-
-            <p>Where:</p>
-            <ul>
-                <li>$\mathbf{y}_t \in \mathbb{R}^K$ is the vector of outcomes</li>
-                <li>$\mathbf{B} \in \mathbb{R}^{K \times M}$ contains own-effects of media on each outcome</li>
-                <li>$\boldsymbol{\Delta} \in \mathbb{R}^{K \times K}$ is the cross-effects matrix</li>
-                <li>$\mathbf{p}_t$ is a vector of promotional indicators</li>
-            </ul>
-
-            <h3 id="cross-effects">Cross-Effects Matrix</h3>
-            <p>
-                The cross-effects matrix $\boldsymbol{\Delta}$ captures how promotions for one product
-                affect sales of others:
-            </p>
-
-            <div class="math-block">
-                <span class="equation-label">(11)</span>
-                $$\boldsymbol{\Delta} = \begin{pmatrix}
-                0 & \delta_{12} & \cdots & \delta_{1K} \\
-                \delta_{21} & 0 & \cdots & \delta_{2K} \\
-                \vdots & \vdots & \ddots & \vdots \\
-                \delta_{K1} & \delta_{K2} & \cdots & 0
-                \end{pmatrix}$$
-            </div>
-
-            <p>Interpretation:</p>
-            <ul>
-                <li>$\delta_{ij} < 0$: Promoting product $j$ <strong>cannibalizes</strong> product $i$</li>
-                <li>$\delta_{ij} > 0$: Promoting product $j$ creates a <strong>halo effect</strong> for product $i$</li>
-                <li>$\delta_{ij} = 0$: Products are independent</li>
-            </ul>
 
             <div class="definition">
-                <h4>Net Portfolio Effect</h4>
+                <h4>Mediation Analysis</h4>
                 <p>
-                    The true incremental value of promoting product $j$ is not just its own-effect,
-                    but the sum across the portfolio:
+                    A mediator sits on the causal path between treatment (media) and outcome (sales).
+                    TV → Awareness → Sales. The nested model estimates both the direct effect
+                    (TV → Sales) and the indirect effect (TV → Awareness → Sales).
                 </p>
             </div>
 
+            <h3 id="nested-mediators">Mediator Types</h3>
+            <p>
+                We support several mediator specifications depending on your data availability:
+            </p>
+            <ul>
+                <li><strong>Observed mediators:</strong> You have actual awareness/consideration data</li>
+                <li><strong>Latent mediators:</strong> Brand state is inferred from response patterns</li>
+                <li><strong>Partial mediators:</strong> Some direct effect remains after controlling for mediator</li>
+            </ul>
+
+            <h3 id="nested-identification">Identification Considerations</h3>
+            <div class="warning">
+                <h4>⚠️ Identification Challenges</h4>
+                <p>
+                    Nested models require careful attention to identification. Without exogenous variation
+                    in the mediator, the direct and indirect effects may not be separately identifiable.
+                    Strong priors or additional data (e.g., survey data) may be necessary.
+                </p>
+            </div>
+
+            <!-- Multivariate Model -->
+            <h2 id="multivariate">Multivariate Model</h2>
+            <p>
+                The multivariate model jointly estimates effects across multiple outcome variables
+                (e.g., product categories), capturing cross-effects and correlated errors.
+            </p>
+
+            <h3 id="cross-effects">Cross-Effects</h3>
+            <p>
+                Media for one product can affect sales of another through halo effects (positive spillover)
+                or cannibalization (negative spillover):
+            </p>
             <div class="math-block">
-                <span class="equation-label">(12)</span>
-                $$\text{Net Effect}_j = \beta_{jj} + \sum_{i \neq j} \delta_{ij}$$
+                $$y_{k,t} = \sum_j \beta_{j,k} \cdot f(A_{j,t}) + \sum_{k' \neq k} \gamma_{k',k} \cdot y_{k',t} + \epsilon_{k,t}$$
+            </div>
+
+            <div class="use-case-grid">
+                <div class="use-case-card good">
+                    <h5>✅ Halo Effect</h5>
+                    <p>Brand advertising lifts sales across the product line. γ > 0.</p>
+                </div>
+                <div class="use-case-card bad">
+                    <h5>⚠️ Cannibalization</h5>
+                    <p>Promoting one product steals sales from another. γ < 0.</p>
+                </div>
             </div>
 
             <h3 id="multivariate-correlation">Correlated Errors</h3>
             <p>
-                Even after accounting for cross-effects, outcomes often have correlated errors due to
-                shared unobserved factors (weather, economic conditions, etc.). We model this with a
-                multivariate normal:
+                Products in the same category often share unobserved drivers. We model this with
+                a multivariate normal error structure:
             </p>
-
             <div class="math-block">
-                <span class="equation-label">(13)</span>
-                $$\boldsymbol{\epsilon}_t \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Sigma})$$
+                $$\epsilon_t \sim \mathcal{N}(0, \Sigma)$$
             </div>
-
             <p>
-                The covariance matrix $\boldsymbol{\Sigma}$ is typically parameterized using an LKJ
-                prior on the correlation matrix:
+                Where Σ is estimated from the data, capturing residual correlations not explained
+                by the model's systematic components.
             </p>
 
-            <pre><code># Correlation matrix prior (regularizes toward independence)
-corr ~ LKJCorr(eta=2.0)
-
-# Outcome-specific scales
-sigma ~ HalfNormal(sigma=0.5, dims="outcome")
-
-# Full covariance
-Sigma = diag(sigma) @ corr @ diag(sigma)</code></pre>
-
-            <!-- Combined Model -->
-            <h2 id="combined">Combined Model</h2>
-            <p>
-                The combined model handles the most complex scenarios: mediators (indirect effects)
-                AND multiple interacting outcomes.
-            </p>
-
-            <div class="use-case-grid">
-                <div class="use-case-card good">
-                    <h5>✓ Good Use Case</h5>
-                    <p>
-                        CPG company with brand tracking data, multiple SKUs in the same category,
-                        wanting to understand how TV affects awareness, which drives trial across
-                        products with potential cannibalization.
-                    </p>
-                </div>
-                <div class="use-case-card bad">
-                    <h5>✗ Avoid When</h5>
-                    <p>
-                        Single product, no mediator data available. The added complexity won't
-                        be identified and will just inflate uncertainty. Use Standard MMM instead.
-                    </p>
-                </div>
-            </div>
-
-            <h3>Model Structure</h3>
-            <p>
-                The combined model links three layers:
-            </p>
-
-            <div class="math-block">
-                <span class="equation-label">(14)</span>
-                $$\text{Mediator:} \quad M_t = \alpha_M + \beta_1 \tilde{x}_t + \epsilon_{M,t}$$
-            </div>
-
-            <div class="math-block">
-                <span class="equation-label">(15)</span>
-                $$\text{Outcomes:} \quad \mathbf{y}_t = \boldsymbol{\alpha} + \mathbf{B}_2\tilde{\mathbf{x}}_t + \boldsymbol{\gamma}M_t + \boldsymbol{\Delta}\mathbf{p}_t + \boldsymbol{\epsilon}_t$$
-            </div>
-
-            <!-- Hierarchical Structure -->
-            <h2 id="hierarchical">Hierarchical Structure</h2>
-            <p>
-                For data with geographic or product groupings, hierarchical (multilevel) models
-                provide partial pooling—sharing information across groups while allowing heterogeneity.
-            </p>
-
-            <h3>Geographic Hierarchy</h3>
-            <p>
-                With data from $G$ geographic regions, we model region-specific coefficients as
-                draws from a common distribution:
-            </p>
-
-            <div class="math-block">
-                <span class="equation-label">(16)</span>
-                $$\beta_g \sim \mathcal{N}(\bar{\beta}, \tau^2)$$
-            </div>
-
-            <p>
-                This provides partial pooling: regions with less data borrow strength from the
-                overall mean $\bar{\beta}$, while regions with more data can deviate.
+            <!-- Variable Selection Section -->
+            <h2 id="variable-selection">Variable Selection Methods</h2>
+            <p class="lead">
+                Bayesian variable selection provides principled approaches to handling uncertainty about
+                which control variables should be included in your model.
             </p>
 
             <div class="warning">
-                <h4>⚠️ National Media Limitation</h4>
+                <h4>⚠️ Critical: Variable Classification Required</h4>
                 <p>
-                    Geo-level random effects on <strong>national</strong> media coefficients cannot be
-                    interpreted as differential causal response—national media provides no geo-level
-                    exposure variation. The "effects" merely reflect correlations with timing patterns.
-                    Only use geo-level variation for media with actual geographic variation in exposure.
+                    Variable selection should <strong>only</strong> be applied to precision control variables—
+                    variables that affect the outcome but do NOT affect treatment assignment (media spending).
+                    <strong>Confounders</strong> (variables affecting both media and sales) must be EXCLUDED 
+                    from selection and always included with standard priors. Shrinking a confounder toward 
+                    zero does not remove confounding bias—it hides it while biasing your media effect estimates.
                 </p>
             </div>
 
-            <!-- Model Diagnostics -->
-            <h2 id="diagnostics">Model Diagnostics</h2>
+            <h3>When Variable Selection is Appropriate</h3>
             <p>
-                Bayesian models require careful diagnostics to ensure valid inference.
+                Variable selection addresses uncertainty about which precision controls matter. Traditional
+                approaches like stepwise regression or p-value hunting are forms of specification shopping
+                that invalidate inference. Bayesian variable selection priors provide an alternative that:
             </p>
+            <ul>
+                <li>Quantifies uncertainty about each variable's relevance</li>
+                <li>Provides adaptive shrinkage (small effects → zero, large effects preserved)</li>
+                <li>Maintains valid posterior inference</li>
+                <li>Can be pre-specified based on domain knowledge</li>
+            </ul>
 
-            <h3>MCMC Diagnostics</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>Diagnostic</th>
-                        <th>Target</th>
-                        <th>Interpretation</th>
+                        <th>Variable Type</th>
+                        <th>Examples</th>
+                        <th>Selection?</th>
+                        <th>Reason</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>$\hat{R}$ (R-hat)</td>
-                        <td>< 1.01</td>
-                        <td>Chains have converged to same distribution</td>
+                        <td><strong>Precision Controls</strong></td>
+                        <td>Weather, gas prices, minor holidays</td>
+                        <td><span class="badge badge-success">✓ OK</span></td>
+                        <td>Affect outcome only</td>
                     </tr>
                     <tr>
-                        <td>ESS Bulk</td>
-                        <td>> 400</td>
-                        <td>Sufficient samples for central tendency</td>
+                        <td><strong>Confounders</strong></td>
+                        <td>Distribution/ACV, price, competitor media</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>Shrinking biases estimates</td>
                     </tr>
                     <tr>
-                        <td>ESS Tail</td>
-                        <td>> 400</td>
-                        <td>Sufficient samples for uncertainty intervals</td>
+                        <td><strong>Core Structure</strong></td>
+                        <td>Trend, seasonality, intercept</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>Fundamental components</td>
                     </tr>
                     <tr>
-                        <td>Divergences</td>
-                        <td>0</td>
-                        <td>No problematic posterior geometry</td>
+                        <td><strong>Mediators</strong></td>
+                        <td>Brand awareness (if on causal path)</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>Blocks true media effect</td>
                     </tr>
                 </tbody>
             </table>
 
-            <h3>Posterior Predictive Checks</h3>
-            <p>
-                Generate predictions from the posterior and compare to observed data:
-            </p>
-
-            <pre><code># Generate posterior predictions
-with model:
-    ppc = pm.sample_posterior_predictive(trace)
-
-# Compare to observed
-az.plot_ppc(trace, data_pairs={"y": "y_obs"})</code></pre>
-
-            <p>
-                Look for systematic discrepancies—if the model consistently misses certain patterns
-                (e.g., seasonality spikes), the specification needs adjustment.
-            </p>
-
-            <h3>Prior Sensitivity</h3>
-            <p>
-                Check how much your conclusions depend on prior choices:
-            </p>
-            <ol>
-                <li>Fit the model with your chosen priors</li>
-                <li>Fit again with weakened priors (e.g., double the variance)</li>
-                <li>Compare posterior distributions</li>
-            </ol>
-            <p>
-                If posteriors change dramatically, either you need more data or your priors are
-                doing too much work. This isn't necessarily bad—strong priors can be appropriate—but
-                you should be transparent about it.
-            </p>
-
-            <div class="note">
-                <h4>📖 Further Reading</h4>
-                <ul>
-                    <li>Jin et al. (2017) - Bayesian Methods for Media Mix Modeling</li>
-                    <li>Chan & Perry (2017) - Challenges and Opportunities in Media Mix Modeling</li>
-                    <li>Google's Lightweight MMM - Open-source reference implementation</li>
-                    <li>PyMC-Marketing documentation - Framework this builds on</li>
-                </ul>
+            <h3>Available Methods</h3>
+            <div class="method-grid">
+                <div class="method-card">
+                    <h4>Regularized Horseshoe</h4>
+                    <p class="use-for">Best for: Sparse signals (few relevant controls)</p>
+                    <p>
+                        Strong shrinkage of noise toward zero while preserving true signals.
+                        The "regularized" version adds slab regularization to prevent
+                        unrealistically large coefficients.
+                    </p>
+                </div>
+                <div class="method-card">
+                    <h4>Spike-and-Slab</h4>
+                    <p class="use-for">Best for: Explicit inclusion probabilities</p>
+                    <p>
+                        Provides direct posterior inclusion probabilities for each variable.
+                        Uses continuous relaxation for gradient-based sampling (NUTS).
+                    </p>
+                </div>
+                <div class="method-card">
+                    <h4>Bayesian LASSO</h4>
+                    <p class="use-for">Best for: Many small effects</p>
+                    <p>
+                        L1-like shrinkage in a Bayesian framework. Better when expecting
+                        many controls have small but nonzero effects rather than sparse signals.
+                    </p>
+                </div>
+                <div class="method-card">
+                    <h4>Finnish Horseshoe</h4>
+                    <p class="use-for">Same as regularized horseshoe</p>
+                    <p>
+                        Mathematically equivalent to regularized horseshoe. The name
+                        emphasizes the slab regularization from Piironen & Vehtari (2017).
+                    </p>
+                </div>
             </div>
 
+            <h3 id="vs-horseshoe">Regularized Horseshoe Prior</h3>
+            <p>
+                The horseshoe prior (Carvalho et al., 2010) with regularization (Piironen & Vehtari, 2017)
+                is our recommended default for variable selection. It provides strong shrinkage for
+                noise variables while preserving signals.
+            </p>
+
+            <h4>Mathematical Specification</h4>
+            <div class="math-block">
+                $$\beta_j = z_j \cdot \tau \cdot \tilde{\lambda}_j$$
+            </div>
+            <p>Where:</p>
+            <ul>
+                <li><strong>z<sub>j</sub> ~ N(0, 1)</strong> — Standardized coefficient</li>
+                <li><strong>τ ~ Half-t<sub>ν<sub>g</sub></sub>(τ₀)</strong> — Global shrinkage</li>
+                <li><strong>λ<sub>j</sub> ~ Half-t<sub>ν<sub>l</sub></sub>(1)</strong> — Local shrinkage</li>
+                <li><strong>λ̃<sub>j</sub></strong> — Regularized local shrinkage (see below)</li>
+            </ul>
+
+            <p>The regularization prevents coefficients from being unrealistically large:</p>
+            <div class="math-block">
+                $$\tilde{\lambda}_j = \frac{c \cdot \lambda_j}{\sqrt{c^2 + \tau^2 \lambda_j^2}}$$
+            </div>
+            <p>Where c² ~ Inv-Gamma(ν<sub>s</sub>/2, ν<sub>s</sub>s²/2) controls the slab width.</p>
+
+            <h4>Global Shrinkage Calibration</h4>
+            <p>
+                The global shrinkage τ controls overall sparsity. The recommended scale:
+            </p>
+            <div class="math-block">
+                $$\tau_0 = \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}}$$
+            </div>
+            <p>
+                Where D₀ is the expected number of nonzero coefficients, D is the total number
+                of selection variables, σ is the residual standard deviation, and N is sample size.
+            </p>
+
+            <h4>Shrinkage Factor Interpretation</h4>
+            <p>
+                The effective shrinkage for coefficient β<sub>j</sub> is:
+            </p>
+            <div class="math-block">
+                $$\kappa_j = \frac{1}{1 + \tau^2 \lambda_j^2}$$
+            </div>
+            <ul>
+                <li><strong>κ<sub>j</sub> ≈ 1</strong> — Strong shrinkage (toward zero, effectively excluded)</li>
+                <li><strong>κ<sub>j</sub> ≈ 0</strong> — Weak shrinkage (coefficient preserved, effectively included)</li>
+            </ul>
+            <p>
+                The <strong>effective number of nonzero coefficients</strong> is:
+            </p>
+            <div class="math-block">
+                $$m_{\text{eff}} = \sum_{j=1}^{D} (1 - \kappa_j)$$
+            </div>
+
+            <h4>Implementation</h4>
+            <pre><code><span class="keyword">from</span> mmm_framework.mmm_extensions <span class="keyword">import</span> (
+    VariableSelectionConfigBuilder,
+    sparse_controls,
+)
+
+<span class="comment"># Method 1: Factory function (simplest)</span>
+config = sparse_controls(
+    expected_nonzero=<span class="number">3</span>,
+    <span class="string">"distribution"</span>, <span class="string">"price"</span>, <span class="string">"competitor_media"</span>,  <span class="comment"># Confounders to exclude</span>
+)
+
+<span class="comment"># Method 2: Builder with full control</span>
+config = (VariableSelectionConfigBuilder()
+    .regularized_horseshoe(expected_nonzero=<span class="number">3</span>)
+    .with_slab_scale(<span class="number">2.0</span>)  <span class="comment"># Max effect in std units</span>
+    .with_slab_df(<span class="number">4.0</span>)     <span class="comment"># Slab tail weight</span>
+    .exclude_confounders(<span class="string">"distribution"</span>, <span class="string">"price"</span>)
+    .build())</code></pre>
+
+            <h3 id="vs-spike-slab">Spike-and-Slab Prior</h3>
+            <p>
+                The spike-and-slab prior provides explicit posterior inclusion probabilities
+                for each variable. We use a continuous relaxation for compatibility with
+                gradient-based samplers (NUTS).
+            </p>
+
+            <h4>Mathematical Specification</h4>
+            <div class="math-block">
+                $$\beta_j = \gamma_j \cdot \beta_{\text{slab},j} + (1 - \gamma_j) \cdot \beta_{\text{spike},j}$$
+            </div>
+            <p>Where:</p>
+            <ul>
+                <li><strong>γ<sub>j</sub> = sigmoid(logit<sub>γ<sub>j</sub></sub> / T)</strong> — Soft inclusion indicator</li>
+                <li><strong>logit<sub>γ<sub>j</sub></sub> ~ N(logit(π), 1)</strong> — Prior inclusion probability π</li>
+                <li><strong>β<sub>slab,j</sub> ~ N(0, σ<sub>slab</sub>)</strong> — Diffuse "included" distribution</li>
+                <li><strong>β<sub>spike,j</sub> ~ N(0, σ<sub>spike</sub>)</strong> — Concentrated "excluded" distribution</li>
+                <li><strong>T</strong> — Temperature (lower = sharper selection)</li>
+            </ul>
+
+            <div class="note">
+                <h4>💡 Interpreting Inclusion Probabilities</h4>
+                <p>
+                    Unlike the horseshoe's shrinkage factors, spike-and-slab directly outputs
+                    γ<sub>j</sub> which can be interpreted as "the posterior probability that
+                    variable j has a non-zero effect." This makes reporting more intuitive.
+                </p>
+            </div>
+
+            <h4>Implementation</h4>
+            <pre><code><span class="keyword">from</span> mmm_framework.mmm_extensions <span class="keyword">import</span> (
+    VariableSelectionConfigBuilder,
+    selection_with_inclusion_probs,
+)
+
+<span class="comment"># Factory function</span>
+config = selection_with_inclusion_probs(
+    prior_inclusion=<span class="number">0.3</span>,  <span class="comment"># 30% prior prob of inclusion</span>
+    <span class="string">"distribution"</span>, <span class="string">"price"</span>,  <span class="comment"># Confounders</span>
+)
+
+<span class="comment"># Builder approach</span>
+config = (VariableSelectionConfigBuilder()
+    .spike_slab(prior_inclusion=<span class="number">0.3</span>)
+    .with_sharp_selection()  <span class="comment"># Lower temperature</span>
+    .exclude_confounders(<span class="string">"distribution"</span>, <span class="string">"price"</span>)
+    .build())</code></pre>
+
+            <h3 id="vs-lasso">Bayesian LASSO</h3>
+            <p>
+                The Bayesian LASSO (Park & Casella, 2008) provides L1-like shrinkage in a
+                Bayesian framework. It's better suited when expecting many controls have
+                small but nonzero effects, rather than truly sparse signals.
+            </p>
+
+            <h4>Mathematical Specification</h4>
+            <div class="math-block">
+                $$\beta_j | \sigma^2, \lambda^2 \sim \mathcal{N}(0, \sigma^2 \tau_j^2)$$
+                $$\tau_j^2 \sim \text{Exponential}\left(\frac{\lambda^2}{2}\right)$$
+            </div>
+            <p>
+                The double-exponential (Laplace) marginal prior on β produces L1-like
+                shrinkage while maintaining a proper Bayesian posterior.
+            </p>
+
+            <h4>Implementation</h4>
+            <pre><code><span class="keyword">from</span> mmm_framework.mmm_extensions <span class="keyword">import</span> (
+    VariableSelectionConfigBuilder,
+    dense_controls,
+)
+
+<span class="comment"># Factory function</span>
+config = dense_controls(
+    regularization=<span class="number">1.0</span>,
+    <span class="string">"distribution"</span>, <span class="string">"price"</span>,
+)
+
+<span class="comment"># Builder approach</span>
+config = (VariableSelectionConfigBuilder()
+    .bayesian_lasso(regularization=<span class="number">1.0</span>)
+    .exclude_confounders(<span class="string">"distribution"</span>, <span class="string">"price"</span>)
+    .build())</code></pre>
+
+            <h3 id="vs-interpretation">Interpreting Results</h3>
+            <p>
+                After fitting a model with variable selection, use the provided utilities
+                to summarize which variables were selected and with what confidence:
+            </p>
+
+            <pre><code><span class="keyword">from</span> mmm_framework.mmm_extensions <span class="keyword">import</span> (
+    compute_inclusion_probabilities,
+    summarize_variable_selection,
+)
+
+<span class="comment"># Get inclusion probabilities</span>
+inclusion = compute_inclusion_probabilities(
+    trace=idata,
+    config=selection_config,
+    name=<span class="string">"ctrl_select"</span>,
+)
+<span class="keyword">print</span>(<span class="string">f"Effective nonzero: </span>{inclusion[<span class="string">'effective_nonzero'</span>]:<span class="string">.2f}</span><span class="string">"</span>)
+
+<span class="comment"># Full summary table</span>
+summary = summarize_variable_selection(
+    trace=idata,
+    control_names=precision_controls,
+    config=selection_config,
+    name=<span class="string">"ctrl_select"</span>,
+)
+<span class="keyword">print</span>(summary)
+<span class="comment">#    variable      mean    std   hdi_3%  hdi_97%  inclusion_prob  selected
+# 0   weather     0.15   0.08     0.01     0.28           0.89      True
+# 1  gas_price    0.02   0.05    -0.06     0.10           0.23     False
+# 2   holiday    -0.11   0.06    -0.21    -0.02           0.85      True</span></code></pre>
+
+            <div class="caution">
+                <h4>⚠️ Don't Overinterpret Low Inclusion Probabilities</h4>
+                <p>
+                    A low posterior inclusion probability doesn't prove a variable has no effect—
+                    it means the data don't provide strong evidence for an effect. With more data
+                    or a different prior, the conclusion might change. Report probabilities, not
+                    binary decisions.
+                </p>
+            </div>
+
+            <h4>Best Practices</h4>
+            <ul>
+                <li><strong>Pre-specify variable classification</strong> before seeing any results</li>
+                <li><strong>Document rationale</strong> for each variable's classification</li>
+                <li><strong>Never tune hyperparameters</strong> based on fit metrics (this is specification shopping)</li>
+                <li><strong>Report inclusion probabilities</strong> alongside point estimates</li>
+                <li><strong>Show sensitivity</strong> to expected_nonzero specification</li>
+                <li><strong>Acknowledge uncertainty</strong> about variable importance</li>
+            </ul>
+
+            <!-- Advanced Topics -->
+            <h2 id="combined">Combined Model</h2>
+            <p>
+                The combined model incorporates both nested (mediation) and multivariate (cross-effects)
+                components. This is the most complex specification and should only be used when
+                data richness supports it.
+            </p>
+
+            <h2 id="hierarchical">Hierarchical Structure</h2>
+            <p>
+                For data with natural groupings (regions, stores, products), hierarchical priors
+                allow partial pooling of information:
+            </p>
+            <div class="math-block">
+                $$\beta_g \sim \mathcal{N}(\mu_\beta, \sigma_\beta)$$
+            </div>
+            <p>
+                This provides regularization (extreme groups shrink toward the mean) while still
+                allowing group-specific estimates.
+            </p>
+
+            <h2 id="diagnostics">Model Diagnostics</h2>
+            <p>
+                Always check model diagnostics before interpreting results:
+            </p>
+            <ul>
+                <li><strong>R-hat < 1.01:</strong> Chains have converged</li>
+                <li><strong>Effective sample size:</strong> ESS > 400 per chain</li>
+                <li><strong>Divergences:</strong> Should be zero or near-zero</li>
+                <li><strong>Posterior predictive checks:</strong> Model captures data patterns</li>
+                <li><strong>Prior sensitivity:</strong> Results robust to reasonable prior changes</li>
+            </ul>
+
+            <div class="note">
+                <h4>💡 When Diagnostics Fail</h4>
+                <p>
+                    Poor diagnostics often indicate model misspecification or identification problems,
+                    not just sampling issues. Consider: Is the model too complex for the data?
+                    Are priors too vague? Are there collinear predictors?
+                </p>
+            </div>
         </main>
     </div>
 
     <script>
         // Initialize KaTeX
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener('DOMContentLoaded', () => {
             renderMathInElement(document.body, {
                 delimiters: [
                     {left: '$$', right: '$$', display: true},
                     {left: '$', right: '$', display: false}
-                ],
-                throwOnError: false
+                ]
             });
         });
 
-        // Active sidebar link highlighting
+        // Highlight current section in sidebar
         const sections = document.querySelectorAll('h2[id], h3[id]');
         const navLinks = document.querySelectorAll('.sidebar-nav a');
 
@@ -1214,7 +1189,7 @@ az.plot_ppc(trace, data_pairs={"y": "y_obs"})</code></pre>
 
             navLinks.forEach(link => {
                 link.classList.remove('active');
-                if (link.getAttribute('href') === '#' + current) {
+                if (link.getAttribute('href') === `#${current}`) {
                     link.classList.add('active');
                 }
             });

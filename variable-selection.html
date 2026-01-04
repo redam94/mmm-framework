@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Variable Selection | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --shadow-lg: 0 16px 48px rgba(45, 58, 45, 0.12);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
+            font-size: 17px;
+        }
+
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        .hero { padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        .container { max-width: 1000px; margin: 0 auto; padding: 0 2rem; }
+        .hero h1 { font-family: 'DM Serif Display', serif; font-size: 2.8rem; margin-bottom: 1rem; color: var(--color-text); }
+        .lead { font-size: 1.25rem; color: var(--color-text-muted); max-width: 800px; }
+
+        section { padding: 4rem 0; }
+        h2 { font-family: 'DM Serif Display', serif; font-size: 2rem; margin-bottom: 1.5rem; color: var(--color-text); }
+        h3 { font-size: 1.4rem; margin: 2rem 0 1rem; color: var(--color-text); }
+
+        .warning-box { background: rgba(201, 112, 103, 0.08); border: 1px solid rgba(201, 112, 103, 0.3); border-left: 4px solid var(--color-danger); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
+        .warning-box h4 { color: var(--color-danger); margin-bottom: 0.75rem; }
+        .caution-box { background: rgba(212, 168, 106, 0.1); border: 1px solid rgba(212, 168, 106, 0.3); border-left: 4px solid var(--color-warning); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
+        .caution-box h4 { color: #b8860b; margin-bottom: 0.75rem; }
+        .success-box { background: rgba(106, 191, 138, 0.1); border: 1px solid rgba(106, 191, 138, 0.3); border-left: 4px solid var(--color-success); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
+        .success-box h4 { color: #3d8b5a; margin-bottom: 0.75rem; }
+        .info-box { background: rgba(106, 143, 168, 0.1); border: 1px solid rgba(106, 143, 168, 0.3); border-left: 4px solid var(--color-accent); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
+        .info-box h4 { color: var(--color-accent-dark); margin-bottom: 0.75rem; }
+
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 2rem 0; }
+        .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; }
+        .card h4 { margin-bottom: 0.75rem; font-size: 1.1rem; }
+        .card.success { border-left: 4px solid var(--color-success); }
+        .card.danger { border-left: 4px solid var(--color-danger); }
+        .card p { color: var(--color-text-muted); font-size: 0.95rem; margin: 0; }
+
+        table { width: 100%; border-collapse: collapse; margin: 2rem 0; background: var(--color-surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        th { background: var(--color-bg-alt); font-weight: 600; color: var(--color-text); }
+        tbody tr:last-child td { border-bottom: none; }
+        .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.8rem; font-weight: 600; }
+        .badge-success { background: rgba(106, 191, 138, 0.15); color: #3d8b5a; }
+        .badge-danger { background: rgba(201, 112, 103, 0.15); color: var(--color-danger); }
+
+        .chart-container { height: 350px; background: var(--color-surface); border-radius: 12px; border: 1px solid var(--color-border); padding: 1rem; margin: 1.5rem 0; }
+        .chart-container-lg { height: 400px; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0; }
+        .chart-box { background: var(--color-surface); border-radius: 12px; border: 1px solid var(--color-border); padding: 1.5rem; }
+        .chart-box h4 { margin-bottom: 1rem; text-align: center; color: var(--color-text-muted); }
+
+        .demo-section { background: var(--color-bg-alt); }
+        .demo-container { background: var(--color-surface); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow-md); border: 1px solid var(--color-border); }
+        .demo-header { margin-bottom: 1.5rem; }
+        .demo-header h3 { font-size: 1.3rem; margin-bottom: 0.5rem; }
+        .demo-header p { color: var(--color-text-muted); }
+
+        .interpretation-box { margin-top: 2rem; padding: 1.5rem; background: var(--color-bg-alt); border-radius: 12px; }
+        .interpretation-box h4 { margin-bottom: 1rem; }
+        .interpretation-list { list-style: none; }
+        .interpretation-list li { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--color-border); }
+        .interpretation-list li:last-child { border-bottom: none; }
+        .prob-high { background: rgba(106, 191, 138, 0.15); color: #3d8b5a; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.85rem; }
+        .prob-medium { background: rgba(212, 168, 106, 0.15); color: #b8860b; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.85rem; }
+        .prob-low { background: rgba(201, 112, 103, 0.15); color: var(--color-danger); padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.85rem; }
+
+        /* DAG Diagram */
+        .dag-container { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0; }
+        .dag-box { background: var(--color-surface); border-radius: 16px; padding: 2rem; border: 1px solid var(--color-border); text-align: center; }
+        .dag-box h4 { margin-bottom: 1rem; }
+        .dag-box.good { border-top: 4px solid var(--color-success); }
+        .dag-box.bad { border-top: 4px solid var(--color-danger); }
+        .dag-svg { width: 100%; max-width: 300px; height: 200px; margin: 0 auto; }
+
+        /* Interactive Controls */
+        .interactive-section { background: var(--color-surface); border-radius: 16px; padding: 2rem; border: 1px solid var(--color-border); margin: 2rem 0; }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+        .control-row label { font-weight: 500; min-width: 180px; }
+        .control-row input[type="range"] { flex: 1; min-width: 200px; }
+        .control-value { font-family: 'JetBrains Mono', monospace; background: var(--color-bg-alt); padding: 0.25rem 0.75rem; border-radius: 4px; min-width: 60px; text-align: center; }
+
+        .method-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin: 2rem 0; }
+        .method-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; text-align: center; transition: var(--transition-smooth); }
+        .method-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .method-card h4 { color: var(--color-primary-dark); margin-bottom: 0.5rem; }
+        .method-card .use-for { font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 1rem; }
+        .method-card .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+        .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: var(--transition-smooth); border: none; text-decoration: none; }
+        .btn-primary { background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark)); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .btn-secondary { background: var(--color-surface); color: var(--color-text); border: 2px solid var(--color-border); }
+        .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+        footer { background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 3rem 0; margin-top: 4rem; }
+        .footer-content { display: flex; justify-content: space-between; align-items: center; }
+        .footer-links { display: flex; gap: 2rem; }
+        .footer-links a { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; }
+        .footer-links a:hover { color: var(--color-primary); }
+
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero h1 { font-size: 2rem; }
+            .card-grid, .dag-container, .chart-grid { grid-template-columns: 1fr; }
+            .footer-content { flex-direction: column; gap: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="#" class="active">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <h1>Variable Selection in MMM</h1>
+            <p class="lead">
+                Bayesian variable selection can help identify which control variables matter—but it requires careful application to avoid undermining your causal estimates.
+            </p>
+        </div>
+    </section>
+
+    <!-- Critical Warning -->
+    <section>
+        <div class="container">
+            <div class="warning-box">
+                <h4>⚠️ Critical Warning: Misuse Can Bias Your Results</h4>
+                <p>
+                    Variable selection is <strong>not</strong> a general-purpose model improvement technique. When applied to the wrong variables, it can systematically bias your media effect estimates—often in ways that make results look better while making them less accurate.
+                </p>
+            </div>
+
+            <h2>Understanding the Causal Structure</h2>
+            <p>
+                The key to using variable selection correctly is understanding the causal relationships in your data. Some variables only affect your outcome (precision controls), while others affect both your treatment and outcome (confounders).
+            </p>
+
+            <!-- DAG Diagrams -->
+            <div class="dag-container">
+                <div class="dag-box good">
+                    <h4>✅ Precision Control (Safe to Select)</h4>
+                    <svg class="dag-svg" viewBox="0 0 300 200">
+                        <!-- Weather node -->
+                        <rect x="20" y="80" width="80" height="40" rx="8" fill="#6abf8a" opacity="0.8"/>
+                        <text x="60" y="105" text-anchor="middle" fill="white" font-size="12" font-weight="600">Weather</text>
+                        
+                        <!-- Media node -->
+                        <rect x="110" y="20" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
+                        <text x="150" y="45" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="200" y="80" width="80" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
+                        <text x="240" y="105" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows -->
+                        <defs>
+                            <marker id="arrow-g" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#5a6b5a"/>
+                            </marker>
+                        </defs>
+                        <path d="M 100 100 L 195 100" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-g)"/>
+                        <path d="M 190 45 L 220 75" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-g)"/>
+                        
+                        <!-- No arrow from weather to media -->
+                        <text x="150" y="180" text-anchor="middle" fill="#5a6b5a" font-size="11">Weather → Sales only</text>
+                    </svg>
+                    <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
+                        Weather affects sales but doesn't influence media spend decisions. Safe to shrink.
+                    </p>
+                </div>
+
+                <div class="dag-box bad">
+                    <h4>❌ Confounder (Never Select)</h4>
+                    <svg class="dag-svg" viewBox="0 0 300 200">
+                        <!-- Distribution node -->
+                        <rect x="110" y="10" width="80" height="40" rx="8" fill="#c97067" opacity="0.8"/>
+                        <text x="150" y="35" text-anchor="middle" fill="white" font-size="11" font-weight="600">Distribution</text>
+                        
+                        <!-- Media node -->
+                        <rect x="20" y="100" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
+                        <text x="60" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Media</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="200" y="100" width="80" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
+                        <text x="240" y="125" text-anchor="middle" fill="white" font-size="12" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows -->
+                        <defs>
+                            <marker id="arrow-r" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                                <path d="M0,0 L0,6 L9,3 z" fill="#c97067"/>
+                            </marker>
+                        </defs>
+                        <path d="M 130 50 L 80 95" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arrow-r)"/>
+                        <path d="M 170 50 L 220 95" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arrow-r)"/>
+                        <path d="M 105 120 L 195 120" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-g)"/>
+                        
+                        <text x="150" y="180" text-anchor="middle" fill="#c97067" font-size="11">Distribution → Media AND Sales</text>
+                    </svg>
+                    <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
+                        Distribution affects both media spend and sales. Shrinking biases media effects.
+                    </p>
+                </div>
+            </div>
+
+            <h3>The Confounder Problem Visualized</h3>
+            <p>
+                When you shrink a confounder toward zero, you don't remove its influence—you just reassign it to your media variables. This inflates media effects and leads to overconfident ROI estimates.
+            </p>
+
+            <!-- Bias Demonstration Chart -->
+            <div class="interactive-section">
+                <h4 style="margin-bottom: 1rem;">Interactive: See What Happens When You Shrink a Confounder</h4>
+                <div class="control-row">
+                    <label>Distribution coefficient shrinkage:</label>
+                    <input type="range" id="shrinkage-slider" min="0" max="100" value="0">
+                    <span class="control-value" id="shrinkage-value">0%</span>
+                </div>
+                <div id="bias-demo-chart" class="chart-container chart-container-lg"></div>
+                <div id="bias-warning" class="caution-box" style="display: none; margin-top: 1rem;">
+                    <h4>⚠️ Bias Detected</h4>
+                    <p id="bias-message"></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Variable Classification -->
+    <section style="background: var(--color-bg-alt);">
+        <div class="container">
+            <h2>Variable Classification Guide</h2>
+            <p>
+                Before applying variable selection, classify every potential control variable. This classification should be done <strong>before</strong> looking at model results.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable Type</th>
+                        <th>Examples</th>
+                        <th>Selection?</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Precision Controls</strong></td>
+                        <td>Weather, gas prices, minor holidays, local events</td>
+                        <td><span class="badge badge-success">✓ OK</span></td>
+                        <td>Affect outcome only, not media allocation</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Confounders</strong></td>
+                        <td>Distribution/ACV, price, competitor media</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>Affect both media AND outcome—shrinking biases estimates</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Core Structure</strong></td>
+                        <td>Trend, seasonality, intercept</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>Fundamental model components, always required</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mediators</strong></td>
+                        <td>Brand awareness, consideration</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>On causal path—shrinking blocks true media effect</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Media Variables</strong></td>
+                        <td>TV spend, digital spend, etc.</td>
+                        <td><span class="badge badge-danger">✗ Never</span></td>
+                        <td>These are your treatments—never shrink toward zero</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Classification Decision Tree -->
+            <div class="info-box">
+                <h4>💡 The Key Question</h4>
+                <p>
+                    Ask yourself: "Does this variable influence how we allocate our media budget?" If yes, it's likely a confounder and must be excluded from selection.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shrinkage Methods Comparison -->
+    <section>
+        <div class="container">
+            <h2>How Different Priors Shrink Coefficients</h2>
+            <p>
+                Different Bayesian priors create different shrinkage profiles. Understanding these helps you choose the right method for your problem.
+            </p>
+
+            <div id="shrinkage-comparison-chart" class="chart-container chart-container-lg"></div>
+
+            <div class="method-cards">
+                <div class="method-card">
+                    <div class="icon">🐴</div>
+                    <h4>Regularized Horseshoe</h4>
+                    <p class="use-for">Best for: Sparse signals</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted);">Strong shrinkage of small effects, minimal shrinkage of large effects. Good when few controls matter.</p>
+                </div>
+                <div class="method-card">
+                    <div class="icon">📊</div>
+                    <h4>Spike-and-Slab</h4>
+                    <p class="use-for">Best for: Clear selection</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted);">Explicit inclusion probabilities. Variables are "in" or "out" with posterior probabilities.</p>
+                </div>
+                <div class="method-card">
+                    <div class="icon">📐</div>
+                    <h4>Bayesian LASSO</h4>
+                    <p class="use-for">Best for: Many small effects</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted);">Uniform shrinkage across coefficients. Good when many controls have small effects.</p>
+                </div>
+                <div class="method-card">
+                    <div class="icon">🇫🇮</div>
+                    <h4>Finnish Horseshoe</h4>
+                    <p class="use-for">Best for: Bounded effects</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted);">Regularized horseshoe with slab component. Prevents unrealistically large coefficients.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive PIP Demo -->
+    <section class="demo-section">
+        <div class="container">
+            <h2>Understanding Posterior Inclusion Probabilities</h2>
+            <p>
+                Bayesian variable selection doesn't make hard yes/no decisions. Instead, it produces <em>posterior inclusion probabilities</em> (PIPs)—the probability that each variable has a non-zero effect.
+            </p>
+
+            <div class="demo-container">
+                <div class="demo-header">
+                    <h3>Example: Control Variable Selection Results</h3>
+                    <p>Higher bars indicate stronger evidence that the variable has a real effect.</p>
+                </div>
+
+                <div id="pip-chart" class="chart-container"></div>
+
+                <div class="interpretation-box">
+                    <h4>How to Interpret These Results</h4>
+                    <ul class="interpretation-list">
+                        <li>
+                            <span><strong>Weather (Rain Days)</strong> — PIP: 0.92</span>
+                            <span class="prob-high">Strong evidence</span>
+                        </li>
+                        <li>
+                            <span><strong>Holiday Indicator</strong> — PIP: 0.87</span>
+                            <span class="prob-high">Strong evidence</span>
+                        </li>
+                        <li>
+                            <span><strong>Local Sports Events</strong> — PIP: 0.64</span>
+                            <span class="prob-medium">Moderate evidence</span>
+                        </li>
+                        <li>
+                            <span><strong>Gas Price</strong> — PIP: 0.31</span>
+                            <span class="prob-low">Weak evidence</span>
+                        </li>
+                        <li>
+                            <span><strong>Unemployment Rate</strong> — PIP: 0.18</span>
+                            <span class="prob-low">Little evidence</span>
+                        </li>
+                        <li>
+                            <span><strong>Stock Market Index</strong> — PIP: 0.08</span>
+                            <span class="prob-low">Effectively excluded</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Effect Size vs PIP Scatter -->
+            <h3 style="margin-top: 3rem;">Relationship: Effect Size vs. Inclusion Probability</h3>
+            <p>Variables with larger estimated effects tend to have higher inclusion probabilities, but uncertainty matters too.</p>
+            <div id="effect-pip-scatter" class="chart-container chart-container-lg"></div>
+        </div>
+    </section>
+
+    <!-- Prior Sensitivity -->
+    <section style="background: var(--color-bg-alt);">
+        <div class="container">
+            <h2>Prior Sensitivity Analysis</h2>
+            <p>
+                Your choice of "expected number of relevant variables" affects results. Always check sensitivity to this assumption.
+            </p>
+
+            <div class="interactive-section" style="background: var(--color-surface);">
+                <h4 style="margin-bottom: 1rem;">Interactive: How Prior Sparsity Affects PIPs</h4>
+                <div class="control-row">
+                    <label>Expected relevant variables:</label>
+                    <input type="range" id="sparsity-slider" min="1" max="10" value="3">
+                    <span class="control-value" id="sparsity-value">3</span>
+                </div>
+                <div id="sensitivity-chart" class="chart-container"></div>
+            </div>
+
+            <div class="caution-box">
+                <h4>⚠️ If Results Change Dramatically</h4>
+                <p>
+                    If your conclusions are highly sensitive to the prior sparsity assumption, this indicates weak identification. Report this uncertainty rather than picking the "best looking" result.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Best Practices -->
+    <section>
+        <div class="container">
+            <h2>Best Practices</h2>
+
+            <h3>Before Fitting the Model</h3>
+            <div class="card-grid">
+                <div class="card">
+                    <h4>📋 Classify All Variables</h4>
+                    <p>Document which variables are confounders vs. precision controls before seeing any results.</p>
+                </div>
+                <div class="card">
+                    <h4>🎯 Set Priors Thoughtfully</h4>
+                    <p>The "expected number of relevant controls" should reflect domain knowledge, not be tuned for fit.</p>
+                </div>
+                <div class="card">
+                    <h4>🚫 Exclude Confounders</h4>
+                    <p>Explicitly exclude all confounders from variable selection. They need standard priors.</p>
+                </div>
+            </div>
+
+            <h3>After Fitting the Model</h3>
+            <div class="card-grid">
+                <div class="card">
+                    <h4>📊 Report PIPs</h4>
+                    <p>Show full posterior inclusion probabilities, not just binary "selected" decisions.</p>
+                </div>
+                <div class="card">
+                    <h4>🔄 Check Sensitivity</h4>
+                    <p>Vary prior sparsity and see how results change. Report this uncertainty.</p>
+                </div>
+                <div class="card">
+                    <h4>⚖️ Don't Overinterpret</h4>
+                    <p>Low PIP ≠ proof of no effect. It means the data doesn't provide strong evidence.</p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>⚠️ What NOT to Do</h4>
+                <ul style="margin: 0; padding-left: 1.5rem;">
+                    <li>Don't tune hyperparameters to improve model fit or coefficient signs</li>
+                    <li>Don't apply selection to confounders, mediators, or media variables</li>
+                    <li>Don't use selection as a substitute for thoughtful model specification</li>
+                    <li>Don't run selection, see "excluded" variables, remove them and refit without selection</li>
+                </ul>
+            </div>
+
+            <div style="text-align: center; margin-top: 3rem;">
+                <a href="technical-guide.html#variable-selection" class="btn btn-primary">View Technical Details →</a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container footer-content">
+            <span class="logo">MMM Framework</span>
+            <div class="footer-links">
+                <a href="index.html">Home</a>
+                <a href="technical-guide.html">Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const colors = {
+            primary: '#8fa86a', primaryDark: '#6d8a4a',
+            accent: '#6a8fa8', accentDark: '#4a6d8a',
+            success: '#6abf8a', warning: '#d4a86a', danger: '#c97067',
+            text: '#2d3a2d', textMuted: '#5a6b5a', border: '#d4ddd4', bg: '#fafbf9'
+        };
+        const config = { displayModeBar: false, responsive: true };
+        const baseLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 40, r: 30, b: 50, l: 60 }
+        };
+
+        // 1. Bias Demo Chart
+        function updateBiasDemo(shrinkage) {
+            const pct = shrinkage / 100;
+            const trueMedia = 0.35;
+            const trueDistribution = 0.45;
+            const observedMedia = trueMedia + (trueDistribution * pct * 0.7);
+            const observedDistribution = trueDistribution * (1 - pct);
+
+            const data = [{
+                x: ['True Media Effect', 'Observed Media Effect', 'True Distribution', 'Observed Distribution'],
+                y: [trueMedia, observedMedia, trueDistribution, observedDistribution],
+                type: 'bar',
+                marker: { color: [colors.accent, pct > 0.3 ? colors.danger : colors.accent, colors.primary, colors.primary] },
+                text: [trueMedia.toFixed(2), observedMedia.toFixed(2), trueDistribution.toFixed(2), observedDistribution.toFixed(2)],
+                textposition: 'outside'
+            }];
+
+            const layout = {
+                ...baseLayout,
+                yaxis: { title: 'Coefficient Value', range: [0, 0.9], gridcolor: colors.border },
+                xaxis: { gridcolor: colors.border },
+                annotations: pct > 0.3 ? [{
+                    x: 'Observed Media Effect', y: observedMedia + 0.08,
+                    text: '↑ Biased!', showarrow: false,
+                    font: { color: colors.danger, size: 14, weight: 'bold' }
+                }] : []
+            };
+
+            Plotly.react('bias-demo-chart', data, layout, config);
+
+            const warning = document.getElementById('bias-warning');
+            const msg = document.getElementById('bias-message');
+            if (pct > 0.3) {
+                warning.style.display = 'block';
+                const inflation = ((observedMedia / trueMedia - 1) * 100).toFixed(0);
+                msg.textContent = `Media effect is inflated by ${inflation}%. The effect that should be attributed to distribution is now incorrectly attributed to media.`;
+            } else {
+                warning.style.display = 'none';
+            }
+        }
+
+        document.getElementById('shrinkage-slider').addEventListener('input', function() {
+            document.getElementById('shrinkage-value').textContent = this.value + '%';
+            updateBiasDemo(parseInt(this.value));
+        });
+
+        // 2. Shrinkage Comparison Chart
+        function initShrinkageComparison() {
+            const x = [];
+            for (let i = -3; i <= 3; i += 0.05) x.push(i);
+
+            // Horseshoe-like (heavy tails)
+            const horseshoe = x.map(v => {
+                const shrink = 1 / (1 + Math.exp(-Math.abs(v) * 2));
+                return v * shrink;
+            });
+
+            // LASSO-like (linear shrinkage)
+            const lasso = x.map(v => {
+                const lambda = 0.5;
+                if (Math.abs(v) < lambda) return 0;
+                return v > 0 ? v - lambda : v + lambda;
+            });
+
+            // Normal (ridge-like, proportional)
+            const ridge = x.map(v => v * 0.6);
+
+            const data = [
+                { x: x, y: x, type: 'scatter', mode: 'lines', name: 'No shrinkage', line: { color: colors.textMuted, dash: 'dash', width: 1 } },
+                { x: x, y: horseshoe, type: 'scatter', mode: 'lines', name: 'Horseshoe', line: { color: colors.primary, width: 3 } },
+                { x: x, y: lasso, type: 'scatter', mode: 'lines', name: 'LASSO', line: { color: colors.accent, width: 3 } },
+                { x: x, y: ridge, type: 'scatter', mode: 'lines', name: 'Ridge', line: { color: colors.warning, width: 3 } }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'True Coefficient', gridcolor: colors.border, zerolinecolor: colors.border },
+                yaxis: { title: 'Estimated Coefficient', gridcolor: colors.border, zerolinecolor: colors.border },
+                legend: { x: 0.02, y: 0.98 },
+                shapes: [{ type: 'line', x0: -3, x1: 3, y0: 0, y1: 0, line: { color: colors.border, width: 1 } }]
+            };
+
+            Plotly.newPlot('shrinkage-comparison-chart', data, layout, config);
+        }
+
+        // 3. PIP Chart
+        function initPIPChart() {
+            const variables = ['Weather', 'Holiday', 'Sports', 'Gas Price', 'Unemployment', 'Stock Market'];
+            const pips = [0.92, 0.87, 0.64, 0.31, 0.18, 0.08];
+            const barColors = pips.map(p => p >= 0.75 ? colors.success : p >= 0.5 ? colors.warning : colors.danger);
+
+            const data = [{
+                x: variables, y: pips, type: 'bar',
+                marker: { color: barColors, line: { color: barColors.map(c => c === colors.success ? '#4a8f5f' : c === colors.warning ? '#b8860b' : '#a85550'), width: 2 } },
+                text: pips.map(p => (p * 100).toFixed(0) + '%'), textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>PIP: %{y:.0%}<extra></extra>'
+            }];
+
+            const layout = {
+                ...baseLayout,
+                yaxis: { title: 'Posterior Inclusion Probability', range: [0, 1.1], tickformat: '.0%', gridcolor: colors.border },
+                xaxis: { gridcolor: colors.border },
+                shapes: [{ type: 'line', x0: -0.5, x1: 5.5, y0: 0.5, y1: 0.5, line: { color: colors.textMuted, width: 2, dash: 'dash' } }],
+                annotations: [{ x: 5.5, y: 0.52, text: '50% threshold', showarrow: false, font: { size: 11, color: colors.textMuted }, xanchor: 'right' }]
+            };
+
+            Plotly.newPlot('pip-chart', data, layout, config);
+        }
+
+        // 4. Effect Size vs PIP Scatter
+        function initEffectPIPScatter() {
+            const variables = ['Weather', 'Holiday', 'Sports', 'Gas Price', 'Unemployment', 'Stock Mkt', 'Temp', 'Weekday'];
+            const effects = [0.42, 0.38, 0.22, 0.08, 0.05, 0.02, 0.35, 0.28];
+            const pips = [0.92, 0.87, 0.64, 0.31, 0.18, 0.08, 0.89, 0.78];
+            const uncertainty = [0.08, 0.10, 0.15, 0.12, 0.08, 0.05, 0.06, 0.12];
+            const markerColors = pips.map(p => p >= 0.5 ? colors.success : colors.danger);
+
+            const data = [{
+                x: effects, y: pips,
+                mode: 'markers+text',
+                type: 'scatter',
+                text: variables,
+                textposition: 'top center',
+                textfont: { size: 10, color: colors.textMuted },
+                marker: { size: uncertainty.map(u => u * 150), color: markerColors, opacity: 0.7, line: { color: 'white', width: 1 } },
+                hovertemplate: '<b>%{text}</b><br>Effect: %{x:.2f}<br>PIP: %{y:.0%}<extra></extra>'
+            }];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Estimated Effect Size', gridcolor: colors.border, range: [-0.05, 0.55] },
+                yaxis: { title: 'Inclusion Probability', tickformat: '.0%', gridcolor: colors.border, range: [0, 1.05] },
+                shapes: [{ type: 'line', x0: -0.05, x1: 0.55, y0: 0.5, y1: 0.5, line: { color: colors.textMuted, width: 1, dash: 'dash' } }],
+                annotations: [{ x: 0.5, y: 0.52, text: 'Inclusion threshold', showarrow: false, font: { size: 10, color: colors.textMuted } }]
+            };
+
+            Plotly.newPlot('effect-pip-scatter', data, layout, config);
+        }
+
+        // 5. Sensitivity Chart
+        function updateSensitivityChart(expectedRelevant) {
+            const variables = ['Weather', 'Holiday', 'Sports', 'Gas Price', 'Unemployment', 'Stock Mkt'];
+            const basePips = [0.92, 0.87, 0.64, 0.31, 0.18, 0.08];
+            
+            // Simulate how PIPs change with different priors
+            const factor = expectedRelevant / 3;
+            const adjustedPips = basePips.map(p => Math.min(0.99, Math.max(0.01, p * (0.5 + 0.5 * factor))));
+            const barColors = adjustedPips.map(p => p >= 0.5 ? colors.success : colors.danger);
+
+            const data = [{
+                x: variables, y: adjustedPips, type: 'bar',
+                marker: { color: barColors },
+                text: adjustedPips.map(p => (p * 100).toFixed(0) + '%'), textposition: 'outside'
+            }];
+
+            const layout = {
+                ...baseLayout, margin: { t: 30, r: 30, b: 50, l: 60 },
+                yaxis: { title: 'PIP', range: [0, 1.1], tickformat: '.0%', gridcolor: colors.border },
+                xaxis: { gridcolor: colors.border },
+                shapes: [{ type: 'line', x0: -0.5, x1: 5.5, y0: 0.5, y1: 0.5, line: { color: colors.textMuted, width: 2, dash: 'dash' } }]
+            };
+
+            Plotly.react('sensitivity-chart', data, layout, config);
+        }
+
+        document.getElementById('sparsity-slider').addEventListener('input', function() {
+            document.getElementById('sparsity-value').textContent = this.value;
+            updateSensitivityChart(parseInt(this.value));
+        });
+
+        // Initialize all charts
+        document.addEventListener('DOMContentLoaded', function() {
+            updateBiasDemo(0);
+            initShrinkageComparison();
+            initPIPChart();
+            initEffectPIPScatter();
+            updateSensitivityChart(3);
+        });
+    </script>
+</body>
+</html>
