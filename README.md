@@ -552,6 +552,298 @@ results.summary(var_names=["beta_media", "alpha"])
 results.plot_trace(var_names=["beta_media"])
 ```
 
+## Variable Selection for Control Variables
+
+The `mmm_extensions` module includes Bayesian variable selection priors for precision control variables. These methods provide principled shrinkage and selection, improving precision when many potential controls exist but only a few are truly relevant.
+
+> ⚠️ **CAUSAL WARNING**: Variable selection should ONLY be applied to **precision control variables**—variables that affect the outcome but do NOT affect treatment assignment (media spending). **Confounders** (variables affecting both media and sales) must be EXCLUDED from selection and always included with standard priors. Shrinking a confounder toward zero does not remove confounding bias.
+
+### Variable Classification
+
+Before applying variable selection, classify each control variable:
+
+| Variable Type | Examples | Selection OK? | Reason |
+|---------------|----------|---------------|--------|
+| **Precision Controls** | Weather, gas prices, minor holidays, sports events | ✅ Yes | Affect outcome only |
+| **Confounders** | Distribution/ACV, price, competitor media | ❌ No | Affect both media AND outcome |
+| **Core Components** | Trend, seasonality | ❌ No | Fundamental model structure |
+| **Mediators** | Brand awareness (if on causal path) | ❌ No | Blocks causal effect |
+
+### Available Methods
+
+| Method | Best For | Key Feature |
+|--------|----------|-------------|
+| **Regularized Horseshoe** | Sparse signals (few relevant controls) | Strong shrinkage of noise, preserves signals |
+| **Finnish Horseshoe** | Same as regularized horseshoe | Emphasizes slab regularization |
+| **Spike-and-Slab** | Explicit inclusion probabilities | Direct posterior P(included) for each variable |
+| **Bayesian LASSO** | Many small effects | L1-like shrinkage in Bayesian framework |
+
+### Quick Start
+
+```python
+from mmm_framework.mmm_extensions import (
+    # Builders
+    VariableSelectionConfigBuilder,
+    HorseshoeConfigBuilder,
+    
+    # Factory functions
+    sparse_controls,
+    selection_with_inclusion_probs,
+    
+    # Components
+    build_control_effects_with_selection,
+    summarize_variable_selection,
+)
+
+# Method 1: Factory function (simplest)
+config = sparse_controls(
+    expected_nonzero=3,
+    "distribution", "price", "competitor_media",  # Confounders to exclude
+)
+
+# Method 2: Builder with full control
+config = (VariableSelectionConfigBuilder()
+    .regularized_horseshoe(expected_nonzero=3)
+    .with_slab_scale(2.0)
+    .exclude_confounders("distribution", "price", "competitor_media")
+    .build())
+```
+
+### Configuration Classes
+
+#### VariableSelectionConfig
+
+The main configuration object:
+
+```python
+from mmm_framework.mmm_extensions import (
+    VariableSelectionConfig,
+    VariableSelectionMethod,
+    HorseshoeConfig,
+)
+
+config = VariableSelectionConfig(
+    method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
+    horseshoe=HorseshoeConfig(
+        expected_nonzero=3,      # Prior belief: ~3 controls are relevant
+        slab_scale=2.0,          # Max expected effect in std units
+        slab_df=4.0,             # Slab tail weight
+    ),
+    exclude_variables=("distribution", "price"),  # Always include these
+)
+```
+
+#### HorseshoeConfig
+
+Controls the regularized horseshoe prior:
+
+```python
+from mmm_framework.mmm_extensions import HorseshoeConfigBuilder
+
+horseshoe = (HorseshoeConfigBuilder()
+    .with_expected_nonzero(5)      # Expect 5 relevant controls
+    .with_slab_scale(2.5)          # Allow effects up to 2.5 std
+    .with_heavy_tails()            # slab_df=2.0 for larger effects
+    .with_aggressive_shrinkage()   # Stronger shrinkage of noise
+    .build())
+```
+
+#### SpikeSlabConfig
+
+For explicit inclusion probabilities:
+
+```python
+from mmm_framework.mmm_extensions import SpikeSlabConfigBuilder
+
+spike_slab = (SpikeSlabConfigBuilder()
+    .with_prior_inclusion(0.3)     # 30% prior prob of inclusion
+    .with_sharp_selection()        # Lower temperature, sharper selection
+    .continuous()                  # Required for NUTS sampling
+    .build())
+```
+
+### Builder API
+
+The `VariableSelectionConfigBuilder` provides a fluent interface:
+
+```python
+from mmm_framework.mmm_extensions import VariableSelectionConfigBuilder
+
+# Regularized horseshoe (recommended default)
+config = (VariableSelectionConfigBuilder()
+    .regularized_horseshoe(expected_nonzero=3)
+    .with_slab_scale(2.0)
+    .with_slab_df(4.0)
+    .exclude_confounders("distribution", "price", "competitor_media")
+    .build())
+
+# Spike-and-slab for inclusion probabilities
+config = (VariableSelectionConfigBuilder()
+    .spike_slab(prior_inclusion=0.3)
+    .with_sharp_selection()
+    .exclude_confounders("distribution", "price")
+    .apply_only_to("weather", "gas_price", "minor_holiday")  # Limit scope
+    .build())
+
+# Bayesian LASSO for many small effects
+config = (VariableSelectionConfigBuilder()
+    .bayesian_lasso(regularization=2.0)
+    .exclude_confounders("distribution", "price")
+    .build())
+```
+
+### Factory Functions
+
+For common configurations:
+
+```python
+from mmm_framework.mmm_extensions import (
+    sparse_controls,
+    selection_with_inclusion_probs,
+    dense_controls,
+)
+
+# Sparse: expect few relevant controls
+config = sparse_controls(3, "distribution", "price")
+
+# Inclusion probs: want P(included) for each variable
+config = selection_with_inclusion_probs(0.5, "distribution", "price")
+
+# Dense: expect many small effects
+config = dense_controls(1.0, "distribution", "price")
+```
+
+### Integration with Models
+
+Use `build_control_effects_with_selection` to handle the split between confounders and precision controls:
+
+```python
+import pymc as pm
+from mmm_framework.mmm_extensions import (
+    VariableSelectionConfigBuilder,
+    build_control_effects_with_selection,
+)
+
+# Define variable roles
+all_controls = ["distribution", "price", "weather", "gas_price", "holiday"]
+confounders = ["distribution", "price"]
+
+# Configure selection (excludes confounders automatically)
+selection_config = (VariableSelectionConfigBuilder()
+    .regularized_horseshoe(expected_nonzero=2)
+    .exclude_confounders(*confounders)
+    .build())
+
+# Build model
+with pm.Model() as model:
+    sigma = pm.HalfNormal("sigma", 0.5)
+    
+    # This handles the split automatically:
+    # - Confounders get standard Normal priors
+    # - Precision controls get horseshoe priors
+    control_result = build_control_effects_with_selection(
+        X_controls=X_controls,
+        control_names=all_controls,
+        n_obs=len(y),
+        sigma=sigma,
+        selection_config=selection_config,
+        name_prefix="ctrl",
+    )
+    
+    # Use in likelihood
+    mu = intercept + media_effect + control_result.contribution
+    pm.Normal("y", mu=mu, sigma=sigma, observed=y)
+```
+
+### Interpreting Results
+
+After fitting, analyze variable selection:
+
+```python
+from mmm_framework.mmm_extensions import (
+    compute_inclusion_probabilities,
+    summarize_variable_selection,
+)
+
+# Get inclusion probabilities
+inclusion = compute_inclusion_probabilities(
+    trace=idata,
+    config=selection_config,
+    name="ctrl_select",
+)
+print(f"Effective nonzero: {inclusion['effective_nonzero']:.2f}")
+
+# Full summary table
+summary = summarize_variable_selection(
+    trace=idata,
+    control_names=precision_controls,
+    config=selection_config,
+    name="ctrl_select",
+)
+print(summary)
+#    variable      mean    std   hdi_3%  hdi_97%  inclusion_prob  selected
+# 0   weather     0.15   0.08     0.01     0.28           0.89      True
+# 1  gas_price    0.02   0.05    -0.06     0.10           0.23     False
+# 2   holiday    -0.11   0.06    -0.21    -0.02           0.85      True
+```
+
+For horseshoe priors, shrinkage factors (κ) indicate selection:
+- κ ≈ 1: Strongly shrunk toward zero (excluded)
+- κ ≈ 0: Preserved at estimated magnitude (included)
+
+```python
+# Access shrinkage factors directly
+kappa = idata.posterior["ctrl_select_kappa"].mean(dim=["chain", "draw"]).values
+for name, k in zip(precision_controls, kappa):
+    status = "SHRUNK" if k > 0.5 else "PRESERVED"
+    print(f"{name}: κ={k:.3f} ({status})")
+```
+
+### Mathematical Specification
+
+#### Regularized Horseshoe (Piironen & Vehtari, 2017)
+
+The regularized horseshoe prior is:
+
+$$\beta_j = z_j \cdot \tau \cdot \tilde{\lambda}_j$$
+
+where:
+- $z_j \sim \mathcal{N}(0, 1)$ — standardized coefficient
+- $\tau \sim \text{Half-}t_{\nu_g}(\tau_0)$ — global shrinkage
+- $\lambda_j \sim \text{Half-}t_{\nu_l}(1)$ — local shrinkage
+- $\tilde{\lambda}_j = \frac{c \cdot \lambda_j}{\sqrt{c^2 + \tau^2 \lambda_j^2}}$ — regularized local shrinkage
+- $c^2 \sim \text{Inv-Gamma}(\nu_s/2, \nu_s s^2/2)$ — slab regularization
+
+The global shrinkage scale is calibrated as:
+
+$$\tau_0 = \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}}$$
+
+where $D_0$ is the expected number of nonzero coefficients.
+
+#### Spike-and-Slab (Continuous Relaxation)
+
+For NUTS-compatible sampling:
+
+$$\beta_j = \gamma_j \cdot \beta_{\text{slab},j} + (1 - \gamma_j) \cdot \beta_{\text{spike},j}$$
+
+where:
+- $\gamma_j = \text{sigmoid}(\text{logit}_{\gamma_j} / T)$ — soft inclusion indicator
+- $\text{logit}_{\gamma_j} \sim \mathcal{N}(\text{logit}(\pi), 1)$
+- $\beta_{\text{slab},j} \sim \mathcal{N}(0, \sigma_{\text{slab}})$
+- $\beta_{\text{spike},j} \sim \mathcal{N}(0, \sigma_{\text{spike}})$ with $\sigma_{\text{spike}} \ll \sigma_{\text{slab}}$
+- $T$ is temperature (lower = sharper selection)
+
+### Best Practices
+
+1. **Pre-specify variable classification** before seeing any results
+2. **Document rationale** for each variable's classification as confounder vs. precision
+3. **Never tune hyperparameters** based on fit metrics (this is specification shopping)
+4. **Report inclusion probabilities** alongside point estimates
+5. **Show sensitivity** to `expected_nonzero` specification
+6. **When uncertain** about causal role, use standard priors (don't apply selection)
+
+---
+
 ## Mathematical Specification: Extended Models
 
 This section provides the formal mathematical specification and statistical justification for the nested, multivariate, and combined models in the `mmm_extensions` module.
@@ -1139,6 +1431,13 @@ mmm-framework/
 - Simmons, J. P., Nelson, L. D., & Simonsohn, U. (2011). False-positive psychology. *Psychological Science*, 22(11), 1359-1366.
 - Silberzahn, R., et al. (2018). Many analysts, one data set. *Advances in Methods and Practices in Psychological Science*, 1(3), 337-356.
 - Camerer, C. F., et al. (2016). Evaluating replicability of laboratory experiments in economics. *Science*, 351(6280), 1433-1436.
+  
+### Variable Selection
+
+- Piironen, J., & Vehtari, A. (2017). Sparsity information and regularization in the horseshoe and other shrinkage priors. *Electronic Journal of Statistics*, 11(2), 5018-5051.
+- Carvalho, C. M., Polson, N. G., & Scott, J. G. (2010). The horseshoe estimator for sparse signals. *Biometrika*, 97(2), 465-480.
+- George, E. I., & McCulloch, R. E. (1993). Variable selection via Gibbs sampling. *JASA*, 88(423), 881-889.
+- Park, T., & Casella, G. (2008). The Bayesian Lasso. *JASA*, 103(482), 681-686.
 
 ## Contributing
 

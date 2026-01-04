@@ -42,6 +42,18 @@ class SaturationType(str, Enum):
     LOGISTIC = "logistic"
     HILL = "hill"
 
+# =============================================================================
+# Variable Selection Enums
+# =============================================================================
+
+class VariableSelectionMethod(str, Enum):
+    """Available variable selection methods for control variables."""
+    NONE = "none"
+    REGULARIZED_HORSESHOE = "regularized_horseshoe"
+    FINNISH_HORSESHOE = "finnish_horseshoe"
+    SPIKE_SLAB = "spike_slab"
+    BAYESIAN_LASSO = "bayesian_lasso"
+
 
 # =============================================================================
 # Base Configuration Classes
@@ -206,3 +218,249 @@ class CombinedModelConfig:
     
     # Whether mediators affect all outcomes or specific ones
     mediator_to_outcome_map: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+# =============================================================================
+# Variable Selection Configuration Classes
+# =============================================================================
+
+@dataclass(frozen=True)
+class HorseshoeConfig:
+    """
+    Configuration for horseshoe-family priors.
+    
+    The regularized horseshoe (Piironen & Vehtari, 2017) provides:
+    - Strong shrinkage of small effects toward zero
+    - Minimal shrinkage of large effects (signal preservation)
+    - Regularized slab to prevent unrealistic effect sizes
+    
+    Parameters
+    ----------
+    expected_nonzero : int
+        Prior expectation of the number of nonzero coefficients (D0).
+        Used to calibrate the global shrinkage parameter tau.
+    slab_scale : float
+        Scale parameter for the slab (c in the formulation).
+        Controls maximum expected coefficient magnitude in std units.
+    slab_df : float
+        Degrees of freedom for the slab's distribution.
+        Lower = heavier tails = allow larger effects.
+    local_df : float
+        Degrees of freedom for local shrinkage parameters (lambda).
+        Default 5.0; use 1.0 for half-Cauchy (original horseshoe).
+    global_df : float
+        Degrees of freedom for global shrinkage parameter (tau).
+        Default 1.0 gives half-Cauchy (standard horseshoe).
+    """
+    expected_nonzero: int = 3
+    slab_scale: float = 2.0
+    slab_df: float = 4.0
+    local_df: float = 5.0
+    global_df: float = 1.0
+
+
+@dataclass(frozen=True)
+class SpikeSlabConfig:
+    """
+    Configuration for spike-and-slab priors.
+    
+    The spike-and-slab uses a mixture of two distributions:
+    - Spike: concentrated near zero (for excluded variables)
+    - Slab: diffuse prior (for included variables)
+    
+    Parameters
+    ----------
+    prior_inclusion_prob : float
+        Prior probability that each coefficient is nonzero.
+        0.5 represents maximum uncertainty about inclusion.
+    spike_scale : float
+        Standard deviation of the spike (near-zero distribution).
+        Should be small (0.01-0.05) to effectively zero coefficients.
+    slab_scale : float
+        Standard deviation of the slab (nonzero distribution).
+        Should reflect expected magnitude of true effects.
+    use_continuous_relaxation : bool
+        If True, use continuous relaxation for gradient-based sampling.
+        Required for NUTS; set False only for Gibbs samplers.
+    temperature : float
+        Temperature for continuous relaxation (lower = sharper selection).
+    """
+    prior_inclusion_prob: float = 0.5
+    spike_scale: float = 0.01
+    slab_scale: float = 1.0
+    use_continuous_relaxation: bool = True
+    temperature: float = 0.1
+
+
+@dataclass(frozen=True)
+class LassoConfig:
+    """
+    Configuration for Bayesian LASSO prior.
+    
+    The Bayesian LASSO (Park & Casella, 2008) places Laplace priors
+    on coefficients, providing L1-like shrinkage in a Bayesian context.
+    
+    Parameters
+    ----------
+    regularization : float
+        Regularization strength (lambda). Higher = more shrinkage.
+    adaptive : bool
+        If True, use adaptive LASSO with coefficient-specific penalties.
+    """
+    regularization: float = 1.0
+    adaptive: bool = False
+
+
+@dataclass(frozen=True)
+class VariableSelectionConfig:
+    """
+    Complete configuration for control variable selection.
+    
+    CAUSAL WARNING: Variable selection should ONLY be applied to precision
+    control variables---variables that affect the outcome but do NOT affect
+    treatment assignment (media spending). Applying selection to confounders
+    can introduce severe bias in causal effect estimates.
+    
+    Parameters
+    ----------
+    method : VariableSelectionMethod
+        Which selection method to use.
+    horseshoe : HorseshoeConfig
+        Configuration for horseshoe methods.
+    spike_slab : SpikeSlabConfig
+        Configuration for spike-and-slab.
+    lasso : LassoConfig
+        Configuration for Bayesian LASSO.
+    exclude_variables : tuple[str, ...]
+        Variables to EXCLUDE from selection (always include with standard priors).
+        Use for known confounders that must remain in the model.
+    include_only_variables : tuple[str, ...] | None
+        If specified, only apply selection to these variables.
+        All others use standard priors.
+    
+    Examples
+    --------
+    >>> # Sparse selection with excluded confounders
+    >>> config = VariableSelectionConfig(
+    ...     method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
+    ...     horseshoe=HorseshoeConfig(expected_nonzero=3),
+    ...     exclude_variables=("distribution", "price", "competitor_media"),
+    ... )
+    """
+    method: VariableSelectionMethod = VariableSelectionMethod.NONE
+    horseshoe: HorseshoeConfig = field(default_factory=HorseshoeConfig)
+    spike_slab: SpikeSlabConfig = field(default_factory=SpikeSlabConfig)
+    lasso: LassoConfig = field(default_factory=LassoConfig)
+    exclude_variables: tuple[str, ...] = ()
+    include_only_variables: tuple[str, ...] | None = None
+    
+    def get_selectable_variables(
+        self,
+        all_control_names: list[str],
+    ) -> tuple[list[str], list[str]]:
+        """
+        Partition control variables into selectable and non-selectable.
+        
+        Parameters
+        ----------
+        all_control_names : list[str]
+            All control variable names in the model.
+        
+        Returns
+        -------
+        tuple[list[str], list[str]]
+            (variables_with_selection, variables_without_selection)
+        """
+        # Start with all controls or specified subset
+        if self.include_only_variables is not None:
+            selectable = [
+                c for c in all_control_names 
+                if c in self.include_only_variables
+            ]
+        else:
+            selectable = list(all_control_names)
+        
+        # Remove excluded variables
+        selectable = [c for c in selectable if c not in self.exclude_variables]
+        
+        # Non-selectable = everything else
+        non_selectable = [c for c in all_control_names if c not in selectable]
+        
+        return selectable, non_selectable
+
+# =============================================================================
+# Factory Functions for Common Configurations
+# =============================================================================
+
+def sparse_selection_config(
+    expected_relevant: int = 3,
+    confounders: tuple[str, ...] = (),
+) -> VariableSelectionConfig:
+    """
+    Create configuration for sparse control selection.
+    
+    Use when you expect only a few controls are truly relevant.
+    
+    Parameters
+    ----------
+    expected_relevant : int
+        Prior expectation of relevant controls.
+    confounders : tuple[str, ...]
+        Confounder variables to exclude from selection.
+    """
+    return VariableSelectionConfig(
+        method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
+        horseshoe=HorseshoeConfig(
+            expected_nonzero=expected_relevant,
+            slab_scale=2.0,
+        ),
+        exclude_variables=confounders,
+    )
+
+
+def dense_selection_config(
+    regularization: float = 1.0,
+    confounders: tuple[str, ...] = (),
+) -> VariableSelectionConfig:
+    """
+    Create configuration for dense control selection.
+    
+    Use when you expect many controls have small effects.
+    
+    Parameters
+    ----------
+    regularization : float
+        Regularization strength.
+    confounders : tuple[str, ...]
+        Confounder variables to exclude from selection.
+    """
+    return VariableSelectionConfig(
+        method=VariableSelectionMethod.BAYESIAN_LASSO,
+        lasso=LassoConfig(regularization=regularization),
+        exclude_variables=confounders,
+    )
+
+
+def inclusion_prob_selection_config(
+    prior_inclusion: float = 0.5,
+    confounders: tuple[str, ...] = (),
+) -> VariableSelectionConfig:
+    """
+    Create configuration with explicit inclusion probabilities.
+    
+    Use when you want interpretable posterior inclusion probabilities.
+    
+    Parameters
+    ----------
+    prior_inclusion : float
+        Prior probability of inclusion for each variable.
+    confounders : tuple[str, ...]
+        Confounder variables to exclude from selection.
+    """
+    return VariableSelectionConfig(
+        method=VariableSelectionMethod.SPIKE_SLAB,
+        spike_slab=SpikeSlabConfig(
+            prior_inclusion_prob=prior_inclusion,
+            temperature=0.1,
+        ),
+        exclude_variables=confounders,
+    )

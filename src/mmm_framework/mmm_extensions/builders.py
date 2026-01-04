@@ -25,6 +25,11 @@ from .config import (
     NestedModelConfig,
     MultivariateModelConfig,
     CombinedModelConfig,
+    VariableSelectionMethod,
+    HorseshoeConfig,
+    SpikeSlabConfig,
+    LassoConfig,
+    VariableSelectionConfig,
 )
 
 
@@ -705,6 +710,505 @@ class CombinedModelConfigBuilder:
             },
         )
 
+# =============================================================================
+# Variable Selection Configuration Builders
+# =============================================================================
+
+class HorseshoeConfigBuilder:
+    """
+    Builder for HorseshoeConfig with sensible defaults.
+    
+    Examples
+    --------
+    >>> config = (HorseshoeConfigBuilder()
+    ...     .with_expected_nonzero(5)
+    ...     .with_slab_scale(2.5)
+    ...     .with_heavy_tails()
+    ...     .build())
+    """
+    
+    def __init__(self):
+        self._expected_nonzero = 3
+        self._slab_scale = 2.0
+        self._slab_df = 4.0
+        self._local_df = 5.0
+        self._global_df = 1.0
+    
+    def with_expected_nonzero(self, n: int) -> Self:
+        """Set expected number of nonzero coefficients."""
+        if n < 1:
+            raise ValueError("expected_nonzero must be at least 1")
+        self._expected_nonzero = n
+        return self
+    
+    def with_slab_scale(self, scale: float) -> Self:
+        """Set slab scale (max expected effect in std units)."""
+        if scale <= 0:
+            raise ValueError("slab_scale must be positive")
+        self._slab_scale = scale
+        return self
+    
+    def with_slab_df(self, df: float) -> Self:
+        """Set slab degrees of freedom."""
+        if df <= 0:
+            raise ValueError("slab_df must be positive")
+        self._slab_df = df
+        return self
+    
+    def with_local_df(self, df: float) -> Self:
+        """Set local shrinkage degrees of freedom."""
+        if df <= 0:
+            raise ValueError("local_df must be positive")
+        self._local_df = df
+        return self
+    
+    def with_global_df(self, df: float) -> Self:
+        """Set global shrinkage degrees of freedom."""
+        if df <= 0:
+            raise ValueError("global_df must be positive")
+        self._global_df = df
+        return self
+    
+    def with_heavy_tails(self) -> Self:
+        """Configure for heavier-tailed slab (allow larger effects)."""
+        self._slab_df = 2.0
+        return self
+    
+    def with_light_tails(self) -> Self:
+        """Configure for lighter-tailed slab (more regularization)."""
+        self._slab_df = 8.0
+        return self
+    
+    def with_half_cauchy_local(self) -> Self:
+        """Use half-Cauchy for local shrinkage (original horseshoe)."""
+        self._local_df = 1.0
+        return self
+    
+    def with_aggressive_shrinkage(self) -> Self:
+        """Configure for more aggressive shrinkage of small effects."""
+        self._local_df = 10.0
+        self._slab_df = 6.0
+        return self
+    
+    def build(self) -> HorseshoeConfig:
+        """Build the HorseshoeConfig object."""
+        return HorseshoeConfig(
+            expected_nonzero=self._expected_nonzero,
+            slab_scale=self._slab_scale,
+            slab_df=self._slab_df,
+            local_df=self._local_df,
+            global_df=self._global_df,
+        )
+
+
+class SpikeSlabConfigBuilder:
+    """
+    Builder for SpikeSlabConfig with sensible defaults.
+    
+    Examples
+    --------
+    >>> config = (SpikeSlabConfigBuilder()
+    ...     .with_prior_inclusion(0.3)
+    ...     .with_sharp_selection()
+    ...     .build())
+    """
+    
+    def __init__(self):
+        self._prior_inclusion_prob = 0.5
+        self._spike_scale = 0.01
+        self._slab_scale = 1.0
+        self._use_continuous_relaxation = True
+        self._temperature = 0.1
+    
+    def with_prior_inclusion(self, prob: float) -> Self:
+        """Set prior inclusion probability."""
+        if not 0 < prob < 1:
+            raise ValueError("prior_inclusion must be in (0, 1)")
+        self._prior_inclusion_prob = prob
+        return self
+    
+    def with_spike_scale(self, scale: float) -> Self:
+        """Set spike scale (should be small, e.g., 0.01)."""
+        if scale <= 0:
+            raise ValueError("spike_scale must be positive")
+        self._spike_scale = scale
+        return self
+    
+    def with_slab_scale(self, scale: float) -> Self:
+        """Set slab scale (expected magnitude of nonzero effects)."""
+        if scale <= 0:
+            raise ValueError("slab_scale must be positive")
+        self._slab_scale = scale
+        return self
+    
+    def with_temperature(self, temp: float) -> Self:
+        """Set temperature for continuous relaxation."""
+        if temp <= 0:
+            raise ValueError("temperature must be positive")
+        self._temperature = temp
+        return self
+    
+    def continuous(self) -> Self:
+        """Use continuous relaxation (required for NUTS)."""
+        self._use_continuous_relaxation = True
+        return self
+    
+    def discrete(self) -> Self:
+        """Use discrete selection (requires Gibbs sampler)."""
+        self._use_continuous_relaxation = False
+        return self
+    
+    def with_sharp_selection(self) -> Self:
+        """Configure for sharper variable selection."""
+        self._temperature = 0.05
+        self._spike_scale = 0.005
+        return self
+    
+    def with_soft_selection(self) -> Self:
+        """Configure for softer variable selection."""
+        self._temperature = 0.2
+        self._spike_scale = 0.05
+        return self
+    
+    def build(self) -> SpikeSlabConfig:
+        """Build the SpikeSlabConfig object."""
+        return SpikeSlabConfig(
+            prior_inclusion_prob=self._prior_inclusion_prob,
+            spike_scale=self._spike_scale,
+            slab_scale=self._slab_scale,
+            use_continuous_relaxation=self._use_continuous_relaxation,
+            temperature=self._temperature,
+        )
+
+
+class LassoConfigBuilder:
+    """
+    Builder for LassoConfig.
+    
+    Examples
+    --------
+    >>> config = (LassoConfigBuilder()
+    ...     .with_regularization(2.0)
+    ...     .adaptive()
+    ...     .build())
+    """
+    
+    def __init__(self):
+        self._regularization = 1.0
+        self._adaptive = False
+    
+    def with_regularization(self, strength: float) -> Self:
+        """Set regularization strength."""
+        if strength <= 0:
+            raise ValueError("regularization must be positive")
+        self._regularization = strength
+        return self
+    
+    def adaptive(self) -> Self:
+        """Use adaptive LASSO with coefficient-specific penalties."""
+        self._adaptive = True
+        return self
+    
+    def non_adaptive(self) -> Self:
+        """Use standard (non-adaptive) LASSO."""
+        self._adaptive = False
+        return self
+    
+    def with_strong_regularization(self) -> Self:
+        """Configure for strong shrinkage."""
+        self._regularization = 5.0
+        return self
+    
+    def with_weak_regularization(self) -> Self:
+        """Configure for weak shrinkage."""
+        self._regularization = 0.5
+        return self
+    
+    def build(self) -> LassoConfig:
+        """Build the LassoConfig object."""
+        return LassoConfig(
+            regularization=self._regularization,
+            adaptive=self._adaptive,
+        )
+
+
+class VariableSelectionConfigBuilder:
+    """
+    Builder for VariableSelectionConfig with fluent API.
+    
+    This is the main builder for configuring variable selection in MMM.
+    
+    CAUSAL WARNING: Variable selection should only be applied to precision
+    controls, not confounders. Use exclude_confounders() to ensure confounders
+    are always included with standard priors.
+    
+    Examples
+    --------
+    >>> # Regularized horseshoe with excluded confounders
+    >>> config = (VariableSelectionConfigBuilder()
+    ...     .regularized_horseshoe(expected_nonzero=5)
+    ...     .with_slab_scale(2.0)
+    ...     .exclude_confounders("distribution", "price", "competitor_media")
+    ...     .build())
+    
+    >>> # Spike-and-slab for explicit inclusion probabilities
+    >>> config = (VariableSelectionConfigBuilder()
+    ...     .spike_slab(prior_inclusion=0.3)
+    ...     .with_sharp_selection()
+    ...     .apply_only_to("weather", "gas_price", "minor_holiday")
+    ...     .build())
+    
+    >>> # Using sub-builders for full control
+    >>> config = (VariableSelectionConfigBuilder()
+    ...     .regularized_horseshoe()
+    ...     .with_horseshoe_config(
+    ...         HorseshoeConfigBuilder()
+    ...         .with_expected_nonzero(3)
+    ...         .with_heavy_tails()
+    ...         .build()
+    ...     )
+    ...     .build())
+    """
+    
+    def __init__(self):
+        self._method = VariableSelectionMethod.NONE
+        self._horseshoe = HorseshoeConfig()
+        self._spike_slab = SpikeSlabConfig()
+        self._lasso = LassoConfig()
+        self._exclude_variables: list[str] = []
+        self._include_only_variables: list[str] | None = None
+    
+    # --- Method selection ---
+    
+    def none(self) -> Self:
+        """No variable selection (standard priors for all controls)."""
+        self._method = VariableSelectionMethod.NONE
+        return self
+    
+    def regularized_horseshoe(self, expected_nonzero: int = 3) -> Self:
+        """
+        Use regularized horseshoe prior (recommended default).
+        
+        The regularized horseshoe provides excellent shrinkage of small
+        effects while preserving large effects, with a slab to prevent
+        unrealistic coefficient magnitudes.
+        
+        Parameters
+        ----------
+        expected_nonzero : int
+            Prior expectation of relevant control variables.
+        """
+        self._method = VariableSelectionMethod.REGULARIZED_HORSESHOE
+        self._horseshoe = HorseshoeConfig(expected_nonzero=expected_nonzero)
+        return self
+    
+    def finnish_horseshoe(self, expected_nonzero: int = 3) -> Self:
+        """
+        Use Finnish horseshoe prior.
+        
+        Mathematically equivalent to regularized horseshoe; name
+        emphasizes the slab regularization from Piironen & Vehtari.
+        
+        Parameters
+        ----------
+        expected_nonzero : int
+            Prior expectation of relevant control variables.
+        """
+        self._method = VariableSelectionMethod.FINNISH_HORSESHOE
+        self._horseshoe = HorseshoeConfig(expected_nonzero=expected_nonzero)
+        return self
+    
+    def spike_slab(
+        self,
+        prior_inclusion: float = 0.5,
+        continuous: bool = True,
+    ) -> Self:
+        """
+        Use spike-and-slab prior.
+        
+        Provides explicit posterior inclusion probabilities for each variable.
+        
+        Parameters
+        ----------
+        prior_inclusion : float
+            Prior probability that each variable is included.
+        continuous : bool
+            Use continuous relaxation for NUTS sampling.
+        """
+        self._method = VariableSelectionMethod.SPIKE_SLAB
+        self._spike_slab = SpikeSlabConfig(
+            prior_inclusion_prob=prior_inclusion,
+            use_continuous_relaxation=continuous,
+        )
+        return self
+    
+    def bayesian_lasso(self, regularization: float = 1.0) -> Self:
+        """
+        Use Bayesian LASSO prior.
+        
+        Better when expecting many small effects rather than sparse signals.
+        
+        Parameters
+        ----------
+        regularization : float
+            Regularization strength (higher = more shrinkage).
+        """
+        self._method = VariableSelectionMethod.BAYESIAN_LASSO
+        self._lasso = LassoConfig(regularization=regularization)
+        return self
+    
+    # --- Horseshoe configuration ---
+    
+    def with_horseshoe_config(self, config: HorseshoeConfig) -> Self:
+        """Set horseshoe configuration from pre-built config."""
+        self._horseshoe = config
+        return self
+    
+    def with_expected_nonzero(self, n: int) -> Self:
+        """Set expected number of nonzero coefficients (horseshoe)."""
+        self._horseshoe = HorseshoeConfig(
+            expected_nonzero=n,
+            slab_scale=self._horseshoe.slab_scale,
+            slab_df=self._horseshoe.slab_df,
+            local_df=self._horseshoe.local_df,
+            global_df=self._horseshoe.global_df,
+        )
+        return self
+    
+    def with_slab_scale(self, scale: float) -> Self:
+        """Set slab scale for horseshoe (max effect in std units)."""
+        self._horseshoe = HorseshoeConfig(
+            expected_nonzero=self._horseshoe.expected_nonzero,
+            slab_scale=scale,
+            slab_df=self._horseshoe.slab_df,
+            local_df=self._horseshoe.local_df,
+            global_df=self._horseshoe.global_df,
+        )
+        return self
+    
+    def with_slab_df(self, df: float) -> Self:
+        """Set slab degrees of freedom (horseshoe)."""
+        self._horseshoe = HorseshoeConfig(
+            expected_nonzero=self._horseshoe.expected_nonzero,
+            slab_scale=self._horseshoe.slab_scale,
+            slab_df=df,
+            local_df=self._horseshoe.local_df,
+            global_df=self._horseshoe.global_df,
+        )
+        return self
+    
+    # --- Spike-slab configuration ---
+    
+    def with_spike_slab_config(self, config: SpikeSlabConfig) -> Self:
+        """Set spike-slab configuration from pre-built config."""
+        self._spike_slab = config
+        return self
+    
+    def with_prior_inclusion(self, prob: float) -> Self:
+        """Set prior inclusion probability (spike-slab)."""
+        self._spike_slab = SpikeSlabConfig(
+            prior_inclusion_prob=prob,
+            spike_scale=self._spike_slab.spike_scale,
+            slab_scale=self._spike_slab.slab_scale,
+            use_continuous_relaxation=self._spike_slab.use_continuous_relaxation,
+            temperature=self._spike_slab.temperature,
+        )
+        return self
+    
+    def with_temperature(self, temp: float) -> Self:
+        """Set temperature for continuous spike-slab."""
+        self._spike_slab = SpikeSlabConfig(
+            prior_inclusion_prob=self._spike_slab.prior_inclusion_prob,
+            spike_scale=self._spike_slab.spike_scale,
+            slab_scale=self._spike_slab.slab_scale,
+            use_continuous_relaxation=self._spike_slab.use_continuous_relaxation,
+            temperature=temp,
+        )
+        return self
+    
+    def with_sharp_selection(self) -> Self:
+        """Configure spike-slab for sharper selection."""
+        self._spike_slab = SpikeSlabConfig(
+            prior_inclusion_prob=self._spike_slab.prior_inclusion_prob,
+            spike_scale=0.005,
+            slab_scale=self._spike_slab.slab_scale,
+            use_continuous_relaxation=self._spike_slab.use_continuous_relaxation,
+            temperature=0.05,
+        )
+        return self
+    
+    # --- LASSO configuration ---
+    
+    def with_lasso_config(self, config: LassoConfig) -> Self:
+        """Set LASSO configuration from pre-built config."""
+        self._lasso = config
+        return self
+    
+    def with_regularization(self, strength: float) -> Self:
+        """Set LASSO regularization strength."""
+        self._lasso = LassoConfig(
+            regularization=strength,
+            adaptive=self._lasso.adaptive,
+        )
+        return self
+    
+    # --- Variable scope ---
+    
+    def exclude_confounders(self, *variables: str) -> Self:
+        """
+        Exclude variables from selection (always include with standard priors).
+        
+        IMPORTANT: Use this for known confounders that affect both media
+        spending and sales. These must be controlled for to identify
+        causal effects and should NOT be subject to variable selection.
+        
+        Parameters
+        ----------
+        *variables : str
+            Variable names to exclude from selection.
+        """
+        self._exclude_variables.extend(variables)
+        return self
+    
+    def exclude(self, *variables: str) -> Self:
+        """Alias for exclude_confounders."""
+        return self.exclude_confounders(*variables)
+    
+    def apply_only_to(self, *variables: str) -> Self:
+        """
+        Apply selection only to specified variables.
+        
+        All other variables will use standard priors.
+        
+        Parameters
+        ----------
+        *variables : str
+            Variable names to apply selection to.
+        """
+        self._include_only_variables = list(variables)
+        return self
+    
+    def clear_exclusions(self) -> Self:
+        """Clear all exclusions."""
+        self._exclude_variables = []
+        self._include_only_variables = None
+        return self
+    
+    # --- Build ---
+    
+    def build(self) -> VariableSelectionConfig:
+        """Build the VariableSelectionConfig object."""
+        return VariableSelectionConfig(
+            method=self._method,
+            horseshoe=self._horseshoe,
+            spike_slab=self._spike_slab,
+            lasso=self._lasso,
+            exclude_variables=tuple(self._exclude_variables),
+            include_only_variables=(
+                tuple(self._include_only_variables) 
+                if self._include_only_variables else None
+            ),
+        )
 
 # =============================================================================
 # Convenience Factory Functions
@@ -766,3 +1270,90 @@ def halo_effect(source: str, target: str) -> CrossEffectConfig:
         .always_active()
         .build()
     )
+
+# =============================================================================
+# Factory Functions
+# =============================================================================
+
+def sparse_controls(
+    expected_nonzero: int = 3,
+    *confounders: str,
+) -> VariableSelectionConfig:
+    """
+    Create sparse control selection configuration.
+    
+    Convenience factory for the most common use case: expecting only
+    a few control variables are truly relevant.
+    
+    Parameters
+    ----------
+    expected_nonzero : int
+        Prior expectation of relevant controls.
+    *confounders : str
+        Confounder variable names to exclude from selection.
+    
+    Returns
+    -------
+    VariableSelectionConfig
+        Configuration for regularized horseshoe selection.
+    
+    Examples
+    --------
+    >>> config = sparse_controls(3, "distribution", "price")
+    """
+    return (VariableSelectionConfigBuilder()
+        .regularized_horseshoe(expected_nonzero=expected_nonzero)
+        .exclude_confounders(*confounders)
+        .build())
+
+
+def selection_with_inclusion_probs(
+    prior_inclusion: float = 0.5,
+    *confounders: str,
+) -> VariableSelectionConfig:
+    """
+    Create selection configuration with explicit inclusion probabilities.
+    
+    Parameters
+    ----------
+    prior_inclusion : float
+        Prior probability of inclusion for each variable.
+    *confounders : str
+        Confounder variable names to exclude from selection.
+    
+    Returns
+    -------
+    VariableSelectionConfig
+        Configuration for spike-slab selection.
+    """
+    return (VariableSelectionConfigBuilder()
+        .spike_slab(prior_inclusion=prior_inclusion)
+        .exclude_confounders(*confounders)
+        .build())
+
+
+def dense_controls(
+    regularization: float = 1.0,
+    *confounders: str,
+) -> VariableSelectionConfig:
+    """
+    Create dense control selection configuration.
+    
+    Use when expecting many controls have small effects.
+    
+    Parameters
+    ----------
+    regularization : float
+        Regularization strength.
+    *confounders : str
+        Confounder variable names to exclude from selection.
+    
+    Returns
+    -------
+    VariableSelectionConfig
+        Configuration for Bayesian LASSO selection.
+    """
+    return (VariableSelectionConfigBuilder()
+        .bayesian_lasso(regularization=regularization)
+        .exclude_confounders(*confounders)
+        .build())
