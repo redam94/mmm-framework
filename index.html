@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMM Framework | Rigorous Marketing Mix Modeling</title>
+    <meta name="description" content="A Bayesian Marketing Mix Model framework with uncertainty quantification, experimental validation, and methodological rigor.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --color-bg: #0a0f1a;
+            --color-bg-elevated: #111827;
+            --color-bg-card: #1a2332;
+            --color-text: #e8eaed;
+            --color-text-muted: #9ca3af;
+            --color-text-dim: #6b7280;
+            --color-primary: #f59e0b;
+            --color-primary-dim: #d97706;
+            --color-accent: #3b82f6;
+            --color-accent-dim: #2563eb;
+            --color-success: #10b981;
+            --color-danger: #ef4444;
+            --color-border: #374151;
+            --font-display: 'DM Serif Display', Georgia, serif;
+            --font-body: 'Source Sans 3', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+            font-size: 17px;
+            overflow-x: hidden;
+        }
+
+        /* Noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4 {
+            font-family: var(--font-display);
+            font-weight: 400;
+            letter-spacing: -0.01em;
+        }
+
+        h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); line-height: 1.1; }
+        h2 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.2; margin-bottom: 1.5rem; }
+        h3 { font-size: clamp(1.5rem, 2.5vw, 1.875rem); line-height: 1.3; }
+
+        p {
+            color: var(--color-text-muted);
+            max-width: 65ch;
+        }
+
+        a {
+            color: var(--color-primary);
+            text-decoration: none;
+            transition: var(--transition-smooth);
+        }
+
+        a:hover {
+            color: var(--color-text);
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        section {
+            padding: 8rem 0;
+            position: relative;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1.25rem 0;
+            background: rgba(10, 15, 26, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: var(--transition-smooth);
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            color: var(--color-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.5rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--color-text-muted);
+            font-size: 0.95rem;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--color-primary);
+            transition: var(--transition-smooth);
+        }
+
+        .nav-links a:hover {
+            color: var(--color-text);
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 6rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 80%;
+            height: 150%;
+            background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -10%;
+            width: 60%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(245, 158, 11, 0.06) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .hero-text {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--color-primary);
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .hero h1 {
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s ease-out 0.1s both;
+        }
+
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-description {
+            font-size: 1.25rem;
+            margin-bottom: 2.5rem;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            animation: fadeInUp 0.8s ease-out 0.3s both;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dim));
+            color: var(--color-bg);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3);
+            color: var(--color-bg);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+        }
+
+        .btn-secondary:hover {
+            background: var(--color-bg-card);
+            border-color: var(--color-text-muted);
+        }
+
+        .hero-visual {
+            position: relative;
+            z-index: 1;
+            animation: fadeIn 1s ease-out 0.4s both;
+        }
+
+        .hero-chart {
+            background: var(--color-bg-card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Problem Section */
+        .problem {
+            background: var(--color-bg-elevated);
+            position: relative;
+        }
+
+        .problem::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+        }
+
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-top: 4rem;
+        }
+
+        .problem-card {
+            background: var(--color-bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--color-border);
+            transition: var(--transition-smooth);
+        }
+
+        .problem-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--color-danger);
+            box-shadow: 0 20px 40px rgba(239, 68, 68, 0.1);
+        }
+
+        .problem-icon {
+            width: 56px;
+            height: 56px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .problem-card h3 {
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+        }
+
+        .problem-card p {
+            font-size: 0.95rem;
+        }
+
+        /* Solution Section */
+        .solution {
+            position: relative;
+        }
+
+        .solution-header {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 5rem;
+        }
+
+        .solution-header p {
+            margin: 0 auto;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 2rem;
+            align-items: stretch;
+        }
+
+        .comparison-card {
+            background: var(--color-bg-card);
+            border-radius: 16px;
+            padding: 2.5rem;
+            border: 1px solid var(--color-border);
+        }
+
+        .comparison-card.traditional {
+            opacity: 0.7;
+        }
+
+        .comparison-card.bayesian {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 60px rgba(245, 158, 11, 0.1);
+        }
+
+        .comparison-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        .comparison-card h3 {
+            margin-bottom: 1.5rem;
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            color: var(--color-text-muted);
+        }
+
+        .comparison-list .icon {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            margin-top: 2px;
+        }
+
+        .comparison-card.traditional .icon {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--color-danger);
+        }
+
+        .comparison-card.bayesian .icon {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--color-success);
+        }
+
+        .comparison-arrow {
+            display: flex;
+            align-items: center;
+            font-size: 2rem;
+            color: var(--color-text-dim);
+        }
+
+        /* Interactive Demo */
+        .demo {
+            background: var(--color-bg-elevated);
+        }
+
+        .demo-header {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 4rem;
+        }
+
+        .demo-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            background: var(--color-bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--color-border);
+            overflow: hidden;
+        }
+
+        .demo-controls {
+            padding: 2rem;
+            border-right: 1px solid var(--color-border);
+            background: rgba(0,0,0,0.2);
+        }
+
+        .demo-controls h4 {
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-dim);
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group {
+            margin-bottom: 2rem;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-text);
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: var(--color-border);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--color-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .control-group input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+
+        .control-value {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--color-primary);
+            margin-top: 0.5rem;
+        }
+
+        .demo-chart {
+            padding: 2rem;
+        }
+
+        .chart-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .chart-tab.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: var(--color-bg);
+        }
+
+        .chart-tab:hover:not(.active) {
+            border-color: var(--color-text-muted);
+            color: var(--color-text);
+        }
+
+        /* Features */
+        .features {
+            position: relative;
+        }
+
+        .features-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 5rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: var(--color-bg-card);
+            border-radius: 16px;
+            padding: 2.5rem;
+            border: 1px solid var(--color-border);
+            transition: var(--transition-smooth);
+        }
+
+        .feature-card:hover {
+            border-color: var(--color-accent);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(245, 158, 11, 0.2));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        /* How It Works */
+        .how-it-works {
+            background: var(--color-bg-elevated);
+        }
+
+        .how-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 5rem;
+        }
+
+        .workflow {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .workflow::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+            opacity: 0.3;
+        }
+
+        .workflow-step {
+            text-align: center;
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-number {
+            width: 80px;
+            height: 80px;
+            background: var(--color-bg-card);
+            border: 2px solid var(--color-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            color: var(--color-primary);
+        }
+
+        .workflow-step h4 {
+            font-family: var(--font-body);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .workflow-step p {
+            font-size: 0.9rem;
+            margin: 0 auto;
+            max-width: 200px;
+        }
+
+        /* CTA Section */
+        .cta {
+            text-align: center;
+            position: relative;
+        }
+
+        .cta::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .cta-content {
+            position: relative;
+            z-index: 1;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .cta h2 {
+            margin-bottom: 1.5rem;
+        }
+
+        .cta p {
+            margin: 0 auto 2.5rem;
+        }
+
+        /* Footer */
+        footer {
+            padding: 4rem 0 2rem;
+            border-top: 1px solid var(--color-border);
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .footer-links a {
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+        }
+
+        .footer-credit {
+            color: var(--color-text-dim);
+            font-size: 0.85rem;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .hero-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .hero-cta {
+                justify-content: center;
+            }
+
+            .hero-visual {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+
+            .problem-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+
+            .comparison-arrow {
+                transform: rotate(90deg);
+                justify-content: center;
+            }
+
+            .demo-container {
+                grid-template-columns: 1fr;
+            }
+
+            .demo-controls {
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .workflow {
+                flex-direction: column;
+                gap: 3rem;
+            }
+
+            .workflow::before {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            section {
+                padding: 5rem 0;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .container {
+                padding: 0 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <a href="#" class="logo">
+                <div class="logo-icon">📊</div>
+                MMM Framework
+            </a>
+            <ul class="nav-links">
+                <li><a href="#problem">The Problem</a></li>
+                <li><a href="#solution">Our Approach</a></li>
+                <li><a href="#demo">Interactive Demo</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <div class="hero-badge">
+                        <span>🔬</span> Open Source Bayesian MMM
+                    </div>
+                    <h1>Marketing Mix Modeling <span>You Can Trust</span></h1>
+                    <p class="hero-description">
+                        Stop guessing. Start measuring. Our framework delivers honest uncertainty estimates, 
+                        not false precision—so you can make budget decisions with real confidence.
+                    </p>
+                    <div class="hero-cta">
+                        <a href="https://github.com/redam94/mmm-framework" class="btn btn-primary">
+                            Get Started →
+                        </a>
+                        <a href="#demo" class="btn btn-secondary">
+                            See It In Action
+                        </a>
+                    </div>
+                </div>
+                <div class="hero-visual">
+                    <div class="hero-chart">
+                        <div id="hero-posterior-chart" style="width: 100%; height: 320px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="problem" id="problem">
+        <div class="container">
+            <div class="fade-in">
+                <h2>The Hidden Problem with Traditional MMM</h2>
+                <p style="font-size: 1.1rem; max-width: 700px;">
+                    Most marketing mix models give you precise-looking numbers. But that precision is often an illusion—
+                    the result of practices that inflate confidence and hide uncertainty.
+                </p>
+            </div>
+            
+            <div class="problem-grid">
+                <div class="problem-card fade-in">
+                    <div class="problem-icon">🎯</div>
+                    <h3>Specification Shopping</h3>
+                    <p>
+                        Testing dozens of model configurations and picking the one with "best" results inflates 
+                        false positive rates from 5% to over 60%. Your confidence intervals are lying to you.
+                    </p>
+                </div>
+                <div class="problem-card fade-in">
+                    <div class="problem-icon">📉</div>
+                    <h3>Unstable Estimates</h3>
+                    <p>
+                        When TV ROI jumps from 1.2 to 2.8 year-over-year with no strategy change, something is wrong. 
+                        Clients notice—and trust erodes with every unexplained shift.
+                    </p>
+                </div>
+                <div class="problem-card fade-in">
+                    <div class="problem-icon">🎭</div>
+                    <h3>False Precision</h3>
+                    <p>
+                        Single-point estimates like "TV ROI = 1.47" imply certainty that doesn't exist. 
+                        Without understanding the range of plausible values, optimization becomes guesswork.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="solution" id="solution">
+        <div class="container">
+            <div class="solution-header fade-in">
+                <h2>A Better Approach: Honest Uncertainty</h2>
+                <p style="font-size: 1.1rem;">
+                    The Bayesian framework doesn't just give you estimates—it tells you how confident to be 
+                    in those estimates. When you're uncertain, you know it. When you're confident, you can prove it.
+                </p>
+            </div>
+
+            <div class="comparison fade-in">
+                <div class="comparison-card traditional">
+                    <div class="comparison-label">Traditional Approach</div>
+                    <h3>Point Estimates & P-Values</h3>
+                    <ul class="comparison-list">
+                        <li>
+                            <span class="icon">✕</span>
+                            <span>Single "best" estimate hides uncertainty</span>
+                        </li>
+                        <li>
+                            <span class="icon">✕</span>
+                            <span>P-values misinterpreted as confidence</span>
+                        </li>
+                        <li>
+                            <span class="icon">✕</span>
+                            <span>Model selection invalidates inference</span>
+                        </li>
+                        <li>
+                            <span class="icon">✕</span>
+                            <span>Can't incorporate prior knowledge</span>
+                        </li>
+                        <li>
+                            <span class="icon">✕</span>
+                            <span>Overconfident when data is sparse</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="comparison-arrow">→</div>
+
+                <div class="comparison-card bayesian">
+                    <div class="comparison-label">Our Framework</div>
+                    <h3>Full Posterior Distributions</h3>
+                    <ul class="comparison-list">
+                        <li>
+                            <span class="icon">✓</span>
+                            <span>Complete range of plausible values</span>
+                        </li>
+                        <li>
+                            <span class="icon">✓</span>
+                            <span>94% credible intervals mean what they say</span>
+                        </li>
+                        <li>
+                            <span class="icon">✓</span>
+                            <span>Pre-specified models, no fishing</span>
+                        </li>
+                        <li>
+                            <span class="icon">✓</span>
+                            <span>Incorporate experiments & meta-analyses</span>
+                        </li>
+                        <li>
+                            <span class="icon">✓</span>
+                            <span>Honest about what data can't tell you</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Demo -->
+    <section class="demo" id="demo">
+        <div class="container">
+            <div class="demo-header fade-in">
+                <h2>See the Difference</h2>
+                <p style="font-size: 1.1rem;">
+                    Watch how Bayesian inference updates beliefs as data arrives. The prior represents what we knew 
+                    before—the posterior shows what the data taught us.
+                </p>
+            </div>
+
+            <div class="demo-container fade-in">
+                <div class="demo-controls">
+                    <h4>Simulation Controls</h4>
+                    
+                    <div class="control-group">
+                        <label>Prior Belief (TV ROI)</label>
+                        <input type="range" id="prior-mean" min="0.5" max="2.5" step="0.1" value="1.5">
+                        <div class="control-value">μ = <span id="prior-mean-value">1.5</span></div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Prior Uncertainty</label>
+                        <input type="range" id="prior-sd" min="0.2" max="1.5" step="0.1" value="0.8">
+                        <div class="control-value">σ = <span id="prior-sd-value">0.8</span></div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Sample Size (weeks)</label>
+                        <input type="range" id="sample-size" min="12" max="156" step="12" value="52">
+                        <div class="control-value">n = <span id="sample-size-value">52</span></div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Data Quality</label>
+                        <input type="range" id="data-noise" min="0.1" max="1.0" step="0.1" value="0.4">
+                        <div class="control-value">noise = <span id="data-noise-value">0.4</span></div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="runSimulation()" style="width: 100%; margin-top: 1rem;">
+                        Run Simulation
+                    </button>
+                </div>
+
+                <div class="demo-chart">
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" onclick="showChart('distribution')">Prior vs Posterior</button>
+                        <button class="chart-tab" onclick="showChart('trace')">MCMC Trace</button>
+                        <button class="chart-tab" onclick="showChart('contribution')">Contributions</button>
+                    </div>
+                    <div id="demo-distribution-chart" style="width: 100%; height: 400px;"></div>
+                    <div id="demo-trace-chart" style="width: 100%; height: 400px; display: none;"></div>
+                    <div id="demo-contribution-chart" style="width: 100%; height: 400px; display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="features-header fade-in">
+                <h2>Built for Real Marketing Decisions</h2>
+                <p style="font-size: 1.1rem;">
+                    Every feature is designed to help you make better budget allocation decisions—
+                    with honest uncertainty quantification at every step.
+                </p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">📊</div>
+                    <h3>Credible Intervals, Not Confidence Tricks</h3>
+                    <p>
+                        When we say "94% probability the true ROI is between 1.2 and 2.1," that's exactly what it means. 
+                        No asymptotic approximations, no misinterpretation required.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🧪</div>
+                    <h3>Calibrate with Experiments</h3>
+                    <p>
+                        Ran a geo-holdout test? Incorporate those results as informative priors. 
+                        Your model learns from experimental evidence, not just observational correlations.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🌍</div>
+                    <h3>Hierarchical Geographic Models</h3>
+                    <p>
+                        Partial pooling across DMAs borrows strength from the full dataset while allowing 
+                        regional variation. Better estimates for sparse markets, honest uncertainty for all.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🔄</div>
+                    <h3>Saturation & Carryover Effects</h3>
+                    <p>
+                        Logistic and Hill saturation curves capture diminishing returns. Geometric adstock 
+                        models carryover. All with uncertainty bounds on the transformation parameters.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Mediation Analysis</h3>
+                    <p>
+                        Does TV build awareness that drives sales? Decompose effects into direct and indirect 
+                        pathways. Understand not just <em>if</em> media works, but <em>how</em>.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Fast Iteration, Rigorous Results</h3>
+                    <p>
+                        JAX-accelerated sampling (NumPyro) provides 4-10x speedups. Iterate quickly during 
+                        development, then run full inference for final results.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+        <div class="container">
+            <div class="how-header fade-in">
+                <h2>From Data to Decisions</h2>
+                <p style="font-size: 1.1rem;">
+                    A streamlined workflow that prioritizes methodological rigor without sacrificing usability.
+                </p>
+            </div>
+
+            <div class="workflow fade-in">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <h4>Upload Data</h4>
+                    <p>Standard MFF format with flexible dimensions</p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <h4>Configure Model</h4>
+                    <p>Set priors, transformations, and structure</p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <h4>Fit & Diagnose</h4>
+                    <p>Full posterior with convergence checks</p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <h4>Analyze Results</h4>
+                    <p>Contributions, scenarios, and recommendations</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+        <div class="container">
+            <div class="cta-content fade-in">
+                <h2>Ready for Rigorous Measurement?</h2>
+                <p style="font-size: 1.1rem;">
+                    The framework is open source and ready to use. Start building marketing mix models 
+                    that deliver honest uncertainty—not false precision.
+                </p>
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <a href="https://github.com/redam94/mmm-framework" class="btn btn-primary">
+                        View on GitHub →
+                    </a>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/README.md" class="btn btn-secondary">
+                        Read Documentation
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="https://github.com/redam94/mmm-framework">GitHub</a>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/README.md">Documentation</a>
+                    <a href="https://github.com/redam94/mmm-framework/issues">Issues</a>
+                </div>
+                <div class="footer-credit">
+                    Built with PyMC & FastAPI • © 2025 Matthew Reda
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Plotly for interactive charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <script>
+        // =====================================================
+        // Scroll Animation
+        // =====================================================
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+        // =====================================================
+        // Chart Configuration
+        // =====================================================
+        const chartColors = {
+            primary: '#f59e0b',
+            accent: '#3b82f6',
+            success: '#10b981',
+            danger: '#ef4444',
+            text: '#e8eaed',
+            textMuted: '#9ca3af',
+            bg: '#1a2332',
+            grid: '#374151'
+        };
+
+        const chartLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: chartColors.textMuted, family: 'Source Sans 3' },
+            margin: { l: 50, r: 30, t: 40, b: 50 },
+            xaxis: {
+                gridcolor: chartColors.grid,
+                zerolinecolor: chartColors.grid,
+            },
+            yaxis: {
+                gridcolor: chartColors.grid,
+                zerolinecolor: chartColors.grid,
+            }
+        };
+
+        const chartConfig = {
+            displayModeBar: false,
+            responsive: true
+        };
+
+        // =====================================================
+        // Utility Functions
+        // =====================================================
+        function normalPDF(x, mean, sd) {
+            const coeff = 1 / (sd * Math.sqrt(2 * Math.PI));
+            const exponent = -0.5 * Math.pow((x - mean) / sd, 2);
+            return coeff * Math.exp(exponent);
+        }
+
+        function generateNormalSamples(mean, sd, n) {
+            const samples = [];
+            for (let i = 0; i < n; i++) {
+                // Box-Muller transform
+                const u1 = Math.random();
+                const u2 = Math.random();
+                const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+                samples.push(mean + sd * z);
+            }
+            return samples;
+        }
+
+        function linspace(start, end, n) {
+            const arr = [];
+            const step = (end - start) / (n - 1);
+            for (let i = 0; i < n; i++) {
+                arr.push(start + step * i);
+            }
+            return arr;
+        }
+
+        // =====================================================
+        // Hero Chart
+        // =====================================================
+        function initHeroChart() {
+            const x = linspace(-0.5, 3.5, 200);
+            
+            // Prior: wider, centered at 1.5
+            const priorY = x.map(xi => normalPDF(xi, 1.5, 0.7));
+            
+            // Posterior: narrower, shifted based on "data"
+            const posteriorY = x.map(xi => normalPDF(xi, 1.82, 0.28));
+            
+            const data = [
+                {
+                    x: x,
+                    y: priorY,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Prior Belief',
+                    line: { color: chartColors.textMuted, width: 2, dash: 'dash' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(156, 163, 175, 0.1)'
+                },
+                {
+                    x: x,
+                    y: posteriorY,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Posterior (After Data)',
+                    line: { color: chartColors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(245, 158, 11, 0.2)'
+                }
+            ];
+
+            const layout = {
+                ...chartLayout,
+                title: {
+                    text: 'TV Channel ROI Distribution',
+                    font: { size: 16, color: chartColors.text }
+                },
+                xaxis: {
+                    ...chartLayout.xaxis,
+                    title: 'ROI Value',
+                    range: [-0.5, 3.5]
+                },
+                yaxis: {
+                    ...chartLayout.yaxis,
+                    title: 'Probability Density',
+                    showticklabels: false
+                },
+                legend: {
+                    x: 0.98,
+                    y: 0.98,
+                    xanchor: 'right',
+                    bgcolor: 'rgba(0,0,0,0.3)'
+                },
+                annotations: [
+                    {
+                        x: 1.82,
+                        y: normalPDF(1.82, 1.82, 0.28) * 0.5,
+                        text: '94% CI: [1.27, 2.37]',
+                        showarrow: true,
+                        arrowhead: 2,
+                        arrowcolor: chartColors.primary,
+                        font: { color: chartColors.primary, size: 12 },
+                        ax: 60,
+                        ay: -40
+                    }
+                ]
+            };
+
+            Plotly.newPlot('hero-posterior-chart', data, layout, chartConfig);
+        }
+
+        // =====================================================
+        // Demo Charts
+        // =====================================================
+        let currentChart = 'distribution';
+
+        function showChart(chartType) {
+            currentChart = chartType;
+            
+            // Update tabs
+            document.querySelectorAll('.chart-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Show/hide charts
+            document.getElementById('demo-distribution-chart').style.display = chartType === 'distribution' ? 'block' : 'none';
+            document.getElementById('demo-trace-chart').style.display = chartType === 'trace' ? 'block' : 'none';
+            document.getElementById('demo-contribution-chart').style.display = chartType === 'contribution' ? 'block' : 'none';
+        }
+
+        function runSimulation() {
+            const priorMean = parseFloat(document.getElementById('prior-mean').value);
+            const priorSD = parseFloat(document.getElementById('prior-sd').value);
+            const sampleSize = parseInt(document.getElementById('sample-size').value);
+            const dataNoise = parseFloat(document.getElementById('data-noise').value);
+            
+            // True value (simulated)
+            const trueValue = 1.65;
+            
+            // Posterior calculation (simplified conjugate update)
+            const dataVariance = dataNoise * dataNoise;
+            const priorVariance = priorSD * priorSD;
+            const posteriorVariance = 1 / (1/priorVariance + sampleSize/dataVariance);
+            const posteriorMean = posteriorVariance * (priorMean/priorVariance + sampleSize*trueValue/dataVariance);
+            const posteriorSD = Math.sqrt(posteriorVariance);
+            
+            updateDistributionChart(priorMean, priorSD, posteriorMean, posteriorSD, trueValue);
+            updateTraceChart(posteriorMean, posteriorSD);
+            updateContributionChart(posteriorMean, posteriorSD);
+        }
+
+        function updateDistributionChart(priorMean, priorSD, postMean, postSD, trueValue) {
+            const xMin = Math.min(priorMean - 3*priorSD, postMean - 3*postSD, 0);
+            const xMax = Math.max(priorMean + 3*priorSD, postMean + 3*postSD, 3);
+            const x = linspace(xMin, xMax, 200);
+            
+            const priorY = x.map(xi => normalPDF(xi, priorMean, priorSD));
+            const postY = x.map(xi => normalPDF(xi, postMean, postSD));
+            
+            const data = [
+                {
+                    x: x,
+                    y: priorY,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Prior',
+                    line: { color: chartColors.textMuted, width: 2, dash: 'dash' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(156, 163, 175, 0.1)'
+                },
+                {
+                    x: x,
+                    y: postY,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Posterior',
+                    line: { color: chartColors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(245, 158, 11, 0.2)'
+                },
+                {
+                    x: [trueValue, trueValue],
+                    y: [0, Math.max(...postY) * 1.1],
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'True Value',
+                    line: { color: chartColors.success, width: 2, dash: 'dot' }
+                }
+            ];
+
+            const ci_low = postMean - 1.96 * postSD;
+            const ci_high = postMean + 1.96 * postSD;
+
+            const layout = {
+                ...chartLayout,
+                title: {
+                    text: 'Prior vs Posterior Distribution',
+                    font: { size: 16, color: chartColors.text }
+                },
+                xaxis: {
+                    ...chartLayout.xaxis,
+                    title: 'TV ROI',
+                },
+                yaxis: {
+                    ...chartLayout.yaxis,
+                    title: 'Density',
+                    showticklabels: false
+                },
+                legend: {
+                    x: 0.98,
+                    y: 0.98,
+                    xanchor: 'right',
+                    bgcolor: 'rgba(0,0,0,0.3)'
+                },
+                annotations: [
+                    {
+                        x: postMean,
+                        y: Math.max(...postY) * 0.6,
+                        text: `Posterior: ${postMean.toFixed(2)} [${ci_low.toFixed(2)}, ${ci_high.toFixed(2)}]`,
+                        showarrow: false,
+                        font: { color: chartColors.primary, size: 13 },
+                        bgcolor: 'rgba(26, 35, 50, 0.8)',
+                        borderpad: 6
+                    }
+                ],
+                shapes: [
+                    {
+                        type: 'rect',
+                        x0: ci_low,
+                        x1: ci_high,
+                        y0: 0,
+                        y1: Math.max(...postY) * 0.15,
+                        fillcolor: 'rgba(245, 158, 11, 0.3)',
+                        line: { width: 0 }
+                    }
+                ]
+            };
+
+            Plotly.newPlot('demo-distribution-chart', data, layout, chartConfig);
+        }
+
+        function updateTraceChart(postMean, postSD) {
+            // Simulate MCMC trace (4 chains)
+            const nSamples = 500;
+            const chains = [];
+            const chainColors = [chartColors.primary, chartColors.accent, chartColors.success, '#a855f7'];
+            
+            for (let c = 0; c < 4; c++) {
+                const samples = [];
+                let current = postMean + (Math.random() - 0.5) * postSD * 2;
+                
+                for (let i = 0; i < nSamples; i++) {
+                    // Random walk with target distribution pull
+                    const proposal = current + (Math.random() - 0.5) * 0.1;
+                    const acceptance = Math.exp(
+                        -0.5 * Math.pow((proposal - postMean) / postSD, 2) +
+                        0.5 * Math.pow((current - postMean) / postSD, 2)
+                    );
+                    if (Math.random() < acceptance) {
+                        current = proposal;
+                    }
+                    samples.push(current);
+                }
+                
+                chains.push({
+                    y: samples,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `Chain ${c + 1}`,
+                    line: { color: chainColors[c], width: 1 },
+                    opacity: 0.7
+                });
+            }
+
+            const layout = {
+                ...chartLayout,
+                title: {
+                    text: 'MCMC Trace Plot (4 Chains)',
+                    font: { size: 16, color: chartColors.text }
+                },
+                xaxis: {
+                    ...chartLayout.xaxis,
+                    title: 'Iteration',
+                },
+                yaxis: {
+                    ...chartLayout.yaxis,
+                    title: 'TV ROI',
+                },
+                legend: {
+                    x: 0.98,
+                    y: 0.98,
+                    xanchor: 'right',
+                    bgcolor: 'rgba(0,0,0,0.3)'
+                },
+                annotations: [
+                    {
+                        x: 0.02,
+                        y: 0.98,
+                        xref: 'paper',
+                        yref: 'paper',
+                        text: 'Chains mixing well = reliable inference ✓',
+                        showarrow: false,
+                        font: { color: chartColors.success, size: 12 },
+                        bgcolor: 'rgba(26, 35, 50, 0.8)',
+                        borderpad: 6
+                    }
+                ]
+            };
+
+            Plotly.newPlot('demo-trace-chart', chains, layout, chartConfig);
+        }
+
+        function updateContributionChart(tvROI, tvSD) {
+            // Simulated channel contributions with uncertainty
+            const channels = ['TV', 'Digital', 'Social', 'Search', 'Print'];
+            const means = [tvROI * 12, 1.8 * 8, 1.3 * 5, 2.1 * 4, 0.9 * 3];
+            const errors = [tvSD * 12, 0.4 * 8, 0.5 * 5, 0.3 * 4, 0.6 * 3];
+            
+            const data = [
+                {
+                    x: channels,
+                    y: means,
+                    type: 'bar',
+                    name: 'Contribution ($M)',
+                    marker: {
+                        color: [chartColors.primary, chartColors.accent, '#a855f7', chartColors.success, chartColors.textMuted]
+                    },
+                    error_y: {
+                        type: 'data',
+                        array: errors.map(e => e * 1.96),
+                        visible: true,
+                        color: chartColors.text,
+                        thickness: 2,
+                        width: 6
+                    }
+                }
+            ];
+
+            const layout = {
+                ...chartLayout,
+                title: {
+                    text: 'Channel Contributions with 95% Credible Intervals',
+                    font: { size: 16, color: chartColors.text }
+                },
+                xaxis: {
+                    ...chartLayout.xaxis,
+                    title: '',
+                },
+                yaxis: {
+                    ...chartLayout.yaxis,
+                    title: 'Revenue Contribution ($M)',
+                },
+                annotations: [
+                    {
+                        x: 0.98,
+                        y: 0.98,
+                        xref: 'paper',
+                        yref: 'paper',
+                        text: 'Error bars show uncertainty range',
+                        showarrow: false,
+                        font: { color: chartColors.textMuted, size: 11 },
+                        bgcolor: 'rgba(26, 35, 50, 0.8)',
+                        borderpad: 6
+                    }
+                ]
+            };
+
+            Plotly.newPlot('demo-contribution-chart', data, layout, chartConfig);
+        }
+
+        // =====================================================
+        // Control Updates
+        // =====================================================
+        document.getElementById('prior-mean').addEventListener('input', function() {
+            document.getElementById('prior-mean-value').textContent = this.value;
+        });
+
+        document.getElementById('prior-sd').addEventListener('input', function() {
+            document.getElementById('prior-sd-value').textContent = this.value;
+        });
+
+        document.getElementById('sample-size').addEventListener('input', function() {
+            document.getElementById('sample-size-value').textContent = this.value;
+        });
+
+        document.getElementById('data-noise').addEventListener('input', function() {
+            document.getElementById('data-noise-value').textContent = this.value;
+        });
+
+        // =====================================================
+        // Initialize - Wait for Plotly to be ready
+        // =====================================================
+        function initCharts() {
+            if (typeof Plotly !== 'undefined') {
+                initHeroChart();
+                runSimulation();
+            } else {
+                // Retry after a short delay if Plotly isn't loaded yet
+                setTimeout(initCharts, 100);
+            }
+        }
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initCharts);
+        } else {
+            initCharts();
+        }
+    </script>
+</body>
+</html>
