@@ -436,6 +436,34 @@ adstock = (AdstockConfigBuilder()
                 $$s(t) = \sum_{n=1}^{N} \left[ a_n \sin\left(\frac{2\pi n t}{P}\right) + b_n \cos\left(\frac{2\pi n t}{P}\right) \right]$$
             </div>
 
+            <div class="note">
+                <h4>💡 Why Explicit Trend & Seasonality Matter</h4>
+                <p>
+                    You might wonder: "If my control variables (e.g., temperature, holidays) already capture seasonal patterns, 
+                    why include explicit seasonality components?" The answer lies in how media spending correlates with time.
+                </p>
+                <p>
+                    <strong>The problem:</strong> Advertisers typically increase spend during high-demand periods (Q4 holidays, 
+                    summer travel season). This means media spend is correlated with seasonality. If you rely on control 
+                    variables to absorb seasonal patterns, any correlation between those controls and media will bias your 
+                    media effect estimates.
+                </p>
+                <p>
+                    <strong>The solution:</strong> Explicit trend and seasonality components isolate the structural time 
+                    patterns that exist <em>regardless of marketing activity</em>. This allows the model to:
+                </p>
+                <ul style="margin-top: 0.5rem; margin-bottom: 0;">
+                    <li>Separate "sales are high because it's December" from "sales are high because we spent on TV"</li>
+                    <li>Prevent media from getting credit for seasonal uplift it didn't cause</li>
+                    <li>Allow controls to capture their specific effects without also serving as proxies for time</li>
+                    <li>Provide cleaner counterfactual estimation (what would sales be with zero media?)</li>
+                </ul>
+                <p style="margin-top: 1rem; margin-bottom: 0;">
+                    <strong>Rule of thumb:</strong> Always include trend and seasonality components. Let controls capture 
+                    their incremental effects <em>beyond</em> structural time patterns, not instead of them.
+                </p>
+            </div>
+
             <h3 id="standard-priors">Prior Specification</h3>
             <pre><code># Recommended default priors for standardized data
 beta_media ~ HalfNormal(sigma=0.5)      # Media coefficients
