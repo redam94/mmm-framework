@@ -2,6 +2,7 @@
 Configuration Page.
 
 Create and manage model configurations with dataset-aware variable selection.
+Single-column layout with expandable sections for detailed settings.
 """
 
 import streamlit as st
@@ -40,6 +41,31 @@ init_session_state(
     selected_config_id=None,
     config_dataset_id=None,
     config_dataset_variables=[],
+    # KPI settings
+    kpi_name='',
+    kpi_dimensions='National',
+    # Media channels
+    media_channels=[],
+    media_configs=[],
+    # Control variables
+    control_variables=[],
+    control_configs=[],
+    # Dimension alignment
+    geo_allocation='equal',
+    # Model settings
+    n_chains=4,
+    n_draws=1000,
+    n_tune=1000,
+    target_accept=0.95,
+    # Trend settings
+    trend_type='Linear',
+    trend_settings={},
+    # Seasonality
+    yearly_order=2,
+    # Hierarchical
+    pool_geo=True,
+    # Performance
+    use_numpyro=False,
 )
 
 
@@ -56,14 +82,25 @@ def get_dataset_variables(client, data_id: str) -> list[str]:
         return []
 
 
+def get_dataset_dimensions(client, data_id: str) -> dict:
+    """Fetch dimension values from a dataset."""
+    try:
+        dataset = client.get_dataset(data_id, include_preview=False)
+        return {
+            'geographies': dataset.get_geographies(),  # Method call
+            'products': dataset.get_products(),  # Method call
+        }
+    except Exception:
+        return {'geographies': [], 'products': []}
+
+
 # =============================================================================
-# Configuration Form
+# Configuration Form - Single Column Layout
 # =============================================================================
 
 @st.fragment
 def render_config_form():
-    """Render the configuration creation form."""
-    st.markdown("### Create New Configuration")
+    """Render the configuration creation form in single-column layout."""
     
     # Get available datasets
     try:
@@ -74,302 +111,586 @@ def render_config_form():
         return
     
     if not datasets:
-        st.warning("Please upload a dataset first.")
-        if st.button("Go to Data Management"):
-            st.switch_page("pages/1_📁_Data_Management.py")
+        st.warning("⚠️ Please upload a dataset first in the Data Management page.")
         return
     
-    # Dataset selection (outside form for dynamic updates)
     dataset_options = {d.filename: d.data_id for d in datasets}
     
-    selected_dataset_name = st.selectbox(
-        "📊 Select Dataset",
+    # -------------------------------------------------------------------------
+    # Dataset Selection
+    # -------------------------------------------------------------------------
+    st.subheader("📁 Dataset Selection")
+    
+    selected_dataset = st.selectbox(
+        "Select Dataset",
         options=list(dataset_options.keys()),
-        index=0,
-        help="Choose the dataset containing your marketing and KPI data",
+        help="Choose the dataset to use for model configuration"
     )
     
-    selected_data_id = dataset_options[selected_dataset_name]
-    
-    # Fetch variables for selected dataset
-    if selected_data_id != st.session_state.config_dataset_id:
-        st.session_state.config_dataset_id = selected_data_id
-        st.session_state.config_dataset_variables = get_dataset_variables(client, selected_data_id)
-    
-    variables = st.session_state.config_dataset_variables
-    
-    if not variables:
-        st.warning("Could not load variables from dataset. Please check the data format.")
+    if selected_dataset:
+        data_id = dataset_options[selected_dataset]
+        
+        # Fetch variables if dataset changed
+        if st.session_state.config_dataset_id != data_id:
+            variables = get_dataset_variables(client, data_id)
+            dimensions = get_dataset_dimensions(client, data_id)
+            st.session_state.config_dataset_id = data_id
+            st.session_state.config_dataset_variables = variables
+            st.session_state.config_dataset_dimensions = dimensions
+        
+        variables = st.session_state.config_dataset_variables
+        dimensions = st.session_state.get('config_dataset_dimensions', {})
+        geographies = dimensions.get('geographies', [])
+        products = dimensions.get('products', [])
+        
+        if not variables:
+            st.warning("⚠️ No variables found in dataset.")
+            return
+        
+        st.info(f"📊 Dataset contains {len(variables)} variables")
+    else:
         return
     
-    st.caption(f"Found {len(variables)} variables in dataset")
+    st.markdown("---")
     
-    # Main configuration form
-    with st.form("config_form"):
-        # Basic info
-        st.markdown("#### Basic Information")
+    # -------------------------------------------------------------------------
+    # KPI Configuration
+    # -------------------------------------------------------------------------
+    st.subheader("🎯 KPI Configuration")
+    
+    kpi_name = st.selectbox(
+        "KPI Variable",
+        options=variables,
+        index=variables.index('Sales') if 'Sales' in variables else 0,
+        help="Select the dependent variable (e.g., Sales, Revenue)"
+    )
+    st.session_state.kpi_name = kpi_name
+    
+    # KPI Granularity options
+    kpi_dim_options = ['National']
+    if geographies:
+        kpi_dim_options.append('By Geography')
+    if products:
+        kpi_dim_options.append('By Product')
+    if geographies and products:
+        kpi_dim_options.append('By Geography & Product')
+    
+    kpi_dimensions = st.selectbox(
+        "KPI Granularity",
+        options=kpi_dim_options,
+        help="At what level is the KPI measured?"
+    )
+    st.session_state.kpi_dimensions = kpi_dimensions
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Media Channels
+    # -------------------------------------------------------------------------
+    st.subheader("📺 Media Channels")
+    
+    # Filter out KPI and common control names for media channel options
+    potential_media = [
+        v for v in variables 
+        if v not in [kpi_name, 'Price', 'Distribution', 'Temperature', 'Promotion']
+    ]
+    
+    media_channels = st.multiselect(
+        "Select Media Channels",
+        options=potential_media,
+        default=[v for v in ['TV', 'Digital', 'Radio', 'Social', 'Print'] if v in potential_media],
+        help="Select variables that represent media spend"
+    )
+    
+    # Media channel configuration
+    media_configs = []
+    if media_channels:
+        st.markdown("**Channel Settings:**")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            config_name = st.text_input(
-                "Configuration Name",
-                placeholder="My MMM Config",
-                help="A descriptive name for this configuration",
-            )
-        with col2:
-            config_description = st.text_area(
-                "Description (optional)",
-                height=68,
-                placeholder="Describe the purpose of this model configuration...",
-            )
-        
-        st.markdown("---")
-        
-        # Variable Selection
-        st.markdown("#### Variable Mapping")
-        
-        # KPI Selection
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            kpi_variable = st.selectbox(
-                "🎯 KPI (Target Variable)",
-                options=[""] + variables,
-                index=0,
-                help="Select the variable representing your key performance indicator (e.g., Sales, Revenue, Conversions)",
-            )
-        with col2:
-            kpi_dimensions = st.selectbox(
-                "KPI Dimensions",
-                options=["National", "By Geography", "By Product", "By Geography and Product"],
-                help="How is your KPI data structured?",
-            )
-        
-        # Media Channels Selection
-        st.markdown("##### 📺 Media Channels")
-        
-        # Filter out KPI from available variables for media
-        media_available = [v for v in variables if v != kpi_variable]
-        
-        media_channels = st.multiselect(
-            "Select Media/Marketing Variables",
-            options=media_available,
-            help="Select all variables representing marketing spend or impressions (e.g., TV_Spend, Digital_Spend, Radio_GRPs)",
-        )
-        
-        # Media channel settings (if any selected)
-        if media_channels:
-            st.caption(f"Configure settings for {len(media_channels)} media channels:")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                default_adstock = st.number_input(
-                    "Default Adstock L-max",
+        for channel in media_channels:
+            with st.expander(f"📺 {channel}", expanded=False):
+                adstock_max = st.slider(
+                    f"Max Adstock Lag (weeks)",
                     min_value=1,
-                    max_value=52,
+                    max_value=12,
                     value=8,
-                    help="Maximum lag for adstock transformation (weeks)",
+                    key=f"adstock_{channel}",
+                    help="Maximum lag for carryover effects"
                 )
-            with col2:
-                media_level = st.selectbox(
-                    "Media Data Level",
-                    options=["National", "By Geography"],
-                    help="Are media variables at national or geo level?",
+                
+                channel_level = st.selectbox(
+                    "Data Level",
+                    options=['National', 'By Geography'],
+                    key=f"level_{channel}",
+                    help="At what level is the media data recorded?"
                 )
-            with col3:
+                
                 saturation_type = st.selectbox(
                     "Saturation Function",
-                    options=["logistic", "hill"],
-                    help="Function to model diminishing returns",
+                    options=['Logistic', 'Hill'],
+                    index=0,
+                    key=f"sat_{channel}",
+                    help="How media response diminishes at high spend levels"
                 )
-        else:
-            default_adstock = 8
-            media_level = "National"
-            saturation_type = "logistic"
+                
+                media_configs.append({
+                    'name': channel,
+                    'adstock_lmax': adstock_max,
+                    'level': channel_level,
+                    'saturation': saturation_type
+                })
+    
+    st.session_state.media_channels = media_channels
+    st.session_state.media_configs = media_configs
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Control Variables
+    # -------------------------------------------------------------------------
+    st.subheader("📊 Control Variables")
+    
+    # Filter out KPI and media channels for control variable options
+    potential_controls = [
+        v for v in variables 
+        if v not in [kpi_name] + media_channels
+    ]
+    
+    control_vars = st.multiselect(
+        "Select Control Variables",
+        options=potential_controls,
+        default=[v for v in ['Price', 'Distribution'] if v in potential_controls],
+        help="Select variables that control for external factors"
+    )
+    
+    # Control variable configuration
+    control_configs = []
+    if control_vars:
+        st.markdown("**Control Settings:**")
         
-        # Control Variables Selection
-        st.markdown("##### 🎛️ Control Variables")
+        for control in control_vars:
+            with st.expander(f"📊 {control}", expanded=False):
+                allow_neg = st.checkbox(
+                    "Allow Negative Effect",
+                    value=control.lower() in ['price', 'competition'],
+                    key=f"neg_{control}",
+                    help="Check if this variable can have negative impact on KPI"
+                )
+                
+                control_level = st.selectbox(
+                    "Data Level",
+                    options=['National', 'By Geography'],
+                    index=0,
+                    key=f"ctrl_level_{control}",
+                    help="At what level is the control data recorded?"
+                )
+                
+                control_configs.append({
+                    'name': control,
+                    'allow_negative': allow_neg,
+                    'level': control_level
+                })
+    
+    st.session_state.control_variables = control_vars
+    st.session_state.control_configs = control_configs
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Dimension Alignment
+    # -------------------------------------------------------------------------
+    if kpi_dimensions != 'National' and any(m.get('level') == 'National' for m in media_configs):
+        st.subheader("🗺️ Dimension Alignment")
         
-        # Filter out KPI and media from available variables for controls
-        control_available = [v for v in variables if v != kpi_variable and v not in media_channels]
+        st.info("ℹ️ National media will be allocated to geographic/product dimensions")
         
-        control_variables = st.multiselect(
-            "Select Control Variables (Optional)",
-            options=control_available,
-            help="Select variables to control for external factors (e.g., Price, Promotions, Seasonality_Index, Competitor_Activity)",
+        allocation_method = st.selectbox(
+            "Allocation Method",
+            options=['Equal', 'By Population', 'By Sales', 'Custom'],
+            help="How to distribute national media to sub-national levels"
         )
-        
-        # Control settings
-        if control_variables:
-            allow_negative_controls = st.checkbox(
-                "Allow negative coefficients for controls",
-                value=True,
-                help="If unchecked, control variables will be constrained to positive effects only",
-            )
-        else:
-            allow_negative_controls = True
+        st.session_state.geo_allocation = allocation_method.lower().replace(' ', '_').replace('by_', '')
         
         st.markdown("---")
-        
-        # Model Settings
-        st.markdown("#### Model Settings")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            trend_type = st.selectbox(
-                "Trend Type",
-                options=["none", "linear", "piecewise", "spline", "gaussian_process"],
-                index=0,
-                help="Type of trend component to include in the model",
+    
+    # -------------------------------------------------------------------------
+    # MCMC Settings
+    # -------------------------------------------------------------------------
+    st.subheader("🎛️ MCMC Settings")
+    
+    n_chains = st.slider(
+        "Number of Chains",
+        min_value=1,
+        max_value=8,
+        value=4,
+        help="More chains = better convergence diagnostics"
+    )
+    st.session_state.n_chains = n_chains
+    
+    n_draws = st.slider(
+        "Draws per Chain",
+        min_value=500,
+        max_value=4000,
+        value=1000,
+        step=500,
+        help="More draws = more precise estimates"
+    )
+    st.session_state.n_draws = n_draws
+    
+    n_tune = st.slider(
+        "Tuning Samples",
+        min_value=500,
+        max_value=2000,
+        value=1000,
+        step=500,
+        help="Samples used for adaptation"
+    )
+    st.session_state.n_tune = n_tune
+    
+    target_accept = st.slider(
+        "Target Accept Rate",
+        min_value=0.8,
+        max_value=0.99,
+        value=0.95,
+        step=0.01,
+        help="Higher = fewer divergences but slower"
+    )
+    st.session_state.target_accept = target_accept
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Trend Configuration
+    # -------------------------------------------------------------------------
+    st.subheader("📈 Trend")
+    
+    trend_type = st.selectbox(
+        "Trend Type",
+        options=['None', 'Linear', 'Piecewise (Prophet-style)', 'Spline', 'Gaussian Process'],
+        index=1,
+        help="How to model the underlying trend"
+    )
+    st.session_state.trend_type = trend_type
+    
+    # Trend-specific settings
+    trend_settings = {}
+    
+    if trend_type == 'Linear':
+        with st.expander("Linear Trend Settings", expanded=False):
+            trend_settings['growth_prior_mu'] = st.slider(
+                "Growth Prior Mean",
+                min_value=-0.5,
+                max_value=0.5,
+                value=0.0,
+                step=0.05,
+                help="Expected growth rate direction"
             )
-            yearly_seasonality = st.number_input(
-                "Yearly Seasonality Order",
-                min_value=0,
-                max_value=10,
-                value=2,
-                help="Number of Fourier terms for yearly seasonality (0 = none)",
+            trend_settings['growth_prior_sigma'] = st.slider(
+                "Growth Prior Sigma",
+                min_value=0.01,
+                max_value=0.5,
+                value=0.1,
+                step=0.01,
+                help="Uncertainty in growth rate"
             )
-        
-        with col2:
-            n_chains = st.number_input(
-                "MCMC Chains",
-                min_value=1,
-                max_value=8,
-                value=4,
-                help="Number of parallel chains for sampling",
+    
+    elif trend_type == 'Piecewise (Prophet-style)':
+        with st.expander("Piecewise Trend Settings", expanded=True):
+            trend_settings['n_changepoints'] = st.slider(
+                "Number of Changepoints",
+                min_value=5,
+                max_value=30,
+                value=10,
+                help="More changepoints = more flexible trend"
             )
-            n_draws = st.number_input(
-                "MCMC Draws",
-                min_value=100,
-                max_value=10000,
-                value=1000,
-                help="Number of posterior samples per chain",
+            trend_settings['changepoint_range'] = st.slider(
+                "Changepoint Range",
+                min_value=0.5,
+                max_value=0.95,
+                value=0.8,
+                step=0.05,
+                help="Fraction of time series where changepoints can occur"
             )
-            n_tune = st.number_input(
-                "MCMC Tune Steps",
-                min_value=100,
-                max_value=5000,
-                value=1000,
-                help="Number of tuning/warmup steps",
+            trend_settings['changepoint_prior_scale'] = st.slider(
+                "Changepoint Prior Scale",
+                min_value=0.001,
+                max_value=0.5,
+                value=0.05,
+                step=0.001,
+                format="%.3f",
+                help="Smaller = smoother trend, larger = more flexible"
             )
-        
-        # Dimension Alignment (if applicable)
-        if kpi_dimensions != "National":
-            st.markdown("#### Dimension Alignment")
-            geo_allocation = st.selectbox(
-                "Geographic Allocation Method",
-                options=["equal", "population", "sales"],
-                help="How to allocate national media spend across geographies",
+    
+    elif trend_type == 'Spline':
+        with st.expander("Spline Trend Settings", expanded=True):
+            trend_settings['n_knots'] = st.slider(
+                "Number of Knots",
+                min_value=5,
+                max_value=30,
+                value=10,
+                help="More knots = more flexible trend"
             )
-        else:
-            geo_allocation = "equal"
-        
-        st.markdown("---")
-        
-        # Summary before submission
-        if kpi_variable and media_channels:
-            st.markdown("#### Configuration Summary")
+            trend_settings['spline_degree'] = st.selectbox(
+                "Spline Degree",
+                options=[1, 2, 3],
+                index=2,
+                format_func=lambda x: {1: "Linear (1)", 2: "Quadratic (2)", 3: "Cubic (3)"}[x],
+                help="Higher degree = smoother curves"
+            )
+            trend_settings['spline_prior_sigma'] = st.slider(
+                "Spline Prior Sigma",
+                min_value=0.1,
+                max_value=3.0,
+                value=1.0,
+                step=0.1,
+                help="Prior standard deviation for spline coefficients"
+            )
+    
+    elif trend_type == 'Gaussian Process':
+        with st.expander("GP Trend Settings", expanded=True):
+            trend_settings['gp_lengthscale_mu'] = st.slider(
+                "Lengthscale Prior Mean",
+                min_value=0.1,
+                max_value=0.7,
+                value=0.3,
+                step=0.05,
+                help="Expected smoothness (fraction of time series)"
+            )
+            trend_settings['gp_lengthscale_sigma'] = st.slider(
+                "Lengthscale Prior Sigma",
+                min_value=0.05,
+                max_value=0.5,
+                value=0.2,
+                step=0.05,
+                help="Uncertainty in smoothness"
+            )
+            trend_settings['gp_amplitude_sigma'] = st.slider(
+                "Amplitude Prior Sigma",
+                min_value=0.1,
+                max_value=1.5,
+                value=0.5,
+                step=0.1,
+                help="Prior on trend magnitude"
+            )
+            trend_settings['gp_n_basis'] = st.slider(
+                "Number of Basis Functions",
+                min_value=10,
+                max_value=40,
+                value=20,
+                help="More = better approximation but slower"
+            )
+    
+    st.session_state.trend_settings = trend_settings
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Seasonality
+    # -------------------------------------------------------------------------
+    st.subheader("🌊 Seasonality")
+    
+    yearly_order = st.slider(
+        "Yearly Seasonality Order",
+        min_value=0,
+        max_value=5,
+        value=2,
+        help="Number of Fourier terms for yearly seasonality (0 = disabled)"
+    )
+    st.session_state.yearly_order = yearly_order
+    
+    if yearly_order > 0:
+        with st.expander("Seasonality Details", expanded=False):
+            st.markdown(f"""
+            **Fourier Terms:** {yearly_order}
             
-            summary_col1, summary_col2, summary_col3 = st.columns(3)
-            with summary_col1:
-                st.metric("KPI", kpi_variable)
-            with summary_col2:
-                st.metric("Media Channels", len(media_channels))
-            with summary_col3:
-                st.metric("Control Variables", len(control_variables))
-        
-        # Submit
-        submitted = st.form_submit_button(
-            "Create Configuration",
-            type="primary",
-            use_container_width=True,
+            This will create {yearly_order * 2} seasonality features 
+            (sin and cos terms for each order).
+            
+            - Order 1: Annual cycle
+            - Order 2: Semi-annual patterns  
+            - Order 3+: Finer seasonal variations
+            """)
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Hierarchical Structure
+    # -------------------------------------------------------------------------
+    st.subheader("🏗️ Hierarchical Structure")
+    
+    if kpi_dimensions != 'National':
+        pool_geo = st.checkbox(
+            "Pool Across Geographies",
+            value=True,
+            help="Share information between geographic units for more stable estimates"
         )
+        st.session_state.pool_geo = pool_geo
         
-        if submitted:
-            # Validation
-            if not config_name:
-                st.error("Please provide a configuration name.")
-                return
-            if not kpi_variable:
-                st.error("Please select a KPI variable.")
-                return
-            if not media_channels:
-                st.error("Please select at least one media channel.")
-                return
-            
-            # Build MFF config
-            kpi_dim_mapping = {
-                "National": ["Period"],
-                "By Geography": ["Period", "Geography"],
-                "By Product": ["Period", "Product"],
-                "By Geography and Product": ["Period", "Geography", "Product"],
-            }
-            
-            media_dim_mapping = {
-                "National": ["Period"],
-                "By Geography": ["Period", "Geography"],
-            }
-            
-            mff_config = {
-                "kpi": {
-                    "name": kpi_variable,
-                    "dimensions": kpi_dim_mapping[kpi_dimensions],
-                },
-                "media_channels": [
-                    {
-                        "name": channel,
-                        "dimensions": media_dim_mapping[media_level],
-                        "adstock": {
-                            "type": "geometric",
-                            "l_max": default_adstock,
-                        },
-                        "saturation": {
-                            "type": saturation_type,
-                        },
-                    }
-                    for channel in media_channels
-                ],
-                "control_variables": [
-                    {
-                        "name": ctrl,
-                        "allow_negative": allow_negative_controls,
-                    }
-                    for ctrl in control_variables
-                ],
-                "dimension_alignment": {
-                    "geographic_allocation": geo_allocation,
-                },
-            }
-            
-            # Model settings
-            model_settings = {
-                "trend_type": trend_type,
-                "yearly_seasonality_order": yearly_seasonality,
-                "n_chains": n_chains,
-                "n_draws": n_draws,
-                "n_tune": n_tune,
-            }
-            
-            # Save to API
-            with st.spinner("Creating configuration..."):
-                try:
-                    result = client.create_config(
-                        name=config_name,
-                        description=config_description or None,
-                        mff_config=mff_config,
-                        model_settings=model_settings,
-                    )
-                    
-                    st.success(f"✅ Configuration '{config_name}' created successfully!")
-                    st.session_state.selected_config_id = result.config_id
-                    st.session_state.selected_data_id = selected_data_id
-                    
-                    clear_config_cache()
-                    
-                except APIError as e:
-                    display_api_error(e)
-                except Exception as e:
-                    st.error(f"Failed to create configuration: {e}")
+        if pool_geo:
+            with st.expander("Hierarchical Details", expanded=False):
+                st.markdown("""
+                **Partial Pooling Benefits:**
+                
+                - Borrows strength from other geographies
+                - Reduces overfitting for small markets
+                - Provides uncertainty-aware estimates
+                - Better handles sparse data
+                """)
+    else:
+        st.info("ℹ️ Hierarchical pooling is only available for multi-geography models")
+        st.session_state.pool_geo = False
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Performance Options
+    # -------------------------------------------------------------------------
+    st.subheader("⚡ Performance")
+    
+    use_numpyro = st.checkbox(
+        "Use NumPyro (JAX)",
+        value=False,
+        help="Faster sampling with JAX backend (requires numpyro installed)"
+    )
+    st.session_state.use_numpyro = use_numpyro
+    
+    if use_numpyro:
+        st.info("🚀 NumPyro will use JAX for faster GPU/TPU sampling if available")
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Configuration Summary & Estimated Time
+    # -------------------------------------------------------------------------
+    st.subheader("📋 Configuration Summary")
+    
+    n_params = len(media_channels) * 3 + len(control_vars) + 5
+    est_time = (n_chains * (n_draws + n_tune) * n_params) / 5000
+    
+    summary_cols = st.columns(4)
+    with summary_cols[0]:
+        st.metric("Media Channels", len(media_channels))
+    with summary_cols[1]:
+        st.metric("Controls", len(control_vars))
+    with summary_cols[2]:
+        st.metric("Est. Parameters", n_params)
+    with summary_cols[3]:
+        st.metric("Est. Time", f"{est_time:.0f}-{est_time*2:.0f}s")
+    
+    st.markdown("---")
+    
+    # -------------------------------------------------------------------------
+    # Build Configuration Button
+    # -------------------------------------------------------------------------
+    config_name = st.text_input(
+        "Configuration Name",
+        value=f"config_{selected_dataset.replace('.', '_')}",
+        help="Give your configuration a descriptive name"
+    )
+    
+    if st.button("🔧 Save Configuration", type="primary", use_container_width=True):
+        save_configuration(client, data_id, config_name)
+
+
+def save_configuration(client, data_id: str, config_name: str):
+    """Save the configuration to the backend."""
+    try:
+        # Convert KPI dimensions string to list format
+        kpi_dims_map = {
+            'National': [],
+            'By Geography': ['Geography'],
+            'By Product': ['Product'],
+            'By Geography & Product': ['Geography', 'Product'],
+        }
+        kpi_dimensions = kpi_dims_map.get(st.session_state.kpi_dimensions, [])
+        
+        # Convert trend type to lowercase API format
+        trend_type_map = {
+            'None': 'none',
+            'Linear': 'linear',
+            'Piecewise (Prophet-style)': 'piecewise',
+            'Spline': 'spline',
+            'Gaussian Process': 'gaussian_process',
+        }
+        trend_type = trend_type_map.get(st.session_state.trend_type, 'linear')
+        
+        # Convert saturation type to dict format
+        def get_saturation_config(sat_type: str) -> dict:
+            if sat_type == 'Hill':
+                return {'type': 'hill'}
+            return {'type': 'logistic'}
+        
+        # Build mff_config structure
+        mff_config = {
+            'kpi': {
+                'name': st.session_state.kpi_name,
+                'dimensions': kpi_dimensions,
+            },
+            'media_channels': [
+                {
+                    'name': ch['name'],
+                    'adstock_lmax': ch.get('adstock_lmax', 8),
+                    'level': ch.get('level', 'National').lower().replace(' ', '_').replace('by_', ''),
+                    'saturation': get_saturation_config(ch.get('saturation', 'Logistic')),
+                }
+                for ch in st.session_state.media_configs
+            ],
+            'controls': [
+                {
+                    'name': ctrl['name'],
+                    'allow_negative': ctrl.get('allow_negative', False),
+                    'level': ctrl.get('level', 'National').lower().replace(' ', '_').replace('by_', ''),
+                }
+                for ctrl in st.session_state.control_configs
+            ],
+            'alignment': {
+                'method': st.session_state.geo_allocation,
+            },
+        }
+        
+        # Build model_settings structure
+        model_settings = {
+            'inference_method': 'bayesian_numpyro' if st.session_state.use_numpyro else 'bayesian_pymc',
+            'n_chains': st.session_state.n_chains,
+            'n_draws': st.session_state.n_draws,
+            'n_tune': st.session_state.n_tune,
+            'target_accept': st.session_state.target_accept,
+            'trend': {
+                'type': trend_type,
+                **st.session_state.trend_settings,
+            },
+            'seasonality': {
+                'yearly_order': st.session_state.yearly_order,
+            },
+            'hierarchical': {
+                'pool_geo': st.session_state.pool_geo,
+            },
+        }
+        
+        # Build the configuration request
+        config_data = {
+            'name': config_name,
+            'description': f"Configuration for dataset {data_id}",
+            'mff_config': mff_config,
+            'model_settings': model_settings,
+        }
+        
+        # Submit to API
+        result = client.create_config(config_data)
+        
+        st.success(f"✅ Configuration '{config_name}' saved successfully!")
+        
+        # Clear cache to refresh config list
+        clear_config_cache()
+        
+        # Store the config ID
+        if isinstance(result, dict):
+            st.session_state.selected_config_id = result.get('config_id')
+        
+    except APIError as e:
+        display_api_error(e, "Failed to save configuration")
+    except Exception as e:
+        st.error(f"Error saving configuration: {e}")
 
 
 # =============================================================================
@@ -379,200 +700,68 @@ def render_config_form():
 @st.fragment
 def render_config_list():
     """Render the list of existing configurations."""
-    st.markdown("### Existing Configurations")
+    st.subheader("📑 Saved Configurations")
     
     try:
         client = get_api_client()
         configs = fetch_configs(client)
-        
-        if not configs:
-            st.info("No configurations found. Create one above.")
-            return
-        
-        for config in configs:
-            with st.container():
-                col1, col2, col3, col4 = st.columns([4, 2, 2, 1])
-                
-                with col1:
-                    is_selected = st.session_state.selected_config_id == config.config_id
-                    icon = "✅" if is_selected else "⚙️"
-                    st.markdown(f"**{icon} {config.name}**")
-                    if config.description:
-                        st.caption(config.description[:50] + "..." if len(config.description) > 50 else config.description)
-                
-                with col2:
-                    st.caption(f"ID: {config.config_id[:8]}...")
-                
-                with col3:
-                    st.caption(format_datetime(config.created_at))
-                
-                with col4:
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        if st.button("📋", key=f"select_cfg_{config.config_id}", help="Select"):
-                            st.session_state.selected_config_id = config.config_id
-                            st.rerun()
-                    with col_b:
-                        if st.button("🗑️", key=f"delete_cfg_{config.config_id}", help="Delete"):
-                            st.session_state[f"confirm_delete_cfg_{config.config_id}"] = True
-                            st.rerun()
-                
-                # Confirm delete
-                if st.session_state.get(f"confirm_delete_cfg_{config.config_id}", False):
-                    st.warning(f"⚠️ Delete '{config.name}'?")
-                    col_yes, col_no = st.columns(2)
-                    with col_yes:
-                        if st.button("Yes", key=f"confirm_yes_cfg_{config.config_id}", type="primary"):
-                            try:
-                                client.delete_config(config.config_id)
-                                st.success("Deleted!")
-                                if st.session_state.selected_config_id == config.config_id:
-                                    st.session_state.selected_config_id = None
-                                clear_config_cache()
-                                del st.session_state[f"confirm_delete_cfg_{config.config_id}"]
-                                st.rerun()
-                            except APIError as e:
-                                display_api_error(e)
-                    with col_no:
-                        if st.button("Cancel", key=f"confirm_no_cfg_{config.config_id}"):
-                            del st.session_state[f"confirm_delete_cfg_{config.config_id}"]
-                            st.rerun()
-                
-                st.markdown("---")
-                
-    except APIError as e:
-        display_api_error(e)
     except Exception as e:
         st.error(f"Error loading configurations: {e}")
-
-
-# =============================================================================
-# Configuration Details
-# =============================================================================
-
-@st.fragment
-def render_config_details():
-    """Render details for the selected configuration."""
-    st.markdown("### Configuration Details")
-    
-    config_id = st.session_state.selected_config_id
-    
-    if not config_id:
-        st.info("Select a configuration to view details.")
         return
     
-    try:
-        client = get_api_client()
-        config = client.get_config(config_id)
-        
-        # Basic info
-        st.markdown(f"**{config.name}**")
-        if config.description:
-            st.caption(config.description)
-        
-        st.caption(f"Created: {format_datetime(config.created_at)} | Updated: {format_datetime(config.updated_at)}")
-        
-        # Quick summary
-        mff = config.mff_config
-        kpi_name = mff.get("kpi", {}).get("name", "Unknown")
-        n_media = len(mff.get("media_channels", []))
-        n_controls = len(mff.get("control_variables", []))
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("KPI", kpi_name)
-        with col2:
-            st.metric("Media", n_media)
-        with col3:
-            st.metric("Controls", n_controls)
-        
-        # Tabs for different sections
-        tab1, tab2, tab3 = st.tabs(["🎯 MFF Config", "⚙️ Model Settings", "📄 Raw JSON"])
-        
-        with tab1:
-            # KPI
-            st.markdown("##### KPI")
-            kpi = mff.get("kpi", {})
-            st.markdown(f"**{kpi.get('name')}** — Dimensions: {', '.join(kpi.get('dimensions', []))}")
-            
-            # Media Channels
-            st.markdown("##### Media Channels")
-            media_names = [ch.get("name") for ch in mff.get("media_channels", [])]
-            st.markdown(", ".join(media_names) if media_names else "None")
-            
-            with st.expander("Channel Details"):
-                for channel in mff.get("media_channels", []):
-                    st.markdown(f"**{channel.get('name')}**")
-                    adstock = channel.get("adstock", {})
-                    saturation = channel.get("saturation", {})
-                    st.caption(f"Adstock: {adstock.get('type', 'geometric')} (L-max: {adstock.get('l_max', 8)}) | Saturation: {saturation.get('type', 'logistic')}")
-            
-            # Controls
-            st.markdown("##### Control Variables")
-            control_names = [ctrl.get("name") for ctrl in mff.get("control_variables", [])]
-            st.markdown(", ".join(control_names) if control_names else "None")
-        
-        with tab2:
-            settings = config.model_settings
-            
-            col1, col2 = st.columns(2)
+    if not configs:
+        st.info("No configurations found. Create one above.")
+        return
+    
+    for config in configs:
+        with st.expander(f"📄 {config.name}", expanded=False):
+            col1, col2 = st.columns([3, 1])
             
             with col1:
-                st.markdown(f"**Trend Type:** {settings.get('trend_type', 'none')}")
-                st.markdown(f"**Seasonality Order:** {settings.get('yearly_seasonality_order', 0)}")
+                st.markdown(f"**ID:** `{config.config_id}`")
+                if config.description:
+                    st.markdown(f"**Description:** {config.description}")
+                st.markdown(f"**Created:** {format_datetime(config.created_at)}")
+                if config.updated_at:
+                    st.markdown(f"**Updated:** {format_datetime(config.updated_at)}")
+                
+                # Display config summary from mff_config using methods
+                st.markdown(f"**KPI:** {config.get_kpi_name()}")
+                st.markdown(f"**Media Channels:** {len(config.get_media_channels())}")
+                st.markdown(f"**Controls:** {len(config.get_controls())}")
+                st.markdown(f"**Inference:** {config.get_inference_method()}")
             
             with col2:
-                st.markdown(f"**Chains:** {settings.get('n_chains', 4)}")
-                st.markdown(f"**Draws:** {settings.get('n_draws', 1000)}")
-                st.markdown(f"**Tune:** {settings.get('n_tune', 1000)}")
-        
-        with tab3:
-            st.json({
-                "mff_config": mff,
-                "model_settings": config.model_settings,
-            })
-        
-        # Actions
-        st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("🔬 Fit Model", use_container_width=True, type="primary"):
-                st.switch_page("pages/3_Model_Fitting.py")
-        
-        with col2:
-            if st.button("📋 Duplicate", use_container_width=True):
-                st.info("Duplicate functionality coming soon")
-        
-    except APIError as e:
-        display_api_error(e)
-    except Exception as e:
-        st.error(f"Error loading configuration: {e}")
+                if st.button("🗑️ Delete", key=f"del_{config.config_id}"):
+                    try:
+                        client.delete_config(config.config_id)
+                        clear_config_cache()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                
+                if st.button("📋 Load", key=f"load_{config.config_id}"):
+                    st.session_state.selected_config_id = config.config_id
+                    st.info(f"Configuration '{config.name}' selected")
 
 
 # =============================================================================
-# Main
+# Main Page
 # =============================================================================
 
 def main():
-    """Main page function."""
+    """Main page entry point."""
     page_header(
-        "⚙️ Configuration",
-        "Create and manage model configurations for your MMM analysis."
+        "⚙️ Model Configuration",
+        "Configure your Marketing Mix Model with dataset-aware variable selection."
     )
     
-    # Two-column layout
-    col_form, col_details = st.columns([3, 2])
-    
-    with col_form:
-        with st.expander("➕ Create New Configuration", expanded=not st.session_state.selected_config_id):
-            render_config_form()
-    
-    with col_details:
-        render_config_details()
+    # Single column layout with expandable form
+    with st.expander("➕ Create New Configuration", expanded=not st.session_state.selected_config_id):
+        render_config_form()
     
     st.markdown("---")
+    
     render_config_list()
 
 

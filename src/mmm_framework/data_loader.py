@@ -20,6 +20,7 @@ from .config import (
     MFFConfig,
     VariableConfig,
     VariableRole,
+    MFFColumnConfig
 )
 
 if TYPE_CHECKING:
@@ -803,3 +804,418 @@ def mff_from_wide_format(
             records.append(record)
     
     return pd.DataFrame(records)
+
+
+# =============================================================================
+# Ragged data handling utilities
+# =============================================================================
+
+def generate_complete_date_range(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    frequency: str,
+) -> pd.DatetimeIndex:
+    """
+    Generate a complete date range for the given frequency.
+    
+    Parameters
+    ----------
+    start_date : pd.Timestamp
+        First date in range.
+    end_date : pd.Timestamp  
+        Last date in range.
+    frequency : str
+        'W' for weekly, 'D' for daily, 'M' for monthly.
+    
+    Returns
+    -------
+    pd.DatetimeIndex
+        Complete date range with no gaps.
+    """
+    freq_map = {
+        "W": "W-SUN",  # Weekly ending Sunday (adjust as needed)
+        "D": "D",
+        "M": "MS",  # Month start
+    }
+    pd_freq = freq_map.get(frequency, frequency)
+    return pd.date_range(start=start_date, end=end_date, freq=pd_freq)
+
+
+def build_complete_index(
+    periods: pd.DatetimeIndex,
+    geographies: list[str] | None = None,
+    products: list[str] | None = None,
+    period_col: str = "Period",
+    geo_col: str = "Geography", 
+    product_col: str = "Product",
+) -> pd.Index | pd.MultiIndex:
+    """
+    Build a complete index covering all combinations of dimensions.
+    
+    This ensures we have entries for every date x geo x product combination,
+    enabling proper detection of missing vs explicit NaN values.
+    """
+    if geographies is None and products is None:
+        return pd.DatetimeIndex(periods, name=period_col)
+    
+    index_parts = [(period_col, periods)]
+    
+    if geographies is not None:
+        index_parts.append((geo_col, geographies))
+    
+    if products is not None:
+        index_parts.append((product_col, products))
+    
+    # Create MultiIndex from product of all dimensions
+    names = [name for name, _ in index_parts]
+    arrays = [values for _, values in index_parts]
+    
+    return pd.MultiIndex.from_product(arrays, names=names)
+
+
+def extract_with_nan_tracking(
+    df: pd.DataFrame,
+    variable_name: str,
+    cols: MFFColumnConfig,
+    target_index: pd.Index | pd.MultiIndex,
+    fill_value: float = 0.0,
+    preserve_explicit_nan: bool = True,
+) -> tuple[pd.Series, pd.Series]:
+    """
+    Extract a variable and track which values were explicitly NaN.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Raw MFF data.
+    variable_name : str
+        Name of variable to extract.
+    cols : MFFColumnConfig
+        Column name mappings.
+    target_index : pd.Index or pd.MultiIndex
+        Complete index to align data to.
+    fill_value : float
+        Value to fill for missing rows (not present in source).
+    preserve_explicit_nan : bool
+        If True, keep explicit NaN values; if False, fill them too.
+    
+    Returns
+    -------
+    values : pd.Series
+        Extracted values aligned to target_index.
+    explicit_nan_mask : pd.Series
+        Boolean mask where True = value was explicitly NaN in source.
+    """
+    # Filter to this variable
+    var_data = df[df[cols.variable_name] == variable_name].copy()
+    
+    if var_data.empty:
+        # No data at all - return all fill values, no explicit NaN
+        values = pd.Series(fill_value, index=target_index, name=variable_name)
+        nan_mask = pd.Series(False, index=target_index, name=f"{variable_name}_explicit_nan")
+        return values, nan_mask
+    
+    # Build index columns based on target index structure
+    if isinstance(target_index, pd.MultiIndex):
+        index_cols = list(target_index.names)
+    else:
+        index_cols = [target_index.name or cols.period]
+    
+    # Ensure date column is datetime
+    var_data[cols.period] = pd.to_datetime(var_data[cols.period])
+    
+    # Track which rows have explicit NaN values BEFORE any filling
+    explicit_nan_rows = var_data[cols.variable_value].isna()
+    
+    # Set index on the variable data
+    if len(index_cols) == 1:
+        var_data = var_data.set_index(index_cols[0])
+    else:
+        # For multi-dimensional data, need to handle index carefully
+        var_data = var_data.set_index(index_cols)
+    
+    # Get the value series
+    source_values = var_data[cols.variable_value]
+    
+    # Track explicit NaN positions from source
+    source_explicit_nan = source_values.isna()
+    
+    # Reindex to complete target index
+    # This introduces NaN for missing rows
+    aligned_values = source_values.reindex(target_index)
+    
+    # Create mask: True where source had explicit NaN
+    # Initialize all False, then mark source explicit NaN positions
+    explicit_nan_mask = pd.Series(False, index=target_index, name=f"{variable_name}_explicit_nan")
+    
+    # Find which target index positions correspond to explicit NaN in source
+    common_idx = target_index.intersection(source_explicit_nan[source_explicit_nan].index)
+    if len(common_idx) > 0:
+        explicit_nan_mask.loc[common_idx] = True
+    
+    # Fill missing (non-explicit-NaN) positions
+    if preserve_explicit_nan:
+        # Only fill where we don't have explicit NaN
+        fill_mask = aligned_values.isna() & ~explicit_nan_mask
+        aligned_values = aligned_values.where(~fill_mask, fill_value)
+    else:
+        # Fill everything that's NaN
+        aligned_values = aligned_values.fillna(fill_value)
+    
+    aligned_values.name = variable_name
+    
+    return aligned_values, explicit_nan_mask
+
+
+# =============================================================================
+# Enhanced MFF Loader
+# =============================================================================
+
+class RaggedMFFLoader:
+    """
+    Loads MFF data with proper handling of ragged/sparse data.
+    
+    Key behaviors:
+    - Generates complete date range based on min/max dates in data
+    - Missing date/dimension combinations filled with configured value (default 0)
+    - Explicit NaN values in source data are preserved
+    - Tracks which values were explicitly NaN for downstream handling
+    """
+    
+    def __init__(self, config: MFFConfig):
+        self.config = config
+        self._raw_data: pd.DataFrame | None = None
+        self._allocation_weights: dict[str, pd.Series] = {}
+        
+    def load(self, data: pd.DataFrame | str) -> RaggedMFFLoader:
+        """Load MFF data from DataFrame or file path."""
+        if isinstance(data, str):
+            if data.endswith('.parquet'):
+                self._raw_data = pd.read_parquet(data)
+            else:
+                self._raw_data = pd.read_csv(data)
+        else:
+            self._raw_data = data.copy()
+        
+        # Parse dates
+        cols = self.config.columns
+        self._raw_data[cols.period] = pd.to_datetime(
+            self._raw_data[cols.period],
+            format=self.config.date_format
+        )
+        
+        return self
+    
+    def _build_complete_periods(self) -> pd.DatetimeIndex:
+        """Build complete date range from min to max date in data."""
+        cols = self.config.columns
+        
+        min_date = self._raw_data[cols.period].min()
+        max_date = self._raw_data[cols.period].max()
+        
+        return generate_complete_date_range(
+            min_date, max_date, self.config.frequency
+        )
+    
+    def _get_dimension_levels(self, var_config: VariableConfig) -> dict[str, list]:
+        """Get all unique levels for each dimension from the KPI data."""
+        cols = self.config.columns
+        levels = {}
+        
+        # Get KPI data to determine dimension levels
+        kpi_data = self._raw_data[
+            self._raw_data[cols.variable_name] == self.config.kpi.name
+        ]
+        
+        if var_config.has_geo:
+            levels[cols.geography] = sorted(
+                kpi_data[cols.geography].dropna().unique().tolist()
+            )
+        
+        if var_config.has_product:
+            levels[cols.product] = sorted(
+                kpi_data[cols.product].dropna().unique().tolist()
+            )
+        
+        return levels
+    
+    def build_panel(self) -> PanelDataset:
+        """
+        Build complete panel dataset with ragged data handling.
+        
+        Missing dates/combinations are filled with zeros (or configured value).
+        Explicit NaN values in source data are preserved.
+        """
+        if self._raw_data is None:
+            raise RuntimeError("No data loaded. Call load() first.")
+        
+        cols = self.config.columns
+        
+        # 1. Build complete date range
+        complete_periods = self._build_complete_periods()
+        
+        # 2. Get dimension levels from KPI data
+        dim_levels = self._get_dimension_levels(self.config.kpi)
+        
+        geos = dim_levels.get(cols.geography)
+        products = dim_levels.get(cols.product)
+        
+        # 3. Build complete target index
+        target_index = build_complete_index(
+            periods=complete_periods,
+            geographies=geos,
+            products=products,
+            period_col=cols.period,
+            geo_col=cols.geography,
+            product_col=cols.product,
+        )
+        
+        # 4. Extract KPI with NaN tracking
+        y, y_nan_mask = extract_with_nan_tracking(
+            self._raw_data,
+            self.config.kpi.name,
+            cols,
+            target_index,
+            fill_value=0.0,  # Usually don't want to fill KPI with 0
+            preserve_explicit_nan=True,  # Always preserve NaN for KPI
+        )
+        
+        # Warn if KPI has missing values
+        missing_count = y.isna().sum()
+        if missing_count > 0:
+            warnings.warn(
+                f"KPI '{self.config.kpi.name}' has {missing_count} missing values "
+                f"({missing_count / len(y) * 100:.1f}% of observations). "
+                f"Consider checking data completeness."
+            )
+        
+        # 5. Build coordinates
+        coords = PanelCoordinates(
+            periods=complete_periods,
+            geographies=geos,
+            products=products,
+            channels=self.config.media_names,
+            controls=self.config.control_names,
+        )
+        
+        # 6. Extract media variables
+        media_series = {}
+        media_stats = {}
+        explicit_nan_masks = {"kpi": y_nan_mask}
+        
+        for media_config in self.config.media_channels:
+            values, nan_mask = extract_with_nan_tracking(
+                self._raw_data,
+                media_config.name,
+                cols,
+                target_index,
+                fill_value=self.config.fill_missing_media,
+                preserve_explicit_nan=self.config.preserve_explicit_nan,
+            )
+            
+            media_series[media_config.name] = values
+            explicit_nan_masks[media_config.name] = nan_mask
+            
+            media_stats[media_config.name] = {
+                "total": float(values.sum()),
+                "mean": float(values.mean()),
+                "std": float(values.std()),
+                "nonzero_pct": float((values > 0).mean()),
+                "explicit_nan_pct": float(nan_mask.mean()),
+                "filled_zero_pct": float(
+                    ((values == self.config.fill_missing_media) & ~nan_mask).mean()
+                ),
+            }
+        
+        X_media = pd.DataFrame(media_series)
+        X_media.index = target_index
+        
+        # 7. Extract control variables
+        X_controls = None
+        if self.config.controls:
+            control_series = {}
+            
+            for control_config in self.config.controls:
+                fill_val = self.config.fill_missing_controls
+                
+                values, nan_mask = extract_with_nan_tracking(
+                    self._raw_data,
+                    control_config.name,
+                    cols,
+                    target_index,
+                    fill_value=fill_val if fill_val is not None else 0.0,
+                    preserve_explicit_nan=self.config.preserve_explicit_nan,
+                )
+                
+                # If fill_missing_controls is None, use forward fill
+                if fill_val is None:
+                    # Only forward fill non-explicit-NaN positions
+                    if self.config.preserve_explicit_nan:
+                        # Complex: need to ffill only missing, not explicit NaN
+                        filled = values.ffill().bfill()
+                        values = values.where(nan_mask, filled)
+                    else:
+                        values = values.ffill().bfill()
+                
+                control_series[control_config.name] = values
+                explicit_nan_masks[control_config.name] = nan_mask
+            
+            X_controls = pd.DataFrame(control_series)
+            X_controls.index = target_index
+        
+        # 8. Build panel dataset
+        panel = PanelDataset(
+            y=y,
+            X_media=X_media,
+            X_controls=X_controls,
+            coords=coords,
+            index=target_index,
+            config=self.config,
+            media_stats=media_stats,
+            explicit_nan_mask=explicit_nan_masks,
+        )
+        
+        return panel
+
+
+# =============================================================================
+# Convenience function
+# =============================================================================
+
+def load_ragged_mff(
+    data: pd.DataFrame | str,
+    config: MFFConfig,
+) -> PanelDataset:
+    """
+    Load MFF data with ragged data handling.
+    
+    Parameters
+    ----------
+    data : pd.DataFrame or str
+        MFF data or path to file.
+    config : MFFConfig
+        Configuration specifying variables and dimensions.
+    
+    Returns
+    -------
+    PanelDataset
+        Panel data with missing dates filled and explicit NaN preserved.
+    
+    Examples
+    --------
+    >>> config = MFFConfig(
+    ...     kpi=VariableConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
+    ...     media_channels=[
+    ...         VariableConfig(name="TV", dimensions=[DimensionType.PERIOD]),
+    ...         VariableConfig(name="Digital", dimensions=[DimensionType.PERIOD]),
+    ...     ],
+    ...     fill_missing_media=0.0,
+    ...     preserve_explicit_nan=True,
+    ... )
+    >>> panel = load_ragged_mff("ragged_data.csv", config)
+    >>> print(f"Filled {(panel.X_media == 0).sum().sum()} missing values with 0")
+    """
+    loader = RaggedMFFLoader(config)
+    loader.load(data)
+    return loader.build_panel()
+

@@ -237,27 +237,27 @@ def main():
     
     try:
         client = get_api_client()
-        models, _ = client.list_models(limit=5)
+        models = client.list_models(limit=5)
         
         if models:
             for model in models:
                 col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 1])
                 
                 with col1:
-                    st.markdown(f"**{model.name or model.model_id}**")
+                    st.markdown(f"**{getattr(model, 'name', None) or model.model_id}**")
                 
                 with col2:
                     st.caption(format_datetime(model.created_at))
                 
                 with col3:
-                    st.markdown(f"{status_icon(model.status.value)} {model.status.value.capitalize()}")
+                    st.markdown(f"{status_icon(model.status)} {model.status.capitalize()}")
                 
                 with col4:
-                    if model.status.value == "active":
+                    if model.status == "active":
                         st.progress(model.progress / 100)
-                    elif model.status.value == "completed":
+                    elif model.status == "completed":
                         st.success("Complete")
-                    elif model.status.value == "failed":
+                    elif model.status == "failed":
                         st.error("Failed")
                 
                 with col5:

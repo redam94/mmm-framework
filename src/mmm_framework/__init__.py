@@ -66,9 +66,11 @@ from .data_loader import (
     PanelDataset,
     # Loader
     MFFLoader,
+    RaggedMFFLoader,
     # Convenience functions
     load_mff,
     mff_from_wide_format,
+    load_ragged_mff,
 )
 
 from .model import (
@@ -104,6 +106,7 @@ from .jobs import (
     submit_model_job,
 )
 
+from . import mmm_extensions
 
 __version__ = "0.1.0"
 
@@ -163,6 +166,8 @@ __all__ = [
     "MFFLoader",
     "load_mff",
     "mff_from_wide_format",
+    "load_ragged_mff",
+    "RaggedMFFLoader",
     # Model
     "MMMResults",
     "PredictionResults",
@@ -186,4 +191,6 @@ __all__ = [
     "JobManager",
     "get_job_manager",
     "submit_model_job",
+    # Extensions
+    "mmm_extensions",
 ]
