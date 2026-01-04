@@ -11,6 +11,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         :root {
             --color-primary: #8fa86a;
@@ -99,6 +100,14 @@
         .dag-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
         .dag-box .mermaid { background: transparent; margin: 0; padding: 0; }
         .dag-box .mermaid svg { max-width: 100%; height: auto; }
+
+        .chart-container { width: 100%; height: 320px; margin: 1rem 0; }
+        .interactive-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .interactive-box h4 { margin-top: 0; margin-bottom: 1rem; color: var(--color-text); }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .control-row label { font-weight: 500; min-width: 80px; }
+        .control-row input[type="range"] { flex: 1; min-width: 150px; max-width: 300px; }
+        .control-row .value { font-family: 'JetBrains Mono', monospace; background: var(--color-bg-alt); padding: 0.25rem 0.5rem; border-radius: 4px; min-width: 60px; text-align: center; }
 
         ul, ol { margin: 1rem 0 1rem 1.5rem; }
         li { margin-bottom: 0.5rem; }
@@ -189,6 +198,11 @@
                 <li><a href="#diagnostics">Convergence</a></li>
                 <li><a href="#diagnostics-ident">Identifiability</a></li>
                 <li><a href="#diagnostics-comparison">Model Comparison</a></li>
+            </ul>
+
+            <h3>Prior Explorer</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#prior-explorer">Distribution Viewer</a></li>
             </ul>
         </aside>
 
@@ -409,7 +423,59 @@ adstock = (AdstockConfigBuilder()
                 <span class="equation-label">(5)</span>
                 $$f_{\text{Hill}}(x) = \frac{x^S}{K^S + x^S}$$
             </div>
-            <p>Where <strong>K</strong> is the half-saturation point and <strong>S</strong> is slope.</p>
+            <p>Where <strong>K</strong> is the half-saturation point (EC50) and <strong>S</strong> is slope (steepness).</p>
+
+            <!-- Interactive Saturation Plots -->
+            <div class="interactive-box">
+                <h4>Interactive: Compare Saturation Functions</h4>
+                <div class="two-col" style="margin: 0;">
+                    <div>
+                        <div class="control-row">
+                            <label>λ (logistic):</label>
+                            <input type="range" id="lambda-slider" min="0.5" max="5" step="0.1" value="2">
+                            <span class="value" id="lambda-value">2.0</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="control-row">
+                            <label>K (Hill):</label>
+                            <input type="range" id="kappa-slider" min="0.1" max="0.9" step="0.05" value="0.5">
+                            <span class="value" id="kappa-value">0.50</span>
+                        </div>
+                        <div class="control-row">
+                            <label>S (Hill):</label>
+                            <input type="range" id="slope-slider" min="0.5" max="4" step="0.1" value="2">
+                            <span class="value" id="slope-value">2.0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="saturation-chart" class="chart-container"></div>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0.5rem 0 0 0;">
+                    <strong>Key insight:</strong> The logistic function has one parameter (λ) controlling saturation speed, 
+                    while Hill has two (K, S) offering more flexibility but risking identifiability issues.
+                </p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Hill Function: Effect of Parameters</h4>
+                <p style="margin-bottom: 1rem;">See how K (half-saturation) and S (slope) independently affect the curve shape:</p>
+                <div id="hill-params-chart" class="chart-container"></div>
+                <div class="two-col" style="margin-top: 1rem;">
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>K (Half-saturation point)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            The spend level where you achieve 50% of maximum effect. 
+                            Lower K = saturation kicks in earlier.
+                        </span>
+                    </div>
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>S (Slope/Steepness)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Controls how sharply the curve rises. S &lt; 1 = concave; S &gt; 1 = S-shaped; S = 1 = Michaelis-Menten.
+                        </span>
+                    </div>
+                </div>
+            </div>
 
             <div class="warning">
                 <h4>⚠️ Identification Warning</h4>
@@ -744,6 +810,126 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                 <p>For complex models, use <code>nuts_sampler="numpyro"</code> for 4-10× speedup via JAX.</p>
             </div>
 
+            <!-- Prior Explorer Section -->
+            <h2 id="prior-explorer">Prior Explorer</h2>
+            <p>
+                Understanding how prior distributions behave is crucial for encoding domain knowledge in your MMM.
+                Use this interactive explorer to visualize common prior choices and see how their parameters 
+                affect the distribution shape.
+            </p>
+
+            <div class="interactive-box">
+                <h4>Interactive Prior Distribution Viewer</h4>
+                <div class="control-row">
+                    <label>Distribution:</label>
+                    <select id="prior-dist-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: 180px;">
+                        <option value="halfnormal">HalfNormal</option>
+                        <option value="normal">Normal</option>
+                        <option value="beta">Beta</option>
+                        <option value="gamma">Gamma</option>
+                        <option value="lognormal">LogNormal</option>
+                        <option value="exponential">Exponential</option>
+                    </select>
+                </div>
+                
+                <div id="prior-params-container">
+                    <!-- Parameters will be dynamically inserted here -->
+                </div>
+                
+                <div id="prior-chart" class="chart-container" style="height: 350px;"></div>
+                
+                <div id="prior-description" class="definition" style="margin-top: 1rem;">
+                    <!-- Description will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <h3>Common Prior Choices in MMM</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Distribution</th>
+                        <th>Typical Values</th>
+                        <th>Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Media coefficients (β)</td>
+                        <td><code>HalfNormal(σ)</code></td>
+                        <td>σ = 0.3 – 0.5</td>
+                        <td>Enforces positivity; regularizes toward zero</td>
+                    </tr>
+                    <tr>
+                        <td>Adstock decay (α)</td>
+                        <td><code>Beta(a, b)</code></td>
+                        <td>a=1, b=3 or a=2, b=2</td>
+                        <td>Bounded [0,1]; controls half-life distribution</td>
+                    </tr>
+                    <tr>
+                        <td>Saturation λ</td>
+                        <td><code>Gamma(α, β)</code></td>
+                        <td>α=2, β=1</td>
+                        <td>Positive; mildly regularizes saturation speed</td>
+                    </tr>
+                    <tr>
+                        <td>Hill K (half-sat)</td>
+                        <td><code>Beta(a, b)</code></td>
+                        <td>a=2, b=2</td>
+                        <td>Bounded to data range; centered prior</td>
+                    </tr>
+                    <tr>
+                        <td>Control coefficients (γ)</td>
+                        <td><code>Normal(μ, σ)</code></td>
+                        <td>μ=0, σ=0.5</td>
+                        <td>Can be positive or negative; regularized</td>
+                    </tr>
+                    <tr>
+                        <td>Intercept (α)</td>
+                        <td><code>Normal(μ, σ)</code></td>
+                        <td>μ=0, σ=1</td>
+                        <td>Weakly informative for standardized data</td>
+                    </tr>
+                    <tr>
+                        <td>Noise (σ)</td>
+                        <td><code>HalfNormal(σ)</code></td>
+                        <td>σ = 0.5</td>
+                        <td>Positive; expect residual ~0.3-0.5 for standardized y</td>
+                    </tr>
+                    <tr>
+                        <td>Hierarchical σ</td>
+                        <td><code>HalfNormal(σ)</code></td>
+                        <td>σ = 0.3</td>
+                        <td>Controls pooling strength; smaller = more pooling</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="interactive-box">
+                <h4>Compare Multiple Priors</h4>
+                <p style="margin-bottom: 1rem;">See how different parameterizations affect your prior beliefs:</p>
+                <div id="prior-comparison-chart" class="chart-container" style="height: 400px;"></div>
+                <div class="control-row" style="margin-top: 1rem;">
+                    <label>Compare:</label>
+                    <select id="prior-compare-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="media">Media Coefficient Priors</option>
+                        <option value="adstock">Adstock Decay Priors</option>
+                        <option value="control">Control Coefficient Priors</option>
+                        <option value="noise">Noise/Scale Priors</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 Prior Selection Principles</h4>
+                <ul style="margin-bottom: 0;">
+                    <li><strong>Weakly informative:</strong> Regularize extreme values without dominating the likelihood</li>
+                    <li><strong>Scientifically motivated:</strong> Encode known constraints (e.g., media effects should be positive)</li>
+                    <li><strong>Scale-appropriate:</strong> Match prior scale to standardized data (coefficients typically &lt; 1)</li>
+                    <li><strong>Sensitivity check:</strong> If results change dramatically with different reasonable priors, your data is weakly informative</li>
+                </ul>
+            </div>
+
         </main>
     </div>
 
@@ -759,7 +945,453 @@ beta_g = mu_beta + tau * offset_g</code></pre>
             }
         });
 
+        // Color scheme
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            border: '#d4ddd4',
+            bgAlt: '#f0f2ed'
+        };
+
+        const plotConfig = { displayModeBar: false, responsive: true };
+        const baseLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { l: 50, r: 180, t: 30, b: 50 },
+            showlegend: true,
+            legend: { 
+                x: 1.02, 
+                y: 1, 
+                xanchor: 'left',
+                yanchor: 'top',
+                bgcolor: 'rgba(255,255,255,0.95)',
+                bordercolor: colors.border,
+                borderwidth: 1,
+                font: { size: 11 }
+            }
+        };
+
+        // Saturation functions
+        function logisticSat(x, lambda) {
+            return 1 - Math.exp(-lambda * x);
+        }
+
+        function hillSat(x, kappa, slope) {
+            const xPow = Math.pow(x, slope);
+            const kPow = Math.pow(kappa, slope);
+            return xPow / (kPow + xPow);
+        }
+
+        // Generate x values (0 to 1, representing normalized spend)
+        function linspace(start, end, n) {
+            const arr = [];
+            const step = (end - start) / (n - 1);
+            for (let i = 0; i < n; i++) arr.push(start + step * i);
+            return arr;
+        }
+
+        const xVals = linspace(0, 1, 100);
+
+        // Interactive comparison chart
+        function updateSaturationChart() {
+            const lambda = parseFloat(document.getElementById('lambda-slider').value);
+            const kappa = parseFloat(document.getElementById('kappa-slider').value);
+            const slope = parseFloat(document.getElementById('slope-slider').value);
+
+            document.getElementById('lambda-value').textContent = lambda.toFixed(1);
+            document.getElementById('kappa-value').textContent = kappa.toFixed(2);
+            document.getElementById('slope-value').textContent = slope.toFixed(1);
+
+            const logisticY = xVals.map(x => logisticSat(x, lambda));
+            const hillY = xVals.map(x => hillSat(x, kappa, slope));
+
+            const data = [
+                {
+                    x: xVals, y: logisticY,
+                    name: `Logistic λ=${lambda.toFixed(1)}`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.primary, width: 3 }
+                },
+                {
+                    x: xVals, y: hillY,
+                    name: `Hill K=${kappa.toFixed(2)}`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.accent, width: 3 }
+                },
+                {
+                    x: [0, 1], y: [0, 1],
+                    name: 'Linear',
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.textMuted, width: 1.5, dash: 'dash' }
+                }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Normalized Spend', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Saturation Effect', range: [0, 1.05], gridcolor: colors.border, zeroline: false },
+                shapes: [
+                    // Hill K marker
+                    { type: 'line', x0: kappa, x1: kappa, y0: 0, y1: 0.5, 
+                      line: { color: colors.accent, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: 0, x1: kappa, y0: 0.5, y1: 0.5, 
+                      line: { color: colors.accent, width: 1, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: kappa, y: 0.52, text: 'K (50%)', showarrow: false, 
+                      font: { size: 10, color: colors.accent } }
+                ]
+            };
+
+            Plotly.react('saturation-chart', data, layout, plotConfig);
+        }
+
+        // Hill parameters demonstration chart
+        function initHillParamsChart() {
+            const kappas = [0.3, 0.5, 0.7];
+            const slopes = [0.5, 1, 2, 4];
+            
+            const data = [];
+            
+            // Vary K with fixed S=2
+            kappas.forEach((k, i) => {
+                const y = xVals.map(x => hillSat(x, k, 2));
+                data.push({
+                    x: xVals, y: y,
+                    name: `K=${k} (S=2)`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.primary, width: 2.5, dash: i === 1 ? 'solid' : (i === 0 ? 'dot' : 'dash') },
+                    legendgroup: 'k'
+                });
+            });
+            
+            // Vary S with fixed K=0.5
+            const sColors = [colors.accent, colors.accentDark, colors.warning, colors.danger];
+            slopes.forEach((s, i) => {
+                const y = xVals.map(x => hillSat(x, 0.5, s));
+                data.push({
+                    x: xVals, y: y,
+                    name: `S=${s} (K=0.5)`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: sColors[i], width: 2 },
+                    legendgroup: 's',
+                    visible: 'legendonly'
+                });
+            });
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Normalized Spend', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Saturation Effect', range: [0, 1.05], gridcolor: colors.border, zeroline: false },
+                annotations: [
+                    { x: 0.5, y: 1.08, xref: 'paper', yref: 'paper', text: 'Click legend to toggle S variations', 
+                      showarrow: false, font: { size: 11, color: colors.textMuted } }
+                ]
+            };
+
+            Plotly.newPlot('hill-params-chart', data, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // PRIOR EXPLORER
+        // =====================================================================
+        
+        // Mathematical functions for distributions
+        const gamma_fn = (z) => {
+            // Lanczos approximation for gamma function
+            if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gamma_fn(1 - z));
+            z -= 1;
+            const g = 7;
+            const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+                771.32342877765313, -176.61502916214059, 12.507343278686905,
+                -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+            let x = c[0];
+            for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+            const t = z + g + 0.5;
+            return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+        };
+
+        const beta_fn = (a, b) => gamma_fn(a) * gamma_fn(b) / gamma_fn(a + b);
+
+        // PDF functions
+        const priorPDFs = {
+            halfnormal: (x, sigma) => {
+                if (x < 0) return 0;
+                return (2 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-x * x / (2 * sigma * sigma));
+            },
+            normal: (x, mu, sigma) => {
+                return (1 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma));
+            },
+            beta: (x, a, b) => {
+                if (x <= 0 || x >= 1) return 0;
+                return (Math.pow(x, a - 1) * Math.pow(1 - x, b - 1)) / beta_fn(a, b);
+            },
+            gamma: (x, alpha, beta) => {
+                if (x <= 0) return 0;
+                return (Math.pow(beta, alpha) / gamma_fn(alpha)) * Math.pow(x, alpha - 1) * Math.exp(-beta * x);
+            },
+            lognormal: (x, mu, sigma) => {
+                if (x <= 0) return 0;
+                return (1 / (x * sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-((Math.log(x) - mu) ** 2) / (2 * sigma * sigma));
+            },
+            exponential: (x, rate) => {
+                if (x < 0) return 0;
+                return rate * Math.exp(-rate * x);
+            }
+        };
+
+        // Distribution metadata
+        const priorInfo = {
+            halfnormal: {
+                name: 'Half-Normal',
+                params: [{ name: 'σ (sigma)', id: 'sigma', min: 0.1, max: 2, step: 0.1, default: 0.5 }],
+                xRange: [0, 4],
+                description: '<strong>HalfNormal(σ)</strong> — A normal distribution truncated at zero. Commonly used for parameters that must be positive (media coefficients, noise). The mode is always at zero, with σ controlling spread.',
+                useCase: 'Media coefficients, noise σ, hierarchical standard deviations'
+            },
+            normal: {
+                name: 'Normal',
+                params: [
+                    { name: 'μ (mu)', id: 'mu', min: -2, max: 2, step: 0.1, default: 0 },
+                    { name: 'σ (sigma)', id: 'sigma', min: 0.1, max: 2, step: 0.1, default: 0.5 }
+                ],
+                xRange: [-4, 4],
+                description: '<strong>Normal(μ, σ)</strong> — The classic bell curve centered at μ. Used for parameters that can be positive or negative. Width controlled by σ.',
+                useCase: 'Control coefficients, intercepts, trend slopes'
+            },
+            beta: {
+                name: 'Beta',
+                params: [
+                    { name: 'α (alpha)', id: 'alpha', min: 0.5, max: 5, step: 0.25, default: 2 },
+                    { name: 'β (beta)', id: 'beta', min: 0.5, max: 5, step: 0.25, default: 2 }
+                ],
+                xRange: [0, 1],
+                description: '<strong>Beta(α, β)</strong> — Flexible distribution bounded to [0, 1]. α=β=1 is uniform; α=β>1 is bell-shaped and centered; α<β shifts mass left; α>β shifts mass right.',
+                useCase: 'Adstock decay rates, Hill K parameter, any proportion'
+            },
+            gamma: {
+                name: 'Gamma',
+                params: [
+                    { name: 'α (shape)', id: 'alpha', min: 0.5, max: 5, step: 0.25, default: 2 },
+                    { name: 'β (rate)', id: 'beta', min: 0.5, max: 3, step: 0.25, default: 1 }
+                ],
+                xRange: [0, 8],
+                description: '<strong>Gamma(α, β)</strong> — Positive continuous distribution. Shape α controls peakedness (α=1 is exponential); rate β controls scale. Mean = α/β.',
+                useCase: 'Saturation parameters, positive coefficients with flexibility'
+            },
+            lognormal: {
+                name: 'Log-Normal',
+                params: [
+                    { name: 'μ (log-mean)', id: 'mu', min: -1, max: 1, step: 0.1, default: 0 },
+                    { name: 'σ (log-sd)', id: 'sigma', min: 0.2, max: 1.5, step: 0.1, default: 0.5 }
+                ],
+                xRange: [0, 5],
+                description: '<strong>LogNormal(μ, σ)</strong> — If log(X) ~ Normal(μ, σ), then X ~ LogNormal. Always positive with right skew. Useful for multiplicative effects.',
+                useCase: 'Scale parameters, multiplicative coefficients'
+            },
+            exponential: {
+                name: 'Exponential',
+                params: [
+                    { name: 'λ (rate)', id: 'rate', min: 0.5, max: 3, step: 0.25, default: 1 }
+                ],
+                xRange: [0, 6],
+                description: '<strong>Exponential(λ)</strong> — Special case of Gamma(1, λ). Mode at zero, decreasing density. Mean = 1/λ. Strong regularization toward zero.',
+                useCase: 'LASSO-style shrinkage, sparse priors'
+            }
+        };
+
+        function updatePriorParams() {
+            const dist = document.getElementById('prior-dist-select').value;
+            const info = priorInfo[dist];
+            const container = document.getElementById('prior-params-container');
+            
+            container.innerHTML = info.params.map(p => `
+                <div class="control-row">
+                    <label>${p.name}:</label>
+                    <input type="range" id="prior-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}">
+                    <span class="value" id="prior-${p.id}-value">${p.default.toFixed(2)}</span>
+                </div>
+            `).join('');
+            
+            // Add event listeners
+            info.params.forEach(p => {
+                document.getElementById(`prior-${p.id}`).addEventListener('input', updatePriorChart);
+            });
+            
+            updatePriorChart();
+        }
+
+        function updatePriorChart() {
+            const dist = document.getElementById('prior-dist-select').value;
+            const info = priorInfo[dist];
+            
+            // Get parameter values
+            const params = info.params.map(p => {
+                const val = parseFloat(document.getElementById(`prior-${p.id}`).value);
+                document.getElementById(`prior-${p.id}-value`).textContent = val.toFixed(2);
+                return val;
+            });
+            
+            // Generate x values
+            const xMin = info.xRange[0];
+            const xMax = info.xRange[1];
+            const xPrior = linspace(xMin + 0.001, xMax - 0.001, 200);
+            
+            // Compute PDF
+            const yPrior = xPrior.map(x => {
+                switch(dist) {
+                    case 'halfnormal': return priorPDFs.halfnormal(x, params[0]);
+                    case 'normal': return priorPDFs.normal(x, params[0], params[1]);
+                    case 'beta': return priorPDFs.beta(x, params[0], params[1]);
+                    case 'gamma': return priorPDFs.gamma(x, params[0], params[1]);
+                    case 'lognormal': return priorPDFs.lognormal(x, params[0], params[1]);
+                    case 'exponential': return priorPDFs.exponential(x, params[0]);
+                }
+            });
+            
+            // Build parameter string for title
+            const paramStr = info.params.map((p, i) => `${p.name.split(' ')[0]}=${params[i].toFixed(2)}`).join(', ');
+            
+            const data = [{
+                x: xPrior,
+                y: yPrior,
+                type: 'scatter',
+                mode: 'lines',
+                fill: 'tozeroy',
+                fillcolor: 'rgba(143, 168, 106, 0.3)',
+                line: { color: colors.primary, width: 3 },
+                name: `${info.name}(${paramStr})`
+            }];
+            
+            // Add mean line if calculable
+            let mean = null;
+            switch(dist) {
+                case 'halfnormal': mean = params[0] * Math.sqrt(2 / Math.PI); break;
+                case 'normal': mean = params[0]; break;
+                case 'beta': mean = params[0] / (params[0] + params[1]); break;
+                case 'gamma': mean = params[0] / params[1]; break;
+                case 'lognormal': mean = Math.exp(params[0] + params[1]*params[1]/2); break;
+                case 'exponential': mean = 1 / params[0]; break;
+            }
+            
+            const yMax = Math.max(...yPrior) * 1.1;
+            
+            const layout = {
+                ...baseLayout,
+                title: { text: `${info.name} Distribution`, font: { size: 16 } },
+                xaxis: { title: 'Parameter Value', range: info.xRange, gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                yaxis: { title: 'Density', range: [0, yMax], gridcolor: colors.border, zeroline: false },
+                shapes: mean !== null ? [{
+                    type: 'line', x0: mean, x1: mean, y0: 0, y1: yMax * 0.9,
+                    line: { color: colors.accent, width: 2, dash: 'dash' }
+                }] : [],
+                annotations: mean !== null ? [{
+                    x: mean, y: yMax * 0.95, text: `Mean: ${mean.toFixed(3)}`,
+                    showarrow: false, font: { color: colors.accent, size: 11 }
+                }] : []
+            };
+            
+            Plotly.react('prior-chart', data, layout, plotConfig);
+            
+            // Update description
+            document.getElementById('prior-description').innerHTML = `
+                <h4>${info.name} Distribution</h4>
+                <p>${info.description}</p>
+                <p><strong>Common use:</strong> ${info.useCase}</p>
+            `;
+        }
+
+        function updatePriorComparison() {
+            const compareType = document.getElementById('prior-compare-select').value;
+            let data = [];
+            let xRange, title;
+            
+            switch(compareType) {
+                case 'media':
+                    xRange = [0, 2];
+                    title = 'Media Coefficient Priors (must be positive)';
+                    const xMedia = linspace(0.001, 2, 200);
+                    data = [
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HalfNormal(0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HalfNormal(0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 1.0)), name: 'HalfNormal(1.0)', line: { color: colors.warning, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.gamma(x, 2, 2)), name: 'Gamma(2,2)', line: { color: colors.danger, width: 2, dash: 'dash' } }
+                    ];
+                    break;
+                case 'adstock':
+                    xRange = [0, 1];
+                    title = 'Adstock Decay Priors (bounded 0-1)';
+                    const xAdstock = linspace(0.001, 0.999, 200);
+                    data = [
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 3)), name: 'Beta(1,3) low', line: { color: colors.primary, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 2, 2)), name: 'Beta(2,2) centered', line: { color: colors.accent, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 3, 1)), name: 'Beta(3,1) high', line: { color: colors.warning, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 1)), name: 'Beta(1,1) uniform', line: { color: colors.textMuted, width: 2, dash: 'dash' } }
+                    ];
+                    break;
+                case 'control':
+                    xRange = [-2, 2];
+                    title = 'Control Coefficient Priors (can be +/-)';
+                    const xControl = linspace(-2, 2, 200);
+                    data = [
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.3)), name: 'Normal(0,0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.5)), name: 'Normal(0,0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 1.0)), name: 'Normal(0,1.0)', line: { color: colors.warning, width: 2 } }
+                    ];
+                    break;
+                case 'noise':
+                    xRange = [0, 2];
+                    title = 'Noise/Scale Parameter Priors';
+                    const xNoise = linspace(0.001, 2, 200);
+                    data = [
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HalfNormal(0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HalfNormal(0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.exponential(x, 2)), name: 'Exponential(2)', line: { color: colors.warning, width: 2, dash: 'dash' } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.gamma(x, 2, 4)), name: 'Gamma(2,4)', line: { color: colors.danger, width: 2, dash: 'dash' } }
+                    ];
+                    break;
+            }
+            
+            data.forEach(d => { d.type = 'scatter'; d.mode = 'lines'; });
+            
+            const layout = {
+                ...baseLayout,
+                title: { text: title, font: { size: 14 } },
+                xaxis: { title: 'Parameter Value', range: xRange, gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                yaxis: { title: 'Density', gridcolor: colors.border, zeroline: false },
+                legend: { 
+                    x: 1.02, 
+                    y: 1, 
+                    xanchor: 'left',
+                    yanchor: 'top',
+                    bgcolor: 'rgba(255,255,255,0.95)',
+                    bordercolor: colors.border,
+                    borderwidth: 1,
+                    font: { size: 11 }
+                },
+                margin: { l: 50, r: 200, t: 40, b: 50 }
+            };
+            
+            Plotly.react('prior-comparison-chart', data, layout, plotConfig);
+        }
+
+        // Event listeners
+        document.getElementById('lambda-slider').addEventListener('input', updateSaturationChart);
+        document.getElementById('kappa-slider').addEventListener('input', updateSaturationChart);
+        document.getElementById('slope-slider').addEventListener('input', updateSaturationChart);
+        document.getElementById('prior-dist-select').addEventListener('change', updatePriorParams);
+        document.getElementById('prior-compare-select').addEventListener('change', updatePriorComparison);
+
+        // Initialize on DOM ready
         document.addEventListener("DOMContentLoaded", function() {
+            // KaTeX
             renderMathInElement(document.body, {
                 delimiters: [
                     {left: "$$", right: "$$", display: true},
@@ -767,6 +1399,12 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                 ],
                 throwOnError: false
             });
+
+            // Initialize charts
+            updateSaturationChart();
+            initHillParamsChart();
+            updatePriorParams();
+            updatePriorComparison();
         });
     </script>
 </body>
