@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 
 # =============================================================================
@@ -19,9 +19,10 @@ from typing import Any
 class MediatorType(str, Enum):
     """Type of mediating variable based on observability."""
 
-    FULLY_LATENT = "fully_latent"
-    PARTIALLY_OBSERVED = "partially_observed"
-    FULLY_OBSERVED = "fully_observed"
+    FULLY_OBSERVED = "fully_observed"      # Every period has observation
+    PARTIALLY_OBSERVED = "partially_observed"  # Sparse point-in-time observations
+    AGGREGATED_SURVEY = "aggregated_survey"    # Temporally aggregated with known n
+    FULLY_LATENT = "fully_latent"    
 
 
 class CrossEffectType(str, Enum):
@@ -491,3 +492,106 @@ def inclusion_prob_selection_config(
         ),
         exclude_variables=confounders,
     )
+
+class MediatorObservationType(str, Enum):
+    """
+    How the mediator is observed.
+    
+    Extends the original MediatorType to add aggregated survey support.
+    """
+    FULLY_OBSERVED = "fully_observed"      # Every period has observation
+    PARTIALLY_OBSERVED = "partially_observed"  # Sparse point-in-time observations
+    AGGREGATED_SURVEY = "aggregated_survey"    # Temporally aggregated with known n
+    FULLY_LATENT = "fully_latent"          # Never observed
+
+
+class AggregatedSurveyLikelihood(str, Enum):
+    """Likelihood for aggregated survey observations."""
+    BINOMIAL = "binomial"      # Exact binomial (preferred)
+    NORMAL = "normal"          # Normal approximation with derived SE
+    BETA_BINOMIAL = "beta_binomial"  # Overdispersed binomial
+
+
+@dataclass(frozen=True)
+class AggregatedSurveyConfig:
+    """
+    Configuration for temporally aggregated survey observations.
+    
+    Used when surveys are fielded continuously over a period (e.g., monthly)
+    and results are aggregated, rather than point-in-time snapshots.
+    
+    Attributes
+    ----------
+    aggregation_map : dict[int, tuple[int, ...]]
+        Maps observation index to constituent time indices.
+        E.g., {0: (0, 1, 2, 3), 1: (4, 5, 6, 7)} for monthly surveys in weekly model.
+    sample_sizes : tuple[int, ...]
+        Number of respondents per survey wave. Length must match aggregation_map.
+    likelihood : AggregatedSurveyLikelihood
+        Which likelihood to use for the observation model.
+    design_effect : float
+        Survey design effect multiplier on variance (default 1.0).
+        Use >1 for clustered samples, complex weighting, etc.
+    aggregation_function : Literal["mean", "sum", "last"]
+        How to aggregate latent values within each period.
+        "mean" is typical for awareness (average state during fielding).
+    overdispersion_prior_sigma : float
+        Prior sigma for overdispersion parameter (beta-binomial only).
+    """
+    aggregation_map: dict[int, tuple[int, ...]]
+    sample_sizes: tuple[int, ...]
+    likelihood: AggregatedSurveyLikelihood = AggregatedSurveyLikelihood.BINOMIAL
+    design_effect: float = 1.0
+    aggregation_function: Literal["mean", "sum", "last"] = "mean"
+    overdispersion_prior_sigma: float = 0.1
+    
+    def __post_init__(self):
+        if len(self.sample_sizes) != len(self.aggregation_map):
+            raise ValueError(
+                f"sample_sizes length ({len(self.sample_sizes)}) must match "
+                f"aggregation_map length ({len(self.aggregation_map)})"
+            )
+        if self.design_effect <= 0:
+            raise ValueError("design_effect must be positive")
+
+
+@dataclass(frozen=True)
+class MediatorConfigExtended:
+    """
+    Extended MediatorConfig with aggregated survey support.
+    
+    This replaces the original MediatorConfig when aggregated surveys are needed.
+    All original fields are preserved for backward compatibility.
+    """
+    name: str
+    observation_type: MediatorObservationType = MediatorObservationType.PARTIALLY_OBSERVED
+    
+    # --- Original fields (from MediatorConfig) ---
+    # Media → Mediator effect prior
+    media_effect_constraint: str = "positive"  # "none", "positive", "negative"
+    media_effect_sigma: float = 1.0
+    
+    # Mediator → Outcome effect prior
+    outcome_effect_sigma: float = 1.0
+    
+    # Simple observation noise (for FULLY_OBSERVED and PARTIALLY_OBSERVED)
+    observation_noise_sigma: float = 0.1
+    
+    # Direct effect settings
+    allow_direct_effect: bool = True
+    direct_effect_sigma: float = 0.5
+    
+    # Transformations
+    apply_adstock: bool = True
+    apply_saturation: bool = True
+    
+    # --- New field for aggregated surveys ---
+    aggregated_survey_config: AggregatedSurveyConfig | None = None
+    
+    def __post_init__(self):
+        if (self.observation_type == MediatorObservationType.AGGREGATED_SURVEY 
+            and self.aggregated_survey_config is None):
+            raise ValueError(
+                "aggregated_survey_config is required when "
+                "observation_type is AGGREGATED_SURVEY"
+            )

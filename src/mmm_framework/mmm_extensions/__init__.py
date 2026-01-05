@@ -50,6 +50,9 @@ from .config import (
     NestedModelConfig,
     MultivariateModelConfig,
     CombinedModelConfig,
+    MediatorObservationType,
+    AggregatedSurveyLikelihood,
+    AggregatedSurveyConfig,
     # Variable Selection
     VariableSelectionMethod,
     HorseshoeConfig,
@@ -73,6 +76,8 @@ from .builders import (
     NestedModelConfigBuilder,
     MultivariateModelConfigBuilder,
     CombinedModelConfigBuilder,
+    AggregatedSurveyConfigBuilder,
+    survey_awareness_mediator,
     awareness_mediator,
     foot_traffic_mediator,
     cannibalization_effect,
@@ -119,6 +124,8 @@ if TYPE_CHECKING:
         build_control_effects_with_selection,
         compute_inclusion_probabilities,
         summarize_variable_selection,
+        build_aggregated_survey_observation,
+        compute_survey_observation_indices,
     )
     from .models import (
         BaseExtendedMMM,

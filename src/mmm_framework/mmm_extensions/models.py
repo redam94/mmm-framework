@@ -40,6 +40,7 @@ from .components import (
     build_linear_effect,
     build_gaussian_likelihood,
     build_partial_observation_model,
+    build_aggregated_survey_observation,
     build_multivariate_likelihood,
     build_cross_effect_matrix,
     compute_cross_effect_contribution,
@@ -273,25 +274,32 @@ class NestedMMM(BaseExtendedMMM):
         mediator_latent = alpha_med + media_effect
 
         # Observation model
-        if med_config.mediator_type != MediatorType.FULLY_LATENT:
-            if med_name in self.mediator_data:
-                obs_data = self.mediator_data[med_name]
-                mask = self.mediator_masks.get(
-                    med_name,
-                    (
-                        ~np.isnan(obs_data)
-                        if obs_data is not None
-                        else np.zeros(self.n_obs, dtype=bool)
-                    ),
-                )
+        if med_config.mediator_type == MediatorType.FULLY_LATENT:
+            pass  # No observation
+        
+        elif med_config.mediator_type == MediatorType.AGGREGATED_SURVEY:
+            # NEW: Aggregated survey observation
+            build_aggregated_survey_observation(
+                name=med_name,
+                latent=mediator_latent,
+                observed_data=self.mediator_data[med_name],
+                config=med_config.aggregated_survey_config,
+                is_proportion=True,
+            )
+        
+        elif med_name in self.mediator_data:
+            # Existing: point observation model
+            obs_data = self.mediator_data[med_name]
+            mask = self.mediator_masks.get(med_name, ~np.isnan(obs_data))
+        
 
-                build_partial_observation_model(
-                    med_name,
-                    mediator_latent,
-                    obs_data,
-                    mask,
-                    med_config.observation_noise_sigma,
-                )
+            build_partial_observation_model(
+                med_name,
+                mediator_latent,
+                obs_data,
+                mask,
+                med_config.observation_noise_sigma,
+            )
 
         # Store for diagnostics
         pm.Deterministic(f"{med_name}_latent", mediator_latent, dims="obs")

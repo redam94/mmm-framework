@@ -8,7 +8,10 @@ Each builder follows the pattern:
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Self, Literal
+
+import numpy as np
+
 from .config import (
     # Enums
     MediatorType,
@@ -30,6 +33,13 @@ from .config import (
     SpikeSlabConfig,
     LassoConfig,
     VariableSelectionConfig,
+    AggregatedSurveyConfig,
+    AggregatedSurveyLikelihood,
+    MediatorObservationType,
+    MediatorConfigExtended
+)
+from .components import (
+    compute_survey_observation_indices
 )
 
 
@@ -321,7 +331,16 @@ class MediatorConfigBuilder:
             adstock=self._adstock,
             saturation=self._saturation,
         )
-
+    
+    def aggregated_survey(self) -> Self:
+        """Mediator observed via temporally aggregated surveys."""
+        self._type = MediatorObservationType.AGGREGATED_SURVEY
+        return self
+    
+    def with_survey_config(self, config: AggregatedSurveyConfig) -> Self:
+        """Set aggregated survey configuration."""
+        self._aggregated_survey_config = config
+        return self
 
 # =============================================================================
 # Outcome Builder
@@ -1366,5 +1385,394 @@ def dense_controls(
         VariableSelectionConfigBuilder()
         .bayesian_lasso(regularization=regularization)
         .exclude_confounders(*confounders)
+        .build()
+    )
+
+class AggregatedSurveyConfigBuilder:
+    """Builder for AggregatedSurveyConfig."""
+    
+    def __init__(self):
+        self._aggregation_map: dict[int, tuple[int, ...]] = {}
+        self._sample_sizes: list[int] = []
+        self._likelihood = AggregatedSurveyLikelihood.BINOMIAL
+        self._design_effect = 1.0
+        self._aggregation_function: Literal["mean", "sum", "last"] = "mean"
+        self._overdispersion_prior_sigma = 0.1
+    
+    # --- Aggregation setup ---
+    
+    def with_aggregation_map(
+        self, 
+        aggregation_map: dict[int, tuple[int, ...] | list[int]]
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Set the aggregation map directly."""
+        self._aggregation_map = {
+            k: tuple(v) for k, v in aggregation_map.items()
+        }
+        return self
+    
+    def from_frequencies(
+        self,
+        model_frequency: str,
+        survey_frequency: str,
+        n_periods: int,
+        start_date: str | None = None,
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Compute aggregation map from frequency specifications."""
+        self._aggregation_map = compute_survey_observation_indices(
+            model_frequency, survey_frequency, n_periods, start_date
+        )
+        return self
+    
+    def monthly_in_weekly_model(
+        self, 
+        n_weeks: int,
+        start_date: str | None = None,
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Convenience for monthly surveys in weekly model."""
+        return self.from_frequencies("weekly", "monthly", n_weeks, start_date)
+    
+    def quarterly_in_weekly_model(
+        self,
+        n_weeks: int,
+        start_date: str | None = None,
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Convenience for quarterly surveys in weekly model."""
+        return self.from_frequencies("weekly", "quarterly", n_weeks, start_date)
+    
+    # --- Sample sizes ---
+    
+    def with_sample_sizes(
+        self, 
+        sample_sizes: list[int] | np.ndarray
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Set sample sizes per survey wave."""
+        self._sample_sizes = list(sample_sizes)
+        return self
+    
+    def with_constant_sample_size(
+        self, 
+        n: int
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Set constant sample size across all waves."""
+        n_waves = len(self._aggregation_map)
+        if n_waves == 0:
+            raise ValueError("Set aggregation_map before sample sizes")
+        self._sample_sizes = [n] * n_waves
+        return self
+    
+    # --- Likelihood ---
+    
+    def binomial(self) -> "AggregatedSurveyConfigBuilder":
+        """Use exact binomial likelihood (default, preferred)."""
+        self._likelihood = AggregatedSurveyLikelihood.BINOMIAL
+        return self
+    
+    def normal_approximation(self) -> "AggregatedSurveyConfigBuilder":
+        """Use normal approximation with derived SEs."""
+        self._likelihood = AggregatedSurveyLikelihood.NORMAL
+        return self
+    
+    def beta_binomial(
+        self, 
+        overdispersion_prior_sigma: float = 0.1
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Use beta-binomial for overdispersed data."""
+        self._likelihood = AggregatedSurveyLikelihood.BETA_BINOMIAL
+        self._overdispersion_prior_sigma = overdispersion_prior_sigma
+        return self
+    
+    # --- Design effect ---
+    
+    def with_design_effect(
+        self, 
+        deff: float
+    ) -> "AggregatedSurveyConfigBuilder":
+        """
+        Set survey design effect.
+        
+        Use >1.0 for clustered samples, complex weighting, etc.
+        Common values: 1.5-2.5 for area probability samples.
+        """
+        self._design_effect = deff
+        return self
+    
+    def with_effective_sample_size(
+        self,
+        nominal_n: int,
+        effective_n: int,
+    ) -> "AggregatedSurveyConfigBuilder":
+        """Compute design effect from nominal and effective sample sizes."""
+        self._design_effect = nominal_n / effective_n
+        return self
+    
+    # --- Aggregation function ---
+    
+    def aggregate_by_mean(self) -> "AggregatedSurveyConfigBuilder":
+        """Average latent values within survey period (default)."""
+        self._aggregation_function = "mean"
+        return self
+    
+    def aggregate_by_last(self) -> "AggregatedSurveyConfigBuilder":
+        """Use last latent value in survey period."""
+        self._aggregation_function = "last"
+        return self
+    
+    # --- Build ---
+    
+    def build(self) -> AggregatedSurveyConfig:
+        """Build the configuration."""
+        if not self._aggregation_map:
+            raise ValueError("aggregation_map is required")
+        if not self._sample_sizes:
+            raise ValueError("sample_sizes is required")
+        
+        return AggregatedSurveyConfig(
+            aggregation_map=self._aggregation_map,
+            sample_sizes=tuple(self._sample_sizes),
+            likelihood=self._likelihood,
+            design_effect=self._design_effect,
+            aggregation_function=self._aggregation_function,
+            overdispersion_prior_sigma=self._overdispersion_prior_sigma,
+        )
+
+
+class MediatorConfigBuilderExtended:
+    """
+    Extended MediatorConfigBuilder with aggregated survey support.
+    
+    Drop-in replacement for MediatorConfigBuilder that adds methods
+    for configuring aggregated survey observations.
+    
+    Example
+    -------
+    >>> config = (
+    ...     MediatorConfigBuilderExtended("brand_awareness")
+    ...     .aggregated_survey()
+    ...     .with_survey_config(
+    ...         AggregatedSurveyConfigBuilder()
+    ...         .monthly_in_weekly_model(104)
+    ...         .with_sample_sizes([500, 450, 520, ...])
+    ...         .binomial()
+    ...         .build()
+    ...     )
+    ...     .with_positive_media_effect()
+    ...     .build()
+    ... )
+    """
+    
+    def __init__(self, name: str):
+        self._name = name
+        self._observation_type = MediatorObservationType.PARTIALLY_OBSERVED
+        self._media_effect_constraint = "positive"
+        self._media_effect_sigma = 1.0
+        self._outcome_effect_sigma = 1.0
+        self._observation_noise_sigma = 0.1
+        self._allow_direct_effect = True
+        self._direct_effect_sigma = 0.5
+        self._apply_adstock = True
+        self._apply_saturation = True
+        self._aggregated_survey_config: AggregatedSurveyConfig | None = None
+    
+    # --- Observation type ---
+    
+    def fully_latent(self) -> "MediatorConfigBuilderExtended":
+        """Mediator is never observed."""
+        self._observation_type = MediatorObservationType.FULLY_LATENT
+        return self
+    
+    def partially_observed(
+        self, 
+        observation_noise: float = 0.1
+    ) -> "MediatorConfigBuilderExtended":
+        """Point-in-time observations (sparse)."""
+        self._observation_type = MediatorObservationType.PARTIALLY_OBSERVED
+        self._observation_noise_sigma = observation_noise
+        return self
+    
+    def fully_observed(
+        self, 
+        observation_noise: float = 0.05
+    ) -> "MediatorConfigBuilderExtended":
+        """Observations every period."""
+        self._observation_type = MediatorObservationType.FULLY_OBSERVED
+        self._observation_noise_sigma = observation_noise
+        return self
+    
+    def aggregated_survey(self) -> "MediatorConfigBuilderExtended":
+        """
+        Mediator observed via temporally aggregated surveys.
+        
+        Must call with_survey_config() after this.
+        """
+        self._observation_type = MediatorObservationType.AGGREGATED_SURVEY
+        return self
+    
+    def with_survey_config(
+        self, 
+        config: AggregatedSurveyConfig
+    ) -> "MediatorConfigBuilderExtended":
+        """Set aggregated survey configuration."""
+        self._aggregated_survey_config = config
+        return self
+    
+    # --- Effect priors (same as original) ---
+    
+    def with_positive_media_effect(
+        self, 
+        sigma: float = 1.0
+    ) -> "MediatorConfigBuilderExtended":
+        """Media increases mediator."""
+        self._media_effect_constraint = "positive"
+        self._media_effect_sigma = sigma
+        return self
+    
+    def with_unconstrained_media_effect(
+        self, 
+        sigma: float = 1.0
+    ) -> "MediatorConfigBuilderExtended":
+        """No sign constraint on media effect."""
+        self._media_effect_constraint = "none"
+        self._media_effect_sigma = sigma
+        return self
+    
+    def with_direct_effect(
+        self, 
+        sigma: float = 0.5
+    ) -> "MediatorConfigBuilderExtended":
+        """Allow direct media → outcome effect."""
+        self._allow_direct_effect = True
+        self._direct_effect_sigma = sigma
+        return self
+    
+    def without_direct_effect(self) -> "MediatorConfigBuilderExtended":
+        """All media effect flows through mediator."""
+        self._allow_direct_effect = False
+        return self
+    
+    # --- Transformations ---
+    
+    def with_adstock(self) -> "MediatorConfigBuilderExtended":
+        """Apply adstock to media → mediator pathway."""
+        self._apply_adstock = True
+        return self
+    
+    def without_adstock(self) -> "MediatorConfigBuilderExtended":
+        """No adstock on media → mediator pathway."""
+        self._apply_adstock = False
+        return self
+    
+    def with_saturation(self) -> "MediatorConfigBuilderExtended":
+        """Apply saturation to media → mediator pathway."""
+        self._apply_saturation = True
+        return self
+    
+    def without_saturation(self) -> "MediatorConfigBuilderExtended":
+        """No saturation on media → mediator pathway."""
+        self._apply_saturation = False
+        return self
+    
+    # --- Build ---
+    
+    def build(self) -> MediatorConfigExtended:
+        """Build the extended mediator configuration."""
+        return MediatorConfigExtended(
+            name=self._name,
+            observation_type=self._observation_type,
+            media_effect_constraint=self._media_effect_constraint,
+            media_effect_sigma=self._media_effect_sigma,
+            outcome_effect_sigma=self._outcome_effect_sigma,
+            observation_noise_sigma=self._observation_noise_sigma,
+            allow_direct_effect=self._allow_direct_effect,
+            direct_effect_sigma=self._direct_effect_sigma,
+            apply_adstock=self._apply_adstock,
+            apply_saturation=self._apply_saturation,
+            aggregated_survey_config=self._aggregated_survey_config,
+        )
+
+
+# =============================================================================
+# FACTORY FUNCTIONS
+# =============================================================================
+
+def survey_awareness_mediator(
+    name: str = "awareness",
+    n_model_periods: int = 104,
+    sample_sizes: list[int] | int = 500,
+    model_frequency: str = "weekly",
+    survey_frequency: str = "monthly",
+    start_date: str | None = None,
+    design_effect: float = 1.0,
+    use_beta_binomial: bool = False,
+) -> MediatorConfigExtended:
+    """
+    Create awareness mediator with aggregated survey observation model.
+    
+    Convenience factory for the common case of brand tracking surveys
+    fielded continuously over monthly periods.
+    
+    Parameters
+    ----------
+    name : str
+        Mediator name.
+    n_model_periods : int
+        Number of periods in the model (e.g., weeks).
+    sample_sizes : list[int] or int
+        Sample sizes per survey wave. If int, uses constant size.
+    model_frequency : str
+        Model time frequency ("weekly" or "daily").
+    survey_frequency : str
+        Survey aggregation frequency ("monthly" or "quarterly").
+    start_date : str, optional
+        Start date for calendar-based aggregation.
+    design_effect : float
+        Survey design effect (default 1.0).
+    use_beta_binomial : bool
+        If True, use beta-binomial for overdispersion.
+    
+    Returns
+    -------
+    MediatorConfigExtended
+        Configured mediator with aggregated survey observation.
+    
+    Example
+    -------
+    >>> mediator = survey_awareness_mediator(
+    ...     name="brand_awareness",
+    ...     n_model_periods=104,  # 2 years weekly
+    ...     sample_sizes=[500, 480, 520, 490, ...],  # per month
+    ...     design_effect=1.5,  # clustered sample
+    ... )
+    """
+    # Build survey config
+    survey_builder = (
+        AggregatedSurveyConfigBuilder()
+        .from_frequencies(model_frequency, survey_frequency, n_model_periods, start_date)
+    )
+    
+    # Handle sample sizes
+    if isinstance(sample_sizes, int):
+        survey_builder.with_constant_sample_size(sample_sizes)
+    else:
+        survey_builder.with_sample_sizes(sample_sizes)
+    
+    # Set design effect
+    survey_builder.with_design_effect(design_effect)
+    
+    # Set likelihood
+    if use_beta_binomial:
+        survey_builder.beta_binomial()
+    else:
+        survey_builder.binomial()
+    
+    survey_config = survey_builder.build()
+    
+    # Build mediator config
+    return (
+        MediatorConfigBuilderExtended(name)
+        .aggregated_survey()
+        .with_survey_config(survey_config)
+        .with_positive_media_effect()
+        .with_direct_effect()
         .build()
     )
