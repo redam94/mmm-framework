@@ -63,7 +63,7 @@
             font-weight: 500;
             transition: var(--transition-smooth);
         }
-        .nav-links a:hover { color: var(--color-primary); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
 
         /* Hero */
         .hero {
@@ -444,12 +444,11 @@
         <div class="container nav-content">
             <a href="#" class="logo">MMM Framework</a>
             <ul class="nav-links">
-                <li><a href="#problem">The Problem</a></li>
-                <li><a href="#models">Models</a></li>
+                <li><a href="#" class="active">Home</a></li>
                 <li><a href="variable-selection.html">Variable Selection</a></li>
-                <li><a href="#demo">Interactive Demo</a></li>
                 <li><a href="technical-guide.html">Technical Guide</a></li>
                 <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>

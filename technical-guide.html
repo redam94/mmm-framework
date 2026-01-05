@@ -134,6 +134,7 @@
                 <li><a href="variable-selection.html">Variable Selection</a></li>
                 <li><a href="#" class="active">Technical Guide</a></li>
                 <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
@@ -1113,17 +1114,21 @@ beta_g = mu_beta + tau * offset_g</code></pre>
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             font: { family: 'Source Sans 3, sans-serif', color: colors.text },
-            margin: { l: 50, r: 180, t: 30, b: 50 },
+            margin: { l: 50, r: 100, t: 30, b: 50 },
             showlegend: true,
             legend: { 
-                x: 1.02, 
+                x: 1.06, 
                 y: 1, 
                 xanchor: 'left',
                 yanchor: 'top',
                 bgcolor: 'rgba(255,255,255,0.95)',
                 bordercolor: colors.border,
                 borderwidth: 1,
-                font: { size: 11 }
+                font: { size: 11 },
+                orientation: "h",
+                entrywidthmode: "fraction", // Use percentages (0 to 1) instead of pixels
+                entrywidth: .51,
+ 
             }
         };
 
@@ -1805,7 +1810,7 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                 fill: 'tozeroy',
                 fillcolor: 'rgba(143, 168, 106, 0.3)',
                 line: { color: colors.primary, width: 3 },
-                name: `${info.name}(${paramStr})`
+                name: `${info.name}<br>(${paramStr})`
             }];
             
             // Add mean line if calculable
@@ -1857,9 +1862,9 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                     title = 'Media Coefficient Priors (must be positive)';
                     const xMedia = linspace(0.001, 2, 200);
                     data = [
-                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HalfNormal(0.3)', line: { color: colors.primary, width: 2 } },
-                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HalfNormal(0.5)', line: { color: colors.accent, width: 2 } },
-                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 1.0)), name: 'HalfNormal(1.0)', line: { color: colors.warning, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HN(0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HN(0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 1.0)), name: 'HN(1.0)', line: { color: colors.warning, width: 2 } },
                         { x: xMedia, y: xMedia.map(x => priorPDFs.gamma(x, 2, 2)), name: 'Gamma(2,2)', line: { color: colors.danger, width: 2, dash: 'dash' } }
                     ];
                     break;
@@ -1868,10 +1873,10 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                     title = 'Adstock Decay Priors (bounded 0-1)';
                     const xAdstock = linspace(0.001, 0.999, 200);
                     data = [
-                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 3)), name: 'Beta(1,3) low', line: { color: colors.primary, width: 2 } },
-                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 2, 2)), name: 'Beta(2,2) centered', line: { color: colors.accent, width: 2 } },
-                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 3, 1)), name: 'Beta(3,1) high', line: { color: colors.warning, width: 2 } },
-                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 1)), name: 'Beta(1,1) uniform', line: { color: colors.textMuted, width: 2, dash: 'dash' } }
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 3)), name: 'B(1,3) low', line: { color: colors.primary, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 2, 2)), name: 'B(2,2) centered', line: { color: colors.accent, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 3, 1)), name: 'B(3,1) high', line: { color: colors.warning, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 1)), name: 'B(1,1) uniform', line: { color: colors.textMuted, width: 2, dash: 'dash' } }
                     ];
                     break;
                 case 'control':
@@ -1879,9 +1884,9 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                     title = 'Control Coefficient Priors (can be +/-)';
                     const xControl = linspace(-2, 2, 200);
                     data = [
-                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.3)), name: 'Normal(0,0.3)', line: { color: colors.primary, width: 2 } },
-                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.5)), name: 'Normal(0,0.5)', line: { color: colors.accent, width: 2 } },
-                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 1.0)), name: 'Normal(0,1.0)', line: { color: colors.warning, width: 2 } }
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.3)), name: 'N(0,0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.5)), name: 'N(0,0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 1.0)), name: 'N(0,1.0)', line: { color: colors.warning, width: 2 } }
                     ];
                     break;
                 case 'noise':
@@ -1889,9 +1894,9 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                     title = 'Noise/Scale Parameter Priors';
                     const xNoise = linspace(0.001, 2, 200);
                     data = [
-                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HalfNormal(0.3)', line: { color: colors.primary, width: 2 } },
-                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HalfNormal(0.5)', line: { color: colors.accent, width: 2 } },
-                        { x: xNoise, y: xNoise.map(x => priorPDFs.exponential(x, 2)), name: 'Exponential(2)', line: { color: colors.warning, width: 2, dash: 'dash' } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HN(0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HN(0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.exponential(x, 2)), name: 'Exp(2)', line: { color: colors.warning, width: 2, dash: 'dash' } },
                         { x: xNoise, y: xNoise.map(x => priorPDFs.gamma(x, 2, 4)), name: 'Gamma(2,4)', line: { color: colors.danger, width: 2, dash: 'dash' } }
                     ];
                     break;
@@ -1912,9 +1917,12 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                     bgcolor: 'rgba(255,255,255,0.95)',
                     bordercolor: colors.border,
                     borderwidth: 1,
-                    font: { size: 11 }
+                    font: { size: 11 },
+                    orientation: "h",
+                    entrywidth:140,  // Sets a fixed width (in pixels) for each entry
+                    entrywidthmode: "pixels"
                 },
-                margin: { l: 50, r: 200, t: 40, b: 50 }
+                margin: { l: 50, r: 80, t: 40, b: 50 }
             };
             
             Plotly.react('prior-comparison-chart', data, layout, plotConfig);

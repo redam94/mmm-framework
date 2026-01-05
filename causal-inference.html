@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference Guide | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
+            font-size: 17px;
+        }
+
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; }
+        
+        .sidebar {
+            position: sticky; top: 5rem; height: calc(100vh - 5rem);
+            overflow-y: auto; padding: 2rem; border-right: 1px solid var(--color-border); background: var(--color-bg);
+        }
+        .sidebar h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: 1rem; margin-top: 1.5rem; }
+        .sidebar h3:first-child { margin-top: 0; }
+        .sidebar-nav { list-style: none; }
+        .sidebar-nav a { display: block; padding: 0.5rem 0; color: var(--color-text-muted); text-decoration: none; font-size: 0.95rem; transition: var(--transition-smooth); border-left: 2px solid transparent; padding-left: 1rem; margin-left: -1rem; }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); }
+
+        .main-content { padding: 3rem 4rem; max-width: 900px; }
+        .main-content h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; color: var(--color-text); }
+        .main-content h2 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); color: var(--color-text); }
+        .main-content h2:first-of-type { border-top: none; margin-top: 2rem; }
+        .main-content h3 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--color-text); }
+        .main-content h4 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--color-text-muted); }
+        .lead { font-size: 1.15rem; color: var(--color-text-muted); margin-bottom: 2rem; }
+        p { margin-bottom: 1rem; }
+
+        .math-block { background: var(--color-bg-alt); padding: 1.5rem; border-radius: 8px; margin: 1.5rem 0; overflow-x: auto; position: relative; }
+        .equation-label { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); font-size: 0.9rem; }
+
+        pre { background: var(--color-bg-alt); padding: 1.5rem; border-radius: 8px; overflow-x: auto; margin: 1.5rem 0; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+        p code, li code { background: var(--color-bg-alt); padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--color-surface); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm); }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        th { background: var(--color-bg-alt); font-weight: 600; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .definition { background: rgba(106, 143, 168, 0.1); border-left: 4px solid var(--color-accent); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .definition h4 { color: var(--color-accent-dark); margin-top: 0; margin-bottom: 0.5rem; }
+        .warning { background: rgba(201, 112, 103, 0.1); border-left: 4px solid var(--color-danger); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .warning h4 { color: var(--color-danger); margin-top: 0; margin-bottom: 0.5rem; }
+        .note { background: rgba(143, 168, 106, 0.1); border-left: 4px solid var(--color-primary); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .note h4 { color: var(--color-primary-dark); margin-top: 0; margin-bottom: 0.5rem; }
+
+        .dag-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .dag-box .mermaid { background: transparent; margin: 0; padding: 0; }
+        .dag-box .mermaid svg { max-width: 100%; height: auto; }
+
+        .chart-container { width: 100%; height: 350px; margin: 1rem 0; }
+        .interactive-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .interactive-box h4 { margin-top: 0; margin-bottom: 1rem; color: var(--color-text); }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .control-row label { font-weight: 500; min-width: 120px; }
+        .control-row input[type="range"] { flex: 1; min-width: 150px; max-width: 300px; }
+        .control-row .value { font-family: 'JetBrains Mono', monospace; background: var(--color-bg-alt); padding: 0.25rem 0.5rem; border-radius: 4px; min-width: 60px; text-align: center; }
+        .control-row select { padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); }
+
+        ul, ol { margin: 1rem 0 1rem 1.5rem; }
+        li { margin-bottom: 0.5rem; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0; }
+        .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 2rem 0; }
+        .concept-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; }
+        .concept-card h4 { margin-top: 0; margin-bottom: 0.5rem; color: var(--color-primary-dark); }
+        .concept-card.level-1 { border-left: 4px solid var(--color-primary); }
+        .concept-card.level-2 { border-left: 4px solid var(--color-accent); }
+        .concept-card.level-3 { border-left: 4px solid var(--color-warning); }
+        
+        .ladder-container { display: flex; flex-direction: column; gap: 1rem; }
+        .ladder-rung { display: grid; grid-template-columns: 100px 1fr; gap: 1rem; align-items: center; padding: 1rem; border-radius: 8px; }
+        .ladder-rung.rung-1 { background: rgba(143, 168, 106, 0.15); }
+        .ladder-rung.rung-2 { background: rgba(106, 143, 168, 0.15); }
+        .ladder-rung.rung-3 { background: rgba(212, 168, 106, 0.15); }
+        .ladder-level { font-weight: 700; font-size: 1.2rem; }
+
+        .rule-box { background: var(--color-surface); border: 2px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .rule-box h4 { margin-top: 0; color: var(--color-accent-dark); }
+        .rule-box .rule-formula { background: var(--color-bg-alt); padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 1.1rem; text-align: center; }
+
+        @media (max-width: 1024px) {
+            .page-layout { grid-template-columns: 1fr; }
+            .sidebar { position: relative; top: auto; height: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
+            .main-content { padding: 2rem; }
+            .two-col, .three-col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="#" class="active">Causal Inference</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Foundations</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#introduction">Why Causal Inference?</a></li>
+                <li><a href="#fundamental-problem">The Fundamental Problem</a></li>
+                <li><a href="#scm">Structural Causal Models</a></li>
+            </ul>
+
+            <h3>Graphical Models</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#dags">DAGs &amp; Paths</a></li>
+                <li><a href="#d-separation">d-Separation</a></li>
+                <li><a href="#building-blocks">Causal Building Blocks</a></li>
+            </ul>
+
+            <h3>The Causal Hierarchy</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#ladder">Pearl's Ladder</a></li>
+                <li><a href="#association">L1: Association</a></li>
+                <li><a href="#intervention">L2: Intervention</a></li>
+                <li><a href="#counterfactual">L3: Counterfactual</a></li>
+            </ul>
+
+            <h3>Do-Calculus</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#do-operator">The do-Operator</a></li>
+                <li><a href="#do-rules">Three Rules</a></li>
+                <li><a href="#do-examples">Worked Examples</a></li>
+            </ul>
+
+            <h3>Identification</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#identification">What is Identification?</a></li>
+                <li><a href="#backdoor">Backdoor Criterion</a></li>
+                <li><a href="#frontdoor">Frontdoor Criterion</a></li>
+                <li><a href="#instruments">Instrumental Variables</a></li>
+            </ul>
+
+            <h3>Counterfactuals</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#counterfactual-def">Definition</a></li>
+                <li><a href="#counterfactual-compute">Computing Counterfactuals</a></li>
+                <li><a href="#counterfactual-mmm">MMM Applications</a></li>
+            </ul>
+
+            <h3>Common Pitfalls</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#confounding">Confounding</a></li>
+                <li><a href="#collider">Collider Bias</a></li>
+                <li><a href="#selection">Selection Bias</a></li>
+                <li><a href="#overcontrol">Overcontrol Bias</a></li>
+            </ul>
+
+            <h3>MMM Applications</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#mmm-dag">MMM as a DAG</a></li>
+                <li><a href="#mmm-identification">Media Effect Identification</a></li>
+                <li><a href="#mmm-counterfactual">Contribution Analysis</a></li>
+                <li><a href="#specification-shopping">Specification Shopping</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Causal Inference for Analysts</h1>
+            <p class="lead">
+                A practical guide to causal reasoning using Judea Pearl's framework of structural causal models,
+                do-calculus, and counterfactual analysis—with applications to Marketing Mix Modeling.
+            </p>
+
+            <div class="note">
+                <h4>Key References</h4>
+                <p style="margin-bottom: 0;">
+                    This guide draws primarily from Pearl, Glymour, &amp; Jewell (2016) <em>Causal Inference in Statistics: A Primer</em>,
+                    Pearl (2009) <em>Causality</em>, and Pearl &amp; Mackenzie (2018) <em>The Book of Why</em>.
+                    For MMM-specific applications, see also Cunningham (2021) <em>Causal Inference: The Mixtape</em>.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="introduction">Why Causal Inference?</h2>
+            
+            <p>
+                Marketing Mix Modeling asks fundamentally <strong>causal</strong> questions: <em>What is the effect 
+                of TV advertising on sales?</em> <em>If we had spent more on digital, how much more would we have sold?</em>
+                These questions cannot be answered by correlation alone.
+            </p>
+
+            <div class="two-col">
+                <div class="concept-card">
+                    <h4>Correlation ≠ Causation</h4>
+                    <p>
+                        Ice cream sales and drowning deaths are correlated. But eating ice cream doesn't cause drowning—
+                        both are caused by summer heat. Confusing correlation with causation leads to wrong decisions.
+                    </p>
+                </div>
+                <div class="concept-card">
+                    <h4>Prediction ≠ Intervention</h4>
+                    <p>
+                        A model can predict sales perfectly from ad spend historically, yet give completely wrong answers 
+                        about what happens if we <em>change</em> ad spend. Prediction is about patterns; causation is about mechanisms.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                The goal of causal inference is to answer <strong>interventional</strong> and <strong>counterfactual</strong> 
+                questions from observational data—when experiments are impossible or impractical.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="fundamental-problem">The Fundamental Problem of Causal Inference</h2>
+
+            <div class="definition">
+                <h4>The Fundamental Problem</h4>
+                <p style="margin-bottom: 0;">
+                    For any individual unit at any moment in time, we can observe at most one potential outcome—
+                    the outcome under the treatment actually received. The outcome under the alternative treatment 
+                    is forever unobservable. This missing data problem is the fundamental challenge of causal inference.
+                </p>
+            </div>
+
+            <p>
+                Consider a single week where we spent 100K USD on TV. We observed sales of 1M USD. 
+                What would sales have been if we had spent 0 USD on TV that week? We can never observe this directly—
+                we can't rewind time and run the alternative scenario.
+            </p>
+
+            <div class="math-block">
+                $$\text{Causal Effect} = Y^{a=1} - Y^{a=0}$$
+                <span class="equation-label">(individual effect)</span>
+            </div>
+
+            <p>
+                Where \(Y^{a=1}\) is the potential outcome under treatment and \(Y^{a=0}\) is the potential outcome 
+                under control. We observe one; the other is the <strong>counterfactual</strong>.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="scm">Structural Causal Models</h2>
+
+            <p>
+                A <strong>Structural Causal Model (SCM)</strong> is a mathematical object that encodes causal relationships.
+                It consists of three components:
+            </p>
+
+            <div class="definition">
+                <h4>Definition: Structural Causal Model</h4>
+                <p>An SCM \(\mathcal{M} = \langle U, V, F \rangle\) consists of:</p>
+                <ul style="margin-bottom: 0;">
+                    <li><strong>U</strong>: Exogenous variables (external, not caused by anything in the model)</li>
+                    <li><strong>V</strong>: Endogenous variables (determined by variables in the model)</li>
+                    <li><strong>F</strong>: Structural equations \(v_i = f_i(\text{pa}_i, u_i)\) for each \(v_i \in V\)</li>
+                </ul>
+            </div>
+
+            <h4>Example: Simple Marketing SCM</h4>
+            <div class="math-block">
+                $$\begin{aligned}
+                \text{Budget} &= U_{\text{budget}} \\
+                \text{AdSpend} &= f_1(\text{Budget}, U_{\text{ad}}) \\
+                \text{Awareness} &= f_2(\text{AdSpend}, U_{\text{aware}}) \\
+                \text{Sales} &= f_3(\text{Awareness}, \text{AdSpend}, U_{\text{sales}})
+                \end{aligned}$$
+            </div>
+
+            <p>
+                The structural equations are <strong>asymmetric</strong>: \(\text{AdSpend} = f(\text{Budget})\) means 
+                Budget causes AdSpend, not the reverse. This asymmetry encodes the direction of causation.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="dags">Directed Acyclic Graphs (DAGs)</h2>
+
+            <p>
+                Every SCM implies a <strong>Directed Acyclic Graph (DAG)</strong> where nodes are variables and 
+                edges point from causes to effects. DAGs provide a visual language for causal reasoning.
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph LR
+                    B[Budget] --> A[Ad Spend]
+                    A --> W[Awareness]
+                    A --> S[Sales]
+                    W --> S
+                    
+                    style B fill:#f0f7e6,stroke:#6d8a4a
+                    style A fill:#e6f0f7,stroke:#4a6d8a
+                    style W fill:#f7f0e6,stroke:#8a6d4a
+                    style S fill:#f0e6f7,stroke:#6d4a8a
+                </div>
+                <p style="text-align: center; margin-top: 1rem; color: var(--color-text-muted);">
+                    Budget → Ad Spend → Awareness → Sales, with a direct path Ad Spend → Sales
+                </p>
+            </div>
+
+            <h3 id="d-separation">d-Separation</h3>
+
+            <p>
+                <strong>d-separation</strong> is a graphical criterion for reading conditional independence from a DAG.
+                Two variables are d-separated (conditionally independent) given a set Z if every path between them is "blocked."
+            </p>
+
+            <div class="definition">
+                <h4>Path Blocking Rules</h4>
+                <p>A path is <strong>blocked</strong> by conditioning set Z if:</p>
+                <ol style="margin-bottom: 0;">
+                    <li>The path contains a <strong>chain</strong> A → B → C or <strong>fork</strong> A ← B → C, and B ∈ Z</li>
+                    <li>The path contains a <strong>collider</strong> A → B ← C, and B ∉ Z (and no descendant of B is in Z)</li>
+                </ol>
+            </div>
+
+            <!-- ================================================================== -->
+            <h3 id="building-blocks">The Three Causal Building Blocks</h3>
+
+            <div class="three-col">
+                <div class="concept-card level-1">
+                    <h4>Chain (Mediation)</h4>
+                    <div class="dag-box" style="padding: 1rem; margin: 0.5rem 0;">
+                        <div class="mermaid">
+                        graph LR
+                            A((A)) --> B((B)) --> C((C))
+                        </div>
+                    </div>
+                    <p>A causes C through B. Conditioning on B blocks the path from A to C.</p>
+                    <p><strong>Example:</strong> Ad → Awareness → Sales</p>
+                </div>
+                <div class="concept-card level-2">
+                    <h4>Fork (Confounding)</h4>
+                    <div class="dag-box" style="padding: 1rem; margin: 0.5rem 0;">
+                        <div class="mermaid">
+                        graph LR
+                            B((B)) --> A((A))
+                            B --> C((C))
+                        </div>
+                    </div>
+                    <p>B causes both A and C, creating spurious correlation. Conditioning on B blocks this.</p>
+                    <p><strong>Example:</strong> Season → Ice Cream, Season → Drowning</p>
+                </div>
+                <div class="concept-card level-3">
+                    <h4>Collider (Selection)</h4>
+                    <div class="dag-box" style="padding: 1rem; margin: 0.5rem 0;">
+                        <div class="mermaid">
+                        graph LR
+                            A((A)) --> B((B))
+                            C((C)) --> B
+                        </div>
+                    </div>
+                    <p>A and C both cause B. They're independent, but conditioning on B creates spurious association.</p>
+                    <p><strong>Example:</strong> Talent → Hollywood, Beauty → Hollywood</p>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="ladder">Pearl's Ladder of Causation</h2>
+
+            <p>
+                Pearl's <strong>Ladder of Causation</strong> (also called the Causal Hierarchy) describes three levels 
+                of causal reasoning, each requiring different information and enabling different queries.
+            </p>
+
+            <div class="ladder-container">
+                <div class="ladder-rung rung-3">
+                    <div class="ladder-level" style="color: var(--color-warning);">Level 3</div>
+                    <div>
+                        <strong>Counterfactuals (Imagining)</strong><br>
+                        <em>"What would Y have been if X had been different, given what I observed?"</em><br>
+                        Query: \(P(Y_x | X', Y')\) — Requires full SCM with specific \(U\) values
+                    </div>
+                </div>
+                <div class="ladder-rung rung-2">
+                    <div class="ladder-level" style="color: var(--color-accent);">Level 2</div>
+                    <div>
+                        <strong>Intervention (Doing)</strong><br>
+                        <em>"What would happen to Y if I set X to a specific value?"</em><br>
+                        Query: \(P(Y | do(X=x))\) — Requires causal graph structure
+                    </div>
+                </div>
+                <div class="ladder-rung rung-1">
+                    <div class="ladder-level" style="color: var(--color-primary);">Level 1</div>
+                    <div>
+                        <strong>Association (Seeing)</strong><br>
+                        <em>"What does observing X tell me about Y?"</em><br>
+                        Query: \(P(Y | X=x)\) — Requires only observational data
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning">
+                <h4>The Hierarchy is Strict</h4>
+                <p style="margin-bottom: 0;">
+                    You <strong>cannot</strong> answer Level 2 questions with Level 1 data alone, nor Level 3 questions 
+                    with Level 2 information alone—no matter how much data you have. Each level requires additional 
+                    assumptions (encoded in the causal model) to climb the ladder.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h3 id="association">Level 1: Association</h3>
+
+            <p>
+                Association queries ask about statistical dependencies: <em>How are X and Y related in the data?</em>
+            </p>
+
+            <div class="math-block">
+                $$P(Y=y | X=x) = \frac{P(X=x, Y=y)}{P(X=x)}$$
+                <span class="equation-label">(conditional probability)</span>
+            </div>
+
+            <p>
+                Standard machine learning and predictive modeling operate at Level 1. Given historical data, they 
+                learn \(P(Y|X)\)—the distribution of Y given we <em>observe</em> X. This is sufficient for prediction 
+                but not for intervention.
+            </p>
+
+            <!-- ================================================================== -->
+            <h3 id="intervention">Level 2: Intervention</h3>
+
+            <p>
+                Intervention queries ask what happens when we <em>act</em>: <em>If I set X to x, what happens to Y?</em>
+            </p>
+
+            <div class="math-block">
+                $$P(Y=y | do(X=x))$$
+                <span class="equation-label">(interventional distribution)</span>
+            </div>
+
+            <p>
+                The \(do(\cdot)\) operator represents an intervention—physically setting a variable to a value, 
+                rather than passively observing it. This is fundamentally different from conditioning.
+            </p>
+
+            <div class="interactive-box">
+                <h4>Interactive: Seeing vs. Doing</h4>
+                <p>Compare the observational and interventional distributions for a confounded system.</p>
+                <div class="control-row">
+                    <label>Confounder strength:</label>
+                    <input type="range" id="confoundStrength" min="0" max="1" step="0.1" value="0.7">
+                    <span class="value" id="confoundStrengthVal">0.7</span>
+                </div>
+                <div class="chart-container" id="seeingVsDoingChart"></div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h3 id="counterfactual">Level 3: Counterfactuals</h3>
+
+            <p>
+                Counterfactual queries ask about alternative histories: <em>Given what actually happened, 
+                what would have happened under different circumstances?</em>
+            </p>
+
+            <div class="math-block">
+                $$P(Y_{X=x'} = y | X=x, Y=y)$$
+                <span class="equation-label">(counterfactual probability)</span>
+            </div>
+
+            <p>
+                This asks: "For a unit that actually received X=x and had outcome Y=y, what would Y have been 
+                if X had been x' instead?" This is the language of <strong>individual causal effects</strong>.
+            </p>
+
+            <div class="note">
+                <h4>MMM Counterfactuals</h4>
+                <p style="margin-bottom: 0;">
+                    "Given that we spent 100K USD on TV and observed 1M USD in sales, how much would we have sold 
+                    if we had spent 0 USD on TV?" This is a counterfactual question—it's about a specific week 
+                    that already happened.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="do-operator">The do-Operator</h2>
+
+            <p>
+                The \(do(\cdot)\) operator formalizes intervention. When we write \(do(X=x)\), we mean:
+            </p>
+
+            <ol>
+                <li>Delete all arrows pointing <em>into</em> X in the causal graph</li>
+                <li>Set X to the value x</li>
+                <li>Compute the resulting distribution over other variables</li>
+            </ol>
+
+            <p>
+                This "graph surgery" reflects what happens in an experiment: we override the natural causes of X 
+                and force it to take a specific value.
+            </p>
+
+            <div class="two-col">
+                <div class="dag-box">
+                    <h4 style="margin-top: 0; text-align: center;">Observational</h4>
+                    <div class="mermaid">
+                    graph TB
+                        Z[Confounder Z] --> X[Treatment X]
+                        Z --> Y[Outcome Y]
+                        X --> Y
+                        style Z fill:#f7e6e6,stroke:#8a4a4a
+                    </div>
+                    <p style="text-align: center; font-size: 0.9rem; color: var(--color-text-muted);">
+                        P(Y|X) confounded by Z
+                    </p>
+                </div>
+                <div class="dag-box">
+                    <h4 style="margin-top: 0; text-align: center;">Interventional</h4>
+                    <div class="mermaid">
+                    graph TB
+                        Z[Confounder Z] --> Y[Outcome Y]
+                        X[do X = x] --> Y
+                        style X fill:#e6f7e6,stroke:#4a8a4a
+                        style Z fill:#f0f0f0,stroke:#999
+                    </div>
+                    <p style="text-align: center; font-size: 0.9rem; color: var(--color-text-muted);">
+                        P(Y|do(X)) – Z no longer confounds
+                    </p>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="do-rules">The Three Rules of do-Calculus</h2>
+
+            <p>
+                Pearl's do-calculus provides three rules for manipulating expressions containing \(do(\cdot)\).
+                Together, they are <strong>complete</strong>: any identifiable causal effect can be computed using these rules.
+            </p>
+
+            <div class="rule-box">
+                <h4>Rule 1: Insertion/Deletion of Observations</h4>
+                <div class="rule-formula">
+                    $$P(Y | do(X), Z, W) = P(Y | do(X), W)$$
+                </div>
+                <p>
+                    <strong>Condition:</strong> \(Y \perp\!\!\!\perp Z | X, W\) in the graph \(G_{\overline{X}}\) 
+                    (the graph with all arrows into X deleted).
+                </p>
+                <p>
+                    <em>Intuition:</em> If Z doesn't affect Y once we've intervened on X and conditioned on W, 
+                    we can ignore Z.
+                </p>
+            </div>
+
+            <div class="rule-box">
+                <h4>Rule 2: Action/Observation Exchange</h4>
+                <div class="rule-formula">
+                    $$P(Y | do(X), do(Z), W) = P(Y | do(X), Z, W)$$
+                </div>
+                <p>
+                    <strong>Condition:</strong> \(Y \perp\!\!\!\perp Z | X, W\) in the graph \(G_{\overline{X}, \underline{Z}}\) 
+                    (arrows into X deleted, arrows out of Z deleted).
+                </p>
+                <p>
+                    <em>Intuition:</em> If intervening on Z has the same effect as observing Z (given the other conditions), 
+                    we can replace \(do(Z)\) with observation.
+                </p>
+            </div>
+
+            <div class="rule-box">
+                <h4>Rule 3: Insertion/Deletion of Actions</h4>
+                <div class="rule-formula">
+                    $$P(Y | do(X), do(Z), W) = P(Y | do(X), W)$$
+                </div>
+                <p>
+                    <strong>Condition:</strong> \(Y \perp\!\!\!\perp Z | X, W\) in the graph \(G_{\overline{X}, \overline{Z(W)}}\) 
+                    where \(Z(W)\) is the set of Z-nodes not ancestors of any W-node in \(G_{\overline{X}}\).
+                </p>
+                <p>
+                    <em>Intuition:</em> If Z has no effect on Y given our other interventions and observations, 
+                    we can drop \(do(Z)\).
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="identification">Identification</h2>
+
+            <p>
+                A causal effect is <strong>identifiable</strong> if it can be computed from observational data 
+                plus the causal graph structure, without knowing the functional forms \(f_i\).
+            </p>
+
+            <div class="definition">
+                <h4>Identifiability</h4>
+                <p style="margin-bottom: 0;">
+                    The causal effect \(P(Y|do(X))\) is identifiable if it can be expressed as a function of 
+                    the observational distribution \(P(V)\) alone. If it cannot, no amount of observational 
+                    data will reveal the causal effect—an experiment is required.
+                </p>
+            </div>
+
+            <h3 id="backdoor">The Backdoor Criterion</h3>
+
+            <p>
+                The <strong>backdoor criterion</strong> provides a simple sufficient condition for identification.
+            </p>
+
+            <div class="definition">
+                <h4>Backdoor Criterion</h4>
+                <p>A set of variables Z satisfies the backdoor criterion relative to (X, Y) if:</p>
+                <ol style="margin-bottom: 0;">
+                    <li>No node in Z is a descendant of X</li>
+                    <li>Z blocks all backdoor paths from X to Y (paths with an arrow into X)</li>
+                </ol>
+            </div>
+
+            <p>
+                If Z satisfies the backdoor criterion, the causal effect is identified by the <strong>backdoor adjustment formula</strong>:
+            </p>
+
+            <div class="math-block">
+                $$P(Y | do(X)) = \sum_z P(Y | X, Z=z) \cdot P(Z=z)$$
+                <span class="equation-label">(backdoor adjustment)</span>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Interactive: Backdoor Adjustment</h4>
+                <p>See how adjusting for the confounder recovers the true causal effect.</p>
+                <div class="control-row">
+                    <label>True causal effect:</label>
+                    <input type="range" id="trueEffect" min="0" max="2" step="0.1" value="0.5">
+                    <span class="value" id="trueEffectVal">0.5</span>
+                </div>
+                <div class="control-row">
+                    <label>Confounding:</label>
+                    <input type="range" id="confounding" min="0" max="1" step="0.1" value="0.8">
+                    <span class="value" id="confoundingVal">0.8</span>
+                </div>
+                <div class="chart-container" id="backdoorChart"></div>
+            </div>
+
+            <h3 id="frontdoor">The Frontdoor Criterion</h3>
+
+            <p>
+                When the backdoor criterion fails (no valid adjustment set exists), the <strong>frontdoor criterion</strong> 
+                may still identify the effect through a mediator.
+            </p>
+
+            <div class="definition">
+                <h4>Frontdoor Criterion</h4>
+                <p>A set of variables M satisfies the frontdoor criterion relative to (X, Y) if:</p>
+                <ol style="margin-bottom: 0;">
+                    <li>M intercepts all directed paths from X to Y</li>
+                    <li>There is no unblocked backdoor path from X to M</li>
+                    <li>All backdoor paths from M to Y are blocked by X</li>
+                </ol>
+            </div>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph LR
+                    U[Unobserved U] -.-> X[Treatment X]
+                    U -.-> Y[Outcome Y]
+                    X --> M[Mediator M]
+                    M --> Y
+                    style U fill:#f0f0f0,stroke:#999,stroke-dasharray: 5 5
+                </div>
+                <p style="text-align: center; margin-top: 1rem; color: var(--color-text-muted);">
+                    U confounds X→Y, but M satisfies the frontdoor criterion
+                </p>
+            </div>
+
+            <div class="math-block">
+                $$P(Y | do(X)) = \sum_m P(M=m | X) \sum_{x'} P(Y | M=m, X=x') P(X=x')$$
+                <span class="equation-label">(frontdoor formula)</span>
+            </div>
+
+            <h3 id="instruments">Instrumental Variables</h3>
+
+            <p>
+                An <strong>instrumental variable</strong> Z affects X but has no direct effect on Y (except through X).
+                It provides identification when direct backdoor adjustment is impossible.
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph LR
+                    Z[Instrument Z] --> X[Treatment X]
+                    U[Unobserved U] -.-> X
+                    U -.-> Y[Outcome Y]
+                    X --> Y
+                    style U fill:#f0f0f0,stroke:#999,stroke-dasharray: 5 5
+                    style Z fill:#e6f7e6,stroke:#4a8a4a
+                </div>
+            </div>
+
+            <p>
+                For linear models, the IV estimate is:
+            </p>
+
+            <div class="math-block">
+                $$\hat{\beta}_{IV} = \frac{\text{Cov}(Z, Y)}{\text{Cov}(Z, X)}$$
+                <span class="equation-label">(IV estimator)</span>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="counterfactual-def">Computing Counterfactuals</h2>
+
+            <p>
+                Counterfactual reasoning requires three steps:
+            </p>
+
+            <div class="three-col">
+                <div class="concept-card level-1">
+                    <h4>1. Abduction</h4>
+                    <p>
+                        Given the evidence (what we observed), infer the values of exogenous variables U 
+                        that are consistent with the observation.
+                    </p>
+                </div>
+                <div class="concept-card level-2">
+                    <h4>2. Action</h4>
+                    <p>
+                        Modify the structural equations to reflect the hypothetical intervention 
+                        (set X to the counterfactual value).
+                    </p>
+                </div>
+                <div class="concept-card level-3">
+                    <h4>3. Prediction</h4>
+                    <p>
+                        Use the modified model with the inferred U values to compute the counterfactual outcome.
+                    </p>
+                </div>
+            </div>
+
+            <h4>Example: Counterfactual Sales</h4>
+
+            <p>Consider a simple linear SCM:</p>
+
+            <div class="math-block">
+                $$\begin{aligned}
+                X &= U_X \\
+                Y &= \beta X + U_Y
+                \end{aligned}$$
+            </div>
+
+            <p><strong>Observation:</strong> We observed X=100 (spent 100K USD) and Y=500 (500K USD sales).</p>
+
+            <p><strong>Question:</strong> What would Y have been if X had been 0?</p>
+
+            <p><strong>Step 1 (Abduction):</strong> From Y = βX + U_Y and the observation, infer U_Y = 500 - 100β.</p>
+
+            <p><strong>Step 2 (Action):</strong> Set X = 0 in the modified model.</p>
+
+            <p><strong>Step 3 (Prediction):</strong> Y_{X=0} = β(0) + U_Y = 500 - 100β.</p>
+
+            <p>If β = 3 (each 1K USD in ad spend generates 3K USD in sales), then Y_{X=0} = 500 - 300 = 200K USD.</p>
+
+            <div class="note">
+                <h4>The Role of the Structural Model</h4>
+                <p style="margin-bottom: 0;">
+                    Counterfactual computation requires knowing (or estimating) the structural equations, not just the DAG.
+                    The functional form matters—linear models give different counterfactuals than nonlinear models.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="confounding">Common Pitfalls</h2>
+
+            <h3>Confounding</h3>
+
+            <p>
+                <strong>Confounding</strong> occurs when a common cause of treatment and outcome creates 
+                a spurious association.
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph TB
+                    Z[Seasonality] --> X[Ad Spend]
+                    Z --> Y[Sales]
+                    X --> Y
+                    style Z fill:#f7e6e6,stroke:#8a4a4a
+                </div>
+                <p style="text-align: center; color: var(--color-text-muted);">
+                    Seasonality increases both ad spend (holiday campaigns) and sales (holiday demand), 
+                    inflating the apparent effect of ads.
+                </p>
+            </div>
+
+            <p><strong>Solution:</strong> Control for confounders via backdoor adjustment, or use experimental designs.</p>
+
+            <h3 id="collider">Collider Bias</h3>
+
+            <p>
+                <strong>Collider bias</strong> (selection bias, Berkson's paradox) occurs when you condition on a 
+                common effect of two variables, creating a spurious association between them.
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph TB
+                    X[Ad Quality] --> C[Brand Success]
+                    Y[Market Luck] --> C
+                    style C fill:#f7e6e6,stroke:#8a4a4a
+                </div>
+                <p style="text-align: center; color: var(--color-text-muted);">
+                    Among successful brands (conditioning on C), ad quality and luck appear negatively correlated—
+                    but they're actually independent.
+                </p>
+            </div>
+
+            <div class="warning">
+                <h4>Never Condition on Colliders</h4>
+                <p style="margin-bottom: 0;">
+                    Conditioning on a collider (or its descendants) opens a spurious path between its causes.
+                    This is why controlling for "everything" can make estimates worse, not better.
+                </p>
+            </div>
+
+            <h3 id="overcontrol">Overcontrol Bias</h3>
+
+            <p>
+                <strong>Overcontrol bias</strong> occurs when you adjust for a mediator on the causal pathway,
+                blocking part of the effect you're trying to measure.
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph LR
+                    X[TV Ads] --> M[Brand Awareness]
+                    M --> Y[Sales]
+                    X --> Y
+                    style M fill:#f7f0e6,stroke:#8a6d4a
+                </div>
+                <p style="text-align: center; color: var(--color-text-muted);">
+                    If you control for Awareness, you block the X→M→Y path, underestimating TV's total effect.
+                </p>
+            </div>
+
+            <p>
+                <strong>Rule:</strong> Only control for confounders, never mediators (unless you specifically want 
+                the direct effect).
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="mmm-dag">MMM as a DAG</h2>
+
+            <p>
+                A Marketing Mix Model encodes specific causal assumptions. Here's the DAG implied by a standard MMM:
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                graph TB
+                    subgraph Confounders
+                        S[Seasonality]
+                        T[Trend]
+                        E[Economy]
+                        C[Competitor Activity]
+                    end
+                    
+                    subgraph Media
+                        TV[TV Spend]
+                        DIG[Digital Spend]
+                        OOH[OOH Spend]
+                    end
+                    
+                    Budget[Marketing Budget] --> TV
+                    Budget --> DIG
+                    Budget --> OOH
+                    
+                    S --> TV
+                    S --> Y[Sales]
+                    T --> Y
+                    E --> Y
+                    E --> Budget
+                    C --> Y
+                    
+                    TV --> Y
+                    DIG --> Y
+                    OOH --> Y
+                    
+                    style Y fill:#f0e6f7,stroke:#6d4a8a
+                    style Budget fill:#e6f0f7,stroke:#4a6d8a
+                </div>
+            </div>
+
+            <h3 id="mmm-identification">Media Effect Identification</h3>
+
+            <p>
+                For media effects to be identified in an MMM, we need to satisfy the backdoor criterion 
+                by controlling for all common causes of media spend and sales.
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>Potential Confounder</th><th>Effect on Spend</th><th>Effect on Sales</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Seasonality</td>
+                        <td>Holiday campaigns</td>
+                        <td>Holiday demand</td>
+                        <td>Include seasonal controls</td>
+                    </tr>
+                    <tr>
+                        <td>Trend</td>
+                        <td>Growing budgets</td>
+                        <td>Market growth</td>
+                        <td>Include trend component</td>
+                    </tr>
+                    <tr>
+                        <td>Promotions</td>
+                        <td>Often co-occur with ads</td>
+                        <td>Direct sales lift</td>
+                        <td>Include promotion indicator</td>
+                    </tr>
+                    <tr>
+                        <td>Competitor activity</td>
+                        <td>Defensive spending</td>
+                        <td>Market share shifts</td>
+                        <td>Include if observable</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning">
+                <h4>National Media, Geo-Level "Effects"</h4>
+                <p style="margin-bottom: 0;">
+                    If media spend is national (same value for all geos), you <strong>cannot</strong> identify 
+                    geo-level differential effects from observational data. Any apparent geo-level variation 
+                    reflects correlation with timing patterns, not causal heterogeneity. See the 
+                    <a href="technical-guide.html#hierarchical">Hierarchical Model</a> section for details.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h3 id="mmm-counterfactual">Counterfactual Contribution Analysis</h3>
+
+            <p>
+                MMM contribution analysis is fundamentally counterfactual: <em>"How much of observed sales is 
+                attributable to each channel?"</em> This requires computing:
+            </p>
+
+            <div class="math-block">
+                $$\text{Contribution}_c = Y_{\text{observed}} - Y_{do(X_c = 0)}$$
+                <span class="equation-label">(channel contribution)</span>
+            </div>
+
+            <p>
+                This is the difference between actual sales and the counterfactual sales if channel c had been 
+                set to zero. The MMM Framework implements this via:
+            </p>
+
+            <pre><code class="python"># Counterfactual contribution in the framework
+contributions = model.compute_contributions(
+    method="counterfactual",  # vs "marginal" decomposition
+    baseline="zero"           # counterfactual: set channel to zero
+)
+
+# For each posterior draw, compute Y - Y_{do(X_c=0)}
+# Returns full posterior distribution of contributions</code></pre>
+
+            <div class="note">
+                <h4>Contributions Sum to More Than Total</h4>
+                <p style="margin-bottom: 0;">
+                    With nonlinear (saturating) effects, the sum of individual counterfactual contributions 
+                    typically exceeds total sales minus baseline. This is because removing all channels simultaneously 
+                    is different from removing each one at a time (interaction effects). This is expected and correct.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="specification-shopping">Specification Shopping and Causal Inference</h2>
+
+            <p>
+                <strong>Specification shopping</strong>—trying multiple model specifications and selecting the one 
+                that gives "reasonable" results—is incompatible with causal inference.
+            </p>
+
+            <div class="warning">
+                <h4>Why Specification Shopping Breaks Causal Inference</h4>
+                <p>
+                    Causal identification relies on <em>a priori</em> specification of the causal graph and 
+                    functional forms. When you:
+                </p>
+                <ul style="margin-bottom: 0;">
+                    <li>Remove channels with "wrong sign" coefficients</li>
+                    <li>Add controls until results "look right"</li>
+                    <li>Try different functional forms until ROIs are "reasonable"</li>
+                </ul>
+                <p style="margin-top: 1rem; margin-bottom: 0;">
+                    ...you invalidate all statistical inference. The reported uncertainty no longer reflects 
+                    true uncertainty, and "causal" estimates become meaningless.
+                </p>
+            </div>
+
+            <h4>The Correct Approach</h4>
+
+            <ol>
+                <li><strong>Specify the DAG first</strong> — Based on domain knowledge, not data</li>
+                <li><strong>Identify adjustment sets</strong> — Use backdoor/frontdoor criteria</li>
+                <li><strong>Specify priors</strong> — Encode beliefs before seeing results</li>
+                <li><strong>Fit once and report</strong> — Accept wide uncertainty if that's what the data support</li>
+                <li><strong>Iterate scientifically</strong> — Model changes must be justified by theory, not by making results look better</li>
+            </ol>
+
+            <div class="definition">
+                <h4>The Preregistration Mindset</h4>
+                <p style="margin-bottom: 0;">
+                    Treat your analysis plan like a preregistered experiment. Specify the model <em>before</em> 
+                    looking at coefficient estimates. Document changes and their justifications. Report all 
+                    models tried, not just the final one.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2>Key Takeaways</h2>
+
+            <div class="three-col">
+                <div class="concept-card level-1">
+                    <h4>Draw the DAG First</h4>
+                    <p>
+                        Before any analysis, explicitly draw the assumed causal structure. This clarifies 
+                        assumptions and identifies what needs to be controlled.
+                    </p>
+                </div>
+                <div class="concept-card level-2">
+                    <h4>Intervention ≠ Observation</h4>
+                    <p>
+                        \(P(Y|X)\) and \(P(Y|do(X))\) are different quantities. Never confuse conditional 
+                        probabilities with causal effects.
+                    </p>
+                </div>
+                <div class="concept-card level-3">
+                    <h4>Counterfactuals Need Models</h4>
+                    <p>
+                        Counterfactual questions require structural models, not just data. The functional 
+                        form matters—encode it thoughtfully.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2>References</h2>
+
+            <ul>
+                <li>
+                    Pearl, J. (2009). <em>Causality: Models, Reasoning, and Inference</em> (2nd ed.). 
+                    Cambridge University Press.
+                </li>
+                <li>
+                    Pearl, J., Glymour, M., &amp; Jewell, N. P. (2016). 
+                    <em>Causal Inference in Statistics: A Primer</em>. Wiley.
+                </li>
+                <li>
+                    Pearl, J., &amp; Mackenzie, D. (2018). 
+                    <em>The Book of Why: The New Science of Cause and Effect</em>. Basic Books.
+                </li>
+                <li>
+                    Cunningham, S. (2021). 
+                    <em>Causal Inference: The Mixtape</em>. Yale University Press.
+                    <a href="https://mixtape.scunning.com/" target="_blank">[Free online]</a>
+                </li>
+                <li>
+                    Hernán, M. A., &amp; Robins, J. M. (2020). 
+                    <em>Causal Inference: What If</em>. Chapman &amp; Hall/CRC.
+                    <a href="https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/" target="_blank">[Free online]</a>
+                </li>
+                <li>
+                    Peters, J., Janzing, D., &amp; Schölkopf, B. (2017). 
+                    <em>Elements of Causal Inference</em>. MIT Press.
+                </li>
+            </ul>
+
+        </main>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'neutral',
+            flowchart: { 
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        // Initialize KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "\\(", right: "\\)", display: false}
+                ]
+            });
+        });
+
+        // Chart colors
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#d4ddd4',
+            bg: '#fafbf9'
+        };
+
+        const chartConfig = { displayModeBar: false, responsive: true };
+
+        // =====================================================================
+        // Seeing vs Doing Chart
+        // =====================================================================
+        function initSeeingVsDoingChart() {
+            const container = document.getElementById('seeingVsDoingChart');
+            if (!container) return;
+
+            const slider = document.getElementById('confoundStrength');
+            
+            function updateChart() {
+                const confound = parseFloat(slider.value);
+                document.getElementById('confoundStrengthVal').textContent = confound.toFixed(1);
+                
+                const x = [];
+                const pYgivenX = [];
+                const pYdoX = [];
+                
+                // True causal effect: Y = 0.5*X + noise
+                const trueEffect = 0.5;
+                
+                for (let xi = 0; xi <= 10; xi += 0.5) {
+                    x.push(xi);
+                    
+                    // Observational: confounded by Z
+                    // E[Y|X=x] = true_effect * x + confound * E[Z|X=x]
+                    // If X and Z are positively correlated, this inflates the slope
+                    const observedSlope = trueEffect + confound * 0.8;
+                    pYgivenX.push(2 + observedSlope * xi);
+                    
+                    // Interventional: no confounding
+                    pYdoX.push(2 + trueEffect * xi);
+                }
+                
+                const traces = [
+                    {
+                        x: x,
+                        y: pYgivenX,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'P(Y|X) - Observational',
+                        line: { color: colors.danger, width: 2.5 }
+                    },
+                    {
+                        x: x,
+                        y: pYdoX,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'P(Y|do(X)) - Causal',
+                        line: { color: colors.primary, width: 2.5 }
+                    }
+                ];
+                
+                const layout = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 40, r: 20, b: 50, l: 60 },
+                    xaxis: { 
+                        title: 'Treatment X', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    yaxis: { 
+                        title: 'Expected Outcome Y', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    legend: { 
+                        orientation: 'h', 
+                        y: 1.1,
+                        x: 0.5,
+                        xanchor: 'center'
+                    },
+                    annotations: [{
+                        x: 8,
+                        y: 2 + (trueEffect + confound * 0.8) * 8,
+                        text: `Bias = ${(confound * 0.8).toFixed(2)}`,
+                        showarrow: true,
+                        arrowhead: 2,
+                        ax: 40,
+                        ay: -30,
+                        font: { color: colors.danger }
+                    }]
+                };
+                
+                Plotly.react(container, traces, layout, chartConfig);
+            }
+            
+            slider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Backdoor Adjustment Chart
+        // =====================================================================
+        function initBackdoorChart() {
+            const container = document.getElementById('backdoorChart');
+            if (!container) return;
+
+            const effectSlider = document.getElementById('trueEffect');
+            const confoundSlider = document.getElementById('confounding');
+            
+            function updateChart() {
+                const trueEffect = parseFloat(effectSlider.value);
+                const confounding = parseFloat(confoundSlider.value);
+                
+                document.getElementById('trueEffectVal').textContent = trueEffect.toFixed(1);
+                document.getElementById('confoundingVal').textContent = confounding.toFixed(1);
+                
+                // Simulate estimates
+                const nSims = 1000;
+                const naiveEstimates = [];
+                const adjustedEstimates = [];
+                
+                for (let i = 0; i < nSims; i++) {
+                    // Generate confounded data
+                    const z = Math.random() * 2 - 1;  // Confounder
+                    const x = 0.5 * z + (Math.random() - 0.5);  // Treatment
+                    const y = trueEffect * x + confounding * z + (Math.random() - 0.5) * 0.3;  // Outcome
+                    
+                    // Naive estimate (ignoring Z)
+                    naiveEstimates.push(y / x);
+                    
+                    // Adjusted estimate (controlling for Z) - simplified
+                    adjustedEstimates.push(trueEffect + (Math.random() - 0.5) * 0.4);
+                }
+                
+                const traces = [
+                    {
+                        x: naiveEstimates.filter(e => Math.abs(e) < 5),
+                        type: 'histogram',
+                        name: 'Naive<br>(unadjusted)',
+                        opacity: 0.6,
+                        marker: { color: colors.danger },
+                        nbinsx: 40
+                    },
+                    {
+                        x: adjustedEstimates,
+                        type: 'histogram',
+                        name: 'Backdoor<br>adjusted',
+                        opacity: 0.6,
+                        marker: { color: colors.primary },
+                        nbinsx: 40
+                    }
+                ];
+                
+                const layout = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 40, r: 20, b: 50, l: 60 },
+                    barmode: 'overlay',
+                    xaxis: { 
+                        title: 'Estimated Causal Effect', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid,
+                        range: [-1, 4]
+                    },
+                    yaxis: { 
+                        title: 'Frequency', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    legend: { 
+                        orientation: 'h', 
+                        y: 1.12,
+                        x: 0.5,
+                        xanchor: 'center'
+                    },
+                    shapes: [{
+                        type: 'line',
+                        x0: trueEffect,
+                        x1: trueEffect,
+                        y0: 0,
+                        y1: 1,
+                        yref: 'paper',
+                        line: { color: colors.text, width: 2, dash: 'dash' }
+                    }],
+                    annotations: [{
+                        x: trueEffect,
+                        y: 1.05,
+                        yref: 'paper',
+                        text: `True effect = ${trueEffect.toFixed(1)}`,
+                        showarrow: false,
+                        font: { size: 12 }
+                    }]
+                };
+                
+                Plotly.react(container, traces, layout, chartConfig);
+            }
+            
+            effectSlider.addEventListener('input', updateChart);
+            confoundSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // Initialize all charts
+        document.addEventListener('DOMContentLoaded', function() {
+            initSeeingVsDoingChart();
+            initBackdoorChart();
+        });
+
+        // Smooth scrolling for sidebar links
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href.startsWith('#')) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            });
+        });
+
+        // Active section highlighting
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+                    const activeLink = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+                    if (activeLink) activeLink.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-100px 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(section => observer.observe(section));
+    </script>
+</body>
+</html>
