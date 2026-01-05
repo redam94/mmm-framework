@@ -46,8 +46,10 @@ if TYPE_CHECKING:
 # Configuration
 # =============================================================================
 
+
 class TrendType(str, Enum):
     """Available trend specifications."""
+
     NONE = "none"
     LINEAR = "linear"
     PIECEWISE = "piecewise"
@@ -58,12 +60,12 @@ class TrendType(str, Enum):
 @dataclass
 class TrendConfig:
     """Configuration for trend component.
-    
+
     Parameters
     ----------
     type : TrendType
         Type of trend to use.
-    
+
     # Piecewise trend parameters (Prophet-style)
     n_changepoints : int
         Number of potential changepoints for piecewise trend.
@@ -71,7 +73,7 @@ class TrendConfig:
         Proportion of time range to place changepoints (0-1).
     changepoint_prior_scale : float
         Prior scale for changepoint magnitudes.
-    
+
     # Spline trend parameters
     n_knots : int
         Number of knots for spline trend.
@@ -79,7 +81,7 @@ class TrendConfig:
         Degree of B-spline (default 3 = cubic).
     spline_prior_sigma : float
         Prior sigma for spline coefficients.
-    
+
     # Gaussian Process trend parameters
     gp_lengthscale_prior_mu : float
         Prior mean for GP lengthscale (in proportion of time range).
@@ -91,66 +93,68 @@ class TrendConfig:
         Number of basis functions for HSGP approximation.
     gp_c : float
         Boundary factor for HSGP (typically 1.5-2.0).
-    
+
     # Linear trend parameters
     growth_prior_mu : float
         Prior mean for linear growth rate.
     growth_prior_sigma : float
         Prior sigma for linear growth rate.
     """
+
     type: TrendType = TrendType.LINEAR
-    
+
     # Piecewise trend parameters
     n_changepoints: int = 10
     changepoint_range: float = 0.8
     changepoint_prior_scale: float = 0.05
-    
+
     # Spline trend parameters
     n_knots: int = 10
     spline_degree: int = 3
     spline_prior_sigma: float = 1.0
-    
+
     # Gaussian Process trend parameters
     gp_lengthscale_prior_mu: float = 0.3
     gp_lengthscale_prior_sigma: float = 0.2
     gp_amplitude_prior_sigma: float = 0.5
     gp_n_basis: int = 20
     gp_c: float = 1.5
-    
+
     # Linear trend parameters
     growth_prior_mu: float = 0.0
     growth_prior_sigma: float = 0.1
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
-            'type': self.type.value,
-            'n_changepoints': self.n_changepoints,
-            'changepoint_range': self.changepoint_range,
-            'changepoint_prior_scale': self.changepoint_prior_scale,
-            'n_knots': self.n_knots,
-            'spline_degree': self.spline_degree,
-            'spline_prior_sigma': self.spline_prior_sigma,
-            'gp_lengthscale_prior_mu': self.gp_lengthscale_prior_mu,
-            'gp_lengthscale_prior_sigma': self.gp_lengthscale_prior_sigma,
-            'gp_amplitude_prior_sigma': self.gp_amplitude_prior_sigma,
-            'gp_n_basis': self.gp_n_basis,
-            'gp_c': self.gp_c,
-            'growth_prior_mu': self.growth_prior_mu,
-            'growth_prior_sigma': self.growth_prior_sigma,
+            "type": self.type.value,
+            "n_changepoints": self.n_changepoints,
+            "changepoint_range": self.changepoint_range,
+            "changepoint_prior_scale": self.changepoint_prior_scale,
+            "n_knots": self.n_knots,
+            "spline_degree": self.spline_degree,
+            "spline_prior_sigma": self.spline_prior_sigma,
+            "gp_lengthscale_prior_mu": self.gp_lengthscale_prior_mu,
+            "gp_lengthscale_prior_sigma": self.gp_lengthscale_prior_sigma,
+            "gp_amplitude_prior_sigma": self.gp_amplitude_prior_sigma,
+            "gp_n_basis": self.gp_n_basis,
+            "gp_c": self.gp_c,
+            "growth_prior_mu": self.growth_prior_mu,
+            "growth_prior_sigma": self.growth_prior_sigma,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> TrendConfig:
         """Create from dictionary."""
         data = data.copy()
-        data['type'] = TrendType(data['type'])
+        data["type"] = TrendType(data["type"])
         return cls(**data)
 
 
 # =============================================================================
 # Helper functions
 # =============================================================================
+
 
 def create_fourier_features(t: np.ndarray, period: float, order: int) -> np.ndarray:
     """Create Fourier features for seasonality."""
@@ -164,9 +168,9 @@ def create_fourier_features(t: np.ndarray, period: float, order: int) -> np.ndar
 def geometric_adstock_np(x: np.ndarray, alpha: float) -> np.ndarray:
     """
     Apply geometric adstock transformation.
-    
+
     y[t] = x[t] + alpha * y[t-1]
-    
+
     Normalized so that sum of weights = 1/(1-alpha)
     """
     n = len(x)
@@ -193,7 +197,7 @@ def logistic_saturation_np(x: np.ndarray, lam: float) -> np.ndarray:
 def create_bspline_basis(t: np.ndarray, n_knots: int, degree: int = 3) -> np.ndarray:
     """
     Create B-spline basis matrix.
-    
+
     Parameters
     ----------
     t : np.ndarray
@@ -202,7 +206,7 @@ def create_bspline_basis(t: np.ndarray, n_knots: int, degree: int = 3) -> np.nda
         Number of interior knots.
     degree : int
         Spline degree (default 3 for cubic).
-    
+
     Returns
     -------
     np.ndarray
@@ -212,23 +216,19 @@ def create_bspline_basis(t: np.ndarray, n_knots: int, degree: int = 3) -> np.nda
         from scipy.interpolate import BSpline
     except ImportError:
         raise ImportError("scipy is required for spline trends")
-    
+
     # Create knot sequence with appropriate boundary knots
     n_interior = n_knots
-    
+
     # Interior knots evenly spaced
     interior_knots = np.linspace(0, 1, n_interior + 2)[1:-1]
-    
+
     # Add boundary knots (repeated for clamping)
-    knots = np.concatenate([
-        np.zeros(degree + 1),
-        interior_knots,
-        np.ones(degree + 1)
-    ])
-    
+    knots = np.concatenate([np.zeros(degree + 1), interior_knots, np.ones(degree + 1)])
+
     # Number of basis functions
     n_basis = len(knots) - degree - 1
-    
+
     # Create basis matrix
     basis = np.zeros((len(t), n_basis))
     for i in range(n_basis):
@@ -236,18 +236,16 @@ def create_bspline_basis(t: np.ndarray, n_knots: int, degree: int = 3) -> np.nda
         c[i] = 1
         spline = BSpline(knots, c, degree)
         basis[:, i] = spline(np.clip(t, 0, 1))
-    
+
     return basis
 
 
 def create_piecewise_trend_matrix(
-    t: np.ndarray,
-    n_changepoints: int,
-    changepoint_range: float = 0.8
+    t: np.ndarray, n_changepoints: int, changepoint_range: float = 0.8
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Create design matrix for piecewise linear trend (Prophet-style).
-    
+
     Parameters
     ----------
     t : np.ndarray
@@ -256,7 +254,7 @@ def create_piecewise_trend_matrix(
         Number of potential changepoints.
     changepoint_range : float
         Proportion of time range to place changepoints.
-    
+
     Returns
     -------
     tuple[np.ndarray, np.ndarray]
@@ -264,12 +262,12 @@ def create_piecewise_trend_matrix(
     """
     # Place changepoints in first changepoint_range of data
     s = np.linspace(0, changepoint_range, n_changepoints + 2)[1:-1]
-    
+
     # Create design matrix A where A[t, j] = (t - s[j])+ indicator
     A = np.zeros((len(t), len(s)))
     for j, sj in enumerate(s):
         A[:, j] = (t >= sj).astype(float)
-    
+
     return s, A
 
 
@@ -277,9 +275,11 @@ def create_piecewise_trend_matrix(
 # Results container
 # =============================================================================
 
+
 @dataclass
 class MMMResults:
     """Container for fitted model results."""
+
     trace: az.InferenceData
     model: pm.Model
     panel: PanelDataset
@@ -287,15 +287,15 @@ class MMMResults:
     diagnostics: dict = field(default_factory=dict)
     y_mean: float = 0.0
     y_std: float = 1.0
-    
+
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
         return az.summary(self.trace, var_names=var_names)
-    
+
     def plot_trace(self, var_names: list[str] | None = None, **kwargs):
         """Plot trace diagnostics."""
         return az.plot_trace(self.trace, var_names=var_names, **kwargs)
-    
+
     def plot_posterior(self, var_names: list[str] | None = None, **kwargs):
         """Plot posterior distributions."""
         return az.plot_posterior(self.trace, var_names=var_names, **kwargs)
@@ -304,17 +304,18 @@ class MMMResults:
 @dataclass
 class PredictionResults:
     """Container for prediction results."""
+
     posterior_predictive: az.InferenceData
     y_pred_mean: np.ndarray
     y_pred_std: np.ndarray
     y_pred_hdi_low: np.ndarray
     y_pred_hdi_high: np.ndarray
     y_pred_samples: np.ndarray  # Shape: (n_samples, n_obs)
-    
+
     @property
     def n_samples(self) -> int:
         return self.y_pred_samples.shape[0]
-    
+
     @property
     def n_obs(self) -> int:
         return self.y_pred_samples.shape[1]
@@ -323,45 +324,46 @@ class PredictionResults:
 @dataclass
 class ContributionResults:
     """Container for counterfactual contribution results."""
-    
+
     # Per-channel contributions (original scale)
     channel_contributions: pd.DataFrame  # (n_obs, n_channels)
-    
+
     # Total contributions over time or for specified period
     total_contributions: pd.Series  # Indexed by channel
-    
+
     # Percentage of total effect
     contribution_pct: pd.Series
-    
+
     # Baseline prediction (all channels present)
     baseline_prediction: np.ndarray
-    
+
     # Counterfactual predictions (each channel zeroed)
     counterfactual_predictions: dict[str, np.ndarray]
-    
+
     # Time period used for calculation (None = all)
     time_period: tuple[int, int] | None = None
-    
+
     # Uncertainty (if computed with multiple samples)
     contribution_hdi_low: pd.Series | None = None
     contribution_hdi_high: pd.Series | None = None
-    
+
     def summary(self) -> pd.DataFrame:
         """Get summary DataFrame."""
         data = {
-            'Channel': self.total_contributions.index,
-            'Total Contribution': self.total_contributions.values,
-            'Contribution %': self.contribution_pct.values,
+            "Channel": self.total_contributions.index,
+            "Total Contribution": self.total_contributions.values,
+            "Contribution %": self.contribution_pct.values,
         }
         if self.contribution_hdi_low is not None:
-            data['HDI 3%'] = self.contribution_hdi_low.values
-            data['HDI 97%'] = self.contribution_hdi_high.values
+            data["HDI 3%"] = self.contribution_hdi_low.values
+            data["HDI 97%"] = self.contribution_hdi_high.values
         return pd.DataFrame(data)
+
 
 @dataclass
 class ComponentDecomposition:
     """Container for full component decomposition results."""
-    
+
     # Component contributions (original scale, per observation)
     intercept: np.ndarray
     trend: np.ndarray
@@ -372,7 +374,7 @@ class ComponentDecomposition:
     controls_by_var: pd.DataFrame | None
     geo_effects: np.ndarray | None
     product_effects: np.ndarray | None
-    
+
     # Aggregated totals
     total_intercept: float
     total_trend: float
@@ -381,69 +383,87 @@ class ComponentDecomposition:
     total_controls: float
     total_geo: float | None
     total_product: float | None
-    
+
     # Scaling parameters for reference
     y_mean: float
     y_std: float
-    
+
     def summary(self) -> pd.DataFrame:
         """Get summary of component contributions."""
         components = {
-            'Base (Intercept)': self.total_intercept,
-            'Trend': self.total_trend,
-            'Seasonality': self.total_seasonality,
-            'Media (Total)': self.total_media,
-            'Controls (Total)': self.total_controls,
+            "Base (Intercept)": self.total_intercept,
+            "Trend": self.total_trend,
+            "Seasonality": self.total_seasonality,
+            "Media (Total)": self.total_media,
+            "Controls (Total)": self.total_controls,
         }
-        
+
         if self.total_geo is not None:
-            components['Geo Effects'] = self.total_geo
+            components["Geo Effects"] = self.total_geo
         if self.total_product is not None:
-            components['Product Effects'] = self.total_product
-        
+            components["Product Effects"] = self.total_product
+
         total = sum(components.values())
-        
-        df = pd.DataFrame({
-            'Component': list(components.keys()),
-            'Total Contribution': list(components.values()),
-            'Contribution %': [v / total * 100 if total != 0 else 0 for v in components.values()]
-        })
-        
+
+        df = pd.DataFrame(
+            {
+                "Component": list(components.keys()),
+                "Total Contribution": list(components.values()),
+                "Contribution %": [
+                    v / total * 100 if total != 0 else 0 for v in components.values()
+                ],
+            }
+        )
+
         return df
-    
+
     def media_summary(self) -> pd.DataFrame:
         """Get detailed media channel breakdown."""
         totals = self.media_by_channel.sum()
         total_media = totals.sum()
-        
-        return pd.DataFrame({
-            'Channel': totals.index,
-            'Total Contribution': totals.values,
-            'Share of Media %': (totals / total_media * 100).values if total_media != 0 else [0] * len(totals)
-        })
-    
+
+        return pd.DataFrame(
+            {
+                "Channel": totals.index,
+                "Total Contribution": totals.values,
+                "Share of Media %": (
+                    (totals / total_media * 100).values
+                    if total_media != 0
+                    else [0] * len(totals)
+                ),
+            }
+        )
+
     def controls_summary(self) -> pd.DataFrame | None:
         """Get detailed control variable breakdown."""
         if self.controls_by_var is None:
             return None
-        
+
         totals = self.controls_by_var.sum()
         total_controls = totals.sum()
-        
-        return pd.DataFrame({
-            'Variable': totals.index,
-            'Total Contribution': totals.values,
-            'Share of Controls %': (totals / total_controls * 100).values if total_controls != 0 else [0] * len(totals)
-        })
+
+        return pd.DataFrame(
+            {
+                "Variable": totals.index,
+                "Total Contribution": totals.values,
+                "Share of Controls %": (
+                    (totals / total_controls * 100).values
+                    if total_controls != 0
+                    else [0] * len(totals)
+                ),
+            }
+        )
+
 
 # =============================================================================
 # Main Model Class
 # =============================================================================
 
+
 class BayesianMMM:
     """
     Bayesian Marketing Mix Model - Robust Implementation with Prediction Support.
-    
+
     This implementation prioritizes numerical stability:
     - All data is standardized before modeling
     - Adstock is pre-computed at fixed alpha values
@@ -452,7 +472,7 @@ class BayesianMMM:
     - Flexible trend modeling with GP, spline, and piecewise options
     - Support for prediction and counterfactual analysis
     - Save/load functionality for model persistence
-    
+
     Parameters
     ----------
     panel : PanelDataset
@@ -464,10 +484,10 @@ class BayesianMMM:
     adstock_alphas : list[float], optional
         Fixed adstock decay values to pre-compute.
     """
-    
+
     # Version for save/load compatibility
     _VERSION = "1.0.0"
-    
+
     def __init__(
         self,
         panel: PanelDataset,
@@ -479,52 +499,56 @@ class BayesianMMM:
         self.model_config = model_config
         self.trend_config = trend_config or TrendConfig()
         self.adstock_alphas = adstock_alphas or [0.0, 0.3, 0.5, 0.7, 0.9]
-        
+
         self.mff_config = panel.config
         self.hierarchical_config = model_config.hierarchical
         self.seasonality_config = model_config.seasonality
-        
+
         self._model: pm.Model | None = None
         self._trace: az.InferenceData | None = None
-        
+
         # Store scaling parameters for prediction
         self._scaling_params: dict[str, Any] = {}
-        
+
         self._prepare_data()
-    
+
     def _prepare_data(self):
         """Prepare and standardize all data."""
         # === Raw data ===
         self.y_raw = self.panel.y.values.astype(np.float64)
         self.X_media_raw = self.panel.X_media.values.astype(np.float64)
-        
+
         if self.panel.X_controls is not None and self.panel.X_controls.shape[1] > 0:
             self.X_controls_raw = self.panel.X_controls.values.astype(np.float64)
         else:
             self.X_controls_raw = None
-        
+
         # === Dimensions ===
         self.n_obs = len(self.y_raw)
         self.n_channels = self.X_media_raw.shape[1]
-        self.n_controls = self.X_controls_raw.shape[1] if self.X_controls_raw is not None else 0
-        
+        self.n_controls = (
+            self.X_controls_raw.shape[1] if self.X_controls_raw is not None else 0
+        )
+
         self.channel_names = list(self.panel.coords.channels)
-        self.control_names = list(self.panel.coords.controls) if self.n_controls > 0 else []
-        
+        self.control_names = (
+            list(self.panel.coords.controls) if self.n_controls > 0 else []
+        )
+
         # === Standardize target ===
         self.y_mean = float(self.y_raw.mean())
         self.y_std = float(self.y_raw.std()) + 1e-8
         self.y = (self.y_raw - self.y_mean) / self.y_std
-        
+
         # Store scaling parameters
-        self._scaling_params['y_mean'] = self.y_mean
-        self._scaling_params['y_std'] = self.y_std
-        
+        self._scaling_params["y_mean"] = self.y_mean
+        self._scaling_params["y_std"] = self.y_std
+
         # === Pre-compute adstocked media at fixed alphas ===
         # Store max values for each channel for normalization
         self._media_max = {}
         self.X_media_adstocked = {}
-        
+
         for alpha in self.adstock_alphas:
             adstocked = geometric_adstock_2d(self.X_media_raw, alpha)
             # Store max values (use maximum across all alphas for consistent scaling)
@@ -535,7 +559,7 @@ class BayesianMMM:
                     self._media_max[key] = current_max
                 else:
                     self._media_max[key] = max(self._media_max[key], current_max)
-        
+
         # Normalize using consistent max values
         for alpha in self.adstock_alphas:
             adstocked = geometric_adstock_2d(self.X_media_raw, alpha)
@@ -543,113 +567,119 @@ class BayesianMMM:
             for c, ch_name in enumerate(self.channel_names):
                 normalized[:, c] = adstocked[:, c] / (self._media_max[ch_name] + 1e-8)
             self.X_media_adstocked[alpha] = normalized
-        
-        self._scaling_params['media_max'] = self._media_max.copy()
-        
+
+        self._scaling_params["media_max"] = self._media_max.copy()
+
         # === Standardize controls ===
         if self.X_controls_raw is not None:
             self.control_mean = self.X_controls_raw.mean(axis=0)
             self.control_std = self.X_controls_raw.std(axis=0) + 1e-8
-            self.X_controls = (self.X_controls_raw - self.control_mean) / self.control_std
-            self._scaling_params['control_mean'] = self.control_mean.copy()
-            self._scaling_params['control_std'] = self.control_std.copy()
+            self.X_controls = (
+                self.X_controls_raw - self.control_mean
+            ) / self.control_std
+            self._scaling_params["control_mean"] = self.control_mean.copy()
+            self._scaling_params["control_std"] = self.control_std.copy()
         else:
             self.X_controls = None
-        
+
         # === Geo/product info ===
         self.has_geo = self.panel.coords.has_geo
         self.has_product = self.panel.coords.has_product
         self.n_geos = self.panel.coords.n_geos
         self.n_products = self.panel.coords.n_products
-        
+
         if self.has_geo:
             self.geo_names = list(self.panel.coords.geographies)
-            self.geo_idx = self._get_group_indices('geography')
+            self.geo_idx = self._get_group_indices("geography")
         else:
             self.geo_idx = np.zeros(self.n_obs, dtype=np.int32)
-        
+
         if self.has_product:
             self.product_names = list(self.panel.coords.products)
-            self.product_idx = self._get_group_indices('product')
+            self.product_idx = self._get_group_indices("product")
         else:
             self.product_idx = np.zeros(self.n_obs, dtype=np.int32)
-        
+
         # === Time index ===
         self.n_periods = self.panel.coords.n_periods
         self.time_idx = self._get_time_index()
         self.t_scaled = np.linspace(0, 1, self.n_periods)  # Unique time points [0, 1]
-        
+
         # === Seasonality features ===
         self._prepare_seasonality()
-        
+
         # === Trend features ===
         self._prepare_trend()
-        
+
         # === Media hierarchy ===
         self.media_groups = self.mff_config.get_hierarchical_media_groups()
         self.has_media_hierarchy = len(self.media_groups) > 0
-    
+
     def _get_group_indices(self, level_name: str) -> np.ndarray:
         """Get group indices for a hierarchical level."""
         cols = self.mff_config.columns
         col_name = getattr(cols, level_name)
-        
+
         if isinstance(self.panel.index, pd.MultiIndex):
             values = self.panel.index.get_level_values(col_name)
-            if level_name == 'geography':
+            if level_name == "geography":
                 categories = self.geo_names
             else:
                 categories = self.product_names
             return pd.Categorical(values, categories=categories).codes.astype(np.int32)
         return np.zeros(self.n_obs, dtype=np.int32)
-    
+
     def _get_time_index(self) -> np.ndarray:
         """Get time index for each observation."""
         cols = self.mff_config.columns
-        
+
         if isinstance(self.panel.index, pd.MultiIndex):
             period_values = self.panel.index.get_level_values(cols.period)
             periods_unique = list(self.panel.coords.periods)
-            return pd.Categorical(period_values, categories=periods_unique).codes.astype(np.int32)
+            return pd.Categorical(
+                period_values, categories=periods_unique
+            ).codes.astype(np.int32)
         return np.arange(self.n_obs, dtype=np.int32)
-    
+
     def _prepare_seasonality(self):
         """Prepare Fourier features for seasonality."""
         self.seasonality_features = {}
         t = np.arange(self.n_periods)
-        
+
         if self.seasonality_config.yearly and self.seasonality_config.yearly > 0:
             period = 52  # Weekly data
             order = self.seasonality_config.yearly
             features = create_fourier_features(t, period, order)
             if features.shape[1] > 0:
                 self.seasonality_features["yearly"] = features
-    
+
     def _prepare_trend(self):
         """Prepare trend features based on configuration."""
         t_unique = np.linspace(0, 1, self.n_periods)
-        
+
         self.trend_features = {}
-        
+
         if self.trend_config.type == TrendType.SPLINE:
             # Create B-spline basis
             self.trend_features["spline_basis"] = create_bspline_basis(
                 t_unique,
                 n_knots=self.trend_config.n_knots,
-                degree=self.trend_config.spline_degree
+                degree=self.trend_config.spline_degree,
             )
-            self.trend_features["n_spline_coef"] = self.trend_features["spline_basis"].shape[1]
-        
+            self.trend_features["n_spline_coef"] = self.trend_features[
+                "spline_basis"
+            ].shape[1]
+
         elif self.trend_config.type == TrendType.PIECEWISE:
             # Create piecewise linear design matrix
             s, A = create_piecewise_trend_matrix(
                 t_unique,
                 n_changepoints=self.trend_config.n_changepoints,
-                changepoint_range=self.trend_config.changepoint_range
+                changepoint_range=self.trend_config.changepoint_range,
             )
             self.trend_features["changepoints"] = s
             self.trend_features["changepoint_matrix"] = A
-        
+
         elif self.trend_config.type == TrendType.GP:
             # Store GP config for model building
             self.trend_features["gp_config"] = {
@@ -659,278 +689,263 @@ class BayesianMMM:
                 "n_basis": self.trend_config.gp_n_basis,
                 "c": self.trend_config.gp_c,
             }
-    
+
     def _build_coords(self) -> dict:
         """Build PyMC coordinate dictionary."""
         coords = {
             "obs": np.arange(self.n_obs),
             "channel": self.channel_names,
         }
-        
+
         if self.has_geo:
             coords["geo"] = self.geo_names
         if self.has_product:
             coords["product"] = self.product_names
         if self.n_controls > 0:
             coords["control"] = self.control_names
-        
+
         for name, features in self.seasonality_features.items():
             n_features = features.shape[1]
             coords[f"{name}_fourier"] = [f"{name}_{i}" for i in range(n_features)]
-        
+
         for parent, children in self.media_groups.items():
             coords[f"{parent}_platform"] = list(children)
-        
+
         # Add trend-specific coordinates
         if self.trend_config.type == TrendType.SPLINE:
             n_coef = self.trend_features.get("n_spline_coef", 0)
             coords["spline_coef"] = list(range(n_coef))
-        
+
         elif self.trend_config.type == TrendType.PIECEWISE:
             n_cp = len(self.trend_features.get("changepoints", []))
             coords["changepoint"] = list(range(n_cp))
-        
+
         return coords
-    
+
     def _build_trend_component(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build the trend component based on configuration."""
-        
+
         # FIX: Convert t_scaled to PyTensor tensor for indexing with PyTensor variables
         t_scaled_tensor = pt.as_tensor_variable(self.t_scaled)
-        
+
         if self.trend_config.type == TrendType.NONE:
             return pt.zeros(time_idx.shape[0])
-        
+
         elif self.trend_config.type == TrendType.LINEAR:
             trend_slope = pm.Normal(
                 "trend_slope",
                 mu=self.trend_config.growth_prior_mu,
-                sigma=self.trend_config.growth_prior_sigma
+                sigma=self.trend_config.growth_prior_sigma,
             )
             return trend_slope * t_scaled_tensor[time_idx]
-        
+
         elif self.trend_config.type == TrendType.PIECEWISE:
             return self._build_piecewise_trend(model, time_idx)
-        
+
         elif self.trend_config.type == TrendType.SPLINE:
             return self._build_spline_trend(model, time_idx)
-        
+
         elif self.trend_config.type == TrendType.GP:
             return self._build_gp_trend(model, time_idx)
-        
+
         else:
             warnings.warn(f"Unknown trend type: {self.trend_config.type}, using linear")
             trend_slope = pm.Normal("trend_slope", mu=0, sigma=0.5)
             return trend_slope * t_scaled_tensor[time_idx]
-    
+
     def _build_piecewise_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build Prophet-style piecewise linear trend."""
-        
+
         s = self.trend_features["changepoints"]
         A = self.trend_features["changepoint_matrix"]
         n_changepoints = len(s)
-        
+
         # Base growth rate
         k = pm.Normal(
             "trend_k",
             mu=self.trend_config.growth_prior_mu,
-            sigma=self.trend_config.growth_prior_sigma
+            sigma=self.trend_config.growth_prior_sigma,
         )
-        
+
         # Changepoint adjustments with Laplace prior (promotes sparsity)
         delta = pm.Laplace(
             "trend_delta",
             mu=0,
             b=self.trend_config.changepoint_prior_scale,
             shape=n_changepoints,
-            dims="changepoint"
+            dims="changepoint",
         )
-        
+
         # Intercept adjustment to keep trend continuous
         m = pm.Normal("trend_m", mu=0, sigma=0.5)
-        
+
         # Build trend at unique time points
         t_unique = np.linspace(0, 1, self.n_periods)
-        
+
         # FIX: Convert numpy arrays to PyTensor tensors
         t_unique_tensor = pt.as_tensor_variable(t_unique)
         A_tensor = pt.as_tensor_variable(A)
         s_tensor = pt.as_tensor_variable(s)
-        
+
         # gamma ensures continuity at changepoints
         gamma = -s_tensor * delta
-        
+
         # Trend at unique times
-        trend_unique = k * t_unique_tensor + pt.dot(A_tensor, delta) + m + pt.dot(A_tensor, gamma)
-        
+        trend_unique = (
+            k * t_unique_tensor + pt.dot(A_tensor, delta) + m + pt.dot(A_tensor, gamma)
+        )
+
         # Map to observations
         return trend_unique[time_idx]
-    
+
     def _build_spline_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build B-spline trend."""
-        
+
         basis = self.trend_features["spline_basis"]
         n_coef = basis.shape[1]
-        
+
         # Spline coefficients with smoothness prior
         # Using random walk prior for smooth trends
         spline_coef_raw = pm.Normal(
-            "spline_coef_raw",
-            mu=0,
-            sigma=1,
-            shape=n_coef,
-            dims="spline_coef"
+            "spline_coef_raw", mu=0, sigma=1, shape=n_coef, dims="spline_coef"
         )
-        
+
         # Scale parameter for smoothness
         spline_scale = pm.HalfNormal(
-            "spline_scale",
-            sigma=self.trend_config.spline_prior_sigma
+            "spline_scale", sigma=self.trend_config.spline_prior_sigma
         )
-        
+
         # Apply cumulative sum for random walk behavior (smoother trends)
         spline_coef = pm.Deterministic(
-            "spline_coef",
-            spline_scale * pt.cumsum(spline_coef_raw),
-            dims="spline_coef"
+            "spline_coef", spline_scale * pt.cumsum(spline_coef_raw), dims="spline_coef"
         )
-        
+
         # FIX: Convert basis to PyTensor tensor
         basis_tensor = pt.as_tensor_variable(basis)
-        
+
         # Compute trend at unique time points
         trend_unique = pt.dot(basis_tensor, spline_coef)
-        
+
         # Center the trend (remove mean)
         trend_unique = trend_unique - trend_unique.mean()
-        
+
         # Map to observations
         return trend_unique[time_idx]
-    
+
     def _build_gp_trend(self, model: pm.Model, time_idx) -> pt.TensorVariable:
         """Build Gaussian Process trend using HSGP approximation."""
-        
+
         gp_config = self.trend_features["gp_config"]
-        
+
         # GP hyperparameters
         gp_lengthscale = pm.LogNormal(
             "gp_lengthscale",
             mu=np.log(gp_config["lengthscale_mu"]),
-            sigma=gp_config["lengthscale_sigma"]
+            sigma=gp_config["lengthscale_sigma"],
         )
-        
-        gp_amplitude = pm.HalfNormal(
-            "gp_amplitude",
-            sigma=gp_config["amplitude_sigma"]
-        )
-        
+
+        gp_amplitude = pm.HalfNormal("gp_amplitude", sigma=gp_config["amplitude_sigma"])
+
         # Use Hilbert Space GP approximation for efficiency
         # This is much faster than full GP for time series
         try:
             import pymc.gp as gp_module
-            
+
             # Matern 3/2 covariance for smooth but flexible trends
             cov_func = gp_amplitude**2 * gp_module.cov.Matern32(
-                input_dim=1,
-                ls=gp_lengthscale
+                input_dim=1, ls=gp_lengthscale
             )
-            
+
             # HSGP approximation
             gp = gp_module.HSGP(
-                m=[gp_config["n_basis"]],
-                c=gp_config["c"],
-                cov_func=cov_func
+                m=[gp_config["n_basis"]], c=gp_config["c"], cov_func=cov_func
             )
-            
+
             # Time points for unique periods, scaled to [-1, 1] for HSGP
             t_unique = np.linspace(-1, 1, self.n_periods).reshape(-1, 1)
-            
+
             # Build GP prior
             trend_unique = gp.prior("trend_gp", X=t_unique)
-            
+
             # Map to observations
             return trend_unique[time_idx]
-            
+
         except (ImportError, AttributeError) as e:
             warnings.warn(
                 f"HSGP not available ({e}), falling back to basis function GP"
             )
-            return self._build_gp_trend_basis(model, gp_lengthscale, gp_amplitude, time_idx)
-    
+            return self._build_gp_trend_basis(
+                model, gp_lengthscale, gp_amplitude, time_idx
+            )
+
     def _build_gp_trend_basis(
         self,
         model: pm.Model,
         lengthscale: pt.TensorVariable,
         amplitude: pt.TensorVariable,
-        time_idx
+        time_idx,
     ) -> pt.TensorVariable:
         """
         Build GP trend using explicit basis function approximation.
-        
+
         This is a fallback when HSGP is not available.
         Uses a spectral (Fourier) approximation to the GP.
         """
         gp_config = self.trend_features["gp_config"]
         n_basis = gp_config["n_basis"]
-        
+
         # Time points
         t_unique = np.linspace(0, 1, self.n_periods)
-        
+
         # Create Fourier basis for GP approximation
         # This approximates a stationary GP with spectral methods
         frequencies = np.arange(1, n_basis + 1)
-        
+
         # Basis functions
         basis_sin = np.sin(2 * np.pi * np.outer(t_unique, frequencies))
         basis_cos = np.cos(2 * np.pi * np.outer(t_unique, frequencies))
         basis = np.hstack([basis_sin, basis_cos])  # (n_periods, 2*n_basis)
-        
+
         # FIX: Convert to PyTensor tensor
         basis_tensor = pt.as_tensor_variable(basis)
-        
+
         # Spectral density weights (approximate Matern 3/2)
         # S(w) ∝ (1 + (w*l)^2)^(-2) for Matern 3/2
         omega = 2 * np.pi * frequencies
         omega_tensor = pt.as_tensor_variable(omega)
-        
+
         # GP basis coefficients
-        gp_coef = pm.Normal(
-            "gp_coef",
-            mu=0,
-            sigma=1,
-            shape=2 * n_basis
-        )
-        
+        gp_coef = pm.Normal("gp_coef", mu=0, sigma=1, shape=2 * n_basis)
+
         # Compute spectral weights (need to be differentiable)
         # Use a simpler squared exponential approximation for stability
-        spectral_weights_sin = pt.exp(-0.5 * (omega_tensor * lengthscale)**2)
-        spectral_weights_cos = pt.exp(-0.5 * (omega_tensor * lengthscale)**2)
+        spectral_weights_sin = pt.exp(-0.5 * (omega_tensor * lengthscale) ** 2)
+        spectral_weights_cos = pt.exp(-0.5 * (omega_tensor * lengthscale) ** 2)
         spectral_weights = pt.concatenate([spectral_weights_sin, spectral_weights_cos])
-        
+
         # Scale coefficients by spectral weights and amplitude
         scaled_coef = amplitude * gp_coef * pt.sqrt(spectral_weights / n_basis)
-        
+
         # Compute trend
         trend_unique = pt.dot(basis_tensor, scaled_coef)
-        
+
         # Center
         trend_unique = trend_unique - trend_unique.mean()
-        
+
         # Map to observations
         return trend_unique[time_idx]
-    
+
     def _prepare_media_data_for_model(
-        self,
-        X_media_raw: np.ndarray | None = None
+        self, X_media_raw: np.ndarray | None = None
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Prepare media data for model (compute adstock at low/high alpha).
-        
+
         Parameters
         ----------
         X_media_raw : np.ndarray, optional
             Raw media data. If None, uses training data.
-        
+
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
@@ -938,77 +953,71 @@ class BayesianMMM:
         """
         if X_media_raw is None:
             X_media_raw = self.X_media_raw
-        
+
         alpha_low = self.adstock_alphas[0]
         alpha_high = self.adstock_alphas[-1]
-        
+
         # Compute adstock
         adstock_low = geometric_adstock_2d(X_media_raw, alpha_low)
         adstock_high = geometric_adstock_2d(X_media_raw, alpha_high)
-        
+
         # Normalize using training data max values
         for c, ch_name in enumerate(self.channel_names):
             max_val = self._media_max[ch_name] + 1e-8
             adstock_low[:, c] = adstock_low[:, c] / max_val
             adstock_high[:, c] = adstock_high[:, c] / max_val
-        
+
         return adstock_low, adstock_high
-    
+
     def _build_model(self) -> pm.Model:
         """Build the PyMC model with Data for prediction support."""
         coords = self._build_coords()
-        
+
         # Prepare media data
         X_adstock_low, X_adstock_high = self._prepare_media_data_for_model()
-        
+
         with pm.Model(coords=coords) as model:
             # =================================================================
             # MUTABLE DATA (for prediction)
             # =================================================================
             X_media_low_data = pm.Data(
-                "X_media_low",
-                X_adstock_low,
-                dims=("obs", "channel")
+                "X_media_low", X_adstock_low, dims=("obs", "channel")
             )
             X_media_high_data = pm.Data(
-                "X_media_high",
-                X_adstock_high,
-                dims=("obs", "channel")
+                "X_media_high", X_adstock_high, dims=("obs", "channel")
             )
-            
+
             if self.X_controls is not None:
                 X_controls_data = pm.Data(
-                    "X_controls",
-                    self.X_controls,
-                    dims=("obs", "control")
+                    "X_controls", self.X_controls, dims=("obs", "control")
                 )
-            
+
             time_idx_data = pm.Data("time_idx", self.time_idx)
             geo_idx_data = pm.Data("geo_idx", self.geo_idx)
             product_idx_data = pm.Data("product_idx", self.product_idx)
-            
+
             n_obs_data = X_media_low_data.shape[0]
-            
+
             # =================================================================
             # INTERCEPT
             # =================================================================
             # Since y is standardized (mean=0, std=1), intercept should be ~0
             intercept = pm.Normal("intercept", mu=0, sigma=0.5)
-            
+
             # =================================================================
             # TREND
             # =================================================================
             trend = self._build_trend_component(model, time_idx_data)
-            
+
             # Store trend for diagnostics
             pm.Deterministic("trend_component", trend)
-            
+
             # =================================================================
             # SEASONALITY
             # =================================================================
             n_periods = self.n_periods
             seasonality_at_periods = pt.zeros(n_periods)
-            
+
             for name, features in self.seasonality_features.items():
                 n_features = features.shape[1]
                 season_coef = pm.Normal(
@@ -1016,21 +1025,21 @@ class BayesianMMM:
                     mu=0,
                     sigma=0.3,
                     shape=n_features,
-                    dims=f"{name}_fourier"
+                    dims=f"{name}_fourier",
                 )
                 # Explicitly convert features to tensor for proper computation
                 features_tensor = pt.as_tensor_variable(features)
                 # Compute seasonal effect at each unique time period
                 season_effect = pt.dot(features_tensor, season_coef)
                 seasonality_at_periods = seasonality_at_periods + season_effect
-            
+
             # Map from unique periods to observations using time index
             # Use subtensor for explicit advanced indexing
             seasonality = seasonality_at_periods[time_idx_data]
-            
+
             # Store seasonality component
             pm.Deterministic("seasonality_component", seasonality)
-            
+
             # Also store seasonality at unique periods for diagnostics
             pm.Deterministic("seasonality_by_period", seasonality_at_periods)
             # ###
@@ -1047,7 +1056,7 @@ class BayesianMMM:
             #     features_tensor = pt.as_tensor_variable(features)
             #     season_effect = pt.dot(features_tensor, season_coef)
             #     seasonality = seasonality + season_effect[time_idx_data]
-            
+
             # =================================================================
             # GEO EFFECTS (if applicable)
             # =================================================================
@@ -1058,60 +1067,64 @@ class BayesianMMM:
                 geo_contribution = geo_effect[geo_idx_data]
             else:
                 geo_contribution = pt.zeros(n_obs_data)
-            
+
             # =================================================================
             # PRODUCT EFFECTS (if applicable)
             # =================================================================
             if self.has_product and self.hierarchical_config.pool_across_product:
                 product_sigma = pm.HalfNormal("product_sigma", sigma=0.3)
-                product_offset = pm.Normal("product_offset", mu=0, sigma=1, shape=self.n_products)
+                product_offset = pm.Normal(
+                    "product_offset", mu=0, sigma=1, shape=self.n_products
+                )
                 product_effect = product_sigma * product_offset
                 product_contribution = product_effect[product_idx_data]
             else:
                 product_contribution = pt.zeros(n_obs_data)
-            
+
             # =================================================================
             # MEDIA EFFECTS
             # =================================================================
             # Strategy: interpolate between pre-computed adstock levels,
             # apply logistic saturation, multiply by coefficient
-            
+
             channel_contribs = []
-            
+
             for c, channel_name in enumerate(self.channel_names):
                 # Get pre-computed adstock at low and high alpha
                 x_low = X_media_low_data[:, c]
                 x_high = X_media_high_data[:, c]
-                
+
                 # Adstock mixing parameter
                 adstock_mix = pm.Beta(f"adstock_{channel_name}", alpha=2, beta=2)
-                
+
                 # Interpolate
                 x_adstocked = (1 - adstock_mix) * x_low + adstock_mix * x_high
-                
+
                 # Saturation parameter (logistic)
                 # Use Exponential for numerical stability near 0
                 sat_lam = pm.Exponential(f"sat_lam_{channel_name}", lam=0.5)
-                
+
                 # Apply saturation with numerical stability
                 # Clip the exponent to prevent overflow
                 exponent = pt.clip(-sat_lam * x_adstocked, -20, 0)
                 x_saturated = 1 - pt.exp(exponent)
-                
+
                 # Channel coefficient (positive, scaled for standardized y)
                 beta = pm.HalfNormal(f"beta_{channel_name}", sigma=0.5)
-                
+
                 channel_contrib = beta * x_saturated
                 channel_contribs.append(channel_contrib)
-            
+
             # Stack and sum
             media_matrix = pt.stack(channel_contribs, axis=1)
             media_contribution = media_matrix.sum(axis=1)
-            
+
             # Store for diagnostics
-            pm.Deterministic("channel_contributions", media_matrix, dims=("obs", "channel"))
+            pm.Deterministic(
+                "channel_contributions", media_matrix, dims=("obs", "channel")
+            )
             pm.Deterministic("media_total", media_contribution)
-            
+
             # =================================================================
             # CONTROL EFFECTS
             # =================================================================
@@ -1126,7 +1139,7 @@ class BayesianMMM:
                 control_contribution = pt.dot(X_controls_data, beta_controls)
             else:
                 control_contribution = pt.zeros(n_obs_data)
-            
+
             # =================================================================
             # COMBINE AND LIKELIHOOD
             # =================================================================
@@ -1139,22 +1152,22 @@ class BayesianMMM:
                 + media_contribution
                 + control_contribution
             )
-            
+
             # Noise (should capture remaining variance after standardization)
             sigma = pm.HalfNormal("sigma", sigma=0.5)
-            
+
             # Likelihood
             pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
-        
+
         return model
-    
+
     @property
     def model(self) -> pm.Model:
         """Get or build the PyMC model."""
         if self._model is None:
             self._model = self._build_model()
         return self._model
-    
+
     def fit(
         self,
         draws: int | None = None,
@@ -1166,7 +1179,7 @@ class BayesianMMM:
     ) -> MMMResults:
         """
         Fit the model using MCMC.
-        
+
         Parameters
         ----------
         draws : int, optional
@@ -1181,7 +1194,7 @@ class BayesianMMM:
             Random seed for reproducibility.
         **kwargs
             Additional arguments passed to pm.sample().
-        
+
         Returns
         -------
         MMMResults
@@ -1192,10 +1205,10 @@ class BayesianMMM:
         chains = chains or self.model_config.n_chains
         target_accept = target_accept or 0.9
         random_seed = random_seed or self.model_config.optim_seed
-        
+
         # Sampler
         nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
-        
+
         with self.model:
             trace = pm.sample(
                 draws=draws,
@@ -1207,21 +1220,21 @@ class BayesianMMM:
                 init="adapt_diag",
                 **kwargs,
             )
-        
+
         self._trace = trace
-        
+
         # Diagnostics
         try:
             div_count = int(trace.sample_stats.diverging.sum().values)
         except:
             div_count = 0
-        
+
         diagnostics = {
             "divergences": div_count,
             "rhat_max": float(az.rhat(trace).max().to_array().max()),
             "ess_bulk_min": float(az.ess(trace, method="bulk").min().to_array().min()),
         }
-        
+
         results = MMMResults(
             trace=trace,
             model=self.model,
@@ -1230,21 +1243,21 @@ class BayesianMMM:
             y_mean=self.y_mean,
             y_std=self.y_std,
         )
-        
+
         # Compute contributions
         results = self._compute_contributions(results)
-        
+
         return results
-    
+
     def _compute_contributions(self, results: MMMResults) -> MMMResults:
         """Compute channel-level contributions in original scale."""
         try:
             contrib_posterior = results.trace.posterior["channel_contributions"]
             contrib_mean = contrib_posterior.mean(dim=["chain", "draw"]).values
-            
+
             # Scale back to original units
             contrib_original = contrib_mean * self.y_std
-            
+
             results.channel_contributions = pd.DataFrame(
                 contrib_original,
                 index=self.panel.index,
@@ -1252,9 +1265,9 @@ class BayesianMMM:
             )
         except Exception as e:
             warnings.warn(f"Could not compute contributions: {e}")
-        
+
         return results
-    
+
     def predict(
         self,
         X_media: np.ndarray | None = None,
@@ -1268,10 +1281,10 @@ class BayesianMMM:
     ) -> PredictionResults:
         """
         Generate predictions with optionally modified input data.
-        
+
         This method allows running posterior predictive sampling with modified
         inputs, enabling counterfactual analysis and contribution calculation.
-        
+
         Parameters
         ----------
         X_media : np.ndarray, optional
@@ -1293,28 +1306,28 @@ class BayesianMMM:
             Probability mass for HDI calculation (default 0.94).
         random_seed : int, optional
             Random seed for reproducibility.
-        
+
         Returns
         -------
         PredictionResults
             Container with predictions, including mean, std, HDI, and samples.
-        
+
         Examples
         --------
         >>> # Get baseline predictions (same as training)
         >>> pred = mmm.predict()
-        
+
         >>> # Prediction with TV spend zeroed out
         >>> X_media_no_tv = panel.X_media.values.copy()
         >>> X_media_no_tv[:, 0] = 0  # Zero out first channel (TV)
         >>> pred_no_tv = mmm.predict(X_media=X_media_no_tv)
-        
+
         >>> # TV contribution = baseline - counterfactual
         >>> tv_contrib = pred.y_pred_mean - pred_no_tv.y_pred_mean
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        
+
         # Use training data as defaults
         if X_media is None:
             X_media = self.X_media_raw
@@ -1324,10 +1337,10 @@ class BayesianMMM:
             geo_idx = self.geo_idx
         if product_idx is None:
             product_idx = self.product_idx
-        
+
         # Prepare media data (compute adstock and normalize)
         X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(X_media)
-        
+
         # Prepare controls (standardize)
         if X_controls is not None:
             X_controls_std = (X_controls - self.control_mean) / self.control_std
@@ -1335,59 +1348,65 @@ class BayesianMMM:
             X_controls_std = self.X_controls
         else:
             X_controls_std = None
-        
+
         # Update model data
         with self.model:
-            pm.set_data({
-                "X_media_low": X_adstock_low,
-                "X_media_high": X_adstock_high,
-                "time_idx": time_idx.astype(np.int32),
-                "geo_idx": geo_idx.astype(np.int32),
-                "product_idx": product_idx.astype(np.int32),
-            })
-            
+            pm.set_data(
+                {
+                    "X_media_low": X_adstock_low,
+                    "X_media_high": X_adstock_high,
+                    "time_idx": time_idx.astype(np.int32),
+                    "geo_idx": geo_idx.astype(np.int32),
+                    "product_idx": product_idx.astype(np.int32),
+                }
+            )
+
             if X_controls_std is not None and self.n_controls > 0:
                 pm.set_data({"X_controls": X_controls_std})
-            
+
             # Sample posterior predictive
             ppc = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=["y_obs"],
                 random_seed=random_seed,
             )
-        
+
         # Reset model data to training values
         with self.model:
-            X_adstock_low_train, X_adstock_high_train = self._prepare_media_data_for_model()
-            pm.set_data({
-                "X_media_low": X_adstock_low_train,
-                "X_media_high": X_adstock_high_train,
-                "time_idx": self.time_idx,
-                "geo_idx": self.geo_idx,
-                "product_idx": self.product_idx,
-            })
+            X_adstock_low_train, X_adstock_high_train = (
+                self._prepare_media_data_for_model()
+            )
+            pm.set_data(
+                {
+                    "X_media_low": X_adstock_low_train,
+                    "X_media_high": X_adstock_high_train,
+                    "time_idx": self.time_idx,
+                    "geo_idx": self.geo_idx,
+                    "product_idx": self.product_idx,
+                }
+            )
             if self.X_controls is not None:
                 pm.set_data({"X_controls": self.X_controls})
-        
+
         # Extract predictions
         y_pred_samples = ppc.posterior_predictive["y_obs"].values
         # Flatten chains and draws: (n_chains, n_draws, n_obs) -> (n_samples, n_obs)
         n_chains, n_draws, n_obs = y_pred_samples.shape
         y_pred_samples = y_pred_samples.reshape(n_chains * n_draws, n_obs)
-        
+
         # Convert to original scale if requested
         if return_original_scale:
             y_pred_samples = y_pred_samples * self.y_std + self.y_mean
-        
+
         # Compute statistics
         y_pred_mean = y_pred_samples.mean(axis=0)
         y_pred_std = y_pred_samples.std(axis=0)
-        
+
         hdi_low_pct = (1 - hdi_prob) / 2 * 100
         hdi_high_pct = (1 + hdi_prob) / 2 * 100
         y_pred_hdi_low = np.percentile(y_pred_samples, hdi_low_pct, axis=0)
         y_pred_hdi_high = np.percentile(y_pred_samples, hdi_high_pct, axis=0)
-        
+
         return PredictionResults(
             posterior_predictive=ppc,
             y_pred_mean=y_pred_mean,
@@ -1396,13 +1415,14 @@ class BayesianMMM:
             y_pred_hdi_high=y_pred_hdi_high,
             y_pred_samples=y_pred_samples,
         )
+
     def compute_component_decomposition(
         self,
         hdi_prob: float = 0.94,
     ) -> ComponentDecomposition:
         """
         Compute full component decomposition of the model.
-        
+
         Returns contribution from each component:
         - Intercept (base)
         - Trend
@@ -1411,12 +1431,12 @@ class BayesianMMM:
         - Controls (total and by variable)
         - Geo effects (if applicable)
         - Product effects (if applicable)
-        
+
         Parameters
         ----------
         hdi_prob : float
             HDI probability (not currently used, for future extension).
-        
+
         Returns
         -------
         ComponentDecomposition
@@ -1424,15 +1444,15 @@ class BayesianMMM:
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        
+
         posterior = self._trace.posterior
-        
+
         # Helper to get mean across chains and draws
         def get_mean(var_name: str) -> np.ndarray:
             if var_name in posterior:
                 return posterior[var_name].mean(dim=["chain", "draw"]).values
             return np.zeros(self.n_obs)
-        
+
         # Extract all components (standardized scale)
         intercept_std = get_mean("intercept_component")
         trend_std = get_mean("trend_component")
@@ -1441,44 +1461,44 @@ class BayesianMMM:
         controls_total_std = get_mean("controls_total")
         geo_std = get_mean("geo_component") if self.has_geo else None
         product_std = get_mean("product_component") if self.has_product else None
-        
+
         # Channel-level media
         channel_contrib_std = get_mean("channel_contributions")
-        
+
         # Control-level contributions
         if self.n_controls > 0 and "control_contributions" in posterior:
             control_contrib_std = get_mean("control_contributions")
         else:
             control_contrib_std = None
-        
+
         # Convert to original scale
         intercept = intercept_std * self.y_std + self.y_mean
         trend = trend_std * self.y_std
         seasonality = seasonality_std * self.y_std
         media_total = media_total_std * self.y_std
         controls_total = controls_total_std * self.y_std
-        
+
         # Channel contributions (original scale)
         media_by_channel = pd.DataFrame(
             channel_contrib_std * self.y_std,
             index=self.panel.index,
-            columns=self.channel_names
+            columns=self.channel_names,
         )
-        
+
         # Control contributions (original scale)
         if control_contrib_std is not None:
             controls_by_var = pd.DataFrame(
                 control_contrib_std * self.y_std,
                 index=self.panel.index,
-                columns=self.control_names
+                columns=self.control_names,
             )
         else:
             controls_by_var = None
-        
+
         # Geo/product effects
         geo_effects = geo_std * self.y_std if geo_std is not None else None
         product_effects = product_std * self.y_std if product_std is not None else None
-        
+
         # Compute totals
         total_intercept = float(intercept.sum())
         total_trend = float(trend.sum())
@@ -1486,8 +1506,10 @@ class BayesianMMM:
         total_media = float(media_total.sum())
         total_controls = float(controls_total.sum())
         total_geo = float(geo_effects.sum()) if geo_effects is not None else None
-        total_product = float(product_effects.sum()) if product_effects is not None else None
-        
+        total_product = (
+            float(product_effects.sum()) if product_effects is not None else None
+        )
+
         return ComponentDecomposition(
             intercept=intercept,
             trend=trend,
@@ -1508,7 +1530,7 @@ class BayesianMMM:
             y_mean=self.y_mean,
             y_std=self.y_std,
         )
-    
+
     def compute_counterfactual_contributions(
         self,
         time_period: tuple[int, int] | None = None,
@@ -1519,14 +1541,14 @@ class BayesianMMM:
     ) -> ContributionResults:
         """
         Compute channel contributions using counterfactual analysis.
-        
+
         For each channel, this method:
         1. Gets baseline prediction (all channels present)
         2. Gets counterfactual prediction (channel zeroed out)
         3. Computes contribution as: baseline - counterfactual
-        
+
         This approach properly accounts for saturation and adstock effects.
-        
+
         Parameters
         ----------
         time_period : tuple[int, int], optional
@@ -1542,23 +1564,23 @@ class BayesianMMM:
             Probability mass for HDI calculation (default 0.94).
         random_seed : int, optional
             Random seed for reproducibility.
-        
+
         Returns
         -------
         ContributionResults
             Container with per-observation and total contributions.
-        
+
         Examples
         --------
         >>> # Total contributions over entire period
         >>> contrib = mmm.compute_counterfactual_contributions()
         >>> print(contrib.summary())
-        
+
         >>> # Contributions for specific time period (weeks 50-100)
         >>> contrib_period = mmm.compute_counterfactual_contributions(
         ...     time_period=(50, 100)
         ... )
-        
+
         >>> # Contributions for specific channels
         >>> contrib_tv = mmm.compute_counterfactual_contributions(
         ...     channels=["TV", "Digital"]
@@ -1566,38 +1588,38 @@ class BayesianMMM:
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        
+
         channels = channels or self.channel_names
-        
+
         # Validate channels
         invalid_channels = [c for c in channels if c not in self.channel_names]
         if invalid_channels:
             raise ValueError(f"Unknown channels: {invalid_channels}")
-        
+
         # Determine observation mask for time period
         if time_period is not None:
             start_idx, end_idx = time_period
             time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
         else:
             time_mask = np.ones(self.n_obs, dtype=bool)
-        
+
         # Get baseline prediction
         baseline_pred = self.predict(
             return_original_scale=True,
             hdi_prob=hdi_prob,
             random_seed=random_seed,
         )
-        
+
         # Store counterfactual predictions
         counterfactual_preds = {}
-        
+
         # Compute counterfactual for each channel
         for channel in channels:
             # Create media data with this channel zeroed out
             X_media_counterfactual = self.X_media_raw.copy()
             ch_idx = self.channel_names.index(channel)
             X_media_counterfactual[:, ch_idx] = 0.0
-            
+
             # Get counterfactual prediction
             cf_pred = self.predict(
                 X_media=X_media_counterfactual,
@@ -1605,75 +1627,79 @@ class BayesianMMM:
                 hdi_prob=hdi_prob,
                 random_seed=random_seed,
             )
-            
+
             counterfactual_preds[channel] = cf_pred
-        
+
         # Compute contributions
         # Contribution = baseline - counterfactual
         contribution_data = {}
         contribution_samples = {}  # For uncertainty
-        
+
         for channel in channels:
             cf_pred = counterfactual_preds[channel]
-            
+
             # Per-observation contribution
             contrib = baseline_pred.y_pred_mean - cf_pred.y_pred_mean
             contribution_data[channel] = contrib
-            
+
             if compute_uncertainty:
                 # Contribution samples for uncertainty
                 contrib_samples = baseline_pred.y_pred_samples - cf_pred.y_pred_samples
                 contribution_samples[channel] = contrib_samples
-        
+
         # Create DataFrame
         channel_contributions = pd.DataFrame(
             contribution_data,
             index=self.panel.index,
         )
-        
+
         # Apply time mask for totals
         if time_period is not None:
             contrib_masked = channel_contributions.iloc[time_mask]
         else:
             contrib_masked = channel_contributions
-        
+
         # Total contributions
         total_contributions = contrib_masked.sum()
-        
+
         # Percentage of total
         total_effect = total_contributions.sum()
-        contribution_pct = (total_contributions / total_effect * 100) if total_effect != 0 else total_contributions * 0
-        
+        contribution_pct = (
+            (total_contributions / total_effect * 100)
+            if total_effect != 0
+            else total_contributions * 0
+        )
+
         # HDI for totals
         contribution_hdi_low = None
         contribution_hdi_high = None
-        
+
         if compute_uncertainty:
             hdi_low_pct = (1 - hdi_prob) / 2 * 100
             hdi_high_pct = (1 + hdi_prob) / 2 * 100
-            
+
             hdi_low_values = {}
             hdi_high_values = {}
-            
+
             for channel in channels:
                 samples = contribution_samples[channel]
                 if time_period is not None:
                     samples = samples[:, time_mask]
-                
+
                 # Sum over time for each sample
                 total_samples = samples.sum(axis=1)
-                
+
                 hdi_low_values[channel] = np.percentile(total_samples, hdi_low_pct)
                 hdi_high_values[channel] = np.percentile(total_samples, hdi_high_pct)
-            
+
             contribution_hdi_low = pd.Series(hdi_low_values)
             contribution_hdi_high = pd.Series(hdi_high_values)
-        
+
         # Store counterfactual predictions as arrays
         cf_pred_arrays = {
             ch: pred.y_pred_mean for ch, pred in counterfactual_preds.items()
         }
-        
+
         return ContributionResults(
             channel_contributions=channel_contributions,
             total_contributions=total_contributions,
@@ -1684,7 +1710,7 @@ class BayesianMMM:
             contribution_hdi_low=contribution_hdi_low,
             contribution_hdi_high=contribution_hdi_high,
         )
-    
+
     def compute_marginal_contributions(
         self,
         spend_increase_pct: float = 10.0,
@@ -1694,10 +1720,10 @@ class BayesianMMM:
     ) -> pd.DataFrame:
         """
         Compute marginal contributions for a given spend increase.
-        
+
         This shows how much additional outcome we'd get from increasing
         spend by a given percentage, accounting for saturation.
-        
+
         Parameters
         ----------
         spend_increase_pct : float
@@ -1708,7 +1734,7 @@ class BayesianMMM:
             Channels to analyze. If None, uses all channels.
         random_seed : int, optional
             Random seed for reproducibility.
-        
+
         Returns
         -------
         pd.DataFrame
@@ -1716,57 +1742,61 @@ class BayesianMMM:
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        
+
         channels = channels or self.channel_names
         multiplier = 1.0 + spend_increase_pct / 100.0
-        
+
         # Determine time mask
         if time_period is not None:
             start_idx, end_idx = time_period
             time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
         else:
             time_mask = np.ones(self.n_obs, dtype=bool)
-        
+
         # Get baseline prediction
         baseline_pred = self.predict(random_seed=random_seed)
         baseline_total = baseline_pred.y_pred_mean[time_mask].sum()
-        
+
         results = []
-        
+
         for channel in channels:
             ch_idx = self.channel_names.index(channel)
-            
+
             # Create media data with increased spend for this channel
             X_media_increased = self.X_media_raw.copy()
             X_media_increased[:, ch_idx] *= multiplier
-            
+
             # Get prediction with increased spend
             increased_pred = self.predict(
                 X_media=X_media_increased,
                 random_seed=random_seed,
             )
             increased_total = increased_pred.y_pred_mean[time_mask].sum()
-            
+
             # Compute marginal contribution
             marginal_contrib = increased_total - baseline_total
-            
+
             # Current spend
             current_spend = self.X_media_raw[time_mask, ch_idx].sum()
             spend_increase = current_spend * (multiplier - 1)
-            
+
             # Marginal ROAS
-            marginal_roas = marginal_contrib / spend_increase if spend_increase > 0 else 0
-            
-            results.append({
-                'Channel': channel,
-                'Current Spend': current_spend,
-                f'Spend Increase ({spend_increase_pct}%)': spend_increase,
-                'Marginal Contribution': marginal_contrib,
-                'Marginal ROAS': marginal_roas,
-            })
-        
+            marginal_roas = (
+                marginal_contrib / spend_increase if spend_increase > 0 else 0
+            )
+
+            results.append(
+                {
+                    "Channel": channel,
+                    "Current Spend": current_spend,
+                    f"Spend Increase ({spend_increase_pct}%)": spend_increase,
+                    "Marginal Contribution": marginal_contrib,
+                    "Marginal ROAS": marginal_roas,
+                }
+            )
+
         return pd.DataFrame(results)
-    
+
     def what_if_scenario(
         self,
         spend_changes: dict[str, float],
@@ -1775,7 +1805,7 @@ class BayesianMMM:
     ) -> dict:
         """
         Run a what-if scenario with custom spend changes.
-        
+
         Parameters
         ----------
         spend_changes : dict[str, float]
@@ -1785,7 +1815,7 @@ class BayesianMMM:
             Time period for calculation.
         random_seed : int, optional
             Random seed for reproducibility.
-        
+
         Returns
         -------
         dict
@@ -1793,74 +1823,76 @@ class BayesianMMM:
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        
+
         # Determine time mask
         if time_period is not None:
             start_idx, end_idx = time_period
             time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
         else:
             time_mask = np.ones(self.n_obs, dtype=bool)
-        
+
         # Get baseline
         baseline_pred = self.predict(random_seed=random_seed)
         baseline_total = baseline_pred.y_pred_mean[time_mask].sum()
-        
+
         # Create scenario media data
         X_media_scenario = self.X_media_raw.copy()
-        
+
         spend_summary = {}
         for channel, multiplier in spend_changes.items():
             if channel not in self.channel_names:
                 raise ValueError(f"Unknown channel: {channel}")
-            
+
             ch_idx = self.channel_names.index(channel)
             original_spend = X_media_scenario[time_mask, ch_idx].sum()
             X_media_scenario[:, ch_idx] *= multiplier
             new_spend = X_media_scenario[time_mask, ch_idx].sum()
-            
+
             spend_summary[channel] = {
-                'original': original_spend,
-                'scenario': new_spend,
-                'change': new_spend - original_spend,
-                'change_pct': (multiplier - 1) * 100,
+                "original": original_spend,
+                "scenario": new_spend,
+                "change": new_spend - original_spend,
+                "change_pct": (multiplier - 1) * 100,
             }
-        
+
         # Get scenario prediction
         scenario_pred = self.predict(
             X_media=X_media_scenario,
             random_seed=random_seed,
         )
         scenario_total = scenario_pred.y_pred_mean[time_mask].sum()
-        
+
         # Compute impact
         outcome_change = scenario_total - baseline_total
-        outcome_change_pct = (outcome_change / baseline_total * 100) if baseline_total != 0 else 0
-        
+        outcome_change_pct = (
+            (outcome_change / baseline_total * 100) if baseline_total != 0 else 0
+        )
+
         return {
-            'baseline_outcome': baseline_total,
-            'scenario_outcome': scenario_total,
-            'outcome_change': outcome_change,
-            'outcome_change_pct': outcome_change_pct,
-            'spend_changes': spend_summary,
-            'baseline_prediction': baseline_pred.y_pred_mean,
-            'scenario_prediction': scenario_pred.y_pred_mean,
+            "baseline_outcome": baseline_total,
+            "scenario_outcome": scenario_total,
+            "outcome_change": outcome_change,
+            "outcome_change_pct": outcome_change_pct,
+            "spend_changes": spend_summary,
+            "baseline_prediction": baseline_pred.y_pred_mean,
+            "scenario_prediction": scenario_pred.y_pred_mean,
         }
-    
+
     def sample_prior_predictive(self, samples: int = 500) -> az.InferenceData:
         """Sample from prior predictive distribution."""
         with self.model:
             return pm.sample_prior_predictive(samples=samples)
-    
+
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary."""
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
         return az.summary(self._trace, var_names=var_names)
-    
+
     # =========================================================================
     # Save and Load Methods
     # =========================================================================
-    
+
     def save(
         self,
         path: str | Path,
@@ -1869,15 +1901,15 @@ class BayesianMMM:
     ) -> None:
         """
         Save the fitted model to disk.
-        
+
         This saves all necessary components to reconstruct and use the model:
         - Model configuration (MFFConfig, ModelConfig, TrendConfig)
         - Fitted trace (ArviZ InferenceData)
         - Scaling parameters for predictions
         - Adstock alphas
-        
+
         The model can be loaded later with `BayesianMMM.load()`.
-        
+
         Parameters
         ----------
         path : str or Path
@@ -1887,18 +1919,18 @@ class BayesianMMM:
             scaling parameters are saved (useful for just saving the setup).
         compress : bool, default True
             Whether to compress the saved files (uses gzip for NetCDF).
-        
+
         Examples
         --------
         >>> # Fit and save a model
         >>> mmm = BayesianMMM(panel, model_config, trend_config)
         >>> results = mmm.fit()
         >>> mmm.save("models/my_mmm_model")
-        
+
         >>> # Load and use later
         >>> mmm_loaded = BayesianMMM.load("models/my_mmm_model", panel)
         >>> predictions = mmm_loaded.predict()
-        
+
         Notes
         -----
         The saved model does NOT include the panel data. When loading,
@@ -1906,70 +1938,70 @@ class BayesianMMM:
         """
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
-        
+
         # 1. Save metadata and version info
         metadata = {
-            'version': self._VERSION,
-            'fitted': self._trace is not None,
-            'n_obs': self.n_obs,
-            'n_channels': self.n_channels,
-            'n_controls': self.n_controls,
-            'channel_names': self.channel_names,
-            'control_names': self.control_names,
-            'has_geo': self.has_geo,
-            'has_product': self.has_product,
-            'n_geos': self.n_geos,
-            'n_products': self.n_products,
-            'n_periods': self.n_periods,
-            'adstock_alphas': self.adstock_alphas,
+            "version": self._VERSION,
+            "fitted": self._trace is not None,
+            "n_obs": self.n_obs,
+            "n_channels": self.n_channels,
+            "n_controls": self.n_controls,
+            "channel_names": self.channel_names,
+            "control_names": self.control_names,
+            "has_geo": self.has_geo,
+            "has_product": self.has_product,
+            "n_geos": self.n_geos,
+            "n_products": self.n_products,
+            "n_periods": self.n_periods,
+            "adstock_alphas": self.adstock_alphas,
         }
-        
+
         if self.has_geo:
-            metadata['geo_names'] = self.geo_names
+            metadata["geo_names"] = self.geo_names
         if self.has_product:
-            metadata['product_names'] = self.product_names
-        
-        with open(path / "metadata.json", 'w') as f:
+            metadata["product_names"] = self.product_names
+
+        with open(path / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
-        
+
         # 2. Save configurations
         configs = {
-            'model_config': self.model_config.model_dump(),
-            'trend_config': self.trend_config.to_dict(),
-            'mff_config': self.mff_config.model_dump(),
+            "model_config": self.model_config.model_dump(),
+            "trend_config": self.trend_config.to_dict(),
+            "mff_config": self.mff_config.model_dump(),
         }
-        
-        with open(path / "configs.json", 'w') as f:
+
+        with open(path / "configs.json", "w") as f:
             json.dump(configs, f, indent=2, default=str)
-        
+
         # 3. Save scaling parameters
         scaling_params = {
-            'y_mean': self.y_mean,
-            'y_std': self.y_std,
-            'media_max': {k: float(v) for k, v in self._media_max.items()},
+            "y_mean": self.y_mean,
+            "y_std": self.y_std,
+            "media_max": {k: float(v) for k, v in self._media_max.items()},
         }
-        
+
         if self.X_controls_raw is not None:
-            scaling_params['control_mean'] = self.control_mean.tolist()
-            scaling_params['control_std'] = self.control_std.tolist()
-        
-        with open(path / "scaling_params.json", 'w') as f:
+            scaling_params["control_mean"] = self.control_mean.tolist()
+            scaling_params["control_std"] = self.control_std.tolist()
+
+        with open(path / "scaling_params.json", "w") as f:
             json.dump(scaling_params, f, indent=2)
-        
+
         # 4. Save trace (if fitted and requested)
         if save_trace and self._trace is not None:
             trace_path = path / "trace.nc"
             self._trace.to_netcdf(str(trace_path))
-            
+
             if compress:
                 import gzip
                 import shutil
-                
-                with open(trace_path, 'rb') as f_in:
-                    with gzip.open(str(trace_path) + '.gz', 'wb') as f_out:
+
+                with open(trace_path, "rb") as f_in:
+                    with gzip.open(str(trace_path) + ".gz", "wb") as f_out:
                         shutil.copyfileobj(f_in, f_out)
                 trace_path.unlink()  # Remove uncompressed file
-        
+
         # 5. Save trend features if they exist
         trend_features_to_save = {}
         for key, value in self.trend_features.items():
@@ -1979,23 +2011,23 @@ class BayesianMMM:
                 trend_features_to_save[key] = value
             else:
                 trend_features_to_save[key] = value
-        
+
         if trend_features_to_save:
-            with open(path / "trend_features.json", 'w') as f:
+            with open(path / "trend_features.json", "w") as f:
                 json.dump(trend_features_to_save, f, indent=2)
-        
+
         # 6. Save seasonality features
         season_features_to_save = {}
         for key, value in self.seasonality_features.items():
             if isinstance(value, np.ndarray):
                 season_features_to_save[key] = value.tolist()
-        
+
         if season_features_to_save:
-            with open(path / "seasonality_features.json", 'w') as f:
+            with open(path / "seasonality_features.json", "w") as f:
                 json.dump(season_features_to_save, f, indent=2)
-        
+
         print(f"Model saved to {path}")
-    
+
     @classmethod
     def load(
         cls,
@@ -2005,7 +2037,7 @@ class BayesianMMM:
     ) -> BayesianMMM:
         """
         Load a saved model from disk.
-        
+
         Parameters
         ----------
         path : str or Path
@@ -2016,24 +2048,24 @@ class BayesianMMM:
         rebuild_model : bool, default True
             Whether to rebuild the PyMC model. Set to False if you only
             need access to the trace and don't need to make predictions.
-        
+
         Returns
         -------
         BayesianMMM
             Loaded model instance with fitted trace (if available).
-        
+
         Examples
         --------
         >>> # Load a saved model
         >>> panel = load_mff(data, config)
         >>> mmm = BayesianMMM.load("models/my_mmm_model", panel)
-        
+
         >>> # Make predictions
         >>> predictions = mmm.predict()
-        
+
         >>> # Access the trace
         >>> summary = mmm.summary()
-        
+
         Raises
         ------
         ValueError
@@ -2042,152 +2074,158 @@ class BayesianMMM:
             If the model files are not found.
         """
         path = Path(path)
-        
+
         if not path.exists():
             raise FileNotFoundError(f"Model directory not found: {path}")
-        
+
         # 1. Load metadata
-        with open(path / "metadata.json", 'r') as f:
+        with open(path / "metadata.json", "r") as f:
             metadata = json.load(f)
-        
+
         # Version check
-        saved_version = metadata.get('version', '0.0.0')
+        saved_version = metadata.get("version", "0.0.0")
         if saved_version != cls._VERSION:
             warnings.warn(
                 f"Model was saved with version {saved_version}, "
                 f"current version is {cls._VERSION}. "
                 "There may be compatibility issues."
             )
-        
+
         # 2. Load configurations
-        with open(path / "configs.json", 'r') as f:
+        with open(path / "configs.json", "r") as f:
             configs = json.load(f)
-        
+
         # Reconstruct configs
         from .config import ModelConfig, MFFConfig
-        
-        model_config = ModelConfig(**configs['model_config'])
-        trend_config = TrendConfig.from_dict(configs['trend_config'])
-        
+
+        model_config = ModelConfig(**configs["model_config"])
+        trend_config = TrendConfig.from_dict(configs["trend_config"])
+
         # 3. Validate panel compatibility
-        if panel.coords.channels != metadata['channel_names']:
+        if panel.coords.channels != metadata["channel_names"]:
             raise ValueError(
                 f"Panel channels {panel.coords.channels} don't match "
                 f"saved model channels {metadata['channel_names']}"
             )
-        
-        if panel.coords.controls != metadata['control_names']:
+
+        if panel.coords.controls != metadata["control_names"]:
             raise ValueError(
                 f"Panel controls {panel.coords.controls} don't match "
                 f"saved model controls {metadata['control_names']}"
             )
-        
+
         # 4. Create instance
-        adstock_alphas = metadata.get('adstock_alphas', [0.0, 0.3, 0.5, 0.7, 0.9])
-        
+        adstock_alphas = metadata.get("adstock_alphas", [0.0, 0.3, 0.5, 0.7, 0.9])
+
         instance = cls(
             panel=panel,
             model_config=model_config,
             trend_config=trend_config,
             adstock_alphas=adstock_alphas,
         )
-        
+
         # 5. Load scaling parameters
-        with open(path / "scaling_params.json", 'r') as f:
+        with open(path / "scaling_params.json", "r") as f:
             scaling_params = json.load(f)
-        
+
         # Override scaling params with saved values (for consistent predictions)
-        instance.y_mean = scaling_params['y_mean']
-        instance.y_std = scaling_params['y_std']
-        instance._media_max = scaling_params['media_max']
-        instance._scaling_params['y_mean'] = scaling_params['y_mean']
-        instance._scaling_params['y_std'] = scaling_params['y_std']
-        instance._scaling_params['media_max'] = scaling_params['media_max']
-        
-        if 'control_mean' in scaling_params:
-            instance.control_mean = np.array(scaling_params['control_mean'])
-            instance.control_std = np.array(scaling_params['control_std'])
-            instance._scaling_params['control_mean'] = instance.control_mean
-            instance._scaling_params['control_std'] = instance.control_std
-        
+        instance.y_mean = scaling_params["y_mean"]
+        instance.y_std = scaling_params["y_std"]
+        instance._media_max = scaling_params["media_max"]
+        instance._scaling_params["y_mean"] = scaling_params["y_mean"]
+        instance._scaling_params["y_std"] = scaling_params["y_std"]
+        instance._scaling_params["media_max"] = scaling_params["media_max"]
+
+        if "control_mean" in scaling_params:
+            instance.control_mean = np.array(scaling_params["control_mean"])
+            instance.control_std = np.array(scaling_params["control_std"])
+            instance._scaling_params["control_mean"] = instance.control_mean
+            instance._scaling_params["control_std"] = instance.control_std
+
         # Re-standardize y with loaded params
         instance.y = (instance.y_raw - instance.y_mean) / instance.y_std
-        
+
         # Re-normalize media with loaded max values
         for alpha in instance.adstock_alphas:
             adstocked = geometric_adstock_2d(instance.X_media_raw, alpha)
             normalized = np.zeros_like(adstocked)
             for c, ch_name in enumerate(instance.channel_names):
-                normalized[:, c] = adstocked[:, c] / (instance._media_max[ch_name] + 1e-8)
+                normalized[:, c] = adstocked[:, c] / (
+                    instance._media_max[ch_name] + 1e-8
+                )
             instance.X_media_adstocked[alpha] = normalized
-        
+
         # Re-standardize controls with loaded params
-        if instance.X_controls_raw is not None and 'control_mean' in scaling_params:
-            instance.X_controls = (instance.X_controls_raw - instance.control_mean) / instance.control_std
-        
+        if instance.X_controls_raw is not None and "control_mean" in scaling_params:
+            instance.X_controls = (
+                instance.X_controls_raw - instance.control_mean
+            ) / instance.control_std
+
         # 6. Load trend features if present
         trend_features_path = path / "trend_features.json"
         if trend_features_path.exists():
-            with open(trend_features_path, 'r') as f:
+            with open(trend_features_path, "r") as f:
                 trend_features = json.load(f)
-            
+
             # Convert lists back to numpy arrays
             for key, value in trend_features.items():
                 if isinstance(value, list):
                     instance.trend_features[key] = np.array(value)
                 else:
                     instance.trend_features[key] = value
-        
+
         # 7. Load seasonality features if present
         season_features_path = path / "seasonality_features.json"
         if season_features_path.exists():
-            with open(season_features_path, 'r') as f:
+            with open(season_features_path, "r") as f:
                 season_features = json.load(f)
-            
+
             for key, value in season_features.items():
                 if isinstance(value, list):
                     instance.seasonality_features[key] = np.array(value)
-        
+
         # 8. Load trace (if available)
         trace_path_gz = path / "trace.nc.gz"
         trace_path = path / "trace.nc"
-        
+
         if trace_path_gz.exists():
             import gzip
             import tempfile
-            
+
             # Decompress to temporary file
-            with tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
                 tmp_path = tmp.name
-            
-            with gzip.open(trace_path_gz, 'rb') as f_in:
-                with open(tmp_path, 'wb') as f_out:
+
+            with gzip.open(trace_path_gz, "rb") as f_in:
+                with open(tmp_path, "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
-            
+
             instance._trace = az.from_netcdf(tmp_path)
             os.unlink(tmp_path)  # Clean up temp file
-            
+
         elif trace_path.exists():
             instance._trace = az.from_netcdf(str(trace_path))
-        
+
         # 9. Build model if requested
         if rebuild_model:
             instance._model = instance._build_model()
-        
+
         print(f"Model loaded from {path}")
         if instance._trace is not None:
-            print(f"  Trace loaded: {instance._trace.posterior.dims['chain']} chains, "
-                  f"{instance._trace.posterior.dims['draw']} draws")
-        
+            print(
+                f"  Trace loaded: {instance._trace.posterior.dims['chain']} chains, "
+                f"{instance._trace.posterior.dims['draw']} draws"
+            )
+
         return instance
-    
+
     def save_trace_only(self, path: str | Path) -> None:
         """
         Save only the fitted trace to a file.
-        
+
         This is useful for quick saves when you don't need to save
         the full model configuration.
-        
+
         Parameters
         ----------
         path : str or Path
@@ -2195,49 +2233,50 @@ class BayesianMMM:
         """
         if self._trace is None:
             raise ValueError("No trace to save. Fit the model first.")
-        
+
         path = Path(path)
-        
-        if str(path).endswith('.gz'):
+
+        if str(path).endswith(".gz"):
             # Save compressed
             base_path = Path(str(path)[:-3])  # Remove .gz
             self._trace.to_netcdf(str(base_path))
-            
+
             import gzip
-            with open(base_path, 'rb') as f_in:
-                with gzip.open(path, 'wb') as f_out:
+
+            with open(base_path, "rb") as f_in:
+                with gzip.open(path, "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
             base_path.unlink()
         else:
             self._trace.to_netcdf(str(path))
-        
+
         print(f"Trace saved to {path}")
-    
+
     def load_trace_only(self, path: str | Path) -> None:
         """
         Load a trace from a file into the current model.
-        
+
         Parameters
         ----------
         path : str or Path
             File path to the trace (.nc or .nc.gz).
         """
         path = Path(path)
-        
-        if str(path).endswith('.gz'):
+
+        if str(path).endswith(".gz"):
             import gzip
             import tempfile
-            
-            with tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as tmp:
+
+            with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
                 tmp_path = tmp.name
-            
-            with gzip.open(path, 'rb') as f_in:
-                with open(tmp_path, 'wb') as f_out:
+
+            with gzip.open(path, "rb") as f_in:
+                with open(tmp_path, "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
-            
+
             self._trace = az.from_netcdf(tmp_path)
             os.unlink(tmp_path)
         else:
             self._trace = az.from_netcdf(str(path))
-        
+
         print(f"Trace loaded from {path}")

@@ -38,12 +38,12 @@ async def upload_data(
 ):
     """
     Upload a dataset in MFF format.
-    
+
     Supported formats:
     - CSV (.csv)
     - Parquet (.parquet)
     - Excel (.xlsx, .xls)
-    
+
     The file should be in Master Flat File (MFF) format with columns:
     - Period, Geography, Product, Campaign, Outlet, Creative
     - VariableName, VariableValue
@@ -51,30 +51,30 @@ async def upload_data(
     # Check file size
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
-    
+
     if size_mb > settings.max_upload_size_mb:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB",
         )
-    
+
     # Validate filename
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Filename is required",
         )
-    
+
     valid_extensions = (".csv", ".parquet", ".xlsx", ".xls")
     if not file.filename.lower().endswith(valid_extensions):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file format. Supported formats: {valid_extensions}",
         )
-    
+
     try:
         metadata = storage.save_data(content, file.filename)
-        
+
         return DataUploadResponse(
             data_id=metadata["data_id"],
             filename=metadata["filename"],
@@ -85,7 +85,7 @@ async def upload_data(
             created_at=datetime.fromisoformat(metadata["created_at"]),
             size_bytes=metadata["size_bytes"],
         )
-    
+
     except StorageError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -109,11 +109,11 @@ async def list_data(
 ):
     """List all uploaded datasets."""
     datasets = storage.list_data()
-    
+
     # Apply pagination
     total = len(datasets)
     datasets = datasets[skip : skip + limit]
-    
+
     return DataListResponse(
         datasets=[
             DataInfo(
@@ -146,12 +146,12 @@ async def get_data(
     """Get information about a specific dataset."""
     try:
         metadata = storage.get_data_info(data_id)
-        
+
         preview = None
         if include_preview:
             df = storage.load_data(data_id)
             preview = df.head(preview_rows).to_dict(orient="records")
-        
+
         return DataInfo(
             data_id=metadata["data_id"],
             filename=metadata["filename"],
@@ -163,7 +163,7 @@ async def get_data(
             size_bytes=metadata["size_bytes"],
             preview=preview,
         )
-    
+
     except StorageError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -186,9 +186,9 @@ async def delete_data(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dataset not found: {data_id}",
         )
-    
+
     storage.delete_data(data_id)
-    
+
     return SuccessResponse(
         success=True,
         message=f"Dataset {data_id} deleted successfully",
@@ -206,23 +206,25 @@ async def get_data_variables(
     """Get variable names and summary statistics from a dataset."""
     try:
         df = storage.load_data(data_id)
-        
+
         if "VariableName" not in df.columns or "VariableValue" not in df.columns:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Dataset is not in MFF format (missing VariableName/VariableValue columns)",
             )
-        
+
         # Get variable summary
-        summary = df.groupby("VariableName")["VariableValue"].agg([
-            "count", "mean", "std", "min", "max"
-        ]).reset_index()
-        
+        summary = (
+            df.groupby("VariableName")["VariableValue"]
+            .agg(["count", "mean", "std", "min", "max"])
+            .reset_index()
+        )
+
         return {
             "data_id": data_id,
             "variables": summary.to_dict(orient="records"),
         }
-    
+
     except StorageError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

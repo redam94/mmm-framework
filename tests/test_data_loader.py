@@ -39,6 +39,7 @@ from mmm_framework.config import (
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_periods():
     """Sample weekly periods."""
@@ -61,59 +62,67 @@ def sample_products():
 def national_mff_data(sample_periods):
     """National-level MFF data (Period only)."""
     records = []
-    
+
     # KPI - Sales at national level
     for period in sample_periods:
-        records.append({
-            "VariableName": "Sales",
-            "VariableValue": 1000 + np.random.normal(0, 100),
-            "Period": period,
-            "Geography": None,
-            "Product": None,
-            "Campaign": None,
-            "Outlet": None,
-            "Creative": None,
-        })
-    
+        records.append(
+            {
+                "VariableName": "Sales",
+                "VariableValue": 1000 + np.random.normal(0, 100),
+                "Period": period,
+                "Geography": None,
+                "Product": None,
+                "Campaign": None,
+                "Outlet": None,
+                "Creative": None,
+            }
+        )
+
     # Media - TV at national level
     for period in sample_periods:
-        records.append({
-            "VariableName": "TV",
-            "VariableValue": max(0, 100 + np.random.exponential(50)),
-            "Period": period,
-            "Geography": None,
-            "Product": None,
-            "Campaign": None,
-            "Outlet": None,
-            "Creative": None,
-        })
-    
+        records.append(
+            {
+                "VariableName": "TV",
+                "VariableValue": max(0, 100 + np.random.exponential(50)),
+                "Period": period,
+                "Geography": None,
+                "Product": None,
+                "Campaign": None,
+                "Outlet": None,
+                "Creative": None,
+            }
+        )
+
     # Media - Digital at national level
     for period in sample_periods:
-        records.append({
-            "VariableName": "Digital",
-            "VariableValue": max(0, 80 + np.random.exponential(40)),
-            "Period": period,
-            "Geography": None,
-            "Product": None,
-            "Campaign": None,
-            "Outlet": None,
-            "Creative": None,
-        })
-    
+        records.append(
+            {
+                "VariableName": "Digital",
+                "VariableValue": max(0, 80 + np.random.exponential(40)),
+                "Period": period,
+                "Geography": None,
+                "Product": None,
+                "Campaign": None,
+                "Outlet": None,
+                "Creative": None,
+            }
+        )
+
     # Control - Price at national level
     for period in sample_periods:
-        records.append({
-            "VariableName": "Price",
-            "VariableValue": 10 + np.random.uniform(-1, 1),
-            "Period": period,
-            "Geography": None,
-            "Product": None,
-            "Campaign": None,
-            "Outlet": None,
-            "Creative": None,
-        })
-    
+        records.append(
+            {
+                "VariableName": "Price",
+                "VariableValue": 10 + np.random.uniform(-1, 1),
+                "Period": period,
+                "Geography": None,
+                "Product": None,
+                "Campaign": None,
+                "Outlet": None,
+                "Creative": None,
+            }
+        )
+
     return pd.DataFrame(records)
 
 
@@ -121,48 +130,54 @@ def national_mff_data(sample_periods):
 def geo_mff_data(sample_periods, sample_geographies):
     """Geo-level MFF data (Period + Geography)."""
     records = []
-    
+
     # KPI - Sales at geo level
     for period in sample_periods:
         for geo in sample_geographies:
-            records.append({
-                "VariableName": "Sales",
-                "VariableValue": 500 + np.random.normal(0, 50),
+            records.append(
+                {
+                    "VariableName": "Sales",
+                    "VariableValue": 500 + np.random.normal(0, 50),
+                    "Period": period,
+                    "Geography": geo,
+                    "Product": None,
+                    "Campaign": None,
+                    "Outlet": None,
+                    "Creative": None,
+                }
+            )
+
+    # Media - TV at national level (will need alignment)
+    for period in sample_periods:
+        records.append(
+            {
+                "VariableName": "TV",
+                "VariableValue": max(0, 100 + np.random.exponential(50)),
                 "Period": period,
-                "Geography": geo,
+                "Geography": None,
                 "Product": None,
                 "Campaign": None,
                 "Outlet": None,
                 "Creative": None,
-            })
-    
-    # Media - TV at national level (will need alignment)
-    for period in sample_periods:
-        records.append({
-            "VariableName": "TV",
-            "VariableValue": max(0, 100 + np.random.exponential(50)),
-            "Period": period,
-            "Geography": None,
-            "Product": None,
-            "Campaign": None,
-            "Outlet": None,
-            "Creative": None,
-        })
-    
+            }
+        )
+
     # Control - Price at geo level
     for period in sample_periods:
         for geo in sample_geographies:
-            records.append({
-                "VariableName": "Price",
-                "VariableValue": 10 + np.random.uniform(-1, 1),
-                "Period": period,
-                "Geography": geo,
-                "Product": None,
-                "Campaign": None,
-                "Outlet": None,
-                "Creative": None,
-            })
-    
+            records.append(
+                {
+                    "VariableName": "Price",
+                    "VariableValue": 10 + np.random.uniform(-1, 1),
+                    "Period": period,
+                    "Geography": geo,
+                    "Product": None,
+                    "Campaign": None,
+                    "Outlet": None,
+                    "Creative": None,
+                }
+            )
+
     return pd.DataFrame(records)
 
 
@@ -220,6 +235,7 @@ def geo_config():
 # PanelCoordinates Tests
 # =============================================================================
 
+
 class TestPanelCoordinates:
     """Tests for PanelCoordinates dataclass."""
 
@@ -232,7 +248,7 @@ class TestPanelCoordinates:
             channels=["TV", "Digital"],
             controls=["Price"],
         )
-        
+
         assert coords.n_periods == 52
         assert coords.has_geo is False
         assert coords.has_product is False
@@ -247,13 +263,15 @@ class TestPanelCoordinates:
             products=None,
             channels=["TV"],
         )
-        
+
         assert coords.has_geo is True
         assert coords.has_product is False
         assert coords.n_geos == 3
         assert coords.geographies == sample_geographies
 
-    def test_init_with_products(self, sample_periods, sample_geographies, sample_products):
+    def test_init_with_products(
+        self, sample_periods, sample_geographies, sample_products
+    ):
         """Test coordinates with geographies and products."""
         coords = PanelCoordinates(
             periods=sample_periods,
@@ -261,7 +279,7 @@ class TestPanelCoordinates:
             products=sample_products,
             channels=["TV"],
         )
-        
+
         assert coords.has_geo is True
         assert coords.has_product is True
         assert coords.n_products == 2
@@ -283,7 +301,9 @@ class TestPanelCoordinates:
         )
         assert coords.n_obs == 52 * 3
 
-    def test_n_obs_geo_product(self, sample_periods, sample_geographies, sample_products):
+    def test_n_obs_geo_product(
+        self, sample_periods, sample_geographies, sample_products
+    ):
         """Test n_obs for geo+product data."""
         coords = PanelCoordinates(
             periods=sample_periods,
@@ -300,9 +320,9 @@ class TestPanelCoordinates:
             channels=["TV", "Digital"],
             controls=["Price"],
         )
-        
+
         pymc_coords = coords.to_pymc_coords()
-        
+
         assert "date" in pymc_coords
         assert "channel" in pymc_coords
         assert "control" in pymc_coords
@@ -317,9 +337,9 @@ class TestPanelCoordinates:
             geographies=sample_geographies,
             channels=["TV"],
         )
-        
+
         pymc_coords = coords.to_pymc_coords()
-        
+
         assert "geo" in pymc_coords
         assert pymc_coords["geo"] == sample_geographies
 
@@ -327,6 +347,7 @@ class TestPanelCoordinates:
 # =============================================================================
 # PanelDataset Tests
 # =============================================================================
+
 
 class TestPanelDataset:
     """Tests for PanelDataset dataclass."""
@@ -338,16 +359,20 @@ class TestPanelDataset:
             channels=["TV", "Digital"],
             controls=["Price"],
         )
-        
+
         y = pd.Series(np.random.randn(52), name="Sales")
-        X_media = pd.DataFrame({
-            "TV": np.random.randn(52),
-            "Digital": np.random.randn(52),
-        })
-        X_controls = pd.DataFrame({
-            "Price": np.random.randn(52),
-        })
-        
+        X_media = pd.DataFrame(
+            {
+                "TV": np.random.randn(52),
+                "Digital": np.random.randn(52),
+            }
+        )
+        X_controls = pd.DataFrame(
+            {
+                "Price": np.random.randn(52),
+            }
+        )
+
         panel = PanelDataset(
             y=y,
             X_media=X_media,
@@ -356,7 +381,7 @@ class TestPanelDataset:
             index=sample_periods,
             config=national_config,
         )
-        
+
         assert panel.n_obs == 52
         assert panel.n_channels == 2
         assert panel.n_controls == 1
@@ -367,7 +392,7 @@ class TestPanelDataset:
             periods=sample_periods,
             channels=["TV"],
         )
-        
+
         panel = PanelDataset(
             y=pd.Series(np.random.randn(52)),
             X_media=pd.DataFrame({"TV": np.random.randn(52)}),
@@ -376,7 +401,7 @@ class TestPanelDataset:
             index=sample_periods,
             config=national_config,
         )
-        
+
         assert panel.is_panel is False
 
     def test_is_panel_geo(self, sample_periods, sample_geographies, geo_config):
@@ -387,13 +412,12 @@ class TestPanelDataset:
             geographies=sample_geographies,
             channels=["TV"],
         )
-        
+
         # Create multi-index
         index = pd.MultiIndex.from_product(
-            [sample_periods, sample_geographies],
-            names=["Period", "Geography"]
+            [sample_periods, sample_geographies], names=["Period", "Geography"]
         )
-        
+
         panel = PanelDataset(
             y=pd.Series(np.random.randn(n_obs), index=index),
             X_media=pd.DataFrame({"TV": np.random.randn(n_obs)}, index=index),
@@ -402,7 +426,7 @@ class TestPanelDataset:
             index=index,
             config=geo_config,
         )
-        
+
         assert panel.is_panel is True
 
     def test_to_numpy(self, sample_periods, national_config):
@@ -412,11 +436,11 @@ class TestPanelDataset:
             channels=["TV"],
             controls=["Price"],
         )
-        
+
         y_data = np.random.randn(52)
         media_data = np.random.randn(52)
         control_data = np.random.randn(52)
-        
+
         panel = PanelDataset(
             y=pd.Series(y_data),
             X_media=pd.DataFrame({"TV": media_data}),
@@ -425,9 +449,9 @@ class TestPanelDataset:
             index=sample_periods,
             config=national_config,
         )
-        
+
         y_np, X_media_np, X_controls_np = panel.to_numpy()
-        
+
         np.testing.assert_array_equal(y_np, y_data)
         np.testing.assert_array_equal(X_media_np.flatten(), media_data)
         np.testing.assert_array_equal(X_controls_np.flatten(), control_data)
@@ -438,19 +462,21 @@ class TestPanelDataset:
             periods=sample_periods,
             channels=["TV", "Digital"],
         )
-        
+
         panel = PanelDataset(
             y=pd.Series(np.random.randn(52)),
-            X_media=pd.DataFrame({
-                "TV": np.ones(52) * 100,
-                "Digital": np.ones(52) * 50,
-            }),
+            X_media=pd.DataFrame(
+                {
+                    "TV": np.ones(52) * 100,
+                    "Digital": np.ones(52) * 50,
+                }
+            ),
             X_controls=None,
             coords=coords,
             index=sample_periods,
             config=national_config,
         )
-        
+
         tv_series = panel.get_media_for_channel("TV")
         assert tv_series.mean() == 100
 
@@ -460,7 +486,7 @@ class TestPanelDataset:
             periods=sample_periods,
             channels=["TV"],
         )
-        
+
         panel = PanelDataset(
             y=pd.Series(np.random.randn(52)),
             X_media=pd.DataFrame({"TV": np.random.randn(52)}),
@@ -469,7 +495,7 @@ class TestPanelDataset:
             index=sample_periods,
             config=national_config,
         )
-        
+
         with pytest.raises(KeyError, match="Radio"):
             panel.get_media_for_channel("Radio")
 
@@ -479,19 +505,21 @@ class TestPanelDataset:
             periods=sample_periods,
             channels=["TV", "Digital"],
         )
-        
+
         panel = PanelDataset(
             y=pd.Series(np.random.randn(52)),
-            X_media=pd.DataFrame({
-                "TV": np.ones(52) * 100,  # Total: 5200
-                "Digital": np.ones(52) * 100,  # Total: 5200
-            }),
+            X_media=pd.DataFrame(
+                {
+                    "TV": np.ones(52) * 100,  # Total: 5200
+                    "Digital": np.ones(52) * 100,  # Total: 5200
+                }
+            ),
             X_controls=None,
             coords=coords,
             index=sample_periods,
             config=national_config,
         )
-        
+
         shares = panel.compute_spend_shares()
         assert np.isclose(shares["TV"], 0.5)
         assert np.isclose(shares["Digital"], 0.5)
@@ -500,6 +528,7 @@ class TestPanelDataset:
 # =============================================================================
 # Validation Function Tests
 # =============================================================================
+
 
 class TestValidateMFFStructure:
     """Tests for validate_mff_structure function."""
@@ -512,17 +541,19 @@ class TestValidateMFFStructure:
 
     def test_missing_kpi_variable_raises(self, sample_periods, national_config):
         """Should raise MFFValidationError for missing KPI variable."""
-        df = pd.DataFrame({
-            "VariableName": ["TV"] * 52,  # No Sales
-            "VariableValue": [100] * 52,
-            "Period": sample_periods,
-            "Geography": [None] * 52,
-            "Product": [None] * 52,
-            "Campaign": [None] * 52,
-            "Outlet": [None] * 52,
-            "Creative": [None] * 52,
-        })
-        
+        df = pd.DataFrame(
+            {
+                "VariableName": ["TV"] * 52,  # No Sales
+                "VariableValue": [100] * 52,
+                "Period": sample_periods,
+                "Geography": [None] * 52,
+                "Product": [None] * 52,
+                "Campaign": [None] * 52,
+                "Outlet": [None] * 52,
+                "Creative": [None] * 52,
+            }
+        )
+
         with pytest.raises(MFFValidationError, match="Sales|Missing"):
             validate_mff_structure(df, national_config)
 
@@ -534,30 +565,34 @@ class TestValidateMFFStructure:
                 MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD]),
             ],
         )
-        
-        df = pd.DataFrame({
-            "VariableName": ["Sales"] * 52,  # No TV
-            "VariableValue": [100] * 52,
-            "Period": pd.date_range("2020-01-06", periods=52, freq="W-MON"),
-            "Geography": [None] * 52,
-            "Product": [None] * 52,
-            "Campaign": [None] * 52,
-            "Outlet": [None] * 52,
-            "Creative": [None] * 52,
-        })
-        
+
+        df = pd.DataFrame(
+            {
+                "VariableName": ["Sales"] * 52,  # No TV
+                "VariableValue": [100] * 52,
+                "Period": pd.date_range("2020-01-06", periods=52, freq="W-MON"),
+                "Geography": [None] * 52,
+                "Product": [None] * 52,
+                "Campaign": [None] * 52,
+                "Outlet": [None] * 52,
+                "Creative": [None] * 52,
+            }
+        )
+
         with pytest.raises(MFFValidationError, match="TV|Missing"):
             validate_mff_structure(df, config)
 
     def test_missing_columns_raises(self, sample_periods, national_config):
         """Should raise MFFValidationError for missing required columns."""
-        df = pd.DataFrame({
-            "VariableName": ["Sales"] * 52,
-            "VariableValue": [100] * 52,
-            "Period": sample_periods,
-            # Missing Geography, Product, Campaign, Outlet, Creative columns
-        })
-        
+        df = pd.DataFrame(
+            {
+                "VariableName": ["Sales"] * 52,
+                "VariableValue": [100] * 52,
+                "Period": sample_periods,
+                # Missing Geography, Product, Campaign, Outlet, Creative columns
+            }
+        )
+
         with pytest.raises(MFFValidationError, match="Missing required columns"):
             validate_mff_structure(df, national_config)
 
@@ -565,6 +600,7 @@ class TestValidateMFFStructure:
 # =============================================================================
 # MFFLoader Tests
 # =============================================================================
+
 
 class TestMFFLoader:
     """Tests for MFFLoader class."""
@@ -579,7 +615,7 @@ class TestMFFLoader:
         loader = MFFLoader(national_config)
         loader.load(national_mff_data)
         panel = loader.build_panel()
-        
+
         assert panel.n_obs == 52
         assert panel.n_channels == 2
         assert panel.n_controls == 1
@@ -590,7 +626,7 @@ class TestMFFLoader:
         loader = MFFLoader(geo_config)
         loader.load(geo_mff_data)
         panel = loader.build_panel()
-        
+
         assert panel.n_obs == 52 * 3
         assert panel.is_panel is True
         assert panel.coords.has_geo is True
@@ -600,7 +636,7 @@ class TestMFFLoader:
         loader = MFFLoader(national_config)
         loader.load(national_mff_data)
         panel = loader.build_panel()
-        
+
         assert panel.coords.channels == ["TV", "Digital"]
         assert panel.coords.controls == ["Price"]
 
@@ -609,7 +645,7 @@ class TestMFFLoader:
         loader = MFFLoader(national_config)
         loader.load(national_mff_data)
         panel = loader.build_panel()
-        
+
         assert "TV" in panel.media_stats
         assert "total" in panel.media_stats["TV"]
         assert "mean" in panel.media_stats["TV"]
@@ -619,13 +655,14 @@ class TestMFFLoader:
 # load_mff Convenience Function Tests
 # =============================================================================
 
+
 class TestLoadMFF:
     """Tests for load_mff convenience function."""
 
     def test_load_mff_basic(self, national_mff_data, national_config):
         """Test basic load_mff usage."""
         panel = load_mff(national_mff_data, national_config)
-        
+
         assert panel.n_obs == 52
         assert isinstance(panel, PanelDataset)
 
@@ -634,23 +671,26 @@ class TestLoadMFF:
 # mff_from_wide_format Tests
 # =============================================================================
 
+
 class TestMFFFromWideFormat:
     """Tests for mff_from_wide_format function."""
 
     def test_basic_conversion(self):
         """Test basic wide to MFF conversion."""
-        wide_df = pd.DataFrame({
-            "Date": pd.date_range("2020-01-06", periods=10, freq="W-MON"),
-            "Sales": [100 + i for i in range(10)],
-            "TV_Spend": [50 + i for i in range(10)],
-        })
-        
+        wide_df = pd.DataFrame(
+            {
+                "Date": pd.date_range("2020-01-06", periods=10, freq="W-MON"),
+                "Sales": [100 + i for i in range(10)],
+                "TV_Spend": [50 + i for i in range(10)],
+            }
+        )
+
         mff_df = mff_from_wide_format(
             wide_df,
             period_col="Date",
             value_columns={"Sales": "Sales", "TV_Spend": "TV"},
         )
-        
+
         assert "VariableName" in mff_df.columns
         assert "VariableValue" in mff_df.columns
         assert "Sales" in mff_df["VariableName"].values
@@ -658,25 +698,28 @@ class TestMFFFromWideFormat:
 
     def test_conversion_with_geo(self):
         """Test conversion with geography column."""
-        wide_df = pd.DataFrame({
-            "Date": ["2020-01-06", "2020-01-06"],
-            "Region": ["East", "West"],
-            "Sales": [100, 90],
-        })
-        
+        wide_df = pd.DataFrame(
+            {
+                "Date": ["2020-01-06", "2020-01-06"],
+                "Region": ["East", "West"],
+                "Sales": [100, 90],
+            }
+        )
+
         mff_df = mff_from_wide_format(
             wide_df,
             period_col="Date",
             value_columns={"Sales": "Sales"},
             geo_col="Region",
         )
-        
+
         assert "Geography" in mff_df.columns
 
 
 # =============================================================================
 # create_simple_mff_config Factory Tests
 # =============================================================================
+
 
 class TestCreateSimpleMFFConfig:
     """Tests for create_simple_mff_config factory function."""
@@ -687,7 +730,7 @@ class TestCreateSimpleMFFConfig:
             kpi_name="Sales",
             media_names=["TV", "Digital"],
         )
-        
+
         assert config.kpi.name == "Sales"
         assert len(config.media_channels) == 2
         assert config.media_channels[0].name == "TV"
@@ -699,7 +742,7 @@ class TestCreateSimpleMFFConfig:
             media_names=["TV"],
             control_names=["Price", "Distribution"],
         )
-        
+
         assert len(config.controls) == 2
 
     def test_with_geo_dimensions(self):
@@ -709,7 +752,7 @@ class TestCreateSimpleMFFConfig:
             media_names=["TV"],
             kpi_dimensions=[DimensionType.PERIOD, DimensionType.GEOGRAPHY],
         )
-        
+
         assert DimensionType.GEOGRAPHY in config.kpi.dimensions
 
     def test_multiplicative(self):
@@ -719,13 +762,14 @@ class TestCreateSimpleMFFConfig:
             media_names=["TV"],
             multiplicative=True,
         )
-        
+
         assert config.kpi.log_transform is True
 
 
 # =============================================================================
 # Integration Tests
 # =============================================================================
+
 
 class TestIntegration:
     """Integration tests for full workflows."""
@@ -734,15 +778,15 @@ class TestIntegration:
         """Test complete workflow for national model."""
         # Load data
         panel = load_mff(national_mff_data, national_config)
-        
+
         # Check panel structure
         assert panel.n_obs == 52
         assert panel.coords.n_periods == 52
-        
+
         # Check data types
         assert isinstance(panel.y, pd.Series)
         assert isinstance(panel.X_media, pd.DataFrame)
-        
+
         # Check PyMC coords
         pymc_coords = panel.coords.to_pymc_coords()
         assert len(pymc_coords["date"]) == 52
@@ -750,10 +794,10 @@ class TestIntegration:
     def test_full_workflow_geo(self, geo_mff_data, geo_config):
         """Test complete workflow for geo-level model."""
         panel = load_mff(geo_mff_data, geo_config)
-        
+
         assert panel.n_obs == 52 * 3
         assert panel.is_panel is True
-        
+
         pymc_coords = panel.coords.to_pymc_coords()
         assert "geo" in pymc_coords
         assert len(pymc_coords["geo"]) == 3

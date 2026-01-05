@@ -5,7 +5,7 @@ Tests cover:
 - Result containers (MediationEffects, CrossEffectSummary, ModelResults)
 - BaseExtendedMMM class
 - NestedMMM class
-- MultivariateMMM class  
+- MultivariateMMM class
 - CombinedMMM class
 - Integration tests with model fitting (slow tests)
 
@@ -68,6 +68,7 @@ from mmm_framework.mmm_extensions.builders import (
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_media_data():
     """Generate sample media data."""
@@ -125,7 +126,7 @@ def nested_config():
         .with_positive_media_effect(sigma=1.0)
         .build()
     )
-    
+
     config = (
         NestedModelConfigBuilder()
         .add_mediator(mediator)
@@ -143,18 +144,18 @@ def multivariate_config():
         .with_positive_media_effects(sigma=0.5)
         .build()
     )
-    
+
     outcome_b = (
         OutcomeConfigBuilder("sales_product_b", column="sales_b")
         .with_positive_media_effects(sigma=0.5)
         .build()
     )
-    
+
     cross_effect = cannibalization_effect(
         source="sales_product_b",
         target="sales_product_a",
     )
-    
+
     config = (
         MultivariateModelConfigBuilder()
         .add_outcome(outcome_a)
@@ -179,6 +180,7 @@ def combined_config(nested_config, multivariate_config):
 # MediationEffects Tests
 # =============================================================================
 
+
 class TestMediationEffects:
     """Tests for MediationEffects dataclass."""
 
@@ -193,7 +195,7 @@ class TestMediationEffects:
             total_effect=0.8,
             proportion_mediated=0.375,
         )
-        
+
         assert effects.channel == "tv"
         assert effects.direct_effect == 0.5
         assert effects.total_effect == 0.8
@@ -210,9 +212,9 @@ class TestMediationEffects:
             total_effect=0.7,
             proportion_mediated=0.43,
         )
-        
+
         d = effects.to_dict()
-        
+
         assert d["channel"] == "digital"
         assert d["direct_effect"] == 0.4
         assert d["indirect_via_awareness"] == 0.2
@@ -235,10 +237,10 @@ class TestMediationEffects:
             total_effect=0.50,
             proportion_mediated=0.60,
         )
-        
+
         assert len(effects.indirect_effects) == 3
         assert effects.total_indirect == 0.30
-        
+
         d = effects.to_dict()
         assert "indirect_via_awareness" in d
         assert "indirect_via_engagement" in d
@@ -255,7 +257,7 @@ class TestMediationEffects:
             total_effect=0.5,
             proportion_mediated=0.0,
         )
-        
+
         d = effects.to_dict()
         assert d["total_indirect"] == 0.0
         assert d["proportion_mediated"] == 0.0
@@ -269,15 +271,16 @@ class TestMediationEffects:
             indirect_effects={},
             total_indirect=0.0,
             total_effect=0.0,
-            proportion_mediated=float('nan'),
+            proportion_mediated=float("nan"),
         )
-        
+
         assert np.isnan(effects.proportion_mediated)
 
 
 # =============================================================================
 # CrossEffectSummary Tests
 # =============================================================================
+
 
 class TestCrossEffectSummary:
     """Tests for CrossEffectSummary dataclass."""
@@ -293,7 +296,7 @@ class TestCrossEffectSummary:
             hdi_low=-0.24,
             hdi_high=-0.06,
         )
-        
+
         assert summary.source == "product_b"
         assert summary.target == "product_a"
         assert summary.effect_type == "cannibalization"
@@ -311,13 +314,14 @@ class TestCrossEffectSummary:
             hdi_low=0.04,
             hdi_high=0.16,
         )
-        
+
         assert summary.mean > 0  # Positive halo effect
 
 
 # =============================================================================
 # ModelResults Tests
 # =============================================================================
+
 
 class TestModelResults:
     """Tests for ModelResults dataclass."""
@@ -327,13 +331,13 @@ class TestModelResults:
         mock_trace = MagicMock()
         mock_model = MagicMock()
         mock_config = MagicMock()
-        
+
         results = ModelResults(
             trace=mock_trace,
             model=mock_model,
             config=mock_config,
         )
-        
+
         assert results.trace == mock_trace
         assert results.model == mock_model
         assert results.config == mock_config
@@ -341,22 +345,25 @@ class TestModelResults:
     def test_summary_calls_arviz(self):
         """Test that summary delegates to ArviZ."""
         mock_trace = MagicMock()
-        
+
         results = ModelResults(
             trace=mock_trace,
             model=MagicMock(),
             config=MagicMock(),
         )
-        
-        with patch('arviz.summary') as mock_summary:
+
+        with patch("arviz.summary") as mock_summary:
             mock_summary.return_value = pd.DataFrame()
             _ = results.summary(var_names=["alpha", "beta"])
-            mock_summary.assert_called_once_with(mock_trace, var_names=["alpha", "beta"])
+            mock_summary.assert_called_once_with(
+                mock_trace, var_names=["alpha", "beta"]
+            )
 
 
 # =============================================================================
 # BaseExtendedMMM Tests
 # =============================================================================
+
 
 class TestBaseExtendedMMM:
     """Tests for BaseExtendedMMM base class."""
@@ -369,7 +376,7 @@ class TestBaseExtendedMMM:
             y=sample_outcome,
             channel_names=channel_names,
         )
-        
+
         assert model.n_obs == 52
         assert model.n_channels == 3
         assert model.channel_names == channel_names
@@ -377,14 +384,14 @@ class TestBaseExtendedMMM:
     def test_init_with_index(self, sample_media_data, sample_outcome, channel_names):
         """Test initialization with custom index."""
         index = pd.date_range("2020-01-06", periods=52, freq="W-MON")
-        
+
         model = BaseExtendedMMM(
             X_media=sample_media_data,
             y=sample_outcome,
             channel_names=channel_names,
             index=index,
         )
-        
+
         assert len(model.index) == 52
         # Check type without ambiguous truth value comparison
         assert type(model.index).__name__ == "DatetimeIndex"
@@ -396,7 +403,7 @@ class TestBaseExtendedMMM:
             y=sample_outcome,
             channel_names=channel_names,
         )
-        
+
         assert isinstance(model.index, pd.RangeIndex)
         assert len(model.index) == 52
 
@@ -407,33 +414,37 @@ class TestBaseExtendedMMM:
             y=sample_outcome,
             channel_names=channel_names,
         )
-        
+
         coords = model._build_coords()
-        
+
         assert "obs" in coords
         assert "channel" in coords
         assert coords["channel"] == channel_names
         assert len(coords["obs"]) == 52
 
-    def test_build_model_not_implemented(self, sample_media_data, sample_outcome, channel_names):
+    def test_build_model_not_implemented(
+        self, sample_media_data, sample_outcome, channel_names
+    ):
         """Test that _build_model raises NotImplementedError."""
         model = BaseExtendedMMM(
             X_media=sample_media_data,
             y=sample_outcome,
             channel_names=channel_names,
         )
-        
+
         with pytest.raises(NotImplementedError):
             model._build_model()
 
-    def test_check_fitted_before_fit(self, sample_media_data, sample_outcome, channel_names):
+    def test_check_fitted_before_fit(
+        self, sample_media_data, sample_outcome, channel_names
+    ):
         """Test _check_fitted raises error before fitting."""
         model = BaseExtendedMMM(
             X_media=sample_media_data,
             y=sample_outcome,
             channel_names=channel_names,
         )
-        
+
         with pytest.raises(ValueError, match="not fitted"):
             model._check_fitted()
 
@@ -441,6 +452,7 @@ class TestBaseExtendedMMM:
 # =============================================================================
 # NestedMMM Tests - Initialization
 # =============================================================================
+
 
 class TestNestedMMMInit:
     """Tests for NestedMMM initialization."""
@@ -455,15 +467,19 @@ class TestNestedMMMInit:
             channel_names=channel_names,
             config=nested_config,
         )
-        
+
         assert model.n_obs == 52
         assert model.n_channels == 3
         assert model.n_mediators == 1
         assert model.mediator_names == ["brand_awareness"]
 
     def test_init_with_mediator_data(
-        self, sample_media_data, sample_outcome, channel_names, 
-        nested_config, sample_mediator_data
+        self,
+        sample_media_data,
+        sample_outcome,
+        channel_names,
+        nested_config,
+        sample_mediator_data,
     ):
         """Test initialization with mediator observations."""
         model = NestedMMM(
@@ -473,7 +489,7 @@ class TestNestedMMMInit:
             config=nested_config,
             mediator_data=sample_mediator_data,
         )
-        
+
         assert "brand_awareness" in model.mediator_data
         assert len(model.mediator_data["brand_awareness"]) == 52
 
@@ -484,7 +500,7 @@ class TestNestedMMMInit:
         n_obs = 52
         mask = np.zeros(n_obs, dtype=bool)
         mask[::4] = True  # Every 4th observation
-        
+
         model = NestedMMM(
             X_media=sample_media_data,
             y=sample_outcome,
@@ -492,7 +508,7 @@ class TestNestedMMMInit:
             config=nested_config,
             mediator_masks={"brand_awareness": mask},
         )
-        
+
         assert "brand_awareness" in model.mediator_masks
         assert model.mediator_masks["brand_awareness"].sum() == 13
 
@@ -506,9 +522,9 @@ class TestNestedMMMInit:
             channel_names=channel_names,
             config=nested_config,
         )
-        
+
         coords = model._build_coords()
-        
+
         assert "mediator" in coords
         assert coords["mediator"] == ["brand_awareness"]
 
@@ -522,7 +538,7 @@ class TestNestedMMMInit:
             channel_names=channel_names,
             config=nested_config,
         )
-        
+
         # Config maps tv and digital to brand_awareness
         affecting = model._get_affecting_channels("brand_awareness")
         assert "tv" in affecting
@@ -535,14 +551,14 @@ class TestNestedMMMInit:
         # Config with no explicit mapping
         mediator = MediatorConfigBuilder("awareness").build()
         config = NestedModelConfigBuilder().add_mediator(mediator).build()
-        
+
         model = NestedMMM(
             X_media=sample_media_data,
             y=sample_outcome,
             channel_names=channel_names,
             config=config,
         )
-        
+
         # Should return all channels
         affecting = model._get_affecting_channels("awareness")
         assert affecting == channel_names
@@ -551,6 +567,7 @@ class TestNestedMMMInit:
 # =============================================================================
 # NestedMMM Tests - Model Building
 # =============================================================================
+
 
 class TestNestedMMMModelBuilding:
     """Tests for NestedMMM model construction."""
@@ -565,9 +582,9 @@ class TestNestedMMMModelBuilding:
             channel_names=channel_names,
             config=nested_config,
         )
-        
+
         pymc_model = model.model
-        
+
         assert pymc_model is not None
         assert len(pymc_model.free_RVs) > 0
 
@@ -581,9 +598,9 @@ class TestNestedMMMModelBuilding:
             channel_names=channel_names,
             config=nested_config,
         )
-        
+
         var_names = [v.name for v in model.model.free_RVs]
-        
+
         # Should have mediator-related variables
         # Exact names depend on implementation
         assert any("alpha" in name.lower() for name in var_names)
@@ -592,6 +609,7 @@ class TestNestedMMMModelBuilding:
 # =============================================================================
 # MultivariateMMM Tests - Initialization
 # =============================================================================
+
 
 class TestMultivariateMMMInit:
     """Tests for MultivariateMMM initialization."""
@@ -606,7 +624,7 @@ class TestMultivariateMMMInit:
             channel_names=channel_names,
             config=multivariate_config,
         )
-        
+
         assert model.n_obs == 52
         assert model.n_channels == 3
         assert model.n_outcomes == 2
@@ -616,10 +634,8 @@ class TestMultivariateMMMInit:
         self, sample_media_data, sample_outcome_data, channel_names, multivariate_config
     ):
         """Test initialization with promotion data."""
-        promo_data = {
-            "product_b_promo": np.random.binomial(1, 0.3, 52).astype(float)
-        }
-        
+        promo_data = {"product_b_promo": np.random.binomial(1, 0.3, 52).astype(float)}
+
         model = MultivariateMMM(
             X_media=sample_media_data,
             outcome_data=sample_outcome_data,
@@ -627,7 +643,7 @@ class TestMultivariateMMMInit:
             config=multivariate_config,
             promotion_data=promo_data,
         )
-        
+
         assert "product_b_promo" in model.promotion_data
 
     def test_build_coords_includes_outcome(
@@ -640,9 +656,9 @@ class TestMultivariateMMMInit:
             channel_names=channel_names,
             config=multivariate_config,
         )
-        
+
         coords = model._build_coords()
-        
+
         assert "outcome" in coords
         assert coords["outcome"] == ["sales_product_a", "sales_product_b"]
 
@@ -650,6 +666,7 @@ class TestMultivariateMMMInit:
 # =============================================================================
 # MultivariateMMM Tests - Model Building
 # =============================================================================
+
 
 class TestMultivariateMMMModelBuilding:
     """Tests for MultivariateMMM model construction."""
@@ -664,9 +681,9 @@ class TestMultivariateMMMModelBuilding:
             channel_names=channel_names,
             config=multivariate_config,
         )
-        
+
         pymc_model = model.model
-        
+
         assert pymc_model is not None
         assert len(pymc_model.free_RVs) > 0
 
@@ -674,6 +691,7 @@ class TestMultivariateMMMModelBuilding:
 # =============================================================================
 # CombinedMMM Tests - Initialization
 # =============================================================================
+
 
 class TestCombinedMMMInit:
     """Tests for CombinedMMM initialization."""
@@ -688,19 +706,23 @@ class TestCombinedMMMInit:
             channel_names=channel_names,
             config=combined_config,
         )
-        
+
         assert model.n_obs == 52
         assert model.n_channels == 3
         assert model.n_mediators == 1
         assert model.n_outcomes == 2
 
     def test_init_with_all_data(
-        self, sample_media_data, sample_outcome_data, channel_names,
-        combined_config, sample_mediator_data
+        self,
+        sample_media_data,
+        sample_outcome_data,
+        channel_names,
+        combined_config,
+        sample_mediator_data,
     ):
         """Test initialization with mediator and promotion data."""
         promo_data = {"promo": np.random.binomial(1, 0.2, 52).astype(float)}
-        
+
         model = CombinedMMM(
             X_media=sample_media_data,
             outcome_data=sample_outcome_data,
@@ -709,7 +731,7 @@ class TestCombinedMMMInit:
             mediator_data=sample_mediator_data,
             promotion_data=promo_data,
         )
-        
+
         assert "brand_awareness" in model.mediator_data
         assert "promo" in model.promotion_data
 
@@ -723,9 +745,9 @@ class TestCombinedMMMInit:
             channel_names=channel_names,
             config=combined_config,
         )
-        
+
         coords = model._build_coords()
-        
+
         assert "mediator" in coords
         assert "outcome" in coords
 
@@ -739,7 +761,7 @@ class TestCombinedMMMInit:
             channel_names=channel_names,
             config=combined_config,
         )
-        
+
         affecting = model._get_affecting_channels("brand_awareness")
         # Should come from nested config mapping
         assert isinstance(affecting, list)
@@ -754,7 +776,7 @@ class TestCombinedMMMInit:
             channel_names=channel_names,
             config=combined_config,
         )
-        
+
         # brand_awareness mapped to sales_product_a
         affected = model._get_affected_outcomes("brand_awareness")
         assert "sales_product_a" in affected
@@ -763,6 +785,7 @@ class TestCombinedMMMInit:
 # =============================================================================
 # Factory Function Tests
 # =============================================================================
+
 
 class TestFactoryFunctions:
     """Tests for factory functions that create configs."""
@@ -773,7 +796,7 @@ class TestFactoryFunctions:
             name="brand_awareness",
             observation_noise=0.15,
         )
-        
+
         assert config.name == "brand_awareness"
         assert config.mediator_type == MediatorType.PARTIALLY_OBSERVED
 
@@ -783,7 +806,7 @@ class TestFactoryFunctions:
             name="store_visits",
             observation_noise=0.10,
         )
-        
+
         assert config.name == "store_visits"
         # foot_traffic_mediator uses fully_observed(), not partially_observed
         assert config.mediator_type == MediatorType.FULLY_OBSERVED
@@ -794,7 +817,7 @@ class TestFactoryFunctions:
             source="multipack",
             target="single_pack",
         )
-        
+
         assert config.source_outcome == "multipack"
         assert config.target_outcome == "single_pack"
         assert config.effect_type == CrossEffectType.CANNIBALIZATION
@@ -806,7 +829,7 @@ class TestFactoryFunctions:
             source="premium",
             target="budget",
         )
-        
+
         assert config.source_outcome == "premium"
         assert config.target_outcome == "budget"
         assert config.effect_type == CrossEffectType.HALO
@@ -817,19 +840,16 @@ class TestFactoryFunctions:
 # Builder Tests
 # =============================================================================
 
+
 class TestNestedModelConfigBuilder:
     """Tests for NestedModelConfigBuilder."""
 
     def test_basic_build(self):
         """Test basic config building."""
         mediator = MediatorConfigBuilder("awareness").build()
-        
-        config = (
-            NestedModelConfigBuilder()
-            .add_mediator(mediator)
-            .build()
-        )
-        
+
+        config = NestedModelConfigBuilder().add_mediator(mediator).build()
+
         assert len(config.mediators) == 1
         assert config.mediators[0].name == "awareness"
 
@@ -837,41 +857,41 @@ class TestNestedModelConfigBuilder:
         """Test adding multiple mediators."""
         awareness = MediatorConfigBuilder("awareness").build()
         consideration = MediatorConfigBuilder("consideration").build()
-        
+
         config = (
             NestedModelConfigBuilder()
             .add_mediator(awareness)
             .add_mediator(consideration)
             .build()
         )
-        
+
         assert len(config.mediators) == 2
 
     def test_channel_mapping(self):
         """Test mapping channels to mediators."""
         mediator = MediatorConfigBuilder("awareness").build()
-        
+
         config = (
             NestedModelConfigBuilder()
             .add_mediator(mediator)
             .map_channels_to_mediator("awareness", ["tv", "digital"])
             .build()
         )
-        
+
         assert "awareness" in config.media_to_mediator_map
         assert "tv" in config.media_to_mediator_map["awareness"]
 
     def test_share_adstock(self):
         """Test adstock sharing option."""
         mediator = MediatorConfigBuilder("awareness").build()
-        
+
         config = (
             NestedModelConfigBuilder()
             .add_mediator(mediator)
             .share_adstock(True)
             .build()
         )
-        
+
         assert config.share_adstock_across_mediators is True
 
 
@@ -881,13 +901,9 @@ class TestMultivariateModelConfigBuilder:
     def test_basic_build(self):
         """Test basic config building."""
         outcome = OutcomeConfigBuilder("sales", column="sales_col").build()
-        
-        config = (
-            MultivariateModelConfigBuilder()
-            .add_outcome(outcome)
-            .build()
-        )
-        
+
+        config = MultivariateModelConfigBuilder().add_outcome(outcome).build()
+
         assert len(config.outcomes) == 1
         assert config.outcomes[0].name == "sales"
 
@@ -895,14 +911,14 @@ class TestMultivariateModelConfigBuilder:
         """Test adding multiple outcomes."""
         outcome_a = OutcomeConfigBuilder("product_a", column="col_a").build()
         outcome_b = OutcomeConfigBuilder("product_b", column="col_b").build()
-        
+
         config = (
             MultivariateModelConfigBuilder()
             .add_outcome(outcome_a)
             .add_outcome(outcome_b)
             .build()
         )
-        
+
         assert len(config.outcomes) == 2
 
     def test_cross_effects(self):
@@ -910,7 +926,7 @@ class TestMultivariateModelConfigBuilder:
         outcome_a = OutcomeConfigBuilder("product_a", column="col_a").build()
         outcome_b = OutcomeConfigBuilder("product_b", column="col_b").build()
         cross = cannibalization_effect("product_b", "product_a")
-        
+
         config = (
             MultivariateModelConfigBuilder()
             .add_outcome(outcome_a)
@@ -918,20 +934,20 @@ class TestMultivariateModelConfigBuilder:
             .add_cross_effect(cross)
             .build()
         )
-        
+
         assert len(config.cross_effects) == 1
 
     def test_lkj_eta(self):
         """Test LKJ correlation prior setting."""
         outcome = OutcomeConfigBuilder("sales", column="col").build()
-        
+
         config = (
             MultivariateModelConfigBuilder()
             .add_outcome(outcome)
             .with_lkj_eta(3.0)
             .build()
         )
-        
+
         assert config.lkj_eta == 3.0
 
 
@@ -940,12 +956,8 @@ class TestMediatorConfigBuilder:
 
     def test_fully_observed(self):
         """Test creating fully observed mediator."""
-        config = (
-            MediatorConfigBuilder("store_sales")
-            .fully_observed()
-            .build()
-        )
-        
+        config = MediatorConfigBuilder("store_sales").fully_observed().build()
+
         assert config.mediator_type == MediatorType.FULLY_OBSERVED
 
     def test_partially_observed(self):
@@ -955,7 +967,7 @@ class TestMediatorConfigBuilder:
             .partially_observed(observation_noise=0.12)
             .build()
         )
-        
+
         assert config.mediator_type == MediatorType.PARTIALLY_OBSERVED
         assert config.observation_noise_sigma == 0.12
 
@@ -966,28 +978,22 @@ class TestMediatorConfigBuilder:
             .with_positive_media_effect(sigma=1.5)
             .build()
         )
-        
+
         assert config.media_effect.constraint == EffectConstraint.POSITIVE
         assert config.media_effect.sigma == 1.5
 
     def test_adstock_config(self):
         """Test adstock configuration."""
-        config = (
-            MediatorConfigBuilder("awareness")
-            .with_slow_adstock(l_max=12)
-            .build()
-        )
-        
+        config = MediatorConfigBuilder("awareness").with_slow_adstock(l_max=12).build()
+
         assert config.adstock.l_max == 12
 
     def test_allow_direct_effect(self):
         """Test allowing direct media effects."""
         config = (
-            MediatorConfigBuilder("awareness")
-            .with_direct_effect(sigma=0.3)
-            .build()
+            MediatorConfigBuilder("awareness").with_direct_effect(sigma=0.3).build()
         )
-        
+
         assert config.allow_direct_effect is True
 
 
@@ -996,11 +1002,8 @@ class TestOutcomeConfigBuilder:
 
     def test_basic_build(self):
         """Test basic outcome config."""
-        config = (
-            OutcomeConfigBuilder("sales", column="sales_col")
-            .build()
-        )
-        
+        config = OutcomeConfigBuilder("sales", column="sales_col").build()
+
         assert config.name == "sales"
         assert config.column == "sales_col"
 
@@ -1011,34 +1014,27 @@ class TestOutcomeConfigBuilder:
             .with_positive_media_effects(sigma=0.8)
             .build()
         )
-        
+
         assert config.media_effect.constraint == EffectConstraint.POSITIVE
         assert config.media_effect.sigma == 0.8
 
     def test_with_trend(self):
         """Test trend inclusion."""
-        config = (
-            OutcomeConfigBuilder("sales", column="col")
-            .with_trend()
-            .build()
-        )
-        
+        config = OutcomeConfigBuilder("sales", column="col").with_trend().build()
+
         assert config.include_trend is True
 
     def test_with_seasonality(self):
         """Test seasonality inclusion."""
-        config = (
-            OutcomeConfigBuilder("sales", column="col")
-            .with_seasonality()
-            .build()
-        )
-        
+        config = OutcomeConfigBuilder("sales", column="col").with_seasonality().build()
+
         assert config.include_seasonality is True
 
 
 # =============================================================================
 # Slow Tests - Model Fitting
 # =============================================================================
+
 
 @pytest.mark.slow
 class TestNestedMMMFitting:
@@ -1054,20 +1050,24 @@ class TestNestedMMMFitting:
             channel_names=channel_names,
             config=nested_config,
         )
-        
+
         results = model.fit(
             draws=50,
             tune=50,
             chains=1,
             random_seed=42,
         )
-        
+
         assert isinstance(results, ModelResults)
         assert results.trace is not None
 
     def test_fit_with_mediator_data(
-        self, sample_media_data, sample_outcome, channel_names,
-        nested_config, sample_mediator_data
+        self,
+        sample_media_data,
+        sample_outcome,
+        channel_names,
+        nested_config,
+        sample_mediator_data,
     ):
         """Test fitting with partial mediator observations."""
         model = NestedMMM(
@@ -1077,14 +1077,14 @@ class TestNestedMMMFitting:
             config=nested_config,
             mediator_data=sample_mediator_data,
         )
-        
+
         results = model.fit(
             draws=50,
             tune=50,
             chains=1,
             random_seed=42,
         )
-        
+
         assert results.trace is not None
 
 
@@ -1102,14 +1102,14 @@ class TestMultivariateMMMFitting:
             channel_names=channel_names,
             config=multivariate_config,
         )
-        
+
         results = model.fit(
             draws=50,
             tune=50,
             chains=1,
             random_seed=42,
         )
-        
+
         assert isinstance(results, ModelResults)
         assert results.trace is not None
 
@@ -1128,14 +1128,14 @@ class TestCombinedMMMFitting:
             channel_names=channel_names,
             config=combined_config,
         )
-        
+
         results = model.fit(
             draws=50,
             tune=50,
             chains=1,
             random_seed=42,
         )
-        
+
         assert isinstance(results, ModelResults)
 
 
@@ -1143,14 +1143,17 @@ class TestCombinedMMMFitting:
 # Integration Tests
 # =============================================================================
 
+
 class TestConfigIntegration:
     """Integration tests for config + model workflow."""
 
-    def test_nested_config_to_model(self, sample_media_data, sample_outcome, channel_names):
+    def test_nested_config_to_model(
+        self, sample_media_data, sample_outcome, channel_names
+    ):
         """Test full workflow from config to model."""
         # Build config
         mediator = awareness_mediator("brand_awareness", observation_noise=0.15)
-        
+
         config = (
             NestedModelConfigBuilder()
             .add_mediator(mediator)
@@ -1158,7 +1161,7 @@ class TestConfigIntegration:
             .share_adstock(True)
             .build()
         )
-        
+
         # Create model
         model = NestedMMM(
             X_media=sample_media_data,
@@ -1166,11 +1169,11 @@ class TestConfigIntegration:
             channel_names=channel_names,
             config=config,
         )
-        
+
         # Verify structure
         assert model.n_mediators == 1
         assert model.mediator_names == ["brand_awareness"]
-        
+
         # Build PyMC model
         pymc_model = model.model
         assert pymc_model is not None
@@ -1184,7 +1187,7 @@ class TestConfigIntegration:
             source="sales_product_b",
             target="sales_product_a",
         )
-        
+
         config = (
             MultivariateModelConfigBuilder()
             .add_outcome(
@@ -1201,7 +1204,7 @@ class TestConfigIntegration:
             .with_lkj_eta(2.0)
             .build()
         )
-        
+
         # Create model
         model = MultivariateMMM(
             X_media=sample_media_data,
@@ -1209,7 +1212,7 @@ class TestConfigIntegration:
             channel_names=channel_names,
             config=config,
         )
-        
+
         # Verify structure
         assert model.n_outcomes == 2
         assert len(config.cross_effects) == 1
@@ -1220,12 +1223,8 @@ class TestConfigIntegration:
         """Test full workflow for combined model."""
         # Nested part
         mediator = awareness_mediator("awareness")
-        nested_config = (
-            NestedModelConfigBuilder()
-            .add_mediator(mediator)
-            .build()
-        )
-        
+        nested_config = NestedModelConfigBuilder().add_mediator(mediator).build()
+
         # Multivariate part
         multi_config = (
             MultivariateModelConfigBuilder()
@@ -1237,14 +1236,16 @@ class TestConfigIntegration:
             )
             .build()
         )
-        
+
         # Combined config
         config = CombinedModelConfig(
             nested=nested_config,
             multivariate=multi_config,
-            mediator_to_outcome_map={"awareness": ("sales_product_a", "sales_product_b")},
+            mediator_to_outcome_map={
+                "awareness": ("sales_product_a", "sales_product_b")
+            },
         )
-        
+
         # Create model
         model = CombinedMMM(
             X_media=sample_media_data,
@@ -1252,7 +1253,7 @@ class TestConfigIntegration:
             channel_names=channel_names,
             config=config,
         )
-        
+
         # Verify structure
         assert model.n_mediators == 1
         assert model.n_outcomes == 2

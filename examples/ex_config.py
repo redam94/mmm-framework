@@ -3,7 +3,7 @@ Example usage of the flexible MMM framework.
 
 Demonstrates:
 1. Simple national-level configuration
-2. Geo-level panel configuration  
+2. Geo-level panel configuration
 3. Multi-product hierarchical configuration
 4. Social media platform splits
 """
@@ -43,6 +43,7 @@ from mmm_framework import (
 # Helper: Generate synthetic MFF data for testing
 # =============================================================================
 
+
 def generate_synthetic_mff(
     n_weeks: int = 156,
     geographies: list[str] | None = None,
@@ -52,9 +53,9 @@ def generate_synthetic_mff(
     seed: int = 42,
 ) -> pd.DataFrame:
     """Generate synthetic MFF data for testing."""
-    
+
     np.random.seed(seed)
-    
+
     # Defaults
     if geographies is None:
         geographies = ["National"]
@@ -62,13 +63,13 @@ def generate_synthetic_mff(
         products = ["All"]
     if media_channels is None:
         media_channels = ["TV", "Digital", "Radio"]
-    
+
     # Date range
     start_date = datetime(2022, 1, 3)  # Start on Monday
     dates = [start_date + timedelta(weeks=i) for i in range(n_weeks)]
-    
+
     records = []
-    
+
     for date in dates:
         for geo in geographies:
             for product in products:
@@ -77,25 +78,37 @@ def generate_synthetic_mff(
                 trend = 1000 + 2 * week_num
                 seasonality = 200 * np.sin(2 * np.pi * week_num / 52)
                 noise = np.random.normal(0, 100)
-                
+
                 # Geo and product effects
-                geo_effect = {"East": 1.2, "West": 0.9, "Central": 1.0, "National": 1.0}.get(geo, 1.0)
-                prod_effect = {"Premium": 1.3, "Standard": 1.0, "Budget": 0.7, "All": 1.0}.get(product, 1.0)
-                
+                geo_effect = {
+                    "East": 1.2,
+                    "West": 0.9,
+                    "Central": 1.0,
+                    "National": 1.0,
+                }.get(geo, 1.0)
+                prod_effect = {
+                    "Premium": 1.3,
+                    "Standard": 1.0,
+                    "Budget": 0.7,
+                    "All": 1.0,
+                }.get(product, 1.0)
+
                 base_sales = (trend + seasonality + noise) * geo_effect * prod_effect
-                
+
                 # KPI record
-                records.append({
-                    "Period": date.strftime("%Y-%m-%d"),
-                    "Geography": geo,
-                    "Product": product,
-                    "Campaign": "",
-                    "Outlet": "",
-                    "Creative": "",
-                    "VariableName": "Sales",
-                    "VariableValue": max(0, base_sales),
-                })
-                
+                records.append(
+                    {
+                        "Period": date.strftime("%Y-%m-%d"),
+                        "Geography": geo,
+                        "Product": product,
+                        "Campaign": "",
+                        "Outlet": "",
+                        "Creative": "",
+                        "VariableName": "Sales",
+                        "VariableValue": max(0, base_sales),
+                    }
+                )
+
                 # Media records (national level - same for all geos/products)
                 if geo == geographies[0] and product == products[0]:
                     for channel in media_channels:
@@ -114,60 +127,68 @@ def generate_synthetic_mff(
                             # Sporadic
                             if np.random.random() > 0.3:
                                 spend = np.random.uniform(5000, 20000)
-                        
-                        records.append({
-                            "Period": date.strftime("%Y-%m-%d"),
-                            "Geography": "",  # National
-                            "Product": "",
-                            "Campaign": "",
-                            "Outlet": "",
-                            "Creative": "",
-                            "VariableName": channel,
-                            "VariableValue": spend,
-                        })
-                    
+
+                        records.append(
+                            {
+                                "Period": date.strftime("%Y-%m-%d"),
+                                "Geography": "",  # National
+                                "Product": "",
+                                "Campaign": "",
+                                "Outlet": "",
+                                "Creative": "",
+                                "VariableName": channel,
+                                "VariableValue": spend,
+                            }
+                        )
+
                     # Social splits if requested
                     if include_social_splits:
                         social_spend = np.random.uniform(15000, 40000)
                         platforms = {"Meta": 0.6, "Snapchat": 0.25, "Twitter": 0.15}
                         for platform, share in platforms.items():
-                            records.append({
-                                "Period": date.strftime("%Y-%m-%d"),
-                                "Geography": "",
-                                "Product": "",
-                                "Campaign": "",
-                                "Outlet": platform,
-                                "Creative": "",
-                                "VariableName": "Social",
-                                "VariableValue": social_spend * share,
-                            })
-                
+                            records.append(
+                                {
+                                    "Period": date.strftime("%Y-%m-%d"),
+                                    "Geography": "",
+                                    "Product": "",
+                                    "Campaign": "",
+                                    "Outlet": platform,
+                                    "Creative": "",
+                                    "VariableName": "Social",
+                                    "VariableValue": social_spend * share,
+                                }
+                            )
+
                 # Control variables
                 if geo == geographies[0] and product == products[0]:
                     # Price index
-                    records.append({
-                        "Period": date.strftime("%Y-%m-%d"),
-                        "Geography": "",
-                        "Product": "",
-                        "Campaign": "",
-                        "Outlet": "",
-                        "Creative": "",
-                        "VariableName": "Price",
-                        "VariableValue": 100 + np.random.normal(0, 5),
-                    })
-                    
+                    records.append(
+                        {
+                            "Period": date.strftime("%Y-%m-%d"),
+                            "Geography": "",
+                            "Product": "",
+                            "Campaign": "",
+                            "Outlet": "",
+                            "Creative": "",
+                            "VariableName": "Price",
+                            "VariableValue": 100 + np.random.normal(0, 5),
+                        }
+                    )
+
                     # Distribution (ACV)
-                    records.append({
-                        "Period": date.strftime("%Y-%m-%d"),
-                        "Geography": "",
-                        "Product": "",
-                        "Campaign": "",
-                        "Outlet": "",
-                        "Creative": "",
-                        "VariableName": "Distribution",
-                        "VariableValue": 0.85 + np.random.normal(0, 0.02),
-                    })
-    
+                    records.append(
+                        {
+                            "Period": date.strftime("%Y-%m-%d"),
+                            "Geography": "",
+                            "Product": "",
+                            "Campaign": "",
+                            "Outlet": "",
+                            "Creative": "",
+                            "VariableName": "Distribution",
+                            "VariableValue": 0.85 + np.random.normal(0, 0.02),
+                        }
+                    )
+
     return pd.DataFrame(records)
 
 
@@ -175,16 +196,17 @@ def generate_synthetic_mff(
 # Example 1: Simple National Model
 # =============================================================================
 
+
 def example_national_model():
     """Simple national-level MMM with default settings."""
-    
+
     print("=" * 60)
     print("Example 1: National Model")
     print("=" * 60)
-    
+
     # Generate synthetic data
     mff_data = generate_synthetic_mff(n_weeks=156)
-    
+
     # Simple config using factory function
     config = create_simple_mff_config(
         kpi_name="Sales",
@@ -193,14 +215,14 @@ def example_national_model():
         kpi_dimensions=[DimensionType.PERIOD],
         multiplicative=False,
     )
-    
+
     # Load data
     panel = load_mff(mff_data, config)
-    
+
     print(panel.summary())
     print("\nSpend shares:")
     print(panel.compute_spend_shares())
-    
+
     return panel
 
 
@@ -208,19 +230,20 @@ def example_national_model():
 # Example 2: Geo-Level Panel Model
 # =============================================================================
 
+
 def example_geo_panel_model():
     """Geo-level panel model with national media disaggregation."""
-    
+
     print("\n" + "=" * 60)
     print("Example 2: Geo Panel Model")
     print("=" * 60)
-    
+
     # Generate synthetic data with geos
     mff_data = generate_synthetic_mff(
         n_weeks=156,
         geographies=["East", "West", "Central"],
     )
-    
+
     # Build config manually for more control
     config = MFFConfig(
         kpi=KPIConfig(
@@ -243,7 +266,7 @@ def example_geo_panel_model():
             ),
             MediaChannelConfig(
                 name="Radio",
-                dimensions=[DimensionType.PERIOD],  # National  
+                dimensions=[DimensionType.PERIOD],  # National
                 adstock=AdstockConfig.geometric(l_max=6),
                 saturation=SaturationConfig.hill(),
             ),
@@ -255,7 +278,7 @@ def example_geo_panel_model():
                 allow_negative=True,
             ),
             ControlVariableConfig(
-                name="Distribution", 
+                name="Distribution",
                 dimensions=[DimensionType.PERIOD],
             ),
         ],
@@ -263,16 +286,16 @@ def example_geo_panel_model():
             geo_allocation=AllocationMethod.SALES,  # Use sales to allocate
         ),
     )
-    
+
     # Load with population weights (could also compute from data)
     geo_weights = {"East": 0.4, "West": 0.35, "Central": 0.25}
-    
+
     panel = load_mff(mff_data, config, geo_weights=geo_weights)
-    
+
     print(panel.summary())
     print("\nPyMC coordinates:")
     print(panel.coords.to_pymc_coords())
-    
+
     return panel
 
 
@@ -280,20 +303,21 @@ def example_geo_panel_model():
 # Example 3: Multi-Product Hierarchical Model
 # =============================================================================
 
+
 def example_product_hierarchical_model():
     """Multi-product model with hierarchical media effects."""
-    
+
     print("\n" + "=" * 60)
     print("Example 3: Product Hierarchical Model")
     print("=" * 60)
-    
+
     # Generate data with products
     mff_data = generate_synthetic_mff(
         n_weeks=156,
         geographies=["East", "West"],
         products=["Premium", "Standard", "Budget"],
     )
-    
+
     config = MFFConfig(
         kpi=KPIConfig(
             name="Sales",
@@ -329,20 +353,24 @@ def example_product_hierarchical_model():
         ],
         controls=[
             ControlVariableConfig(name="Price", dimensions=[DimensionType.PERIOD]),
-            ControlVariableConfig(name="Distribution", dimensions=[DimensionType.PERIOD]),
+            ControlVariableConfig(
+                name="Distribution", dimensions=[DimensionType.PERIOD]
+            ),
         ],
         alignment=DimensionAlignmentConfig(
             geo_allocation=AllocationMethod.SALES,
             product_allocation=AllocationMethod.SALES,
         ),
     )
-    
+
     panel = load_mff(mff_data, config)
-    
+
     print(panel.summary())
     print(f"\nPanel shape: {panel.n_obs} observations")
-    print(f"  {panel.coords.n_periods} periods × {panel.coords.n_geos} geos × {panel.coords.n_products} products")
-    
+    print(
+        f"  {panel.coords.n_periods} periods × {panel.coords.n_geos} geos × {panel.coords.n_products} products"
+    )
+
     return panel
 
 
@@ -350,26 +378,27 @@ def example_product_hierarchical_model():
 # Example 4: Social Platform Splits with Hierarchy
 # =============================================================================
 
+
 def example_social_splits():
     """Social media with platform-level splits and hierarchical pooling."""
-    
+
     print("\n" + "=" * 60)
     print("Example 4: Social Platform Splits")
     print("=" * 60)
-    
+
     # Generate data with social splits
     mff_data = generate_synthetic_mff(
         n_weeks=156,
         include_social_splits=True,
     )
-    
+
     # Create social platform configs
     social_configs = create_social_platform_configs(
         platforms=["Meta", "Snapchat", "Twitter"],
         parent_name="Social",
         adstock_lmax=4,
     )
-    
+
     config = MFFConfig(
         kpi=KPIConfig(
             name="Sales",
@@ -379,21 +408,24 @@ def example_social_splits():
             create_national_media_config("TV", adstock_lmax=8),
             create_national_media_config("Digital", adstock_lmax=4),
             create_national_media_config("Radio", adstock_lmax=6),
-        ] + social_configs,
+        ]
+        + social_configs,
         controls=[
             ControlVariableConfig(name="Price", dimensions=[DimensionType.PERIOD]),
-            ControlVariableConfig(name="Distribution", dimensions=[DimensionType.PERIOD]),
+            ControlVariableConfig(
+                name="Distribution", dimensions=[DimensionType.PERIOD]
+            ),
         ],
     )
-    
+
     # Note: For social splits, we need special handling in the loader
-    # The current loader aggregates by VariableName, so each platform 
+    # The current loader aggregates by VariableName, so each platform
     # would need its own VariableName or we handle Outlet dimension
-    
+
     print("Config created with hierarchical social structure:")
     print(f"  Media channels: {config.media_names}")
     print(f"  Hierarchical groups: {config.get_hierarchical_media_groups()}")
-    
+
     return config
 
 
@@ -401,13 +433,14 @@ def example_social_splits():
 # Example 5: Full Model Configuration
 # =============================================================================
 
+
 def example_full_model_config():
     """Complete model configuration including inference settings."""
-    
+
     print("\n" + "=" * 60)
     print("Example 5: Full Model Configuration")
     print("=" * 60)
-    
+
     # MFF config
     mff_config = MFFConfig(
         kpi=KPIConfig(
@@ -439,7 +472,7 @@ def example_full_model_config():
             ),
         ],
     )
-    
+
     # Model config
     model_config = ModelConfig(
         inference_method=InferenceMethod.BAYESIAN_NUMPYRO,
@@ -448,18 +481,18 @@ def example_full_model_config():
         n_tune=1000,
         target_accept=0.9,
     )
-    
+
     print("MFF Configuration:")
     print(f"  KPI: {mff_config.kpi.name} with dims {mff_config.kpi.dim_names}")
     print(f"  Media channels: {mff_config.media_names}")
     print(f"  Controls: {mff_config.control_names}")
-    
+
     print("\nModel Configuration:")
     print(f"  Method: {model_config.inference_method.value}")
     print(f"  Chains: {model_config.n_chains}")
     print(f"  Draws: {model_config.n_draws}")
     print(f"  Use NumPyro: {model_config.use_numpyro}")
-    
+
     return mff_config, model_config
 
 
@@ -474,7 +507,7 @@ if __name__ == "__main__":
     panel3 = example_product_hierarchical_model()
     config4 = example_social_splits()
     configs5 = example_full_model_config()
-    
+
     print("\n" + "=" * 60)
     print("All examples completed successfully!")
     print("=" * 60)

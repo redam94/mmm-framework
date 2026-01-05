@@ -26,8 +26,10 @@ API_TIMEOUT = float(os.getenv("MMM_API_TIMEOUT", "30.0"))
 # Enums
 # =============================================================================
 
+
 class JobStatus(str, Enum):
     """Job status enum."""
+
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -40,9 +42,11 @@ class JobStatus(str, Enum):
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class DatasetInfo:
     """Dataset information matching API DataInfo schema."""
+
     data_id: str
     filename: str
     rows: int
@@ -52,32 +56,33 @@ class DatasetInfo:
     created_at: datetime
     size_bytes: int = 0
     preview: list = None
-    
+
     # Computed on access, not as properties
     def get_n_rows(self) -> int:
         """Alias for rows."""
         return self.rows
-    
+
     def get_n_cols(self) -> int:
         """Alias for columns."""
         return self.columns
-    
+
     def get_geographies(self) -> list:
         """Get geographies from dimensions."""
         if self.dimensions and isinstance(self.dimensions, dict):
-            return self.dimensions.get('Geography', [])
+            return self.dimensions.get("Geography", [])
         return []
-    
+
     def get_products(self) -> list:
         """Get products from dimensions."""
         if self.dimensions and isinstance(self.dimensions, dict):
-            return self.dimensions.get('Product', [])
+            return self.dimensions.get("Product", [])
         return []
 
 
 @dataclass
 class ConfigInfo:
     """Configuration information."""
+
     config_id: str
     name: str
     created_at: datetime
@@ -85,37 +90,38 @@ class ConfigInfo:
     description: str = None
     mff_config: dict = None
     model_settings: dict = None
-    
+
     def get_kpi_name(self) -> str:
         """Get KPI name from mff_config."""
         if self.mff_config and isinstance(self.mff_config, dict):
-            kpi = self.mff_config.get('kpi', {})
+            kpi = self.mff_config.get("kpi", {})
             if isinstance(kpi, dict):
-                return kpi.get('name', 'N/A')
-        return 'N/A'
-    
+                return kpi.get("name", "N/A")
+        return "N/A"
+
     def get_media_channels(self) -> list:
         """Get media channels from mff_config."""
         if self.mff_config and isinstance(self.mff_config, dict):
-            return self.mff_config.get('media_channels', [])
+            return self.mff_config.get("media_channels", [])
         return []
-    
+
     def get_controls(self) -> list:
         """Get control variables from mff_config."""
         if self.mff_config and isinstance(self.mff_config, dict):
-            return self.mff_config.get('controls', [])
+            return self.mff_config.get("controls", [])
         return []
-    
+
     def get_inference_method(self) -> str:
         """Get inference method from model_settings."""
         if self.model_settings and isinstance(self.model_settings, dict):
-            return self.model_settings.get('inference_method', 'N/A')
-        return 'N/A'
+            return self.model_settings.get("inference_method", "N/A")
+        return "N/A"
 
 
 @dataclass
 class ModelInfo:
     """Model information."""
+
     model_id: str
     config_id: str
     status: str
@@ -127,6 +133,7 @@ class ModelInfo:
 @dataclass
 class JobInfo:
     """Job information."""
+
     job_id: str
     status: str
     progress: float = 0.0
@@ -138,8 +145,10 @@ class JobInfo:
 # API Error
 # =============================================================================
 
+
 class APIError(Exception):
     """API error with status code and message."""
+
     def __init__(self, status_code: int, message: str, details: dict = None):
         self.status_code = status_code
         self.message = message
@@ -151,18 +160,19 @@ class APIError(Exception):
 # API Client
 # =============================================================================
 
+
 class MMMAPIClient:
     """HTTP client for MMM Framework API."""
-    
+
     def __init__(self, base_url: str = API_BASE_URL, timeout: float = API_TIMEOUT):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._client = httpx.Client(
             base_url=self.base_url,
             timeout=timeout,
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
-    
+
     def _handle_response(self, response: httpx.Response) -> dict:
         """Handle API response and raise errors if needed."""
         if response.status_code >= 400:
@@ -172,26 +182,26 @@ class MMMAPIClient:
             except Exception:
                 message = response.text
             raise APIError(response.status_code, message)
-        
+
         if response.status_code == 204:
             return {}
-        
+
         return response.json()
-    
+
     # -------------------------------------------------------------------------
     # Health Check
     # -------------------------------------------------------------------------
-    
+
     def health_check(self) -> dict:
         """Check API health."""
         response = self._client.get("/health")
         return self._handle_response(response)
-    
+
     # Alias for compatibility
     def health(self) -> dict:
         """Check API health (alias for health_check)."""
         return self.health_check()
-    
+
     def health_detailed(self) -> dict:
         """Get detailed health status including component status."""
         try:
@@ -205,13 +215,13 @@ class MMMAPIClient:
                 "api": True,
                 "storage": True,
                 "worker": basic.get("worker_active", False),
-                **basic
+                **basic,
             }
-    
+
     # -------------------------------------------------------------------------
     # Datasets (uses /data endpoint)
     # -------------------------------------------------------------------------
-    
+
     def list_datasets(self, skip: int = 0, limit: int = 50) -> list[DatasetInfo]:
         """List all datasets."""
         params = {"skip": skip, "limit": limit}
@@ -230,8 +240,10 @@ class MMMAPIClient:
             )
             for d in data.get("datasets", [])
         ]
-    
-    def get_dataset(self, data_id: str, include_preview: bool = False, preview_rows: int = 10) -> DatasetInfo:
+
+    def get_dataset(
+        self, data_id: str, include_preview: bool = False, preview_rows: int = 10
+    ) -> DatasetInfo:
         """Get dataset by ID."""
         params = {"include_preview": include_preview, "preview_rows": preview_rows}
         response = self._client.get(f"/data/{data_id}", params=params)
@@ -247,31 +259,31 @@ class MMMAPIClient:
             size_bytes=d.get("size_bytes", 0),
             preview=d.get("preview"),
         )
-    
+
     def upload_dataset(self, file_content: bytes, filename: str) -> dict:
         """Upload a dataset."""
         files = {"file": (filename, file_content)}
         response = self._client.post(
             "/data/upload",
             files=files,
-            headers={}  # Let httpx set content-type for multipart
+            headers={},  # Let httpx set content-type for multipart
         )
         return self._handle_response(response)
-    
+
     def delete_dataset(self, data_id: str) -> dict:
         """Delete a dataset."""
         response = self._client.delete(f"/data/{data_id}")
         return self._handle_response(response)
-    
+
     def get_dataset_variables(self, data_id: str) -> dict:
         """Get variable names and summary statistics from a dataset."""
         response = self._client.get(f"/data/{data_id}/variables")
         return self._handle_response(response)
-    
+
     # -------------------------------------------------------------------------
     # Configurations
     # -------------------------------------------------------------------------
-    
+
     def list_configs(self, skip: int = 0, limit: int = 50) -> list[ConfigInfo]:
         """List all configurations."""
         params = {"skip": skip, "limit": limit}
@@ -284,12 +296,20 @@ class MMMAPIClient:
                 description=c.get("description"),
                 mff_config=c.get("mff_config"),
                 model_settings=c.get("model_settings"),
-                created_at=datetime.fromisoformat(c["created_at"]) if c.get("created_at") else datetime.now(),
-                updated_at=datetime.fromisoformat(c["updated_at"]) if c.get("updated_at") else None,
+                created_at=(
+                    datetime.fromisoformat(c["created_at"])
+                    if c.get("created_at")
+                    else datetime.now()
+                ),
+                updated_at=(
+                    datetime.fromisoformat(c["updated_at"])
+                    if c.get("updated_at")
+                    else None
+                ),
             )
             for c in data.get("configs", [])
         ]
-    
+
     def get_config(self, config_id: str) -> ConfigInfo:
         """Get configuration by ID."""
         response = self._client.get(f"/configs/{config_id}")
@@ -300,24 +320,30 @@ class MMMAPIClient:
             description=c.get("description"),
             mff_config=c.get("mff_config"),
             model_settings=c.get("model_settings"),
-            created_at=datetime.fromisoformat(c["created_at"]) if c.get("created_at") else datetime.now(),
-            updated_at=datetime.fromisoformat(c["updated_at"]) if c.get("updated_at") else None,
+            created_at=(
+                datetime.fromisoformat(c["created_at"])
+                if c.get("created_at")
+                else datetime.now()
+            ),
+            updated_at=(
+                datetime.fromisoformat(c["updated_at"]) if c.get("updated_at") else None
+            ),
         )
-    
+
     def create_config(self, config_data: dict) -> dict:
         """Create a new configuration."""
         response = self._client.post("/configs", json=config_data)
         return self._handle_response(response)
-    
+
     def delete_config(self, config_id: str) -> dict:
         """Delete a configuration."""
         response = self._client.delete(f"/configs/{config_id}")
         return self._handle_response(response)
-    
+
     # -------------------------------------------------------------------------
     # Models
     # -------------------------------------------------------------------------
-    
+
     def list_models(self, skip: int = 0, limit: int = 50) -> list[ModelInfo]:
         """List all models."""
         params = {"skip": skip, "limit": limit}
@@ -329,12 +355,16 @@ class MMMAPIClient:
                 config_id=m["config_id"],
                 status=m["status"],
                 created_at=datetime.fromisoformat(m["created_at"]),
-                completed_at=datetime.fromisoformat(m["completed_at"]) if m.get("completed_at") else None,
+                completed_at=(
+                    datetime.fromisoformat(m["completed_at"])
+                    if m.get("completed_at")
+                    else None
+                ),
                 metrics=m.get("metrics"),
             )
             for m in data.get("models", [])
         ]
-    
+
     def get_model(self, model_id: str) -> ModelInfo:
         """Get model by ID."""
         response = self._client.get(f"/models/{model_id}")
@@ -344,24 +374,28 @@ class MMMAPIClient:
             config_id=m["config_id"],
             status=m["status"],
             created_at=datetime.fromisoformat(m["created_at"]),
-            completed_at=datetime.fromisoformat(m["completed_at"]) if m.get("completed_at") else None,
+            completed_at=(
+                datetime.fromisoformat(m["completed_at"])
+                if m.get("completed_at")
+                else None
+            ),
             metrics=m.get("metrics"),
         )
-    
+
     def get_model_results(self, model_id: str) -> dict:
         """Get model results."""
         response = self._client.get(f"/models/{model_id}/results")
         return self._handle_response(response)
-    
+
     # -------------------------------------------------------------------------
     # Jobs
     # -------------------------------------------------------------------------
-    
+
     def submit_fit_job(self, config_id: str) -> dict:
         """Submit a model fitting job."""
         response = self._client.post("/jobs/fit", json={"config_id": config_id})
         return self._handle_response(response)
-    
+
     def get_job_status(self, job_id: str) -> JobInfo:
         """Get job status."""
         response = self._client.get(f"/jobs/{job_id}")
@@ -378,6 +412,7 @@ class MMMAPIClient:
 # =============================================================================
 # Cached Client & Helpers
 # =============================================================================
+
 
 @st.cache_resource
 def get_api_client() -> MMMAPIClient:

@@ -13,9 +13,11 @@ from typing import Any
 # Custom CSS
 # =============================================================================
 
+
 def apply_custom_css():
     """Apply custom CSS styling."""
-    st.markdown("""
+    st.markdown(
+        """
     <style>
         .stTabs [data-baseweb="tab-list"] {
             gap: 24px;
@@ -53,12 +55,15 @@ def apply_custom_css():
             margin: 10px 0;
         }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # =============================================================================
 # Page Header
 # =============================================================================
+
 
 def page_header(title: str, description: str = ""):
     """Render a consistent page header."""
@@ -71,6 +76,7 @@ def page_header(title: str, description: str = ""):
 # =============================================================================
 # Session State
 # =============================================================================
+
 
 def init_session_state(**defaults):
     """Initialize session state with default values."""
@@ -92,6 +98,7 @@ def set_session_value(key: str, value: Any):
 # =============================================================================
 # Formatters
 # =============================================================================
+
 
 def format_datetime(dt: datetime, format_str: str = "%Y-%m-%d %H:%M") -> str:
     """Format datetime for display."""
@@ -135,10 +142,11 @@ def format_currency(value: float, symbol: str = "$", decimals: int = 0) -> str:
 # Error Handling
 # =============================================================================
 
+
 def display_api_error(error: Exception, context: str = ""):
     """Display API error with context."""
     from api_client import APIError
-    
+
     if isinstance(error, APIError):
         st.error(f"❌ {context}: {error.message}")
         if error.details:
@@ -159,6 +167,7 @@ def display_validation_error(errors: list[str]):
 # =============================================================================
 # Status Indicators
 # =============================================================================
+
 
 def status_badge(status: str) -> str:
     """Return emoji badge for status."""
@@ -190,6 +199,7 @@ def status_color(status: str) -> str:
 # Progress Display
 # =============================================================================
 
+
 def render_progress(progress: float, message: str = ""):
     """Render progress bar with message."""
     st.progress(progress)
@@ -201,32 +211,30 @@ def render_progress(progress: float, message: str = ""):
 # Confirmation Dialog
 # =============================================================================
 
+
 def confirm_action(key: str, message: str = "Are you sure?") -> bool:
     """Simple confirmation using checkbox."""
     return st.checkbox(message, key=f"confirm_{key}")
+
 
 from .common import (
     # Color utilities
     rgb_to_rgba,
     CHART_COLORS,
     COMPONENT_COLORS,
-    
     # # Status helpers
     # status_badge,
     status_icon,
-    
     # # Formatting
     format_bytes,
     format_duration,
     # format_datetime,
     # format_percentage,
     # format_number,
-    
     # # Session state
     # init_session_state,
     # get_session,
     # set_session,
-    
     # UI components
     metric_card,
     info_box,
@@ -237,11 +245,9 @@ from .common import (
     job_progress_display,
     page_header,
     sidebar_status,
-    
     # # Error handling
     # display_api_error,
     # handle_api_call,
-    
     # CSS
     CUSTOM_CSS,
     # apply_custom_css,
@@ -251,24 +257,19 @@ from .charts import (
     # Model fit
     plot_model_fit,
     plot_residuals,
-    
     # Contributions
     plot_channel_contributions,
     plot_contribution_waterfall,
     plot_contribution_pie,
     plot_contribution_timeseries,
-    
     # Response curves
     plot_response_curves,
     plot_marginal_roas,
-    
     # Decomposition
     plot_component_decomposition,
-    
     # Posteriors
     plot_posterior_distributions,
     plot_trace,
-    
     # Scenarios
     plot_scenario_comparison,
     plot_budget_optimization,
@@ -303,7 +304,6 @@ __all__ = [
     "handle_api_call",
     "CUSTOM_CSS",
     "apply_custom_css",
-    
     # Charts
     "plot_model_fit",
     "plot_residuals",

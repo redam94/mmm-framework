@@ -43,6 +43,7 @@ try:
         geometric_adstock_matrix,
         build_media_transforms,
     )
+
     HAS_SCAN_FUNCTIONS = True
 except (ImportError, AttributeError):
     HAS_SCAN_FUNCTIONS = False
@@ -51,6 +52,7 @@ except (ImportError, AttributeError):
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def sample_1d_input():
@@ -61,17 +63,20 @@ def sample_1d_input():
 @pytest.fixture
 def sample_2d_input():
     """2D input for multi-channel tests."""
-    return np.array([
-        [100.0, 50.0],
-        [50.0, 30.0],
-        [0.0, 20.0],
-        [25.0, 10.0],
-    ])
+    return np.array(
+        [
+            [100.0, 50.0],
+            [50.0, 30.0],
+            [0.0, 20.0],
+            [25.0, 10.0],
+        ]
+    )
 
 
 # =============================================================================
 # Geometric Adstock Tests (PyTensor)
 # =============================================================================
+
 
 @pytest.mark.skipif(not HAS_SCAN_FUNCTIONS, reason="scan-based functions not available")
 class TestGeometricAdstock:
@@ -82,12 +87,12 @@ class TestGeometricAdstock:
         with pm.Model():
             x = pt.as_tensor_variable(sample_1d_input)
             alpha = pt.constant(0.5)
-            
+
             result = geometric_adstock(x, alpha, l_max=4)
-            
+
             # Compile and evaluate
             fn = result.eval()
-            
+
             assert len(fn) == len(sample_1d_input)
 
     def test_normalization(self):
@@ -95,10 +100,10 @@ class TestGeometricAdstock:
         with pm.Model():
             x = pt.as_tensor_variable([1.0, 0.0, 0.0, 0.0])
             alpha = pt.constant(0.5)
-            
+
             result = geometric_adstock(x, alpha, l_max=4, normalize=True)
             fn = result.eval()
-            
+
             # Output should exist and be non-zero
             assert fn[0] != 0
 
@@ -107,10 +112,10 @@ class TestGeometricAdstock:
         with pm.Model():
             x = pt.as_tensor_variable([1.0, 0.0, 0.0, 0.0])
             alpha = pt.constant(0.5)
-            
+
             result = geometric_adstock(x, alpha, l_max=4, normalize=False)
             fn = result.eval()
-            
+
             assert fn[0] > 0
 
 
@@ -123,16 +128,17 @@ class TestGeometricAdstockMatrix:
         with pm.Model():
             X = pt.as_tensor_variable(sample_2d_input)
             alphas = pt.constant([0.5, 0.7])
-            
+
             result = geometric_adstock_matrix(X, alphas, l_max=3)
             fn = result.eval()
-            
+
             assert fn.shape == sample_2d_input.shape
 
 
 # =============================================================================
 # Logistic Saturation Tests
 # =============================================================================
+
 
 class TestLogisticSaturation:
     """Tests for logistic_saturation function."""
@@ -141,39 +147,39 @@ class TestLogisticSaturation:
         """Test that zero input gives zero output."""
         x = pt.constant(0.0)
         lam = pt.constant(1.0)
-        
+
         result = logistic_saturation(x, lam)
         fn = result.eval()
-        
+
         assert fn == pytest.approx(0.0, abs=1e-10)
 
     def test_large_input_approaches_one(self):
         """Test asymptotic behavior."""
         x = pt.constant(100.0)
         lam = pt.constant(1.0)
-        
+
         result = logistic_saturation(x, lam)
         fn = result.eval()
-        
+
         assert fn == pytest.approx(1.0, abs=1e-6)
 
     def test_lambda_effect(self):
         """Test that higher lambda gives faster saturation."""
         x = pt.constant(5.0)
-        
+
         result_low = logistic_saturation(x, pt.constant(0.1)).eval()
         result_high = logistic_saturation(x, pt.constant(1.0)).eval()
-        
+
         assert result_high > result_low
 
     def test_vectorized(self, sample_1d_input):
         """Test vectorized operation."""
         x = pt.as_tensor_variable(sample_1d_input)
         lam = pt.constant(0.1)
-        
+
         result = logistic_saturation(x, lam)
         fn = result.eval()
-        
+
         assert len(fn) == len(sample_1d_input)
         assert all(fn >= 0)
         assert all(fn <= 1)
@@ -183,6 +189,7 @@ class TestLogisticSaturation:
 # Hill Saturation Tests
 # =============================================================================
 
+
 class TestHillSaturation:
     """Tests for hill_saturation function."""
 
@@ -191,10 +198,10 @@ class TestHillSaturation:
         x = pt.constant(10.0)
         kappa = pt.constant(10.0)  # x = kappa
         slope = pt.constant(1.0)
-        
+
         result = hill_saturation(x, kappa, slope)
         fn = result.eval()
-        
+
         # At x=kappa, output should be 0.5
         assert fn == pytest.approx(0.5, rel=0.01)
 
@@ -202,10 +209,10 @@ class TestHillSaturation:
         """Test that higher slope gives steeper curve."""
         x = pt.constant(5.0)
         kappa = pt.constant(10.0)
-        
+
         result_low = hill_saturation(x, kappa, pt.constant(1.0)).eval()
         result_high = hill_saturation(x, kappa, pt.constant(3.0)).eval()
-        
+
         # Higher slope gives lower value for x < kappa
         assert result_low > result_high
 
@@ -213,14 +220,14 @@ class TestHillSaturation:
         """Test output is in [0, 1]."""
         # Only positive values for Hill
         positive_input = np.abs(sample_1d_input) + 1
-        
+
         x = pt.as_tensor_variable(positive_input)
         kappa = pt.constant(50.0)
         slope = pt.constant(2.0)
-        
+
         result = hill_saturation(x, kappa, slope)
         fn = result.eval()
-        
+
         assert all(fn >= 0)
         assert all(fn <= 1)
 
@@ -229,36 +236,35 @@ class TestHillSaturation:
 # Apply Transformation Pipeline Tests
 # =============================================================================
 
+
 class TestApplyTransformationPipeline:
     """Tests for apply_transformation_pipeline function."""
 
     def test_single_transform(self):
         """Test applying a single transformation."""
         x = pt.constant(10.0)
-        
-        transforms = [
-            (logistic_saturation, {"lam": pt.constant(0.5)})
-        ]
-        
+
+        transforms = [(logistic_saturation, {"lam": pt.constant(0.5)})]
+
         result = apply_transformation_pipeline(x, transforms)
         fn = result.eval()
-        
+
         expected = logistic_saturation(x, pt.constant(0.5)).eval()
         assert fn == pytest.approx(expected, rel=1e-6)
 
     def test_multiple_transforms(self):
         """Test applying multiple transformations in sequence."""
         x = pt.constant(100.0)
-        
+
         # Chain transformations
         transforms = [
             (lambda v, scale: v * scale, {"scale": pt.constant(0.5)}),
             (logistic_saturation, {"lam": pt.constant(0.1)}),
         ]
-        
+
         result = apply_transformation_pipeline(x, transforms)
         fn = result.eval()
-        
+
         # 100 * 0.5 = 50, then saturate
         expected = logistic_saturation(pt.constant(50.0), pt.constant(0.1)).eval()
         assert fn == pytest.approx(expected, rel=1e-6)
@@ -266,16 +272,17 @@ class TestApplyTransformationPipeline:
     def test_empty_pipeline(self):
         """Test empty pipeline returns input."""
         x = pt.constant(42.0)
-        
+
         result = apply_transformation_pipeline(x, [])
         fn = result.eval()
-        
+
         assert fn == 42.0
 
 
 # =============================================================================
 # Prior Factory Tests
 # =============================================================================
+
 
 class TestCreateAdstockPrior:
     """Tests for create_adstock_prior function."""
@@ -284,30 +291,27 @@ class TestCreateAdstockPrior:
         """Test creating Beta prior for adstock."""
         with pm.Model() as model:
             alpha = create_adstock_prior("alpha_tv", prior_type="beta")
-            
+
             assert "alpha_tv" in [v.name for v in model.free_RVs]
 
     def test_beta_prior_custom_params(self):
         """Test Beta prior with custom parameters."""
         with pm.Model() as model:
             alpha = create_adstock_prior(
-                "alpha_digital",
-                prior_type="beta",
-                alpha=3,
-                beta=2
+                "alpha_digital", prior_type="beta", alpha=3, beta=2
             )
-            
+
             # Sample to check it works
             prior = pm.sample_prior_predictive(samples=10)
             vals = prior.prior["alpha_digital"].values.flatten()
-            
+
             assert all(vals >= 0) and all(vals <= 1)
 
     def test_uniform_prior(self):
         """Test creating Uniform prior."""
         with pm.Model() as model:
             alpha = create_adstock_prior("alpha_social", prior_type="uniform")
-            
+
             assert "alpha_social" in [v.name for v in model.free_RVs]
 
     def test_invalid_prior_type(self):
@@ -324,7 +328,7 @@ class TestCreateSaturationPrior:
         """Test creating logistic saturation priors."""
         with pm.Model() as model:
             params = create_saturation_prior("sat_tv", saturation_type="logistic")
-            
+
             assert "lam" in params
             assert "sat_tv_lam" in [v.name for v in model.free_RVs]
 
@@ -332,7 +336,7 @@ class TestCreateSaturationPrior:
         """Test creating Hill saturation priors."""
         with pm.Model() as model:
             params = create_saturation_prior("sat_digital", saturation_type="hill")
-            
+
             assert "kappa" in params
             assert "slope" in params
             assert "sat_digital_kappa" in [v.name for v in model.free_RVs]
@@ -352,17 +356,17 @@ class TestCreateEffectPrior:
         """Test unconstrained (Normal) prior."""
         with pm.Model() as model:
             beta = create_effect_prior("beta_control", constrained="none")
-            
+
             assert "beta_control" in [v.name for v in model.free_RVs]
 
     def test_positive_constraint(self):
         """Test positive (HalfNormal) prior."""
         with pm.Model() as model:
             beta = create_effect_prior("beta_media", constrained="positive", sigma=0.5)
-            
+
             prior = pm.sample_prior_predictive(samples=100)
             vals = prior.prior["beta_media"].values.flatten()
-            
+
             assert all(vals >= 0)
 
     def test_negative_constraint(self):
@@ -383,12 +387,9 @@ class TestCreateEffectPrior:
         """Test creating prior with dimensions."""
         with pm.Model(coords={"channel": ["tv", "digital"]}) as model:
             beta = create_effect_prior(
-                "beta_media",
-                constrained="positive",
-                sigma=0.5,
-                dims="channel"
+                "beta_media", constrained="positive", sigma=0.5, dims="channel"
             )
-            
+
             # Should have shape matching dims
             prior = pm.sample_prior_predictive(samples=10)
             assert prior.prior["beta_media"].shape[-1] == 2
@@ -397,6 +398,7 @@ class TestCreateEffectPrior:
 # =============================================================================
 # CrossEffectSpec Tests
 # =============================================================================
+
 
 class TestCrossEffectSpec:
     """Tests for CrossEffectSpec dataclass."""
@@ -410,7 +412,7 @@ class TestCrossEffectSpec:
             effect_type="cannibalization",
             prior_sigma=0.3,
         )
-        
+
         assert spec.source_idx == 0
         assert spec.target_idx == 1
         assert spec.effect_type == "cannibalization"
@@ -424,7 +426,7 @@ class TestCrossEffectSpec:
             effect_type="halo",
             prior_sigma=0.25,
         )
-        
+
         assert spec.effect_type == "halo"
         assert spec.prior_sigma == 0.25
 
@@ -435,13 +437,14 @@ class TestCrossEffectSpec:
             target_idx=1,
             effect_type="unconstrained",
         )
-        
+
         assert spec.prior_sigma == 0.3  # Default value
 
 
 # =============================================================================
 # MediaTransformResult Tests
 # =============================================================================
+
 
 class TestMediaTransformResult:
     """Tests for MediaTransformResult dataclass."""
@@ -451,13 +454,13 @@ class TestMediaTransformResult:
         transformed = pt.zeros((10, 2))
         adstock_params = {"ch1": pt.constant(0.5)}
         saturation_params = {"ch1": {"lam": pt.constant(1.0)}}
-        
+
         result = MediaTransformResult(
             transformed=transformed,
             adstock_params=adstock_params,
             saturation_params=saturation_params,
         )
-        
+
         assert result.transformed is not None
         assert "ch1" in result.adstock_params
         assert "ch1" in result.saturation_params
@@ -467,6 +470,7 @@ class TestMediaTransformResult:
 # Build Media Transforms Tests
 # =============================================================================
 
+
 @pytest.mark.skipif(not HAS_SCAN_FUNCTIONS, reason="scan-based functions not available")
 class TestBuildMediaTransforms:
     """Tests for build_media_transforms function."""
@@ -475,10 +479,10 @@ class TestBuildMediaTransforms:
         """Test basic media transformation building."""
         np.random.seed(42)
         X_media = np.random.randn(20, 2).astype(np.float64)
-        
+
         with pm.Model(coords={"obs": range(20), "channel": ["tv", "digital"]}):
             X_tensor = pt.as_tensor_variable(X_media)
-            
+
             result = build_media_transforms(
                 X_media=X_tensor,
                 channel_names=["tv", "digital"],
@@ -486,7 +490,7 @@ class TestBuildMediaTransforms:
                 saturation_config={"type": "logistic"},
                 share_params=False,
             )
-            
+
             assert isinstance(result, MediaTransformResult)
             assert result.transformed is not None
 
@@ -494,10 +498,12 @@ class TestBuildMediaTransforms:
         """Test with shared parameters across channels."""
         np.random.seed(42)
         X_media = np.random.randn(20, 3).astype(np.float64)
-        
-        with pm.Model(coords={"obs": range(20), "channel": ["tv", "digital", "social"]}):
+
+        with pm.Model(
+            coords={"obs": range(20), "channel": ["tv", "digital", "social"]}
+        ):
             X_tensor = pt.as_tensor_variable(X_media)
-            
+
             result = build_media_transforms(
                 X_media=X_tensor,
                 channel_names=["tv", "digital", "social"],
@@ -505,7 +511,7 @@ class TestBuildMediaTransforms:
                 saturation_config={"type": "logistic"},
                 share_params=True,
             )
-            
+
             # Should have shared adstock parameter
             assert "shared" in result.adstock_params
 
@@ -513,10 +519,10 @@ class TestBuildMediaTransforms:
         """Test with name prefix for parameters."""
         np.random.seed(42)
         X_media = np.random.randn(10, 1).astype(np.float64)
-        
+
         with pm.Model(coords={"obs": range(10), "channel": ["tv"]}) as model:
             X_tensor = pt.as_tensor_variable(X_media)
-            
+
             result = build_media_transforms(
                 X_media=X_tensor,
                 channel_names=["tv"],
@@ -524,7 +530,7 @@ class TestBuildMediaTransforms:
                 saturation_config={"type": "logistic"},
                 name_prefix="mediator",
             )
-            
+
             var_names = [v.name for v in model.free_RVs]
             # Should have prefixed names
             assert any("mediator" in name for name in var_names)
@@ -534,6 +540,7 @@ class TestBuildMediaTransforms:
 # Integration Tests
 # =============================================================================
 
+
 class TestComponentIntegration:
     """Integration tests for components working together."""
 
@@ -541,30 +548,27 @@ class TestComponentIntegration:
         """Test saturation combined with effect prior."""
         np.random.seed(42)
         X_raw = np.abs(np.random.randn(50, 2) * 100)
-        
+
         with pm.Model(coords={"obs": range(50), "channel": ["tv", "digital"]}):
             X_tensor = pt.as_tensor_variable(X_raw)
-            
+
             # Apply saturation to each channel
             saturated = []
             for i in range(2):
                 lam = pm.Gamma(f"lam_{i}", alpha=3, beta=1)
                 sat = logistic_saturation(X_tensor[:, i], lam)
                 saturated.append(sat)
-            
+
             X_sat = pt.stack(saturated, axis=1)
-            
+
             # Create effect prior
             beta = create_effect_prior(
-                "beta_media",
-                constrained="positive",
-                sigma=0.5,
-                dims="channel"
+                "beta_media", constrained="positive", sigma=0.5, dims="channel"
             )
-            
+
             # Compute linear effect
             effect = pt.dot(X_sat, beta)
-            
+
             # Should compile without error
             assert effect is not None
 

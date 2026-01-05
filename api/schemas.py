@@ -13,8 +13,10 @@ from pydantic import BaseModel, Field, field_validator
 # Enums
 # =============================================================================
 
+
 class JobStatus(str, Enum):
     """Status of a background job."""
+
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -25,6 +27,7 @@ class JobStatus(str, Enum):
 
 class DataFormat(str, Enum):
     """Supported data formats."""
+
     CSV = "csv"
     PARQUET = "parquet"
     EXCEL = "excel"
@@ -33,6 +36,7 @@ class DataFormat(str, Enum):
 
 class TrendType(str, Enum):
     """Trend model types."""
+
     NONE = "none"
     LINEAR = "linear"
     PIECEWISE = "piecewise"
@@ -42,6 +46,7 @@ class TrendType(str, Enum):
 
 class AllocationMethod(str, Enum):
     """Media allocation methods."""
+
     EQUAL = "equal"
     POPULATION = "population"
     SALES = "sales"
@@ -52,8 +57,10 @@ class AllocationMethod(str, Enum):
 # Data Models
 # =============================================================================
 
+
 class DataUploadResponse(BaseModel):
     """Response after uploading data."""
+
     data_id: str
     filename: str
     rows: int
@@ -66,6 +73,7 @@ class DataUploadResponse(BaseModel):
 
 class DataInfo(BaseModel):
     """Information about uploaded data."""
+
     data_id: str
     filename: str
     rows: int
@@ -79,6 +87,7 @@ class DataInfo(BaseModel):
 
 class DataListResponse(BaseModel):
     """List of uploaded datasets."""
+
     datasets: list[DataInfo]
     total: int
 
@@ -87,11 +96,18 @@ class DataListResponse(BaseModel):
 # Configuration Models
 # =============================================================================
 
+
 class PriorConfigSchema(BaseModel):
     """Prior distribution configuration."""
+
     distribution: Literal[
-        "HalfNormal", "Normal", "LogNormal", 
-        "Gamma", "Beta", "TruncatedNormal", "HalfStudentT"
+        "HalfNormal",
+        "Normal",
+        "LogNormal",
+        "Gamma",
+        "Beta",
+        "TruncatedNormal",
+        "HalfStudentT",
     ] = "HalfNormal"
     params: dict[str, float] = Field(default_factory=dict)
     dims: str | list[str] | None = None
@@ -99,6 +115,7 @@ class PriorConfigSchema(BaseModel):
 
 class AdstockConfigSchema(BaseModel):
     """Adstock transformation configuration."""
+
     type: Literal["geometric", "weibull", "delayed", "none"] = "geometric"
     l_max: int = Field(default=8, ge=1, le=52)
     normalize: bool = True
@@ -107,6 +124,7 @@ class AdstockConfigSchema(BaseModel):
 
 class SaturationConfigSchema(BaseModel):
     """Saturation transformation configuration."""
+
     type: Literal["hill", "logistic", "michaelis_menten", "tanh", "none"] = "hill"
     kappa_prior: PriorConfigSchema | None = None
     slope_prior: PriorConfigSchema | None = None
@@ -116,6 +134,7 @@ class SaturationConfigSchema(BaseModel):
 
 class MediaChannelSchema(BaseModel):
     """Media channel configuration."""
+
     name: str
     display_name: str | None = None
     dimensions: list[Literal["Period", "Geography", "Product"]] = ["Period"]
@@ -127,6 +146,7 @@ class MediaChannelSchema(BaseModel):
 
 class ControlVariableSchema(BaseModel):
     """Control variable configuration."""
+
     name: str
     display_name: str | None = None
     dimensions: list[Literal["Period", "Geography", "Product"]] = ["Period"]
@@ -137,6 +157,7 @@ class ControlVariableSchema(BaseModel):
 
 class KPIConfigSchema(BaseModel):
     """KPI configuration."""
+
     name: str
     display_name: str | None = None
     dimensions: list[Literal["Period", "Geography", "Product"]] = ["Period"]
@@ -146,6 +167,7 @@ class KPIConfigSchema(BaseModel):
 
 class TrendConfigSchema(BaseModel):
     """Trend configuration."""
+
     type: TrendType = TrendType.LINEAR
     n_changepoints: int = Field(default=10, ge=0, le=50)
     changepoint_range: float = Field(default=0.8, gt=0, le=1)
@@ -163,6 +185,7 @@ class TrendConfigSchema(BaseModel):
 
 class SeasonalityConfigSchema(BaseModel):
     """Seasonality configuration."""
+
     yearly: int | None = Field(default=2, ge=0, le=10)
     monthly: int | None = None
     weekly: int | None = None
@@ -170,6 +193,7 @@ class SeasonalityConfigSchema(BaseModel):
 
 class HierarchicalConfigSchema(BaseModel):
     """Hierarchical model configuration."""
+
     enabled: bool = True
     pool_across_geo: bool = True
     pool_across_product: bool = True
@@ -179,6 +203,7 @@ class HierarchicalConfigSchema(BaseModel):
 
 class AlignmentConfigSchema(BaseModel):
     """Dimension alignment configuration."""
+
     geo_allocation: AllocationMethod = AllocationMethod.EQUAL
     product_allocation: AllocationMethod = AllocationMethod.SALES
     geo_weight_variable: str | None = None
@@ -187,6 +212,7 @@ class AlignmentConfigSchema(BaseModel):
 
 class MFFConfigSchema(BaseModel):
     """Complete MFF model configuration."""
+
     kpi: KPIConfigSchema
     media_channels: list[MediaChannelSchema]
     controls: list[ControlVariableSchema] = Field(default_factory=list)
@@ -199,19 +225,25 @@ class MFFConfigSchema(BaseModel):
 
 class ModelConfigSchema(BaseModel):
     """Model fitting configuration."""
+
     inference_method: Literal["bayesian_pymc", "bayesian_numpyro"] = "bayesian_pymc"
     n_chains: int = Field(default=4, ge=1, le=16)
     n_draws: int = Field(default=1000, ge=100, le=10000)
     n_tune: int = Field(default=1000, ge=100, le=5000)
     target_accept: float = Field(default=0.9, gt=0.5, lt=1.0)
     trend: TrendConfigSchema = Field(default_factory=TrendConfigSchema)
-    seasonality: SeasonalityConfigSchema = Field(default_factory=SeasonalityConfigSchema)
-    hierarchical: HierarchicalConfigSchema = Field(default_factory=HierarchicalConfigSchema)
+    seasonality: SeasonalityConfigSchema = Field(
+        default_factory=SeasonalityConfigSchema
+    )
+    hierarchical: HierarchicalConfigSchema = Field(
+        default_factory=HierarchicalConfigSchema
+    )
     random_seed: int | None = 42
 
 
 class ConfigCreateRequest(BaseModel):
     """Request to create a new configuration."""
+
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
     mff_config: MFFConfigSchema
@@ -220,6 +252,7 @@ class ConfigCreateRequest(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     """Request to update configuration."""
+
     name: str | None = None
     description: str | None = None
     mff_config: MFFConfigSchema | None = None
@@ -228,6 +261,7 @@ class ConfigUpdateRequest(BaseModel):
 
 class ConfigResponse(BaseModel):
     """Configuration response."""
+
     config_id: str
     name: str
     description: str | None
@@ -239,6 +273,7 @@ class ConfigResponse(BaseModel):
 
 class ConfigListResponse(BaseModel):
     """List of configurations."""
+
     configs: list[ConfigResponse]
     total: int
 
@@ -247,8 +282,10 @@ class ConfigListResponse(BaseModel):
 # Model/Job Models
 # =============================================================================
 
+
 class ModelFitRequest(BaseModel):
     """Request to start model fitting."""
+
     data_id: str
     config_id: str
     name: str | None = None
@@ -262,6 +299,7 @@ class ModelFitRequest(BaseModel):
 
 class ModelInfo(BaseModel):
     """Information about a model."""
+
     model_id: str
     name: str | None
     description: str | None
@@ -280,12 +318,14 @@ class ModelInfo(BaseModel):
 
 class ModelListResponse(BaseModel):
     """List of models."""
+
     models: list[ModelInfo]
     total: int
 
 
 class ModelResultsResponse(BaseModel):
     """Model results after fitting."""
+
     model_id: str
     status: JobStatus
     diagnostics: dict[str, Any]
@@ -296,6 +336,7 @@ class ModelResultsResponse(BaseModel):
 
 class ContributionRequest(BaseModel):
     """Request for contribution analysis."""
+
     time_period: tuple[int, int] | None = None
     channels: list[str] | None = None
     compute_uncertainty: bool = True
@@ -304,6 +345,7 @@ class ContributionRequest(BaseModel):
 
 class ContributionResponse(BaseModel):
     """Contribution analysis response."""
+
     model_id: str
     total_contributions: dict[str, float]
     contribution_pct: dict[str, float]
@@ -314,12 +356,14 @@ class ContributionResponse(BaseModel):
 
 class ScenarioRequest(BaseModel):
     """What-if scenario request."""
+
     spend_changes: dict[str, float]
     time_period: tuple[int, int] | None = None
 
 
 class ScenarioResponse(BaseModel):
     """Scenario analysis response."""
+
     model_id: str
     baseline_outcome: float
     scenario_outcome: float
@@ -330,6 +374,7 @@ class ScenarioResponse(BaseModel):
 
 class PredictionRequest(BaseModel):
     """Prediction request."""
+
     media_spend: dict[str, list[float]] | None = None
     n_periods: int | None = None
     return_samples: bool = False
@@ -337,6 +382,7 @@ class PredictionRequest(BaseModel):
 
 class PredictionResponse(BaseModel):
     """Prediction response."""
+
     model_id: str
     y_pred_mean: list[float]
     y_pred_std: list[float]
@@ -349,14 +395,17 @@ class PredictionResponse(BaseModel):
 # Generic Response Models
 # =============================================================================
 
+
 class SuccessResponse(BaseModel):
     """Generic success response."""
+
     success: bool = True
     message: str
 
 
 class ErrorResponse(BaseModel):
     """Generic error response."""
+
     success: bool = False
     error: str
     detail: str | None = None
@@ -364,6 +413,7 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: Literal["healthy", "unhealthy"]
     version: str
     redis_connected: bool

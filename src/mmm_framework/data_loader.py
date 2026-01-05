@@ -20,7 +20,7 @@ from .config import (
     MFFConfig,
     VariableConfig,
     VariableRole,
-    MFFColumnConfig
+    MFFColumnConfig,
 )
 
 if TYPE_CHECKING:
@@ -31,45 +31,47 @@ if TYPE_CHECKING:
 # Data validation
 # =============================================================================
 
+
 class MFFValidationError(Exception):
     """Raised when MFF data fails validation."""
+
     pass
 
 
 def validate_mff_structure(df: pd.DataFrame, config: MFFConfig) -> list[str]:
     """
     Validate MFF dataframe structure against config.
-    
+
     Returns list of warnings (empty if clean).
     Raises MFFValidationError for critical issues.
     """
     warnings_list = []
     cols = config.columns
-    
+
     # Check required columns exist
     missing_cols = set(cols.all_columns) - set(df.columns)
     if missing_cols:
         raise MFFValidationError(f"Missing required columns: {missing_cols}")
-    
+
     # Check for expected variables
     actual_vars = set(df[cols.variable_name].unique())
     expected_vars = set(config.variable_names)
-    
+
     missing_vars = expected_vars - actual_vars
     if missing_vars:
         raise MFFValidationError(f"Missing expected variables: {missing_vars}")
-    
+
     extra_vars = actual_vars - expected_vars
     if extra_vars:
         warnings_list.append(f"Extra variables in data (will be ignored): {extra_vars}")
-    
+
     # Check for nulls in key columns
     null_counts = df[cols.all_columns].isnull().sum()
     if null_counts[cols.variable_value] > 0:
         warnings_list.append(
             f"Found {null_counts[cols.variable_value]} null values in {cols.variable_value}"
         )
-    
+
     # Validate date parsing
     try:
         pd.to_datetime(df[cols.period].iloc[0], format=config.date_format)
@@ -77,7 +79,7 @@ def validate_mff_structure(df: pd.DataFrame, config: MFFConfig) -> list[str]:
         raise MFFValidationError(
             f"Cannot parse dates with format '{config.date_format}': {e}"
         )
-    
+
     return warnings_list
 
 
@@ -88,15 +90,15 @@ def validate_variable_dimensions(
 ) -> tuple[bool, str]:
     """
     Validate that a variable's data matches its configured dimensions.
-    
+
     Returns (is_valid, message).
     """
     cols = config.columns
     var_data = df[df[cols.variable_name] == var_config.name]
-    
+
     if var_data.empty:
         return False, f"No data found for variable '{var_config.name}'"
-    
+
     # Map dimension types to column names
     dim_col_map = {
         DimensionType.PERIOD: cols.period,
@@ -106,7 +108,7 @@ def validate_variable_dimensions(
         DimensionType.OUTLET: cols.outlet,
         DimensionType.CREATIVE: cols.creative,
     }
-    
+
     # Check which dimensions have variation
     active_dims = []
     for dim_type in DimensionType:
@@ -116,14 +118,14 @@ def validate_variable_dimensions(
         # or if it's Period (always active)
         if len(unique_vals) > 1 or dim_type == DimensionType.PERIOD:
             active_dims.append(dim_type)
-    
+
     configured_dims = set(var_config.dimensions)
     actual_dims = set(active_dims)
-    
+
     # Period should always be present
     if DimensionType.PERIOD not in actual_dims:
         return False, f"Variable '{var_config.name}' has no time variation"
-    
+
     # Check for unexpected dimensions
     extra_dims = actual_dims - configured_dims - {DimensionType.PERIOD}
     if extra_dims and DimensionType.PERIOD in configured_dims:
@@ -133,7 +135,7 @@ def validate_variable_dimensions(
                 f"Variable '{var_config.name}' has unexpected dimensions: {extra_dims}. "
                 f"Configured for: {configured_dims}"
             )
-    
+
     return True, "OK"
 
 
@@ -141,41 +143,42 @@ def validate_variable_dimensions(
 # Panel dataset container
 # =============================================================================
 
+
 @dataclass
 class PanelCoordinates:
     """Coordinate labels for panel dimensions."""
-    
+
     periods: pd.DatetimeIndex
     geographies: list[str] | None = None
     products: list[str] | None = None
     channels: list[str] = field(default_factory=list)
     controls: list[str] = field(default_factory=list)
-    
+
     @property
     def has_geo(self) -> bool:
         return self.geographies is not None and len(self.geographies) > 0
-    
+
     @property
     def has_product(self) -> bool:
         return self.products is not None and len(self.products) > 0
-    
+
     @property
     def n_periods(self) -> int:
         return len(self.periods)
-    
+
     @property
     def n_geos(self) -> int:
         return len(self.geographies) if self.geographies else 1
-    
+
     @property
     def n_products(self) -> int:
         return len(self.products) if self.products else 1
-    
+
     @property
     def n_obs(self) -> int:
         """Total number of observations."""
         return self.n_periods * self.n_geos * self.n_products
-    
+
     def to_pymc_coords(self) -> dict[str, list]:
         """Convert to PyMC coordinate dictionary."""
         coords = {
@@ -195,64 +198,66 @@ class PanelCoordinates:
 class PanelDataset:
     """
     Structured panel data ready for modeling.
-    
+
     All arrays are aligned to the same index structure.
     """
-    
+
     # Target variable
     y: pd.Series
-    
+
     # Feature matrices
     X_media: pd.DataFrame
     X_controls: pd.DataFrame | None
-    
+
     # Coordinate information
     coords: PanelCoordinates
-    
+
     # Index for reconstruction
     index: pd.MultiIndex | pd.DatetimeIndex
-    
+
     # Original config reference
     config: MFFConfig
-    
+
     # Metadata
     media_stats: dict[str, dict] = field(default_factory=dict)
-    
+
     @property
     def n_obs(self) -> int:
         return len(self.y)
-    
+
     @property
     def n_channels(self) -> int:
         return self.X_media.shape[1] if self.X_media is not None else 0
-    
+
     @property
     def n_controls(self) -> int:
         return self.X_controls.shape[1] if self.X_controls is not None else 0
-    
+
     @property
     def is_panel(self) -> bool:
         """True if data has geo or product dimensions."""
         return self.coords.has_geo or self.coords.has_product
-    
+
     def to_numpy(self) -> tuple[NDArray, NDArray, NDArray | None]:
         """Convert to numpy arrays for modeling."""
         y = self.y.values
         X_media = self.X_media.values
         X_controls = self.X_controls.values if self.X_controls is not None else None
         return y, X_media, X_controls
-    
+
     def get_media_for_channel(self, channel: str) -> pd.Series:
         """Get media series for a specific channel."""
         if channel not in self.X_media.columns:
-            raise KeyError(f"Channel '{channel}' not found. Available: {list(self.X_media.columns)}")
+            raise KeyError(
+                f"Channel '{channel}' not found. Available: {list(self.X_media.columns)}"
+            )
         return self.X_media[channel]
-    
+
     def compute_spend_shares(self) -> pd.Series:
         """Compute share of total spend for each channel."""
         totals = self.X_media.sum()
         return totals / totals.sum()
-    
+
     def summary(self) -> str:
         """Generate summary string."""
         lines = [
@@ -271,13 +276,13 @@ class PanelDataset:
             f"  Min:  {self.y.min():.2f}",
             f"  Max:  {self.y.max():.2f}",
         ]
-        
+
         if self.n_channels > 0:
             lines.append("")
             lines.append("Media channel totals:")
             for col in self.X_media.columns:
                 lines.append(f"  {col}: {self.X_media[col].sum():,.0f}")
-        
+
         return "\n".join(lines)
 
 
@@ -285,58 +290,58 @@ class PanelDataset:
 # MFF Loader and Parser
 # =============================================================================
 
+
 class MFFLoader:
     """
     Loads and parses MFF format data into panel structure.
-    
+
     Handles:
     - Variable extraction by name
     - Dimension alignment (national to geo, etc.)
     - Missing value handling
     - Date parsing and frequency alignment
     """
-    
+
     def __init__(self, config: MFFConfig):
         self.config = config
         self._raw_data: pd.DataFrame | None = None
         self._allocation_weights: dict[str, pd.Series] = {}
-    
+
     def load(self, data: pd.DataFrame | str) -> MFFLoader:
         """
         Load MFF data from DataFrame or file path.
-        
+
         Parameters
         ----------
         data : pd.DataFrame or str
             Either a DataFrame in MFF format or path to CSV/parquet file.
-        
+
         Returns
         -------
         self : MFFLoader
             For method chaining.
         """
         if isinstance(data, str):
-            if data.endswith('.parquet'):
+            if data.endswith(".parquet"):
                 self._raw_data = pd.read_parquet(data)
             else:
                 self._raw_data = pd.read_csv(data)
         else:
             self._raw_data = data.copy()
-        
+
         # Validate structure
         warnings_list = validate_mff_structure(self._raw_data, self.config)
         for w in warnings_list:
             warnings.warn(w)
-        
+
         # Parse dates
         cols = self.config.columns
         self._raw_data[cols.period] = pd.to_datetime(
-            self._raw_data[cols.period],
-            format=self.config.date_format
+            self._raw_data[cols.period], format=self.config.date_format
         )
-        
+
         return self
-    
+
     def set_allocation_weights(
         self,
         dimension: DimensionType,
@@ -344,7 +349,7 @@ class MFFLoader:
     ) -> MFFLoader:
         """
         Set custom allocation weights for dimension disaggregation.
-        
+
         Parameters
         ----------
         dimension : DimensionType
@@ -352,7 +357,7 @@ class MFFLoader:
         weights : pd.Series or dict
             Weights indexed by dimension level (e.g., geo names).
             Will be normalized to sum to 1.
-        
+
         Returns
         -------
         self : MFFLoader
@@ -360,47 +365,47 @@ class MFFLoader:
         """
         if isinstance(weights, dict):
             weights = pd.Series(weights)
-        
+
         # Normalize
         weights = weights / weights.sum()
         self._allocation_weights[dimension.value] = weights
-        
+
         return self
-    
+
     def _extract_variable(
         self,
         var_config: VariableConfig,
     ) -> pd.DataFrame:
         """Extract a single variable from MFF data."""
         cols = self.config.columns
-        
+
         # Filter to this variable
         mask = self._raw_data[cols.variable_name] == var_config.name
         var_data = self._raw_data[mask].copy()
-        
+
         if var_data.empty:
             raise MFFValidationError(f"No data found for variable '{var_config.name}'")
-        
+
         # Build dimension columns based on config
         dim_cols = [cols.period]  # Always include period
-        
+
         if DimensionType.GEOGRAPHY in var_config.dimensions:
             dim_cols.append(cols.geography)
         if DimensionType.PRODUCT in var_config.dimensions:
             dim_cols.append(cols.product)
-        
+
         # Handle split dimensions for media
         if isinstance(var_config, MediaChannelConfig):
             if DimensionType.OUTLET in var_config.split_dimensions:
                 dim_cols.append(cols.outlet)
             if DimensionType.CAMPAIGN in var_config.split_dimensions:
                 dim_cols.append(cols.campaign)
-        
+
         # Aggregate to configured dimensions
         result = var_data.groupby(dim_cols, as_index=False)[cols.variable_value].sum()
-        
+
         return result
-    
+
     def _get_allocation_weights(
         self,
         dimension: DimensionType,
@@ -408,7 +413,7 @@ class MFFLoader:
     ) -> pd.Series:
         """Get allocation weights for a dimension."""
         dim_name = dimension.value
-        
+
         # Check for custom weights
         if dim_name in self._allocation_weights:
             weights = self._allocation_weights[dim_name]
@@ -420,7 +425,7 @@ class MFFLoader:
                 )
                 return pd.Series(1.0 / len(levels), index=levels)
             return weights.loc[levels]
-        
+
         # Check config for method
         if dimension == DimensionType.GEOGRAPHY:
             method = self.config.alignment.geo_allocation
@@ -431,35 +436,39 @@ class MFFLoader:
         else:
             method = AllocationMethod.EQUAL
             weight_var = None
-        
+
         if method == AllocationMethod.EQUAL:
             return pd.Series(1.0 / len(levels), index=levels)
-        
+
         elif method == AllocationMethod.SALES and self._raw_data is not None:
             # Use KPI totals as weights
             cols = self.config.columns
             kpi_data = self._raw_data[
                 self._raw_data[cols.variable_name] == self.config.kpi.name
             ]
-            dim_col = cols.geography if dimension == DimensionType.GEOGRAPHY else cols.product
+            dim_col = (
+                cols.geography if dimension == DimensionType.GEOGRAPHY else cols.product
+            )
             totals = kpi_data.groupby(dim_col)[cols.variable_value].sum()
             weights = totals / totals.sum()
             return weights.reindex(levels).fillna(1.0 / len(levels))
-        
+
         elif method == AllocationMethod.CUSTOM and weight_var:
             # Extract weight variable from data
             cols = self.config.columns
             weight_data = self._raw_data[
                 self._raw_data[cols.variable_name] == weight_var
             ]
-            dim_col = cols.geography if dimension == DimensionType.GEOGRAPHY else cols.product
+            dim_col = (
+                cols.geography if dimension == DimensionType.GEOGRAPHY else cols.product
+            )
             weights = weight_data.groupby(dim_col)[cols.variable_value].sum()
             weights = weights / weights.sum()
             return weights.reindex(levels).fillna(1.0 / len(levels))
-        
+
         # Default to equal
         return pd.Series(1.0 / len(levels), index=levels)
-    
+
     def _align_to_target_dimensions(
         self,
         var_data: pd.DataFrame,
@@ -468,7 +477,7 @@ class MFFLoader:
     ) -> pd.Series:
         """
         Align variable data to target KPI dimensions.
-        
+
         Handles:
         - Disaggregation (national → geo, national → geo+product)
         - Aggregation (product-geo → geo)
@@ -477,57 +486,65 @@ class MFFLoader:
         cols = self.config.columns
         target_dims = self.config.kpi.dimensions
         var_dims = var_config.dimensions
-        
+
         # Get dimension names for indexing
         target_has_geo = DimensionType.GEOGRAPHY in target_dims
         target_has_product = DimensionType.PRODUCT in target_dims
         var_has_geo = DimensionType.GEOGRAPHY in var_dims
         var_has_product = DimensionType.PRODUCT in var_dims
-        
+
         # Build index columns
         var_index_cols = [cols.period]
         if var_has_geo:
             var_index_cols.append(cols.geography)
         if var_has_product:
             var_index_cols.append(cols.product)
-        
+
         # Set index on variable data
         var_series = var_data.set_index(var_index_cols)[cols.variable_value]
-        
+
         # Case 1: Same dimensions - direct reindex
         if set(var_dims) == set(target_dims):
             return var_series.reindex(target_index).fillna(0)
-        
+
         # Case 2: Disaggregation needed - build full cross-product expansion
         expand_geos = target_has_geo and not var_has_geo
         expand_products = target_has_product and not var_has_product
-        
+
         if expand_geos or expand_products:
             # Get the periods from original data
             if isinstance(var_series.index, pd.MultiIndex):
                 periods = var_series.index.get_level_values(cols.period).unique()
             else:
                 periods = var_series.index.unique()
-            
+
             # Build expansion dimensions and weights
             expand_dims = []
             expand_weights = []
-            
+
             if expand_geos:
-                geo_levels = target_index.get_level_values(cols.geography).unique().tolist()
-                geo_weights = self._get_allocation_weights(DimensionType.GEOGRAPHY, geo_levels)
+                geo_levels = (
+                    target_index.get_level_values(cols.geography).unique().tolist()
+                )
+                geo_weights = self._get_allocation_weights(
+                    DimensionType.GEOGRAPHY, geo_levels
+                )
                 expand_dims.append((cols.geography, geo_levels))
                 expand_weights.append(geo_weights)
-            
+
             if expand_products:
-                product_levels = target_index.get_level_values(cols.product).unique().tolist()
-                product_weights = self._get_allocation_weights(DimensionType.PRODUCT, product_levels)
+                product_levels = (
+                    target_index.get_level_values(cols.product).unique().tolist()
+                )
+                product_weights = self._get_allocation_weights(
+                    DimensionType.PRODUCT, product_levels
+                )
                 expand_dims.append((cols.product, product_levels))
                 expand_weights.append(product_weights)
-            
+
             # Create expanded data
             expanded_records = []
-            
+
             for period in periods:
                 # Get base value for this period
                 if isinstance(var_series.index, pd.MultiIndex):
@@ -536,7 +553,7 @@ class MFFLoader:
                         base_val = base_val.iloc[0]
                 else:
                     base_val = var_series.loc[period]
-                
+
                 # Generate all combinations
                 if len(expand_dims) == 1:
                     dim_name, levels = expand_dims[0]
@@ -556,37 +573,39 @@ class MFFLoader:
                                 dim1_name: level1,
                                 dim2_name: level2,
                             }
-                            record["value"] = base_val * weights1[level1] * weights2[level2]
+                            record["value"] = (
+                                base_val * weights1[level1] * weights2[level2]
+                            )
                             expanded_records.append(record)
-            
+
             # Convert to series with proper index
             expanded_df = pd.DataFrame(expanded_records)
-            
+
             # Build index in same order as target
             index_cols = []
             for name in target_index.names:
                 if name in expanded_df.columns:
                     index_cols.append(name)
-            
+
             var_series = expanded_df.set_index(index_cols)["value"]
-        
+
         # Case 3: Aggregation needed (less common)
         if var_has_geo and not target_has_geo:
             # Aggregate across geo
             var_series = var_series.groupby(level=cols.period).sum()
-        
+
         if var_has_product and not target_has_product:
             # Aggregate across product
             group_levels = [n for n in var_series.index.names if n != cols.product]
             var_series = var_series.groupby(level=group_levels).sum()
-        
+
         # Final reindex to target
         return var_series.reindex(target_index).fillna(0)
-    
+
     def build_panel(self) -> PanelDataset:
         """
         Build complete panel dataset from loaded MFF data.
-        
+
         Returns
         -------
         PanelDataset
@@ -594,48 +613,48 @@ class MFFLoader:
         """
         if self._raw_data is None:
             raise RuntimeError("No data loaded. Call load() first.")
-        
+
         cols = self.config.columns
-        
+
         # 1. Extract and build KPI (target) index
         kpi_data = self._extract_variable(self.config.kpi)
-        
+
         # Build index based on KPI dimensions
         index_cols = [cols.period]
         if self.config.kpi.has_geo:
             index_cols.append(cols.geography)
         if self.config.kpi.has_product:
             index_cols.append(cols.product)
-        
+
         kpi_data = kpi_data.sort_values(index_cols)
-        
+
         if len(index_cols) > 1:
             target_index = pd.MultiIndex.from_frame(kpi_data[index_cols])
         else:
             target_index = pd.DatetimeIndex(kpi_data[cols.period])
-        
+
         y = pd.Series(
             kpi_data[cols.variable_value].values,
             index=target_index,
-            name=self.config.kpi.name
+            name=self.config.kpi.name,
         )
-        
+
         # Apply log transform if multiplicative
         if self.config.kpi.log_transform:
             y = np.log(y.clip(lower=self.config.kpi.floor_value))
-        
+
         # 2. Build coordinates
         periods = kpi_data[cols.period].unique()
         periods = pd.DatetimeIndex(sorted(periods))
-        
+
         geos = None
         if self.config.kpi.has_geo:
             geos = sorted(kpi_data[cols.geography].unique().tolist())
-        
+
         products = None
         if self.config.kpi.has_product:
             products = sorted(kpi_data[cols.product].unique().tolist())
-        
+
         coords = PanelCoordinates(
             periods=periods,
             geographies=geos,
@@ -643,20 +662,20 @@ class MFFLoader:
             channels=self.config.media_names,
             controls=self.config.control_names,
         )
-        
+
         # 3. Build media matrix
         media_series = {}
         media_stats = {}
-        
+
         for media_config in self.config.media_channels:
             var_data = self._extract_variable(media_config)
             aligned = self._align_to_target_dimensions(
                 var_data, media_config, target_index
             )
-            
+
             # Fill missing media with configured value
             aligned = aligned.fillna(self.config.fill_missing_media)
-            
+
             media_series[media_config.name] = aligned
             media_stats[media_config.name] = {
                 "total": float(aligned.sum()),
@@ -664,32 +683,32 @@ class MFFLoader:
                 "std": float(aligned.std()),
                 "nonzero_pct": float((aligned > 0).mean()),
             }
-        
+
         X_media = pd.DataFrame(media_series)
         X_media.index = target_index
-        
+
         # 4. Build control matrix
         X_controls = None
         if self.config.controls:
             control_series = {}
-            
+
             for control_config in self.config.controls:
                 var_data = self._extract_variable(control_config)
                 aligned = self._align_to_target_dimensions(
                     var_data, control_config, target_index
                 )
-                
+
                 # Fill missing controls
                 if self.config.fill_missing_controls is not None:
                     aligned = aligned.fillna(self.config.fill_missing_controls)
                 else:
                     aligned = aligned.ffill().bfill()
-                
+
                 control_series[control_config.name] = aligned
-            
+
             X_controls = pd.DataFrame(control_series)
             X_controls.index = target_index
-        
+
         # 5. Construct panel dataset
         panel = PanelDataset(
             y=y,
@@ -700,13 +719,14 @@ class MFFLoader:
             config=self.config,
             media_stats=media_stats,
         )
-        
+
         return panel
 
 
 # =============================================================================
 # Convenience functions
 # =============================================================================
+
 
 def load_mff(
     data: pd.DataFrame | str,
@@ -716,7 +736,7 @@ def load_mff(
 ) -> PanelDataset:
     """
     Convenience function to load MFF data in one call.
-    
+
     Parameters
     ----------
     data : pd.DataFrame or str
@@ -727,12 +747,12 @@ def load_mff(
         Custom weights for geo allocation.
     product_weights : pd.Series or dict, optional
         Custom weights for product allocation.
-    
+
     Returns
     -------
     PanelDataset
         Ready-to-use panel data.
-    
+
     Examples
     --------
     >>> config = create_simple_mff_config(
@@ -746,13 +766,13 @@ def load_mff(
     """
     loader = MFFLoader(config)
     loader.load(data)
-    
+
     if geo_weights is not None:
         loader.set_allocation_weights(DimensionType.GEOGRAPHY, geo_weights)
-    
+
     if product_weights is not None:
         loader.set_allocation_weights(DimensionType.PRODUCT, product_weights)
-    
+
     return loader.build_panel()
 
 
@@ -765,7 +785,7 @@ def mff_from_wide_format(
 ) -> pd.DataFrame:
     """
     Convert wide-format data to MFF format.
-    
+
     Parameters
     ----------
     df : pd.DataFrame
@@ -779,14 +799,14 @@ def mff_from_wide_format(
         Name of geography column.
     product_col : str, optional
         Name of product column.
-    
+
     Returns
     -------
     pd.DataFrame
         Data in MFF format.
     """
     records = []
-    
+
     for _, row in df.iterrows():
         base_record = {
             "Period": row[period_col],
@@ -796,19 +816,20 @@ def mff_from_wide_format(
             "Outlet": "",
             "Creative": "",
         }
-        
+
         for col_name, var_name in value_columns.items():
             record = base_record.copy()
             record["VariableName"] = var_name
             record["VariableValue"] = row[col_name]
             records.append(record)
-    
+
     return pd.DataFrame(records)
 
 
 # =============================================================================
 # Ragged data handling utilities
 # =============================================================================
+
 
 def generate_complete_date_range(
     start_date: pd.Timestamp,
@@ -817,16 +838,16 @@ def generate_complete_date_range(
 ) -> pd.DatetimeIndex:
     """
     Generate a complete date range for the given frequency.
-    
+
     Parameters
     ----------
     start_date : pd.Timestamp
         First date in range.
-    end_date : pd.Timestamp  
+    end_date : pd.Timestamp
         Last date in range.
     frequency : str
         'W' for weekly, 'D' for daily, 'M' for monthly.
-    
+
     Returns
     -------
     pd.DatetimeIndex
@@ -846,30 +867,30 @@ def build_complete_index(
     geographies: list[str] | None = None,
     products: list[str] | None = None,
     period_col: str = "Period",
-    geo_col: str = "Geography", 
+    geo_col: str = "Geography",
     product_col: str = "Product",
 ) -> pd.Index | pd.MultiIndex:
     """
     Build a complete index covering all combinations of dimensions.
-    
+
     This ensures we have entries for every date x geo x product combination,
     enabling proper detection of missing vs explicit NaN values.
     """
     if geographies is None and products is None:
         return pd.DatetimeIndex(periods, name=period_col)
-    
+
     index_parts = [(period_col, periods)]
-    
+
     if geographies is not None:
         index_parts.append((geo_col, geographies))
-    
+
     if products is not None:
         index_parts.append((product_col, products))
-    
+
     # Create MultiIndex from product of all dimensions
     names = [name for name, _ in index_parts]
     arrays = [values for _, values in index_parts]
-    
+
     return pd.MultiIndex.from_product(arrays, names=names)
 
 
@@ -883,7 +904,7 @@ def extract_with_nan_tracking(
 ) -> tuple[pd.Series, pd.Series]:
     """
     Extract a variable and track which values were explicitly NaN.
-    
+
     Parameters
     ----------
     df : pd.DataFrame
@@ -898,7 +919,7 @@ def extract_with_nan_tracking(
         Value to fill for missing rows (not present in source).
     preserve_explicit_nan : bool
         If True, keep explicit NaN values; if False, fill them too.
-    
+
     Returns
     -------
     values : pd.Series
@@ -908,51 +929,57 @@ def extract_with_nan_tracking(
     """
     # Filter to this variable
     var_data = df[df[cols.variable_name] == variable_name].copy()
-    
+
     if var_data.empty:
         # No data at all - return all fill values, no explicit NaN
         values = pd.Series(fill_value, index=target_index, name=variable_name)
-        nan_mask = pd.Series(False, index=target_index, name=f"{variable_name}_explicit_nan")
+        nan_mask = pd.Series(
+            False, index=target_index, name=f"{variable_name}_explicit_nan"
+        )
         return values, nan_mask
-    
+
     # Build index columns based on target index structure
     if isinstance(target_index, pd.MultiIndex):
         index_cols = list(target_index.names)
     else:
         index_cols = [target_index.name or cols.period]
-    
+
     # Ensure date column is datetime
     var_data[cols.period] = pd.to_datetime(var_data[cols.period])
-    
+
     # Track which rows have explicit NaN values BEFORE any filling
     explicit_nan_rows = var_data[cols.variable_value].isna()
-    
+
     # Set index on the variable data
     if len(index_cols) == 1:
         var_data = var_data.set_index(index_cols[0])
     else:
         # For multi-dimensional data, need to handle index carefully
         var_data = var_data.set_index(index_cols)
-    
+
     # Get the value series
     source_values = var_data[cols.variable_value]
-    
+
     # Track explicit NaN positions from source
     source_explicit_nan = source_values.isna()
-    
+
     # Reindex to complete target index
     # This introduces NaN for missing rows
     aligned_values = source_values.reindex(target_index)
-    
+
     # Create mask: True where source had explicit NaN
     # Initialize all False, then mark source explicit NaN positions
-    explicit_nan_mask = pd.Series(False, index=target_index, name=f"{variable_name}_explicit_nan")
-    
+    explicit_nan_mask = pd.Series(
+        False, index=target_index, name=f"{variable_name}_explicit_nan"
+    )
+
     # Find which target index positions correspond to explicit NaN in source
-    common_idx = target_index.intersection(source_explicit_nan[source_explicit_nan].index)
+    common_idx = target_index.intersection(
+        source_explicit_nan[source_explicit_nan].index
+    )
     if len(common_idx) > 0:
         explicit_nan_mask.loc[common_idx] = True
-    
+
     # Fill missing (non-explicit-NaN) positions
     if preserve_explicit_nan:
         # Only fill where we don't have explicit NaN
@@ -961,9 +988,9 @@ def extract_with_nan_tracking(
     else:
         # Fill everything that's NaN
         aligned_values = aligned_values.fillna(fill_value)
-    
+
     aligned_values.name = variable_name
-    
+
     return aligned_values, explicit_nan_mask
 
 
@@ -971,95 +998,93 @@ def extract_with_nan_tracking(
 # Enhanced MFF Loader
 # =============================================================================
 
+
 class RaggedMFFLoader:
     """
     Loads MFF data with proper handling of ragged/sparse data.
-    
+
     Key behaviors:
     - Generates complete date range based on min/max dates in data
     - Missing date/dimension combinations filled with configured value (default 0)
     - Explicit NaN values in source data are preserved
     - Tracks which values were explicitly NaN for downstream handling
     """
-    
+
     def __init__(self, config: MFFConfig):
         self.config = config
         self._raw_data: pd.DataFrame | None = None
         self._allocation_weights: dict[str, pd.Series] = {}
-        
+
     def load(self, data: pd.DataFrame | str) -> RaggedMFFLoader:
         """Load MFF data from DataFrame or file path."""
         if isinstance(data, str):
-            if data.endswith('.parquet'):
+            if data.endswith(".parquet"):
                 self._raw_data = pd.read_parquet(data)
             else:
                 self._raw_data = pd.read_csv(data)
         else:
             self._raw_data = data.copy()
-        
+
         # Parse dates
         cols = self.config.columns
         self._raw_data[cols.period] = pd.to_datetime(
-            self._raw_data[cols.period],
-            format=self.config.date_format
+            self._raw_data[cols.period], format=self.config.date_format
         )
-        
+
         return self
-    
+
     def _build_complete_periods(self) -> pd.DatetimeIndex:
         """Build complete date range from min to max date in data."""
         cols = self.config.columns
-        
+
         min_date = self._raw_data[cols.period].min()
         max_date = self._raw_data[cols.period].max()
-        
-        return generate_complete_date_range(
-            min_date, max_date, self.config.frequency
-        )
-    
+
+        return generate_complete_date_range(min_date, max_date, self.config.frequency)
+
     def _get_dimension_levels(self, var_config: VariableConfig) -> dict[str, list]:
         """Get all unique levels for each dimension from the KPI data."""
         cols = self.config.columns
         levels = {}
-        
+
         # Get KPI data to determine dimension levels
         kpi_data = self._raw_data[
             self._raw_data[cols.variable_name] == self.config.kpi.name
         ]
-        
+
         if var_config.has_geo:
             levels[cols.geography] = sorted(
                 kpi_data[cols.geography].dropna().unique().tolist()
             )
-        
+
         if var_config.has_product:
             levels[cols.product] = sorted(
                 kpi_data[cols.product].dropna().unique().tolist()
             )
-        
+
         return levels
-    
+
     def build_panel(self) -> PanelDataset:
         """
         Build complete panel dataset with ragged data handling.
-        
+
         Missing dates/combinations are filled with zeros (or configured value).
         Explicit NaN values in source data are preserved.
         """
         if self._raw_data is None:
             raise RuntimeError("No data loaded. Call load() first.")
-        
+
         cols = self.config.columns
-        
+
         # 1. Build complete date range
         complete_periods = self._build_complete_periods()
-        
+
         # 2. Get dimension levels from KPI data
         dim_levels = self._get_dimension_levels(self.config.kpi)
-        
+
         geos = dim_levels.get(cols.geography)
         products = dim_levels.get(cols.product)
-        
+
         # 3. Build complete target index
         target_index = build_complete_index(
             periods=complete_periods,
@@ -1069,7 +1094,7 @@ class RaggedMFFLoader:
             geo_col=cols.geography,
             product_col=cols.product,
         )
-        
+
         # 4. Extract KPI with NaN tracking
         y, y_nan_mask = extract_with_nan_tracking(
             self._raw_data,
@@ -1079,7 +1104,7 @@ class RaggedMFFLoader:
             fill_value=0.0,  # Usually don't want to fill KPI with 0
             preserve_explicit_nan=True,  # Always preserve NaN for KPI
         )
-        
+
         # Warn if KPI has missing values
         missing_count = y.isna().sum()
         if missing_count > 0:
@@ -1088,7 +1113,7 @@ class RaggedMFFLoader:
                 f"({missing_count / len(y) * 100:.1f}% of observations). "
                 f"Consider checking data completeness."
             )
-        
+
         # 5. Build coordinates
         coords = PanelCoordinates(
             periods=complete_periods,
@@ -1097,12 +1122,12 @@ class RaggedMFFLoader:
             channels=self.config.media_names,
             controls=self.config.control_names,
         )
-        
+
         # 6. Extract media variables
         media_series = {}
         media_stats = {}
         explicit_nan_masks = {"kpi": y_nan_mask}
-        
+
         for media_config in self.config.media_channels:
             values, nan_mask = extract_with_nan_tracking(
                 self._raw_data,
@@ -1112,10 +1137,10 @@ class RaggedMFFLoader:
                 fill_value=self.config.fill_missing_media,
                 preserve_explicit_nan=self.config.preserve_explicit_nan,
             )
-            
+
             media_series[media_config.name] = values
             explicit_nan_masks[media_config.name] = nan_mask
-            
+
             media_stats[media_config.name] = {
                 "total": float(values.sum()),
                 "mean": float(values.mean()),
@@ -1126,18 +1151,18 @@ class RaggedMFFLoader:
                     ((values == self.config.fill_missing_media) & ~nan_mask).mean()
                 ),
             }
-        
+
         X_media = pd.DataFrame(media_series)
         X_media.index = target_index
-        
+
         # 7. Extract control variables
         X_controls = None
         if self.config.controls:
             control_series = {}
-            
+
             for control_config in self.config.controls:
                 fill_val = self.config.fill_missing_controls
-                
+
                 values, nan_mask = extract_with_nan_tracking(
                     self._raw_data,
                     control_config.name,
@@ -1146,7 +1171,7 @@ class RaggedMFFLoader:
                     fill_value=fill_val if fill_val is not None else 0.0,
                     preserve_explicit_nan=self.config.preserve_explicit_nan,
                 )
-                
+
                 # If fill_missing_controls is None, use forward fill
                 if fill_val is None:
                     # Only forward fill non-explicit-NaN positions
@@ -1156,13 +1181,13 @@ class RaggedMFFLoader:
                         values = values.where(nan_mask, filled)
                     else:
                         values = values.ffill().bfill()
-                
+
                 control_series[control_config.name] = values
                 explicit_nan_masks[control_config.name] = nan_mask
-            
+
             X_controls = pd.DataFrame(control_series)
             X_controls.index = target_index
-        
+
         # 8. Build panel dataset
         panel = PanelDataset(
             y=y,
@@ -1174,7 +1199,7 @@ class RaggedMFFLoader:
             media_stats=media_stats,
             explicit_nan_mask=explicit_nan_masks,
         )
-        
+
         return panel
 
 
@@ -1182,25 +1207,26 @@ class RaggedMFFLoader:
 # Convenience function
 # =============================================================================
 
+
 def load_ragged_mff(
     data: pd.DataFrame | str,
     config: MFFConfig,
 ) -> PanelDataset:
     """
     Load MFF data with ragged data handling.
-    
+
     Parameters
     ----------
     data : pd.DataFrame or str
         MFF data or path to file.
     config : MFFConfig
         Configuration specifying variables and dimensions.
-    
+
     Returns
     -------
     PanelDataset
         Panel data with missing dates filled and explicit NaN preserved.
-    
+
     Examples
     --------
     >>> config = MFFConfig(
@@ -1218,4 +1244,3 @@ def load_ragged_mff(
     loader = RaggedMFFLoader(config)
     loader.load(data)
     return loader.build_panel()
-

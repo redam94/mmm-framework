@@ -25,22 +25,22 @@ async def lifespan(app: FastAPI):
     # Startup
     settings = get_settings()
     settings.ensure_storage_dirs()
-    
+
     # Initialize Redis connection
     redis = await get_redis()
     await redis.connect()
-    
+
     yield
-    
+
     # Shutdown
     await redis.disconnect()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    
+
     settings = settings or get_settings()
-    
+
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
@@ -86,7 +86,7 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
         ],
         lifespan=lifespan,
     )
-    
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -95,12 +95,12 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Include routers
     app.include_router(data_router)
     app.include_router(configs_router)
     app.include_router(models_router)
-    
+
     # Health endpoints
     @app.get(
         "/health",
@@ -110,23 +110,23 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
     async def health_check():
         """
         Check API health status.
-        
+
         Returns the status of the API, Redis connection, and worker availability.
         """
         redis = await get_redis()
-        
+
         redis_ok = await redis.ping()
         worker_ok = await redis.check_worker_health()
-        
+
         overall_status = "healthy" if redis_ok else "unhealthy"
-        
+
         return HealthResponse(
             status=overall_status,
             version=settings.app_version,
             redis_connected=redis_ok,
             worker_active=worker_ok,
         )
-    
+
     @app.get(
         "/health/detailed",
         tags=["Health"],
@@ -135,15 +135,15 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
         """Get detailed health information including queue stats."""
         redis = await get_redis()
         storage = get_storage()
-        
+
         redis_ok = await redis.ping()
         queue_stats = await redis.get_queue_stats() if redis_ok else {}
-        
+
         # Count stored items
         n_datasets = len(storage.list_data())
         n_configs = len(storage.list_configs())
         n_models = len(storage.list_models())
-        
+
         return {
             "status": "healthy" if redis_ok else "unhealthy",
             "version": settings.app_version,
@@ -159,7 +159,7 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
                 "models": n_models,
             },
         }
-    
+
     @app.get("/", tags=["Health"])
     async def root():
         """API root endpoint."""
@@ -169,7 +169,7 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
             "docs": "/docs",
             "health": "/health",
         }
-    
+
     # Exception handlers
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request, exc: HTTPException):
@@ -177,11 +177,13 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
             status_code=exc.status_code,
             content={
                 "success": False,
-                "error": exc.detail if isinstance(exc.detail, str) else "Request failed",
+                "error": (
+                    exc.detail if isinstance(exc.detail, str) else "Request failed"
+                ),
                 "detail": exc.detail if isinstance(exc.detail, dict) else None,
             },
         )
-    
+
     @app.exception_handler(Exception)
     async def general_exception_handler(request, exc: Exception):
         return JSONResponse(
@@ -192,7 +194,7 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
                 "detail": str(exc) if settings.debug else None,
             },
         )
-    
+
     return app
 
 
@@ -202,7 +204,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     settings = get_settings()
     uvicorn.run(
         "main:app",

@@ -54,6 +54,7 @@ try:
         create_variable_selection_prior,
         build_control_effects_with_selection,
     )
+
     HAS_PYMC = True
 except ImportError:
     HAS_PYMC = False
@@ -62,6 +63,7 @@ except ImportError:
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def sample_control_names():
@@ -85,13 +87,14 @@ def sample_precision_controls():
 # HorseshoeConfig Tests
 # =============================================================================
 
+
 class TestHorseshoeConfig:
     """Tests for HorseshoeConfig dataclass."""
 
     def test_default_values(self):
         """Test that default values are correct."""
         config = HorseshoeConfig()
-        
+
         assert config.expected_nonzero == 3
         assert config.slab_scale == 2.0
         assert config.slab_df == 4.0
@@ -107,7 +110,7 @@ class TestHorseshoeConfig:
             local_df=1.0,
             global_df=2.0,
         )
-        
+
         assert config.expected_nonzero == 5
         assert config.slab_scale == 3.0
         assert config.slab_df == 6.0
@@ -117,7 +120,7 @@ class TestHorseshoeConfig:
     def test_immutability(self):
         """Test that config is frozen (immutable)."""
         config = HorseshoeConfig()
-        
+
         with pytest.raises(FrozenInstanceError):
             config.expected_nonzero = 10
 
@@ -126,13 +129,14 @@ class TestHorseshoeConfig:
 # SpikeSlabConfig Tests
 # =============================================================================
 
+
 class TestSpikeSlabConfig:
     """Tests for SpikeSlabConfig dataclass."""
 
     def test_default_values(self):
         """Test that default values are correct."""
         config = SpikeSlabConfig()
-        
+
         assert config.prior_inclusion_prob == 0.5
         assert config.spike_scale == 0.01
         assert config.slab_scale == 1.0
@@ -148,7 +152,7 @@ class TestSpikeSlabConfig:
             use_continuous_relaxation=False,
             temperature=0.05,
         )
-        
+
         assert config.prior_inclusion_prob == 0.3
         assert config.spike_scale == 0.005
         assert config.slab_scale == 2.0
@@ -158,7 +162,7 @@ class TestSpikeSlabConfig:
     def test_immutability(self):
         """Test that config is frozen (immutable)."""
         config = SpikeSlabConfig()
-        
+
         with pytest.raises(FrozenInstanceError):
             config.prior_inclusion_prob = 0.8
 
@@ -167,13 +171,14 @@ class TestSpikeSlabConfig:
 # LassoConfig Tests
 # =============================================================================
 
+
 class TestLassoConfig:
     """Tests for LassoConfig dataclass."""
 
     def test_default_values(self):
         """Test that default values are correct."""
         config = LassoConfig()
-        
+
         assert config.regularization == 1.0
         assert config.adaptive is False
 
@@ -183,14 +188,14 @@ class TestLassoConfig:
             regularization=2.5,
             adaptive=True,
         )
-        
+
         assert config.regularization == 2.5
         assert config.adaptive is True
 
     def test_immutability(self):
         """Test that config is frozen (immutable)."""
         config = LassoConfig()
-        
+
         with pytest.raises(FrozenInstanceError):
             config.regularization = 5.0
 
@@ -199,13 +204,14 @@ class TestLassoConfig:
 # VariableSelectionConfig Tests
 # =============================================================================
 
+
 class TestVariableSelectionConfig:
     """Tests for VariableSelectionConfig dataclass."""
 
     def test_default_values(self):
         """Test that default values are correct."""
         config = VariableSelectionConfig()
-        
+
         assert config.method == VariableSelectionMethod.NONE
         assert isinstance(config.horseshoe, HorseshoeConfig)
         assert isinstance(config.spike_slab, SpikeSlabConfig)
@@ -219,7 +225,7 @@ class TestVariableSelectionConfig:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             horseshoe=HorseshoeConfig(expected_nonzero=5),
         )
-        
+
         assert config.method == VariableSelectionMethod.REGULARIZED_HORSESHOE
         assert config.horseshoe.expected_nonzero == 5
 
@@ -229,7 +235,7 @@ class TestVariableSelectionConfig:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             exclude_variables=("distribution", "price"),
         )
-        
+
         assert "distribution" in config.exclude_variables
         assert "price" in config.exclude_variables
 
@@ -239,7 +245,7 @@ class TestVariableSelectionConfig:
             method=VariableSelectionMethod.SPIKE_SLAB,
             include_only_variables=("weather", "gas_price"),
         )
-        
+
         assert config.include_only_variables == ("weather", "gas_price")
 
     def test_get_selectable_variables_no_exclusions(self, sample_control_names):
@@ -247,9 +253,11 @@ class TestVariableSelectionConfig:
         config = VariableSelectionConfig(
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         assert selectable == sample_control_names
         assert non_selectable == []
 
@@ -261,9 +269,11 @@ class TestVariableSelectionConfig:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             exclude_variables=sample_confounders,
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         assert "distribution" not in selectable
         assert "price" not in selectable
         assert "distribution" in non_selectable
@@ -278,9 +288,11 @@ class TestVariableSelectionConfig:
             method=VariableSelectionMethod.SPIKE_SLAB,
             include_only_variables=("weather", "gas_price"),
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         assert set(selectable) == {"weather", "gas_price"}
         assert set(non_selectable) == {"holiday", "distribution", "price"}
 
@@ -291,9 +303,11 @@ class TestVariableSelectionConfig:
             include_only_variables=("weather", "gas_price", "distribution"),
             exclude_variables=("distribution",),  # Exclude from selectable
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         # distribution is in include_only but also excluded
         assert "distribution" not in selectable
         assert "weather" in selectable
@@ -304,56 +318,45 @@ class TestVariableSelectionConfig:
 # HorseshoeConfigBuilder Tests
 # =============================================================================
 
+
 class TestHorseshoeConfigBuilder:
     """Tests for HorseshoeConfigBuilder."""
 
     def test_default_build(self):
         """Test building with defaults."""
         config = HorseshoeConfigBuilder().build()
-        
+
         assert config.expected_nonzero == 3
         assert config.slab_scale == 2.0
 
     def test_with_expected_nonzero(self):
         """Test setting expected nonzero."""
-        config = (
-            HorseshoeConfigBuilder()
-            .with_expected_nonzero(7)
-            .build()
-        )
-        
+        config = HorseshoeConfigBuilder().with_expected_nonzero(7).build()
+
         assert config.expected_nonzero == 7
 
     def test_with_slab_scale(self):
         """Test setting slab scale."""
-        config = (
-            HorseshoeConfigBuilder()
-            .with_slab_scale(3.5)
-            .build()
-        )
-        
+        config = HorseshoeConfigBuilder().with_slab_scale(3.5).build()
+
         assert config.slab_scale == 3.5
 
     def test_with_heavy_tails(self):
         """Test heavy tails preset."""
-        config = (
-            HorseshoeConfigBuilder()
-            .with_heavy_tails()
-            .build()
-        )
-        
+        config = HorseshoeConfigBuilder().with_heavy_tails().build()
+
         assert config.slab_df == 2.0
 
     def test_with_aggressive_shrinkage(self):
         """Test aggressive shrinkage preset."""
-        config = (
-            HorseshoeConfigBuilder()
-            .with_aggressive_shrinkage()
-            .build()
-        )
-        
-        assert config.global_df == 1.0, f"Expected global_df to be 1.0 for aggressive shrinkage found {config.global_df}"
-        assert config.local_df == 10.0, f"Expected local_df to be 10.0 for aggressive shrinkage found {config.local_df}"
+        config = HorseshoeConfigBuilder().with_aggressive_shrinkage().build()
+
+        assert (
+            config.global_df == 1.0
+        ), f"Expected global_df to be 1.0 for aggressive shrinkage found {config.global_df}"
+        assert (
+            config.local_df == 10.0
+        ), f"Expected local_df to be 10.0 for aggressive shrinkage found {config.local_df}"
 
     def test_fluent_chaining(self):
         """Test fluent API chaining."""
@@ -364,7 +367,7 @@ class TestHorseshoeConfigBuilder:
             .with_heavy_tails()
             .build()
         )
-        
+
         assert config.expected_nonzero == 5
         assert config.slab_scale == 2.5
         assert config.slab_df == 2.0
@@ -374,34 +377,27 @@ class TestHorseshoeConfigBuilder:
 # SpikeSlabConfigBuilder Tests
 # =============================================================================
 
+
 class TestSpikeSlabConfigBuilder:
     """Tests for SpikeSlabConfigBuilder."""
 
     def test_default_build(self):
         """Test building with defaults."""
         config = SpikeSlabConfigBuilder().build()
-        
+
         assert config.prior_inclusion_prob == 0.5
         assert config.use_continuous_relaxation is True
 
     def test_with_prior_inclusion(self):
         """Test setting prior inclusion probability."""
-        config = (
-            SpikeSlabConfigBuilder()
-            .with_prior_inclusion(0.3)
-            .build()
-        )
-        
+        config = SpikeSlabConfigBuilder().with_prior_inclusion(0.3).build()
+
         assert config.prior_inclusion_prob == 0.3
 
     def test_with_temperature(self):
         """Test setting temperature."""
-        config = (
-            SpikeSlabConfigBuilder()
-            .with_temperature(0.05)
-            .build()
-        )
-        
+        config = SpikeSlabConfigBuilder().with_temperature(0.05).build()
+
         assert config.temperature == 0.05
 
     def test_temperature_validation(self):
@@ -414,43 +410,27 @@ class TestSpikeSlabConfigBuilder:
 
     def test_continuous_mode(self):
         """Test continuous relaxation mode."""
-        config = (
-            SpikeSlabConfigBuilder()
-            .continuous()
-            .build()
-        )
-        
+        config = SpikeSlabConfigBuilder().continuous().build()
+
         assert config.use_continuous_relaxation is True
 
     def test_discrete_mode(self):
         """Test discrete mode."""
-        config = (
-            SpikeSlabConfigBuilder()
-            .discrete()
-            .build()
-        )
-        
+        config = SpikeSlabConfigBuilder().discrete().build()
+
         assert config.use_continuous_relaxation is False
 
     def test_with_sharp_selection(self):
         """Test sharp selection preset."""
-        config = (
-            SpikeSlabConfigBuilder()
-            .with_sharp_selection()
-            .build()
-        )
-        
+        config = SpikeSlabConfigBuilder().with_sharp_selection().build()
+
         assert config.temperature == 0.05
         assert config.spike_scale == 0.005
 
     def test_with_soft_selection(self):
         """Test soft selection preset."""
-        config = (
-            SpikeSlabConfigBuilder()
-            .with_soft_selection()
-            .build()
-        )
-        
+        config = SpikeSlabConfigBuilder().with_soft_selection().build()
+
         assert config.temperature == 0.2
         assert config.spike_scale == 0.05
 
@@ -459,24 +439,21 @@ class TestSpikeSlabConfigBuilder:
 # LassoConfigBuilder Tests
 # =============================================================================
 
+
 class TestLassoConfigBuilder:
     """Tests for LassoConfigBuilder."""
 
     def test_default_build(self):
         """Test building with defaults."""
         config = LassoConfigBuilder().build()
-        
+
         assert config.regularization == 1.0
         assert config.adaptive is False
 
     def test_with_regularization(self):
         """Test setting regularization strength."""
-        config = (
-            LassoConfigBuilder()
-            .with_regularization(2.5)
-            .build()
-        )
-        
+        config = LassoConfigBuilder().with_regularization(2.5).build()
+
         assert config.regularization == 2.5
 
     def test_regularization_validation(self):
@@ -489,43 +466,26 @@ class TestLassoConfigBuilder:
 
     def test_adaptive_mode(self):
         """Test adaptive LASSO mode."""
-        config = (
-            LassoConfigBuilder()
-            .adaptive()
-            .build()
-        )
-        
+        config = LassoConfigBuilder().adaptive().build()
+
         assert config.adaptive is True
 
     def test_non_adaptive_mode(self):
         """Test non-adaptive LASSO mode."""
-        config = (
-            LassoConfigBuilder()
-            .adaptive()
-            .non_adaptive()
-            .build()
-        )
-        
+        config = LassoConfigBuilder().adaptive().non_adaptive().build()
+
         assert config.adaptive is False
 
     def test_with_strong_regularization(self):
         """Test strong regularization preset."""
-        config = (
-            LassoConfigBuilder()
-            .with_strong_regularization()
-            .build()
-        )
-        
+        config = LassoConfigBuilder().with_strong_regularization().build()
+
         assert config.regularization == 5.0
 
     def test_with_weak_regularization(self):
         """Test weak regularization preset."""
-        config = (
-            LassoConfigBuilder()
-            .with_weak_regularization()
-            .build()
-        )
-        
+        config = LassoConfigBuilder().with_weak_regularization().build()
+
         assert config.regularization == 0.5
 
 
@@ -533,23 +493,20 @@ class TestLassoConfigBuilder:
 # VariableSelectionConfigBuilder Tests
 # =============================================================================
 
+
 class TestVariableSelectionConfigBuilder:
     """Tests for VariableSelectionConfigBuilder."""
 
     def test_default_build(self):
         """Test building with defaults (no selection)."""
         config = VariableSelectionConfigBuilder().build()
-        
+
         assert config.method == VariableSelectionMethod.NONE
 
     def test_none_method(self):
         """Test explicitly setting no selection."""
-        config = (
-            VariableSelectionConfigBuilder()
-            .none()
-            .build()
-        )
-        
+        config = VariableSelectionConfigBuilder().none().build()
+
         assert config.method == VariableSelectionMethod.NONE
 
     def test_regularized_horseshoe(self):
@@ -559,7 +516,7 @@ class TestVariableSelectionConfigBuilder:
             .regularized_horseshoe(expected_nonzero=5)
             .build()
         )
-        
+
         assert config.method == VariableSelectionMethod.REGULARIZED_HORSESHOE
         assert config.horseshoe.expected_nonzero == 5
 
@@ -570,18 +527,16 @@ class TestVariableSelectionConfigBuilder:
             .finnish_horseshoe(expected_nonzero=4)
             .build()
         )
-        
+
         assert config.method == VariableSelectionMethod.FINNISH_HORSESHOE
         assert config.horseshoe.expected_nonzero == 4
 
     def test_spike_slab(self):
         """Test spike-and-slab method."""
         config = (
-            VariableSelectionConfigBuilder()
-            .spike_slab(prior_inclusion=0.3)
-            .build()
+            VariableSelectionConfigBuilder().spike_slab(prior_inclusion=0.3).build()
         )
-        
+
         assert config.method == VariableSelectionMethod.SPIKE_SLAB
         assert config.spike_slab.prior_inclusion_prob == 0.3
         assert config.spike_slab.use_continuous_relaxation is True
@@ -593,17 +548,15 @@ class TestVariableSelectionConfigBuilder:
             .spike_slab(prior_inclusion=0.5, continuous=False)
             .build()
         )
-        
+
         assert config.spike_slab.use_continuous_relaxation is False
 
     def test_bayesian_lasso(self):
         """Test Bayesian LASSO method."""
         config = (
-            VariableSelectionConfigBuilder()
-            .bayesian_lasso(regularization=2.0)
-            .build()
+            VariableSelectionConfigBuilder().bayesian_lasso(regularization=2.0).build()
         )
-        
+
         assert config.method == VariableSelectionMethod.BAYESIAN_LASSO
         assert config.lasso.regularization == 2.0
 
@@ -615,7 +568,7 @@ class TestVariableSelectionConfigBuilder:
             .exclude_confounders("distribution", "price")
             .build()
         )
-        
+
         assert "distribution" in config.exclude_variables
         assert "price" in config.exclude_variables
 
@@ -627,7 +580,7 @@ class TestVariableSelectionConfigBuilder:
             .exclude("distribution", "price")
             .build()
         )
-        
+
         assert "distribution" in config.exclude_variables
         assert "price" in config.exclude_variables
 
@@ -639,7 +592,7 @@ class TestVariableSelectionConfigBuilder:
             .apply_only_to("weather", "gas_price")
             .build()
         )
-        
+
         assert set(config.include_only_variables) == {"weather", "gas_price"}
 
     def test_clear_exclusions(self):
@@ -652,21 +605,21 @@ class TestVariableSelectionConfigBuilder:
             .clear_exclusions()
             .build()
         )
-        
+
         assert config.exclude_variables == ()
         assert config.include_only_variables is None
 
     def test_with_horseshoe_config(self):
         """Test setting horseshoe config from pre-built config."""
         horseshoe = HorseshoeConfig(expected_nonzero=7, slab_scale=3.0)
-        
+
         config = (
             VariableSelectionConfigBuilder()
             .regularized_horseshoe()
             .with_horseshoe_config(horseshoe)
             .build()
         )
-        
+
         assert config.horseshoe.expected_nonzero == 7
         assert config.horseshoe.slab_scale == 3.0
 
@@ -678,7 +631,7 @@ class TestVariableSelectionConfigBuilder:
             .with_slab_scale(3.5)
             .build()
         )
-        
+
         assert config.horseshoe.slab_scale == 3.5
 
     def test_with_expected_nonzero(self):
@@ -689,7 +642,7 @@ class TestVariableSelectionConfigBuilder:
             .with_expected_nonzero(8)
             .build()
         )
-        
+
         assert config.horseshoe.expected_nonzero == 8
 
     def test_with_slab_df(self):
@@ -700,7 +653,7 @@ class TestVariableSelectionConfigBuilder:
             .with_slab_df(6.0)
             .build()
         )
-        
+
         assert config.horseshoe.slab_df == 6.0
 
     def test_with_prior_inclusion(self):
@@ -711,29 +664,23 @@ class TestVariableSelectionConfigBuilder:
             .with_prior_inclusion(0.2)
             .build()
         )
-        
+
         assert config.spike_slab.prior_inclusion_prob == 0.2
 
     def test_with_temperature(self):
         """Test setting temperature via builder."""
         config = (
-            VariableSelectionConfigBuilder()
-            .spike_slab()
-            .with_temperature(0.08)
-            .build()
+            VariableSelectionConfigBuilder().spike_slab().with_temperature(0.08).build()
         )
-        
+
         assert config.spike_slab.temperature == 0.08
 
     def test_with_sharp_selection(self):
         """Test sharp selection preset."""
         config = (
-            VariableSelectionConfigBuilder()
-            .spike_slab()
-            .with_sharp_selection()
-            .build()
+            VariableSelectionConfigBuilder().spike_slab().with_sharp_selection().build()
         )
-        
+
         assert config.spike_slab.temperature == 0.05
         assert config.spike_slab.spike_scale == 0.005
 
@@ -745,7 +692,7 @@ class TestVariableSelectionConfigBuilder:
             .with_regularization(3.0)
             .build()
         )
-        
+
         assert config.lasso.regularization == 3.0
 
     def test_comprehensive_example(self, sample_confounders):
@@ -758,7 +705,7 @@ class TestVariableSelectionConfigBuilder:
             .exclude_confounders(*sample_confounders)
             .build()
         )
-        
+
         assert config.method == VariableSelectionMethod.REGULARIZED_HORSESHOE
         assert config.horseshoe.expected_nonzero == 5
         assert config.horseshoe.slab_scale == 2.5
@@ -771,13 +718,14 @@ class TestVariableSelectionConfigBuilder:
 # Factory Functions Tests (Config Module)
 # =============================================================================
 
+
 class TestConfigFactoryFunctions:
     """Tests for factory functions in config module."""
 
     def test_sparse_selection_config(self):
         """Test sparse_selection_config factory."""
         config = sparse_selection_config(expected_relevant=5)
-        
+
         assert config.method == VariableSelectionMethod.REGULARIZED_HORSESHOE
         assert config.horseshoe.expected_nonzero == 5
         assert config.horseshoe.slab_scale == 2.0
@@ -788,14 +736,14 @@ class TestConfigFactoryFunctions:
             expected_relevant=3,
             confounders=sample_confounders,
         )
-        
+
         assert "distribution" in config.exclude_variables
         assert "price" in config.exclude_variables
 
     def test_dense_selection_config(self):
         """Test dense_selection_config factory."""
         config = dense_selection_config(regularization=2.0)
-        
+
         assert config.method == VariableSelectionMethod.BAYESIAN_LASSO
         assert config.lasso.regularization == 2.0
 
@@ -805,13 +753,13 @@ class TestConfigFactoryFunctions:
             regularization=1.5,
             confounders=sample_confounders,
         )
-        
+
         assert "distribution" in config.exclude_variables
 
     def test_inclusion_prob_selection_config(self):
         """Test inclusion_prob_selection_config factory."""
         config = inclusion_prob_selection_config(prior_inclusion=0.3)
-        
+
         assert config.method == VariableSelectionMethod.SPIKE_SLAB
         assert config.spike_slab.prior_inclusion_prob == 0.3
         assert config.spike_slab.temperature == 0.1
@@ -821,20 +769,21 @@ class TestConfigFactoryFunctions:
 # Factory Functions Tests (Builders Module)
 # =============================================================================
 
+
 class TestBuilderFactoryFunctions:
     """Tests for factory functions in builders module."""
 
     def test_sparse_controls(self):
         """Test sparse_controls factory."""
         config = sparse_controls(expected_nonzero=4)
-        
+
         assert config.method == VariableSelectionMethod.REGULARIZED_HORSESHOE
         assert config.horseshoe.expected_nonzero == 4
 
     def test_sparse_controls_with_confounders(self):
         """Test sparse_controls with confounder args."""
         config = sparse_controls(3, "distribution", "price")
-        
+
         assert config.horseshoe.expected_nonzero == 3
         assert "distribution" in config.exclude_variables
         assert "price" in config.exclude_variables
@@ -842,27 +791,27 @@ class TestBuilderFactoryFunctions:
     def test_selection_with_inclusion_probs(self):
         """Test selection_with_inclusion_probs factory."""
         config = selection_with_inclusion_probs(prior_inclusion=0.4)
-        
+
         assert config.method == VariableSelectionMethod.SPIKE_SLAB
         assert config.spike_slab.prior_inclusion_prob == 0.4
 
     def test_selection_with_inclusion_probs_with_confounders(self):
         """Test selection_with_inclusion_probs with confounder args."""
         config = selection_with_inclusion_probs(0.3, "distribution")
-        
+
         assert "distribution" in config.exclude_variables
 
     def test_dense_controls(self):
         """Test dense_controls factory."""
         config = dense_controls(regularization=2.5)
-        
+
         assert config.method == VariableSelectionMethod.BAYESIAN_LASSO
         assert config.lasso.regularization == 2.5
 
     def test_dense_controls_with_confounders(self):
         """Test dense_controls with confounder args."""
         config = dense_controls(1.0, "distribution", "price")
-        
+
         assert "distribution" in config.exclude_variables
         assert "price" in config.exclude_variables
 
@@ -870,6 +819,7 @@ class TestBuilderFactoryFunctions:
 # =============================================================================
 # VariableSelectionResult Tests (requires PyMC)
 # =============================================================================
+
 
 @pytest.mark.skipif(not HAS_PYMC, reason="PyMC not installed")
 class TestVariableSelectionResult:
@@ -880,7 +830,7 @@ class TestVariableSelectionResult:
         with pm.Model():
             beta = pm.Normal("beta", mu=0, sigma=1, shape=5)
             result = VariableSelectionResult(beta=beta)
-            
+
             assert result.beta is beta
             assert result.inclusion_indicators is None
             assert result.local_shrinkage is None
@@ -894,13 +844,13 @@ class TestVariableSelectionResult:
             beta = pm.Normal("beta", mu=0, sigma=1, shape=5)
             gamma = pm.Uniform("gamma", 0, 1, shape=5)
             tau = pm.HalfNormal("tau", sigma=1)
-            
+
             result = VariableSelectionResult(
                 beta=beta,
                 inclusion_indicators=gamma,
                 global_shrinkage=tau,
             )
-            
+
             assert result.beta is beta
             assert result.inclusion_indicators is gamma
             assert result.global_shrinkage is tau
@@ -910,6 +860,7 @@ class TestVariableSelectionResult:
 # Prior Creation Functions Tests (requires PyMC)
 # =============================================================================
 
+
 @pytest.mark.skipif(not HAS_PYMC, reason="PyMC not installed")
 class TestCreateRegularizedHorseshoePrior:
     """Tests for create_regularized_horseshoe_prior function."""
@@ -917,7 +868,7 @@ class TestCreateRegularizedHorseshoePrior:
     def test_basic_creation(self):
         """Test basic prior creation."""
         config = HorseshoeConfig(expected_nonzero=3)
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_regularized_horseshoe_prior(
@@ -927,7 +878,7 @@ class TestCreateRegularizedHorseshoePrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             assert result.beta is not None
             assert "beta" in model.named_vars
             assert result.global_shrinkage is not None
@@ -939,7 +890,7 @@ class TestCreateRegularizedHorseshoePrior:
         """Test prior creation with dimension name."""
         config = HorseshoeConfig(expected_nonzero=3)
         control_names = ["weather", "gas_price", "holiday"]
-        
+
         with pm.Model(coords={"controls": control_names}) as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_regularized_horseshoe_prior(
@@ -950,13 +901,13 @@ class TestCreateRegularizedHorseshoePrior:
                 config=config,
                 dims="controls",
             )
-            
+
             assert result.beta is not None
 
     def test_parameter_names(self):
         """Test that all expected parameters are created."""
         config = HorseshoeConfig()
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_regularized_horseshoe_prior(
@@ -966,7 +917,7 @@ class TestCreateRegularizedHorseshoePrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             # Check expected parameter names exist
             assert "ctrl_tau" in model.named_vars  # Global shrinkage
             assert "ctrl_lambda" in model.named_vars  # Local shrinkage
@@ -981,7 +932,7 @@ class TestCreateFinnishHorseshoePrior:
     def test_equivalent_to_regularized(self):
         """Test that Finnish horseshoe returns same structure as regularized."""
         config = HorseshoeConfig(expected_nonzero=3)
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_finnish_horseshoe_prior(
@@ -991,7 +942,7 @@ class TestCreateFinnishHorseshoePrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             # Should have same structure as regularized
             assert result.beta is not None
             assert result.global_shrinkage is not None
@@ -1008,14 +959,14 @@ class TestCreateSpikeSlabPrior:
             prior_inclusion_prob=0.5,
             use_continuous_relaxation=True,
         )
-        
+
         with pm.Model() as model:
             result = create_spike_slab_prior(
                 name="beta",
                 n_variables=5,
                 config=config,
             )
-            
+
             assert result.beta is not None
             assert result.inclusion_indicators is not None
             assert "beta_gamma" in model.named_vars
@@ -1028,28 +979,28 @@ class TestCreateSpikeSlabPrior:
             prior_inclusion_prob=0.5,
             use_continuous_relaxation=False,
         )
-        
+
         with pm.Model() as model:
             result = create_spike_slab_prior(
                 name="beta",
                 n_variables=5,
                 config=config,
             )
-            
+
             assert result.beta is not None
             assert result.inclusion_indicators is not None
 
     def test_effective_nonzero_tracked(self):
         """Test that effective nonzero is tracked."""
         config = SpikeSlabConfig(prior_inclusion_prob=0.3)
-        
+
         with pm.Model() as model:
             result = create_spike_slab_prior(
                 name="beta",
                 n_variables=5,
                 config=config,
             )
-            
+
             assert result.effective_nonzero is not None
             assert "beta_effective_nonzero" in model.named_vars
 
@@ -1061,14 +1012,14 @@ class TestCreateBayesianLassoPrior:
     def test_basic_creation(self):
         """Test basic LASSO prior creation."""
         config = LassoConfig(regularization=1.0)
-        
+
         with pm.Model() as model:
             result = create_bayesian_lasso_prior(
                 name="beta",
                 n_variables=5,
                 config=config,
             )
-            
+
             assert result.beta is not None
             assert "beta" in model.named_vars
 
@@ -1076,7 +1027,7 @@ class TestCreateBayesianLassoPrior:
         """Test LASSO prior with dimension name."""
         config = LassoConfig(regularization=2.0)
         control_names = ["weather", "gas_price", "holiday"]
-        
+
         with pm.Model(coords={"controls": control_names}) as model:
             result = create_bayesian_lasso_prior(
                 name="beta",
@@ -1084,7 +1035,7 @@ class TestCreateBayesianLassoPrior:
                 config=config,
                 dims="controls",
             )
-            
+
             assert result.beta is not None
 
 
@@ -1095,7 +1046,7 @@ class TestCreateVariableSelectionPrior:
     def test_none_method(self):
         """Test dispatch with NONE method (standard priors)."""
         config = VariableSelectionConfig(method=VariableSelectionMethod.NONE)
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_variable_selection_prior(
@@ -1105,7 +1056,7 @@ class TestCreateVariableSelectionPrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             assert result.beta is not None
             # Should have standard normal prior without selection machinery
             assert result.local_shrinkage is None
@@ -1116,7 +1067,7 @@ class TestCreateVariableSelectionPrior:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             horseshoe=HorseshoeConfig(expected_nonzero=3),
         )
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_variable_selection_prior(
@@ -1126,7 +1077,7 @@ class TestCreateVariableSelectionPrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             assert result.local_shrinkage is not None
             assert result.global_shrinkage is not None
 
@@ -1136,7 +1087,7 @@ class TestCreateVariableSelectionPrior:
             method=VariableSelectionMethod.SPIKE_SLAB,
             spike_slab=SpikeSlabConfig(prior_inclusion_prob=0.3),
         )
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_variable_selection_prior(
@@ -1146,7 +1097,7 @@ class TestCreateVariableSelectionPrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             assert result.inclusion_indicators is not None
 
     def test_lasso_dispatch(self):
@@ -1155,7 +1106,7 @@ class TestCreateVariableSelectionPrior:
             method=VariableSelectionMethod.BAYESIAN_LASSO,
             lasso=LassoConfig(regularization=2.0),
         )
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_variable_selection_prior(
@@ -1165,13 +1116,14 @@ class TestCreateVariableSelectionPrior:
                 sigma=sigma,
                 config=config,
             )
-            
+
             assert result.beta is not None
 
 
 # =============================================================================
 # ControlEffectResult Tests (requires PyMC)
 # =============================================================================
+
 
 @pytest.mark.skipif(not HAS_PYMC, reason="PyMC not installed")
 class TestControlEffectResult:
@@ -1182,7 +1134,7 @@ class TestControlEffectResult:
         with pm.Model():
             contribution = pt.zeros(100)
             result = ControlEffectResult(contribution=contribution)
-            
+
             assert result.contribution is contribution
             assert result.beta_selected is None
             assert result.beta_fixed is None
@@ -1193,6 +1145,7 @@ class TestControlEffectResult:
 # =============================================================================
 # Build Control Effects with Selection Tests (requires PyMC)
 # =============================================================================
+
 
 @pytest.mark.skipif(not HAS_PYMC, reason="PyMC not installed")
 class TestBuildControlEffectsWithSelection:
@@ -1207,10 +1160,10 @@ class TestBuildControlEffectsWithSelection:
     def test_no_selection(self, sample_control_data, sample_control_names):
         """Test with no variable selection (method=NONE)."""
         config = VariableSelectionConfig(method=VariableSelectionMethod.NONE)
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
-            
+
             result = build_control_effects_with_selection(
                 X_controls=sample_control_data,
                 control_names=sample_control_names,
@@ -1219,7 +1172,7 @@ class TestBuildControlEffectsWithSelection:
                 selection_config=config,
                 name_prefix="ctrl",
             )
-            
+
             assert result.contribution is not None
             # All variables should be in components
             assert len(result.components) == len(sample_control_names)
@@ -1230,10 +1183,10 @@ class TestBuildControlEffectsWithSelection:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             horseshoe=HorseshoeConfig(expected_nonzero=2),
         )
-        
+
         with pm.Model(coords={"ctrl_select_dim": sample_control_names}) as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
-            
+
             result = build_control_effects_with_selection(
                 X_controls=sample_control_data,
                 control_names=sample_control_names,
@@ -1242,7 +1195,7 @@ class TestBuildControlEffectsWithSelection:
                 selection_config=config,
                 name_prefix="ctrl",
             )
-            
+
             assert result.contribution is not None
             assert result.selection_result is not None
             assert result.beta_selected is not None
@@ -1258,10 +1211,10 @@ class TestBuildControlEffectsWithSelection:
         )
 
         selectable, _ = config.get_selectable_variables(sample_control_names)
-        
+
         with pm.Model(coords={"ctrl_select_dim": selectable}) as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
-            
+
             result = build_control_effects_with_selection(
                 X_controls=sample_control_data,
                 control_names=sample_control_names,
@@ -1270,7 +1223,7 @@ class TestBuildControlEffectsWithSelection:
                 selection_config=config,
                 name_prefix="ctrl",
             )
-            
+
             assert result.contribution is not None
             # Should have both fixed (confounders) and selected coefficients
             assert result.beta_fixed is not None
@@ -1282,10 +1235,10 @@ class TestBuildControlEffectsWithSelection:
             method=VariableSelectionMethod.SPIKE_SLAB,
             spike_slab=SpikeSlabConfig(prior_inclusion_prob=0.5),
         )
-        
+
         with pm.Model(coords={"ctrl_select_dim": sample_control_names}) as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
-            
+
             result = build_control_effects_with_selection(
                 X_controls=sample_control_data,
                 control_names=sample_control_names,
@@ -1294,7 +1247,7 @@ class TestBuildControlEffectsWithSelection:
                 selection_config=config,
                 name_prefix="ctrl",
             )
-            
+
             # All control names should be in components
             for name in sample_control_names:
                 assert name in result.components
@@ -1303,6 +1256,7 @@ class TestBuildControlEffectsWithSelection:
 # =============================================================================
 # Integration Tests (slow, requires sampling)
 # =============================================================================
+
 
 @pytest.mark.slow
 @pytest.mark.skipif(not HAS_PYMC, reason="PyMC not installed")
@@ -1314,14 +1268,14 @@ class TestVariableSelectionIntegration:
         np.random.seed(42)
         n_obs = 50
         n_vars = 5
-        
+
         # True coefficients: sparse with 2 nonzero
         true_beta = np.array([0.0, 0.5, 0.0, 0.0, -0.3])
         X = np.random.randn(n_obs, n_vars)
         y = X @ true_beta + np.random.randn(n_obs) * 0.5
-        
+
         config = HorseshoeConfig(expected_nonzero=2)
-        
+
         with pm.Model() as model:
             sigma = pm.HalfNormal("sigma", sigma=1)
             result = create_regularized_horseshoe_prior(
@@ -1331,10 +1285,10 @@ class TestVariableSelectionIntegration:
                 sigma=sigma,
                 config=config,
             )
-            
+
             mu = pt.dot(X, result.beta)
             pm.Normal("y", mu=mu, sigma=sigma, observed=y)
-            
+
             # Quick sampling for test
             trace = pm.sample(
                 draws=100,
@@ -1343,7 +1297,7 @@ class TestVariableSelectionIntegration:
                 random_seed=42,
                 progressbar=False,
             )
-        
+
         # Check that we got samples
         assert "beta" in trace.posterior
         assert trace.posterior["beta"].shape[-1] == n_vars
@@ -1353,16 +1307,16 @@ class TestVariableSelectionIntegration:
         np.random.seed(42)
         n_obs = 50
         n_vars = 4
-        
+
         X = np.random.randn(n_obs, n_vars)
         true_beta = np.array([0.0, 0.4, 0.0, -0.3])
         y = X @ true_beta + np.random.randn(n_obs) * 0.5
-        
+
         config = SpikeSlabConfig(
             prior_inclusion_prob=0.5,
             use_continuous_relaxation=True,
         )
-        
+
         with pm.Model() as model:
             result = create_spike_slab_prior(
                 name="beta",
@@ -1370,10 +1324,10 @@ class TestVariableSelectionIntegration:
                 config=config,
             )
             sigma = pm.HalfNormal("sigma", sigma=1)
-            
+
             mu = pt.dot(X, result.beta)
             pm.Normal("y", mu=mu, sigma=sigma, observed=y)
-            
+
             trace = pm.sample(
                 draws=100,
                 tune=100,
@@ -1381,7 +1335,7 @@ class TestVariableSelectionIntegration:
                 random_seed=42,
                 progressbar=False,
             )
-        
+
         assert "beta" in trace.posterior
         assert "beta_gamma" in trace.posterior
 
@@ -1389,6 +1343,7 @@ class TestVariableSelectionIntegration:
 # =============================================================================
 # Edge Cases and Error Handling
 # =============================================================================
+
 
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
@@ -1399,9 +1354,11 @@ class TestEdgeCases:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             exclude_variables=(),
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         assert selectable == sample_control_names
         assert non_selectable == []
 
@@ -1411,9 +1368,11 @@ class TestEdgeCases:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             exclude_variables=tuple(sample_control_names),
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         assert selectable == []
         assert non_selectable == sample_control_names
 
@@ -1423,9 +1382,11 @@ class TestEdgeCases:
             method=VariableSelectionMethod.SPIKE_SLAB,
             include_only_variables=(),
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         # Empty include_only means nothing is selectable
         assert selectable == []
         assert non_selectable == sample_control_names
@@ -1436,9 +1397,11 @@ class TestEdgeCases:
             method=VariableSelectionMethod.REGULARIZED_HORSESHOE,
             exclude_variables=("unknown_var",),
         )
-        
-        selectable, non_selectable = config.get_selectable_variables(sample_control_names)
-        
+
+        selectable, non_selectable = config.get_selectable_variables(
+            sample_control_names
+        )
+
         # Unknown var should be ignored, all controls selectable
         assert selectable == sample_control_names
         assert non_selectable == []
@@ -1446,7 +1409,10 @@ class TestEdgeCases:
     def test_method_enum_values(self):
         """Test all VariableSelectionMethod enum values exist."""
         assert VariableSelectionMethod.NONE.value == "none"
-        assert VariableSelectionMethod.REGULARIZED_HORSESHOE.value == "regularized_horseshoe"
+        assert (
+            VariableSelectionMethod.REGULARIZED_HORSESHOE.value
+            == "regularized_horseshoe"
+        )
         assert VariableSelectionMethod.FINNISH_HORSESHOE.value == "finnish_horseshoe"
         assert VariableSelectionMethod.SPIKE_SLAB.value == "spike_slab"
         assert VariableSelectionMethod.BAYESIAN_LASSO.value == "bayesian_lasso"
@@ -1456,16 +1422,16 @@ class TestEdgeCases:
         """Test that unknown method raises ValueError."""
         # Create a config with an invalid method value by bypassing dataclass
         config = VariableSelectionConfig.__new__(VariableSelectionConfig)
-        object.__setattr__(config, 'method', 'invalid_method')
-        object.__setattr__(config, 'horseshoe', HorseshoeConfig())
-        object.__setattr__(config, 'spike_slab', SpikeSlabConfig())
-        object.__setattr__(config, 'lasso', LassoConfig())
-        object.__setattr__(config, 'exclude_variables', ())
-        object.__setattr__(config, 'include_only_variables', None)
-        
+        object.__setattr__(config, "method", "invalid_method")
+        object.__setattr__(config, "horseshoe", HorseshoeConfig())
+        object.__setattr__(config, "spike_slab", SpikeSlabConfig())
+        object.__setattr__(config, "lasso", LassoConfig())
+        object.__setattr__(config, "exclude_variables", ())
+        object.__setattr__(config, "include_only_variables", None)
+
         with pm.Model():
             sigma = pm.HalfNormal("sigma", sigma=1)
-            
+
             with pytest.raises(ValueError, match="Unknown variable selection method"):
                 create_variable_selection_prior(
                     name="beta",

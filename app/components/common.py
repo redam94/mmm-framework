@@ -14,8 +14,16 @@ from typing import Any
 # =============================================================================
 
 CHART_COLORS = [
-    "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
-    "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+    "#636EFA",
+    "#EF553B",
+    "#00CC96",
+    "#AB63FA",
+    "#FFA15A",
+    "#19D3F3",
+    "#FF6692",
+    "#B6E880",
+    "#FF97FF",
+    "#FECB52",
 ]
 
 COMPONENT_COLORS = {
@@ -43,6 +51,7 @@ def rgb_to_rgba(color: str, alpha: float = 0.3) -> str:
 # =============================================================================
 # Status Helpers
 # =============================================================================
+
 
 def status_icon(status: str) -> str:
     """Get status icon for job status."""
@@ -73,11 +82,12 @@ def status_badge(status: str) -> str:
 # Formatting
 # =============================================================================
 
+
 def format_bytes(size_bytes: int | None) -> str:
     """Format bytes to human readable string."""
     if size_bytes is None:
         return "N/A"
-    
+
     for unit in ["B", "KB", "MB", "GB"]:
         if abs(size_bytes) < 1024.0:
             return f"{size_bytes:.1f} {unit}"
@@ -89,7 +99,7 @@ def format_duration(seconds: float | None) -> str:
     """Format duration in seconds to human readable string."""
     if seconds is None:
         return "N/A"
-    
+
     if seconds < 60:
         return f"{seconds:.1f}s"
     elif seconds < 3600:
@@ -102,13 +112,13 @@ def format_datetime(dt: datetime | str | None) -> str:
     """Format datetime to readable string."""
     if dt is None:
         return "N/A"
-    
+
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt)
         except ValueError:
             return dt
-    
+
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
@@ -123,7 +133,7 @@ def format_number(value: float | int | None, decimals: int = 2) -> str:
     """Format number with appropriate suffix."""
     if value is None:
         return "N/A"
-    
+
     if abs(value) >= 1e9:
         return f"{value/1e9:.{decimals}f}B"
     elif abs(value) >= 1e6:
@@ -137,6 +147,7 @@ def format_number(value: float | int | None, decimals: int = 2) -> str:
 # =============================================================================
 # Session State
 # =============================================================================
+
 
 def init_session_state(**defaults):
     """Initialize session state with defaults."""
@@ -159,7 +170,10 @@ def set_session(key: str, value: Any):
 # UI Components
 # =============================================================================
 
-def metric_card(label: str, value: Any, delta: Any = None, help_text: str | None = None):
+
+def metric_card(
+    label: str, value: Any, delta: Any = None, help_text: str | None = None
+):
     """Display a styled metric card."""
     st.metric(label=label, value=value, delta=delta, help=help_text)
 
@@ -198,6 +212,7 @@ def loading_placeholder(message: str = "Loading..."):
 def data_preview_table(data: list[dict], max_rows: int = 10):
     """Display a preview table of data."""
     import pandas as pd
+
     df = pd.DataFrame(data[:max_rows])
     st.dataframe(df, use_container_width=True)
 
@@ -206,7 +221,7 @@ def summary_statistics(data: dict[str, Any]):
     """Display summary statistics in columns."""
     n_cols = min(4, len(data))
     cols = st.columns(n_cols)
-    
+
     for i, (label, value) in enumerate(data.items()):
         with cols[i % n_cols]:
             st.metric(label, value)
@@ -229,7 +244,7 @@ def page_header(title: str, subtitle: str | None = None):
 def sidebar_status():
     """Display API connection status in sidebar."""
     from api_client import check_api_connection
-    
+
     with st.sidebar:
         if check_api_connection():
             st.success("✅ API Connected")
@@ -243,10 +258,11 @@ def sidebar_status():
 # Error Handling
 # =============================================================================
 
+
 def display_api_error(error: Exception):
     """Display API error with details."""
     from api_client import APIError, ConnectionError, NotFoundError, ValidationError
-    
+
     if isinstance(error, ConnectionError):
         st.error(f"🔌 Connection Error: {error.message}")
         st.info("Please ensure the API server is running.")

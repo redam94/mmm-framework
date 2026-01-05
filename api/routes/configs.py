@@ -46,7 +46,7 @@ async def create_config(
 ):
     """
     Create a new model configuration.
-    
+
     The configuration includes:
     - **mff_config**: Data specification (KPI, media channels, controls, alignment)
     - **model_settings**: Model fitting settings (inference method, MCMC params, trend, seasonality)
@@ -57,7 +57,7 @@ async def create_config(
         "mff_config": request.mff_config.model_dump(),
         "model_settings": request.model_settings.model_dump(),
     }
-    
+
     saved = storage.save_config(config_data)
     return _config_to_response(saved)
 
@@ -75,7 +75,7 @@ async def list_configs(
     configs = storage.list_configs()
     total = len(configs)
     configs = configs[skip : skip + limit]
-    
+
     return ConfigListResponse(
         configs=[_config_to_response(c) for c in configs],
         total=total,
@@ -118,7 +118,7 @@ async def update_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Configuration not found: {config_id}",
         )
-    
+
     updates = {}
     if request.name is not None:
         updates["name"] = request.name
@@ -128,7 +128,7 @@ async def update_config(
         updates["mff_config"] = request.mff_config.model_dump()
     if request.model_settings is not None:
         updates["model_settings"] = request.model_settings.model_dump()
-    
+
     updated = storage.update_config(config_id, updates)
     return _config_to_response(updated)
 
@@ -148,9 +148,9 @@ async def delete_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Configuration not found: {config_id}",
         )
-    
+
     storage.delete_config(config_id)
-    
+
     return SuccessResponse(
         success=True,
         message=f"Configuration {config_id} deleted successfully",
@@ -171,7 +171,7 @@ async def duplicate_config(
     """Create a copy of an existing configuration."""
     try:
         original = storage.load_config(config_id)
-        
+
         # Create new config with new name
         new_config = {
             "name": new_name,
@@ -179,10 +179,10 @@ async def duplicate_config(
             "mff_config": original["mff_config"],
             "model_settings": original["model_settings"],
         }
-        
+
         saved = storage.save_config(new_config)
         return _config_to_response(saved)
-        
+
     except StorageError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -199,43 +199,43 @@ async def validate_config(
 ):
     """
     Validate a configuration without saving it.
-    
+
     Checks that the configuration is well-formed and compatible.
     """
     # The Pydantic validation already checks most things
     # Here we can add additional semantic validation
-    
+
     errors = []
-    
+
     # Check KPI name is not empty
     if not request.mff_config.kpi.name:
         errors.append("KPI name cannot be empty")
-    
+
     # Check at least one media channel
     if not request.mff_config.media_channels:
         errors.append("At least one media channel is required")
-    
+
     # Check for duplicate channel names
     channel_names = [ch.name for ch in request.mff_config.media_channels]
     if len(channel_names) != len(set(channel_names)):
         errors.append("Duplicate media channel names detected")
-    
+
     # Check control names don't overlap with channels
     control_names = [c.name for c in request.mff_config.controls]
     overlap = set(channel_names) & set(control_names)
     if overlap:
         errors.append(f"Variable names cannot be both media and control: {overlap}")
-    
+
     # Check model settings
     if request.model_settings.n_draws < request.model_settings.n_tune:
         errors.append("n_draws should typically be >= n_tune for reliable inference")
-    
+
     if errors:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"errors": errors},
         )
-    
+
     return {
         "valid": True,
         "message": "Configuration is valid",

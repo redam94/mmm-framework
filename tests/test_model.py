@@ -61,6 +61,7 @@ from mmm_framework.data_loader import (
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_periods():
     """Sample weekly periods."""
@@ -71,7 +72,7 @@ def sample_periods():
 def simple_panel(sample_periods):
     """Create a simple national-level PanelDataset for testing."""
     n_obs = len(sample_periods)
-    
+
     # Create coordinates
     coords = PanelCoordinates(
         periods=sample_periods,
@@ -80,18 +81,22 @@ def simple_panel(sample_periods):
         channels=["TV", "Digital"],
         controls=["Price"],
     )
-    
+
     # Create data
     np.random.seed(42)
     y = pd.Series(1000 + np.random.randn(n_obs) * 100, name="Sales")
-    X_media = pd.DataFrame({
-        "TV": np.abs(np.random.randn(n_obs) * 50 + 100),
-        "Digital": np.abs(np.random.randn(n_obs) * 30 + 80),
-    })
-    X_controls = pd.DataFrame({
-        "Price": 10 + np.random.randn(n_obs) * 0.5,
-    })
-    
+    X_media = pd.DataFrame(
+        {
+            "TV": np.abs(np.random.randn(n_obs) * 50 + 100),
+            "Digital": np.abs(np.random.randn(n_obs) * 30 + 80),
+        }
+    )
+    X_controls = pd.DataFrame(
+        {
+            "Price": 10 + np.random.randn(n_obs) * 0.5,
+        }
+    )
+
     # Create simple config
     config = MFFConfig(
         kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
@@ -103,7 +108,7 @@ def simple_panel(sample_periods):
             ControlVariableConfig(name="Price", dimensions=[DimensionType.PERIOD]),
         ],
     )
-    
+
     return PanelDataset(
         y=y,
         X_media=X_media,
@@ -120,13 +125,12 @@ def geo_panel(sample_periods):
     geos = ["East", "West", "Central"]
     n_periods = len(sample_periods)
     n_obs = n_periods * len(geos)
-    
+
     # Create multi-index
     index = pd.MultiIndex.from_product(
-        [sample_periods, geos],
-        names=["Period", "Geography"]
+        [sample_periods, geos], names=["Period", "Geography"]
     )
-    
+
     coords = PanelCoordinates(
         periods=sample_periods,
         geographies=geos,
@@ -134,34 +138,28 @@ def geo_panel(sample_periods):
         channels=["TV"],
         controls=["Price"],
     )
-    
+
     np.random.seed(42)
     y = pd.Series(500 + np.random.randn(n_obs) * 50, index=index, name="Sales")
     X_media = pd.DataFrame(
-        {"TV": np.abs(np.random.randn(n_obs) * 30 + 50)},
-        index=index
+        {"TV": np.abs(np.random.randn(n_obs) * 30 + 50)}, index=index
     )
-    X_controls = pd.DataFrame(
-        {"Price": 10 + np.random.randn(n_obs) * 0.3},
-        index=index
-    )
-    
+    X_controls = pd.DataFrame({"Price": 10 + np.random.randn(n_obs) * 0.3}, index=index)
+
     config = MFFConfig(
         kpi=KPIConfig(
-            name="Sales",
-            dimensions=[DimensionType.PERIOD, DimensionType.GEOGRAPHY]
+            name="Sales", dimensions=[DimensionType.PERIOD, DimensionType.GEOGRAPHY]
         ),
         media_channels=[
             MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD]),
         ],
         controls=[
             ControlVariableConfig(
-                name="Price",
-                dimensions=[DimensionType.PERIOD, DimensionType.GEOGRAPHY]
+                name="Price", dimensions=[DimensionType.PERIOD, DimensionType.GEOGRAPHY]
             ),
         ],
     )
-    
+
     return PanelDataset(
         y=y,
         X_media=X_media,
@@ -194,6 +192,7 @@ def trend_config():
 # TrendType Enum Tests
 # =============================================================================
 
+
 class TestTrendType:
     """Tests for TrendType enum."""
 
@@ -220,13 +219,14 @@ class TestTrendType:
 # TrendConfig Tests
 # =============================================================================
 
+
 class TestTrendConfig:
     """Tests for TrendConfig dataclass."""
 
     def test_default_values(self):
         """Test default configuration values."""
         config = TrendConfig()
-        
+
         assert config.type == TrendType.LINEAR
         assert config.n_changepoints == 10
         assert config.changepoint_range == 0.8
@@ -241,7 +241,7 @@ class TestTrendConfig:
             n_changepoints=15,
             changepoint_prior_scale=0.1,
         )
-        
+
         assert config.type == TrendType.PIECEWISE
         assert config.n_changepoints == 15
         assert config.changepoint_prior_scale == 0.1
@@ -250,7 +250,7 @@ class TestTrendConfig:
         """Test serialization to dictionary."""
         config = TrendConfig(type=TrendType.SPLINE, n_knots=8)
         d = config.to_dict()
-        
+
         assert d["type"] == "spline"
         assert d["n_knots"] == 8
         assert "gp_lengthscale_prior_mu" in d
@@ -274,7 +274,7 @@ class TestTrendConfig:
             "growth_prior_sigma": 0.1,
         }
         config = TrendConfig.from_dict(d)
-        
+
         assert config.type == TrendType.GP
         assert config.gp_n_basis == 30
         assert config.gp_lengthscale_prior_mu == 0.4
@@ -286,9 +286,9 @@ class TestTrendConfig:
             n_changepoints=20,
             changepoint_prior_scale=0.02,
         )
-        
+
         restored = TrendConfig.from_dict(original.to_dict())
-        
+
         assert restored.type == original.type
         assert restored.n_changepoints == original.n_changepoints
         assert restored.changepoint_prior_scale == original.changepoint_prior_scale
@@ -298,6 +298,7 @@ class TestTrendConfig:
 # Helper Function Tests
 # =============================================================================
 
+
 class TestCreateFourierFeatures:
     """Tests for create_fourier_features function."""
 
@@ -306,9 +307,9 @@ class TestCreateFourierFeatures:
         t = np.arange(52)
         period = 52
         order = 2
-        
+
         features = create_fourier_features(t, period, order)
-        
+
         # 2 features per order (sin + cos)
         assert features.shape == (52, 4)
 
@@ -316,7 +317,7 @@ class TestCreateFourierFeatures:
         """Test with order=0 returns empty features."""
         t = np.arange(52)
         features = create_fourier_features(t, period=52, order=0)
-        
+
         assert features.shape == (52, 0)
 
     def test_periodicity(self):
@@ -324,21 +325,19 @@ class TestCreateFourierFeatures:
         t = np.arange(104)  # 2 years
         period = 52
         order = 1
-        
+
         features = create_fourier_features(t, period, order)
-        
+
         # sin feature should repeat after 52 observations
         np.testing.assert_array_almost_equal(
-            features[:52, 0],
-            features[52:, 0],
-            decimal=10
+            features[:52, 0], features[52:, 0], decimal=10
         )
 
     def test_sin_cos_orthogonality(self):
         """Test that sin and cos features are approximately orthogonal."""
         t = np.arange(52)
         features = create_fourier_features(t, period=52, order=1)
-        
+
         # Dot product of sin and cos should be near zero
         dot_product = np.dot(features[:, 0], features[:, 1])
         assert abs(dot_product) < 1e-10
@@ -351,14 +350,14 @@ class TestGeometricAdstockNp:
         """Test with alpha=0 (no carryover)."""
         x = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
         result = geometric_adstock_np(x, alpha=0.0)
-        
+
         np.testing.assert_array_equal(result, x)
 
     def test_full_decay(self):
         """Test with high alpha (strong carryover)."""
         x = np.array([1.0, 0.0, 0.0, 0.0])
         result = geometric_adstock_np(x, alpha=0.9)
-        
+
         # First value unchanged
         assert result[0] == 1.0
         # Subsequent values should decay
@@ -370,7 +369,7 @@ class TestGeometricAdstockNp:
         """Test that adstock accumulates over time."""
         x = np.array([1.0, 1.0, 1.0, 1.0])
         result = geometric_adstock_np(x, alpha=0.5)
-        
+
         # Each value should be >= corresponding input
         assert all(result >= x)
         # Values should increase (accumulation)
@@ -381,12 +380,12 @@ class TestGeometricAdstockNp:
         """Test impulse response shape."""
         x = np.zeros(10)
         x[0] = 100.0
-        
+
         result = geometric_adstock_np(x, alpha=0.7)
-        
+
         # Should decay exponentially
         for i in range(1, 10):
-            expected = 100 * (0.7 ** i)
+            expected = 100 * (0.7**i)
             assert result[i] == pytest.approx(expected, rel=1e-6)
 
 
@@ -397,7 +396,7 @@ class TestGeometricAdstock2d:
         """Test that output shape matches input."""
         X = np.random.randn(52, 3)
         result = geometric_adstock_2d(X, alpha=0.5)
-        
+
         assert result.shape == X.shape
 
     def test_per_channel_application(self):
@@ -405,13 +404,13 @@ class TestGeometricAdstock2d:
         X = np.zeros((5, 2))
         X[0, 0] = 1.0
         X[0, 1] = 2.0
-        
+
         result = geometric_adstock_2d(X, alpha=0.5)
-        
+
         # Channel 0
         assert result[0, 0] == 1.0
         assert result[1, 0] == pytest.approx(0.5, rel=1e-6)
-        
+
         # Channel 1
         assert result[0, 1] == 2.0
         assert result[1, 1] == pytest.approx(1.0, rel=1e-6)
@@ -424,31 +423,31 @@ class TestLogisticSaturationNp:
         """Test that zero input gives zero output."""
         x = np.array([0.0])
         result = logistic_saturation_np(x, lam=1.0)
-        
+
         assert result[0] == pytest.approx(0.0, abs=1e-10)
 
     def test_asymptotic_behavior(self):
         """Test that output approaches 1 for large inputs."""
         x = np.array([100.0])
         result = logistic_saturation_np(x, lam=1.0)
-        
+
         assert result[0] == pytest.approx(1.0, abs=1e-6)
 
     def test_monotonic_increasing(self):
         """Test that function is monotonically increasing."""
         x = np.linspace(0, 100, 100)
         result = logistic_saturation_np(x, lam=0.1)
-        
+
         # Check monotonicity
         assert all(np.diff(result) >= 0)
 
     def test_lambda_effect(self):
         """Test that higher lambda gives faster saturation."""
         x = np.array([10.0])
-        
+
         result_low = logistic_saturation_np(x, lam=0.1)
         result_high = logistic_saturation_np(x, lam=1.0)
-        
+
         # Higher lambda should give higher saturation at same x
         assert result_high[0] > result_low[0]
 
@@ -456,7 +455,7 @@ class TestLogisticSaturationNp:
         """Test that negative values are clipped to zero."""
         x = np.array([-5.0, -1.0, 0.0, 1.0])
         result = logistic_saturation_np(x, lam=1.0)
-        
+
         # Negative inputs should give 0
         assert result[0] == pytest.approx(0.0, abs=1e-10)
         assert result[1] == pytest.approx(0.0, abs=1e-10)
@@ -465,7 +464,7 @@ class TestLogisticSaturationNp:
         """Test that output is always in [0, 1)."""
         x = np.random.uniform(0, 1000, 100)
         result = logistic_saturation_np(x, lam=0.5)
-        
+
         assert all(result >= 0)
         assert all(result <= 1)
 
@@ -477,9 +476,9 @@ class TestCreateBsplineBasis:
         """Test that output has correct shape."""
         t = np.linspace(0, 1, 52)
         n_knots = 5
-        
+
         basis = create_bspline_basis(t, n_knots=n_knots, degree=3)
-        
+
         # Number of basis functions = n_interior_knots + degree + 1
         assert basis.shape[0] == 52
 
@@ -487,7 +486,7 @@ class TestCreateBsplineBasis:
         """Test that basis functions sum to 1 (approximately)."""
         t = np.linspace(0, 1, 100)
         basis = create_bspline_basis(t, n_knots=10, degree=3)
-        
+
         # Sum across basis functions should be ~1 for interior points
         row_sums = basis[10:-10].sum(axis=1)
         np.testing.assert_array_almost_equal(row_sums, 1.0, decimal=5)
@@ -496,16 +495,16 @@ class TestCreateBsplineBasis:
         """Test that basis functions are non-negative."""
         t = np.linspace(0, 1, 50)
         basis = create_bspline_basis(t, n_knots=5, degree=3)
-        
+
         assert np.all(basis >= -1e-10)  # Allow small numerical errors
 
     def test_different_degrees(self):
         """Test with different spline degrees."""
         t = np.linspace(0, 1, 50)
-        
+
         basis_linear = create_bspline_basis(t, n_knots=5, degree=1)
         basis_cubic = create_bspline_basis(t, n_knots=5, degree=3)
-        
+
         # Different degrees should give different shapes
         assert basis_linear.shape[1] != basis_cubic.shape[1]
 
@@ -517,9 +516,9 @@ class TestCreatePiecewiseTrendMatrix:
         """Test that outputs have correct shapes."""
         t = np.linspace(0, 1, 52)
         n_changepoints = 10
-        
+
         s, A = create_piecewise_trend_matrix(t, n_changepoints)
-        
+
         assert len(s) == n_changepoints
         assert A.shape == (52, n_changepoints)
 
@@ -529,7 +528,7 @@ class TestCreatePiecewiseTrendMatrix:
         s, A = create_piecewise_trend_matrix(
             t, n_changepoints=10, changepoint_range=0.8
         )
-        
+
         # All changepoints should be <= 0.8
         assert all(s <= 0.8)
         assert all(s >= 0)
@@ -538,7 +537,7 @@ class TestCreatePiecewiseTrendMatrix:
         """Test that design matrix contains 0s and 1s."""
         t = np.linspace(0, 1, 50)
         s, A = create_piecewise_trend_matrix(t, n_changepoints=5)
-        
+
         # A should contain only 0 and 1
         assert set(np.unique(A)) == {0.0, 1.0}
 
@@ -546,7 +545,7 @@ class TestCreatePiecewiseTrendMatrix:
         """Test the step-function structure of design matrix."""
         t = np.linspace(0, 1, 100)
         s, A = create_piecewise_trend_matrix(t, n_changepoints=5)
-        
+
         # Each column should be 0 then 1 (step function)
         for j in range(A.shape[1]):
             col = A[:, j]
@@ -562,6 +561,7 @@ class TestCreatePiecewiseTrendMatrix:
 # Result Container Tests
 # =============================================================================
 
+
 class TestMMMResults:
     """Tests for MMMResults dataclass."""
 
@@ -570,7 +570,7 @@ class TestMMMResults:
         mock_trace = MagicMock()
         mock_model = MagicMock()
         mock_panel = MagicMock()
-        
+
         results = MMMResults(
             trace=mock_trace,
             model=mock_model,
@@ -579,7 +579,7 @@ class TestMMMResults:
             y_mean=1000.0,
             y_std=100.0,
         )
-        
+
         assert results.y_mean == 1000.0
         assert results.y_std == 100.0
         assert results.diagnostics["divergences"] == 0
@@ -589,13 +589,13 @@ class TestMMMResults:
         mock_trace = MagicMock()
         mock_model = MagicMock()
         mock_panel = MagicMock()
-        
+
         results = MMMResults(
             trace=mock_trace,
             model=mock_model,
             panel=mock_panel,
         )
-        
+
         assert results.channel_contributions is None
         assert results.diagnostics == {}
         assert results.y_mean == 0.0
@@ -609,7 +609,7 @@ class TestPredictionResults:
         """Test n_samples and n_obs properties."""
         mock_ppc = MagicMock()
         samples = np.random.randn(100, 52)  # 100 samples, 52 obs
-        
+
         results = PredictionResults(
             posterior_predictive=mock_ppc,
             y_pred_mean=samples.mean(axis=0),
@@ -618,7 +618,7 @@ class TestPredictionResults:
             y_pred_hdi_high=np.percentile(samples, 97, axis=0),
             y_pred_samples=samples,
         )
-        
+
         assert results.n_samples == 100
         assert results.n_obs == 52
 
@@ -628,13 +628,15 @@ class TestContributionResults:
 
     def test_summary(self):
         """Test summary method."""
-        channel_contrib = pd.DataFrame({
-            "TV": np.random.randn(52),
-            "Digital": np.random.randn(52),
-        })
+        channel_contrib = pd.DataFrame(
+            {
+                "TV": np.random.randn(52),
+                "Digital": np.random.randn(52),
+            }
+        )
         total_contrib = pd.Series({"TV": 1000.0, "Digital": 500.0})
         contrib_pct = pd.Series({"TV": 66.7, "Digital": 33.3})
-        
+
         results = ContributionResults(
             channel_contributions=channel_contrib,
             total_contributions=total_contrib,
@@ -642,9 +644,9 @@ class TestContributionResults:
             baseline_prediction=np.random.randn(52),
             counterfactual_predictions={},
         )
-        
+
         summary = results.summary()
-        
+
         assert "Channel" in summary.columns
         assert "Total Contribution" in summary.columns
         assert "Contribution %" in summary.columns
@@ -659,16 +661,20 @@ class TestComponentDecomposition:
         decomp = ComponentDecomposition(
             intercept=np.ones(52) * 500,
             trend=np.linspace(0, 100, 52),
-            seasonality=np.sin(np.linspace(0, 4*np.pi, 52)) * 50,
+            seasonality=np.sin(np.linspace(0, 4 * np.pi, 52)) * 50,
             media_total=np.ones(52) * 200,
-            media_by_channel=pd.DataFrame({
-                "TV": np.ones(52) * 120,
-                "Digital": np.ones(52) * 80,
-            }),
+            media_by_channel=pd.DataFrame(
+                {
+                    "TV": np.ones(52) * 120,
+                    "Digital": np.ones(52) * 80,
+                }
+            ),
             controls_total=np.ones(52) * 50,
-            controls_by_var=pd.DataFrame({
-                "Price": np.ones(52) * 50,
-            }),
+            controls_by_var=pd.DataFrame(
+                {
+                    "Price": np.ones(52) * 50,
+                }
+            ),
             geo_effects=None,
             product_effects=None,
             total_intercept=500 * 52,
@@ -681,9 +687,9 @@ class TestComponentDecomposition:
             y_mean=1000.0,
             y_std=100.0,
         )
-        
+
         summary = decomp.summary()
-        
+
         assert "Component" in summary.columns
         assert "Total Contribution" in summary.columns
         assert "Contribution %" in summary.columns
@@ -696,10 +702,12 @@ class TestComponentDecomposition:
             trend=np.zeros(10),
             seasonality=np.zeros(10),
             media_total=np.ones(10) * 50,
-            media_by_channel=pd.DataFrame({
-                "TV": np.ones(10) * 30,
-                "Digital": np.ones(10) * 20,
-            }),
+            media_by_channel=pd.DataFrame(
+                {
+                    "TV": np.ones(10) * 30,
+                    "Digital": np.ones(10) * 20,
+                }
+            ),
             controls_total=np.zeros(10),
             controls_by_var=None,
             geo_effects=None,
@@ -714,9 +722,9 @@ class TestComponentDecomposition:
             y_mean=100.0,
             y_std=10.0,
         )
-        
+
         media_summary = decomp.media_summary()
-        
+
         assert len(media_summary) == 2
         assert "Share of Media %" in media_summary.columns
 
@@ -725,13 +733,14 @@ class TestComponentDecomposition:
 # BayesianMMM Tests - Initialization
 # =============================================================================
 
+
 class TestBayesianMMMInit:
     """Tests for BayesianMMM initialization."""
 
     def test_basic_init(self, simple_panel, model_config, trend_config):
         """Test basic model initialization."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.panel == simple_panel
         assert mmm.model_config == model_config
         assert mmm.trend_config == trend_config
@@ -739,60 +748,65 @@ class TestBayesianMMMInit:
     def test_data_standardization(self, simple_panel, model_config, trend_config):
         """Test that data is standardized."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         # y should be standardized
-        assert hasattr(mmm, 'y_mean')
-        assert hasattr(mmm, 'y_std')
+        assert hasattr(mmm, "y_mean")
+        assert hasattr(mmm, "y_std")
         assert mmm.y_mean != 0 or mmm.y_std != 1  # At least one should differ
 
     def test_channel_names(self, simple_panel, model_config, trend_config):
         """Test that channel names are extracted."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.channel_names == ["TV", "Digital"]
 
     def test_control_names(self, simple_panel, model_config, trend_config):
         """Test that control names are extracted."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.control_names == ["Price"]
 
     def test_n_obs(self, simple_panel, model_config, trend_config):
         """Test n_obs property."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.n_obs == 52
 
     def test_n_channels(self, simple_panel, model_config, trend_config):
         """Test n_channels property."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.n_channels == 2
 
     def test_n_controls(self, simple_panel, model_config, trend_config):
         """Test n_controls property."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.n_controls == 1
 
     def test_has_geo_national(self, simple_panel, model_config, trend_config):
         """Test has_geo for national data."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         assert mmm.has_geo is False
 
     def test_has_geo_panel(self, geo_panel, model_config, trend_config):
         """Test has_geo for geo-level data."""
         mmm = BayesianMMM(geo_panel, model_config, trend_config)
-        
+
         assert mmm.has_geo is True
 
     def test_different_trend_types(self, simple_panel, model_config):
         """Test initialization with different trend types."""
-        for trend_type in [TrendType.NONE, TrendType.LINEAR, TrendType.PIECEWISE, TrendType.SPLINE]:
+        for trend_type in [
+            TrendType.NONE,
+            TrendType.LINEAR,
+            TrendType.PIECEWISE,
+            TrendType.SPLINE,
+        ]:
             trend_config = TrendConfig(type=trend_type)
             mmm = BayesianMMM(simple_panel, model_config, trend_config)
-            
+
             assert mmm.trend_config.type == trend_type
 
 
@@ -800,38 +814,45 @@ class TestBayesianMMMInit:
 # BayesianMMM Tests - Model Building
 # =============================================================================
 
+
 class TestBayesianMMMModelBuilding:
     """Tests for BayesianMMM model building."""
 
-    def test_model_property_builds_model(self, simple_panel, model_config, trend_config):
+    def test_model_property_builds_model(
+        self, simple_panel, model_config, trend_config
+    ):
         """Test that accessing model property builds the model."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         model = mmm.model
-        
+
         assert model is not None
         # PyMC model should have free random variables
         assert len(model.free_RVs) > 0
 
-    def test_model_has_expected_variables(self, simple_panel, model_config, trend_config):
+    def test_model_has_expected_variables(
+        self, simple_panel, model_config, trend_config
+    ):
         """Test that model has expected random variables."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
         model = mmm.model
-        
+
         var_names = [v.name for v in model.free_RVs]
-        
+
         # Should have intercept
         assert "intercept" in var_names
         # Should have sigma
         assert "sigma" in var_names
         # Should have beta for each channel
-        assert "beta_TV" in var_names or any("beta" in name and "TV" in name for name in var_names)
+        assert "beta_TV" in var_names or any(
+            "beta" in name and "TV" in name for name in var_names
+        )
 
     def test_model_coords(self, simple_panel, model_config, trend_config):
         """Test that model has correct coordinates."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
         model = mmm.model
-        
+
         assert "obs" in model.coords
         assert "channel" in model.coords
         assert set(model.coords["channel"]) == set(["TV", "Digital"])
@@ -842,14 +863,14 @@ class TestBayesianMMMModelBuilding:
             periods=sample_periods,
             channels=["TV"],
         )
-        
+
         config = MFFConfig(
             kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
             media_channels=[
                 MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD]),
             ],
         )
-        
+
         panel = PanelDataset(
             y=pd.Series(np.random.randn(52)),
             X_media=pd.DataFrame({"TV": np.random.randn(52)}),
@@ -858,10 +879,10 @@ class TestBayesianMMMModelBuilding:
             index=sample_periods,
             config=config,
         )
-        
+
         mmm = BayesianMMM(panel, model_config, trend_config)
         model = mmm.model
-        
+
         # Should still build successfully
         assert model is not None
 
@@ -870,6 +891,7 @@ class TestBayesianMMMModelBuilding:
 # BayesianMMM Tests - Fitting (Slow)
 # =============================================================================
 
+
 @pytest.mark.slow
 class TestBayesianMMMFitting:
     """Tests for BayesianMMM fitting (slow tests requiring MCMC)."""
@@ -877,28 +899,28 @@ class TestBayesianMMMFitting:
     def test_fit_returns_results(self, simple_panel, model_config, trend_config):
         """Test that fit returns MMMResults."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         results = mmm.fit(
             draws=50,
             tune=50,
             chains=1,
             random_seed=42,
         )
-        
+
         assert isinstance(results, MMMResults)
         assert results.trace is not None
 
     def test_fit_diagnostics(self, simple_panel, model_config, trend_config):
         """Test that fit computes diagnostics."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         results = mmm.fit(
             draws=50,
             tune=50,
             chains=2,
             random_seed=42,
         )
-        
+
         assert "divergences" in results.diagnostics
         assert "rhat_max" in results.diagnostics
         assert "ess_bulk_min" in results.diagnostics
@@ -906,14 +928,14 @@ class TestBayesianMMMFitting:
     def test_fit_stores_trace(self, simple_panel, model_config, trend_config):
         """Test that fit stores trace in the model."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         results = mmm.fit(
             draws=50,
             tune=50,
             chains=1,
             random_seed=42,
         )
-        
+
         assert mmm._trace is not None
         assert mmm._trace == results.trace
 
@@ -921,6 +943,7 @@ class TestBayesianMMMFitting:
 # =============================================================================
 # BayesianMMM Tests - Prediction (Slow)
 # =============================================================================
+
 
 @pytest.mark.slow
 class TestBayesianMMMPrediction:
@@ -936,7 +959,7 @@ class TestBayesianMMMPrediction:
     def test_predict_returns_results(self, fitted_mmm):
         """Test that predict returns PredictionResults."""
         results = fitted_mmm.predict()
-        
+
         assert isinstance(results, PredictionResults)
         assert results.y_pred_mean is not None
         assert len(results.y_pred_mean) == fitted_mmm.n_obs
@@ -944,21 +967,24 @@ class TestBayesianMMMPrediction:
     def test_predict_original_scale(self, fitted_mmm):
         """Test prediction in original scale."""
         results = fitted_mmm.predict(return_original_scale=True)
-        
+
         # Predictions should be in original scale (around y_mean)
-        assert np.abs(results.y_pred_mean.mean() - fitted_mmm.y_mean) < 3 * fitted_mmm.y_std
+        assert (
+            np.abs(results.y_pred_mean.mean() - fitted_mmm.y_mean)
+            < 3 * fitted_mmm.y_std
+        )
 
     def test_predict_standardized_scale(self, fitted_mmm):
         """Test prediction in standardized scale."""
         results = fitted_mmm.predict(return_original_scale=False)
-        
+
         # Predictions should be standardized (around 0)
         assert np.abs(results.y_pred_mean.mean()) < 3
 
     def test_predict_hdi(self, fitted_mmm):
         """Test that HDI is computed correctly."""
         results = fitted_mmm.predict(hdi_prob=0.94)
-        
+
         # HDI should bracket the mean
         assert np.all(results.y_pred_hdi_low <= results.y_pred_mean)
         assert np.all(results.y_pred_mean <= results.y_pred_hdi_high)
@@ -968,24 +994,25 @@ class TestBayesianMMMPrediction:
 # BayesianMMM Tests - Prior Predictive
 # =============================================================================
 
+
 class TestBayesianMMMPriorPredictive:
     """Tests for prior predictive sampling."""
 
     def test_sample_prior_predictive(self, simple_panel, model_config, trend_config):
         """Test prior predictive sampling."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         prior = mmm.sample_prior_predictive(samples=50)
-        
+
         assert prior is not None
         assert "prior_predictive" in prior.groups()
 
     def test_prior_predictive_shape(self, simple_panel, model_config, trend_config):
         """Test prior predictive output shape."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         prior = mmm.sample_prior_predictive(samples=100)
-        
+
         y_prior = prior.prior_predictive["y_obs"]
         # Should have shape (chains, samples, n_obs)
         assert y_prior.shape[-1] == mmm.n_obs
@@ -995,6 +1022,7 @@ class TestBayesianMMMPriorPredictive:
 # BayesianMMM Tests - Summary
 # =============================================================================
 
+
 @pytest.mark.slow
 class TestBayesianMMMSummary:
     """Tests for BayesianMMM summary method."""
@@ -1002,7 +1030,7 @@ class TestBayesianMMMSummary:
     def test_summary_requires_fit(self, simple_panel, model_config, trend_config):
         """Test that summary raises error before fit."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         with pytest.raises(ValueError, match="not fitted"):
             mmm.summary()
 
@@ -1010,9 +1038,9 @@ class TestBayesianMMMSummary:
         """Test that summary returns DataFrame."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
         mmm.fit(draws=50, tune=50, chains=1, random_seed=42)
-        
+
         summary = mmm.summary()
-        
+
         assert isinstance(summary, pd.DataFrame)
         assert "mean" in summary.columns
         assert "sd" in summary.columns
@@ -1021,9 +1049,9 @@ class TestBayesianMMMSummary:
         """Test summary with specific var_names."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
         mmm.fit(draws=50, tune=50, chains=1, random_seed=42)
-        
+
         summary = mmm.summary(var_names=["intercept", "sigma"])
-        
+
         assert "intercept" in summary.index
         assert "sigma" in summary.index
 
@@ -1031,6 +1059,7 @@ class TestBayesianMMMSummary:
 # =============================================================================
 # Integration Tests
 # =============================================================================
+
 
 @pytest.mark.slow
 class TestModelIntegration:
@@ -1040,21 +1069,21 @@ class TestModelIntegration:
         """Test complete workflow for national model."""
         # Configure
         trend_config = TrendConfig(type=TrendType.LINEAR)
-        
+
         # Build
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
-        
+
         # Check model structure
         assert mmm.n_obs == 52
         assert mmm.n_channels == 2
-        
+
         # Fit
         results = mmm.fit(draws=50, tune=50, chains=1, random_seed=42)
-        
+
         # Verify results
         assert results.diagnostics["divergences"] >= 0
         # assert results.diagnostics["rhat_max"] > 0
-        
+
         # Predict
         pred = mmm.predict()
         assert len(pred.y_pred_mean) == 52
@@ -1062,16 +1091,16 @@ class TestModelIntegration:
     def test_full_workflow_geo(self, geo_panel, model_config):
         """Test complete workflow for geo-level model."""
         trend_config = TrendConfig(type=TrendType.LINEAR)
-        
+
         mmm = BayesianMMM(geo_panel, model_config, trend_config)
-        
+
         # Check panel structure
         assert mmm.has_geo is True
         assert mmm.n_obs == 52 * 3
-        
+
         # Fit
         results = mmm.fit(draws=50, tune=50, chains=1, random_seed=42)
-        
+
         assert results.trace is not None
 
 

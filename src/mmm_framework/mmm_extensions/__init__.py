@@ -12,11 +12,11 @@ from mmm_extensions import (
     MediatorConfigBuilder,
     OutcomeConfigBuilder,
     VariableSelectionConfigBuilder,
-    
+
     # Factory functions for common configurations
     awareness_mediator,
     sparse_controls,
-    
+
     # Model classes
     NestedMMM,
     CombinedMMM,
@@ -169,7 +169,7 @@ def __getattr__(name: str):
         "compute_inclusion_probabilities",
         "summarize_variable_selection",
     }
-    
+
     # Models module
     models_exports = {
         "BaseExtendedMMM",
@@ -180,15 +180,17 @@ def __getattr__(name: str):
         "CrossEffectSummary",
         "ModelResults",
     }
-    
+
     if name in components_exports:
         from . import components
+
         return getattr(components, name)
-    
+
     if name in models_exports:
         from . import models
+
         return getattr(models, name)
-    
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

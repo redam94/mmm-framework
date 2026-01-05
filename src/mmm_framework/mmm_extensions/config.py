@@ -15,8 +15,10 @@ from typing import Any
 # Enums
 # =============================================================================
 
+
 class MediatorType(str, Enum):
     """Type of mediating variable based on observability."""
+
     FULLY_LATENT = "fully_latent"
     PARTIALLY_OBSERVED = "partially_observed"
     FULLY_OBSERVED = "fully_observed"
@@ -24,6 +26,7 @@ class MediatorType(str, Enum):
 
 class CrossEffectType(str, Enum):
     """Type of cross-product effect."""
+
     CANNIBALIZATION = "cannibalization"
     HALO = "halo"
     SYMMETRIC = "symmetric"
@@ -32,6 +35,7 @@ class CrossEffectType(str, Enum):
 
 class EffectConstraint(str, Enum):
     """Constraint on effect direction."""
+
     NONE = "none"
     POSITIVE = "positive"
     NEGATIVE = "negative"
@@ -39,15 +43,19 @@ class EffectConstraint(str, Enum):
 
 class SaturationType(str, Enum):
     """Type of saturation function."""
+
     LOGISTIC = "logistic"
     HILL = "hill"
+
 
 # =============================================================================
 # Variable Selection Enums
 # =============================================================================
 
+
 class VariableSelectionMethod(str, Enum):
     """Available variable selection methods for control variables."""
+
     NONE = "none"
     REGULARIZED_HORSESHOE = "regularized_horseshoe"
     FINNISH_HORSESHOE = "finnish_horseshoe"
@@ -59,9 +67,11 @@ class VariableSelectionMethod(str, Enum):
 # Base Configuration Classes
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class AdstockConfig:
     """Configuration for adstock transformation."""
+
     l_max: int = 8
     prior_type: str = "beta"
     prior_alpha: float = 2.0
@@ -72,6 +82,7 @@ class AdstockConfig:
 @dataclass(frozen=True)
 class SaturationConfig:
     """Configuration for saturation transformation."""
+
     type: SaturationType = SaturationType.LOGISTIC
     # Logistic params
     lam_prior_alpha: float = 3.0
@@ -86,6 +97,7 @@ class SaturationConfig:
 @dataclass(frozen=True)
 class EffectPriorConfig:
     """Configuration for effect coefficient prior."""
+
     constraint: EffectConstraint = EffectConstraint.NONE
     mu: float = 0.0
     sigma: float = 1.0
@@ -95,37 +107,37 @@ class EffectPriorConfig:
 # Mediator Configuration
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class MediatorConfig:
     """Configuration for a mediating variable."""
+
     name: str
     mediator_type: MediatorType = MediatorType.PARTIALLY_OBSERVED
-    
+
     # Media → Mediator effect prior
     media_effect: EffectPriorConfig = field(
         default_factory=lambda: EffectPriorConfig(
-            constraint=EffectConstraint.POSITIVE,
-            sigma=1.0
+            constraint=EffectConstraint.POSITIVE, sigma=1.0
         )
     )
-    
+
     # Mediator → Outcome effect prior
     outcome_effect: EffectPriorConfig = field(
         default_factory=lambda: EffectPriorConfig(
-            constraint=EffectConstraint.NONE,
-            sigma=1.0
+            constraint=EffectConstraint.NONE, sigma=1.0
         )
     )
-    
+
     # Observation model parameters
     observation_noise_sigma: float = 0.1
-    
+
     # Direct effect (media → outcome, bypassing mediator)
     allow_direct_effect: bool = True
     direct_effect: EffectPriorConfig = field(
         default_factory=lambda: EffectPriorConfig(sigma=0.5)
     )
-    
+
     # Transformations for media → mediator pathway
     apply_adstock: bool = True
     apply_saturation: bool = True
@@ -137,18 +149,20 @@ class MediatorConfig:
 # Outcome Configuration
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class OutcomeConfig:
     """Configuration for an outcome variable."""
+
     name: str
     column: str
-    
+
     # Outcome-specific priors
     intercept_prior_sigma: float = 2.0
     media_effect: EffectPriorConfig = field(
         default_factory=lambda: EffectPriorConfig(sigma=0.5)
     )
-    
+
     # Component inclusion
     include_trend: bool = True
     include_seasonality: bool = True
@@ -158,20 +172,22 @@ class OutcomeConfig:
 # Cross-Effect Configuration
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class CrossEffectConfig:
     """Configuration for cross-product effects."""
+
     source_outcome: str
     target_outcome: str
     effect_type: CrossEffectType = CrossEffectType.CANNIBALIZATION
-    
+
     # Prior
     prior_sigma: float = 0.3
-    
+
     # Modulation
     promotion_modulated: bool = True
     promotion_column: str | None = None
-    
+
     # Temporal structure
     lag: int = 0  # 0 = contemporaneous, 1 = lagged
 
@@ -180,15 +196,17 @@ class CrossEffectConfig:
 # Top-Level Model Configurations
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class NestedModelConfig:
     """Configuration for nested/mediated model."""
+
     mediators: tuple[MediatorConfig, ...] = field(default_factory=tuple)
-    
+
     # Which channels affect which mediators
     # If empty, all channels affect all mediators
     media_to_mediator_map: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    
+
     # Shared vs separate transformations
     share_adstock_across_mediators: bool = True
     share_saturation_across_mediators: bool = False
@@ -197,12 +215,13 @@ class NestedModelConfig:
 @dataclass(frozen=True)
 class MultivariateModelConfig:
     """Configuration for multivariate outcome model."""
+
     outcomes: tuple[OutcomeConfig, ...] = field(default_factory=tuple)
     cross_effects: tuple[CrossEffectConfig, ...] = field(default_factory=tuple)
-    
+
     # Correlation structure
     lkj_eta: float = 2.0
-    
+
     # Parameter sharing
     share_media_adstock: bool = True
     share_media_saturation: bool = False
@@ -213,26 +232,29 @@ class MultivariateModelConfig:
 @dataclass(frozen=True)
 class CombinedModelConfig:
     """Configuration for combined nested + multivariate model."""
+
     nested: NestedModelConfig
     multivariate: MultivariateModelConfig
-    
+
     # Whether mediators affect all outcomes or specific ones
     mediator_to_outcome_map: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
 
 # =============================================================================
 # Variable Selection Configuration Classes
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class HorseshoeConfig:
     """
     Configuration for horseshoe-family priors.
-    
+
     The regularized horseshoe (Piironen & Vehtari, 2017) provides:
     - Strong shrinkage of small effects toward zero
     - Minimal shrinkage of large effects (signal preservation)
     - Regularized slab to prevent unrealistic effect sizes
-    
+
     Parameters
     ----------
     expected_nonzero : int
@@ -251,6 +273,7 @@ class HorseshoeConfig:
         Degrees of freedom for global shrinkage parameter (tau).
         Default 1.0 gives half-Cauchy (standard horseshoe).
     """
+
     expected_nonzero: int = 3
     slab_scale: float = 2.0
     slab_df: float = 4.0
@@ -262,11 +285,11 @@ class HorseshoeConfig:
 class SpikeSlabConfig:
     """
     Configuration for spike-and-slab priors.
-    
+
     The spike-and-slab uses a mixture of two distributions:
     - Spike: concentrated near zero (for excluded variables)
     - Slab: diffuse prior (for included variables)
-    
+
     Parameters
     ----------
     prior_inclusion_prob : float
@@ -284,6 +307,7 @@ class SpikeSlabConfig:
     temperature : float
         Temperature for continuous relaxation (lower = sharper selection).
     """
+
     prior_inclusion_prob: float = 0.5
     spike_scale: float = 0.01
     slab_scale: float = 1.0
@@ -295,10 +319,10 @@ class SpikeSlabConfig:
 class LassoConfig:
     """
     Configuration for Bayesian LASSO prior.
-    
+
     The Bayesian LASSO (Park & Casella, 2008) places Laplace priors
     on coefficients, providing L1-like shrinkage in a Bayesian context.
-    
+
     Parameters
     ----------
     regularization : float
@@ -306,6 +330,7 @@ class LassoConfig:
     adaptive : bool
         If True, use adaptive LASSO with coefficient-specific penalties.
     """
+
     regularization: float = 1.0
     adaptive: bool = False
 
@@ -314,12 +339,12 @@ class LassoConfig:
 class VariableSelectionConfig:
     """
     Complete configuration for control variable selection.
-    
+
     CAUSAL WARNING: Variable selection should ONLY be applied to precision
     control variables---variables that affect the outcome but do NOT affect
     treatment assignment (media spending). Applying selection to confounders
     can introduce severe bias in causal effect estimates.
-    
+
     Parameters
     ----------
     method : VariableSelectionMethod
@@ -336,7 +361,7 @@ class VariableSelectionConfig:
     include_only_variables : tuple[str, ...] | None
         If specified, only apply selection to these variables.
         All others use standard priors.
-    
+
     Examples
     --------
     >>> # Sparse selection with excluded confounders
@@ -346,25 +371,26 @@ class VariableSelectionConfig:
     ...     exclude_variables=("distribution", "price", "competitor_media"),
     ... )
     """
+
     method: VariableSelectionMethod = VariableSelectionMethod.NONE
     horseshoe: HorseshoeConfig = field(default_factory=HorseshoeConfig)
     spike_slab: SpikeSlabConfig = field(default_factory=SpikeSlabConfig)
     lasso: LassoConfig = field(default_factory=LassoConfig)
     exclude_variables: tuple[str, ...] = ()
     include_only_variables: tuple[str, ...] | None = None
-    
+
     def get_selectable_variables(
         self,
         all_control_names: list[str],
     ) -> tuple[list[str], list[str]]:
         """
         Partition control variables into selectable and non-selectable.
-        
+
         Parameters
         ----------
         all_control_names : list[str]
             All control variable names in the model.
-        
+
         Returns
         -------
         tuple[list[str], list[str]]
@@ -373,23 +399,24 @@ class VariableSelectionConfig:
         # Start with all controls or specified subset
         if self.include_only_variables is not None:
             selectable = [
-                c for c in all_control_names 
-                if c in self.include_only_variables
+                c for c in all_control_names if c in self.include_only_variables
             ]
         else:
             selectable = list(all_control_names)
-        
+
         # Remove excluded variables
         selectable = [c for c in selectable if c not in self.exclude_variables]
-        
+
         # Non-selectable = everything else
         non_selectable = [c for c in all_control_names if c not in selectable]
-        
+
         return selectable, non_selectable
+
 
 # =============================================================================
 # Factory Functions for Common Configurations
 # =============================================================================
+
 
 def sparse_selection_config(
     expected_relevant: int = 3,
@@ -397,9 +424,9 @@ def sparse_selection_config(
 ) -> VariableSelectionConfig:
     """
     Create configuration for sparse control selection.
-    
+
     Use when you expect only a few controls are truly relevant.
-    
+
     Parameters
     ----------
     expected_relevant : int
@@ -423,9 +450,9 @@ def dense_selection_config(
 ) -> VariableSelectionConfig:
     """
     Create configuration for dense control selection.
-    
+
     Use when you expect many controls have small effects.
-    
+
     Parameters
     ----------
     regularization : float
@@ -446,9 +473,9 @@ def inclusion_prob_selection_config(
 ) -> VariableSelectionConfig:
     """
     Create configuration with explicit inclusion probabilities.
-    
+
     Use when you want interpretable posterior inclusion probabilities.
-    
+
     Parameters
     ----------
     prior_inclusion : float
