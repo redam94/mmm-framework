@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bayesian Workflow | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
+            font-size: 17px;
+        }
+
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; }
+        
+        .sidebar {
+            position: sticky; top: 5rem; height: calc(100vh - 5rem);
+            overflow-y: auto; padding: 2rem; border-right: 1px solid var(--color-border); background: var(--color-bg);
+        }
+        .sidebar h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: 1rem; margin-top: 1.5rem; }
+        .sidebar h3:first-child { margin-top: 0; }
+        .sidebar-nav { list-style: none; }
+        .sidebar-nav a { display: block; padding: 0.5rem 0; color: var(--color-text-muted); text-decoration: none; font-size: 0.95rem; transition: var(--transition-smooth); border-left: 2px solid transparent; padding-left: 1rem; margin-left: -1rem; }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); }
+        .sidebar-nav .sub-item a { padding-left: 2rem; font-size: 0.9rem; }
+
+        .main-content { padding: 3rem 4rem; max-width: 900px; }
+        .main-content h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; color: var(--color-text); }
+        .main-content h2 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); color: var(--color-text); }
+        .main-content h2:first-of-type { border-top: none; margin-top: 2rem; }
+        .main-content h3 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--color-text); }
+        .main-content h4 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--color-text-muted); }
+        .lead { font-size: 1.15rem; color: var(--color-text-muted); margin-bottom: 2rem; }
+        p { margin-bottom: 1rem; }
+
+        .math-block { background: var(--color-bg-alt); padding: 1.5rem; border-radius: 8px; margin: 1.5rem 0; overflow-x: auto; position: relative; }
+        .equation-label { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); font-size: 0.9rem; }
+
+        pre { background: var(--color-bg-alt); padding: 1.5rem; border-radius: 8px; overflow-x: auto; margin: 1.5rem 0; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+        p code, li code { background: var(--color-bg-alt); padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--color-surface); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm); }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        th { background: var(--color-bg-alt); font-weight: 600; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .definition { background: rgba(106, 143, 168, 0.1); border-left: 4px solid var(--color-accent); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .definition h4 { color: var(--color-accent-dark); margin-top: 0; margin-bottom: 0.5rem; }
+        .warning { background: rgba(201, 112, 103, 0.1); border-left: 4px solid var(--color-danger); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .warning h4 { color: var(--color-danger); margin-top: 0; margin-bottom: 0.5rem; }
+        .note { background: rgba(143, 168, 106, 0.1); border-left: 4px solid var(--color-primary); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .note h4 { color: var(--color-primary-dark); margin-top: 0; margin-bottom: 0.5rem; }
+
+        .workflow-diagram { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; }
+        .dag-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .dag-box .mermaid { background: transparent; margin: 0; padding: 0; }
+        .dag-box .mermaid svg { max-width: 100%; height: auto; }
+
+        .chart-container { width: 100%; height: 350px; margin: 1rem 0; }
+        .chart-container-tall { width: 100%; height: 450px; margin: 1rem 0; }
+        .interactive-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .interactive-box h4 { margin-top: 0; margin-bottom: 1rem; color: var(--color-text); }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .control-row label { font-weight: 500; min-width: 120px; }
+        .control-row input[type="range"] { flex: 1; min-width: 150px; max-width: 300px; }
+        .control-row .value { font-family: 'JetBrains Mono', monospace; background: var(--color-bg-alt); padding: 0.25rem 0.5rem; border-radius: 4px; min-width: 60px; text-align: center; }
+
+        ul, ol { margin: 1rem 0 1rem 1.5rem; }
+        li { margin-bottom: 0.5rem; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0; }
+        .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 2rem 0; }
+        .workflow-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; }
+        .workflow-card h4 { margin-top: 0; margin-bottom: 0.5rem; color: var(--color-primary-dark); }
+        .workflow-card .step-number { font-size: 2rem; font-weight: 700; color: var(--color-primary); opacity: 0.3; position: absolute; top: 0.5rem; right: 1rem; }
+        .workflow-card { position: relative; }
+        
+        .step-badge { display: inline-block; background: var(--color-primary); color: white; font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 12px; margin-bottom: 0.5rem; }
+        .step-badge.check { background: var(--color-accent); }
+        .step-badge.iterate { background: var(--color-warning); }
+        .step-badge.diagnose { background: var(--color-danger); }
+
+        .checklist { list-style: none; margin-left: 0; }
+        .checklist li { padding-left: 1.5rem; position: relative; margin-bottom: 0.75rem; }
+        .checklist li::before { content: "✓"; position: absolute; left: 0; color: var(--color-primary); font-weight: bold; }
+        .checklist li.warning-item::before { content: "⚠"; color: var(--color-warning); }
+        .checklist li.x-item::before { content: "✗"; color: var(--color-danger); }
+
+        @media (max-width: 1024px) {
+            .page-layout { grid-template-columns: 1fr; }
+            .sidebar { position: relative; top: auto; height: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
+            .main-content { padding: 2rem; }
+            .two-col, .three-col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="#" class="active">Bayesian Workflow</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#introduction">Introduction</a></li>
+                <li><a href="#workflow-diagram">The Full Workflow</a></li>
+                <li><a href="#philosophy">Philosophy</a></li>
+            </ul>
+
+            <h3>1. Model Building</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#model-building">Constructing the Model</a></li>
+                <li><a href="#prior-elicitation">Prior Elicitation</a></li>
+                <li><a href="#domain-knowledge">Domain Knowledge</a></li>
+            </ul>
+
+            <h3>2. Prior Predictive</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#prior-predictive">Prior Predictive Checks</a></li>
+                <li><a href="#prior-pushforward">Prior Pushforward</a></li>
+                <li><a href="#weakly-informative">Weakly Informative Priors</a></li>
+            </ul>
+
+            <h3>3. Fitting</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#model-fitting">Computational Fitting</a></li>
+                <li><a href="#diagnostics">MCMC Diagnostics</a></li>
+                <li><a href="#divergences">Divergences & Pathologies</a></li>
+            </ul>
+
+            <h3>4. Posterior Predictive</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#posterior-predictive">Posterior Predictive Checks</a></li>
+                <li><a href="#calibration">Calibration</a></li>
+                <li><a href="#loo-cv">Leave-One-Out CV</a></li>
+            </ul>
+
+            <h3>5. Model Comparison</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#model-comparison">Comparing Models</a></li>
+                <li><a href="#elpd">ELPD & LOO-CV</a></li>
+                <li><a href="#model-topology">Model Topology</a></li>
+            </ul>
+
+            <h3>6. Sensitivity</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#sensitivity">Sensitivity Analysis</a></li>
+                <li><a href="#prior-sensitivity">Prior Sensitivity</a></li>
+                <li><a href="#data-influence">Data Influence</a></li>
+            </ul>
+
+            <h3>7. Iteration</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#iteration">Model Expansion</a></li>
+                <li><a href="#when-to-stop">When to Stop</a></li>
+            </ul>
+
+            <h3>MMM-Specific</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#mmm-workflow">MMM Workflow</a></li>
+                <li><a href="#mmm-priors">MMM Prior Guidance</a></li>
+                <li><a href="#mmm-validation">Validation Strategies</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Bayesian Workflow</h1>
+            <p class="lead">
+                A principled approach to building, checking, and refining Bayesian models.
+                This guide follows the framework established by Gelman et al. (2020) and Gabry et al. (2019),
+                adapted for Marketing Mix Models with practical PyMC implementations.
+            </p>
+
+            <div class="note">
+                <h4>Key Reference</h4>
+                <p style="margin-bottom: 0;">
+                    This workflow is based on <em>Bayesian Workflow</em> (Gelman et al., 2020) and 
+                    <em>Visualization in Bayesian Workflow</em> (Gabry et al., 2019, JRSS-A). 
+                    The core insight: Bayesian analysis is <strong>iterative</strong>—building, fitting, checking, 
+                    and expanding models in a principled cycle.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="introduction">Introduction</h2>
+            
+            <p>
+                Bayesian data analysis is about more than computing a posterior distribution. It is an 
+                <strong>iterative process</strong> of model building, inference, model checking, and model expansion. 
+                Each step informs the next, and visualization is indispensable at every stage.
+            </p>
+
+            <p>
+                For Marketing Mix Models, this workflow is especially important because:
+            </p>
+            <ul>
+                <li><strong>Identification challenges:</strong> MMMs often have weak identification, making prior choice critical</li>
+                <li><strong>Domain knowledge is rich:</strong> We have strong beliefs about plausible effect sizes and shapes</li>
+                <li><strong>Stakes are high:</strong> Budget allocation decisions depend on getting the model right</li>
+                <li><strong>Overfitting is tempting:</strong> With many channels and controls, specification shopping is easy</li>
+            </ul>
+
+            <!-- ================================================================== -->
+            <h2 id="workflow-diagram">The Full Workflow</h2>
+            
+            <div class="workflow-diagram">
+                <div class="dag-box">
+                    <div class="mermaid">
+                    flowchart TB
+                        subgraph Build["1. Model Building"]
+                            A1[Define Generative Model]
+                            A2[Elicit Prior Distributions]
+                            A3[Encode Domain Knowledge]
+                        end
+                        
+                        subgraph Prior["2. Prior Predictive"]
+                            B1[Sample from Priors]
+                            B2[Generate Fake Data]
+                            B3[Check Plausibility]
+                        end
+                        
+                        subgraph Fit["3. Computational Fitting"]
+                            C1[Run MCMC Sampler]
+                            C2[Check Diagnostics]
+                            C3[Address Pathologies]
+                        end
+                        
+                        subgraph Post["4. Posterior Predictive"]
+                            D1[Generate Replicated Data]
+                            D2[Compare to Observed]
+                            D3[Check Calibration]
+                        end
+                        
+                        subgraph Compare["5. Model Comparison"]
+                            E1[Compute LOO-CV]
+                            E2[Compare ELPD]
+                            E3[Stack or Select]
+                        end
+                        
+                        subgraph Sense["6. Sensitivity Analysis"]
+                            F1[Vary Priors]
+                            F2[Check Data Influence]
+                            F3[Assess Robustness]
+                        end
+                        
+                        Build --> Prior
+                        Prior -->|Priors implausible| Build
+                        Prior -->|Priors ok| Fit
+                        Fit -->|Diagnostics fail| Build
+                        Fit -->|Diagnostics ok| Post
+                        Post -->|Model fails| Iterate
+                        Post -->|Model ok| Compare
+                        Compare --> Sense
+                        Sense --> Iterate
+                        
+                        subgraph Iterate["7. Model Expansion"]
+                            G1[Add Complexity]
+                            G2[Refine Structure]
+                        end
+                        
+                        Iterate -->|New model| Build
+                        
+                        style Build fill:#f0f7e6,stroke:#6d8a4a
+                        style Prior fill:#e6f0f7,stroke:#4a6d8a
+                        style Fit fill:#f7f0e6,stroke:#8a6d4a
+                        style Post fill:#e6f7f0,stroke:#4a8a6d
+                        style Compare fill:#f0e6f7,stroke:#6d4a8a
+                        style Sense fill:#f7e6f0,stroke:#8a4a6d
+                        style Iterate fill:#f7f7e6,stroke:#8a8a4a
+                    </div>
+                </div>
+            </div>
+
+            <p>
+                The workflow is not strictly linear. At each stage, we may discover problems that send us back
+                to an earlier stage. This is normal and expected—the goal is to build understanding, not just 
+                to produce a single "correct" answer.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="philosophy">Philosophy</h2>
+
+            <div class="definition">
+                <h4>The Generative Model Perspective</h4>
+                <p style="margin-bottom: 0;">
+                    A Bayesian model is a <strong>generative model</strong>—a complete description of how data 
+                    could have been generated. This includes the prior \(p(\theta)\), the likelihood \(p(y|\theta)\), 
+                    and together they define the joint distribution \(p(y, \theta) = p(y|\theta)p(\theta)\).
+                    If you can't simulate data from your model, you don't fully understand it.
+                </p>
+            </div>
+
+            <p>
+                The workflow emphasizes several key principles:
+            </p>
+
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge">Principle</span>
+                    <h4>Prediction First</h4>
+                    <p>
+                        Check models by their predictions—both before seeing data (prior predictive) and 
+                        after fitting (posterior predictive). If predictions don't make sense, the model doesn't make sense.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge">Principle</span>
+                    <h4>Iterate Honestly</h4>
+                    <p>
+                        Model building is iterative, but changes should be driven by <em>scientific reasoning</em>,
+                        not by "trying things until the coefficients look right." Document every change.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge">Principle</span>
+                    <h4>Embrace Uncertainty</h4>
+                    <p>
+                        Report full posterior distributions, not just point estimates. Uncertainty is information—
+                        wide posteriors tell you the data can't distinguish between hypotheses.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="model-building">1. Model Building</h2>
+
+            <p>
+                Model building starts with a <strong>generative story</strong>: how do we believe the data were generated?
+                For an MMM, this story includes the baseline sales process, the effect of marketing activities, 
+                and the noise structure.
+            </p>
+
+            <h3 id="prior-elicitation">Prior Elicitation</h3>
+
+            <p>
+                Priors encode domain knowledge <em>before</em> seeing the data. In MMM, we often have strong beliefs:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Domain Knowledge</th>
+                        <th>Prior Implication</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Media effects \(\beta\)</td>
+                        <td>Advertising generally has positive, diminishing returns</td>
+                        <td>Positive support, shrinkage toward zero</td>
+                    </tr>
+                    <tr>
+                        <td>Adstock \(\alpha\)</td>
+                        <td>Effects decay over days/weeks, rarely months</td>
+                        <td>Beta prior concentrated in [0.3, 0.8]</td>
+                    </tr>
+                    <tr>
+                        <td>Saturation \(\lambda\)</td>
+                        <td>Diminishing returns set in at realistic spend levels</td>
+                        <td>Prior centered on typical campaign spend</td>
+                    </tr>
+                    <tr>
+                        <td>Seasonality amplitude</td>
+                        <td>Sales vary by season but not 10x</td>
+                        <td>Constrained to plausible range</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 id="domain-knowledge">Encoding Domain Knowledge</h3>
+
+            <p>
+                The prior is the formal mechanism for encoding domain knowledge. Consider the saturation parameter 
+                \(\lambda\) in a logistic saturation function:
+            </p>
+
+            <div class="math-block">
+                $$f(x; \lambda) = \frac{1}{1 + e^{-\lambda x}} - 0.5$$
+                <span class="equation-label">(saturation)</span>
+            </div>
+
+            <p>
+                If we know that saturation typically occurs around 1M USD spend, we can set a prior on \(\lambda\) such that
+                \(f(1M)\) has most of its mass in a plausible range (e.g., 60-90% of maximum effect).
+            </p>
+
+            <pre><code class="python"># Prior on saturation parameter
+# If typical_spend = 1M and we want 70% saturation at typical spend:
+# solve: 0.7 = 1/(1 + exp(-lambda * 1M))
+# lambda ≈ 0.85 / 1M
+
+import pymc as pm
+
+with pm.Model():
+    # Lognormal prior on lambda, centered on expected value
+    lam = pm.Lognormal(
+        "lambda", 
+        mu=np.log(0.85 / typical_spend), 
+        sigma=0.5  # allows factor of ~3x variation
+    )</code></pre>
+
+            <!-- ================================================================== -->
+            <h2 id="prior-predictive">2. Prior Predictive Checks</h2>
+
+            <p>
+                Before fitting the model to data, we sample from the <strong>prior predictive distribution</strong>:
+            </p>
+
+            <div class="math-block">
+                $$p(y^{\text{rep}}) = \int p(y^{\text{rep}}|\theta) \, p(\theta) \, d\theta$$
+                <span class="equation-label">(prior predictive)</span>
+            </div>
+
+            <p>
+                This generates fake datasets from the model using only the priors—no observed data involved.
+                The question is: <em>could the observed data plausibly have come from this generative process?</em>
+            </p>
+
+            <h3 id="prior-pushforward">Prior Pushforward</h3>
+
+            <div class="definition">
+                <h4>Prior Pushforward</h4>
+                <p style="margin-bottom: 0;">
+                    The <strong>prior pushforward</strong> is the distribution of derived quantities (predictions, effect sizes, ROI)
+                    implied by the prior. Even if individual parameter priors seem reasonable, their combination might imply
+                    absurd predictions. Checking the pushforward catches these problems.
+                </p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Interactive: Prior Predictive Check</h4>
+                <p>Adjust the prior parameters and see how they affect the prior predictive distribution of sales.</p>
+                <div class="control-row">
+                    <label>Media Effect σ:</label>
+                    <input type="range" id="priorSigma" min="0.1" max="2" step="0.1" value="0.5">
+                    <span class="value" id="priorSigmaVal">0.5</span>
+                </div>
+                <div class="control-row">
+                    <label>Intercept σ:</label>
+                    <input type="range" id="interceptSigma" min="0.1" max="1" step="0.1" value="0.3">
+                    <span class="value" id="interceptSigmaVal">0.3</span>
+                </div>
+                <div class="chart-container" id="priorPredictiveChart"></div>
+            </div>
+
+            <h3 id="weakly-informative">Weakly Informative Priors</h3>
+
+            <p>
+                A prior is <strong>weakly informative</strong> if the prior predictive distribution:
+            </p>
+            <ul class="checklist">
+                <li>Has mass on plausible datasets (including extreme but possible cases)</li>
+                <li>Has <em>no</em> mass on impossible datasets (negative sales, infinite values)</li>
+                <li>Is broader than the observed data (not cherry-picked to match)</li>
+            </ul>
+
+            <div class="warning">
+                <h4>Common Mistake: Flat Priors</h4>
+                <p style="margin-bottom: 0;">
+                    "Non-informative" or flat priors on parameters often imply <em>highly informative</em> priors 
+                    on predictions. For example, flat priors on many regression coefficients imply that 
+                    extreme predictions are just as likely as moderate ones. Always check the prior pushforward.
+                </p>
+            </div>
+
+            <pre><code class="python"># Prior predictive check in PyMC
+with model:
+    prior_pred = pm.sample_prior_predictive(samples=500)
+
+# Visualize: do these look like plausible sales data?
+fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+for i, ax in enumerate(axes.flat):
+    ax.plot(prior_pred.prior_predictive["y_obs"][0, i])
+    ax.set_title(f"Draw {i+1}")
+plt.suptitle("Prior Predictive Samples")
+plt.tight_layout()</code></pre>
+
+            <!-- ================================================================== -->
+            <h2 id="model-fitting">3. Computational Fitting</h2>
+
+            <p>
+                Once satisfied with the prior predictive, we fit the model using MCMC (typically NUTS in PyMC).
+                The goal is to obtain samples from the posterior:
+            </p>
+
+            <div class="math-block">
+                $$p(\theta|y) = \frac{p(y|\theta)p(\theta)}{p(y)} \propto p(y|\theta)p(\theta)$$
+                <span class="equation-label">(Bayes' theorem)</span>
+            </div>
+
+            <h3 id="diagnostics">MCMC Diagnostics</h3>
+
+            <p>
+                MCMC produces <em>samples</em> from the posterior, not the posterior itself. We must verify that the
+                samples are reliable:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Diagnostic</th>
+                        <th>Target</th>
+                        <th>What it Checks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>\(\hat{R}\) (R-hat)</td>
+                        <td>&lt; 1.01</td>
+                        <td>Chains have converged to same distribution</td>
+                    </tr>
+                    <tr>
+                        <td>ESS (bulk)</td>
+                        <td>&gt; 400</td>
+                        <td>Enough independent samples for central tendency</td>
+                    </tr>
+                    <tr>
+                        <td>ESS (tail)</td>
+                        <td>&gt; 400</td>
+                        <td>Enough independent samples for tail quantiles</td>
+                    </tr>
+                    <tr>
+                        <td>Divergences</td>
+                        <td>0</td>
+                        <td>Sampler exploring geometry correctly</td>
+                    </tr>
+                    <tr>
+                        <td>Tree depth</td>
+                        <td>&lt; max</td>
+                        <td>Sampler not struggling with curvature</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="interactive-box">
+                <h4>Interactive: Trace Plot Diagnostics</h4>
+                <p>Good chains look like "hairy caterpillars"—stationary, well-mixed, and indistinguishable.</p>
+                <div class="chart-container-tall" id="tracePlotChart"></div>
+            </div>
+
+            <h3 id="divergences">Divergences and Pathologies</h3>
+
+            <div class="warning">
+                <h4>Divergences Indicate Geometry Problems</h4>
+                <p style="margin-bottom: 0;">
+                    Divergent transitions mean the sampler encountered regions of high curvature it couldn't explore
+                    reliably. Common causes: non-centered parameterizations needed, funnel geometries, 
+                    multimodality, or model misspecification. <strong>Never ignore divergences.</strong>
+                </p>
+            </div>
+
+            <p>Solutions to common MCMC problems:</p>
+
+            <div class="two-col">
+                <div class="workflow-card">
+                    <span class="step-badge diagnose">Problem</span>
+                    <h4>Divergences</h4>
+                    <ul>
+                        <li>Increase <code>target_accept</code> (0.9 → 0.95 → 0.99)</li>
+                        <li>Use non-centered parameterization for hierarchical models</li>
+                        <li>Reparameterize to reduce posterior curvature</li>
+                        <li>Check for multimodality or unidentified parameters</li>
+                    </ul>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge diagnose">Problem</span>
+                    <h4>Low ESS / High R-hat</h4>
+                    <ul>
+                        <li>Run more iterations</li>
+                        <li>Check for slow-mixing parameters (treedepth warnings)</li>
+                        <li>Improve initialization</li>
+                        <li>Consider tighter priors if identification is weak</li>
+                    </ul>
+                </div>
+            </div>
+
+            <pre><code class="python"># Standard fitting with diagnostics
+with model:
+    trace = pm.sample(
+        draws=2000,
+        tune=2000,
+        chains=4,
+        target_accept=0.95,
+        random_seed=42,
+        return_inferencedata=True
+    )
+
+# Check diagnostics
+print(az.summary(trace, var_names=["beta", "alpha", "lambda"]))
+# Look for: R-hat < 1.01, ESS > 400, no divergences</code></pre>
+
+            <!-- ================================================================== -->
+            <h2 id="posterior-predictive">4. Posterior Predictive Checks</h2>
+
+            <p>
+                After fitting, we generate data from the <strong>posterior predictive distribution</strong>:
+            </p>
+
+            <div class="math-block">
+                $$p(y^{\text{rep}}|y) = \int p(y^{\text{rep}}|\theta) \, p(\theta|y) \, d\theta$$
+                <span class="equation-label">(posterior predictive)</span>
+            </div>
+
+            <p>
+                If the model is good, replicated data \(y^{\text{rep}}\) should look like the observed data \(y\).
+                Systematic differences indicate model misspecification.
+            </p>
+
+            <div class="interactive-box">
+                <h4>Interactive: Posterior Predictive Check</h4>
+                <p>Compare observed data (dark line) to posterior predictive draws (light lines).</p>
+                <div class="chart-container" id="posteriorPredictiveChart"></div>
+            </div>
+
+            <h3 id="calibration">Calibration</h3>
+
+            <p>
+                A model is <strong>calibrated</strong> if its stated uncertainty is accurate. For example, 
+                90% prediction intervals should contain the true value 90% of the time.
+            </p>
+
+            <div class="definition">
+                <h4>Probability Integral Transform (PIT)</h4>
+                <p style="margin-bottom: 0;">
+                    If the posterior predictive is calibrated, the PIT values 
+                    \(F_{y^{\text{rep}}}(y_{\text{obs}})\)—the CDF of the predictive distribution evaluated 
+                    at the observed value—should be uniformly distributed. Deviations from uniformity indicate 
+                    calibration problems.
+                </p>
+            </div>
+
+            <h3 id="loo-cv">Leave-One-Out Cross-Validation</h3>
+
+            <p>
+                LOO-CV estimates out-of-sample predictive performance without actually refitting the model
+                for each held-out observation. PSIS-LOO uses importance sampling to approximate LOO efficiently:
+            </p>
+
+            <pre><code class="python"># Compute LOO
+loo = az.loo(trace, pointwise=True)
+print(loo)
+
+# Check Pareto k diagnostics
+# k > 0.7: that observation is highly influential, LOO approximation unreliable
+high_k = np.where(loo.pareto_k > 0.7)[0]
+if len(high_k) > 0:
+    print(f"Warning: {len(high_k)} observations with k > 0.7")</code></pre>
+
+            <!-- ================================================================== -->
+            <h2 id="model-comparison">5. Model Comparison</h2>
+
+            <p>
+                When we have multiple candidate models, we compare them using their expected predictive performance.
+                The key quantity is the <strong>expected log pointwise predictive density (ELPD)</strong>:
+            </p>
+
+            <div class="math-block">
+                $$\text{ELPD} = \sum_{i=1}^n \log p(y_i | y_{-i})$$
+                <span class="equation-label">(leave-one-out ELPD)</span>
+            </div>
+
+            <h3 id="elpd">ELPD and LOO-CV</h3>
+
+            <p>
+                Higher ELPD is better—it means the model makes better predictions on held-out data.
+                The standard error of the ELPD difference tells us whether the difference is meaningful.
+            </p>
+
+            <pre><code class="python"># Compare multiple models
+comparison = az.compare({
+    "standard": trace_standard,
+    "nested": trace_nested,
+    "hierarchical": trace_hierarchical
+})
+print(comparison)
+
+# Visualize comparison
+az.plot_compare(comparison)</code></pre>
+
+            <div class="note">
+                <h4>Model Weights</h4>
+                <p style="margin-bottom: 0;">
+                    Rather than selecting a single "best" model, consider <strong>stacking weights</strong>
+                    that combine models based on their predictive performance. This accounts for model uncertainty
+                    and often gives better predictions than any single model.
+                </p>
+            </div>
+
+            <h3 id="model-topology">Model Topology</h3>
+
+            <p>
+                Gelman et al. (2020) recommend thinking of models as a <strong>topology</strong>—a network of related
+                models that can be expanded or simplified. Each model comparison teaches us something about the structure
+                of the problem. Below is the full model topology for the MMM Framework:
+            </p>
+
+            <div class="dag-box">
+                <div class="mermaid">
+                flowchart TB
+                    subgraph Core["Core Model Types"]
+                        STD[Standard MMM<br/><small>Single outcome</small>]
+                        NEST[Nested MMM<br/><small>+ Mediators</small>]
+                        MV[Multivariate MMM<br/><small>+ Cross-effects</small>]
+                        COMB[Combined MMM<br/><small>Mediators + Cross-effects</small>]
+                    end
+                    
+                    subgraph Hier["Hierarchical Extensions"]
+                        H_INT[+ Random Intercepts<br/><small>Geo-level baseline</small>]
+                        H_SLOPE[+ Random Slopes<br/><small>Geo-level response</small>]
+                        H_FULL[Full Hierarchical<br/><small>Partial pooling</small>]
+                    end
+                    
+                    subgraph VarSel["Variable Selection"]
+                        VS_HS[Regularized Horseshoe<br/><small>Sparse precision controls</small>]
+                        VS_SS[Spike-and-Slab<br/><small>Discrete selection</small>]
+                        VS_BL[Bayesian LASSO<br/><small>L1 regularization</small>]
+                    end
+                    
+                    STD --> NEST
+                    STD --> MV
+                    NEST --> COMB
+                    MV --> COMB
+                    
+                    STD --> H_INT
+                    NEST --> H_INT
+                    MV --> H_INT
+                    COMB --> H_INT
+                    
+                    H_INT --> H_SLOPE
+                    H_SLOPE --> H_FULL
+                    
+                    H_FULL -.-> VS_HS
+                    H_FULL -.-> VS_SS
+                    H_FULL -.-> VS_BL
+                    
+                    style STD fill:#f0f7e6,stroke:#6d8a4a
+                    style NEST fill:#e6f0f7,stroke:#4a6d8a
+                    style MV fill:#f7f0e6,stroke:#8a6d4a
+                    style COMB fill:#f0e6f7,stroke:#6d4a8a
+                    style H_FULL fill:#e6f7f0,stroke:#4a8a6d
+                    style VS_HS fill:#f7e6e6,stroke:#8a4a4a
+                </div>
+            </div>
+
+            <h4>Model Selection Guide</h4>
+            <table>
+                <thead>
+                    <tr><th>Scenario</th><th>Model Choice</th><th>Key Considerations</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Single outcome, national data</td>
+                        <td><strong>Standard MMM</strong></td>
+                        <td>Start here; acknowledge wide uncertainty</td>
+                    </tr>
+                    <tr>
+                        <td>Upper-funnel metrics available</td>
+                        <td><strong>Nested MMM</strong></td>
+                        <td>Awareness/consideration as mediators; direct/indirect decomposition</td>
+                    </tr>
+                    <tr>
+                        <td>Product portfolio effects</td>
+                        <td><strong>Multivariate MMM</strong></td>
+                        <td>Cannibalization, halo effects; correlated errors via LKJ</td>
+                    </tr>
+                    <tr>
+                        <td>Full funnel + portfolio</td>
+                        <td><strong>Combined MMM</strong></td>
+                        <td>Highest complexity; requires strong identification</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-geo, national media</td>
+                        <td><strong>+ Random Intercepts</strong></td>
+                        <td>Geo baselines; <em>not</em> geo-level media response</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-geo, regional media</td>
+                        <td><strong>+ Random Slopes</strong></td>
+                        <td>Geo-level variation in media creates identification</td>
+                    </tr>
+                    <tr>
+                        <td>Many precision controls</td>
+                        <td><strong>+ Variable Selection</strong></td>
+                        <td>Horseshoe/spike-slab on controls <em>only</em>; never on media</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning">
+                <h4>Variable Selection Caution</h4>
+                <p style="margin-bottom: 0;">
+                    Variable selection priors (horseshoe, spike-and-slab) should <strong>only</strong> be applied 
+                    to precision control variables—not to confounders, mediators, or media channels. Applying 
+                    selection priors to causal variables can severely bias effect estimates. See the 
+                    <a href="variable-selection.html">Variable Selection Guide</a> for details.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="sensitivity">6. Sensitivity Analysis</h2>
+
+            <p>
+                How much do our conclusions depend on our modeling choices? Sensitivity analysis systematically
+                varies assumptions to assess robustness.
+            </p>
+
+            <h3 id="prior-sensitivity">Prior Sensitivity</h3>
+
+            <p>
+                Refit the model with different priors and compare posteriors. If conclusions change dramatically
+                with reasonable prior variations, the data are not strongly informative about those parameters.
+            </p>
+
+            <div class="interactive-box">
+                <h4>Interactive: Prior Sensitivity</h4>
+                <p>See how the posterior changes as the prior becomes more or less informative.</p>
+                <div class="control-row">
+                    <label>Prior SD:</label>
+                    <input type="range" id="priorSD" min="0.1" max="2" step="0.1" value="0.5">
+                    <span class="value" id="priorSDVal">0.5</span>
+                </div>
+                <div class="chart-container" id="sensitivityChart"></div>
+            </div>
+
+            <h3 id="data-influence">Data Influence</h3>
+
+            <p>
+                The Pareto k diagnostics from LOO-CV identify influential observations. High-influence observations 
+                warrant investigation:
+            </p>
+
+            <ul>
+                <li><strong>Are they outliers?</strong> Consider robust likelihoods (Student-t)</li>
+                <li><strong>Are they unusual periods?</strong> (Promotions, COVID, competitive activity)</li>
+                <li><strong>Are they data errors?</strong> Check the raw data</li>
+            </ul>
+
+            <!-- ================================================================== -->
+            <h2 id="iteration">7. Model Expansion</h2>
+
+            <p>
+                Based on posterior predictive checks and domain understanding, we iteratively expand the model
+                to address deficiencies. The MMM Framework provides structured expansion paths:
+            </p>
+
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge iterate">Standard → Nested</span>
+                    <h4>Add Mediators</h4>
+                    <p>
+                        When upper-funnel metrics (awareness, consideration) are available, add them as mediators
+                        to decompose effects into direct and indirect pathways.
+                    </p>
+                    <ul>
+                        <li>Fully observed: complete time series</li>
+                        <li>Partially observed: sparse survey data</li>
+                        <li>Fully latent: requires strong priors</li>
+                    </ul>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge iterate">Standard → Multivariate</span>
+                    <h4>Add Cross-Effects</h4>
+                    <p>
+                        When modeling product portfolios, add cross-effects to capture cannibalization or 
+                        halo effects between outcomes.
+                    </p>
+                    <ul>
+                        <li>Cannibalization: negative cross-effect</li>
+                        <li>Halo: positive cross-effect</li>
+                        <li>LKJ prior on error correlations</li>
+                    </ul>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge iterate">Any → Hierarchical</span>
+                    <h4>Add Partial Pooling</h4>
+                    <p>
+                        With multi-geo data, add hierarchical structure to borrow strength across regions 
+                        while capturing heterogeneity.
+                    </p>
+                    <ul>
+                        <li>Random intercepts: geo baselines</li>
+                        <li>Random slopes: requires geo media variation</li>
+                        <li>Non-centered for divergence control</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="two-col">
+                <div class="workflow-card">
+                    <span class="step-badge iterate">Expansion</span>
+                    <h4>Improve Time Structure</h4>
+                    <p>
+                        If residuals are autocorrelated, add more flexible trend/seasonality:
+                    </p>
+                    <ul>
+                        <li>Piecewise linear trend with changepoints</li>
+                        <li>Gaussian Process trend for smooth variation</li>
+                        <li>Fourier seasonality with more harmonics</li>
+                        <li>Holiday/event effects</li>
+                    </ul>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge iterate">Expansion</span>
+                    <h4>Refine Transformations</h4>
+                    <p>
+                        If saturation/carryover curves don't match patterns:
+                    </p>
+                    <ul>
+                        <li>Logistic vs. Hill saturation functions</li>
+                        <li>Geometric vs. Weibull adstock decay</li>
+                        <li>Channel-specific vs. shared parameters</li>
+                        <li>Time-varying saturation for mature brands</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h4>Expansion Decision Tree</h4>
+            <div class="dag-box">
+                <div class="mermaid">
+                flowchart TD
+                    A[Posterior Predictive Check] --> B{Systematic<br/>Residual Pattern?}
+                    B -->|No| C[Model OK]
+                    B -->|Yes| D{What type?}
+                    
+                    D -->|Autocorrelation| E[Add Trend/AR]
+                    D -->|Geo heterogeneity| F[Add Hierarchical]
+                    D -->|Cross-outcome| G[Add Multivariate]
+                    D -->|Mediation signal| H[Add Nested]
+                    
+                    E --> I{Improved ELPD?}
+                    F --> I
+                    G --> I
+                    H --> I
+                    
+                    I -->|Yes, > 1 SE| J[Accept Expansion]
+                    I -->|No| K[Reject / Investigate]
+                    
+                    J --> A
+                    K --> L[Check Priors/<br/>Data Quality]
+                    
+                    style C fill:#e6f7e6,stroke:#4a8a4a
+                    style J fill:#e6f0f7,stroke:#4a6d8a
+                    style K fill:#f7e6e6,stroke:#8a4a4a
+                </div>
+            </div>
+
+            <h3 id="when-to-stop">When to Stop</h3>
+
+            <p>
+                Model expansion has diminishing returns. Stop when:
+            </p>
+
+            <ul class="checklist">
+                <li>Posterior predictive checks show no systematic problems</li>
+                <li>Additional complexity doesn't improve ELPD beyond standard error</li>
+                <li>The model answers the scientific questions with adequate precision</li>
+                <li class="warning-item">You've started "shopping" for specifications that give desired answers</li>
+            </ul>
+
+            <div class="warning">
+                <h4>Avoid Specification Shopping</h4>
+                <p style="margin-bottom: 0;">
+                    If you try many models and only report the one with "reasonable" coefficients, you're 
+                    specification shopping. This invalidates uncertainty quantification and leads to overconfident
+                    conclusions. Document all models tried and all decisions made.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="mmm-workflow">MMM-Specific Workflow</h2>
+
+            <p>
+                Applying the Bayesian workflow to Marketing Mix Models involves specific considerations
+                for the MMM Framework's model classes:
+            </p>
+
+            <h3>Workflow by Model Type</h3>
+            
+            <div class="interactive-box">
+                <h4>Standard → Nested Workflow</h4>
+                <ol>
+                    <li><strong>Fit Standard MMM first</strong> — Establish baseline effects and diagnostics</li>
+                    <li><strong>Check mediator data</strong> — Is it fully observed, sparse, or absent?</li>
+                    <li><strong>Configure mediator type</strong> — <code>FULLY_OBSERVED</code>, <code>PARTIALLY_OBSERVED</code>, or <code>FULLY_LATENT</code></li>
+                    <li><strong>Map channels to mediators</strong> — Not all channels need to affect all mediators</li>
+                    <li><strong>Compare ELPD</strong> — Does the nested model improve predictions?</li>
+                    <li><strong>Interpret decomposition</strong> — Direct vs. indirect effects, proportion mediated</li>
+                </ol>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Standard → Multivariate Workflow</h4>
+                <ol>
+                    <li><strong>Fit separate Standard MMMs</strong> — One per outcome, check individual diagnostics</li>
+                    <li><strong>Check residual correlations</strong> — Are outcome residuals correlated?</li>
+                    <li><strong>Configure outcomes</strong> — <code>OutcomeConfig</code> for each with separate/shared transformations</li>
+                    <li><strong>Add cross-effects</strong> — <code>CANNIBALIZATION</code>, <code>HALO</code>, or <code>SPILLOVER</code></li>
+                    <li><strong>Set LKJ prior</strong> — η=1 (uniform), η=2 (shrink toward independence)</li>
+                    <li><strong>Interpret cross-effects</strong> — Effect of outcome A on outcome B</li>
+                </ol>
+            </div>
+
+            <h3 id="mmm-priors">MMM Prior Guidance</h3>
+
+            <p>
+                For each major parameter class in the framework, here is guidance on setting informative priors:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Framework Default</th>
+                        <th>Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Media β (log scale)</td>
+                        <td><code>HalfNormal(σ=0.5)</code></td>
+                        <td>Positive effects; ~5% lift per unit at median</td>
+                    </tr>
+                    <tr>
+                        <td>Adstock α</td>
+                        <td><code>Beta(α=3, β=3)</code></td>
+                        <td>Centered at 0.5; most mass in [0.2, 0.8]</td>
+                    </tr>
+                    <tr>
+                        <td>Saturation λ (logistic)</td>
+                        <td><code>Gamma(α=2, β=1/x̄)</code></td>
+                        <td>Scaled to mean spend; 50% saturation at typical level</td>
+                    </tr>
+                    <tr>
+                        <td>Mediator→Outcome γ</td>
+                        <td><code>HalfNormal(σ=1)</code></td>
+                        <td>Positive awareness→sales; scale depends on units</td>
+                    </tr>
+                    <tr>
+                        <td>Cross-effect (cannib.)</td>
+                        <td><code>HalfNormal(σ=0.3)</code></td>
+                        <td>Constrained negative; typically small relative to main effects</td>
+                    </tr>
+                    <tr>
+                        <td>Hierarchical σ (geo)</td>
+                        <td><code>HalfNormal(σ=0.5)</code></td>
+                        <td>Prior on geo-level variation; weakly informative</td>
+                    </tr>
+                    <tr>
+                        <td>LKJ η (correlations)</td>
+                        <td><code>η=2.0</code></td>
+                        <td>Mild shrinkage toward independence; η=1 is uniform</td>
+                    </tr>
+                    <tr>
+                        <td>Horseshoe τ (global)</td>
+                        <td><code>D₀/(D-D₀) · σ/√n</code></td>
+                        <td>Calibrated by expected # nonzero (Piironen & Vehtari, 2017)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <pre><code class="python"># Example: Configure priors in the framework
+from mmm_framework import ModelConfigBuilder, AdstockConfigBuilder, SaturationConfigBuilder
+
+config = (
+    ModelConfigBuilder()
+    .with_adstock(
+        AdstockConfigBuilder()
+        .with_type("geometric")
+        .with_alpha_prior("Beta", alpha=3, beta=3)  # Centered at 0.5
+        .build()
+    )
+    .with_saturation(
+        SaturationConfigBuilder()
+        .with_type("logistic")
+        .with_lam_prior("Gamma", alpha=2, beta=1/mean_spend)  # Scale to data
+        .build()
+    )
+    .with_media_prior("HalfNormal", sigma=0.5)  # Positive effects
+    .build()
+)</code></pre>
+
+            <h3 id="mmm-validation">Validation Strategies</h3>
+
+            <p>
+                MMM validation goes beyond statistical checks. The framework supports multiple validation approaches:
+            </p>
+
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge check">Internal</span>
+                    <h4>Holdout Validation</h4>
+                    <p>
+                        Hold out recent periods and assess prediction accuracy using the framework's 
+                        <code>predict()</code> method.
+                    </p>
+                    <ul>
+                        <li>MAPE, RMSE on holdout</li>
+                        <li>Coverage of prediction intervals</li>
+                        <li>⚠️ Tests extrapolation, not causality</li>
+                    </ul>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge check">External</span>
+                    <h4>Geo Experiments</h4>
+                    <p>
+                        Compare MMM estimates to randomized geo experiments—the gold standard for causal validation.
+                    </p>
+                    <ul>
+                        <li>Match lift estimates to geo tests</li>
+                        <li>Assess coverage of credible intervals</li>
+                        <li>Calibrate priors if systematic bias</li>
+                    </ul>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge check">Business</span>
+                    <h4>Plausibility Checks</h4>
+                    <p>
+                        Verify results against domain knowledge and industry benchmarks.
+                    </p>
+                    <ul>
+                        <li>ROI within industry norms</li>
+                        <li>Adstock aligns with creative wear-out</li>
+                        <li>Saturation at plausible spend levels</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h4>Framework Validation Code</h4>
+            <pre><code class="python"># Holdout validation
+train_data, test_data = panel.split(holdout_periods=8)
+model = BayesianMMM(train_data, config)
+model.fit()
+
+# Predict on holdout
+predictions = model.predict(test_data)
+coverage = model.compute_coverage(test_data, ci=0.9)
+print(f"90% CI Coverage: {coverage:.1%}")  # Should be ~90%
+
+# Compare to geo experiment
+geo_test_lift = 0.12  # 12% lift from experiment
+mmm_lift = model.compute_channel_lift("tv", scenario="actual_vs_zero")
+print(f"MMM Lift: {mmm_lift.mean():.1%} [{mmm_lift.hdi(0.9)}]")
+print(f"Geo Test Lift: {geo_test_lift:.1%}")
+# Check if geo test result within MMM credible interval</code></pre>
+
+            <div class="note">
+                <h4>Documentation is Critical</h4>
+                <p style="margin-bottom: 0;">
+                    Maintain a log of all modeling decisions: priors chosen, diagnostics observed, models compared,
+                    and rationale for expansions. The framework's <code>model.save()</code> method preserves configs,
+                    but document the <em>why</em> behind each choice separately. This prevents specification shopping 
+                    and enables honest reporting.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2>References</h2>
+
+            <ul>
+                <li>
+                    Gelman, A., Vehtari, A., Simpson, D., et al. (2020). 
+                    <em>Bayesian Workflow.</em> arXiv:2011.01808.
+                </li>
+                <li>
+                    Gabry, J., Simpson, D., Vehtari, A., Betancourt, M., & Gelman, A. (2019). 
+                    <em>Visualization in Bayesian workflow.</em> J. R. Stat. Soc. A, 182(2), 389-402.
+                </li>
+                <li>
+                    Vehtari, A., Gelman, A., & Gabry, J. (2017). 
+                    <em>Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC.</em> 
+                    Statistics and Computing, 27(5), 1413-1432.
+                </li>
+                <li>
+                    Betancourt, M. (2017). 
+                    <em>A Conceptual Introduction to Hamiltonian Monte Carlo.</em> arXiv:1701.02434.
+                </li>
+            </ul>
+
+        </main>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+
+        // Initialize KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "$", right: "$", display: false},
+                    {left: "\\(", right: "\\)", display: false}
+                ]
+            });
+        });
+
+        // Chart colors matching site theme
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#d4ddd4',
+            bg: '#fafbf9'
+        };
+
+        const chartConfig = { displayModeBar: false, responsive: true };
+
+        // =====================================================================
+        // Prior Predictive Chart
+        // =====================================================================
+        function initPriorPredictiveChart() {
+            const container = document.getElementById('priorPredictiveChart');
+            if (!container) return;
+
+            const sigmaSlider = document.getElementById('priorSigma');
+            const interceptSlider = document.getElementById('interceptSigma');
+            
+            function generatePriorPredictive(mediaSigma, interceptSigma) {
+                const n = 52;
+                const traces = [];
+                
+                // Generate 20 prior predictive draws
+                for (let draw = 0; draw < 20; draw++) {
+                    const intercept = 100 + interceptSigma * 100 * (Math.random() * 2 - 1);
+                    const beta = mediaSigma * (Math.random() * 2 - 1);
+                    const trend = 0.05 * (Math.random() * 2 - 1);
+                    
+                    const y = [];
+                    for (let t = 0; t < n; t++) {
+                        const media = 10 + 5 * Math.sin(t / 52 * 2 * Math.PI) + Math.random() * 5;
+                        const seasonal = 10 * Math.sin(t / 52 * 2 * Math.PI);
+                        const noise = 5 * (Math.random() * 2 - 1);
+                        y.push(intercept + beta * media + trend * t + seasonal + noise);
+                    }
+                    
+                    traces.push({
+                        x: Array.from({length: n}, (_, i) => i + 1),
+                        y: y,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { color: colors.accent, width: 1, opacity: 0.3 },
+                        showlegend: draw === 0,
+                        name: 'Prior Predictive'
+                    });
+                }
+                
+                return traces;
+            }
+            
+            function updateChart() {
+                const mediaSigma = parseFloat(sigmaSlider.value);
+                const interceptSigma = parseFloat(interceptSlider.value);
+                
+                document.getElementById('priorSigmaVal').textContent = mediaSigma.toFixed(1);
+                document.getElementById('interceptSigmaVal').textContent = interceptSigma.toFixed(1);
+                
+                const traces = generatePriorPredictive(mediaSigma, interceptSigma);
+                
+                const layout = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 30, r: 20, b: 50, l: 60 },
+                    xaxis: { 
+                        title: 'Week', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    yaxis: { 
+                        title: 'Predicted Sales', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    showlegend: false
+                };
+                
+                Plotly.react(container, traces, layout, chartConfig);
+            }
+            
+            sigmaSlider.addEventListener('input', updateChart);
+            interceptSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Trace Plot Chart
+        // =====================================================================
+        function initTracePlotChart() {
+            const container = document.getElementById('tracePlotChart');
+            if (!container) return;
+
+            const n = 500;
+            const traces = [];
+            const chainColors = [colors.primary, colors.accent, colors.warning, colors.danger];
+            
+            // Generate 4 chains of a well-mixed parameter
+            for (let chain = 0; chain < 4; chain++) {
+                let y = [];
+                for (let i = 1; i < n; i++) {
+                    y.push(0.1 * (Math.random() * 2 - 1));
+                }
+                // Add stationary correction
+                const mean = y.reduce((a, b) => a + b, 0) / n;
+                y = y.map(v => v - mean + 0.5);
+                
+                traces.push({
+                    x: Array.from({length: n}, (_, i) => i + 1),
+                    y: y,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: chainColors[chain], width: 1 },
+                    name: `Chain ${chain + 1}`
+                });
+            }
+            
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                margin: { t: 30, r: 20, b: 50, l: 60 },
+                xaxis: { 
+                    title: 'Iteration', 
+                    gridcolor: colors.grid, 
+                    zerolinecolor: colors.grid 
+                },
+                yaxis: { 
+                    title: 'Parameter Value (β)', 
+                    gridcolor: colors.grid, 
+                    zerolinecolor: colors.grid 
+                },
+                legend: { 
+                    orientation: 'h', 
+                    y: 1.1,
+                    x: 0.5,
+                    xanchor: 'center'
+                },
+                annotations: [{
+                    x: 0.5,
+                    y: 1.15,
+                    xref: 'paper',
+                    yref: 'paper',
+                    text: 'R̂ = 1.00 | ESS = 1842 | No divergences ✓',
+                    showarrow: false,
+                    font: { size: 12, color: colors.primaryDark }
+                }]
+            };
+            
+            Plotly.newPlot(container, traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Posterior Predictive Chart
+        // =====================================================================
+        function initPosteriorPredictiveChart() {
+            const container = document.getElementById('posteriorPredictiveChart');
+            if (!container) return;
+
+            const n = 52;
+            const traces = [];
+            
+            // Generate "observed" data
+            const observed = [];
+            for (let t = 0; t < n; t++) {
+                const trend = 0.3 * t;
+                const seasonal = 15 * Math.sin(t / 52 * 2 * Math.PI);
+                const noise = 5 * (Math.random() * 2 - 1);
+                observed.push(100 + trend + seasonal + noise);
+            }
+            
+            // Generate posterior predictive draws (similar to observed)
+            for (let draw = 0; draw < 50; draw++) {
+                const y = observed.map(v => v + 8 * (Math.random() * 2 - 1));
+                
+                traces.push({
+                    x: Array.from({length: n}, (_, i) => i + 1),
+                    y: y,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: colors.accent, width: 1 },
+                    opacity: 0.15,
+                    showlegend: draw === 0,
+                    name: 'Posterior Predictive'
+                });
+            }
+            
+            // Add observed data on top
+            traces.push({
+                x: Array.from({length: n}, (_, i) => i + 1),
+                y: observed,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: colors.text, width: 2.5 },
+                name: 'Observed Data'
+            });
+            
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                margin: { t: 30, r: 20, b: 50, l: 60 },
+                xaxis: { 
+                    title: 'Week', 
+                    gridcolor: colors.grid, 
+                    zerolinecolor: colors.grid 
+                },
+                yaxis: { 
+                    title: 'Sales', 
+                    gridcolor: colors.grid, 
+                    zerolinecolor: colors.grid 
+                },
+                legend: { 
+                    orientation: 'h', 
+                    y: 1.1,
+                    x: 0.5,
+                    xanchor: 'center'
+                }
+            };
+            
+            Plotly.newPlot(container, traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Sensitivity Chart
+        // =====================================================================
+        function initSensitivityChart() {
+            const container = document.getElementById('sensitivityChart');
+            if (!container) return;
+
+            const sdSlider = document.getElementById('priorSD');
+            
+            function updateChart() {
+                const priorSD = parseFloat(sdSlider.value);
+                document.getElementById('priorSDVal').textContent = priorSD.toFixed(1);
+                
+                // Prior distribution
+                const x = [];
+                const prior = [];
+                const likelihood = [];
+                const posterior = [];
+                
+                for (let i = -2; i <= 3; i += 0.05) {
+                    x.push(i);
+                    // Prior: N(0, priorSD)
+                    prior.push(Math.exp(-0.5 * Math.pow(i / priorSD, 2)) / (priorSD * Math.sqrt(2 * Math.PI)));
+                    // "Likelihood": centered at 0.8
+                    const likSD = 0.4;
+                    likelihood.push(Math.exp(-0.5 * Math.pow((i - 0.8) / likSD, 2)) / (likSD * Math.sqrt(2 * Math.PI)));
+                }
+                
+                // Compute posterior (product of prior and likelihood, normalized)
+                const product = prior.map((p, i) => p * likelihood[i]);
+                const integral = product.reduce((a, b) => a + b, 0) * 0.05;
+                const posteriorNorm = product.map(p => p / integral);
+                
+                const traces = [
+                    {
+                        x: x,
+                        y: prior,
+                        type: 'scatter',
+                        mode: 'lines',
+                        fill: 'tozeroy',
+                        line: { color: colors.textMuted, width: 2, dash: 'dash' },
+                        fillcolor: 'rgba(90, 107, 90, 0.1)',
+                        name: 'Prior'
+                    },
+                    {
+                        x: x,
+                        y: likelihood,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { color: colors.accent, width: 2 },
+                        name: 'Likelihood'
+                    },
+                    {
+                        x: x,
+                        y: posteriorNorm,
+                        type: 'scatter',
+                        mode: 'lines',
+                        fill: 'tozeroy',
+                        line: { color: colors.primary, width: 2.5 },
+                        fillcolor: 'rgba(143, 168, 106, 0.3)',
+                        name: 'Posterior'
+                    }
+                ];
+                
+                const layout = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 30, r: 20, b: 50, l: 60 },
+                    xaxis: { 
+                        title: 'Media Effect (β)', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    yaxis: { 
+                        title: 'Density', 
+                        gridcolor: colors.grid, 
+                        zerolinecolor: colors.grid 
+                    },
+                    legend: { 
+                        orientation: 'h', 
+                        y: 1.1,
+                        x: 0.5,
+                        xanchor: 'center'
+                    }
+                };
+                
+                Plotly.react(container, traces, layout, chartConfig);
+            }
+            
+            sdSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // Initialize all charts on load
+        document.addEventListener('DOMContentLoaded', function() {
+            initPriorPredictiveChart();
+            initTracePlotChart();
+            initPosteriorPredictiveChart();
+            initSensitivityChart();
+        });
+
+        // Smooth scrolling for sidebar links
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href.startsWith('#')) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            });
+        });
+
+        // Active section highlighting in sidebar
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+                    const activeLink = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+                    if (activeLink) activeLink.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-100px 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(section => observer.observe(section));
+    </script>
+</body>
+</html>
