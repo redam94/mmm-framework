@@ -41,7 +41,7 @@
             line-height: 1.8;
             font-size: 17px;
         }
-
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
         nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
             background: rgba(250, 251, 249, 0.95);
@@ -123,6 +123,16 @@
             .main-content { padding: 2rem; }
             .two-col { grid-template-columns: 1fr; }
         }
+        /* Footer */
+        footer {
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+            padding: 3rem 0;
+        }
+        .footer-content { display: flex; justify-content: space-between; align-items: center; }
+        .footer-links { display: flex; gap: 2rem; }
+        .footer-links a { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; }
+        .footer-links a:hover { color: var(--color-primary); }
     </style>
 </head>
 <body>
@@ -135,6 +145,7 @@
                 <li><a href="#" class="active">Technical Guide</a></li>
                 <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
                 <li><a href="causal-inference.html">Causal Inference</a></li>
+                <li><a href="faq.html">FAQ</a></li>
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
