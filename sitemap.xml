@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-inference.html</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/index.html</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/bayesian-workflow.html</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/technical-guide.html</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/faq.html</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/variable-selection.html</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/pytensor/d3viz/html/template.html</loc>
+        <lastmod>2025-12-09</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/streamlit/static/index.html</loc>
+        <lastmod>2025-12-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/arviz/static/html/icons-svg-inline.html</loc>
+        <lastmod>2025-07-14</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/tornado/test/static/dir/index.html</loc>
+        <lastmod>2025-12-11</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/tornado/test/templates/utf8.html</loc>
+        <lastmod>2025-12-11</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/matplotlib/backends/web_backend/all_figures.html</loc>
+        <lastmod>2025-12-11</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/matplotlib/backends/web_backend/ipython_inline_figure.html</loc>
+        <lastmod>2025-12-11</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/matplotlib/backends/web_backend/single_figure.html</loc>
+        <lastmod>2025-12-11</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/numba/core/annotations/template.html</loc>
+        <lastmod>2025-12-09</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/setuptools/tests/indexes/test_links_priority/external.html</loc>
+        <lastmod>2025-06-08</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/setuptools/tests/indexes/test_links_priority/simple/foobar/index.html</loc>
+        <lastmod>2025-06-08</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/xarray/static/html/icons-svg-inline.html</loc>
+        <lastmod>2025-12-09</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/coverage/htmlfiles/pyfile.html</loc>
+        <lastmod>2026-01-04</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/venv/lib/python3.12/site-packages/coverage/htmlfiles/index.html</loc>
+        <lastmod>2026-01-04</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+</urlset>
