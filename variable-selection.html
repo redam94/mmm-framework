@@ -13,6 +13,9 @@
     <meta property="og:type" content="website">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -388,7 +391,184 @@
                     </div>
                 </div>
             </div>
+            <!-- 
+                Add this section to variable-selection.html 
+                Suggested location: After the "Why This Beats Specification Shopping" comparison section,
+                before the "The Confounder Problem" section
+            -->
 
+            <!-- Frequentist Transformation Shopping Warning -->
+            <div class="warning-box" style="border-left: 5px solid var(--color-danger); background: rgba(201, 112, 103, 0.08); margin: 2rem 0; padding: 1.5rem;">
+                <h4 style="margin-top: 0; color: var(--color-danger);">⚠️ The Transformation Shopping Trap: "Optimizing" Adstock, Lag, and Saturation</h4>
+                
+                <p>
+                    A particularly insidious form of specification shopping occurs when analysts iterate through 
+                    <strong>adstock decay rates, lag structures, and saturation parameters</strong> until media 
+                    coefficients become positive with high t-statistics. This practice is common but deeply problematic.
+                </p>
+                
+                <div class="dag-container" style="margin: 1.5rem 0;">
+                    <div class="dag-box bad" style="flex: 1; min-width: 300px;">
+                        <h4>❌ The "Optimization" Loop</h4>
+                        <div style="text-align: left; padding: 1rem; font-size: 0.95rem;">
+                            <ol style="margin: 0; padding-left: 1.5rem; color: var(--color-text-muted);">
+                                <li>Fit model with initial transformation parameters</li>
+                                <li>Media coefficient is negative or insignificant 😟</li>
+                                <li>Try different adstock decay (1.0 → 0.9 → 0.8 → 0.7...)</li>
+                                <li>Try different lag structure (0 weeks → 2 weeks → 4 weeks...)</li>
+                                <li>Try different saturation curve (adjust λ, K, S...)</li>
+                                <li>Stop when coefficient is positive with t > 1.0 🎯</li>
+                                <li><em>Report the t-stat and p-value as if this was the only model</em></li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 style="margin-top: 1.5rem;">This Is a Machine for Producing Results—Not Learning</h5>
+                <p>
+                    When you cycle through dozens of transformation specifications until one produces a positive, 
+                    "significant" coefficient, you haven't discovered the true effect—you've built a 
+                    <strong>result-producing machine</strong>. The process guarantees you'll find <em>something</em> 
+                    that looks good, regardless of what's actually in the data.
+                </p>
+                
+                <p>
+                    The fundamental problem: <strong>you're learning nothing about your data</strong>. The "significant" 
+                    result is an artifact of the search process, not evidence of a true effect. You could run this 
+                    same procedure on pure noise and eventually find a specification that passes your threshold.
+                </p>
+
+                <h5 style="margin-top: 1.5rem;">The False Transparency of Reported Statistics</h5>
+                <p>
+                    Reporting the t-statistic and p-value from your final "winning" specification creates a 
+                    <strong>false appearance of rigor</strong>. The statistics are mathematically correct for 
+                    <em>that particular model</em>—but they're meaningless for inference because they don't 
+                    account for the selection process.
+                </p>
+                
+                <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                    <p style="margin: 0; font-style: italic;">
+                        <strong>What it looks like:</strong> "TV coefficient = 0.15, t = 2.34, p = 0.019"<br>
+                        <strong>What actually happened:</strong> 47 specifications were tested. This was the 
+                        first one where TV was positive and significant. The other 46 were quietly discarded.
+                    </p>
+                </div>
+                
+                <p>
+                    This isn't transparency—it's the <em>opposite</em> of transparency. You're presenting the 
+                    statistics from one specification while hiding the search that led to it. A truly transparent 
+                    report would acknowledge: "We tested 47 transformation specifications. Here's what we found 
+                    across all of them." (Of course, that report would reveal the fragility of the result.)
+                </p>
+
+                <h5 style="margin-top: 1.5rem;">Two Problems: Inflated False Positives AND Biased Coefficients</h5>
+                
+                <p>
+                    Selecting on t-statistics creates <strong>two distinct problems</strong>, not one:
+                </p>
+                
+                <div class="two-col" style="gap: 1.5rem; margin: 1rem 0;">
+                    <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--color-danger);">
+                        <strong style="color: var(--color-danger);">1. False Positive Inflation</strong>
+                        <p style="font-size: 0.9rem; margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                            Testing many specifications and keeping the "winner" inflates your false positive rate 
+                            far beyond the nominal α = 0.05. With 50 specs tested, you have a 92% chance of finding 
+                            something "significant" even when there's no true effect.
+                        </p>
+                    </div>
+                    <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--color-warning);">
+                        <strong style="color: var(--color-warning);">2. Upward Coefficient Bias (Winner's Curse)</strong>
+                        <p style="font-size: 0.9rem; margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                            Since \(t = \frac{\hat{\beta}}{SE}\), selecting for high t-statistics means selecting for coefficients 
+                            that were <em>inflated by favorable noise</em>. The "winning" estimate systematically 
+                            overstates the true effect—often dramatically.
+                        </p>
+                    </div>
+                </div>
+
+                <p>
+                    The winner's curse is especially pernicious because <strong>even when a true effect exists</strong>, 
+                    you'll overestimate it. If the true TV effect is β = 0.05, random variation across specifications 
+                    might produce estimates ranging from -0.02 to +0.12. By selecting the specification with the 
+                    highest t-stat, you're systematically picking estimates from the upper tail of the noise distribution.
+                </p>
+                
+                <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                    <p style="margin: 0;">
+                        <strong>The cruel irony:</strong> The more specifications you test, the more "significant" 
+                        and the more <em>wrong</em> your selected result becomes. Your reported coefficient is 
+                        simultaneously more confident and more biased.
+                    </p>
+                </div>
+
+                <h5 style="margin-top: 1.5rem;">The Math: How Bad Is It?</h5>
+                <p>
+                    If you test <em>k</em> specifications and report the one with p < 0.05, your <em>actual</em> 
+                    false positive rate is approximately:
+                </p>
+                <div style="background: var(--color-bg); padding: 1rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; text-align: center; margin: 1rem 0;">
+                    $$P(\text{at least one false positive}) \approx 1 - (1 - 0.05)^k$$
+                </div>
+                
+                <!-- Interactive FPR Chart -->
+                <div class="interactive-box" style="margin: 1.5rem 0;">
+                    <h4>Interactive: False Positive Rate vs. Specifications Tested</h4>
+                    <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--color-text-muted);">
+                        Drag the slider to see how testing more specifications inflates your actual error rate. 
+                        Common MMM specification searches easily reach 50+ combinations.
+                    </p>
+                    <div class="control-row" style="margin-bottom: 1rem;">
+                        <label>Specifications tested (k):</label>
+                        <input type="range" id="fpr-k-slider" min="1" max="100" step="1" value="20" 
+                            style="flex: 1; margin: 0 1rem;">
+                        <span id="fpr-k-value" style="min-width: 30px; font-weight: 600;">20</span>
+                    </div>
+                    <div class="control-row" style="margin-bottom: 1rem;">
+                        <label>Nominal α level:</label>
+                        <select id="fpr-alpha-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                            <option value="0.05" selected>0.05 (standard)</option>
+                            <option value="0.01">0.01 (stricter)</option>
+                            <option value="0.10">0.10 (lenient)</option>
+                        </select>
+                    </div>
+                    <div id="fpr-chart" style="height: 320px;"></div>
+                    <div id="fpr-summary" style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px; margin-top: 1rem; text-align: center;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <h5 style="margin-top: 1.5rem;">What To Do Instead</h5>
+                <div class="two-col" style="gap: 1.5rem; margin-top: 1rem;">
+                    <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px;">
+                        <strong style="color: var(--color-primary);">Pre-specify transformations</strong>
+                        <p style="font-size: 0.9rem; margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                            Choose adstock and saturation parameters based on theory or industry benchmarks 
+                            <em>before</em> seeing how they affect coefficients. Document this in a pre-registration.
+                        </p>
+                    </div>
+                    <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px;">
+                        <strong style="color: var(--color-primary);">Use Bayesian priors on transformations</strong>
+                        <p style="font-size: 0.9rem; margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                            Put priors on adstock/saturation parameters and let the model estimate them jointly 
+                            with coefficients. Uncertainty in transformations flows through to uncertainty in effects.
+                        </p>
+                    </div>
+                    <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px;">
+                        <strong style="color: var(--color-primary);">Report sensitivity</strong>
+                        <p style="font-size: 0.9rem; margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                            If you must explore specifications, report results across <em>all</em> of them. 
+                            Show the distribution of estimates, not just the "best" one.
+                        </p>
+                    </div>
+                    <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px;">
+                        <strong style="color: var(--color-primary);">Embrace uncertainty honestly</strong>
+                        <p style="font-size: 0.9rem; margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                            If the effect is only positive under specific transformations, that's important 
+                            information—it means the effect is uncertain. Report that uncertainty.
+                        </p>
+                    </div>
+                </div>
+            </div>
             <h3>The Confounder Problem: Why Dropping Variables Biases Effects</h3>
             <p>
                 A classic specification shopping pattern is dropping <strong>confounder variables</strong> (like distribution) because they "reduce" media effects or have unexpected signs. But confounders affect both your media spending and your outcomes—dropping them doesn't remove their influence, it just hides it while biasing your estimates.
@@ -426,7 +606,7 @@
                         <path d="M 185 46 L 250 85" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arr-c2)"/>
                         <!-- Media to Sales (true effect) -->
                         <path d="M 93 110 L 227 110" stroke="#8fa86a" stroke-width="2" fill="none" marker-end="url(#arr-c1)"/>
-                        <text x="160" y="102" font-size="10" fill="#3d8b5a" font-weight="bold">True Effect = 0.25</text>
+                        <text x="115" y="102" font-size="10" fill="#3d8b5a" font-weight="bold">True Effect = 0.25</text>
                         
                         <text x="160" y="168" text-anchor="middle" font-size="10" fill="#3d8b5a">✓ Unbiased estimate of media effect</text>
                     </svg>
@@ -451,7 +631,7 @@
                         
                         <!-- Biased arrow -->
                         <path d="M 93 110 L 227 110" stroke="#c97067" stroke-width="3" fill="none" marker-end="url(#arr-c2)"/>
-                        <text x="160" y="102" font-size="10" fill="#c97067" font-weight="bold">"Effect" = 0.45 ⚠️</text>
+                        <text x="115" y="102" font-size="10" fill="#c97067" font-weight="bold">"Effect" = 0.45 ⚠️</text>
                         
                         <!-- Ghost confounding path -->
                         <path d="M 55 90 Q 160 20 265 90" stroke="#c97067" stroke-width="1.5" stroke-dasharray="4,3" fill="none" opacity="0.5"/>
@@ -1271,6 +1451,170 @@
             initPIPChart();
             initEffectPIPScatter();
             updateSensitivityChart(3);
+        });
+        (function() {
+            // FPR Chart
+            function updateFPRChart() {
+                var k = parseInt(document.getElementById('fpr-k-slider').value);
+                var alpha = parseFloat(document.getElementById('fpr-alpha-select').value);
+                
+                document.getElementById('fpr-k-value').textContent = k;
+                
+                // Generate curve data
+                var kValues = [];
+                var fprValues = [];
+                for (var i = 1; i <= 100; i++) {
+                    kValues.push(i);
+                    fprValues.push((1 - Math.pow(1 - alpha, i)) * 100);
+                }
+                
+                // Current point
+                var currentFPR = (1 - Math.pow(1 - alpha, k)) * 100;
+                
+                // Common MMM spec counts
+                var commonSpecs = [
+                    { k: 5, label: '5 adstock values' },
+                    { k: 25, label: '5×5 (adstock × lag)' },
+                    { k: 50, label: '5×5×2 (+ saturation)' },
+                    { k: 75, label: '5×5×3 (3 sat curves)' }
+                ];
+                
+                var traces = [
+                    // Main curve
+                    {
+                        x: kValues,
+                        y: fprValues,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'Actual FPR',
+                        line: { color: '#c97067', width: 3 },
+                        hovertemplate: 'k=%{x}<br>FPR=%{y:.1f}%<extra></extra>'
+                    },
+                    // Nominal alpha line
+                    {
+                        x: [1, 100],
+                        y: [alpha * 100, alpha * 100],
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'Nominal α',
+                        line: { color: '#8fa86a', width: 2, dash: 'dash' },
+                        hoverinfo: 'skip'
+                    },
+                    // Current selection point
+                    {
+                        x: [k],
+                        y: [currentFPR],
+                        type: 'scatter',
+                        mode: 'markers',
+                        name: 'Current',
+                        marker: { color: '#c97067', size: 14, symbol: 'circle',
+                                line: { color: 'white', width: 2 } },
+                        hovertemplate: '<b>k=%{x}</b><br>Actual FPR=%{y:.1f}%<extra></extra>'
+                    }
+                ];
+                
+                // Add common spec markers
+                commonSpecs.forEach(function(spec) {
+                    var specFPR = (1 - Math.pow(1 - alpha, spec.k)) * 100;
+                    traces.push({
+                        x: [spec.k],
+                        y: [specFPR],
+                        type: 'scatter',
+                        mode: 'markers',
+                        name: spec.label,
+                        marker: { color: '#6a8fa8', size: 10, symbol: 'diamond' },
+                        hovertemplate: '<b>' + spec.label + '</b><br>k=' + spec.k + '<br>FPR=' + specFPR.toFixed(1) + '%<extra></extra>'
+                    });
+                });
+                
+                var layout = {
+                    xaxis: {
+                        title: 'Number of Specifications Tested (k)',
+                        range: [0, 105],
+                        gridcolor: '#e8ebe8',
+                        zeroline: false
+                    },
+                    yaxis: {
+                        title: 'Actual False Positive Rate (%)',
+                        range: [0, 105],
+                        gridcolor: '#e8ebe8',
+                        zeroline: false
+                    },
+                    showlegend: true,
+                    legend: {
+                        x: 0.02,
+                        y: 0.98,
+                        bgcolor: 'rgba(255,255,255,0.9)',
+                        bordercolor: '#d4ddd4',
+                        borderwidth: 1
+                    },
+                    margin: { t: 20, r: 20, b: 50, l: 60 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    annotations: [
+                        {
+                            x: 50,
+                            y: alpha * 100,
+                            xref: 'x',
+                            yref: 'y',
+                            text: 'What you report: α = ' + (alpha * 100).toFixed(0) + '%',
+                            showarrow: false,
+                            font: { color: '#8fa86a', size: 11 },
+                            yshift: 12
+                        }
+                    ],
+                    shapes: [
+                        // Highlight region above nominal
+                        {
+                            type: 'rect',
+                            x0: 0, x1: 100,
+                            y0: alpha * 100, y1: 100,
+                            fillcolor: 'rgba(201, 112, 103, 0.1)',
+                            line: { width: 0 }
+                        }
+                    ]
+                };
+                
+                var config = { 
+                    displayModeBar: false, 
+                    responsive: true 
+                };
+                
+                Plotly.newPlot('fpr-chart', traces, layout, config);
+                
+                // Update summary
+                var inflation = (currentFPR / (alpha * 100)).toFixed(1);
+                var summaryHTML = '<span style="font-size: 1.1rem;">' +
+                    'With <strong>' + k + ' specifications</strong> tested at α = ' + alpha + ':<br>' +
+                    'Reported p-value: <span style="color: var(--color-primary);">' + alpha + '</span> → ' +
+                    'Actual FPR: <span style="color: var(--color-danger); font-weight: 700;">' + currentFPR.toFixed(1) + '%</span>' +
+                    '<br><span style="font-size: 0.9rem; color: var(--color-text-muted);">' +
+                    '(' + inflation + '× inflation over nominal rate)</span></span>';
+                document.getElementById('fpr-summary').innerHTML = summaryHTML;
+            }
+            
+            // Initialize on page load
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    updateFPRChart();
+                    document.getElementById('fpr-k-slider').addEventListener('input', updateFPRChart);
+                    document.getElementById('fpr-alpha-select').addEventListener('change', updateFPRChart);
+                });
+            } else {
+                updateFPRChart();
+                document.getElementById('fpr-k-slider').addEventListener('input', updateFPRChart);
+                document.getElementById('fpr-alpha-select').addEventListener('change', updateFPRChart);
+            }
+        })();
+        // Initialize KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "\\(", right: "\\)", display: false}
+                ]
+            });
         });
     </script>
 </body>
