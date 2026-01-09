@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scientific Modeling | MMM Framework</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad: true, theme: 'neutral'});</script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        :root {
+            --color-primary: #6d8a4a;
+            --color-primary-dark: #4a5f32;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6f88;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #6abf8a;
+            --color-text: #2d3748;
+            --color-text-muted: #64748b;
+            --color-bg: #fafaf9;
+            --color-bg-alt: #f5f5f4;
+            --color-surface: #ffffff;
+            --color-border: #e7e5e4;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+            --transition-smooth: all 0.2s ease;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--color-bg); color: var(--color-text); line-height: 1.7; font-size: 1rem; }
+        
+        nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(250, 250, 249, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--color-border); padding: 1rem 0; }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; }
+        
+        .sidebar {
+            position: sticky; top: 5rem; height: calc(100vh - 5rem);
+            overflow-y: auto; padding: 2rem; border-right: 1px solid var(--color-border); background: var(--color-bg);
+        }
+        .sidebar h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: 1rem; margin-top: 1.5rem; }
+        .sidebar h3:first-child { margin-top: 0; }
+        .sidebar-nav { list-style: none; }
+        .sidebar-nav a { display: block; padding: 0.5rem 0; color: var(--color-text-muted); text-decoration: none; font-size: 0.95rem; transition: var(--transition-smooth); border-left: 2px solid transparent; padding-left: 1rem; margin-left: -1rem; }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); }
+
+        .main-content { padding: 3rem 4rem; max-width: 900px; }
+        .main-content h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; color: var(--color-text); }
+        .main-content h2 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); color: var(--color-text); }
+        .main-content h2:first-of-type { border-top: none; margin-top: 2rem; }
+        .main-content h3 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--color-text); }
+        .main-content h4 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--color-text-muted); }
+        .lead { font-size: 1.15rem; color: var(--color-text-muted); margin-bottom: 2rem; }
+        p { margin-bottom: 1rem; }
+        ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+        li { margin-bottom: 0.5rem; }
+
+        .definition {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .definition h4 { color: var(--color-primary-dark); margin-bottom: 0.75rem; margin-top: 0; }
+
+        .note {
+            background: rgba(106, 143, 168, 0.1);
+            border: 1px solid rgba(106, 143, 168, 0.3);
+            border-left: 4px solid var(--color-accent);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .note h4 { color: var(--color-accent-dark); margin-bottom: 0.75rem; margin-top: 0; }
+
+        .warning-box {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .warning-box h4 { color: var(--color-danger); margin-bottom: 0.75rem; margin-top: 0; }
+
+        .success-box {
+            background: rgba(106, 191, 138, 0.1);
+            border: 1px solid rgba(106, 191, 138, 0.3);
+            border-left: 4px solid var(--color-success);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .success-box h4 { color: #3d8b5a; margin-bottom: 0.75rem; margin-top: 0; }
+
+        blockquote {
+            border-left: 4px solid var(--color-primary);
+            padding-left: 1.5rem;
+            margin: 2rem 0;
+            font-style: italic;
+            color: var(--color-text-muted);
+        }
+        blockquote cite {
+            display: block;
+            margin-top: 0.5rem;
+            font-style: normal;
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .dag-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            overflow-x: auto;
+        }
+
+        .three-col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .workflow-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            padding: 1.25rem;
+            transition: var(--transition-smooth);
+        }
+        .workflow-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        .workflow-card h4 { margin-bottom: 0.5rem; font-size: 1.05rem; }
+        .workflow-card p { font-size: 0.95rem; color: var(--color-text-muted); margin-bottom: 0; }
+
+        .step-badge {
+            display: inline-block;
+            background: var(--color-primary);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .step-badge.principle { background: var(--color-accent); }
+        .step-badge.warning { background: var(--color-warning); }
+        .step-badge.danger { background: var(--color-danger); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+        th { font-weight: 600; color: var(--color-text-muted); }
+        tr:hover { background: var(--color-bg-alt); }
+
+        pre {
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1.25rem;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--color-bg-alt);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        pre code { background: none; padding: 0; }
+
+        .math-block {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+            position: relative;
+        }
+        .equation-label {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+        }
+
+        .principle-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .principle-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        .principle-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        .principle-card .icon { font-size: 2rem; margin-bottom: 1rem; }
+        .principle-card h4 { font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--color-text); }
+        .principle-card p { color: var(--color-text-muted); font-size: 0.95rem; margin-bottom: 0; }
+
+        .checklist { list-style: none; padding-left: 0; }
+        .checklist li { padding-left: 1.5rem; position: relative; margin-bottom: 0.75rem; }
+        .checklist li::before { content: "✓"; position: absolute; left: 0; color: var(--color-primary); font-weight: bold; }
+        .checklist li.warning-item::before { content: "⚠"; color: var(--color-warning); }
+        .checklist li.x-item::before { content: "✗"; color: var(--color-danger); }
+
+        @media (max-width: 1024px) {
+            .page-layout { grid-template-columns: 1fr; }
+            .sidebar { position: relative; top: auto; height: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
+            .main-content { padding: 2rem; }
+            .three-col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="about.html">About</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
+                <li><a href="#" class="active">Scientific Modeling</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Philosophy</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#introduction">What is a Model?</a></li>
+                <li><a href="#all-models-wrong">All Models Are Wrong</a></li>
+                <li><a href="#generative-perspective">The Generative Perspective</a></li>
+            </ul>
+
+            <h3>Building Models</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#questions-first">Questions Drive Models</a></li>
+                <li><a href="#generative-story">The Generative Story</a></li>
+                <li><a href="#components">Model Components</a></li>
+            </ul>
+
+            <h3>The Scientific Cycle</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#iteration">Iteration as Learning</a></li>
+                <li><a href="#honest-iteration">Honest vs. Shopping</a></li>
+                <li><a href="#expanding">Expanding Models</a></li>
+            </ul>
+
+            <h3>Evaluation</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#predictive-checks">Predictive Checking</a></li>
+                <li><a href="#sensitivity">Sensitivity Analysis</a></li>
+                <li><a href="#validation">External Validation</a></li>
+            </ul>
+
+            <h3>Practical Guidance</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#starting-simple">Starting Simple</a></li>
+                <li><a href="#when-to-stop">When to Stop</a></li>
+                <li><a href="#communication">Communicating Models</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Scientific Statistical Modeling</h1>
+            <p class="lead">
+                A principled approach to building, evaluating, and iterating on statistical models.
+                This guide establishes the philosophical foundations that underpin rigorous quantitative analysis—
+                applicable to Marketing Mix Models and beyond.
+            </p>
+
+            <div class="note">
+                <h4>Core Insight</h4>
+                <p style="margin-bottom: 0;">
+                    Scientific modeling is not about finding "the correct model." It is about building useful 
+                    representations of reality, understanding their limitations, and honestly communicating 
+                    what they can and cannot tell us about the questions we care about.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="introduction">What is a Model?</h2>
+
+            <p>
+                A statistical model is a <strong>simplified representation of a data-generating process</strong>. 
+                It is a formal description of how we believe observed data came to be—not a claim that the 
+                world actually works this way, but a useful fiction that helps us reason about patterns, 
+                make predictions, and inform decisions.
+            </p>
+
+            <div class="definition">
+                <h4>A Model is a Machine for Generating Data</h4>
+                <p style="margin-bottom: 0;">
+                    If you truly understand a model, you can use it to simulate fake data that looks like 
+                    the real thing. This "generative" perspective is central to scientific modeling: 
+                    a model specifies all the steps required to produce observations, from parameter values 
+                    through random variation to final measurements.
+                </p>
+            </div>
+
+            <p>
+                Models serve multiple purposes:
+            </p>
+
+            <ul>
+                <li><strong>Description:</strong> Summarizing patterns in observed data</li>
+                <li><strong>Prediction:</strong> Forecasting future or unobserved outcomes</li>
+                <li><strong>Causal inference:</strong> Estimating the effects of interventions</li>
+                <li><strong>Decision support:</strong> Quantifying uncertainty to inform choices</li>
+            </ul>
+
+            <p>
+                The same model can excel at one purpose while failing at another. A model that describes 
+                historical patterns beautifully may predict poorly. A model with accurate predictions may 
+                give misleading causal estimates. Understanding what question you are asking is essential 
+                to evaluating whether a model is adequate for your purpose.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="all-models-wrong">All Models Are Wrong</h2>
+
+            <blockquote>
+                "All models are wrong, but some are useful."
+                <cite>— George E. P. Box</cite>
+            </blockquote>
+
+            <p>
+                This famous aphorism captures a deep truth: no model perfectly represents reality. 
+                The world is infinitely complex; every model is a simplification. The question is not 
+                "is this model correct?" but rather "is this model useful for my purpose?"
+            </p>
+
+            <p>
+                Box elaborated on this in his 1976 paper <em>Science and Statistics</em>:
+            </p>
+
+            <blockquote>
+                "Since all models are wrong the scientist cannot obtain a 'correct' one by excessive elaboration. 
+                On the contrary, following William of Occam, he should seek an economical description of natural phenomena."
+            </blockquote>
+
+            <p>
+                This has profound implications for practice:
+            </p>
+
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge principle">Implication</span>
+                    <h4>Embrace Simplicity</h4>
+                    <p>
+                        Complex models are not inherently better. A simple model that captures key features 
+                        is often more useful than a complex model that overfits noise.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge principle">Implication</span>
+                    <h4>Know Your Purpose</h4>
+                    <p>
+                        Evaluate models against the specific question you need to answer, 
+                        not against some abstract notion of "correctness."
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge principle">Implication</span>
+                    <h4>Quantify Uncertainty</h4>
+                    <p>
+                        Since no model is correct, honest uncertainty quantification is essential—
+                        not optional, not a sign of weakness.
+                    </p>
+                </div>
+            </div>
+
+            <h3>Useful Wrongness</h3>
+
+            <p>
+                The goal is to be "usefully wrong"—to have a model whose simplifications and approximations 
+                do not materially affect the conclusions relevant to your decision. A city map that ignores 
+                building heights is "wrong" but perfectly adequate for navigation. A map that ignores streets 
+                would be useless for the same purpose.
+            </p>
+
+            <p>
+                In Marketing Mix Modeling, this means:
+            </p>
+
+            <ul>
+                <li>We don't need to model every factor affecting sales—only those that confound media effects or improve precision</li>
+                <li>Our saturation function doesn't need to be "correct"—just flexible enough to capture diminishing returns</li>
+                <li>Our temporal dynamics can be stylized—as long as they capture the relevant carryover patterns</li>
+            </ul>
+
+            <!-- ================================================================== -->
+            <h2 id="generative-perspective">The Generative Perspective</h2>
+
+            <p>
+                A <strong>generative model</strong> is a complete description of how data could have been produced. 
+                It specifies a joint probability distribution over all quantities—both observable (data) and 
+                unobservable (parameters). If you can simulate data from your model, you understand it.
+            </p>
+
+            <div class="definition">
+                <h4>The Joint Distribution</h4>
+                <p>
+                    A generative model defines:
+                </p>
+                <div class="math-block">
+                    $$p(y, \theta) = p(y | \theta) \cdot p(\theta)$$
+                </div>
+                <p style="margin-bottom: 0;">
+                    Where \(p(\theta)\) is the <strong>prior</strong>—beliefs about parameters before seeing data—and 
+                    \(p(y|\theta)\) is the <strong>likelihood</strong>—how likely the data are given the parameters.
+                </p>
+            </div>
+
+            <p>
+                The generative perspective offers several advantages:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Advantage</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Simulation</strong></td>
+                        <td>You can generate fake data before seeing real data, checking whether your model can produce plausible outcomes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Prior predictive checks</strong></td>
+                        <td>Sample from priors, push through the model, and examine implied predictions—catching implausible assumptions early</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Posterior predictive checks</strong></td>
+                        <td>After fitting, simulate new data from the posterior and compare to observations—assessing model adequacy</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Calibration</strong></td>
+                        <td>Test whether predictive intervals have nominal coverage on held-out data</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Transparent assumptions</strong></td>
+                        <td>Every assumption is explicit in the generative story—nothing hidden in "black box" algorithms</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="dag-box">
+                <h4 style="margin-bottom: 1rem;">The Generative Process</h4>
+                <div class="mermaid">
+                flowchart LR
+                    subgraph Prior["Prior Beliefs"]
+                        P[/"θ ~ p(θ)"/]
+                    end
+                    
+                    subgraph Model["Generative Model"]
+                        L["y ~ p(y|θ)"]
+                    end
+                    
+                    subgraph Output["Predictions"]
+                        D[/"Data y"/]
+                    end
+                    
+                    P --> Model
+                    Model --> D
+                    
+                    style Prior fill:#f0f7e6,stroke:#6d8a4a
+                    style Model fill:#e6f0f7,stroke:#4a6d8a
+                    style Output fill:#f7f0e6,stroke:#8a6d4a
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="questions-first">Questions Drive Models</h2>
+
+            <p>
+                Scientific modeling begins with a question, not with data or techniques. The question 
+                determines what model structure is appropriate, what data are needed, and how to evaluate success.
+            </p>
+
+            <div class="warning-box">
+                <h4>Common Mistake: Technique-First Modeling</h4>
+                <p style="margin-bottom: 0;">
+                    Starting with "let's run a regression" or "let's use machine learning" puts the cart 
+                    before the horse. The right question is: "What decision needs to be made, and what 
+                    quantities do we need to estimate to inform that decision?"
+                </p>
+            </div>
+
+            <h3>The Question Hierarchy</h3>
+
+            <p>
+                Different questions require fundamentally different modeling approaches:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Question Type</th>
+                        <th>Example</th>
+                        <th>Modeling Requirement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Description</strong></td>
+                        <td>"How did sales vary by region?"</td>
+                        <td>Summary statistics, visualization</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Association</strong></td>
+                        <td>"Are ad spend and sales correlated?"</td>
+                        <td>Correlation, regression (no causal interpretation)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Prediction</strong></td>
+                        <td>"What will sales be next quarter?"</td>
+                        <td>Forecasting model (predictive accuracy matters)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Causal</strong></td>
+                        <td>"How much would sales increase if we spent more on TV?"</td>
+                        <td>Causal model with identification strategy</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Counterfactual</strong></td>
+                        <td>"Why did the campaign underperform?"</td>
+                        <td>Structural model capable of counterfactual reasoning</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                Marketing Mix Models typically aim for <strong>causal</strong> questions—we want to know the 
+                effect of changing media spend, not just whether spend and sales are correlated. This imposes 
+                stronger requirements on model structure and identification than purely predictive or descriptive tasks.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="generative-story">The Generative Story</h2>
+
+            <p>
+                Every model should begin with a <strong>generative story</strong>—a narrative description of 
+                how the data came to be. This story guides model structure and makes assumptions explicit.
+            </p>
+
+            <div class="definition">
+                <h4>Example: An MMM Generative Story</h4>
+                <p>
+                    "Weekly sales in each region are driven by baseline demand that varies seasonally. 
+                    Marketing activities (TV, digital, print) increase demand, but with diminishing returns 
+                    as spending increases. Media effects decay over time—a TV ad this week still has some 
+                    impact next week, but less. Regional variation in baseline demand exists, but media 
+                    effectiveness is assumed similar across regions. Sales are observed with measurement 
+                    noise reflecting day-to-day variation not captured by the model."
+                </p>
+            </div>
+
+            <p>
+                This narrative immediately suggests model components:
+            </p>
+
+            <ul>
+                <li>Baseline with seasonal patterns → trend and seasonality terms</li>
+                <li>Diminishing returns → saturation function</li>
+                <li>Decay over time → adstock transformation</li>
+                <li>Regional variation → hierarchical intercepts</li>
+                <li>Measurement noise → error distribution</li>
+            </ul>
+
+            <p>
+                The story also makes assumptions explicit: media effectiveness is assumed constant across regions. 
+                If this assumption is wrong, we know where to expand the model.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="components">Model Components</h2>
+
+            <p>
+                Statistical models have three core components that must be specified:
+            </p>
+
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge">Component</span>
+                    <h4>Likelihood</h4>
+                    <p>
+                        The probability model for observed data given parameters. Specifies the 
+                        "random" part of the model—how data vary around the structural component.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge">Component</span>
+                    <h4>Structural Model</h4>
+                    <p>
+                        The functional relationship between inputs (covariates) and outputs (response). 
+                        Captures the "systematic" part of the data-generating process.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge">Component</span>
+                    <h4>Priors</h4>
+                    <p>
+                        Probability distributions over unknown parameters encoding beliefs before 
+                        seeing data. Essential for Bayesian inference; often implicit in frequentist methods.
+                    </p>
+                </div>
+            </div>
+
+            <h3>Choosing a Likelihood</h3>
+
+            <p>
+                The likelihood should match the nature of the outcome:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Outcome Type</th>
+                        <th>Common Likelihood</th>
+                        <th>Key Property</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Continuous, unbounded</td>
+                        <td>Normal (Gaussian)</td>
+                        <td>Symmetric, thin tails</td>
+                    </tr>
+                    <tr>
+                        <td>Continuous, positive</td>
+                        <td>Log-normal, Gamma</td>
+                        <td>Right-skewed, positive support</td>
+                    </tr>
+                    <tr>
+                        <td>Count data</td>
+                        <td>Poisson, Negative binomial</td>
+                        <td>Discrete, non-negative</td>
+                    </tr>
+                    <tr>
+                        <td>Binary</td>
+                        <td>Bernoulli (via logit/probit)</td>
+                        <td>0/1 outcomes</td>
+                    </tr>
+                    <tr>
+                        <td>Proportions (0-1)</td>
+                        <td>Beta</td>
+                        <td>Bounded continuous</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Building Structural Models</h3>
+
+            <p>
+                The structural model encodes domain knowledge about relationships. Key principles:
+            </p>
+
+            <ul class="checklist">
+                <li>Include relationships supported by theory or domain expertise</li>
+                <li>Use flexible functional forms when the true relationship is uncertain</li>
+                <li>Avoid overparameterization—complexity should be justified</li>
+                <li class="warning-item">Do not choose structure to obtain desired results</li>
+            </ul>
+
+            <!-- ================================================================== -->
+            <h2 id="iteration">Iteration as Learning</h2>
+
+            <p>
+                Model building is inherently iterative. We build, check, revise, and expand—learning about 
+                both the data and the phenomenon through this cycle. This is not a failure of method; 
+                it is the method.
+            </p>
+
+            <div class="dag-box">
+                <h4 style="margin-bottom: 1rem;">The Scientific Modeling Cycle</h4>
+                <div class="mermaid">
+                flowchart TB
+                    Q[Define Question] --> S[Generative Story]
+                    S --> B[Build Model]
+                    B --> PP[Prior Predictive Check]
+                    PP -->|Implausible| S
+                    PP -->|Reasonable| F[Fit Model]
+                    F --> D[Diagnostics]
+                    D -->|Failures| B
+                    D -->|OK| PPC[Posterior Predictive Check]
+                    PPC -->|Model fails| E[Expand/Revise]
+                    PPC -->|Model adequate| R[Report Results]
+                    E --> B
+                    
+                    style Q fill:#f0f7e6,stroke:#6d8a4a
+                    style S fill:#e6f0f7,stroke:#4a6d8a
+                    style B fill:#f7f0e6,stroke:#8a6d4a
+                    style PP fill:#e6f7f0,stroke:#4a8a6d
+                    style F fill:#f0e6f7,stroke:#6d4a8a
+                    style D fill:#f7e6f0,stroke:#8a4a6d
+                    style PPC fill:#e6f0f7,stroke:#4a6d8a
+                    style E fill:#f7f0e6,stroke:#8a6d4a
+                    style R fill:#f0f7e6,stroke:#6d8a4a
+                </div>
+            </div>
+
+            <p>
+                Each iteration teaches us something:
+            </p>
+
+            <ul>
+                <li><strong>Prior predictive failures</strong> reveal that our encoded assumptions imply impossible outcomes</li>
+                <li><strong>Computational failures</strong> often indicate model misspecification or identification problems</li>
+                <li><strong>Posterior predictive failures</strong> show where the model fails to capture data patterns</li>
+                <li><strong>Sensitivity analysis</strong> reveals which conclusions are robust and which are fragile</li>
+            </ul>
+
+            <!-- ================================================================== -->
+            <h2 id="honest-iteration">Honest Iteration vs. Specification Shopping</h2>
+
+            <p>
+                There is a crucial distinction between legitimate scientific iteration and problematic 
+                "specification shopping." Both involve changing models, but they differ fundamentally 
+                in what drives the changes.
+            </p>
+
+            <div class="principle-grid">
+                <div class="principle-card" style="border-left: 4px solid var(--color-success);">
+                    <div class="icon">✓</div>
+                    <h4>Honest Iteration</h4>
+                    <p>
+                        Changes driven by <strong>scientific reasoning</strong>: theoretical considerations, 
+                        diagnostic failures, domain knowledge, predictive inadequacy. Changes are made 
+                        <em>before</em> examining the focal relationship.
+                    </p>
+                </div>
+                <div class="principle-card" style="border-left: 4px solid var(--color-danger);">
+                    <div class="icon">✗</div>
+                    <h4>Specification Shopping</h4>
+                    <p>
+                        Changes driven by <strong>results</strong>: adjusting until coefficients have 
+                        expected signs, desired significance, or "reasonable" magnitudes. The focal 
+                        relationship is examined to guide changes.
+                    </p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>The Statistical Harm of Specification Shopping</h4>
+                <p>
+                    Specification shopping invalidates statistical inference. When you try multiple 
+                    specifications and select based on results:
+                </p>
+                <ul style="margin-bottom: 0;">
+                    <li>Confidence intervals no longer have nominal coverage</li>
+                    <li>p-values lose their interpretation as false positive rates</li>
+                    <li>Coefficient estimates are systematically biased toward expected values</li>
+                    <li>Uncertainty is underestimated because specification uncertainty is ignored</li>
+                </ul>
+            </div>
+
+            <h3>Legitimate Reasons to Modify a Model</h3>
+
+            <ul class="checklist">
+                <li>Prior predictive samples are implausible (reveals bad priors or structure)</li>
+                <li>MCMC diagnostics show convergence failures (model may be misspecified)</li>
+                <li>Posterior predictive checks reveal systematic patterns in residuals</li>
+                <li>Domain expert identifies missing confounders or incorrect functional form</li>
+                <li>New data become available that enable richer model structure</li>
+                <li class="x-item">Results don't match expectations (this is NOT a valid reason)</li>
+            </ul>
+
+            <h3>Pre-Registration as Protection</h3>
+
+            <p>
+                The most robust protection against specification shopping is <strong>pre-registration</strong>: 
+                committing to model specification before seeing results. This doesn't prevent iteration—you 
+                can still revise models—but it requires documenting and justifying changes, making the 
+                distinction between planned and exploratory analyses explicit.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="expanding">Expanding Models</h2>
+
+            <p>
+                When a model fails predictive checks or sensitivity analysis reveals fragility, 
+                we may need to expand it. Model expansion should be driven by the nature of the 
+                failure, not by a desire for different results.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Observed Problem</th>
+                        <th>Possible Expansion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Residual autocorrelation</td>
+                        <td>Add lagged terms, AR errors, or state-space dynamics</td>
+                    </tr>
+                    <tr>
+                        <td>Non-constant variance</td>
+                        <td>Model heteroskedasticity, use robust likelihood</td>
+                    </tr>
+                    <tr>
+                        <td>Outliers in posterior predictive</td>
+                        <td>Use heavy-tailed distribution, mixture model</td>
+                    </tr>
+                    <tr>
+                        <td>Group-level variation</td>
+                        <td>Hierarchical/multilevel structure</td>
+                    </tr>
+                    <tr>
+                        <td>Non-linear patterns</td>
+                        <td>Flexible basis functions, splines, saturation curves</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                Each expansion introduces complexity. Gelman et al. recommend thinking of models as a 
+                <strong>topology</strong>—a network of related models that can be compared and contrasted. 
+                Sometimes a simpler model in the network is adequate; sometimes we need to move to a 
+                more complex neighbor.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="predictive-checks">Predictive Checking</h2>
+
+            <p>
+                The primary tool for evaluating models is <strong>predictive checking</strong>: comparing 
+                model predictions to observed data. There are two forms:
+            </p>
+
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge">Before Fitting</span>
+                    <h4>Prior Predictive</h4>
+                    <p>
+                        Generate data using only priors. Do the implied predictions look plausible? 
+                        Could the observed data have come from this prior predictive distribution?
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge">After Fitting</span>
+                    <h4>Posterior Predictive</h4>
+                    <p>
+                        Generate replicated data from the posterior. Compare statistics of replicated 
+                        data to observed data. Where does the model fail to reproduce patterns?
+                    </p>
+                </div>
+            </div>
+
+            <h3>Prior Predictive Checks</h3>
+
+            <p>
+                Before fitting to data, sample from priors and push through the model:
+            </p>
+
+            <pre><code class="python"># Prior predictive check
+with model:
+    prior_pred = pm.sample_prior_predictive(samples=500)
+
+# Examine the implied distribution of predictions
+y_prior = prior_pred.prior_predictive["y"].values
+
+# Check: are these values plausible for sales data?
+# - All positive? (sales can't be negative)
+# - Reasonable range? (not implying billion-dollar weeks)
+# - Sensible variation? (not identical across all scenarios)</code></pre>
+
+            <h3>Posterior Predictive Checks</h3>
+
+            <p>
+                After fitting, generate replicated datasets and compare to observations:
+            </p>
+
+            <pre><code class="python"># Posterior predictive check
+with model:
+    post_pred = pm.sample_posterior_predictive(trace)
+
+# Compare observed and replicated data
+y_rep = post_pred.posterior_predictive["y"].values
+y_obs = data["sales"].values
+
+# Visual checks
+# - Does distribution of y_rep match distribution of y_obs?
+# - Do time-series patterns match?
+# - Are extreme values reproduced?
+
+# Quantitative checks (test statistics)
+# - Compare means, variances, autocorrelations
+# - p-value: P(T(y_rep) > T(y_obs)) should be near 0.5 if model is adequate</code></pre>
+
+            <!-- ================================================================== -->
+            <h2 id="sensitivity">Sensitivity Analysis</h2>
+
+            <p>
+                Sensitivity analysis asks: <em>how much do conclusions change if we change assumptions?</em>
+                Conclusions that are robust to reasonable alternative assumptions are more credible than 
+                those that depend on specific choices.
+            </p>
+
+            <h3>Types of Sensitivity Analysis</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Question</th>
+                        <th>Method</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Prior sensitivity</strong></td>
+                        <td>How much do priors affect conclusions?</td>
+                        <td>Re-fit with alternative priors, compare posteriors</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Likelihood sensitivity</strong></td>
+                        <td>Does distributional choice matter?</td>
+                        <td>Compare Normal vs. Student-t, Gaussian vs. log-normal</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Structural sensitivity</strong></td>
+                        <td>Does functional form affect results?</td>
+                        <td>Compare saturation functions, lag structures</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Data sensitivity</strong></td>
+                        <td>Are results driven by specific observations?</td>
+                        <td>Leave-one-out, jackknife, influence diagnostics</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h4>Robust Conclusions</h4>
+                <p style="margin-bottom: 0;">
+                    When conclusions are similar across reasonable variations in priors, likelihoods, 
+                    and structure, they can be reported with confidence. When conclusions are sensitive, 
+                    report the range of plausible values and be honest about uncertainty.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="validation">External Validation</h2>
+
+            <p>
+                The gold standard for model evaluation is <strong>external validation</strong>: testing 
+                predictions against data not used in fitting. In causal modeling, experimental validation 
+                is particularly valuable—it provides ground truth against which model predictions can be assessed.
+            </p>
+
+            <h3>Types of External Validation</h3>
+
+            <ul>
+                <li><strong>Temporal holdout:</strong> Fit on historical data, predict future periods</li>
+                <li><strong>Geographic holdout:</strong> Fit on some regions, predict held-out regions</li>
+                <li><strong>Experimental validation:</strong> Compare model predictions to experimental results</li>
+            </ul>
+
+            <p>
+                Experimental validation is particularly powerful because experiments provide causal 
+                estimates under minimal assumptions. If a model predicts that cutting TV spend in 
+                a region should reduce sales by 5%, and a geo-holdout experiment shows a 4.8% reduction, 
+                we have evidence the model is well-calibrated.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="starting-simple">Starting Simple</h2>
+
+            <p>
+                A common mistake is starting with a complex model. Better practice is to begin with 
+                the simplest model that could plausibly address your question, then expand as needed 
+                based on diagnostic failures.
+            </p>
+
+            <div class="definition">
+                <h4>The Iterative Expansion Strategy</h4>
+                <ol style="margin-bottom: 0;">
+                    <li>Start with the simplest reasonable model</li>
+                    <li>Check diagnostics and predictive performance</li>
+                    <li>If adequate, stop—complexity adds risk without benefit</li>
+                    <li>If inadequate, identify the specific failure mode</li>
+                    <li>Expand the model to address that failure</li>
+                    <li>Return to step 2</li>
+                </ol>
+            </div>
+
+            <p>
+                For Marketing Mix Models, a minimal starting point might be:
+            </p>
+
+            <ul>
+                <li>Linear model with adstocked media variables</li>
+                <li>Simple trend and seasonal dummies</li>
+                <li>Gaussian likelihood</li>
+                <li>Weakly informative priors</li>
+            </ul>
+
+            <p>
+                From there, expand based on diagnostic failures: add saturation if linearity is implausible, 
+                add hierarchical structure if residuals show geographic patterns, etc.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="when-to-stop">When to Stop</h2>
+
+            <p>
+                Model improvement has diminishing returns. At some point, additional complexity 
+                adds more risk (overfitting, computational cost, interpretability loss) than benefit. 
+                When should you stop?
+            </p>
+
+            <ul class="checklist">
+                <li>Prior predictive checks pass—implied predictions are plausible</li>
+                <li>Computational diagnostics pass—no divergences, good \(\hat{R}\), sufficient ESS</li>
+                <li>Posterior predictive checks pass—no systematic failures</li>
+                <li>Key conclusions are robust to sensitivity analysis</li>
+                <li>Model adequacy is sufficient for the decision at hand</li>
+            </ul>
+
+            <p>
+                "Sufficient for the decision at hand" is key. A model for screening which channels 
+                deserve experimentation needs less precision than a model for setting exact budget 
+                allocations. Match model effort to decision importance.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="communication">Communicating Models</h2>
+
+            <p>
+                A model is only useful if its insights can be communicated to decision-makers. 
+                Effective communication requires translating technical results into decision-relevant 
+                language—while honestly conveying uncertainty.
+            </p>
+
+            <h3>Principles for Model Communication</h3>
+
+            <ul>
+                <li><strong>Lead with decisions, not methods.</strong> "We estimate X, which implies Y for your decision" not "We ran a hierarchical Bayesian model with..."</li>
+                <li><strong>Quantify uncertainty visually.</strong> Credible intervals, posterior distributions, fan charts—make uncertainty tangible</li>
+                <li><strong>Distinguish robust from fragile findings.</strong> "We're confident about X, less certain about Y"</li>
+                <li><strong>Acknowledge limitations.</strong> Every model has them; hiding them erodes trust when they're eventually discovered</li>
+                <li><strong>Connect to validation.</strong> "This model predicted past experiments well" builds credibility</li>
+            </ul>
+
+            <div class="note">
+                <h4>Uncertainty as Value</h4>
+                <p style="margin-bottom: 0;">
+                    Honest uncertainty quantification is not a weakness—it's a feature. Wide credible 
+                    intervals tell you "we need more data or experimentation to decide this confidently." 
+                    That information is valuable: it prevents overconfident decisions and identifies 
+                    where to invest in learning.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2>Summary: The Scientific Modeling Mindset</h2>
+
+            <div class="principle-grid">
+                <div class="principle-card">
+                    <div class="icon">🎯</div>
+                    <h4>Question First</h4>
+                    <p>Start with the decision, not the technique. Let the question drive model structure.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">📖</div>
+                    <h4>Tell the Story</h4>
+                    <p>Every model should have a generative story. If you can't simulate data, you don't understand the model.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">🔄</div>
+                    <h4>Iterate Honestly</h4>
+                    <p>Model building is iterative—but changes should be driven by diagnostics, not desired results.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">🔍</div>
+                    <h4>Check Everything</h4>
+                    <p>Prior predictive, posterior predictive, diagnostics, sensitivity. Trust but verify.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">📊</div>
+                    <h4>Quantify Uncertainty</h4>
+                    <p>All models are wrong. Honest uncertainty is information, not weakness.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">✅</div>
+                    <h4>Validate Externally</h4>
+                    <p>Out-of-sample prediction and experimental validation build credibility.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // Simple scroll highlighting for sidebar
+        document.addEventListener('DOMContentLoaded', function() {
+            const sections = document.querySelectorAll('h2[id], h3[id]');
+            const navLinks = document.querySelectorAll('.sidebar-nav a');
+            
+            function updateActiveLink() {
+                let current = '';
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    if (scrollY >= sectionTop - 120) {
+                        current = section.getAttribute('id');
+                    }
+                });
+                
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href') === '#' + current) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+            
+            window.addEventListener('scroll', updateActiveLink);
+        });
+    </script>
+</body>
+</html>
