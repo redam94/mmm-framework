@@ -18,8 +18,9 @@
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+    <link rel="stylesheet" href="shared/styles.css">
     <style>
-        :root {
+        /* :root {
             --color-primary: #8fa86a;
             --color-primary-dark: #6d8a4a;
             --color-accent: #6a8fa8;
@@ -63,7 +64,7 @@
         .sidebar h3:first-child { margin-top: 0; }
         .sidebar-nav { list-style: none; }
         .sidebar-nav a { display: block; padding: 0.5rem 0; color: var(--color-text-muted); text-decoration: none; font-size: 0.95rem; transition: var(--transition-smooth); border-left: 2px solid transparent; padding-left: 1rem; margin-left: -1rem; }
-        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); } */
 
         .main-content { padding: 3rem 4rem; max-width: 900px; }
         .main-content h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; color: var(--color-text); }
@@ -247,7 +248,7 @@
     </style>
 </head>
 <body>
-    <nav>
+    <!-- <nav>
         <div class="nav-content">
             <a href="index.html" class="logo">MMM Framework</a>
             <ul class="nav-links">
@@ -262,7 +263,7 @@
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
-    </nav>
+    </nav> -->
 
     <div class="page-layout">
         <aside class="sidebar">
@@ -1045,7 +1046,7 @@ az.plot_ppc(trace, observed=y_observed)</code></pre>
 
         </main>
     </div>
-
+    <script src="shared/components.js"></script>
     <script>
         // Color scheme matching the site
         const colors = {

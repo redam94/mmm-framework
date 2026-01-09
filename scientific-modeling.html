@@ -9,8 +9,9 @@
     <script>mermaid.initialize({startOnLoad: true, theme: 'neutral'});</script>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
     <style>
-        :root {
+        /* :root {
             --color-primary: #6d8a4a;
             --color-primary-dark: #4a5f32;
             --color-accent: #6a8fa8;
@@ -36,11 +37,11 @@
         .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
         .nav-links { display: flex; gap: 2rem; list-style: none; }
         .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
-        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); } */
 
-        .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; }
+        /* .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; } */
         
-        .sidebar {
+        /* .sidebar {
             position: sticky; top: 5rem; height: calc(100vh - 5rem);
             overflow-y: auto; padding: 2rem; border-right: 1px solid var(--color-border); background: var(--color-bg);
         }
@@ -48,7 +49,7 @@
         .sidebar h3:first-child { margin-top: 0; }
         .sidebar-nav { list-style: none; }
         .sidebar-nav a { display: block; padding: 0.5rem 0; color: var(--color-text-muted); text-decoration: none; font-size: 0.95rem; transition: var(--transition-smooth); border-left: 2px solid transparent; padding-left: 1rem; margin-left: -1rem; }
-        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); } */
 
         .main-content { padding: 3rem 4rem; max-width: 900px; }
         .main-content h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; color: var(--color-text); }
@@ -248,7 +249,7 @@
     </style>
 </head>
 <body>
-    <nav>
+    <!-- <nav>
         <div class="nav-content">
             <a href="index.html" class="logo">MMM Framework</a>
             <ul class="nav-links">
@@ -263,7 +264,7 @@
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
-    </nav>
+    </nav> -->
 
     <div class="page-layout">
         <aside class="sidebar">
@@ -1137,7 +1138,7 @@ y_obs = data["sales"].values
 
         </main>
     </div>
-
+    <script src="shared/components.js"></script>
     <script>
         // Simple scroll highlighting for sidebar
         document.addEventListener('DOMContentLoaded', function() {

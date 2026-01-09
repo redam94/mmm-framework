@@ -18,8 +18,9 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
     <style>
-        :root {
+        /* :root {
             --color-primary: #8fa86a;
             --color-primary-dark: #6d8a4a;
             --color-accent: #6a8fa8;
@@ -47,9 +48,9 @@
             color: var(--color-text);
             line-height: 1.8;
             font-size: 17px;
-        }
+        } */
 
-        nav {
+        /* nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
             background: rgba(250, 251, 249, 0.95);
             backdrop-filter: blur(20px);
@@ -60,16 +61,16 @@
         .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
         .nav-links { display: flex; gap: 2rem; list-style: none; }
         .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
-        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); } */
 
-        .hero { padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        /* .hero { padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
         .container { max-width: 1000px; margin: 0 auto; padding: 0 2rem; }
         .hero h1 { font-family: 'DM Serif Display', serif; font-size: 2.8rem; margin-bottom: 1rem; color: var(--color-text); }
         .lead { font-size: 1.25rem; color: var(--color-text-muted); max-width: 800px; }
 
         section { padding: 4rem 0; }
         h2 { font-family: 'DM Serif Display', serif; font-size: 2rem; margin-bottom: 1.5rem; color: var(--color-text); }
-        h3 { font-size: 1.4rem; margin: 2rem 0 1rem; color: var(--color-text); }
+        h3 { font-size: 1.4rem; margin: 2rem 0 1rem; color: var(--color-text); } */
 
         .warning-box { background: rgba(201, 112, 103, 0.08); border: 1px solid rgba(201, 112, 103, 0.3); border-left: 4px solid var(--color-danger); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
         .warning-box h4 { color: var(--color-danger); margin-bottom: 0.75rem; }
@@ -144,7 +145,7 @@
         .btn-secondary { background: var(--color-surface); color: var(--color-text); border: 2px solid var(--color-border); }
         .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
-        footer { background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 3rem 0; margin-top: 4rem; }
+        /* footer { background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 3rem 0; margin-top: 4rem; }
         .footer-content { display: flex; justify-content: space-between; align-items: center; }
         .footer-links { display: flex; gap: 2rem; }
         .footer-links a { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; }
@@ -155,11 +156,11 @@
             .hero h1 { font-size: 2rem; }
             .card-grid, .dag-container, .chart-grid { grid-template-columns: 1fr; }
             .footer-content { flex-direction: column; gap: 1rem; }
-        }
+        } */
     </style>
 </head>
 <body>
-    <nav>
+    <!-- <nav>
         <div class="nav-content">
             <a href="index.html" class="logo">MMM Framework</a>
             <ul class="nav-links">
@@ -174,7 +175,7 @@
                 <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
             </ul>
         </div>
-    </nav>
+    </nav> -->
 
     <section class="hero">
         <div class="container">
@@ -1091,7 +1092,7 @@
         </div>
     </section>
 
-    <footer>
+    <!-- <footer>
         <div class="container footer-content">
             <span class="logo">MMM Framework</span>
             <div class="footer-links">
@@ -1103,8 +1104,8 @@
                 <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
             </div>
         </div>
-    </footer>
-
+    </footer> -->
+    <script src="shared/components.js"></script>
     <script>
         const colors = {
             primary: '#8fa86a', primaryDark: '#6d8a4a',
