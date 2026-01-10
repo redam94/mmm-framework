@@ -12,7 +12,11 @@
         <lastmod>2026-01-05</lastmod>
         <changefreq>monthly</changefreq>
     </url>
-
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/getting-started.html</loc>
+        <lastmod>2026-01-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/bayesian-workflow.html</loc>
         <lastmod>2026-01-05</lastmod>
