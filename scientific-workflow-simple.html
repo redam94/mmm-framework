@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scientific Modeling for Everyone | MMM Framework</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Plotly for Interactive Charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- Mermaid for Diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    
+    <style>
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #c9a067;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf8;
+            --color-bg-alt: #f5f7f2;
+            --color-surface: #ffffff;
+            --color-border: #e0e5dc;
+            --color-grid: rgba(90, 124, 101, 0.1);
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+            --transition-smooth: all 0.3s ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Source Sans 3', -apple-system, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+            font-size: 17px;
+        }
+
+        /* Page Layout */
+        .page-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 2rem 1.5rem;
+            border-right: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+
+        .sidebar h3 {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--color-text-muted);
+            margin-bottom: 0.75rem;
+            margin-top: 1.75rem;
+            font-weight: 600;
+        }
+
+        .sidebar h3:first-child { margin-top: 0; }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav a {
+            display: block;
+            padding: 0.5rem 0;
+            padding-left: 1rem;
+            margin-left: -1rem;
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            border-left: 3px solid transparent;
+            transition: var(--transition-smooth);
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            color: var(--color-primary);
+            border-left-color: var(--color-primary);
+            background: rgba(90, 124, 101, 0.05);
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 3rem 4rem;
+            max-width: 950px;
+        }
+
+        .main-content h1 {
+            font-family: 'DM Serif Display', Georgia, serif;
+            font-size: 2.75rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--color-primary);
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+        }
+
+        .lead {
+            font-size: 1.2rem;
+            color: var(--color-text-muted);
+            margin-bottom: 2.5rem;
+            line-height: 1.8;
+        }
+
+        h2 {
+            font-family: 'DM Serif Display', Georgia, serif;
+            font-size: 1.9rem;
+            margin-top: 4rem;
+            margin-bottom: 1.25rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--color-border);
+            color: var(--color-text);
+        }
+
+        h2:first-of-type {
+            border-top: none;
+            margin-top: 2rem;
+        }
+
+        h3 {
+            font-size: 1.35rem;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        p { margin-bottom: 1.25rem; }
+
+        /* Analogy Cards */
+        .analogy-card {
+            background: linear-gradient(135deg, var(--color-bg-alt) 0%, var(--color-surface) 100%);
+            border: 1px solid var(--color-border);
+            border-left: 5px solid var(--color-accent);
+            border-radius: var(--radius-md);
+            padding: 1.75rem 2rem;
+            margin: 2rem 0;
+            position: relative;
+        }
+
+        .analogy-card::before {
+            content: "💡";
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            font-size: 1.5rem;
+            background: var(--color-surface);
+            padding: 0 0.5rem;
+        }
+
+        .analogy-card h4 {
+            color: var(--color-accent-dark);
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+        }
+
+        .analogy-card p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Key Insight Boxes */
+        .key-insight {
+            background: linear-gradient(135deg, rgba(143, 168, 106, 0.12) 0%, rgba(90, 124, 101, 0.08) 100%);
+            border: 1px solid rgba(90, 124, 101, 0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem 2rem;
+            margin: 2rem 0;
+        }
+
+        .key-insight h4 {
+            color: var(--color-primary-dark);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .key-insight h4::before {
+            content: "✦";
+            color: var(--color-primary);
+        }
+
+        /* Warning Boxes */
+        .warning-box {
+            background: linear-gradient(135deg, rgba(201, 160, 103, 0.12) 0%, rgba(201, 112, 103, 0.08) 100%);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: 1.5rem 2rem;
+            margin: 2rem 0;
+        }
+
+        .warning-box h4 {
+            color: var(--color-danger);
+            margin-bottom: 0.75rem;
+        }
+
+        /* Interactive Demo Boxes */
+        .interactive-demo {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin: 2.5rem 0;
+            box-shadow: var(--shadow-md);
+        }
+
+        .interactive-demo h4 {
+            font-size: 1.15rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .interactive-demo .demo-subtitle {
+            color: var(--color-text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 380px;
+            margin: 1rem 0;
+        }
+
+        .chart-explanation {
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+        }
+
+        .chart-explanation strong {
+            color: var(--color-text);
+        }
+
+        /* Sliders */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .control-row label {
+            min-width: 200px;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .control-row input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--color-border);
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .control-row input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition-smooth);
+        }
+
+        .control-row input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background: var(--color-primary-dark);
+        }
+
+        .value-display {
+            min-width: 50px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            background: var(--color-bg-alt);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        /* Comparison Grid */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .comparison-card {
+            padding: 1.75rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+        }
+
+        .comparison-card.good {
+            background: linear-gradient(135deg, rgba(103, 201, 154, 0.08) 0%, var(--color-surface) 100%);
+            border-color: rgba(103, 201, 154, 0.4);
+        }
+
+        .comparison-card.bad {
+            background: linear-gradient(135deg, rgba(201, 112, 103, 0.08) 0%, var(--color-surface) 100%);
+            border-color: rgba(201, 112, 103, 0.4);
+        }
+
+        .comparison-card h4 {
+            margin-bottom: 1rem;
+            font-size: 1.05rem;
+        }
+
+        .comparison-card ul {
+            margin: 0;
+            padding-left: 1.25rem;
+        }
+
+        .comparison-card li {
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        /* Stats Highlight */
+        .stat-highlight {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .stat-highlight.danger {
+            background: rgba(201, 112, 103, 0.15);
+            color: var(--color-danger);
+        }
+
+        .stat-highlight.success {
+            background: rgba(103, 201, 154, 0.15);
+            color: #3d8b5a;
+        }
+
+        .stat-highlight.warning {
+            background: rgba(201, 160, 103, 0.15);
+            color: #8a6d2d;
+        }
+
+        /* Mermaid Diagrams */
+        .diagram-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .diagram-container h4 {
+            margin-bottom: 1.5rem;
+            color: var(--color-text);
+        }
+
+        /* Visual Metaphor Sections */
+        .visual-metaphor {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: center;
+            margin: 2.5rem 0;
+            padding: 2rem;
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-lg);
+        }
+
+        .visual-metaphor .metaphor-image {
+            text-align: center;
+            font-size: 4rem;
+            line-height: 1;
+        }
+
+        .visual-metaphor .metaphor-text h4 {
+            font-size: 1.2rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-primary-dark);
+        }
+
+        /* Quick Stats Row */
+        .stats-row {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--color-bg-alt);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--color-border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--color-primary-light);
+        }
+
+        /* Code */
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            background: var(--color-bg-alt);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            color: var(--color-primary-dark);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .page-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: relative;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            .main-content {
+                padding: 2rem;
+            }
+
+            .comparison-grid,
+            .visual-metaphor {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Getting Started</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#introduction">What is a Model?</a></li>
+                <li><a href="#map-analogy">The Map Analogy</a></li>
+                <li><a href="#all-models-wrong">All Models Are Wrong</a></li>
+            </ul>
+
+            <h3>Building Intuition</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#generative">The Story-Telling Approach</a></li>
+                <li><a href="#prior-predictive">Checking Your Assumptions</a></li>
+                <li><a href="#questions-first">Start With Questions</a></li>
+            </ul>
+
+            <h3>The Scientific Process</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#iteration">Learning Through Iteration</a></li>
+                <li><a href="#honest-vs-shopping">Honest vs. Shopping</a></li>
+                <li><a href="#multiple-testing">The Fishing Problem</a></li>
+                <li><a href="#winners-curse">The Winner's Curse</a></li>
+            </ul>
+
+            <h3>Checking Your Work</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#sensitivity">Sensitivity Analysis</a></li>
+                <li><a href="#validation">External Validation</a></li>
+            </ul>
+
+            <h3>Practical Takeaways</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#communication">Communicating Uncertainty</a></li>
+                <li><a href="#summary">Key Principles</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Scientific Modeling Made Simple</h1>
+            <p class="subtitle">A practical guide for everyone—no PhD required</p>
+            
+            <p class="lead">
+                Statistical models are tools that help us understand what's really happening with our marketing.
+                This guide explains the core principles in plain language, with visual demonstrations you can 
+                explore yourself. By the end, you'll understand why our approach produces more reliable insights
+                than traditional methods.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="introduction">What is a Statistical Model?</h2>
+
+            <p>
+                At its core, a statistical model is simply a <strong>story about how your data came to be</strong>.
+                It's a mathematical way of saying "we think sales happen because of these factors, in this way."
+            </p>
+
+            <div class="analogy-card">
+                <h4>Think of it like a recipe</h4>
+                <p>
+                    A cooking recipe tells you: "If you combine these ingredients in these proportions, 
+                    you'll get this dish." A statistical model does the same thing for business outcomes: 
+                    "If TV spend is this much, and digital is this much, and it's this time of year, 
+                    you'll get approximately this many sales."
+                </p>
+                <p>
+                    Just like recipes can be simplified (leaving out optional garnishes) or detailed 
+                    (specifying exact temperatures), models can be simple or complex. The goal isn't to 
+                    capture every possible factor—it's to capture the ones that matter for your question.
+                </p>
+            </div>
+
+            <h3 id="map-analogy">The Map Analogy</h3>
+
+            <div class="visual-metaphor">
+                <div class="metaphor-image">🗺️</div>
+                <div class="metaphor-text">
+                    <h4>Models are like maps, not photographs</h4>
+                    <p>
+                        A subway map doesn't show every building, tree, or street in the city. It leaves 
+                        out most details to focus on what matters: how to get from A to B.
+                    </p>
+                    <p>
+                        Similarly, our marketing models don't capture every factor that affects sales. 
+                        They focus on the factors we can measure and control—like ad spend—while 
+                        acknowledging that other things matter too.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                This perspective is actually <em>freeing</em>: we're not trying to find some "perfect" 
+                model that captures all of reality. We're building useful tools for making better decisions, 
+                while being honest about what they can and can't tell us.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="all-models-wrong">All Models Are Wrong (And That's OK)</h2>
+
+            <p>
+                There's a famous saying in statistics: <strong>"All models are wrong, but some are useful."</strong>
+                This isn't pessimism—it's wisdom.
+            </p>
+
+            <div class="analogy-card">
+                <h4>The weather forecast comparison</h4>
+                <p>
+                    Weather forecasts are "wrong" in the sense that they can't predict exactly when and 
+                    where each raindrop will fall. But they're incredibly <em>useful</em>—you probably 
+                    check the forecast before planning outdoor activities.
+                </p>
+                <p>
+                    Marketing models work the same way. We won't predict your exact sales next Tuesday, 
+                    but we can tell you whether TV is likely working better than social media, and give 
+                    you a realistic range of what to expect.
+                </p>
+            </div>
+
+            <div class="key-insight">
+                <h4>The key question isn't "Is this model perfect?"</h4>
+                <p>
+                    It's "Is this model <strong>useful enough</strong> for the decision I need to make?"
+                    A model that tells you TV's ROI is somewhere between 1.5 and 2.5 is useful for deciding 
+                    whether to keep investing in TV. It doesn't need to tell you the ROI is exactly 1.87.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="generative">The Story-Telling Approach</h2>
+
+            <p>
+                The best models start with a clear <strong>story</strong> about how things work. We call 
+                this a "generative" approach—we can use the model to <em>generate</em> fake data that 
+                should look like real data if our story is correct.
+            </p>
+
+            <div class="analogy-card">
+                <h4>Like a flight simulator</h4>
+                <p>
+                    Pilots train in flight simulators before flying real planes. A simulator is a "model" 
+                    of how flying works—it generates realistic experiences based on the rules of physics 
+                    and aerodynamics.
+                </p>
+                <p>
+                    If the simulator produces wildly unrealistic results (planes flying backwards, for instance), 
+                    you'd know something is wrong with the underlying model. Our statistical models work the 
+                    same way: we can run them "forward" to generate synthetic data, and check whether it 
+                    looks plausible.
+                </p>
+            </div>
+
+            <h3 id="prior-predictive">Checking Your Assumptions</h3>
+
+            <p>
+                Before we even look at real data, we can test whether our assumptions make sense. This is 
+                called a <strong>prior predictive check</strong>—we're checking what our model predicts 
+                based only on our assumptions, before learning from the data.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>🔬 Interactive: See Your Assumptions in Action</h4>
+                <p class="demo-subtitle">
+                    Move the sliders to change how confident we are about media effects. Watch how this 
+                    changes the range of sales our model thinks are possible—before seeing any real data.
+                </p>
+
+                <div class="control-group">
+                    <div class="control-row">
+                        <label>How confident about media effect?</label>
+                        <input type="range" id="effectConfidence" min="0.1" max="1.0" step="0.05" value="0.3">
+                        <span class="value-display" id="effectConfidenceVal">0.30</span>
+                    </div>
+                    <div class="control-row">
+                        <label>How confident about baseline sales?</label>
+                        <input type="range" id="baselineConfidence" min="0.1" max="0.5" step="0.05" value="0.2">
+                        <span class="value-display" id="baselineConfidenceVal">0.20</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="priorPredictiveChart"></div>
+
+                <div class="chart-explanation">
+                    <strong>What you're seeing:</strong> Each gray line shows a possible sales trajectory 
+                    based on our assumptions. If the gray band covers impossible values (like negative sales), 
+                    our assumptions need adjustment. The green dashed lines show a realistic range for actual sales.
+                </div>
+            </div>
+
+            <p>
+                This might seem like extra work, but it catches problems early. If our assumptions imply 
+                that weekly sales could be negative or could be $1 billion, we know something is wrong 
+                <em>before</em> we waste time fitting the model.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="questions-first">Start With Questions, Not Data</h2>
+
+            <p>
+                The most common mistake in analysis is jumping straight to the data without first 
+                clarifying what question you're trying to answer. The question determines everything 
+                else: what data you need, what model is appropriate, and how to evaluate success.
+            </p>
+
+            <div class="visual-metaphor">
+                <div class="metaphor-text">
+                    <h4>Navigation without a destination</h4>
+                    <p>
+                        Imagine opening Google Maps before deciding where you want to go. You'd just 
+                        be zooming around randomly. You need a destination first—then the tool becomes useful.
+                    </p>
+                    <p>
+                        Similarly, "What does the data say?" is the wrong first question. Better questions 
+                        are: "Should we increase TV spend?" or "Which channel drives the most incremental sales?"
+                    </p>
+                </div>
+                <div class="metaphor-image">🧭</div>
+            </div>
+
+            <p>
+                Different questions require different approaches. If you want to know whether TV ads 
+                <em>cause</em> sales increases (vs. just happening to coincide with them), that requires 
+                different methods than simply describing what happened.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="iteration">Learning Through Iteration</h2>
+
+            <p>
+                Scientific modeling is inherently iterative. We build a model, check if it makes sense, 
+                learn from what doesn't work, and improve. This isn't a bug—it's the process working as intended.
+            </p>
+
+            <div class="diagram-container">
+                <h4>The Scientific Modeling Cycle</h4>
+                <div class="mermaid">
+                flowchart LR
+                    Q[🎯 Define Question] --> S[📖 Tell the Story]
+                    S --> B[🔧 Build Model]
+                    B --> C[✓ Check Assumptions]
+                    C -->|Problems?| S
+                    C -->|OK| F[📊 Fit to Data]
+                    F --> D[🔍 Diagnose Results]
+                    D -->|Issues?| B
+                    D -->|OK| R[📋 Report Findings]
+                    
+                    style Q fill:#f0f7e6,stroke:#6d8a4a
+                    style S fill:#e6f0f7,stroke:#4a6d8a
+                    style B fill:#f7f0e6,stroke:#8a6d4a
+                    style C fill:#e6f7f0,stroke:#4a8a6d
+                    style F fill:#f0e6f7,stroke:#6d4a8a
+                    style D fill:#f7e6f0,stroke:#8a4a6d
+                    style R fill:#f0f7e6,stroke:#6d8a4a
+                </div>
+            </div>
+
+            <p>
+                Each time through the cycle, we learn something. Maybe our assumptions were too loose 
+                (the model thinks sales could be negative). Maybe the model can't capture an important 
+                pattern in the data (it misses every December spike). Each failure teaches us what to fix.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="honest-vs-shopping">Honest Iteration vs. Specification Shopping</h2>
+
+            <p>
+                Here's the crucial distinction: there's a <strong>right way</strong> and a <strong>wrong way</strong> 
+                to iterate on models. The difference isn't about the mechanical actions—it's about <em>what's 
+                driving the changes</em>.
+            </p>
+
+            <div class="comparison-grid">
+                <div class="comparison-card good">
+                    <h4 style="color: #3d8b5a;">✓ Honest Scientific Iteration</h4>
+                    <p>Changes driven by:</p>
+                    <ul>
+                        <li>Model produces impossible predictions</li>
+                        <li>Clear patterns the model misses</li>
+                        <li>Domain expertise suggests missing factors</li>
+                        <li>Pre-planned alternatives to test</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--color-text-muted);">
+                        <strong>The goal:</strong> Make the model better at capturing reality
+                    </p>
+                </div>
+                <div class="comparison-card bad">
+                    <h4 style="color: #c97067;">✗ Specification Shopping</h4>
+                    <p>Changes driven by:</p>
+                    <ul>
+                        <li>"That coefficient should be positive"</li>
+                        <li>"The ROI needs to be above 1.0"</li>
+                        <li>"This doesn't match our expectations"</li>
+                        <li>"The client won't like this result"</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--color-text-muted);">
+                        <strong>The goal:</strong> Get the results you wanted
+                    </p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>⚠️ Why Specification Shopping Is Dangerous</h4>
+                <p>
+                    When you adjust your model until you get the results you want, you're not 
+                    <em>discovering</em> anything—you're just <strong>manufacturing</strong> the answer you 
+                    already had in mind. The statistics look legitimate, but they've lost their meaning.
+                </p>
+                <p style="margin-bottom: 0;">
+                    It's like weighing yourself on different scales until you find one that shows the 
+                    number you want. The scale isn't wrong—you've just selected on the outcome.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="multiple-testing">The Fishing Problem</h2>
+
+            <p>
+                Imagine fishing in a pond with 100 fishing rods. If you cast all 100 and report only 
+                the one that caught a fish, you haven't proven you're a good angler—you've just tried 
+                a lot of times. This is the <strong>multiple testing problem</strong>.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>⚠️ Interactive: Watch False Positives Multiply</h4>
+                <p class="demo-subtitle">
+                    When analysts test many model specifications and report the best one, the chance of 
+                    finding something "significant" by pure luck skyrockets. Move the slider to see the effect.
+                </p>
+
+                <div class="control-group">
+                    <div class="control-row">
+                        <label>Number of specifications tested:</label>
+                        <input type="range" id="numSpecs" min="1" max="100" step="1" value="20">
+                        <span class="value-display" id="numSpecsVal">20</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="multipleTestingChart"></div>
+
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <span class="stat-label">Effective False Positive Rate:</span>
+                        <span class="stat-highlight danger" id="effectiveFPR">64.2%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">What the report claims:</span>
+                        <span class="stat-highlight success">5%</span>
+                    </div>
+                </div>
+
+                <div class="chart-explanation">
+                    <strong>The gap is staggering:</strong> When you test 20 specifications and report 
+                    the best one, your actual false positive rate is about 64%—not the 5% your statistics 
+                    claim. You're over 12x more likely to be fooled by random noise.
+                </div>
+            </div>
+
+            <div class="analogy-card">
+                <h4>The birthday party trick</h4>
+                <p>
+                    At a party with 23 people, there's a 50% chance two people share a birthday. With 
+                    50 people, it's 97%. This feels surprising because we think about finding someone 
+                    with <em>our</em> birthday—but the question is finding <em>any</em> match.
+                </p>
+                <p>
+                    Specification shopping works the same way. Each individual test has a small chance 
+                    of a false positive. But when you run many tests and pick the best one, you're not 
+                    asking "did <em>this</em> specification get lucky?" You're asking "did <em>any</em> 
+                    specification get lucky?" And the answer is usually yes.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="winners-curse">The Winner's Curse</h2>
+
+            <p>
+                Even when there <em>is</em> a real effect, specification shopping makes you overestimate it.
+                This is called the <strong>Winner's Curse</strong>: the specification that "wins" 
+                (looks best) is usually the one that got lucky with random noise.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>📊 Interactive: See the Bias Build Up</h4>
+                <p class="demo-subtitle">
+                    Each specification estimates the same true effect, but random variation makes some 
+                    estimates higher and some lower. When you pick the highest one, you systematically overestimate.
+                </p>
+
+                <div class="control-group">
+                    <div class="control-row">
+                        <label>True media effect:</label>
+                        <input type="range" id="trueEffect" min="0" max="0.5" step="0.05" value="0.2">
+                        <span class="value-display" id="trueEffectVal">0.20</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Noise in each estimate:</label>
+                        <input type="range" id="estNoise" min="0.05" max="0.3" step="0.01" value="0.1">
+                        <span class="value-display" id="estNoiseVal">0.10</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Specifications tested:</label>
+                        <input type="range" id="winnerSpecs" min="1" max="50" step="1" value="20">
+                        <span class="value-display" id="winnerSpecsVal">20</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="winnersCurseChart"></div>
+
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <span class="stat-label">True effect:</span>
+                        <span class="stat-highlight success" id="trueEffectDisplay">0.20</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Expected reported effect:</span>
+                        <span class="stat-highlight warning" id="reportedEffect">0.29</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Overestimation:</span>
+                        <span class="stat-highlight danger" id="overestimation">+45%</span>
+                    </div>
+                </div>
+
+                <div class="chart-explanation">
+                    <strong>This explains failed replications:</strong> Effects that were "discovered" 
+                    through specification shopping often fail to replicate because the original estimate 
+                    was inflated by lucky noise. The true effect is smaller than what was reported.
+                </p>
+            </div>
+
+            <div class="analogy-card">
+                <h4>The sports tryout analogy</h4>
+                <p>
+                    Imagine evaluating basketball players based on a single day's performance. The player 
+                    who scores most that day isn't necessarily the best—they might have had an unusually 
+                    good day. If you sign them expecting that performance to continue, you'll be disappointed.
+                </p>
+                <p>
+                    Specification shopping does exactly this with statistical estimates: it selects the 
+                    estimate that performed best on this particular dataset, which is often unusually good 
+                    due to chance.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="sensitivity">Sensitivity Analysis: Stress-Testing Your Conclusions</h2>
+
+            <p>
+                The solution to these problems isn't to never make any modeling choices—that's impossible. 
+                It's to <strong>test how much your conclusions change</strong> across reasonable alternatives. 
+                This is called <strong>sensitivity analysis</strong>.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>🔄 Interactive: How Robust Are Your Results?</h4>
+                <p class="demo-subtitle">
+                    Good results hold up across reasonable alternative assumptions. Fragile results flip-flop.
+                    Watch how honest reporting differs from cherry-picked reporting.
+                </p>
+
+                <div class="control-group">
+                    <div class="control-row">
+                        <label>Specifications analyzed:</label>
+                        <input type="range" id="sensitivitySpecs" min="1" max="30" step="1" value="10">
+                        <span class="value-display" id="sensitivitySpecsVal">10</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Variation across specs:</label>
+                        <input type="range" id="specVariation" min="0.05" max="0.4" step="0.01" value="0.15">
+                        <span class="value-display" id="specVariationVal">0.15</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="sensitivityChart"></div>
+
+                <div class="chart-explanation">
+                    <strong>Honest reporting:</strong> The shaded band shows the full range of results 
+                    across reasonable specifications. A finding is "robust" if it holds across this range 
+                    (e.g., the effect is always positive). It's "fragile" if it could flip.
+                </div>
+            </div>
+
+            <div class="key-insight">
+                <h4>Robust findings vs. fragile findings</h4>
+                <p>
+                    Some findings hold up no matter how we specify the model: "TV has a positive effect 
+                    on sales" might be robust. Others are fragile: "TV's ROI is exactly 2.3" might vary 
+                    wildly across specifications.
+                </p>
+                <p style="margin-bottom: 0;">
+                    Honest analysis reports both—and clearly distinguishes which conclusions you can 
+                    trust and which are more speculative.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="validation">External Validation: The Ultimate Test</h2>
+
+            <p>
+                The best way to know if your model works is to <strong>test it against reality</strong>. 
+                This means using it to make predictions and then checking if those predictions come true.
+            </p>
+
+            <div class="visual-metaphor">
+                <div class="metaphor-image">🎯</div>
+                <div class="metaphor-text">
+                    <h4>Predictions create accountability</h4>
+                    <p>
+                        A weather forecaster who's always wrong eventually loses credibility. Models 
+                        should face the same test: if they consistently make predictions that fail, 
+                        we should trust them less.
+                    </p>
+                    <p>
+                        We recommend running controlled experiments (like geo-tests) to validate model 
+                        predictions whenever possible. Models that pass these tests earn more trust.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="communication">Communicating Uncertainty Honestly</h2>
+
+            <p>
+                Perhaps the most important skill in statistical modeling is <strong>honest communication</strong>. 
+                This means reporting what you actually know, what you don't know, and how confident you 
+                should be in each conclusion.
+            </p>
+
+            <div class="comparison-grid">
+                <div class="comparison-card bad">
+                    <h4 style="color: #c97067;">❌ False Confidence</h4>
+                    <p>"TV ROI is 2.3"</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted);">
+                        Implies precision that doesn't exist. Hides the uncertainty.
+                    </p>
+                </div>
+                <div class="comparison-card good">
+                    <h4 style="color: #3d8b5a;">✓ Honest Uncertainty</h4>
+                    <p>"TV ROI is likely between 1.8 and 2.8"</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted);">
+                        Shows the actual range. Enables better decisions.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                Counterintuitively, <strong>honest uncertainty is more useful</strong> than false precision. 
+                If TV's ROI could be anywhere from 1.5 to 3.0, you know TV is clearly positive—worth 
+                investing in. But you also know not to optimize to the third decimal place, because 
+                that precision is an illusion.
+            </p>
+
+            <div class="analogy-card">
+                <h4>The GPS analogy</h4>
+                <p>
+                    When GPS says "arrive in 45-55 minutes," that's more useful than "arrive in exactly 
+                    47 minutes"—because you know to plan for the range. Reporting a single number implies 
+                    a confidence that doesn't exist and leads to worse planning.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="summary">Key Principles to Remember</h2>
+
+            <div class="key-insight" style="padding: 2rem;">
+                <h4 style="font-size: 1.2rem;">The Five Pillars of Scientific Modeling</h4>
+                
+                <p style="margin-top: 1.5rem; margin-bottom: 0.5rem;"><strong>1. Start with questions, not data.</strong></p>
+                <p style="color: var(--color-text-muted); margin-bottom: 1.25rem;">
+                    Know what you're trying to learn before you start analyzing. The question shapes everything.
+                </p>
+
+                <p style="margin-bottom: 0.5rem;"><strong>2. Build models as stories.</strong></p>
+                <p style="color: var(--color-text-muted); margin-bottom: 1.25rem;">
+                    A good model tells a clear story about how things work. If you can't explain the story, 
+                    the model isn't ready.
+                </p>
+
+                <p style="margin-bottom: 0.5rem;"><strong>3. Check assumptions before results.</strong></p>
+                <p style="color: var(--color-text-muted); margin-bottom: 1.25rem;">
+                    Run prior predictive checks. Make sure your assumptions don't imply impossible things.
+                </p>
+
+                <p style="margin-bottom: 0.5rem;"><strong>4. Iterate honestly.</strong></p>
+                <p style="color: var(--color-text-muted); margin-bottom: 1.25rem;">
+                    Change models to fix problems, not to get desired results. Document what you tried and why.
+                </p>
+
+                <p style="margin-bottom: 0.5rem;"><strong>5. Report uncertainty honestly.</strong></p>
+                <p style="color: var(--color-text-muted); margin-bottom: 0;">
+                    Show ranges, not false precision. Distinguish robust findings from fragile ones. 
+                    Let stakeholders make informed decisions.
+                </p>
+            </div>
+
+            <p style="margin-top: 2rem;">
+                These principles might seem like they lead to "less confident" answers—and they do! 
+                But they lead to answers you can actually trust. A confident-sounding answer that's 
+                wrong is worse than an honest range that captures reality.
+            </p>
+
+            <p>
+                The goal of scientific modeling isn't to produce the most impressive-looking numbers. 
+                It's to learn what's actually true about your marketing and make better decisions as a result.
+            </p>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#f0f7e6',
+                primaryBorderColor: '#6d8a4a',
+                secondaryColor: '#e6f0f7',
+                tertiaryColor: '#f7f0e6',
+                fontFamily: 'Source Sans 3, sans-serif',
+                fontSize: '14px'
+            }
+        });
+
+        // Chart configuration
+        const chartConfig = {
+            responsive: true,
+            displayModeBar: false
+        };
+
+        const colors = {
+            primary: '#5a7c65',
+            primaryLight: '#8fa86a',
+            primaryDark: '#3d5a47',
+            accent: '#6a8fa8',
+            warning: '#c9a067',
+            danger: '#c97067',
+            success: '#67c99a',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: 'rgba(90, 124, 101, 0.1)',
+            surface: '#ffffff'
+        };
+
+        // Utility functions
+        function normalRandom(mean = 0, std = 1) {
+            const u1 = Math.random();
+            const u2 = Math.random();
+            return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        }
+
+        // =====================================================================
+        // Prior Predictive Chart
+        // =====================================================================
+        function initPriorPredictiveChart() {
+            const container = document.getElementById('priorPredictiveChart');
+            if (!container) return;
+
+            const effectSlider = document.getElementById('effectConfidence');
+            const baselineSlider = document.getElementById('baselineConfidence');
+
+            function updateChart() {
+                const effectSD = parseFloat(effectSlider.value);
+                const baselineSD = parseFloat(baselineSlider.value);
+
+                document.getElementById('effectConfidenceVal').textContent = effectSD.toFixed(2);
+                document.getElementById('baselineConfidenceVal').textContent = baselineSD.toFixed(2);
+
+                const n = 52;
+                const traces = [];
+                const allY = [];
+
+                // Generate prior predictive draws
+                for (let draw = 0; draw < 40; draw++) {
+                    const intercept = 100 * (1 + normalRandom(0, baselineSD));
+                    const beta = normalRandom(0, effectSD);
+                    const trend = normalRandom(0, 0.015);
+
+                    const y = [];
+                    for (let t = 0; t < n; t++) {
+                        const media = 50 + 30 * Math.sin(2 * Math.PI * t / 12);
+                        const baseline = intercept * (1 + trend * t);
+                        const effect = beta * media;
+                        const noise = normalRandom(0, 8);
+                        const val = baseline + effect + noise;
+                        y.push(val);
+                        allY.push(val);
+                    }
+
+                    traces.push({
+                        x: Array.from({length: n}, (_, i) => i + 1),
+                        y: y,
+                        mode: 'lines',
+                        line: { color: 'rgba(90, 124, 101, 0.15)', width: 1.5 },
+                        showlegend: false,
+                        hoverinfo: 'skip'
+                    });
+                }
+
+                // Observed data range (plausible)
+                traces.push({
+                    x: [1, 52],
+                    y: [70, 70],
+                    mode: 'lines',
+                    name: 'Plausible minimum',
+                    line: { color: colors.success, width: 2, dash: 'dash' },
+                    showlegend: true
+                });
+                traces.push({
+                    x: [1, 52],
+                    y: [180, 180],
+                    mode: 'lines',
+                    name: 'Plausible maximum',
+                    line: { color: colors.success, width: 2, dash: 'dash' },
+                    showlegend: true
+                });
+
+                const layout = {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 30, r: 30, b: 50, l: 60 },
+                    xaxis: {
+                        title: 'Week',
+                        gridcolor: colors.grid,
+                        zeroline: false
+                    },
+                    yaxis: {
+                        title: 'Sales (prior predictions)',
+                        gridcolor: colors.grid,
+                        zeroline: true,
+                        zerolinecolor: colors.danger,
+                        zerolinewidth: 2
+                    },
+                    legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' },
+                    showlegend: true
+                };
+
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+
+            effectSlider.addEventListener('input', updateChart);
+            baselineSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Multiple Testing Chart
+        // =====================================================================
+        function initMultipleTestingChart() {
+            const container = document.getElementById('multipleTestingChart');
+            if (!container) return;
+
+            const specsSlider = document.getElementById('numSpecs');
+
+            function updateChart() {
+                const k = parseInt(specsSlider.value);
+                document.getElementById('numSpecsVal').textContent = k;
+
+                const alpha = 0.05;
+                const fpr = 1 - Math.pow(1 - alpha, k);
+                document.getElementById('effectiveFPR').textContent = (fpr * 100).toFixed(1) + '%';
+
+                // Generate data for chart
+                const specs = [];
+                const nominalRates = [];
+                const effectiveRates = [];
+
+                for (let i = 1; i <= 100; i++) {
+                    specs.push(i);
+                    nominalRates.push(5);
+                    effectiveRates.push((1 - Math.pow(1 - 0.05, i)) * 100);
+                }
+
+                const traces = [
+                    {
+                        x: specs,
+                        y: nominalRates,
+                        mode: 'lines',
+                        name: 'What statistics claim (5%)',
+                        line: { color: colors.success, width: 3 },
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(103, 201, 154, 0.2)'
+                    },
+                    {
+                        x: specs,
+                        y: effectiveRates,
+                        mode: 'lines',
+                        name: 'Actual false positive rate',
+                        line: { color: colors.danger, width: 3 },
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(201, 112, 103, 0.2)'
+                    },
+                    {
+                        x: [k, k],
+                        y: [0, 100],
+                        mode: 'lines',
+                        name: 'Your specs tested',
+                        line: { color: colors.text, width: 2, dash: 'dash' },
+                        showlegend: false
+                    },
+                    {
+                        x: [k],
+                        y: [(1 - Math.pow(1 - 0.05, k)) * 100],
+                        mode: 'markers',
+                        marker: { size: 14, color: colors.danger, symbol: 'circle' },
+                        showlegend: false,
+                        hoverinfo: 'text',
+                        text: `${k} specs → ${((1 - Math.pow(1 - 0.05, k)) * 100).toFixed(1)}% false positive rate`
+                    }
+                ];
+
+                const layout = {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 40, r: 30, b: 50, l: 60 },
+                    xaxis: {
+                        title: 'Number of specifications tested',
+                        gridcolor: colors.grid,
+                        range: [0, 105]
+                    },
+                    yaxis: {
+                        title: 'False positive rate (%)',
+                        gridcolor: colors.grid,
+                        range: [0, 105]
+                    },
+                    legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center' },
+                    showlegend: true
+                };
+
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+
+            specsSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Winner's Curse Chart
+        // =====================================================================
+        function initWinnersCurseChart() {
+            const container = document.getElementById('winnersCurseChart');
+            if (!container) return;
+
+            const trueSlider = document.getElementById('trueEffect');
+            const noiseSlider = document.getElementById('estNoise');
+            const specsSlider = document.getElementById('winnerSpecs');
+
+            function updateChart() {
+                const trueEffect = parseFloat(trueSlider.value);
+                const noise = parseFloat(noiseSlider.value);
+                const k = parseInt(specsSlider.value);
+
+                document.getElementById('trueEffectVal').textContent = trueEffect.toFixed(2);
+                document.getElementById('estNoiseVal').textContent = noise.toFixed(2);
+                document.getElementById('winnerSpecsVal').textContent = k;
+
+                // Simulate winner's curse
+                const nSim = 2000;
+                const selectedEstimates = [];
+                const allEstimates = [];
+
+                for (let sim = 0; sim < nSim; sim++) {
+                    let maxEst = -Infinity;
+                    for (let j = 0; j < k; j++) {
+                        const est = trueEffect + normalRandom(0, noise);
+                        allEstimates.push(est);
+                        if (est > maxEst) maxEst = est;
+                    }
+                    selectedEstimates.push(maxEst);
+                }
+
+                const expectedSelected = selectedEstimates.reduce((a, b) => a + b, 0) / nSim;
+                const overestPct = ((expectedSelected - trueEffect) / Math.max(trueEffect, 0.01)) * 100;
+
+                document.getElementById('trueEffectDisplay').textContent = trueEffect.toFixed(2);
+                document.getElementById('reportedEffect').textContent = expectedSelected.toFixed(2);
+                document.getElementById('overestimation').textContent = 
+                    (overestPct > 0 ? '+' : '') + overestPct.toFixed(0) + '%';
+
+                // Create histogram bins
+                const binWidth = 0.03;
+                const minVal = Math.min(...selectedEstimates, ...allEstimates.slice(0, 500), trueEffect - 0.3);
+                const maxVal = Math.max(...selectedEstimates, trueEffect + 0.3);
+
+                function histogram(data, width) {
+                    const bins = {};
+                    data.forEach(v => {
+                        const bin = Math.floor(v / width) * width;
+                        bins[bin] = (bins[bin] || 0) + 1;
+                    });
+                    const centers = Object.keys(bins).map(Number).sort((a, b) => a - b);
+                    const counts = centers.map(c => bins[c]);
+                    const maxCount = Math.max(...counts);
+                    return { centers, density: counts.map(c => c / maxCount) };
+                }
+
+                // Sample of all estimates (honest approach)
+                const honestSample = [];
+                for (let i = 0; i < Math.min(nSim, 500); i++) {
+                    honestSample.push(trueEffect + normalRandom(0, noise));
+                }
+                const honestHist = histogram(honestSample, binWidth);
+                const selectedHist = histogram(selectedEstimates, binWidth);
+
+                const traces = [
+                    {
+                        x: honestHist.centers,
+                        y: honestHist.density,
+                        type: 'bar',
+                        name: 'Honest (single spec)',
+                        marker: { color: 'rgba(103, 201, 154, 0.6)', line: { color: colors.success, width: 1 } },
+                        width: binWidth * 0.9
+                    },
+                    {
+                        x: selectedHist.centers,
+                        y: selectedHist.density,
+                        type: 'bar',
+                        name: `Selected (best of ${k})`,
+                        marker: { color: 'rgba(201, 112, 103, 0.6)', line: { color: colors.danger, width: 1 } },
+                        width: binWidth * 0.9
+                    },
+                    {
+                        x: [trueEffect, trueEffect],
+                        y: [0, 1.1],
+                        mode: 'lines',
+                        name: 'True effect',
+                        line: { color: colors.primaryDark, width: 3 }
+                    },
+                    {
+                        x: [expectedSelected, expectedSelected],
+                        y: [0, 1.1],
+                        mode: 'lines',
+                        name: 'Expected reported',
+                        line: { color: colors.danger, width: 3, dash: 'dash' }
+                    }
+                ];
+
+                const layout = {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 40, r: 30, b: 50, l: 60 },
+                    barmode: 'overlay',
+                    xaxis: {
+                        title: 'Estimated effect',
+                        gridcolor: colors.grid
+                    },
+                    yaxis: {
+                        title: 'Relative frequency',
+                        gridcolor: colors.grid,
+                        range: [0, 1.15]
+                    },
+                    legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center' },
+                    showlegend: true
+                };
+
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+
+            trueSlider.addEventListener('input', updateChart);
+            noiseSlider.addEventListener('input', updateChart);
+            specsSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Sensitivity Analysis Chart
+        // =====================================================================
+        function initSensitivityChart() {
+            const container = document.getElementById('sensitivityChart');
+            if (!container) return;
+
+            const specsSlider = document.getElementById('sensitivitySpecs');
+            const varSlider = document.getElementById('specVariation');
+
+            function updateChart() {
+                const numSpecs = parseInt(specsSlider.value);
+                const variation = parseFloat(varSlider.value);
+
+                document.getElementById('sensitivitySpecsVal').textContent = numSpecs;
+                document.getElementById('specVariationVal').textContent = variation.toFixed(2);
+
+                const trueEffect = 0.20;
+                const x = Array.from({length: numSpecs}, (_, i) => i + 1);
+                
+                // Generate estimates with variation
+                const estimates = x.map(() => trueEffect + normalRandom(0, variation));
+                const sorted = [...estimates].sort((a, b) => b - a);
+                const cherryPicked = sorted[0];
+                const mean = estimates.reduce((a, b) => a + b, 0) / numSpecs;
+                const min = Math.min(...estimates);
+                const max = Math.max(...estimates);
+
+                const traces = [
+                    // Honest range band
+                    {
+                        x: [...x, ...x.slice().reverse()],
+                        y: [...estimates.map(() => max), ...estimates.map(() => min).reverse()],
+                        fill: 'toself',
+                        fillcolor: 'rgba(90, 124, 101, 0.15)',
+                        line: { color: 'transparent' },
+                        name: 'Full range',
+                        showlegend: true,
+                        hoverinfo: 'skip'
+                    },
+                    // Individual estimates
+                    {
+                        x: x,
+                        y: estimates,
+                        mode: 'markers',
+                        name: 'Individual specs',
+                        marker: { 
+                            size: 10, 
+                            color: estimates.map(e => e === cherryPicked ? colors.danger : colors.primary),
+                            line: { color: colors.surface, width: 2 }
+                        }
+                    },
+                    // True effect
+                    {
+                        x: [0, numSpecs + 1],
+                        y: [trueEffect, trueEffect],
+                        mode: 'lines',
+                        name: 'True effect',
+                        line: { color: colors.primaryDark, width: 2 }
+                    },
+                    // Mean estimate (honest)
+                    {
+                        x: [0, numSpecs + 1],
+                        y: [mean, mean],
+                        mode: 'lines',
+                        name: 'Honest average',
+                        line: { color: colors.success, width: 2, dash: 'dash' }
+                    },
+                    // Cherry-picked (bad)
+                    {
+                        x: [0, numSpecs + 1],
+                        y: [cherryPicked, cherryPicked],
+                        mode: 'lines',
+                        name: 'Cherry-picked best',
+                        line: { color: colors.danger, width: 2, dash: 'dot' }
+                    }
+                ];
+
+                const layout = {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                    margin: { t: 40, r: 30, b: 50, l: 60 },
+                    xaxis: {
+                        title: 'Specification number',
+                        gridcolor: colors.grid,
+                        range: [0, numSpecs + 1]
+                    },
+                    yaxis: {
+                        title: 'Estimated effect',
+                        gridcolor: colors.grid
+                    },
+                    legend: { orientation: 'h', y: 1.18, x: 0.5, xanchor: 'center' },
+                    showlegend: true,
+                    annotations: [
+                        {
+                            x: numSpecs * 0.85,
+                            y: (min + max) / 2,
+                            text: 'Honest<br>uncertainty',
+                            showarrow: false,
+                            font: { color: colors.textMuted, size: 11 }
+                        }
+                    ]
+                };
+
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+
+            specsSlider.addEventListener('input', updateChart);
+            varSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Initialize all charts
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof Plotly === 'undefined') {
+                console.error('Plotly not loaded');
+                document.querySelectorAll('.chart-container').forEach(el => {
+                    el.innerHTML = '<p style="color: #c97067; padding: 2rem; text-align: center;">Chart library failed to load. Please refresh the page.</p>';
+                });
+                return;
+            }
+
+            try { initPriorPredictiveChart(); } catch (e) { console.error('Prior Predictive Chart error:', e); }
+            try { initMultipleTestingChart(); } catch (e) { console.error('Multiple Testing Chart error:', e); }
+            try { initWinnersCurseChart(); } catch (e) { console.error('Winners Curse Chart error:', e); }
+            try { initSensitivityChart(); } catch (e) { console.error('Sensitivity Chart error:', e); }
+        });
+
+        // Smooth scrolling for sidebar links
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href.startsWith('#')) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            });
+        });
+
+        // Active section highlighting
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+                    const activeLink = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+                    if (activeLink) activeLink.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-100px 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(section => observer.observe(section));
+    </script>
+</body>
+</html>
