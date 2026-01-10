@@ -11,7 +11,7 @@
     // =========================================================================
     const NAV_LINKS = [
         { href: 'index.html', label: 'Home' },
-        { href: 'getting-started.html', label: 'Getting Started' },
+        { href: 'getting-started.html', label: 'Getting Started' },  // Add this line
         { href: 'about.html', label: 'About' },
         { href: 'variable-selection.html', label: 'Variable Selection' },
         { href: 'technical-guide.html', label: 'Technical Guide' },
