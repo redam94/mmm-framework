@@ -1,7 +1,6 @@
 /**
  * MMM Framework - Shared Components
  * Dynamically injects navigation and footer into pages
- * Includes mobile hamburger menu and collapsible sidebar
  */
 
 (function() {
@@ -12,7 +11,7 @@
     // =========================================================================
     const NAV_LINKS = [
         { href: 'index.html', label: 'Home' },
-        { href: 'getting-started.html', label: 'Getting Started' },
+        { href: 'getting-started.html', label: 'Getting Started' },  // Add this line
         { href: 'about.html', label: 'About' },
         { href: 'variable-selection.html', label: 'Variable Selection' },
         { href: 'technical-guide.html', label: 'Technical Guide' },
@@ -48,13 +47,6 @@
         return currentPage === href;
     }
 
-    /**
-     * Check if we're on mobile/tablet
-     */
-    function isMobile() {
-        return window.innerWidth <= 1024;
-    }
-
     // =========================================================================
     // Navigation Component
     // =========================================================================
@@ -71,7 +63,7 @@
         nav.innerHTML = `
         <div class="container nav-content">
             <a href="index.html" class="logo">MMM Framework</a>
-            <button class="mobile-menu-btn" aria-label="Toggle menu" aria-expanded="false">
+            <button class="mobile-menu-btn" aria-label="Toggle menu">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -87,12 +79,8 @@
         const navLinks = nav.querySelector('.nav-links');
         
         menuBtn.addEventListener('click', () => {
-            const isExpanded = navLinks.classList.toggle('active');
+            navLinks.classList.toggle('active');
             menuBtn.classList.toggle('active');
-            menuBtn.setAttribute('aria-expanded', isExpanded);
-            
-            // Prevent body scroll when menu is open
-            document.body.classList.toggle('menu-open', isExpanded);
         });
 
         // Close menu when clicking a link
@@ -100,19 +88,7 @@
             link.addEventListener('click', () => {
                 navLinks.classList.remove('active');
                 menuBtn.classList.remove('active');
-                menuBtn.setAttribute('aria-expanded', 'false');
-                document.body.classList.remove('menu-open');
             });
-        });
-
-        // Close menu on escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && navLinks.classList.contains('active')) {
-                navLinks.classList.remove('active');
-                menuBtn.classList.remove('active');
-                menuBtn.setAttribute('aria-expanded', 'false');
-                document.body.classList.remove('menu-open');
-            }
         });
 
         return nav;
@@ -140,101 +116,6 @@
         `;
 
         return footer;
-    }
-
-    // =========================================================================
-    // Sidebar Toggle Component (for pages with sidebar)
-    // =========================================================================
-    
-    function createSidebarToggle() {
-        const sidebar = document.querySelector('.sidebar');
-        if (!sidebar) return;
-
-        // Create toggle button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className = 'sidebar-toggle';
-        toggleBtn.setAttribute('aria-label', 'Toggle table of contents');
-        toggleBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-        `;
-
-        // Create overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'sidebar-overlay';
-
-        // Add to DOM
-        document.body.appendChild(toggleBtn);
-        document.body.appendChild(overlay);
-
-        // Toggle sidebar
-        function toggleSidebar() {
-            const isActive = sidebar.classList.toggle('active');
-            overlay.classList.toggle('active', isActive);
-            document.body.classList.toggle('menu-open', isActive);
-            
-            // Update button icon
-            if (isActive) {
-                toggleBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                `;
-            } else {
-                toggleBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="3" y1="12" x2="21" y2="12"></line>
-                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                        <line x1="3" y1="18" x2="21" y2="18"></line>
-                    </svg>
-                `;
-            }
-        }
-
-        toggleBtn.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
-
-        // Close sidebar when clicking a link (on mobile)
-        sidebar.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', () => {
-                if (isMobile()) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                    document.body.classList.remove('menu-open');
-                    toggleBtn.innerHTML = `
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="3" y1="12" x2="21" y2="12"></line>
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <line x1="3" y1="18" x2="21" y2="18"></line>
-                        </svg>
-                    `;
-                }
-            });
-        });
-
-        // Close on escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && sidebar.classList.contains('active')) {
-                toggleSidebar();
-            }
-        });
-
-        // Handle resize - close sidebar when returning to desktop
-        let resizeTimeout;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                if (!isMobile() && sidebar.classList.contains('active')) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                    document.body.classList.remove('menu-open');
-                }
-            }, 100);
-        });
     }
 
     // =========================================================================
@@ -294,31 +175,6 @@
     }
 
     // =========================================================================
-    // Smooth Scroll for Anchor Links
-    // =========================================================================
-    
-    function initSmoothScroll() {
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                const targetId = this.getAttribute('href');
-                if (targetId === '#') return;
-                
-                const targetElement = document.querySelector(targetId);
-                if (targetElement) {
-                    e.preventDefault();
-                    const navHeight = document.querySelector('nav')?.offsetHeight || 0;
-                    const targetPosition = targetElement.getBoundingClientRect().top + window.pageYOffset - navHeight - 20;
-                    
-                    window.scrollTo({
-                        top: targetPosition,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        });
-    }
-
-    // =========================================================================
     // Initialize
     // =========================================================================
     
@@ -331,13 +187,9 @@
         const footer = createFooter();
         document.body.appendChild(footer);
 
-        // Initialize sidebar toggle for pages with sidebars
-        createSidebarToggle();
-
         // Initialize features
         initScrollAnimations();
         initSidebarActiveState();
-        initSmoothScroll();
     }
 
     // Run when DOM is ready
