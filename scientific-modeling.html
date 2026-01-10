@@ -3,46 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scientific Modeling | MMM Framework</title>
-    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({startOnLoad: true, theme: 'neutral'});</script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <title>Scientific Statistical Modeling | MMM Framework</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <link rel="stylesheet" href="shared/styles.css">
     <style>
         /* :root {
-            --color-primary: #6d8a4a;
-            --color-primary-dark: #4a5f32;
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
             --color-accent: #6a8fa8;
-            --color-accent-dark: #4a6f88;
+            --color-accent-dark: #4a6d8a;
             --color-warning: #d4a86a;
             --color-danger: #c97067;
             --color-success: #6abf8a;
-            --color-text: #2d3748;
-            --color-text-muted: #64748b;
-            --color-bg: #fafaf9;
-            --color-bg-alt: #f5f5f4;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f4ed;
             --color-surface: #ffffff;
-            --color-border: #e7e5e4;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-            --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 1px 3px rgba(45, 58, 45, 0.08);
+            --shadow-md: 0 4px 12px rgba(45, 58, 45, 0.1);
             --transition-smooth: all 0.2s ease;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--color-bg); color: var(--color-text); line-height: 1.7; font-size: 1rem; }
-        
-        nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(250, 250, 249, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--color-border); padding: 1rem 0; }
-        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
-        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
-        .nav-links { display: flex; gap: 2rem; list-style: none; }
-        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
-        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); } */
 
-        /* .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; } */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--color-bg); color: var(--color-text); line-height: 1.7; }
+
+        .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; }
         
-        /* .sidebar {
+        .sidebar {
             position: sticky; top: 5rem; height: calc(100vh - 5rem);
             overflow-y: auto; padding: 2rem; border-right: 1px solid var(--color-border); background: var(--color-bg);
         }
@@ -241,34 +238,108 @@
         .checklist li.warning-item::before { content: "⚠"; color: var(--color-warning); }
         .checklist li.x-item::before { content: "✗"; color: var(--color-danger); }
 
+        /* Interactive Elements */
+        .interactive-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .interactive-box h4 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+            font-size: 1.1rem;
+        }
+        .chart-container {
+            width: 100%;
+            height: 350px;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .control-row label {
+            font-weight: 500;
+            min-width: 180px;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 150px;
+            max-width: 300px;
+        }
+        .control-row .value {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--color-bg-alt);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .comparison-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .comparison-card.good {
+            border-top: 4px solid var(--color-success);
+        }
+        .comparison-card.bad {
+            border-top: 4px solid var(--color-danger);
+        }
+        .comparison-card h4 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+        .comparison-card ul {
+            margin-bottom: 0;
+        }
+
+        .stat-highlight {
+            display: inline-block;
+            background: var(--color-bg-alt);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+        .stat-highlight.danger {
+            background: rgba(201, 112, 103, 0.15);
+            color: var(--color-danger);
+        }
+
         @media (max-width: 1024px) {
             .page-layout { grid-template-columns: 1fr; }
             .sidebar { position: relative; top: auto; height: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
             .main-content { padding: 2rem; }
             .three-col { grid-template-columns: 1fr; }
+            .comparison-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
-    <!-- <nav>
-        <div class="nav-content">
-            <a href="index.html" class="logo">MMM Framework</a>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="about.html">About</a></li>
-                <li><a href="variable-selection.html">Variable Selection</a></li>
-                <li><a href="technical-guide.html">Technical Guide</a></li>
-                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
-                <li><a href="causal-inference.html">Causal Inference</a></li>
-                <li><a href="#" class="active">Scientific Modeling</a></li>
-                <li><a href="faq.html">FAQ</a></li>
-                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
-            </ul>
-        </div>
-    </nav> -->
 
     <div class="page-layout">
         <aside class="sidebar">
+            <h3>Interactive</h3>
+            <ul class="sidebar-nav">
+                <li><a href="scientific-workflow-demo.html" style="color: var(--color-primary); font-weight: 600;">🔬 Workflow Demo</a></li>
+                <li><a href="mmm-example-report.html" style="color: var(--color-accent);">📊 Example Report</a></li>
+            </ul>
+
             <h3>Philosophy</h3>
             <ul class="sidebar-nav">
                 <li><a href="#introduction">What is a Model?</a></li>
@@ -322,42 +393,41 @@
                 </p>
             </div>
 
-            <!-- ================================================================== -->
-            <h2 id="introduction">What is a Model?</h2>
+            <!-- Interactive Workflow Demo CTA -->
+            <div class="interactive-box" style="background: linear-gradient(135deg, rgba(143, 168, 106, 0.15) 0%, rgba(106, 143, 168, 0.15) 100%); border: 2px solid var(--color-primary); text-align: center;">
+                <h4 style="margin-top: 0; font-size: 1.2rem;">🔬 See It In Action: Interactive Workflow Demo</h4>
+                <p style="margin-bottom: 1rem;">
+                    Walk through the complete scientific modeling workflow step-by-step. Build a Bayesian MMM 
+                    from question formulation through prior predictive checks, MCMC fitting, diagnostics, and 
+                    sensitivity analysis—culminating in an example report.
+                </p>
+                <a href="scientific-workflow-demo.html" class="btn btn-primary" style="display: inline-block; padding: 0.75rem 2rem; background: var(--color-primary); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.2s;">
+                    Launch Interactive Demo →
+                </a>
+            </div>
 
-            <p>
-                A statistical model is a <strong>simplified representation of a data-generating process</strong>. 
-                It is a formal description of how we believe observed data came to be—not a claim that the 
-                world actually works this way, but a useful fiction that helps us reason about patterns, 
-                make predictions, and inform decisions.
-            </p>
+            <!-- ================================================================== -->
+            <h2 id="introduction">What is a Statistical Model?</h2>
 
             <div class="definition">
-                <h4>A Model is a Machine for Generating Data</h4>
+                <h4>Definition</h4>
                 <p style="margin-bottom: 0;">
-                    If you truly understand a model, you can use it to simulate fake data that looks like 
-                    the real thing. This "generative" perspective is central to scientific modeling: 
-                    a model specifies all the steps required to produce observations, from parameter values 
-                    through random variation to final measurements.
+                    A <strong>statistical model</strong> is a mathematical description of a data-generating process.
+                    It specifies a family of probability distributions indexed by parameters, where different parameter 
+                    values correspond to different hypotheses about how the data arose.
                 </p>
             </div>
 
             <p>
-                Models serve multiple purposes:
+                Models are not photographs of reality—they are <em>useful simplifications</em>. A map of 
+                New York City is not the city itself, but it can help you navigate. Similarly, a model 
+                of sales response to advertising is not the actual cognitive and behavioral processes 
+                involved, but it can help you make better decisions.
             </p>
 
-            <ul>
-                <li><strong>Description:</strong> Summarizing patterns in observed data</li>
-                <li><strong>Prediction:</strong> Forecasting future or unobserved outcomes</li>
-                <li><strong>Causal inference:</strong> Estimating the effects of interventions</li>
-                <li><strong>Decision support:</strong> Quantifying uncertainty to inform choices</li>
-            </ul>
-
             <p>
-                The same model can excel at one purpose while failing at another. A model that describes 
-                historical patterns beautifully may predict poorly. A model with accurate predictions may 
-                give misleading causal estimates. Understanding what question you are asking is essential 
-                to evaluating whether a model is adequate for your purpose.
+                This perspective is liberating: we don't need to find the "true" model (which doesn't exist).
+                We need to find models that are useful for our purposes while being honest about their limitations.
             </p>
 
             <!-- ================================================================== -->
@@ -365,94 +435,35 @@
 
             <blockquote>
                 "All models are wrong, but some are useful."
-                <cite>— George E. P. Box</cite>
+                <cite>— George E.P. Box</cite>
             </blockquote>
 
             <p>
-                This famous aphorism captures a deep truth: no model perfectly represents reality. 
-                The world is infinitely complex; every model is a simplification. The question is not 
-                "is this model correct?" but rather "is this model useful for my purpose?"
-            </p>
-
-            <p>
-                Box elaborated on this in his 1976 paper <em>Science and Statistics</em>:
-            </p>
-
-            <blockquote>
-                "Since all models are wrong the scientist cannot obtain a 'correct' one by excessive elaboration. 
-                On the contrary, following William of Occam, he should seek an economical description of natural phenomena."
-            </blockquote>
-
-            <p>
-                This has profound implications for practice:
-            </p>
-
-            <div class="three-col">
-                <div class="workflow-card">
-                    <span class="step-badge principle">Implication</span>
-                    <h4>Embrace Simplicity</h4>
-                    <p>
-                        Complex models are not inherently better. A simple model that captures key features 
-                        is often more useful than a complex model that overfits noise.
-                    </p>
-                </div>
-                <div class="workflow-card">
-                    <span class="step-badge principle">Implication</span>
-                    <h4>Know Your Purpose</h4>
-                    <p>
-                        Evaluate models against the specific question you need to answer, 
-                        not against some abstract notion of "correctness."
-                    </p>
-                </div>
-                <div class="workflow-card">
-                    <span class="step-badge principle">Implication</span>
-                    <h4>Quantify Uncertainty</h4>
-                    <p>
-                        Since no model is correct, honest uncertainty quantification is essential—
-                        not optional, not a sign of weakness.
-                    </p>
-                </div>
-            </div>
-
-            <h3>Useful Wrongness</h3>
-
-            <p>
-                The goal is to be "usefully wrong"—to have a model whose simplifications and approximations 
-                do not materially affect the conclusions relevant to your decision. A city map that ignores 
-                building heights is "wrong" but perfectly adequate for navigation. A map that ignores streets 
-                would be useless for the same purpose.
-            </p>
-
-            <p>
-                In Marketing Mix Modeling, this means:
+                Box's aphorism captures a fundamental truth. Every model makes simplifying assumptions that 
+                do not perfectly match reality. The question is not "is this model true?" but rather:
             </p>
 
             <ul>
-                <li>We don't need to model every factor affecting sales—only those that confound media effects or improve precision</li>
-                <li>Our saturation function doesn't need to be "correct"—just flexible enough to capture diminishing returns</li>
-                <li>Our temporal dynamics can be stylized—as long as they capture the relevant carryover patterns</li>
+                <li>Is the model useful for the decisions I need to make?</li>
+                <li>Are its predictions accurate enough for my purposes?</li>
+                <li>Am I aware of its limitations and their implications?</li>
             </ul>
+
+            <p>
+                A model that captures the main drivers of sales may be highly useful even if it ignores 
+                subtle effects that contribute only 2% of variance. The key is knowing which simplifications 
+                matter for your question and which don't.
+            </p>
 
             <!-- ================================================================== -->
             <h2 id="generative-perspective">The Generative Perspective</h2>
 
-            <p>
-                A <strong>generative model</strong> is a complete description of how data could have been produced. 
-                It specifies a joint probability distribution over all quantities—both observable (data) and 
-                unobservable (parameters). If you can simulate data from your model, you understand it.
-            </p>
-
             <div class="definition">
-                <h4>The Joint Distribution</h4>
-                <p>
-                    A generative model defines:
-                </p>
-                <div class="math-block">
-                    $$p(y, \theta) = p(y | \theta) \cdot p(\theta)$$
-                </div>
+                <h4>Generative Model</h4>
                 <p style="margin-bottom: 0;">
-                    Where \(p(\theta)\) is the <strong>prior</strong>—beliefs about parameters before seeing data—and 
-                    \(p(y|\theta)\) is the <strong>likelihood</strong>—how likely the data are given the parameters.
+                    A model is <strong>generative</strong> if it can be used to simulate new data. Given parameter 
+                    values, you can run the model forward to produce synthetic observations. This is the key test 
+                    of understanding: if you cannot simulate data from your model, you do not fully understand it.
                 </p>
             </div>
 
@@ -491,6 +502,29 @@
                 </tbody>
             </table>
 
+            <!-- Interactive: Prior Predictive Simulation -->
+            <div class="interactive-box">
+                <h4>🔬 Interactive: Prior Predictive Simulation</h4>
+                <p>See how prior assumptions translate into predicted data ranges. Adjust the prior parameters and observe the implied distribution of sales predictions.</p>
+                <div class="control-row">
+                    <label>Prior SD on Media Effect:</label>
+                    <input type="range" id="priorEffectSD" min="0.1" max="1.0" step="0.05" value="0.3">
+                    <span class="value" id="priorEffectSDVal">0.3</span>
+                </div>
+                <div class="control-row">
+                    <label>Prior SD on Intercept:</label>
+                    <input type="range" id="priorInterceptSD" min="0.1" max="0.5" step="0.05" value="0.2">
+                    <span class="value" id="priorInterceptSDVal">0.2</span>
+                </div>
+                <div class="chart-container" id="priorPredictiveChart" style="height: 350px; min-height: 350px;">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #5a6b5a;"></div>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-top: 1rem;">
+                    Each line represents one possible data trajectory given the prior assumptions. 
+                    If the gray band covers implausible values (e.g., negative sales), your priors need adjustment.
+                </p>
+            </div>
+
             <div class="dag-box">
                 <h4 style="margin-bottom: 1rem;">The Generative Process</h4>
                 <div class="mermaid">
@@ -524,122 +558,81 @@
                 determines what model structure is appropriate, what data are needed, and how to evaluate success.
             </p>
 
-            <div class="warning-box">
-                <h4>Common Mistake: Technique-First Modeling</h4>
-                <p style="margin-bottom: 0;">
-                    Starting with "let's run a regression" or "let's use machine learning" puts the cart 
-                    before the horse. The right question is: "What decision needs to be made, and what 
-                    quantities do we need to estimate to inform that decision?"
-                </p>
+            <div class="three-col">
+                <div class="workflow-card">
+                    <span class="step-badge principle">Question Type</span>
+                    <h4>Descriptive</h4>
+                    <p>
+                        "What patterns exist in the data?" Summarize, visualize, identify regularities.
+                        Less concerned with causation.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge principle">Question Type</span>
+                    <h4>Predictive</h4>
+                    <p>
+                        "What will happen next?" Forecast future values. Model complexity traded 
+                        against generalization.
+                    </p>
+                </div>
+                <div class="workflow-card">
+                    <span class="step-badge principle">Question Type</span>
+                    <h4>Causal</h4>
+                    <p>
+                        "What would happen if we intervened?" Requires identifying assumptions and 
+                        often experimental validation.
+                    </p>
+                </div>
             </div>
 
-            <h3>The Question Hierarchy</h3>
-
             <p>
-                Different questions require fundamentally different modeling approaches:
-            </p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Question Type</th>
-                        <th>Example</th>
-                        <th>Modeling Requirement</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>Description</strong></td>
-                        <td>"How did sales vary by region?"</td>
-                        <td>Summary statistics, visualization</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Association</strong></td>
-                        <td>"Are ad spend and sales correlated?"</td>
-                        <td>Correlation, regression (no causal interpretation)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Prediction</strong></td>
-                        <td>"What will sales be next quarter?"</td>
-                        <td>Forecasting model (predictive accuracy matters)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Causal</strong></td>
-                        <td>"How much would sales increase if we spent more on TV?"</td>
-                        <td>Causal model with identification strategy</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Counterfactual</strong></td>
-                        <td>"Why did the campaign underperform?"</td>
-                        <td>Structural model capable of counterfactual reasoning</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p>
-                Marketing Mix Models typically aim for <strong>causal</strong> questions—we want to know the 
-                effect of changing media spend, not just whether spend and sales are correlated. This imposes 
-                stronger requirements on model structure and identification than purely predictive or descriptive tasks.
+                Marketing Mix Models typically aim to answer causal questions: "What is the effect of 
+                advertising on sales?" This is the hardest type of question to answer from observational 
+                data, and requires explicit assumptions about the data-generating process.
             </p>
 
             <!-- ================================================================== -->
             <h2 id="generative-story">The Generative Story</h2>
 
             <p>
-                Every model should begin with a <strong>generative story</strong>—a narrative description of 
-                how the data came to be. This story guides model structure and makes assumptions explicit.
+                Every model should have a <strong>generative story</strong>: a narrative description of 
+                how you believe the data came to be. For an MMM, this might be:
             </p>
 
             <div class="definition">
-                <h4>Example: An MMM Generative Story</h4>
-                <p>
-                    "Weekly sales in each region are driven by baseline demand that varies seasonally. 
-                    Marketing activities (TV, digital, print) increase demand, but with diminishing returns 
-                    as spending increases. Media effects decay over time—a TV ad this week still has some 
-                    impact next week, but less. Regional variation in baseline demand exists, but media 
-                    effectiveness is assumed similar across regions. Sales are observed with measurement 
-                    noise reflecting day-to-day variation not captured by the model."
-                </p>
+                <h4>Example: MMM Generative Story</h4>
+                <ol style="margin-bottom: 0;">
+                    <li>There is a baseline level of sales that would occur without any marketing.</li>
+                    <li>This baseline varies over time due to trend and seasonality.</li>
+                    <li>Marketing activities (TV, digital, etc.) increase sales above baseline.</li>
+                    <li>Each channel has carryover effects (adstock) and diminishing returns (saturation).</li>
+                    <li>External factors (weather, economy, competitors) create additional variation.</li>
+                    <li>The observed sales = baseline + marketing effects + external effects + noise.</li>
+                </ol>
             </div>
 
             <p>
-                This narrative immediately suggests model components:
-            </p>
-
-            <ul>
-                <li>Baseline with seasonal patterns → trend and seasonality terms</li>
-                <li>Diminishing returns → saturation function</li>
-                <li>Decay over time → adstock transformation</li>
-                <li>Regional variation → hierarchical intercepts</li>
-                <li>Measurement noise → error distribution</li>
-            </ul>
-
-            <p>
-                The story also makes assumptions explicit: media effectiveness is assumed constant across regions. 
-                If this assumption is wrong, we know where to expand the model.
+                Writing down this story forces you to be explicit about your assumptions. Each element 
+                of the story corresponds to a component of the mathematical model.
             </p>
 
             <!-- ================================================================== -->
             <h2 id="components">Model Components</h2>
-
-            <p>
-                Statistical models have three core components that must be specified:
-            </p>
 
             <div class="three-col">
                 <div class="workflow-card">
                     <span class="step-badge">Component</span>
                     <h4>Likelihood</h4>
                     <p>
-                        The probability model for observed data given parameters. Specifies the 
-                        "random" part of the model—how data vary around the structural component.
+                        The probability of observed data given parameters. How is noise distributed? 
+                        Normal? Heavy-tailed? Count data?
                     </p>
                 </div>
                 <div class="workflow-card">
                     <span class="step-badge">Component</span>
                     <h4>Structural Model</h4>
                     <p>
-                        The functional relationship between inputs (covariates) and outputs (response). 
+                        Functional relationships between variables. Linear? Nonlinear? 
                         Captures the "systematic" part of the data-generating process.
                     </p>
                 </div>
@@ -648,7 +641,7 @@
                     <h4>Priors</h4>
                     <p>
                         Probability distributions over unknown parameters encoding beliefs before 
-                        seeing data. Essential for Bayesian inference; often implicit in frequentist methods.
+                        seeing data. Essential for Bayesian inference.
                     </p>
                 </div>
             </div>
@@ -695,19 +688,6 @@
                     </tr>
                 </tbody>
             </table>
-
-            <h3>Building Structural Models</h3>
-
-            <p>
-                The structural model encodes domain knowledge about relationships. Key principles:
-            </p>
-
-            <ul class="checklist">
-                <li>Include relationships supported by theory or domain expertise</li>
-                <li>Use flexible functional forms when the true relationship is uncertain</li>
-                <li>Avoid overparameterization—complexity should be justified</li>
-                <li class="warning-item">Do not choose structure to obtain desired results</li>
-            </ul>
 
             <!-- ================================================================== -->
             <h2 id="iteration">Iteration as Learning</h2>
@@ -766,57 +746,114 @@
                 in what drives the changes.
             </p>
 
-            <div class="principle-grid">
-                <div class="principle-card" style="border-left: 4px solid var(--color-success);">
-                    <div class="icon">✓</div>
-                    <h4>Honest Iteration</h4>
-                    <p>
-                        Changes driven by <strong>scientific reasoning</strong>: theoretical considerations, 
-                        diagnostic failures, domain knowledge, predictive inadequacy. Changes are made 
-                        <em>before</em> examining the focal relationship.
+            <div class="comparison-grid">
+                <div class="comparison-card good">
+                    <h4 style="color: #3d8b5a;">✓ Honest Scientific Iteration</h4>
+                    <p>Changes driven by:</p>
+                    <ul>
+                        <li>Diagnostic failures (divergences, poor mixing)</li>
+                        <li>Posterior predictive mismatches</li>
+                        <li>Domain knowledge about missing structure</li>
+                        <li>Pre-specified model expansion criteria</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--color-text-muted);">
+                        The goal is model improvement based on evidence of inadequacy.
                     </p>
                 </div>
-                <div class="principle-card" style="border-left: 4px solid var(--color-danger);">
-                    <div class="icon">✗</div>
-                    <h4>Specification Shopping</h4>
-                    <p>
-                        Changes driven by <strong>results</strong>: adjusting until coefficients have 
-                        expected signs, desired significance, or "reasonable" magnitudes. The focal 
-                        relationship is examined to guide changes.
+                <div class="comparison-card bad">
+                    <h4 style="color: var(--color-danger);">✗ Specification Shopping</h4>
+                    <p>Changes driven by:</p>
+                    <ul>
+                        <li>Coefficient has "wrong" sign</li>
+                        <li>Effect not statistically significant</li>
+                        <li>Results don't match expectations</li>
+                        <li>ROI falls below threshold</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--color-text-muted);">
+                        The goal is obtaining desired results, not model improvement.
                     </p>
+                </div>
+            </div>
+
+            <!-- Interactive: Multiple Testing Demonstration -->
+            <div class="interactive-box">
+                <h4>⚠️ Interactive: The Multiple Testing Problem</h4>
+                <p>
+                    When you test multiple specifications and report the one with the best results, 
+                    your false positive rate explodes. See how quickly the probability of finding 
+                    "significant" results by chance increases with the number of specifications tested.
+                </p>
+                <div class="control-row">
+                    <label>Specifications Tested:</label>
+                    <input type="range" id="numSpecs" min="1" max="100" step="1" value="20">
+                    <span class="value" id="numSpecsVal">20</span>
+                </div>
+                <div class="control-row">
+                    <label>Nominal α level:</label>
+                    <input type="range" id="alphaLevel" min="0.01" max="0.10" step="0.01" value="0.05">
+                    <span class="value" id="alphaLevelVal">0.05</span>
+                </div>
+                <div class="chart-container" id="multipleTestingChart" style="height: 350px; min-height: 350px;">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #5a6b5a;"></div>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+                    <div>
+                        <span style="font-size: 0.85rem; color: var(--color-text-muted);">Effective False Positive Rate:</span>
+                        <span class="stat-highlight danger" id="effectiveFPR">64.2%</span>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.85rem; color: var(--color-text-muted);">Confidence Interval Validity:</span>
+                        <span class="stat-highlight danger" id="ciValidity">Severely Compromised</span>
+                    </div>
                 </div>
             </div>
 
             <div class="warning-box">
-                <h4>The Statistical Harm of Specification Shopping</h4>
+                <h4>The Winner's Curse</h4>
                 <p>
-                    Specification shopping invalidates statistical inference. When you try multiple 
-                    specifications and select based on results:
+                    Even when a true effect exists, selecting the specification with the highest t-statistic 
+                    biases estimates upward. The "winning" specification likely benefited from favorable noise 
+                    in that particular sample. This is why specification-shopped effects often fail to replicate: 
+                    you selected on noise, not signal.
                 </p>
-                <ul style="margin-bottom: 0;">
-                    <li>Confidence intervals no longer have nominal coverage</li>
-                    <li>p-values lose their interpretation as false positive rates</li>
-                    <li>Coefficient estimates are systematically biased toward expected values</li>
-                    <li>Uncertainty is underestimated because specification uncertainty is ignored</li>
-                </ul>
             </div>
 
-            <h3>Legitimate Reasons to Modify a Model</h3>
+            <!-- Interactive: Winner's Curse Visualization -->
+            <div class="interactive-box">
+                <h4>📊 Interactive: The Winner's Curse</h4>
+                <p>
+                    Each specification produces a noisy estimate of the true effect. When you pick the "best" one, 
+                    you systematically overestimate. The more specifications you test, the more biased your selected estimate.
+                </p>
+                <div class="control-row">
+                    <label>True Effect:</label>
+                    <input type="range" id="trueEffect" min="0" max="0.5" step="0.05" value="0.2">
+                    <span class="value" id="trueEffectVal">0.20</span>
+                </div>
+                <div class="control-row">
+                    <label>Estimation Noise (σ):</label>
+                    <input type="range" id="estNoise" min="0.05" max="0.3" step="0.01" value="0.1">
+                    <span class="value" id="estNoiseVal">0.10</span>
+                </div>
+                <div class="control-row">
+                    <label>Specifications Tested:</label>
+                    <input type="range" id="winnerSpecs" min="1" max="50" step="1" value="20">
+                    <span class="value" id="winnerSpecsVal">20</span>
+                </div>
+                <div class="chart-container" id="winnersCurseChart" style="height: 350px; min-height: 350px;">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #5a6b5a;"></div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <span style="font-size: 0.85rem; color: var(--color-text-muted);">Expected bias in selected estimate:</span>
+                    <span class="stat-highlight danger" id="expectedBias">+45%</span>
+                </div>
+            </div>
 
-            <ul class="checklist">
-                <li>Prior predictive samples are implausible (reveals bad priors or structure)</li>
-                <li>MCMC diagnostics show convergence failures (model may be misspecified)</li>
-                <li>Posterior predictive checks reveal systematic patterns in residuals</li>
-                <li>Domain expert identifies missing confounders or incorrect functional form</li>
-                <li>New data become available that enable richer model structure</li>
-                <li class="x-item">Results don't match expectations (this is NOT a valid reason)</li>
-            </ul>
-
-            <h3>Pre-Registration as Protection</h3>
+            <h3>Pre-Specification: The Solution</h3>
 
             <p>
-                The most robust protection against specification shopping is <strong>pre-registration</strong>: 
-                committing to model specification before seeing results. This doesn't prevent iteration—you 
+                The solution to specification shopping is <strong>pre-specification</strong>: commit to your 
+                model structure before looking at results. This doesn't prevent iteration—you 
                 can still revise models—but it requires documenting and justifying changes, making the 
                 distinction between planned and exploratory analyses explicit.
             </p>
@@ -860,13 +897,6 @@
                     </tr>
                 </tbody>
             </table>
-
-            <p>
-                Each expansion introduces complexity. Gelman et al. recommend thinking of models as a 
-                <strong>topology</strong>—a network of related models that can be compared and contrasted. 
-                Sometimes a simpler model in the network is adequate; sometimes we need to move to a 
-                more complex neighbor.
-            </p>
 
             <!-- ================================================================== -->
             <h2 id="predictive-checks">Predictive Checking</h2>
@@ -930,11 +960,7 @@ y_obs = data["sales"].values
 # Visual checks
 # - Does distribution of y_rep match distribution of y_obs?
 # - Do time-series patterns match?
-# - Are extreme values reproduced?
-
-# Quantitative checks (test statistics)
-# - Compare means, variances, autocorrelations
-# - p-value: P(T(y_rep) > T(y_obs)) should be near 0.5 if model is adequate</code></pre>
+# - Are extreme values reproduced?</code></pre>
 
             <!-- ================================================================== -->
             <h2 id="sensitivity">Sensitivity Analysis</h2>
@@ -945,156 +971,120 @@ y_obs = data["sales"].values
                 those that depend on specific choices.
             </p>
 
-            <h3>Types of Sensitivity Analysis</h3>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Question</th>
-                        <th>Method</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>Prior sensitivity</strong></td>
-                        <td>How much do priors affect conclusions?</td>
-                        <td>Re-fit with alternative priors, compare posteriors</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Likelihood sensitivity</strong></td>
-                        <td>Does distributional choice matter?</td>
-                        <td>Compare Normal vs. Student-t, Gaussian vs. log-normal</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Structural sensitivity</strong></td>
-                        <td>Does functional form affect results?</td>
-                        <td>Compare saturation functions, lag structures</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Data sensitivity</strong></td>
-                        <td>Are results driven by specific observations?</td>
-                        <td>Leave-one-out, jackknife, influence diagnostics</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <div class="success-box">
-                <h4>Robust Conclusions</h4>
-                <p style="margin-bottom: 0;">
-                    When conclusions are similar across reasonable variations in priors, likelihoods, 
-                    and structure, they can be reported with confidence. When conclusions are sensitive, 
-                    report the range of plausible values and be honest about uncertainty.
+            <!-- Interactive: Sensitivity Analysis -->
+            <div class="interactive-box">
+                <h4>🔄 Interactive: Sensitivity Across Specifications</h4>
+                <p>
+                    The same data analyzed with different reasonable specifications can yield vastly different 
+                    conclusions. This visualization shows the distribution of coefficient estimates across 
+                    a range of plausible model choices.
+                </p>
+                <div class="control-row">
+                    <label>Number of Specifications:</label>
+                    <input type="range" id="sensitivitySpecs" min="5" max="50" step="5" value="20">
+                    <span class="value" id="sensitivitySpecsVal">20</span>
+                </div>
+                <div class="control-row">
+                    <label>Specification Variability:</label>
+                    <input type="range" id="specVariability" min="0.1" max="0.5" step="0.05" value="0.25">
+                    <span class="value" id="specVariabilityVal">0.25</span>
+                </div>
+                <div class="chart-container" id="sensitivityChart" style="height: 350px; min-height: 350px;">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #5a6b5a;"></div>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-top: 1rem;">
+                    Each dot represents one specification's estimate. The red dashed line shows the "selected" 
+                    estimate if you picked the most significant result. The gray band shows the honest uncertainty range.
                 </p>
             </div>
+
+            <h3>What to Vary</h3>
+
+            <ul class="checklist">
+                <li>Prior distributions (especially on key parameters)</li>
+                <li>Functional forms (linear vs. nonlinear, different saturation curves)</li>
+                <li>Lag structures (different adstock parameters)</li>
+                <li>Control variable sets (within theoretically justified bounds)</li>
+                <li class="warning-item">Do NOT vary until you get desired results</li>
+            </ul>
 
             <!-- ================================================================== -->
             <h2 id="validation">External Validation</h2>
 
             <p>
-                The gold standard for model evaluation is <strong>external validation</strong>: testing 
-                predictions against data not used in fitting. In causal modeling, experimental validation 
-                is particularly valuable—it provides ground truth against which model predictions can be assessed.
+                The strongest test of a model is its performance on data it has never seen—especially 
+                data generated by experimental intervention. For MMMs, this typically means comparing 
+                model predictions to results from geo-lift experiments or randomized holdout tests.
             </p>
 
-            <h3>Types of External Validation</h3>
-
-            <ul>
-                <li><strong>Temporal holdout:</strong> Fit on historical data, predict future periods</li>
-                <li><strong>Geographic holdout:</strong> Fit on some regions, predict held-out regions</li>
-                <li><strong>Experimental validation:</strong> Compare model predictions to experimental results</li>
-            </ul>
-
-            <p>
-                Experimental validation is particularly powerful because experiments provide causal 
-                estimates under minimal assumptions. If a model predicts that cutting TV spend in 
-                a region should reduce sales by 5%, and a geo-holdout experiment shows a 4.8% reduction, 
-                we have evidence the model is well-calibrated.
-            </p>
+            <div class="success-box">
+                <h4>Why Experimental Validation Matters</h4>
+                <p style="margin-bottom: 0;">
+                    Observational models can fit historical data well while producing biased causal estimates.
+                    Experimental validation provides ground truth against which to calibrate model predictions.
+                    Industry studies suggest two-thirds of uncalibrated MMM estimates require significant adjustment
+                    when compared to experimental results.
+                </p>
+            </div>
 
             <!-- ================================================================== -->
             <h2 id="starting-simple">Starting Simple</h2>
 
             <p>
-                A common mistake is starting with a complex model. Better practice is to begin with 
-                the simplest model that could plausibly address your question, then expand as needed 
-                based on diagnostic failures.
+                A common mistake is to start with a complex model. Better practice:
             </p>
 
-            <div class="definition">
-                <h4>The Iterative Expansion Strategy</h4>
-                <ol style="margin-bottom: 0;">
-                    <li>Start with the simplest reasonable model</li>
-                    <li>Check diagnostics and predictive performance</li>
-                    <li>If adequate, stop—complexity adds risk without benefit</li>
-                    <li>If inadequate, identify the specific failure mode</li>
-                    <li>Expand the model to address that failure</li>
-                    <li>Return to step 2</li>
-                </ol>
-            </div>
-
-            <p>
-                For Marketing Mix Models, a minimal starting point might be:
-            </p>
-
-            <ul>
-                <li>Linear model with adstocked media variables</li>
-                <li>Simple trend and seasonal dummies</li>
-                <li>Gaussian likelihood</li>
-                <li>Weakly informative priors</li>
+            <ul class="checklist">
+                <li>Start with the simplest model that could possibly work</li>
+                <li>Add complexity only when diagnostics indicate it's needed</li>
+                <li>Document each addition and why it was made</li>
+                <li>Compare simpler and more complex models on held-out data</li>
             </ul>
 
             <p>
-                From there, expand based on diagnostic failures: add saturation if linearity is implausible, 
-                add hierarchical structure if residuals show geographic patterns, etc.
+                A simple model that you understand deeply is more valuable than a complex model 
+                that produces mysteriously "better" results.
             </p>
 
             <!-- ================================================================== -->
             <h2 id="when-to-stop">When to Stop</h2>
 
             <p>
-                Model improvement has diminishing returns. At some point, additional complexity 
-                adds more risk (overfitting, computational cost, interpretability loss) than benefit. 
-                When should you stop?
+                Model building could continue forever. Practical stopping rules:
             </p>
 
-            <ul class="checklist">
-                <li>Prior predictive checks pass—implied predictions are plausible</li>
-                <li>Computational diagnostics pass—no divergences, good \(\hat{R}\), sufficient ESS</li>
-                <li>Posterior predictive checks pass—no systematic failures</li>
-                <li>Key conclusions are robust to sensitivity analysis</li>
-                <li>Model adequacy is sufficient for the decision at hand</li>
+            <ul>
+                <li><strong>Predictive adequacy:</strong> Posterior predictive checks pass for features that matter</li>
+                <li><strong>Computational stability:</strong> MCMC diagnostics are acceptable</li>
+                <li><strong>Diminishing returns:</strong> Additional complexity improves fit marginally</li>
+                <li><strong>Resource constraints:</strong> Time and computational budget exhausted</li>
             </ul>
 
             <p>
-                "Sufficient for the decision at hand" is key. A model for screening which channels 
-                deserve experimentation needs less precision than a model for setting exact budget 
-                allocations. Match model effort to decision importance.
+                Importantly, stopping is not the same as claiming the model is "correct." It means 
+                the model is adequate for current purposes, given current constraints.
             </p>
 
             <!-- ================================================================== -->
             <h2 id="communication">Communicating Models</h2>
 
             <p>
-                A model is only useful if its insights can be communicated to decision-makers. 
-                Effective communication requires translating technical results into decision-relevant 
-                language—while honestly conveying uncertainty.
+                How you communicate model results is as important as the modeling itself. Key principles:
             </p>
 
-            <h3>Principles for Model Communication</h3>
-
-            <ul>
-                <li><strong>Lead with decisions, not methods.</strong> "We estimate X, which implies Y for your decision" not "We ran a hierarchical Bayesian model with..."</li>
-                <li><strong>Quantify uncertainty visually.</strong> Credible intervals, posterior distributions, fan charts—make uncertainty tangible</li>
-                <li><strong>Distinguish robust from fragile findings.</strong> "We're confident about X, less certain about Y"</li>
-                <li><strong>Acknowledge limitations.</strong> Every model has them; hiding them erodes trust when they're eventually discovered</li>
-                <li><strong>Connect to validation.</strong> "This model predicted past experiments well" builds credibility</li>
+            <ul class="checklist">
+                <li>Report uncertainty honestly—credible intervals, not just point estimates</li>
+                <li>Distinguish robust findings from fragile ones</li>
+                <li>Explain assumptions and their implications for conclusions</li>
+                <li>Acknowledge limitations without burying the signal in caveats</li>
+                <li class="x-item">Do not present specification-shopped results as definitive</li>
             </ul>
 
             <div class="note">
-                <h4>Uncertainty as Value</h4>
+                <h4>Uncertainty Is Information</h4>
                 <p style="margin-bottom: 0;">
-                    Honest uncertainty quantification is not a weakness—it's a feature. Wide credible 
+                    Wide credible intervals are not a failure of analysis—they are honest communication that 
+                    the data cannot distinguish between hypotheses. Wide credible 
                     intervals tell you "we need more data or experimentation to decide this confidently." 
                     That information is valuable: it prevents overconfident decisions and identifies 
                     where to invest in learning.
@@ -1128,43 +1118,649 @@ y_obs = data["sales"].values
                 <div class="principle-card">
                     <div class="icon">📊</div>
                     <h4>Quantify Uncertainty</h4>
-                    <p>All models are wrong. Honest uncertainty is information, not weakness.</p>
+                    <p>All models are wrong. Honest uncertainty quantification tells us how wrong they might be.</p>
                 </div>
                 <div class="principle-card">
-                    <div class="icon">✅</div>
-                    <h4>Validate Externally</h4>
-                    <p>Out-of-sample prediction and experimental validation build credibility.</p>
+                    <div class="icon">🗣️</div>
+                    <h4>Communicate Clearly</h4>
+                    <p>Report what you know, what you don't, and what would change your conclusions.</p>
                 </div>
             </div>
 
+            <h3>Further Reading</h3>
+
+            <ul>
+                <li>
+                    Gelman, A., et al. (2020). 
+                    <em>Bayesian Workflow.</em> arXiv:2011.01808.
+                    <a href="https://arxiv.org/abs/2011.01808" target="_blank">[Link]</a>
+                </li>
+                <li>
+                    Box, G. E. P. (1976). 
+                    <em>Science and Statistics.</em> Journal of the American Statistical Association.
+                </li>
+                <li>
+                    McElreath, R. (2020). 
+                    <em>Statistical Rethinking</em> (2nd ed.). CRC Press.
+                    <a href="https://xcelab.net/rm/statistical-rethinking/" target="_blank">[Link]</a>
+                </li>
+                <li>
+                    Simmons, J. P., Nelson, L. D., & Simonsohn, U. (2011). 
+                    <em>False-Positive Psychology.</em> Psychological Science.
+                    <a href="https://doi.org/10.1177/0956797611417632" target="_blank">[Link]</a>
+                </li>
+            </ul>
+
         </main>
     </div>
+
     <script src="shared/components.js"></script>
     <script>
-        // Simple scroll highlighting for sidebar
-        document.addEventListener('DOMContentLoaded', function() {
-            const sections = document.querySelectorAll('h2[id], h3[id]');
-            const navLinks = document.querySelectorAll('.sidebar-nav a');
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'neutral',
+            flowchart: { 
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        // Initialize KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "$", right: "$", display: false},
+                    {left: "\\(", right: "\\)", display: false}
+                ]
+            });
+        });
+
+        // Chart colors matching site theme
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#d4ddd4',
+            bg: '#fafbf9'
+        };
+
+        const chartConfig = { displayModeBar: false, responsive: true };
+
+        // =====================================================================
+        // Random number generation utilities
+        // =====================================================================
+        function normalRandom(mean = 0, std = 1) {
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random();
+            while(v === 0) v = Math.random();
+            return mean + std * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        function truncatedNormal(mean, std, min, max) {
+            let sample;
+            do {
+                sample = normalRandom(mean, std);
+            } while (sample < min || sample > max);
+            return sample;
+        }
+
+        // =====================================================================
+        // Prior Predictive Chart
+        // =====================================================================
+        function initPriorPredictiveChart() {
+            const container = document.getElementById('priorPredictiveChart');
+            if (!container) return;
+
+            const effectSlider = document.getElementById('priorEffectSD');
+            const interceptSlider = document.getElementById('priorInterceptSD');
             
-            function updateActiveLink() {
-                let current = '';
-                sections.forEach(section => {
-                    const sectionTop = section.offsetTop;
-                    if (scrollY >= sectionTop - 120) {
-                        current = section.getAttribute('id');
-                    }
-                });
+            function updateChart() {
+                const effectSD = parseFloat(effectSlider.value);
+                const interceptSD = parseFloat(interceptSlider.value);
                 
-                navLinks.forEach(link => {
-                    link.classList.remove('active');
-                    if (link.getAttribute('href') === '#' + current) {
-                        link.classList.add('active');
+                document.getElementById('priorEffectSDVal').textContent = effectSD.toFixed(2);
+                document.getElementById('priorInterceptSDVal').textContent = interceptSD.toFixed(2);
+                
+                const n = 52; // weeks
+                const traces = [];
+                const allY = [];
+                
+                // Generate 30 prior predictive draws
+                for (let draw = 0; draw < 30; draw++) {
+                    const intercept = 100 * (1 + normalRandom(0, interceptSD));
+                    const beta = normalRandom(0, effectSD);
+                    const trend = normalRandom(0, 0.02);
+                    
+                    const y = [];
+                    for (let t = 0; t < n; t++) {
+                        const media = 50 + 30 * Math.sin(2 * Math.PI * t / 12); // seasonal media
+                        const baseline = intercept * (1 + trend * t);
+                        const effect = beta * media;
+                        const noise = normalRandom(0, 5);
+                        y.push(baseline + effect + noise);
+                        allY.push(baseline + effect + noise);
                     }
-                });
+                    
+                    traces.push({
+                        x: Array.from({length: n}, (_, i) => i + 1),
+                        y: y,
+                        mode: 'lines',
+                        line: { color: colors.accent, width: 1.5 },
+                        opacity: 0.3,
+                        showlegend: false,
+                        hoverinfo: 'skip'
+                    });
+                }
+                
+                // Add percentile bands
+                const weeks = Array.from({length: n}, (_, i) => i + 1);
+                const p5 = Math.min(...allY);
+                const p95 = Math.max(...allY);
+                
+                // Add a zero line if predictions go negative
+                if (p5 < 0) {
+                    traces.push({
+                        x: [1, n],
+                        y: [0, 0],
+                        mode: 'lines',
+                        line: { color: colors.danger, width: 2, dash: 'dash' },
+                        showlegend: false,
+                        hoverinfo: 'skip'
+                    });
+                }
+                
+                const layout = {
+                    margin: { t: 30, r: 30, b: 50, l: 60 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { 
+                        title: 'Week',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid
+                    },
+                    yaxis: { 
+                        title: 'Predicted Sales',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid
+                    },
+                    annotations: p5 < 0 ? [{
+                        x: n * 0.8,
+                        y: p5 * 0.5,
+                        text: '⚠️ Negative predictions!',
+                        showarrow: false,
+                        font: { color: colors.danger, size: 12 }
+                    }] : []
+                };
+                
+                Plotly.newPlot(container, traces, layout, chartConfig);
             }
             
-            window.addEventListener('scroll', updateActiveLink);
+            effectSlider.addEventListener('input', updateChart);
+            interceptSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Multiple Testing Chart
+        // =====================================================================
+        function initMultipleTestingChart() {
+            const container = document.getElementById('multipleTestingChart');
+            if (!container) return;
+
+            const specsSlider = document.getElementById('numSpecs');
+            const alphaSlider = document.getElementById('alphaLevel');
+            
+            function updateChart() {
+                const numSpecs = parseInt(specsSlider.value);
+                const alpha = parseFloat(alphaSlider.value);
+                
+                document.getElementById('numSpecsVal').textContent = numSpecs;
+                document.getElementById('alphaLevelVal').textContent = alpha.toFixed(2);
+                
+                // Calculate false positive rates for different numbers of tests
+                const k = Array.from({length: 100}, (_, i) => i + 1);
+                const fpr = k.map(n => 1 - Math.pow(1 - alpha, n));
+                
+                // Current value
+                const currentFPR = 1 - Math.pow(1 - alpha, numSpecs);
+                document.getElementById('effectiveFPR').textContent = (currentFPR * 100).toFixed(1) + '%';
+                
+                // Update CI validity message
+                const ciValidityEl = document.getElementById('ciValidity');
+                if (currentFPR > 0.5) {
+                    ciValidityEl.textContent = 'Severely Compromised';
+                    ciValidityEl.className = 'stat-highlight danger';
+                } else if (currentFPR > 0.2) {
+                    ciValidityEl.textContent = 'Substantially Inflated';
+                    ciValidityEl.className = 'stat-highlight danger';
+                } else if (currentFPR > 0.1) {
+                    ciValidityEl.textContent = 'Moderately Inflated';
+                    ciValidityEl.style.background = 'rgba(212, 168, 106, 0.2)';
+                    ciValidityEl.style.color = colors.warning;
+                } else {
+                    ciValidityEl.textContent = 'Acceptable';
+                    ciValidityEl.style.background = 'rgba(106, 191, 138, 0.2)';
+                    ciValidityEl.style.color = colors.success;
+                }
+                
+                const traces = [
+                    {
+                        x: k,
+                        y: fpr.map(f => f * 100),
+                        mode: 'lines',
+                        name: 'Effective FPR',
+                        line: { color: colors.danger, width: 3 },
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(201, 112, 103, 0.2)'
+                    },
+                    {
+                        x: [numSpecs],
+                        y: [currentFPR * 100],
+                        mode: 'markers',
+                        name: 'Your analysis',
+                        marker: { color: colors.danger, size: 14, symbol: 'circle' }
+                    },
+                    {
+                        x: [1, 100],
+                        y: [alpha * 100, alpha * 100],
+                        mode: 'lines',
+                        name: `Nominal α = ${(alpha * 100).toFixed(0)}%`,
+                        line: { color: colors.success, width: 2, dash: 'dash' }
+                    }
+                ];
+                
+                const layout = {
+                    margin: { t: 30, r: 30, b: 50, l: 60 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { 
+                        title: 'Number of Specifications Tested',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid,
+                        range: [0, 105]
+                    },
+                    yaxis: { 
+                        title: 'False Positive Rate (%)',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid,
+                        range: [0, 105]
+                    },
+                    legend: { 
+                        orientation: 'h', 
+                        y: 1.15,
+                        x: 0.5,
+                        xanchor: 'center'
+                    },
+                    shapes: [{
+                        type: 'line',
+                        x0: numSpecs,
+                        x1: numSpecs,
+                        y0: 0,
+                        y1: currentFPR * 100,
+                        line: { color: colors.textMuted, width: 1, dash: 'dot' }
+                    }]
+                };
+                
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+            
+            specsSlider.addEventListener('input', updateChart);
+            alphaSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Winner's Curse Chart
+        // =====================================================================
+        function initWinnersCurseChart() {
+            const container = document.getElementById('winnersCurseChart');
+            if (!container) return;
+
+            const trueEffectSlider = document.getElementById('trueEffect');
+            const noiseSlider = document.getElementById('estNoise');
+            const specsSlider = document.getElementById('winnerSpecs');
+            
+            function updateChart() {
+                const trueEffect = parseFloat(trueEffectSlider.value);
+                const noise = parseFloat(noiseSlider.value);
+                const numSpecs = parseInt(specsSlider.value);
+                
+                document.getElementById('trueEffectVal').textContent = trueEffect.toFixed(2);
+                document.getElementById('estNoiseVal').textContent = noise.toFixed(2);
+                document.getElementById('winnerSpecsVal').textContent = numSpecs;
+                
+                // Generate multiple simulation runs
+                const numSims = 200;
+                const selectedEstimates = [];
+                const allEstimates = [];
+                
+                for (let sim = 0; sim < numSims; sim++) {
+                    let maxT = -Infinity;
+                    let selectedEst = trueEffect;
+                    const initialEstimates = trueEffect + normalRandom(0, noise);
+                    allEstimates.push(initialEstimates);
+                    if (numSpecs === 1) {
+                        selectedEstimates.push(initialEstimates);
+                        continue;
+                    }
+                    for (let spec = 0; spec < numSpecs; spec++) {
+                        const estimate = trueEffect + normalRandom(0, noise);
+                        const tStat = estimate / noise;
+                        
+                        if (tStat > maxT) {
+                            maxT = tStat;
+                            selectedEst = estimate;
+                        }
+                    }
+                    selectedEstimates.push(selectedEst);
+                }
+                
+                const avgSelected = selectedEstimates.reduce((a, b) => a + b) / selectedEstimates.length;
+                const bias = ((avgSelected - trueEffect) / trueEffect * 100);
+                
+                document.getElementById('expectedBias').textContent = 
+                    (bias >= 0 ? '+' : '') + bias.toFixed(0) + '%';
+                
+                const traces = [
+                    // Histogram of all estimates (light)
+                    {
+                        x: allEstimates,
+                        type: 'histogram',
+                        name: 'All estimates',
+                        opacity: 0.4,
+                        marker: { color: colors.accent },
+                        nbinsx: 40
+                    },
+                    // Histogram of selected estimates (darker)
+                    {
+                        x: selectedEstimates,
+                        type: 'histogram',
+                        name: 'Selected "best" estimates',
+                        opacity: 0.7,
+                        marker: { color: colors.danger },
+                        nbinsx: 40
+                    }
+                ];
+                
+                const layout = {
+                    margin: { t: 30, r: 30, b: 50, l: 60 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    barmode: 'overlay',
+                    xaxis: { 
+                        title: 'Coefficient Estimate',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid
+                    },
+                    yaxis: { 
+                        title: 'Frequency',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid
+                    },
+                    legend: { 
+                        orientation: 'h', 
+                        y: 1.15,
+                        x: 0.5,
+                        xanchor: 'center'
+                    },
+                    shapes: [
+                        {
+                            type: 'line',
+                            x0: trueEffect,
+                            x1: trueEffect,
+                            y0: 0,
+                            y1: 1,
+                            yref: 'paper',
+                            line: { color: colors.success, width: 3 }
+                        },
+                        {
+                            type: 'line',
+                            x0: avgSelected,
+                            x1: avgSelected,
+                            y0: 0,
+                            y1: 1,
+                            yref: 'paper',
+                            line: { color: colors.danger, width: 3, dash: 'dash' }
+                        }
+                    ],
+                    annotations: [
+                        {
+                            x: trueEffect,
+                            y: 1.02,
+                            yref: 'paper',
+                            text: 'True effect',
+                            showarrow: false,
+                            font: { color: colors.success, size: 11 }
+                        },
+                        {
+                            x: avgSelected,
+                            y: 1.08,
+                            yref: 'paper',
+                            text: 'Avg selected',
+                            showarrow: false,
+                            font: { color: colors.danger, size: 11 }
+                        }
+                    ]
+                };
+                
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+            
+            trueEffectSlider.addEventListener('input', updateChart);
+            noiseSlider.addEventListener('input', updateChart);
+            specsSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // =====================================================================
+        // Sensitivity Analysis Chart
+        // =====================================================================
+        function initSensitivityChart() {
+            const container = document.getElementById('sensitivityChart');
+            if (!container) return;
+
+            const specsSlider = document.getElementById('sensitivitySpecs');
+            const varSlider = document.getElementById('specVariability');
+            
+            function updateChart() {
+                const numSpecs = parseInt(specsSlider.value);
+                const variability = parseFloat(varSlider.value);
+                
+                document.getElementById('sensitivitySpecsVal').textContent = numSpecs;
+                document.getElementById('specVariabilityVal').textContent = variability.toFixed(2);
+                
+                // Generate specification results
+                const trueEffect = 0.15;
+                const specs = [];
+                let maxT = -Infinity;
+                let selectedIdx = 0;
+                
+                for (let i = 0; i < numSpecs; i++) {
+                    const estimate = trueEffect + normalRandom(0, variability);
+                    const se = 0.05 + Math.random() * 0.03;
+                    const tStat = estimate / se;
+                    
+                    specs.push({
+                        estimate: estimate,
+                        se: se,
+                        tStat: tStat,
+                        significant: Math.abs(tStat) > 1.96
+                    });
+                    
+                    if (tStat > maxT) {
+                        maxT = tStat;
+                        selectedIdx = i;
+                    }
+                }
+                
+                // Sort by estimate for visualization
+                specs.sort((a, b) => a.estimate - b.estimate);
+                
+                const estimates = specs.map(s => s.estimate);
+                const specNumbers = Array.from({length: numSpecs}, (_, i) => i + 1);
+                const sigColors = specs.map(s => s.significant ? colors.danger : colors.accent);
+                
+                const selectedEstimate = specs.find((_, i) => 
+                    Math.abs(specs[i].tStat - maxT) < 0.001
+                )?.estimate || estimates[estimates.length - 1];
+                
+                const traces = [
+                    // Individual specification estimates
+                    {
+                        x: specNumbers,
+                        y: estimates,
+                        mode: 'markers',
+                        name: 'Specification estimates',
+                        marker: { 
+                            color: sigColors, 
+                            size: 10,
+                            line: { color: colors.text, width: 1 }
+                        }
+                    },
+                    // True effect
+                    {
+                        x: [0, numSpecs + 1],
+                        y: [trueEffect, trueEffect],
+                        mode: 'lines',
+                        name: 'True effect',
+                        line: { color: colors.success, width: 2 }
+                    },
+                    // Selected estimate
+                    {
+                        x: [0, numSpecs + 1],
+                        y: [selectedEstimate, selectedEstimate],
+                        mode: 'lines',
+                        name: 'Selected "best"',
+                        line: { color: colors.danger, width: 2, dash: 'dash' }
+                    }
+                ];
+                
+                // Add honest uncertainty band
+                const p10 = estimates[Math.floor(estimates.length * 0.1)];
+                const p90 = estimates[Math.floor(estimates.length * 0.9)];
+                
+                const layout = {
+                    margin: { t: 30, r: 30, b: 50, l: 60 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { 
+                        title: 'Specification (sorted by estimate)',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid
+                    },
+                    yaxis: { 
+                        title: 'Coefficient Estimate',
+                        gridcolor: colors.grid,
+                        zerolinecolor: colors.grid
+                    },
+                    legend: { 
+                        orientation: 'h', 
+                        y: 1.15,
+                        x: 0.5,
+                        xanchor: 'center'
+                    },
+                    shapes: [
+                        {
+                            type: 'rect',
+                            x0: 0,
+                            x1: numSpecs + 1,
+                            y0: p10,
+                            y1: p90,
+                            fillcolor: 'rgba(90, 107, 90, 0.15)',
+                            line: { width: 0 }
+                        }
+                    ],
+                    annotations: [
+                        {
+                            x: numSpecs * 0.85,
+                            y: (p10 + p90) / 2,
+                            text: 'Honest uncertainty range',
+                            showarrow: false,
+                            font: { color: colors.textMuted, size: 10 }
+                        }
+                    ]
+                };
+                
+                Plotly.newPlot(container, traces, layout, chartConfig);
+            }
+            
+            specsSlider.addEventListener('input', updateChart);
+            varSlider.addEventListener('input', updateChart);
+            updateChart();
+        }
+
+        // Initialize all charts on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if Plotly is loaded
+            if (typeof Plotly === 'undefined') {
+                console.error('Plotly not loaded');
+                document.querySelectorAll('.chart-container').forEach(el => {
+                    el.innerHTML = '<p style="color: #c97067; padding: 2rem;">Chart library failed to load. Please refresh the page.</p>';
+                });
+                return;
+            }
+            
+            try {
+                initPriorPredictiveChart();
+            } catch (e) {
+                console.error('Prior Predictive Chart error:', e);
+            }
+            
+            try {
+                initMultipleTestingChart();
+            } catch (e) {
+                console.error('Multiple Testing Chart error:', e);
+            }
+            
+            try {
+                initWinnersCurseChart();
+            } catch (e) {
+                console.error('Winners Curse Chart error:', e);
+            }
+            
+            try {
+                initSensitivityChart();
+            } catch (e) {
+                console.error('Sensitivity Chart error:', e);
+            }
         });
+
+        // Smooth scrolling for sidebar links
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href.startsWith('#')) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            });
+        });
+
+        // Active section highlighting
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+                    const activeLink = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+                    if (activeLink) activeLink.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-100px 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(section => observer.observe(section));
     </script>
 </body>
 </html>

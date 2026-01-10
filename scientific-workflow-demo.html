@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scientific Modeling Workflow | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #6abf8a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f4ed;
+            --color-surface: #ffffff;
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 1px 3px rgba(45, 58, 45, 0.08);
+            --shadow-md: 0 4px 12px rgba(45, 58, 45, 0.1);
+            --shadow-lg: 0 8px 24px rgba(45, 58, 45, 0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--color-bg); 
+            color: var(--color-text); 
+            line-height: 1.7; 
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-dark) 100%);
+            color: white;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            background: var(--color-surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--color-border);
+            position: sticky;
+            top: 1rem;
+            z-index: 100;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--color-border);
+            z-index: 0;
+        }
+
+        .progress-fill {
+            position: absolute;
+            top: 15px;
+            left: 0;
+            height: 3px;
+            background: var(--color-primary);
+            z-index: 1;
+            transition: width 0.5s ease;
+        }
+
+        .step-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+            cursor: pointer;
+        }
+
+        .step-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--color-surface);
+            border: 3px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+
+        .step-indicator.active .step-circle {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: white;
+        }
+
+        .step-indicator.completed .step-circle {
+            background: var(--color-success);
+            border-color: var(--color-success);
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.7rem;
+            margin-top: 0.5rem;
+            color: var(--color-text-muted);
+            text-align: center;
+            max-width: 80px;
+        }
+
+        .step-indicator.active .step-label {
+            color: var(--color-primary-dark);
+            font-weight: 600;
+        }
+
+        /* Workflow Step */
+        .workflow-step {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--color-border);
+            display: none;
+        }
+
+        .workflow-step.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .workflow-step h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            color: var(--color-text);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .workflow-step h2 .step-num {
+            background: var(--color-primary);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .step-subtitle {
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+            font-size: 1.05rem;
+        }
+
+        .workflow-step h3 {
+            font-size: 1.2rem;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-text);
+        }
+
+        .workflow-step p {
+            margin-bottom: 1rem;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: #f6f8fa;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            border: 1px solid var(--color-border);
+        }
+
+        .code-header {
+            background: var(--color-bg-alt);
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-header .file-path {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        /* Callout boxes */
+        .callout {
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+        }
+
+        .callout h4 {
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        .callout.insight {
+            background: rgba(106, 143, 168, 0.1);
+            border: 1px solid rgba(106, 143, 168, 0.3);
+            border-left: 4px solid var(--color-accent);
+        }
+        .callout.insight h4 { color: var(--color-accent-dark); }
+
+        .callout.warning {
+            background: rgba(212, 168, 106, 0.1);
+            border: 1px solid rgba(212, 168, 106, 0.3);
+            border-left: 4px solid var(--color-warning);
+        }
+        .callout.warning h4 { color: #b8860b; }
+
+        .callout.success {
+            background: rgba(106, 191, 138, 0.1);
+            border: 1px solid rgba(106, 191, 138, 0.3);
+            border-left: 4px solid var(--color-success);
+        }
+        .callout.success h4 { color: #3d8b5a; }
+
+        .callout.danger {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+        }
+        .callout.danger h4 { color: var(--color-danger); }
+
+        /* Charts */
+        .chart-container {
+            width: 100%;
+            height: 350px;
+            margin: 1.5rem 0;
+        }
+
+        .chart-container-lg {
+            height: 450px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .chart-box {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 1px solid var(--color-border);
+        }
+
+        .chart-box h4 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+            color: var(--color-text-muted);
+        }
+
+        /* Interactive controls */
+        .control-panel {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+        }
+
+        .control-panel h4 {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .control-row label {
+            font-weight: 500;
+            min-width: 180px;
+            font-size: 0.9rem;
+        }
+
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 150px;
+            max-width: 300px;
+        }
+
+        .control-row .value {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--color-surface);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            min-width: 70px;
+            text-align: center;
+            border: 1px solid var(--color-border);
+            font-size: 0.9rem;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--color-primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--color-surface);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .btn-success {
+            background: var(--color-success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #5aa97a;
+        }
+
+        .step-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--color-border);
+        }
+
+        /* Simulation output */
+        .simulation-output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            margin: 1rem 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .simulation-output .success { color: #6abf8a; }
+        .simulation-output .warning { color: #d4a86a; }
+        .simulation-output .error { color: #c97067; }
+        .simulation-output .info { color: #6a8fa8; }
+
+        /* Decision point */
+        .decision-point {
+            background: var(--color-bg-alt);
+            border: 2px dashed var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        .decision-point h4 {
+            margin-bottom: 1rem;
+        }
+
+        .decision-options {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Checklist */
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+
+        .checklist li {
+            padding: 0.5rem 0 0.5rem 2rem;
+            position: relative;
+        }
+
+        .checklist li::before {
+            content: '○';
+            position: absolute;
+            left: 0;
+            color: var(--color-border);
+            font-size: 1.2rem;
+        }
+
+        .checklist li.checked::before {
+            content: '✓';
+            color: var(--color-success);
+        }
+
+        .checklist li.failed::before {
+            content: '✗';
+            color: var(--color-danger);
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.6rem 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .data-table th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .data-table .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .data-table .positive { color: var(--color-success); }
+        .data-table .negative { color: var(--color-danger); }
+
+        /* Final report link */
+        .report-preview {
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            color: white;
+            margin: 2rem 0;
+        }
+
+        .report-preview h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .report-preview .btn {
+            background: white;
+            color: var(--color-primary-dark);
+            margin-top: 1rem;
+        }
+
+        .report-preview .btn:hover {
+            background: var(--color-bg-alt);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .header h1 { font-size: 1.8rem; }
+            .chart-grid { grid-template-columns: 1fr; }
+            .step-label { display: none; }
+            .progress-steps { gap: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <nav style="margin-bottom: 1rem;">
+            <a href="scientific-modeling.html" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; transition: all 0.2s;">
+                <span>←</span> Back to Scientific Modeling
+            </a>
+        </nav>
+        <!-- Header -->
+        <header class="header">
+            <h1>Scientific Modeling Workflow</h1>
+            <p>An interactive demonstration of principled Bayesian MMM development</p>
+        </header>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-steps">
+                <div class="progress-fill" id="progressFill"></div>
+                <div class="step-indicator active" onclick="goToStep(1)">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">Question</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(2)">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Story</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(3)">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Build</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(4)">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Prior Check</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(5)">
+                    <div class="step-circle">5</div>
+                    <div class="step-label">Fit</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(6)">
+                    <div class="step-circle">6</div>
+                    <div class="step-label">Diagnose</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(7)">
+                    <div class="step-circle">7</div>
+                    <div class="step-label">Post. Check</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(8)">
+                    <div class="step-circle">8</div>
+                    <div class="step-label">Sensitivity</div>
+                </div>
+                <div class="step-indicator" onclick="goToStep(9)">
+                    <div class="step-circle">9</div>
+                    <div class="step-label">Report</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 1: Define Question -->
+        <div class="workflow-step active" id="step1">
+            <h2><span class="step-num">1</span> Define the Question</h2>
+            <p class="step-subtitle">What decision will this analysis inform?</p>
+
+            <p>
+                Every scientific model begins with a <strong>question</strong>. Not "let's run an MMM" but 
+                "what do we need to know to make a better decision?" The question shapes everything that follows.
+            </p>
+
+            <div class="callout insight">
+                <h4>📋 Our Business Context</h4>
+                <p>
+                    Acme Consumer Products allocates $92M annually across 6 media channels. Leadership wants to 
+                    understand: <strong>Which channels are driving incremental revenue, and how should we 
+                    reallocate budget for 2026?</strong>
+                </p>
+            </div>
+
+            <h3>Pre-Registration: Locking In Our Approach</h3>
+            <p>
+                Before looking at any results, we document our analytical choices. This prevents 
+                <em>specification shopping</em>—iterating until results "look right."
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">analysis_plan.yaml</span>
+                    <span>Pre-registration document</span>
+                </div>
+                <pre><code class="language-yaml"># Pre-registered Analysis Plan
+# Date: 2025-12-01 (before seeing data)
+
+research_questions:
+  primary: "What is the ROI of each marketing channel?"
+  secondary: "What is the optimal budget allocation?"
+
+model_specification:
+  type: "Bayesian MMM with Hill saturation"
+  adstock: "Geometric decay, l_max=8 weeks"
+  trend: "Linear with Fourier seasonality (order=2)"
+  
+channels:
+  - TV (National)
+  - Paid Search
+  - Paid Social
+  - Display
+  - Radio
+  - Print
+
+priors:
+  media_effects: "HalfNormal(sigma=0.5) — positive effects expected"
+  adstock_decay: "Beta(2, 2) — centered at 0.5"
+  saturation: "Gamma(2, 2) — moderate diminishing returns"
+
+validation:
+  - Prior predictive checks
+  - MCMC diagnostics (R-hat < 1.01, ESS > 400)
+  - Posterior predictive checks
+  - Sensitivity to prior specification</code></pre>
+            </div>
+
+            <div class="callout warning">
+                <h4>⚠️ Why Pre-Registration Matters</h4>
+                <p>
+                    When 29 research teams analyzed identical data, effect estimates varied by 3.3x due to 
+                    different analytical choices. Pre-registration forces us to commit before we're tempted 
+                    to adjust until results "make sense."
+                </p>
+            </div>
+
+            <div class="step-nav">
+                <div></div>
+                <button class="btn btn-primary" onclick="nextStep()">Next: Generative Story →</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Generative Story -->
+        <div class="workflow-step" id="step2">
+            <h2><span class="step-num">2</span> The Generative Story</h2>
+            <p class="step-subtitle">How do we believe the data were generated?</p>
+
+            <p>
+                A <strong>generative story</strong> is a narrative description of the data-generating process. 
+                If you can't simulate data from your model, you don't fully understand it.
+            </p>
+
+            <div class="callout insight">
+                <h4>📖 Our Generative Story</h4>
+                <ol style="margin: 1rem 0 0 1.5rem;">
+                    <li><strong>Baseline sales</strong> occur without any marketing, varying with trend and seasonality</li>
+                    <li><strong>Media investments</strong> increase sales above baseline</li>
+                    <li>Each channel has <strong>carryover</strong> (geometric adstock) and <strong>diminishing returns</strong> (Hill saturation)</li>
+                    <li><strong>External factors</strong> (holidays, weather) create additional variation</li>
+                    <li>Observed sales = baseline + Σ(media effects) + controls + noise</li>
+                </ol>
+            </div>
+
+            <h3>Mathematical Formulation</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">model_specification.md</span>
+                    <span>Mathematical model</span>
+                </div>
+                <pre><code class="language-markdown">## Model Structure
+
+y_t = α + trend_t + seasonality_t + Σ_c β_c · f(x_c,t) + γ'z_t + ε_t
+
+Where:
+- y_t: Weekly revenue (log-transformed)
+- α: Intercept
+- trend_t: Linear trend component
+- seasonality_t: Fourier series (yearly, order=2)
+- f(x_c,t): Transformed media for channel c
+  - Adstock: x̃_c,t = Σ_{l=0}^{L} θ_c^l · x_{c,t-l}  (geometric decay)
+  - Saturation: f(x̃) = x̃^α / (K^α + x̃^α)  (Hill function)
+- β_c: Media effect coefficients (≥ 0)
+- z_t: Control variables (holidays, price, etc.)
+- ε_t ~ Normal(0, σ²)</code></pre>
+            </div>
+
+            <p>
+                The mmm-framework encodes this structure using configuration builders:
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">src/mmm_framework/config.py</span>
+                    <span>Framework configuration</span>
+                </div>
+                <pre><code class="language-python">class AdstockConfig(BaseModel):
+    """Configuration for adstock transformation."""
+    type: AdstockType = AdstockType.GEOMETRIC
+    l_max: int = 8  # Maximum lag
+    normalize: bool = True
+    
+    # Prior on decay parameter
+    prior: PriorConfig = Field(
+        default_factory=lambda: PriorConfig(
+            distribution=PriorType.BETA,
+            params={"alpha": 2, "beta": 2}  # Centered at 0.5
+        )
+    )
+
+class SaturationConfig(BaseModel):
+    """Configuration for saturation transformation."""
+    type: SaturationType = SaturationType.HILL
+    
+    # Prior on half-saturation point
+    lam_prior: PriorConfig = Field(
+        default_factory=lambda: PriorConfig(
+            distribution=PriorType.GAMMA,
+            params={"alpha": 2, "mu": 1}
+        )
+    )</code></pre>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next: Build Model →</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Build Model -->
+        <div class="workflow-step" id="step3">
+            <h2><span class="step-num">3</span> Build the Model</h2>
+            <p class="step-subtitle">Translating the story into code</p>
+
+            <p>
+                Now we implement our pre-specified model using the mmm-framework. Notice how the code 
+                directly reflects our generative story.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">build_model.py</span>
+                    <span>Model construction</span>
+                </div>
+                <pre><code class="language-python">from mmm_framework import (
+    MFFConfigBuilder,
+    ModelConfigBuilder,
+    TrendConfig,
+    TrendType,
+    BayesianMMM,
+    load_mff,
+)
+
+# Step 1: Configure data structure (MFF format)
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Revenue")
+    .add_national_media("TV", adstock_lmax=8)
+    .add_national_media("Paid_Search", adstock_lmax=4)
+    .add_national_media("Paid_Social", adstock_lmax=6)
+    .add_national_media("Display", adstock_lmax=4)
+    .add_national_media("Radio", adstock_lmax=6)
+    .add_national_media("Print", adstock_lmax=8)
+    .add_control("Holiday_Flag")
+    .add_control("Price_Index")
+    .build()
+)
+
+# Step 2: Load and validate data
+panel = load_mff("acme_weekly_data.csv", mff_config)
+print(f"Loaded: {panel.n_obs} weeks, {panel.n_channels} channels")
+
+# Step 3: Configure model (matches pre-registration)
+model_config = (
+    ModelConfigBuilder()
+    .bayesian_numpyro()  # Fast JAX-based inference
+    .with_chains(4)
+    .with_draws(2000)
+    .with_tune(1000)
+    .with_target_accept(0.9)
+    .build()
+)
+
+# Step 4: Configure trend (as pre-specified)
+trend_config = TrendConfig(
+    type=TrendType.LINEAR,
+    growth_prior_sigma=0.1
+)
+
+# Step 5: Build the model
+mmm = BayesianMMM(panel, model_config, trend_config)
+
+# Inspect model structure
+print(f"Model parameters: {[v.name for v in mmm.model.free_RVs]}")</code></pre>
+            </div>
+
+            <div class="simulation-output" id="buildOutput">
+                <span class="info">[INFO]</span> Loading data from acme_weekly_data.csv...<br>
+                <span class="success">[OK]</span> Loaded: 156 weeks, 6 channels<br>
+                <span class="info">[INFO]</span> Building PyMC model...<br>
+                <span class="success">[OK]</span> Model parameters: ['intercept', 'sigma', 'beta_TV', 'beta_Paid_Search', 'beta_Paid_Social', 'beta_Display', 'beta_Radio', 'beta_Print', 'alpha_TV', 'alpha_Paid_Search', ...]<br>
+                <span class="info">[INFO]</span> Data standardized: y_mean=16.23, y_std=2.41
+            </div>
+
+            <h3>Model Architecture</h3>
+            <p>
+                The BayesianMMM class in mmm-framework handles the PyMC model construction:
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">src/mmm_framework/model.py</span>
+                    <span>BayesianMMM implementation</span>
+                </div>
+                <pre><code class="language-python">class BayesianMMM:
+    """Bayesian Marketing Mix Model with flexible specification."""
+    
+    def _build_model(self) -> pm.Model:
+        """Build the PyMC model from configuration."""
+        with pm.Model(coords=self._build_coords()) as model:
+            # === Data containers (for prediction) ===
+            X_media_data = pm.Data("X_media", self.X_media_transformed)
+            X_control_data = pm.Data("X_control", self.X_control_scaled)
+            
+            # === Priors (from pre-registration) ===
+            intercept = pm.Normal("intercept", mu=0, sigma=1)
+            sigma = pm.HalfNormal("sigma", sigma=0.5)
+            
+            # Media effects (constrained positive)
+            beta_media = pm.HalfNormal(
+                "beta_media", 
+                sigma=0.5, 
+                dims="channel"
+            )
+            
+            # Control effects (unconstrained)
+            beta_control = pm.Normal(
+                "beta_control", 
+                mu=0, sigma=0.5, 
+                dims="control"
+            )
+            
+            # === Structural model ===
+            mu = (
+                intercept 
+                + self._build_trend()
+                + self._build_seasonality()
+                + pt.dot(X_media_data, beta_media)
+                + pt.dot(X_control_data, beta_control)
+            )
+            
+            # === Likelihood ===
+            pm.Normal("y", mu=mu, sigma=sigma, observed=self.y_scaled)
+            
+        return model</code></pre>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next: Prior Predictive Check →</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Prior Predictive Check -->
+        <div class="workflow-step" id="step4">
+            <h2><span class="step-num">4</span> Prior Predictive Check</h2>
+            <p class="step-subtitle">Do our priors encode sensible assumptions?</p>
+
+            <p>
+                Before seeing any data, we sample from our priors and push through the model. 
+                If the implied predictions are implausible, our priors need adjustment.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">prior_predictive.py</span>
+                    <span>Prior predictive sampling</span>
+                </div>
+                <pre><code class="language-python"># Sample from priors only (no data influence)
+with mmm.model:
+    prior_pred = pm.sample_prior_predictive(samples=500, random_seed=42)
+
+# Extract implied predictions
+y_prior = prior_pred.prior_predictive["y"].values.flatten()
+
+# Check: Are these plausible for weekly revenue?
+print(f"Prior predictive range: [{y_prior.min():.1f}, {y_prior.max():.1f}]")
+print(f"Observed data range: [{panel.y.min():.1f}, {panel.y.max():.1f}]")
+print(f"Proportion negative: {(y_prior < 0).mean():.1%}")</code></pre>
+            </div>
+
+            <div class="control-panel">
+                <h4>Adjust Prior Parameters</h4>
+                <div class="control-row">
+                    <label>Media Effect Prior SD:</label>
+                    <input type="range" id="priorMediaSD" min="0.1" max="1.5" step="0.1" value="0.5">
+                    <span class="value" id="priorMediaSDVal">0.5</span>
+                </div>
+                <div class="control-row">
+                    <label>Intercept Prior SD:</label>
+                    <input type="range" id="priorInterceptSD" min="0.5" max="3" step="0.1" value="1.0">
+                    <span class="value" id="priorInterceptSDVal">1.0</span>
+                </div>
+                <button class="btn btn-secondary" onclick="runPriorPredictive()" style="margin-top: 0.5rem;">
+                    🔄 Regenerate Prior Samples
+                </button>
+            </div>
+
+            <div class="chart-container" id="priorPredChart"></div>
+
+            <div class="decision-point" id="priorDecision">
+                <h4>🔍 Prior Predictive Assessment</h4>
+                <p id="priorAssessment">Checking prior predictions...</p>
+                <div class="decision-options" id="priorOptions">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()" id="priorNextBtn">Next: Fit Model →</button>
+            </div>
+        </div>
+
+        <!-- Step 5: Fit Model -->
+        <div class="workflow-step" id="step5">
+            <h2><span class="step-num">5</span> Fit the Model</h2>
+            <p class="step-subtitle">Running MCMC inference</p>
+
+            <p>
+                With our priors validated, we fit the model using Hamiltonian Monte Carlo. 
+                The mmm-framework uses NumPyro for fast JAX-based sampling.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">fit_model.py</span>
+                    <span>MCMC inference</span>
+                </div>
+                <pre><code class="language-python"># Fit the model
+print("Starting MCMC sampling...")
+results = mmm.fit(random_seed=42)
+
+# Results object contains trace and diagnostics
+print(f"\n=== Sampling Complete ===")
+print(f"Chains: {results.trace.posterior.dims['chain']}")
+print(f"Draws per chain: {results.trace.posterior.dims['draw']}")
+print(f"Total samples: {results.n_samples}")
+
+# Quick diagnostic check
+print(f"\n=== Quick Diagnostics ===")
+print(f"Divergences: {results.diagnostics['divergences']}")
+print(f"Max R-hat: {results.diagnostics['rhat_max']:.4f}")
+print(f"Min ESS (bulk): {results.diagnostics['ess_bulk_min']:.0f}")</code></pre>
+            </div>
+
+            <div class="simulation-output" id="fitOutput">
+                <span class="info">[INFO]</span> Starting MCMC sampling with NumPyro...<br>
+                <span class="info">[INFO]</span> Chains: 4 | Draws: 2000 | Tune: 1000<br>
+                <span id="fitProgress"></span>
+            </div>
+
+            <button class="btn btn-success" onclick="runMCMC()" id="runMCMCBtn">▶ Run MCMC Sampling</button>
+
+            <div id="mcmcResults" style="display: none;">
+                <div class="chart-container" id="traceChart"></div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Mean</th>
+                            <th>SD</th>
+                            <th>HDI 3%</th>
+                            <th>HDI 97%</th>
+                            <th>R-hat</th>
+                            <th>ESS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="posteriorTable">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()" id="fitNextBtn" disabled>Next: Diagnostics →</button>
+            </div>
+        </div>
+
+        <!-- Step 6: Diagnostics -->
+        <div class="workflow-step" id="step6">
+            <h2><span class="step-num">6</span> MCMC Diagnostics</h2>
+            <p class="step-subtitle">Did the sampler explore the posterior properly?</p>
+
+            <p>
+                Before trusting our results, we must verify that MCMC sampling succeeded. 
+                The key diagnostics are R-hat (convergence) and ESS (effective sample size).
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">diagnostics.py</span>
+                    <span>MCMC diagnostics</span>
+                </div>
+                <pre><code class="language-python">import arviz as az
+
+# Comprehensive diagnostics
+diagnostics = az.summary(
+    results.trace, 
+    var_names=["beta_media", "alpha", "sigma"],
+    stat_funcs={"median": np.median}
+)
+
+# Check convergence criteria
+rhat_ok = (diagnostics["r_hat"] < 1.01).all()
+ess_ok = (diagnostics["ess_bulk"] > 400).all()
+divergences = results.trace.sample_stats["diverging"].sum().item()
+
+print(f"R-hat < 1.01: {'✓ PASS' if rhat_ok else '✗ FAIL'}")
+print(f"ESS > 400: {'✓ PASS' if ess_ok else '✗ FAIL'}")
+print(f"Divergences: {divergences} {'✓ PASS' if divergences == 0 else '⚠ WARNING'}")</code></pre>
+            </div>
+
+            <h3>Diagnostic Checklist</h3>
+            <ul class="checklist" id="diagnosticChecklist">
+                <li id="diag-rhat">R-hat < 1.01 for all parameters (chains converged)</li>
+                <li id="diag-ess">ESS > 400 for all parameters (sufficient samples)</li>
+                <li id="diag-div">No divergences (sampler didn't get stuck)</li>
+                <li id="diag-trace">Trace plots show good mixing (chains overlap)</li>
+            </ul>
+
+            <div class="chart-grid">
+                <div class="chart-box">
+                    <h4>R-hat Distribution</h4>
+                    <div class="chart-container" id="rhatChart" style="height: 250px;"></div>
+                </div>
+                <div class="chart-box">
+                    <h4>ESS Distribution</h4>
+                    <div class="chart-container" id="essChart" style="height: 250px;"></div>
+                </div>
+            </div>
+
+            <div class="decision-point" id="diagDecision">
+                <h4>🔍 Diagnostic Assessment</h4>
+                <p id="diagAssessment">Checking MCMC diagnostics...</p>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next: Posterior Predictive →</button>
+            </div>
+        </div>
+
+        <!-- Step 7: Posterior Predictive Check -->
+        <div class="workflow-step" id="step7">
+            <h2><span class="step-num">7</span> Posterior Predictive Check</h2>
+            <p class="step-subtitle">Does the model reproduce the observed data patterns?</p>
+
+            <p>
+                Now we compare model predictions (from the posterior) to actual observations. 
+                This reveals whether our model captures the essential features of the data.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">posterior_predictive.py</span>
+                    <span>Posterior predictive checking</span>
+                </div>
+                <pre><code class="language-python"># Generate predictions from posterior
+with mmm.model:
+    post_pred = pm.sample_posterior_predictive(
+        results.trace, 
+        random_seed=42
+    )
+
+y_rep = post_pred.posterior_predictive["y"].values
+y_obs = panel.y
+
+# Compare statistics
+print("=== Posterior Predictive Checks ===")
+print(f"Observed mean: {y_obs.mean():.2f}")
+print(f"Predicted mean: {y_rep.mean():.2f} (95% CI: [{np.percentile(y_rep.mean(axis=(0,1)), 2.5):.2f}, {np.percentile(y_rep.mean(axis=(0,1)), 97.5):.2f}])")
+
+# Bayesian p-value (should be ~0.5 if model is adequate)
+pval = (y_rep.mean(axis=2) > y_obs.mean()).mean()
+print(f"Bayesian p-value (mean): {pval:.3f}")</code></pre>
+            </div>
+
+            <div class="chart-container chart-container-lg" id="ppcChart"></div>
+
+            <h3>Test Statistics Comparison</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Statistic</th>
+                        <th>Observed</th>
+                        <th>Predicted (Median)</th>
+                        <th>95% Interval</th>
+                        <th>p-value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Mean</td>
+                        <td class="mono">16.23</td>
+                        <td class="mono">16.18</td>
+                        <td class="mono">[15.82, 16.54]</td>
+                        <td class="mono">0.48</td>
+                        <td class="positive">✓ Pass</td>
+                    </tr>
+                    <tr>
+                        <td>Std Dev</td>
+                        <td class="mono">2.41</td>
+                        <td class="mono">2.38</td>
+                        <td class="mono">[2.21, 2.58]</td>
+                        <td class="mono">0.52</td>
+                        <td class="positive">✓ Pass</td>
+                    </tr>
+                    <tr>
+                        <td>Autocorr (lag 1)</td>
+                        <td class="mono">0.72</td>
+                        <td class="mono">0.69</td>
+                        <td class="mono">[0.58, 0.79]</td>
+                        <td class="mono">0.61</td>
+                        <td class="positive">✓ Pass</td>
+                    </tr>
+                    <tr>
+                        <td>Max</td>
+                        <td class="mono">22.14</td>
+                        <td class="mono">21.89</td>
+                        <td class="mono">[20.45, 23.67]</td>
+                        <td class="mono">0.55</td>
+                        <td class="positive">✓ Pass</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="callout success">
+                <h4>✓ Posterior Predictive Check Passed</h4>
+                <p>
+                    The model reproduces key data characteristics within uncertainty bounds. 
+                    Bayesian p-values near 0.5 indicate the model is neither systematically over- nor under-predicting.
+                </p>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next: Sensitivity Analysis →</button>
+            </div>
+        </div>
+
+        <!-- Step 8: Sensitivity Analysis -->
+        <div class="workflow-step" id="step8">
+            <h2><span class="step-num">8</span> Sensitivity Analysis</h2>
+            <p class="step-subtitle">How robust are our conclusions?</p>
+
+            <p>
+                We test whether our conclusions hold under alternative reasonable assumptions. 
+                Findings that are sensitive to specification choices require additional validation.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">sensitivity.py</span>
+                    <span>Sensitivity analysis</span>
+                </div>
+                <pre><code class="language-python"># Define alternative specifications (pre-registered)
+specifications = [
+    {"name": "Base Model", "adstock_lmax": 8, "prior_sd": 0.5},
+    {"name": "Shorter Adstock", "adstock_lmax": 4, "prior_sd": 0.5},
+    {"name": "Longer Adstock", "adstock_lmax": 12, "prior_sd": 0.5},
+    {"name": "Tighter Priors", "adstock_lmax": 8, "prior_sd": 0.3},
+    {"name": "Wider Priors", "adstock_lmax": 8, "prior_sd": 1.0},
+    {"name": "Drop Q4 2024", "adstock_lmax": 8, "prior_sd": 0.5, "exclude": "2024-Q4"},
+]
+
+# Fit each specification and collect ROI estimates
+sensitivity_results = {}
+for spec in specifications:
+    model = build_model(**spec)
+    results = model.fit()
+    sensitivity_results[spec["name"]] = extract_roi(results)
+
+# Identify robust vs fragile findings
+for channel in channels:
+    estimates = [r[channel] for r in sensitivity_results.values()]
+    print(f"{channel}: {np.mean(estimates):.2f} (range: {np.min(estimates):.2f} - {np.max(estimates):.2f})")</code></pre>
+            </div>
+
+            <div class="chart-container chart-container-lg" id="sensitivityChart"></div>
+
+            <h3>Robustness Assessment</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Base ROI</th>
+                        <th>Range Across Specs</th>
+                        <th>Robust Finding?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Paid Search</td>
+                        <td class="mono">2.41</td>
+                        <td class="mono">[2.28 – 2.55]</td>
+                        <td class="positive">✓ Robust (always > 2.0)</td>
+                    </tr>
+                    <tr>
+                        <td>Paid Social</td>
+                        <td class="mono">1.87</td>
+                        <td class="mono">[1.64 – 2.12]</td>
+                        <td class="positive">✓ Robust (always > 1.5)</td>
+                    </tr>
+                    <tr>
+                        <td>TV</td>
+                        <td class="mono">1.24</td>
+                        <td class="mono">[0.92 – 1.58]</td>
+                        <td><span style="color: var(--color-warning);">⚠ Sensitive to adstock</span></td>
+                    </tr>
+                    <tr>
+                        <td>Print</td>
+                        <td class="mono">0.54</td>
+                        <td class="mono">[0.41 – 0.68]</td>
+                        <td class="positive">✓ Robust (always < 1.0)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="callout warning">
+                <h4>⚠️ TV ROI is Specification-Sensitive</h4>
+                <p>
+                    TV ROI varies from 0.92 to 1.58 across specifications—crossing the break-even threshold.
+                    This suggests the data is not strongly informative about TV effectiveness. 
+                    <strong>Recommendation:</strong> Conduct a geo-holdout experiment to validate.
+                </p>
+            </div>
+
+            <div class="callout success">
+                <h4>✓ Robust Findings</h4>
+                <p>
+                    <strong>Paid Search outperforms</strong> (ROI > 2.0) across all specifications. 
+                    <strong>Print underperforms</strong> (ROI < 1.0) consistently. 
+                    These findings are safe to act on.
+                </p>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Next: Generate Report →</button>
+            </div>
+        </div>
+
+        <!-- Step 9: Final Report -->
+        <div class="workflow-step" id="step9">
+            <h2><span class="step-num">9</span> Generate Report</h2>
+            <p class="step-subtitle">Communicating results with honest uncertainty</p>
+
+            <p>
+                The final step is generating a report that honestly communicates findings—including uncertainty, 
+                sensitivity, and recommendations for validation.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="file-path">generate_report.py</span>
+                    <span>Report generation</span>
+                </div>
+                <pre><code class="language-python">from mmm_framework.reporting import MMMReportGenerator
+
+# Generate comprehensive report
+report = MMMReportGenerator(
+    results=results,
+    panel=panel,
+    sensitivity=sensitivity_results,
+    config={
+        "title": "Marketing Mix Model Report",
+        "client": "Acme Consumer Products",
+        "period": "Jan 2023 - Dec 2025",
+        "include_uncertainty": True,
+        "include_sensitivity": True,
+        "include_recommendations": True,
+    }
+)
+
+# Export to HTML with interactive charts
+report.to_html("mmm_report_q4_2025.html")
+
+# Also export executive summary
+report.executive_summary("executive_summary.pdf")</code></pre>
+            </div>
+
+            <div class="callout insight">
+                <h4>📊 Report Contents</h4>
+                <ul style="margin: 0.5rem 0 0 1.5rem;">
+                    <li>Executive summary with key metrics and credible intervals</li>
+                    <li>Model fit visualization (actual vs. predicted)</li>
+                    <li>Channel ROI forest plot with uncertainty</li>
+                    <li>Revenue decomposition (waterfall and time series)</li>
+                    <li>Saturation curves and marginal ROI</li>
+                    <li>Sensitivity analysis results</li>
+                    <li>Recommendations categorized by confidence level</li>
+                    <li>Methodology documentation</li>
+                </ul>
+            </div>
+
+            <div class="report-preview">
+                <h3>📄 Your MMM Report is Ready</h3>
+                <p>The report includes all analysis with honest uncertainty quantification.</p>
+                <a href="mmm-example-report.html" target="_blank" class="btn">Open Full Report →</a>
+            </div>
+
+            <h3>Workflow Summary</h3>
+            <ul class="checklist">
+                <li class="checked">Question defined and pre-registered</li>
+                <li class="checked">Generative story articulated</li>
+                <li class="checked">Model built matching pre-specification</li>
+                <li class="checked">Prior predictive check passed</li>
+                <li class="checked">MCMC sampling converged</li>
+                <li class="checked">Diagnostics passed (R-hat, ESS, divergences)</li>
+                <li class="checked">Posterior predictive check passed</li>
+                <li class="checked">Sensitivity analysis completed</li>
+                <li class="checked">Report generated with uncertainty</li>
+            </ul>
+
+            <div class="callout success">
+                <h4>🎉 Scientific Modeling Complete</h4>
+                <p>
+                    You've completed the full Bayesian workflow. Your findings are documented with honest 
+                    uncertainty, sensitivity analysis identifies which conclusions are robust, and the report 
+                    provides actionable recommendations with appropriate caveats.
+                </p>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" onclick="prevStep()">← Back to Sensitivity</button>
+                <button class="btn btn-primary" onclick="goToStep(1)">↺ Start Over</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize highlight.js
+        hljs.highlightAll();
+
+        // =====================================================================
+        // Configuration
+        // =====================================================================
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#e8ece8',
+            bg: '#fafbf9'
+        };
+
+        const chartConfig = { displayModeBar: false, responsive: true };
+
+        let currentStep = 1;
+        const totalSteps = 9;
+
+        // =====================================================================
+        // Navigation
+        // =====================================================================
+        function updateProgress() {
+            const fill = document.getElementById('progressFill');
+            const percentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
+            fill.style.width = `${percentage}%`;
+
+            document.querySelectorAll('.step-indicator').forEach((indicator, idx) => {
+                indicator.classList.remove('active', 'completed');
+                if (idx + 1 === currentStep) {
+                    indicator.classList.add('active');
+                } else if (idx + 1 < currentStep) {
+                    indicator.classList.add('completed');
+                }
+            });
+        }
+
+        function showStep(step) {
+            document.querySelectorAll('.workflow-step').forEach(s => s.classList.remove('active'));
+            document.getElementById(`step${step}`).classList.add('active');
+            currentStep = step;
+            updateProgress();
+            window.scrollTo({ top: 200, behavior: 'smooth' });
+
+            // Initialize step-specific content
+            if (step === 4) initPriorPredictive();
+            if (step === 5) initFitStep();
+            if (step === 6) initDiagnostics();
+            if (step === 7) initPPC();
+            if (step === 8) initSensitivity();
+        }
+
+        function nextStep() {
+            if (currentStep < totalSteps) showStep(currentStep + 1);
+        }
+
+        function prevStep() {
+            if (currentStep > 1) showStep(currentStep - 1);
+        }
+
+        function goToStep(step) {
+            showStep(step);
+        }
+
+        // =====================================================================
+        // Utility Functions
+        // =====================================================================
+        function normalRandom(mean = 0, std = 1) {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random();
+            while (v === 0) v = Math.random();
+            return mean + std * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        // =====================================================================
+        // Step 4: Prior Predictive
+        // =====================================================================
+        function initPriorPredictive() {
+            document.getElementById('priorMediaSD').addEventListener('input', updatePriorValues);
+            document.getElementById('priorInterceptSD').addEventListener('input', updatePriorValues);
+            runPriorPredictive();
+        }
+
+        function updatePriorValues() {
+            document.getElementById('priorMediaSDVal').textContent = 
+                parseFloat(document.getElementById('priorMediaSD').value).toFixed(1);
+            document.getElementById('priorInterceptSDVal').textContent = 
+                parseFloat(document.getElementById('priorInterceptSD').value).toFixed(1);
+        }
+
+        function runPriorPredictive() {
+            const mediaSD = parseFloat(document.getElementById('priorMediaSD').value);
+            const interceptSD = parseFloat(document.getElementById('priorInterceptSD').value);
+            
+            const n = 52;
+            const traces = [];
+            const allY = [];
+            
+            // Generate 50 prior predictive draws
+            for (let draw = 0; draw < 50; draw++) {
+                const intercept = 16 + normalRandom(0, interceptSD);
+                const betas = Array.from({length: 6}, () => Math.abs(normalRandom(0, mediaSD)));
+                
+                const y = [];
+                for (let t = 0; t < n; t++) {
+                    const trend = 0.02 * t;
+                    const seasonality = 2 * Math.sin(2 * Math.PI * t / 52);
+                    const mediaEffect = betas.reduce((sum, b) => sum + b * (0.5 + 0.3 * Math.random()), 0);
+                    const noise = normalRandom(0, 0.5);
+                    const val = intercept + trend + seasonality + mediaEffect + noise;
+                    y.push(val);
+                    allY.push(val);
+                }
+                
+                traces.push({
+                    x: Array.from({length: n}, (_, i) => i + 1),
+                    y: y,
+                    mode: 'lines',
+                    line: { color: colors.accent, width: 1 },
+                    opacity: 0.2,
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                });
+            }
+
+            // Add observed data range
+            traces.push({
+                x: [1, n],
+                y: [12, 12],
+                mode: 'lines',
+                name: 'Observed Min',
+                line: { color: colors.success, width: 2, dash: 'dash' }
+            });
+            traces.push({
+                x: [1, n],
+                y: [22, 22],
+                mode: 'lines',
+                name: 'Observed Max',
+                line: { color: colors.success, width: 2, dash: 'dash' }
+            });
+
+            const layout = {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { family: 'Inter, sans-serif', color: colors.text },
+                margin: { t: 30, r: 30, b: 50, l: 60 },
+                xaxis: { title: 'Week', gridcolor: colors.grid },
+                yaxis: { title: 'Prior Predictive (Revenue)', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.1 },
+                showlegend: true
+            };
+
+            Plotly.newPlot('priorPredChart', traces, layout, chartConfig);
+
+            // Assess prior quality
+            const minY = Math.min(...allY);
+            const maxY = Math.max(...allY);
+            const negProp = allY.filter(y => y < 0).length / allY.length;
+            
+            const assessment = document.getElementById('priorAssessment');
+            const options = document.getElementById('priorOptions');
+            
+            if (negProp > 0.05) {
+                assessment.innerHTML = `<span style="color: ${colors.danger};">⚠️ ${(negProp * 100).toFixed(1)}% of prior predictions are negative. Priors may be too diffuse.</span>`;
+                options.innerHTML = `
+                    <button class="btn btn-secondary" onclick="document.getElementById('priorMediaSD').value = 0.3; updatePriorValues(); runPriorPredictive();">Tighten Media Prior</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('priorInterceptSD').value = 0.5; updatePriorValues(); runPriorPredictive();">Tighten Intercept Prior</button>
+                `;
+            } else if (maxY > 40 || minY < 5) {
+                assessment.innerHTML = `<span style="color: ${colors.warning};">⚠️ Prior range [${minY.toFixed(1)}, ${maxY.toFixed(1)}] extends beyond plausible values. Consider adjusting.</span>`;
+                options.innerHTML = `<button class="btn btn-primary" onclick="nextStep();">Proceed Anyway →</button>`;
+            } else {
+                assessment.innerHTML = `<span style="color: ${colors.success};">✓ Priors look reasonable. Range [${minY.toFixed(1)}, ${maxY.toFixed(1)}] covers observed data [12, 22].</span>`;
+                options.innerHTML = `<button class="btn btn-success" onclick="nextStep();">✓ Prior Check Passed — Continue →</button>`;
+            }
+        }
+
+        // =====================================================================
+        // Step 5: Fit Model
+        // =====================================================================
+        function initFitStep() {
+            document.getElementById('runMCMCBtn').disabled = false;
+            document.getElementById('fitNextBtn').disabled = true;
+            document.getElementById('mcmcResults').style.display = 'none';
+        }
+
+        function runMCMC() {
+            const btn = document.getElementById('runMCMCBtn');
+            const output = document.getElementById('fitOutput');
+            const progress = document.getElementById('fitProgress');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Sampling...';
+
+            let step = 0;
+            const steps = [
+                '<span class="info">[INFO]</span> Compiling model with JAX...',
+                '<span class="success">[OK]</span> Model compiled in 2.3s',
+                '<span class="info">[INFO]</span> Running warmup (1000 iterations)...',
+                '<span class="info">[CHAIN 1]</span> Warmup: 100% ████████████████████ 1000/1000',
+                '<span class="info">[CHAIN 2]</span> Warmup: 100% ████████████████████ 1000/1000',
+                '<span class="info">[CHAIN 3]</span> Warmup: 100% ████████████████████ 1000/1000',
+                '<span class="info">[CHAIN 4]</span> Warmup: 100% ████████████████████ 1000/1000',
+                '<span class="info">[INFO]</span> Running sampling (2000 iterations)...',
+                '<span class="info">[CHAIN 1]</span> Sampling: 100% ████████████████████ 2000/2000',
+                '<span class="info">[CHAIN 2]</span> Sampling: 100% ████████████████████ 2000/2000',
+                '<span class="info">[CHAIN 3]</span> Sampling: 100% ████████████████████ 2000/2000',
+                '<span class="info">[CHAIN 4]</span> Sampling: 100% ████████████████████ 2000/2000',
+                '<span class="success">[OK]</span> Sampling complete in 47.2s',
+                '<span class="success">[OK]</span> Divergences: 0',
+                '<span class="success">[OK]</span> Max R-hat: 1.003',
+                '<span class="success">[OK]</span> Min ESS: 1842'
+            ];
+
+            const interval = setInterval(() => {
+                if (step < steps.length) {
+                    progress.innerHTML += steps[step] + '<br>';
+                    output.scrollTop = output.scrollHeight;
+                    step++;
+                } else {
+                    clearInterval(interval);
+                    btn.textContent = '✓ Complete';
+                    showMCMCResults();
+                    document.getElementById('fitNextBtn').disabled = false;
+                }
+            }, 200);
+        }
+
+        function showMCMCResults() {
+            document.getElementById('mcmcResults').style.display = 'block';
+            
+            // Posterior table
+            const posteriorData = [
+                { param: 'β_TV', mean: 0.12, sd: 0.04, hdi_low: 0.05, hdi_high: 0.19, rhat: 1.001, ess: 2341 },
+                { param: 'β_Paid_Search', mean: 0.28, sd: 0.03, hdi_low: 0.22, hdi_high: 0.34, rhat: 1.002, ess: 2156 },
+                { param: 'β_Paid_Social', mean: 0.18, sd: 0.04, hdi_low: 0.11, hdi_high: 0.25, rhat: 1.001, ess: 2089 },
+                { param: 'β_Display', mean: 0.08, sd: 0.03, hdi_low: 0.02, hdi_high: 0.14, rhat: 1.003, ess: 1956 },
+                { param: 'β_Radio', mean: 0.05, sd: 0.03, hdi_low: 0.00, hdi_high: 0.11, rhat: 1.002, ess: 2234 },
+                { param: 'β_Print', mean: 0.02, sd: 0.02, hdi_low: 0.00, hdi_high: 0.06, rhat: 1.001, ess: 2445 },
+                { param: 'σ', mean: 0.48, sd: 0.03, hdi_low: 0.43, hdi_high: 0.54, rhat: 1.001, ess: 3012 }
+            ];
+
+            const tbody = document.getElementById('posteriorTable');
+            tbody.innerHTML = posteriorData.map(row => `
+                <tr>
+                    <td>${row.param}</td>
+                    <td class="mono">${row.mean.toFixed(2)}</td>
+                    <td class="mono">${row.sd.toFixed(2)}</td>
+                    <td class="mono">${row.hdi_low.toFixed(2)}</td>
+                    <td class="mono">${row.hdi_high.toFixed(2)}</td>
+                    <td class="mono ${row.rhat < 1.01 ? 'positive' : 'negative'}">${row.rhat.toFixed(3)}</td>
+                    <td class="mono ${row.ess > 400 ? 'positive' : 'negative'}">${row.ess}</td>
+                </tr>
+            `).join('');
+
+            // Trace plot (simplified)
+            const traces = [];
+            for (let chain = 0; chain < 4; chain++) {
+                const y = Array.from({length: 500}, (_, i) => 0.12 + normalRandom(0, 0.02) + 0.001 * Math.sin(i / 50));
+                traces.push({
+                    y: y,
+                    mode: 'lines',
+                    name: `Chain ${chain + 1}`,
+                    line: { width: 1 },
+                    opacity: 0.7
+                });
+            }
+
+            const layout = {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { family: 'Inter, sans-serif', color: colors.text },
+                margin: { t: 30, r: 30, b: 40, l: 60 },
+                xaxis: { title: 'Iteration', gridcolor: colors.grid },
+                yaxis: { title: 'β_TV', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.1 },
+                title: { text: 'Trace Plot: TV Effect', font: { size: 14 } }
+            };
+
+            Plotly.newPlot('traceChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Step 6: Diagnostics
+        // =====================================================================
+        function initDiagnostics() {
+            // R-hat histogram
+            const rhats = Array.from({length: 20}, () => 1 + Math.abs(normalRandom(0, 0.002)));
+            Plotly.newPlot('rhatChart', [{
+                x: rhats,
+                type: 'histogram',
+                marker: { color: rhats.every(r => r < 1.01) ? colors.success : colors.danger },
+                nbinsx: 15
+            }], {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                margin: { t: 20, r: 20, b: 40, l: 50 },
+                xaxis: { title: 'R-hat', gridcolor: colors.grid },
+                yaxis: { title: 'Count', gridcolor: colors.grid },
+                shapes: [{ type: 'line', x0: 1.01, x1: 1.01, y0: 0, y1: 10, line: { color: colors.danger, dash: 'dash' } }]
+            }, chartConfig);
+
+            // ESS histogram
+            const ess = Array.from({length: 20}, () => 1500 + normalRandom(0, 500));
+            Plotly.newPlot('essChart', [{
+                x: ess,
+                type: 'histogram',
+                marker: { color: ess.every(e => e > 400) ? colors.success : colors.danger },
+                nbinsx: 15
+            }], {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                margin: { t: 20, r: 20, b: 40, l: 50 },
+                xaxis: { title: 'ESS', gridcolor: colors.grid },
+                yaxis: { title: 'Count', gridcolor: colors.grid },
+                shapes: [{ type: 'line', x0: 400, x1: 400, y0: 0, y1: 10, line: { color: colors.warning, dash: 'dash' } }]
+            }, chartConfig);
+
+            // Update checklist
+            ['diag-rhat', 'diag-ess', 'diag-div', 'diag-trace'].forEach(id => {
+                document.getElementById(id).classList.add('checked');
+            });
+
+            document.getElementById('diagAssessment').innerHTML = 
+                `<span style="color: ${colors.success};">✓ All diagnostics passed. Sampling was successful.</span>`;
+        }
+
+        // =====================================================================
+        // Step 7: PPC
+        // =====================================================================
+        function initPPC() {
+            const n = 156;
+            const weeks = Array.from({length: n}, (_, i) => {
+                const d = new Date(2023, 0, 1);
+                d.setDate(d.getDate() + i * 7);
+                return d.toISOString().split('T')[0];
+            });
+
+            // Observed data
+            const observed = weeks.map((_, i) => 
+                16 + 0.02 * i + 2 * Math.sin(2 * Math.PI * i / 52) + normalRandom(0, 1)
+            );
+
+            // Posterior predictive (multiple draws)
+            const ppDraws = [];
+            for (let d = 0; d < 100; d++) {
+                ppDraws.push(weeks.map((_, i) => 
+                    16 + 0.02 * i + 2 * Math.sin(2 * Math.PI * i / 52) + normalRandom(0, 0.8)
+                ));
+            }
+
+            // Compute percentiles
+            const lower = weeks.map((_, i) => {
+                const vals = ppDraws.map(d => d[i]).sort((a, b) => a - b);
+                return vals[Math.floor(vals.length * 0.1)];
+            });
+            const upper = weeks.map((_, i) => {
+                const vals = ppDraws.map(d => d[i]).sort((a, b) => a - b);
+                return vals[Math.floor(vals.length * 0.9)];
+            });
+            const median = weeks.map((_, i) => {
+                const vals = ppDraws.map(d => d[i]).sort((a, b) => a - b);
+                return vals[Math.floor(vals.length * 0.5)];
+            });
+
+            const traces = [
+                { x: weeks, y: upper, mode: 'lines', line: { width: 0 }, showlegend: false },
+                { x: weeks, y: lower, mode: 'lines', fill: 'tonexty', fillcolor: 'rgba(143, 168, 106, 0.3)', line: { width: 0 }, name: '80% Interval' },
+                { x: weeks, y: median, mode: 'lines', line: { color: colors.primary, width: 2 }, name: 'Predicted (Median)' },
+                { x: weeks, y: observed, mode: 'markers', marker: { color: colors.accent, size: 4 }, name: 'Observed' }
+            ];
+
+            Plotly.newPlot('ppcChart', traces, {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { family: 'Inter, sans-serif', color: colors.text },
+                margin: { t: 30, r: 30, b: 50, l: 60 },
+                xaxis: { title: '', gridcolor: colors.grid, tickformat: '%b %Y' },
+                yaxis: { title: 'Weekly Revenue ($M)', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.1 },
+                title: { text: 'Posterior Predictive Check', font: { size: 14 } }
+            }, chartConfig);
+        }
+
+        // =====================================================================
+        // Step 8: Sensitivity
+        // =====================================================================
+        function initSensitivity() {
+            const specs = ['Base', 'Short Adstock', 'Long Adstock', 'Tight Prior', 'Wide Prior', 'Drop Q4'];
+            const channels = ['TV', 'Paid Search', 'Print'];
+            
+            const data = {
+                'TV': [1.24, 1.45, 0.92, 1.31, 1.18, 1.28],
+                'Paid Search': [2.41, 2.35, 2.52, 2.48, 2.28, 2.44],
+                'Print': [0.54, 0.61, 0.48, 0.52, 0.58, 0.51]
+            };
+
+            const traces = channels.map(ch => ({
+                x: specs,
+                y: data[ch],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: ch,
+                marker: { size: 10 }
+            }));
+
+            traces.push({
+                x: specs,
+                y: Array(specs.length).fill(1),
+                mode: 'lines',
+                name: 'Break-even',
+                line: { color: colors.text, width: 2, dash: 'dash' }
+            });
+
+            Plotly.newPlot('sensitivityChart', traces, {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { family: 'Inter, sans-serif', color: colors.text },
+                margin: { t: 30, r: 30, b: 80, l: 60 },
+                xaxis: { title: '', gridcolor: colors.grid, tickangle: -30 },
+                yaxis: { title: 'ROI Estimate', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.15 },
+                shapes: [{
+                    type: 'rect',
+                    x0: -0.5, x1: specs.length - 0.5,
+                    y0: 0, y1: 1,
+                    fillcolor: 'rgba(201, 112, 103, 0.1)',
+                    line: { width: 0 }
+                }]
+            }, chartConfig);
+        }
+
+        // =====================================================================
+        // Initialize
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProgress();
+        });
+    </script>
+</body>
+</html>
