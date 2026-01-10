@@ -1268,14 +1268,14 @@
         // Saturation Curves
         // =====================================================================
         const saturationParams = {
-            search: { K: 60, K_sd: 8, S: 12, S_sd: 3, currentSpend: 18.2 },
-            social: { K: 40, K_sd: 7, S: 10, S_sd: 2.5, currentSpend: 12.5 },
-            tv: { K: 70, K_sd: 15, S: 35, S_sd: 8, currentSpend: 42 },
-            display: { K: 20, K_sd: 5, S: 7, S_sd: 2, currentSpend: 8.3 }
+            search: { K: 24, K_sd: 4, S: 2, S_sd: 0.1, currentSpend: 11.2, maxResponse: 70 },
+            social: { K: 30, K_sd: 5, S: 3, S_sd: 0.12, currentSpend: 20.5, maxResponse: 70 },
+            tv: { K: 30, K_sd: 8, S: 1.4, S_sd: 0.08, currentSpend: 42, maxResponse: 130 },
+            display: { K: 3, K_sd: .4, S: 2, S_sd: 0.15, currentSpend: 3.3, maxResponse: 10 }
         };
 
-        function hillFunction(x, K, S) {
-            return K * Math.pow(x, 2) / (Math.pow(S, 2) + Math.pow(x, 2));
+        function hillFunction(x, K, S, maxResponse = 70) {
+            return maxResponse * Math.pow(x, S) / (Math.pow(K, S) + Math.pow(x, S));
         }
 
         function initSaturationCharts() {
@@ -1289,25 +1289,31 @@
             
             const spend = [], response = [], responseLower = [], responseUpper = [];
             const marginalROI = [], marginalLower = [], marginalUpper = [];
-            const maxSpend = params.currentSpend * 2;
+            const maxSpend = params.currentSpend * 2.2;
             
             // Use approximate 80% credible interval (±1.28 SD)
             const K_low = params.K - 1.28 * params.K_sd;
             const K_high = params.K + 1.28 * params.K_sd;
             const S_low = Math.max(1, params.S - 1.28 * params.S_sd);
             const S_high = params.S + 1.28 * params.S_sd;
+            const M_low = params.maxResponse - 1.28 * (params.maxResponse * 0.1); // Assume 10% SD
+            const M_high = params.maxResponse + 1.28 * (params.maxResponse * 0.1);
             
             for (let x = 0; x <= maxSpend; x += maxSpend / 50) {
                 spend.push(x);
                 
                 // Response with uncertainty - compute all 4 combinations and take min/max
-                const y = hillFunction(x, params.K, params.S);
+                const y = hillFunction(x, params.K, params.S, params.maxResponse);
                 
                 const responseScenarios = [
-                    hillFunction(x, K_low, S_low),
-                    hillFunction(x, K_low, S_high),
-                    hillFunction(x, K_high, S_low),
-                    hillFunction(x, K_high, S_high),
+                    hillFunction(x, K_low, S_low, M_low),
+                    hillFunction(x, K_low, S_high, M_low),
+                    hillFunction(x, K_high, S_low, M_low),
+                    hillFunction(x, K_high, S_high, M_low),
+                    hillFunction(x, K_low, S_low, M_high),
+                    hillFunction(x, K_low, S_high, M_high),
+                    hillFunction(x, K_high, S_low, M_high),
+                    hillFunction(x, K_high, S_high, M_high),
                     y  // Include median to ensure band contains it
                 ];
                 
@@ -1316,15 +1322,19 @@
                 responseUpper.push(Math.max(...responseScenarios));
                 
                 // Marginal ROI with uncertainty - compute all 4 combinations and take min/max
-                const dx = 0.1;
-                const dy_median = hillFunction(x + dx, params.K, params.S) - y;
+                const dx = 0.01;
+                const dy_median = hillFunction(x + dx, params.K, params.S, params.maxResponse) - y;
                 
                 // Compute derivative for all 4 corner cases of parameter space
                 const scenarios = [
-                    hillFunction(x + dx, K_low, S_low) - hillFunction(x, K_low, S_low),
-                    hillFunction(x + dx, K_low, S_high) - hillFunction(x, K_low, S_high),
-                    hillFunction(x + dx, K_high, S_low) - hillFunction(x, K_high, S_low),
-                    hillFunction(x + dx, K_high, S_high) - hillFunction(x, K_high, S_high)
+                    hillFunction(x + dx, K_low, S_low, M_low) - hillFunction(x, K_low, S_low, M_low),
+                    hillFunction(x + dx, K_low, S_high, M_low) - hillFunction(x, K_low, S_high, M_low),
+                    hillFunction(x + dx, K_high, S_low, M_low) - hillFunction(x, K_high, S_low, M_low),
+                    hillFunction(x + dx, K_high, S_high, M_low) - hillFunction(x, K_high, S_high, M_low),
+                    hillFunction(x + dx, K_low, S_low, M_high) - hillFunction(x, K_low, S_low, M_high),
+                    hillFunction(x + dx, K_low, S_high, M_high) - hillFunction(x, K_low, S_high, M_high),
+                    hillFunction(x + dx, K_high, S_low, M_high) - hillFunction(x, K_high, S_low, M_high),
+                    hillFunction(x + dx, K_high, S_high, M_high) - hillFunction(x, K_high, S_high, M_high),
                 ];
                 
                 const allMarginals = scenarios.map(dy => dy / dx);
@@ -1371,7 +1381,7 @@
                 // Current spend marker
                 {
                     x: [params.currentSpend],
-                    y: [hillFunction(params.currentSpend, params.K, params.S)],
+                    y: [hillFunction(params.currentSpend, params.K, params.S, params.maxResponse)],
                     type: 'scatter',
                     mode: 'markers',
                     marker: { color: colors.danger, size: 12, symbol: 'diamond' },
@@ -1380,22 +1390,30 @@
                         type: 'data',
                         symmetric: false,
                         array: [(() => {
-                            const yMed = hillFunction(params.currentSpend, params.K, params.S);
+                            const yMed = hillFunction(params.currentSpend, params.K, params.S, params.maxResponse);
                             const scenarios = [
-                                hillFunction(params.currentSpend, K_low, S_low),
-                                hillFunction(params.currentSpend, K_low, S_high),
-                                hillFunction(params.currentSpend, K_high, S_low),
-                                hillFunction(params.currentSpend, K_high, S_high)
+                                hillFunction(params.currentSpend, K_low, S_low, M_low),
+                                hillFunction(params.currentSpend, K_low, S_high, M_low),
+                                hillFunction(params.currentSpend, K_high, S_low, M_low),
+                                hillFunction(params.currentSpend, K_high, S_high, M_low),
+                                hillFunction(params.currentSpend, K_low, S_low, M_high),
+                                hillFunction(params.currentSpend, K_low, S_high, M_high),
+                                hillFunction(params.currentSpend, K_high, S_low, M_high),
+                                hillFunction(params.currentSpend, K_high, S_high, M_high)
                             ];
                             return Math.max(...scenarios) - yMed;
                         })()],
                         arrayminus: [(() => {
-                            const yMed = hillFunction(params.currentSpend, params.K, params.S);
+                            const yMed = hillFunction(params.currentSpend, params.K, params.S, params.maxResponse);
                             const scenarios = [
-                                hillFunction(params.currentSpend, K_low, S_low),
-                                hillFunction(params.currentSpend, K_low, S_high),
-                                hillFunction(params.currentSpend, K_high, S_low),
-                                hillFunction(params.currentSpend, K_high, S_high)
+                                hillFunction(params.currentSpend, K_low, S_low, M_low),
+                                hillFunction(params.currentSpend, K_low, S_high, M_low),
+                                hillFunction(params.currentSpend, K_high, S_low, M_low),
+                                hillFunction(params.currentSpend, K_high, S_high, M_low),
+                                hillFunction(params.currentSpend, K_low, S_low, M_high),
+                                hillFunction(params.currentSpend, K_low, S_high, M_high),
+                                hillFunction(params.currentSpend, K_high, S_low, M_high),
+                                hillFunction(params.currentSpend, K_high, S_high, M_high)
                             ];
                             return yMed - Math.min(...scenarios);
                         })()],
@@ -1415,7 +1433,7 @@
                 shapes: [{
                     type: 'line',
                     x0: params.currentSpend, x1: params.currentSpend,
-                    y0: 0, y1: hillFunction(params.currentSpend, params.K, params.S),
+                    y0: 0, y1: hillFunction(params.currentSpend, params.K, params.S, params.maxResponse),
                     line: { color: colors.danger, width: 1, dash: 'dot' }
                 }]
             };
@@ -1677,6 +1695,7 @@
         }
 
         function updateOptimization() {
+            
             const totalBudget = parseFloat(document.getElementById('totalBudget').value);
             const tvShare = parseFloat(document.getElementById('tvShare').value);
             const digitalShare = parseFloat(document.getElementById('digitalShare').value);
@@ -1693,13 +1712,13 @@
             const tradSpend = totalBudget * tradShare / 100;
 
             // Simple ROI model
-            const tvRev = tvSpend * (1.24 + normalRandom(0, 0.1));
-            const digitalRev = digitalSpend * (2.0 + normalRandom(0, 0.15));
-            const tradRev = tradSpend * (0.65 + normalRandom(0, 0.1));
+            const tvRev = tvSpend * (2.24*tvSpend/40/(1+Math.pow(tvSpend/40, 2)));
+            const digitalRev = digitalSpend * (3.0*Math.pow(digitalSpend/30,.3)/(1+Math.pow(digitalSpend/30, 1.3)));
+            const tradRev = tradSpend * (3.65*Math.pow(tradSpend/18,1.2)/(1+Math.pow(tradSpend/18, 2.2)));
             
             const expectedRev = tvRev + digitalRev + tradRev;
             const roi = expectedRev / totalBudget;
-            const delta = expectedRev - 127;
+            const delta = expectedRev - 116;
 
             document.getElementById('simRevenue').textContent = '$' + Math.round(expectedRev) + 'M';
             document.getElementById('simRevenueCi').textContent = `80% CI: [$${Math.round(expectedRev * 0.77)}M – $${Math.round(expectedRev * 1.23)}M]`;
