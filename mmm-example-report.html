@@ -460,19 +460,19 @@
                     <div class="label">Total Revenue (2025)</div>
                 </div>
                 <div class="metric-card highlight">
-                    <div class="value">$127M</div>
+                    <div class="value">$116M</div>
                     <div class="label">Marketing-Attributed Revenue</div>
-                    <div class="ci">80% CI: [$98M – $156M]</div>
+                    <div class="ci">80% CI: [$90M – $143M]</div>
                 </div>
                 <div class="metric-card">
-                    <div class="value">1.42</div>
+                    <div class="value">1.26</div>
                     <div class="label">Blended Marketing ROI</div>
-                    <div class="ci">80% CI: [1.08 – 1.79]</div>
+                    <div class="ci">80% CI: [0.96 – 1.58]</div>
                 </div>
                 <div class="metric-card">
-                    <div class="value">15.0%</div>
+                    <div class="value">13.7%</div>
                     <div class="label">Marketing Contribution</div>
-                    <div class="ci">80% CI: [11.6% – 18.4%]</div>
+                    <div class="ci">80% CI: [10.6% – 16.9%]</div>
                 </div>
             </div>
 
@@ -934,7 +934,7 @@
             paper_bgcolor: 'transparent',
             plot_bgcolor: 'transparent',
             font: { family: 'Inter, sans-serif', color: colors.text, size: 12 },
-            margin: { t: 40, r: 40, b: 50, l: 60 }
+            margin: { t: 40, r: 40, b: 70, l: 60 }
         };
 
         // =====================================================================
@@ -1322,7 +1322,7 @@
                 responseUpper.push(Math.max(...responseScenarios));
                 
                 // Marginal ROI with uncertainty - compute all 4 combinations and take min/max
-                const dx = 0.01;
+                const dx = 0.001;
                 const dy_median = hillFunction(x + dx, params.K, params.S, params.maxResponse) - y;
                 
                 // Compute derivative for all 4 corner cases of parameter space
@@ -1770,11 +1770,11 @@
         function initSensitivityChart() {
             const specifications = [
                 'Base Model',
-                'Alt. Adstock (shorter)',
-                'Alt. Adstock (longer)',
+                'Alt. Adstock<br>(shorter)',
+                'Alt. Adstock<br>(longer)',
                 'Alt. Saturation',
-                'Drop Q4 2024',
-                'Add Weather Control',
+                'Drop<br>Q4 2024',
+                'Add<br>Weather Control',
                 'Different Priors'
             ];
 
