@@ -835,3 +835,415 @@ def _hex_to_rgb(hex_color: str) -> str:
     hex_color = hex_color.lstrip('#')
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return f"{r}, {g}, {b}"
+
+
+def create_geo_roi_heatmap(
+    geo_names: list[str],
+    channel_names: list[str],
+    geo_roi: dict[str, dict[str, dict[str, float]]],
+    config: ReportConfig,
+    chart_config: ChartConfig | None = None,
+    div_id: str = "geoRoiHeatmap",
+) -> str:
+    """
+    Create geographic ROI heatmap showing channel performance across regions.
+    
+    Parameters
+    ----------
+    geo_names : list[str]
+        Names of geographies (y-axis)
+    channel_names : list[str]
+        Names of channels (x-axis)
+    geo_roi : dict
+        Nested dict: {geo: {channel: {"mean", "lower", "upper"}}}
+    config : ReportConfig
+        Report configuration
+    chart_config : ChartConfig, optional
+        Chart-specific configuration
+    div_id : str
+        HTML div ID
+        
+    Returns
+    -------
+    str
+        HTML string with embedded Plotly heatmap
+    """
+    chart_config = chart_config or ChartConfig(height=400)
+    colors = config.color_scheme
+    
+    # Build matrix
+    z_values = []
+    hover_text = []
+    
+    for geo in geo_names:
+        row_vals = []
+        row_text = []
+        for ch in channel_names:
+            roi_data = geo_roi.get(geo, {}).get(ch, {})
+            mean = roi_data.get("mean", 0)
+            lower = roi_data.get("lower", 0)
+            upper = roi_data.get("upper", 0)
+            row_vals.append(mean)
+            row_text.append(f"{geo} × {ch}<br>ROI: {mean:.2f}x<br>CI: [{lower:.2f}, {upper:.2f}]")
+        z_values.append(row_vals)
+        hover_text.append(row_text)
+    
+    traces = [{
+        "type": "heatmap",
+        "x": channel_names,
+        "y": geo_names,
+        "z": z_values,
+        "text": hover_text,
+        "hoverinfo": "text",
+        "colorscale": [
+            [0, "#c97067"],      # Low ROI (danger)
+            [0.5, "#fafbf9"],    # Neutral
+            [1, colors.primary], # High ROI
+        ],
+        "colorbar": {
+            "title": "ROI",
+            "thickness": 15,
+        },
+        "zmin": 0,
+        "zmid": 1.0,
+    }]
+    
+    layout = chart_config.to_plotly_layout(colors)
+    layout["xaxis"] = {"title": "Channel", "side": "top"}
+    layout["yaxis"] = {"title": "Geography", "autorange": "reversed"}
+    
+    return create_plotly_div(traces, layout, div_id)
+
+
+def create_geo_decomposition_chart(
+    geo_names: list[str],
+    geo_contribution: dict[str, dict[str, float]],
+    config: ReportConfig,
+    chart_config: ChartConfig | None = None,
+    div_id: str = "geoDecompChart",
+) -> str:
+    """
+    Create stacked bar chart showing contribution decomposition by geography.
+    
+    Parameters
+    ----------
+    geo_names : list[str]
+        Names of geographies
+    geo_contribution : dict
+        Nested dict: {geo: {component: contribution}}
+    config : ReportConfig
+        Report configuration
+    chart_config : ChartConfig, optional
+        Chart-specific configuration
+    div_id : str
+        HTML div ID
+        
+    Returns
+    -------
+    str
+        HTML string with embedded Plotly chart
+    """
+    chart_config = chart_config or ChartConfig(height=400)
+    colors = config.color_scheme
+    channel_colors = config.channel_colors
+    
+    # Get all components across geos
+    all_components = set()
+    for geo_data in geo_contribution.values():
+        all_components.update(geo_data.keys())
+    all_components = sorted(all_components)
+    
+    traces = []
+    for comp in all_components:
+        values = [geo_contribution.get(geo, {}).get(comp, 0) for geo in geo_names]
+        traces.append({
+            "type": "bar",
+            "x": geo_names,
+            "y": values,
+            "name": comp,
+            "marker": {"color": channel_colors.get(comp)},
+        })
+    
+    layout = chart_config.to_plotly_layout(colors)
+    layout["barmode"] = "stack"
+    layout["xaxis"] = {"title": "Geography"}
+    layout["yaxis"] = {"title": "Contribution", "tickformat": "$,.0f"}
+    layout["legend"] = {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "center", "x": 0.5}
+    
+    return create_plotly_div(traces, layout, div_id)
+
+
+def create_mediator_pathway_chart(
+    channel_names: list[str],
+    mediator_names: list[str],
+    mediator_pathways: dict[str, dict[str, Any]],
+    config: ReportConfig,
+    chart_config: ChartConfig | None = None,
+    div_id: str = "mediatorPathwayChart",
+) -> str:
+    """
+    Create Sankey-style diagram showing effect pathways through mediators.
+    
+    Parameters
+    ----------
+    channel_names : list[str]
+        Names of media channels
+    mediator_names : list[str]
+        Names of mediators (e.g., awareness, consideration)
+    mediator_pathways : dict
+        Pathway data: {channel: {mediator: effect, "_direct": effect, "_total": effect}}
+    config : ReportConfig
+        Report configuration
+    chart_config : ChartConfig, optional
+        Chart-specific configuration
+    div_id : str
+        HTML div ID
+        
+    Returns
+    -------
+    str
+        HTML string with embedded Plotly Sankey diagram
+    """
+    chart_config = chart_config or ChartConfig(height=500)
+    colors = config.color_scheme
+    channel_colors = config.channel_colors
+    
+    # Build Sankey diagram
+    # Nodes: channels, mediators, "Sales"
+    node_labels = list(channel_names) + list(mediator_names) + ["Sales"]
+    node_colors = [channel_colors.get(ch) for ch in channel_names]
+    node_colors += [colors.accent for _ in mediator_names]
+    node_colors += [colors.primary]
+    
+    n_channels = len(channel_names)
+    n_mediators = len(mediator_names)
+    
+    sources = []
+    targets = []
+    values = []
+    link_colors = []
+    
+    for i, ch in enumerate(channel_names):
+        pathways = mediator_pathways.get(ch, {})
+        
+        # Direct effects: channel -> Sales
+        direct = pathways.get("_direct", {})
+        direct_val = abs(direct.get("mean", 0)) if isinstance(direct, dict) else abs(direct)
+        if direct_val > 0.001:
+            sources.append(i)
+            targets.append(n_channels + n_mediators)  # Sales node
+            values.append(direct_val)
+            link_colors.append(f"rgba({_hex_to_rgb(channel_colors.get(ch))}, 0.4)")
+        
+        # Indirect effects: channel -> mediator -> Sales
+        for j, med in enumerate(mediator_names):
+            med_effect = pathways.get(med, {})
+            effect_val = abs(med_effect.get("mean", 0)) if isinstance(med_effect, dict) else abs(med_effect)
+            if effect_val > 0.001:
+                # Channel -> Mediator
+                sources.append(i)
+                targets.append(n_channels + j)
+                values.append(effect_val)
+                link_colors.append(f"rgba({_hex_to_rgb(channel_colors.get(ch))}, 0.3)")
+    
+    # Mediator -> Sales (aggregate)
+    for j, med in enumerate(mediator_names):
+        total_through_med = 0
+        for ch in channel_names:
+            pathways = mediator_pathways.get(ch, {})
+            med_effect = pathways.get(med, {})
+            effect_val = abs(med_effect.get("mean", 0)) if isinstance(med_effect, dict) else abs(med_effect)
+            total_through_med += effect_val
+        
+        if total_through_med > 0.001:
+            sources.append(n_channels + j)
+            targets.append(n_channels + n_mediators)
+            values.append(total_through_med)
+            link_colors.append(f"rgba({_hex_to_rgb(colors.accent)}, 0.4)")
+    
+    traces = [{
+        "type": "sankey",
+        "orientation": "h",
+        "node": {
+            "label": node_labels,
+            "color": node_colors,
+            "pad": 20,
+            "thickness": 20,
+            "line": {"color": colors.border, "width": 0.5},
+        },
+        "link": {
+            "source": sources,
+            "target": targets,
+            "value": values,
+            "color": link_colors,
+        },
+    }]
+    
+    layout = chart_config.to_plotly_layout(colors)
+    layout["title"] = {"text": "Effect Pathways: Media → Mediators → Sales", "font": {"size": 14}}
+    
+    return create_plotly_div(traces, layout, div_id)
+
+
+def create_mediator_time_series(
+    dates: np.ndarray | pd.DatetimeIndex | list,
+    mediator_names: list[str],
+    mediator_time_series: dict[str, np.ndarray],
+    config: ReportConfig,
+    chart_config: ChartConfig | None = None,
+    div_id: str = "mediatorTsChart",
+) -> str:
+    """
+    Create time series chart for mediator values.
+    
+    Parameters
+    ----------
+    dates : array-like
+        Date index
+    mediator_names : list[str]
+        Names of mediators
+    mediator_time_series : dict
+        Time series data: {mediator: values}
+    config : ReportConfig
+        Report configuration
+    chart_config : ChartConfig, optional
+        Chart-specific configuration
+    div_id : str
+        HTML div ID
+        
+    Returns
+    -------
+    str
+        HTML string with embedded Plotly chart
+    """
+    chart_config = chart_config or ChartConfig(height=350)
+    colors = config.color_scheme
+    
+    # Convert dates
+    if isinstance(dates, pd.DatetimeIndex):
+        x_vals = dates.strftime('%Y-%m-%d').tolist()
+    else:
+        x_vals = [str(d) for d in dates]
+    
+    mediator_colors = [colors.accent, colors.primary, colors.warning, colors.success]
+    
+    traces = []
+    for i, med in enumerate(mediator_names):
+        ts = mediator_time_series.get(med)
+        if ts is not None:
+            traces.append({
+                "type": "scatter",
+                "mode": "lines",
+                "x": x_vals,
+                "y": ts.tolist() if hasattr(ts, 'tolist') else list(ts),
+                "name": med,
+                "line": {"color": mediator_colors[i % len(mediator_colors)], "width": 2},
+            })
+    
+    layout = chart_config.to_plotly_layout(colors)
+    layout["xaxis"] = {"title": "Date", "gridcolor": colors.border}
+    layout["yaxis"] = {"title": "Value (normalized)", "gridcolor": colors.border}
+    layout["legend"] = {"orientation": "h", "yanchor": "bottom", "y": 1.02}
+    layout["hovermode"] = "x unified"
+    
+    return create_plotly_div(traces, layout, div_id)
+
+
+def create_cannibalization_heatmap(
+    product_names: list[str],
+    cannibalization_matrix: dict[str, dict[str, dict[str, float]]],
+    config: ReportConfig,
+    chart_config: ChartConfig | None = None,
+    div_id: str = "cannibHeatmap",
+) -> str:
+    """
+    Create heatmap showing cross-product cannibalization effects.
+    
+    Parameters
+    ----------
+    product_names : list[str]
+        Names of products
+    cannibalization_matrix : dict
+        Nested dict: {source: {target: {"mean", "lower", "upper"}}}
+    config : ReportConfig
+        Report configuration
+    chart_config : ChartConfig, optional
+        Chart-specific configuration
+    div_id : str
+        HTML div ID
+        
+    Returns
+    -------
+    str
+        HTML string with embedded Plotly heatmap
+    """
+    chart_config = chart_config or ChartConfig(height=400)
+    colors = config.color_scheme
+    
+    # Build matrix
+    n = len(product_names)
+    z_values = []
+    hover_text = []
+    annotations = []
+    
+    for i, source in enumerate(product_names):
+        row_vals = []
+        row_text = []
+        for j, target in enumerate(product_names):
+            if source == target:
+                row_vals.append(None)  # Diagonal = N/A
+                row_text.append(f"{source} (self)")
+            else:
+                effect = cannibalization_matrix.get(source, {}).get(target, {})
+                mean = effect.get("mean", 0)
+                lower = effect.get("lower", 0)
+                upper = effect.get("upper", 0)
+                row_vals.append(mean)
+                
+                effect_type = "Cannibalization" if mean < 0 else "Synergy"
+                row_text.append(
+                    f"{source} → {target}<br>"
+                    f"{effect_type}: {mean:.1%}<br>"
+                    f"CI: [{lower:.1%}, {upper:.1%}]"
+                )
+                
+                # Add text annotation
+                annotations.append({
+                    "x": target,
+                    "y": source,
+                    "text": f"{mean:.1%}",
+                    "showarrow": False,
+                    "font": {"size": 10, "color": "#ffffff" if abs(mean) > 0.05 else colors.text},
+                })
+        
+        z_values.append(row_vals)
+        hover_text.append(row_text)
+    
+    traces = [{
+        "type": "heatmap",
+        "x": product_names,
+        "y": product_names,
+        "z": z_values,
+        "text": hover_text,
+        "hoverinfo": "text",
+        "colorscale": [
+            [0, "#c97067"],      # Cannibalization (negative)
+            [0.5, "#fafbf9"],    # Neutral
+            [1, colors.success], # Synergy (positive)
+        ],
+        "colorbar": {
+            "title": "Effect",
+            "tickformat": ".0%",
+            "thickness": 15,
+        },
+        "zmid": 0,
+        "zmin": -0.15,
+        "zmax": 0.15,
+    }]
+    
+    layout = chart_config.to_plotly_layout(colors)
+    layout["xaxis"] = {"title": "Target Product", "side": "top", "tickangle": -45}
+    layout["yaxis"] = {"title": "Source Product's Marketing", "autorange": "reversed"}
+    layout["annotations"] = annotations
+    
+    return create_plotly_div(traces, layout, div_id)

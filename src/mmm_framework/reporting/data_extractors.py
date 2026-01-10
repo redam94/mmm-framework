@@ -84,6 +84,23 @@ class MMMDataBundle:
     mediator_effects: dict[str, Any] | None = None
     cross_effects: dict[str, Any] | None = None
     outcome_correlations: np.ndarray | None = None
+    
+    # Geographic data
+    geo_names: list[str] | None = None
+    geo_performance: dict[str, dict[str, Any]] | None = None  # {geo: {metric: value}}
+    geo_roi: dict[str, dict[str, dict[str, float]]] | None = None  # {geo: {channel: {"mean", "lower", "upper"}}}
+    geo_contribution: dict[str, dict[str, float]] | None = None  # {geo: {component: contribution}}
+    
+    # Mediator pathway data (nested models)
+    mediator_names: list[str] | None = None
+    mediator_pathways: dict[str, dict[str, Any]] | None = None  # {channel: {mediator: {"direct", "indirect", "total"}}}
+    mediator_time_series: dict[str, np.ndarray] | None = None  # {mediator: values}
+    total_indirect_effect: dict[str, float] | None = None  # {"mean", "lower", "upper"}
+    
+    # Cannibalization / cross-product effects
+    product_names: list[str] | None = None
+    cannibalization_matrix: dict[str, dict[str, dict[str, float]]] | None = None  # {source: {target: {"mean", "lower", "upper"}}}
+    net_product_effects: dict[str, dict[str, float]] | None = None  # {product: {"direct", "cannibalization", "net"}}
 
 
 @runtime_checkable

@@ -73,6 +73,14 @@ class Section(ABC):
             {notes}
         </section>
         '''
+    
+    def _format_currency(self, value: float) -> str:
+        """Format value as currency using report config."""
+        return self.config.format_currency(value)
+    
+    def _format_percentage(self, value: float) -> str:
+        """Format value as percentage."""
+        return f"{value:{self.config.percentage_format}}"
 
 
 class ExecutiveSummarySection(Section):
@@ -684,6 +692,402 @@ class DiagnosticsSection(Section):
         return self._render_section_wrapper('\n'.join(content_parts))
 
 
+class GeographicSection(Section):
+    """Geographic performance breakdown for multi-geo models."""
+    
+    section_id: str = "geographic"
+    default_title: str = "Geographic Analysis"
+    
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        
+        # Check if we have geographic data
+        if not self.data.geo_names or not self.data.geo_performance:
+            return ""
+        
+        content_parts = []
+        ci_level = int(self.section_config.credible_interval * 100)
+        
+        # Geographic performance summary table
+        content_parts.append(f'''
+            <h3>Performance by Geography</h3>
+            <p>Regional breakdown with {ci_level}% credible intervals.</p>
+        ''')
+        
+        # Build performance table
+        table_rows = []
+        for geo in self.data.geo_names:
+            perf = self.data.geo_performance.get(geo, {})
+            revenue = perf.get("revenue", {})
+            roi = perf.get("blended_roi", {})
+            contribution = perf.get("marketing_contribution_pct", {})
+            
+            rev_str = self._format_currency(revenue.get("mean", 0))
+            roi_str = f"{roi.get('mean', 0):.2f}x"
+            roi_ci = f"[{roi.get('lower', 0):.2f}, {roi.get('upper', 0):.2f}]"
+            contrib_str = self._format_percentage(contribution.get("mean", 0))
+            
+            table_rows.append(f'''
+                <tr>
+                    <td><strong>{geo}</strong></td>
+                    <td class="mono">{rev_str}</td>
+                    <td class="mono">{roi_str}</td>
+                    <td class="mono muted">{roi_ci}</td>
+                    <td class="mono">{contrib_str}</td>
+                </tr>
+            ''')
+        
+        content_parts.append(f'''
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Geography</th>
+                        <th>Revenue</th>
+                        <th>Blended ROI</th>
+                        <th>{ci_level}% CI</th>
+                        <th>Marketing %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(table_rows)}
+                </tbody>
+            </table>
+        ''')
+        
+        # Geographic ROI heatmap/chart
+        if self.data.geo_roi:
+            geo_chart = charts.create_geo_roi_heatmap(
+                geo_names=self.data.geo_names,
+                channel_names=self.data.channel_names or [],
+                geo_roi=self.data.geo_roi,
+                config=self.config,
+                chart_config=ChartConfig(height=max(300, len(self.data.geo_names) * 40)),
+            )
+            content_parts.append(f'''
+                <h3>Channel ROI by Geography</h3>
+                <p>Heatmap showing channel performance across regions. Darker colors indicate higher ROI.</p>
+                {geo_chart}
+            ''')
+        
+        # Geographic contribution breakdown
+        if self.data.geo_contribution:
+            geo_decomp = charts.create_geo_decomposition_chart(
+                geo_names=self.data.geo_names,
+                geo_contribution=self.data.geo_contribution,
+                config=self.config,
+                chart_config=ChartConfig(height=400),
+            )
+            content_parts.append(f'''
+                <h3>Contribution Decomposition by Geography</h3>
+                {geo_decomp}
+            ''')
+        
+        return self._render_section_wrapper('\n'.join(content_parts))
+
+
+class MediatorSection(Section):
+    """Mediator pathway analysis for nested models."""
+    
+    section_id: str = "mediators"
+    default_title: str = "Mediator Pathway Analysis"
+    
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        
+        # Check for mediator data
+        if not self.data.mediator_names or not self.data.mediator_pathways:
+            return ""
+        
+        content_parts = []
+        ci_level = int(self.section_config.credible_interval * 100)
+        
+        # Introduction
+        content_parts.append(f'''
+            <h3>Indirect Effects Through Mediators</h3>
+            <p>Marketing affects sales both directly and indirectly through intermediate outcomes 
+            (e.g., awareness, consideration). This analysis decomposes total effects into direct 
+            and mediated pathways with {ci_level}% credible intervals.</p>
+        ''')
+        
+        # Pathway diagram (visual representation)
+        pathway_chart = charts.create_mediator_pathway_chart(
+            channel_names=self.data.channel_names or [],
+            mediator_names=self.data.mediator_names,
+            mediator_pathways=self.data.mediator_pathways,
+            config=self.config,
+            chart_config=ChartConfig(height=500),
+        )
+        content_parts.append(pathway_chart)
+        
+        # Effects table by channel
+        content_parts.append('''
+            <h3>Effect Decomposition by Channel</h3>
+        ''')
+        
+        table_rows = []
+        for channel in (self.data.channel_names or []):
+            pathways = self.data.mediator_pathways.get(channel, {})
+            
+            # Aggregate effects (handle both dict and scalar)
+            total_effect = pathways.get("_total", 0)
+            direct_effect = pathways.get("_direct", 0)
+            indirect_effect = pathways.get("_indirect", 0)
+            
+            # Helper to extract value
+            def get_val(v, key="mean", default=0):
+                return v.get(key, default) if isinstance(v, dict) else v
+            
+            total_mean = get_val(total_effect)
+            total_lower = get_val(total_effect, "lower", total_mean * 0.8)
+            total_upper = get_val(total_effect, "upper", total_mean * 1.2)
+            direct_mean = get_val(direct_effect)
+            indirect_mean = get_val(indirect_effect)
+            
+            total_str = f"{total_mean:.3f}"
+            total_ci = f"[{total_lower:.3f}, {total_upper:.3f}]"
+            direct_str = f"{direct_mean:.3f}"
+            indirect_str = f"{indirect_mean:.3f}"
+            
+            # Percentage mediated (using mediator sums if _indirect not provided)
+            if indirect_mean == 0 and self.data.mediator_names:
+                # Sum up mediator effects
+                indirect_mean = sum(
+                    get_val(pathways.get(m, 0)) for m in self.data.mediator_names
+                )
+                indirect_str = f"{indirect_mean:.3f}"
+            
+            pct_mediated = (indirect_mean / total_mean * 100) if total_mean != 0 else 0
+            
+            table_rows.append(f'''
+                <tr>
+                    <td><strong>{channel}</strong></td>
+                    <td class="mono">{total_str}</td>
+                    <td class="mono muted">{total_ci}</td>
+                    <td class="mono">{direct_str}</td>
+                    <td class="mono">{indirect_str}</td>
+                    <td class="mono">{pct_mediated:.1f}%</td>
+                </tr>
+            ''')
+        
+        content_parts.append(f'''
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Total Effect</th>
+                        <th>{ci_level}% CI</th>
+                        <th>Direct</th>
+                        <th>Indirect</th>
+                        <th>% Mediated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(table_rows)}
+                </tbody>
+            </table>
+        ''')
+        
+        # Mediator time series
+        if self.data.mediator_time_series and self.data.dates is not None:
+            mediator_ts_chart = charts.create_mediator_time_series(
+                dates=self.data.dates,
+                mediator_names=self.data.mediator_names,
+                mediator_time_series=self.data.mediator_time_series,
+                config=self.config,
+                chart_config=ChartConfig(height=350),
+            )
+            content_parts.append(f'''
+                <h3>Mediator Values Over Time</h3>
+                <p>Tracking awareness, consideration, and other intermediate outcomes.</p>
+                {mediator_ts_chart}
+            ''')
+        
+        # Interpretation callout
+        if self.data.total_indirect_effect:
+            indirect = self.data.total_indirect_effect
+            content_parts.append(f'''
+                <div class="callout">
+                    <strong>Key Insight:</strong> Approximately 
+                    <strong>{self._format_percentage(indirect.get('mean', 0))}</strong> 
+                    [{self._format_percentage(indirect.get('lower', 0))}, 
+                    {self._format_percentage(indirect.get('upper', 0))}] of total marketing 
+                    effect operates through measured mediators. Direct response accounts for 
+                    the remainder.
+                </div>
+            ''')
+        
+        return self._render_section_wrapper('\n'.join(content_parts))
+
+
+class CannibalizationSection(Section):
+    """Cross-product cannibalization effects analysis."""
+    
+    section_id: str = "cannibalization"
+    default_title: str = "Product Cannibalization Analysis"
+    
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        
+        # Check for cannibalization data
+        if not self.data.product_names or not self.data.cannibalization_matrix:
+            return ""
+        
+        content_parts = []
+        ci_level = int(self.section_config.credible_interval * 100)
+        
+        # Introduction
+        content_parts.append(f'''
+            <h3>Cross-Product Effects</h3>
+            <p>Marketing for one product may cannibalize sales of another (substitution) or 
+            boost them (halo effects). This matrix shows cross-product effects with {ci_level}% 
+            credible intervals. Negative values indicate cannibalization; positive values 
+            indicate synergy.</p>
+        ''')
+        
+        # Cannibalization heatmap
+        cannib_chart = charts.create_cannibalization_heatmap(
+            product_names=self.data.product_names,
+            cannibalization_matrix=self.data.cannibalization_matrix,
+            config=self.config,
+            chart_config=ChartConfig(height=max(350, len(self.data.product_names) * 50)),
+        )
+        content_parts.append(cannib_chart)
+        
+        # Net effects table
+        if self.data.net_product_effects:
+            content_parts.append('''
+                <h3>Net Product Effects</h3>
+                <p>Direct marketing effect minus cannibalization from other products' marketing.</p>
+            ''')
+            
+            table_rows = []
+            for product in self.data.product_names:
+                effects = self.data.net_product_effects.get(product, {})
+                direct = effects.get("direct", 0)
+                cannib = effects.get("cannibalization", 0)
+                net = effects.get("net", 0)
+                
+                # Color coding
+                cannib_class = "danger" if cannib < -0.05 else ("success" if cannib > 0.05 else "")
+                
+                table_rows.append(f'''
+                    <tr>
+                        <td><strong>{product}</strong></td>
+                        <td class="mono">{self._format_currency(direct)}</td>
+                        <td class="mono {cannib_class}">{self._format_currency(cannib)}</td>
+                        <td class="mono"><strong>{self._format_currency(net)}</strong></td>
+                        <td class="mono">{(cannib/direct*100) if direct else 0:.1f}%</td>
+                    </tr>
+                ''')
+            
+            content_parts.append(f'''
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Direct Effect</th>
+                            <th>Cross-Product Effect</th>
+                            <th>Net Effect</th>
+                            <th>Cannib. %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {''.join(table_rows)}
+                    </tbody>
+                </table>
+            ''')
+        
+        # Detailed cross-effects table
+        content_parts.append(f'''
+            <h3>Detailed Cross-Product Matrix</h3>
+            <p>Effect of row product's marketing on column product's sales.</p>
+        ''')
+        
+        # Build matrix table
+        header_cells = '<th>Source \\ Target</th>' + ''.join(
+            f'<th>{p}</th>' for p in self.data.product_names
+        )
+        
+        matrix_rows = []
+        for source in self.data.product_names:
+            row_cells = [f'<td><strong>{source}</strong></td>']
+            for target in self.data.product_names:
+                if source == target:
+                    row_cells.append('<td class="mono muted">—</td>')
+                else:
+                    effect = self.data.cannibalization_matrix.get(source, {}).get(target, {})
+                    mean = effect.get("mean", 0)
+                    lower = effect.get("lower", 0)
+                    upper = effect.get("upper", 0)
+                    
+                    # Color based on sign and significance
+                    if upper < 0:
+                        cell_class = "danger"  # Significantly negative (cannibalization)
+                    elif lower > 0:
+                        cell_class = "success"  # Significantly positive (synergy)
+                    else:
+                        cell_class = "muted"  # CI includes zero
+                    
+                    row_cells.append(
+                        f'<td class="mono {cell_class}" title="[{lower:.3f}, {upper:.3f}]">'
+                        f'{mean:.3f}</td>'
+                    )
+            matrix_rows.append(f'<tr>{"".join(row_cells)}</tr>')
+        
+        content_parts.append(f'''
+            <table class="data-table matrix-table">
+                <thead><tr>{header_cells}</tr></thead>
+                <tbody>{''.join(matrix_rows)}</tbody>
+            </table>
+            <p class="muted" style="font-size: 0.85rem; margin-top: 0.5rem;">
+                <span class="danger">Red</span> = significant cannibalization; 
+                <span class="success">Green</span> = significant synergy; 
+                <span class="muted">Gray</span> = not significant (CI includes zero).
+                Hover for credible intervals.
+            </p>
+        ''')
+        
+        # Key insights
+        significant_cannib = []
+        significant_synergy = []
+        
+        for source in self.data.product_names:
+            for target in self.data.product_names:
+                if source != target:
+                    effect = self.data.cannibalization_matrix.get(source, {}).get(target, {})
+                    upper = effect.get("upper", 0)
+                    lower = effect.get("lower", 0)
+                    mean = effect.get("mean", 0)
+                    
+                    if upper < -0.01:
+                        significant_cannib.append((source, target, mean))
+                    elif lower > 0.01:
+                        significant_synergy.append((source, target, mean))
+        
+        if significant_cannib or significant_synergy:
+            insights = []
+            if significant_cannib:
+                top_cannib = sorted(significant_cannib, key=lambda x: x[2])[:3]
+                cannib_items = [f"{s} → {t} ({m:.1%})" for s, t, m in top_cannib]
+                insights.append(f"<strong>Strongest cannibalization:</strong> {', '.join(cannib_items)}")
+            
+            if significant_synergy:
+                top_synergy = sorted(significant_synergy, key=lambda x: -x[2])[:3]
+                synergy_items = [f"{s} → {t} (+{m:.1%})" for s, t, m in top_synergy]
+                insights.append(f"<strong>Strongest synergies:</strong> {', '.join(synergy_items)}")
+            
+            content_parts.append(f'''
+                <div class="callout">
+                    {'<br>'.join(insights)}
+                </div>
+            ''')
+        
+        return self._render_section_wrapper('\n'.join(content_parts))
+
+
 # Registry of available sections
 SECTION_REGISTRY: dict[str, type[Section]] = {
     "executive_summary": ExecutiveSummarySection,
@@ -694,4 +1098,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "sensitivity": SensitivitySection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,
+    "geographic": GeographicSection,
+    "mediators": MediatorSection,
+    "cannibalization": CannibalizationSection,
 }

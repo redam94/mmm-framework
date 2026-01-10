@@ -30,6 +30,9 @@ from .sections import (
     SensitivitySection,
     MethodologySection,
     DiagnosticsSection,
+    GeographicSection,
+    MediatorSection,
+    CannibalizationSection,
     SECTION_REGISTRY,
 )
 
@@ -108,7 +111,10 @@ class MMMReportGenerator:
             ("executive_summary", ExecutiveSummarySection, self.config.executive_summary),
             ("model_fit", ModelFitSection, self.config.model_fit),
             ("channel_roi", ChannelROISection, self.config.channel_roi),
+            ("geographic", GeographicSection, self.config.geographic),
             ("decomposition", DecompositionSection, self.config.decomposition),
+            ("mediators", MediatorSection, self.config.mediators),
+            ("cannibalization", CannibalizationSection, self.config.cannibalization),
             ("saturation", SaturationSection, self.config.saturation),
             ("sensitivity", SensitivitySection, self.config.sensitivity),
             ("methodology", MethodologySection, self.config.methodology),

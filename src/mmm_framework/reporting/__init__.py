@@ -14,6 +14,7 @@ Features:
 
 from .generator import MMMReportGenerator, ReportBuilder
 from .config import ReportConfig, SectionConfig, ColorScheme, ColorPalette
+from .data_extractors import MMMDataBundle
 from .sections import (
     Section,
     ExecutiveSummarySection,
@@ -24,6 +25,9 @@ from .sections import (
     SensitivitySection,
     MethodologySection,
     DiagnosticsSection,
+    GeographicSection,
+    MediatorSection,
+    CannibalizationSection,
 )
 from .charts import (
     ChartConfig,
@@ -36,14 +40,20 @@ from .charts import (
     create_adstock_chart,
     create_prior_posterior_chart,
     create_trace_plot,
+    create_geo_roi_heatmap,
+    create_geo_decomposition_chart,
+    create_mediator_pathway_chart,
+    create_mediator_time_series,
+    create_cannibalization_heatmap,
 )
-from .data_extractors import MMMDataBundle
 
 __version__ = "1.0.0"
 __all__ = [
     # Main generator
     "MMMReportGenerator",
     "ReportBuilder",
+    # Data
+    "MMMDataBundle",
     # Configuration
     "ReportConfig",
     "SectionConfig",
@@ -59,6 +69,9 @@ __all__ = [
     "SensitivitySection",
     "MethodologySection",
     "DiagnosticsSection",
+    "GeographicSection",
+    "MediatorSection",
+    "CannibalizationSection",
     # Charts
     "ChartConfig",
     "create_model_fit_chart",
@@ -70,6 +83,9 @@ __all__ = [
     "create_adstock_chart",
     "create_prior_posterior_chart",
     "create_trace_plot",
-    # Data Extractors
-    "MMMDataBundle",
+    "create_geo_roi_heatmap",
+    "create_geo_decomposition_chart",
+    "create_mediator_pathway_chart",
+    "create_mediator_time_series",
+    "create_cannibalization_heatmap",
 ]
