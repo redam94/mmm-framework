@@ -6,6 +6,7 @@
     <title>Marketing Mix Model Report | Q4 2025</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -441,7 +442,7 @@
                 <span>←</span> Back to Scientific Modeling
             </a>
         </nav>
-        
+
         <!-- Header -->
         <header class="report-header">
             <h1>Marketing Mix Model Report</h1>
@@ -1098,29 +1099,84 @@
         // Waterfall Chart
         // =====================================================================
         function initWaterfallChart() {
-            const categories = ['Baseline', 'TV', 'Paid Search', 'Paid Social', 'Display', 'Radio', 'Print', 'Total Revenue'];
-            const values = [720, 52, 44, 23, 10, 6, 2, 847];
-            const measures = ['absolute', 'relative', 'relative', 'relative', 'relative', 'relative', 'relative', 'total'];
+            // Contributions with uncertainty
+            const categories = ['Baseline', 'TV', 'Paid Search', 'Paid Social', 'Display', 'Radio', 'Print'];
+            const values = [720, 52, 44, 23, 10, 6, 2];
+            const lowerCI = [695, 33, 34, 17, 6, 3, 1];  // Lower 80% CI
+            const upperCI = [745, 72, 54, 30, 14, 10, 4]; // Upper 80% CI
+            
+            // Calculate cumulative positions for waterfall
+            let cumulative = 0;
+            const bases = [];
+            const heights = [];
+            const errorMinus = [];
+            const errorPlus = [];
+            
+            for (let i = 0; i < values.length; i++) {
+                bases.push(cumulative);
+                heights.push(values[i]);
+                errorMinus.push(values[i] - lowerCI[i]);
+                errorPlus.push(upperCI[i] - values[i]);
+                cumulative += values[i];
+            }
+            
+            // Add total
+            categories.push('Total Revenue');
+            bases.push(0);
+            heights.push(cumulative);
+            errorMinus.push(cumulative - 804);  // Total lower CI
+            errorPlus.push(890 - cumulative);   // Total upper CI
+
+            const barColors = [
+                colors.textMuted, // Baseline
+                channelColors['TV'],
+                channelColors['Paid Search'],
+                channelColors['Paid Social'],
+                channelColors['Display'],
+                channelColors['Radio'],
+                channelColors['Print'],
+                colors.primary  // Total
+            ];
 
             const trace = {
-                type: 'waterfall',
-                orientation: 'v',
+                type: 'bar',
                 x: categories,
-                y: [720, 52, 44, 23, 10, 6, 2, 0],
-                measure: measures,
-                text: values.map(v => '$' + v + 'M'),
+                y: heights,
+                base: bases,
+                marker: { color: barColors },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: errorPlus,
+                    arrayminus: errorMinus,
+                    color: colors.text,
+                    thickness: 1.5,
+                    width: 4
+                },
+                text: heights.map((v, i) => {
+                    if (i === heights.length - 1) return `$${v}M<br>[${804}, ${890}]`;
+                    return `$${v}M<br>[${lowerCI[i]}, ${upperCI[i]}]`;
+                }),
                 textposition: 'outside',
-                connector: { line: { color: colors.grid } },
-                increasing: { marker: { color: colors.success } },
-                decreasing: { marker: { color: colors.danger } },
-                totals: { marker: { color: colors.primary } }
+                hovertemplate: '<b>%{x}</b><br>Contribution: $%{y}M<br>80% CI: [%{customdata[0]}, %{customdata[1]}]<extra></extra>',
+                customdata: categories.map((_, i) => {
+                    if (i === categories.length - 1) return [804, 890];
+                    return [lowerCI[i], upperCI[i]];
+                })
             };
 
             const layout = {
                 ...baseLayout,
                 xaxis: { title: '' },
-                yaxis: { title: 'Revenue ($M)', gridcolor: colors.grid },
-                showlegend: false
+                yaxis: { title: 'Revenue ($M)', gridcolor: colors.grid, range: [0, 950] },
+                showlegend: false,
+                annotations: [{
+                    x: 'Total Revenue',
+                    y: cumulative + 50,
+                    text: '80% CI: [$804M, $890M]',
+                    showarrow: false,
+                    font: { size: 10, color: colors.textMuted }
+                }]
             };
 
             Plotly.newPlot('waterfallChart', [trace], layout, chartConfig);
@@ -1212,10 +1268,10 @@
         // Saturation Curves
         // =====================================================================
         const saturationParams = {
-            search: { K: 60, S: 12, currentSpend: 18.2 },
-            social: { K: 40, S: 10, currentSpend: 12.5 },
-            tv: { K: 70, S: 35, currentSpend: 42 },
-            display: { K: 20, S: 7, currentSpend: 8.3 }
+            search: { K: 60, K_sd: 8, S: 12, S_sd: 3, currentSpend: 18.2 },
+            social: { K: 40, K_sd: 7, S: 10, S_sd: 2.5, currentSpend: 12.5 },
+            tv: { K: 70, K_sd: 15, S: 35, S_sd: 8, currentSpend: 42 },
+            display: { K: 20, K_sd: 5, S: 7, S_sd: 2, currentSpend: 8.3 }
         };
 
         function hillFunction(x, K, S) {
@@ -1231,37 +1287,122 @@
             const channel = document.getElementById('saturationChannel').value;
             const params = saturationParams[channel];
             
-            const spend = [], response = [], marginalROI = [];
+            const spend = [], response = [], responseLower = [], responseUpper = [];
+            const marginalROI = [], marginalLower = [], marginalUpper = [];
             const maxSpend = params.currentSpend * 2;
+            
+            // Use approximate 80% credible interval (±1.28 SD)
+            const K_low = params.K - 1.28 * params.K_sd;
+            const K_high = params.K + 1.28 * params.K_sd;
+            const S_low = Math.max(1, params.S - 1.28 * params.S_sd);
+            const S_high = params.S + 1.28 * params.S_sd;
             
             for (let x = 0; x <= maxSpend; x += maxSpend / 50) {
                 spend.push(x);
-                const y = hillFunction(x, params.K, params.S);
-                response.push(y);
                 
-                // Marginal ROI (derivative)
+                // Response with uncertainty - compute all 4 combinations and take min/max
+                const y = hillFunction(x, params.K, params.S);
+                
+                const responseScenarios = [
+                    hillFunction(x, K_low, S_low),
+                    hillFunction(x, K_low, S_high),
+                    hillFunction(x, K_high, S_low),
+                    hillFunction(x, K_high, S_high),
+                    y  // Include median to ensure band contains it
+                ];
+                
+                response.push(y);
+                responseLower.push(Math.min(...responseScenarios));
+                responseUpper.push(Math.max(...responseScenarios));
+                
+                // Marginal ROI with uncertainty - compute all 4 combinations and take min/max
                 const dx = 0.1;
-                const dy = hillFunction(x + dx, params.K, params.S) - y;
-                marginalROI.push(dy / dx);
+                const dy_median = hillFunction(x + dx, params.K, params.S) - y;
+                
+                // Compute derivative for all 4 corner cases of parameter space
+                const scenarios = [
+                    hillFunction(x + dx, K_low, S_low) - hillFunction(x, K_low, S_low),
+                    hillFunction(x + dx, K_low, S_high) - hillFunction(x, K_low, S_high),
+                    hillFunction(x + dx, K_high, S_low) - hillFunction(x, K_high, S_low),
+                    hillFunction(x + dx, K_high, S_high) - hillFunction(x, K_high, S_high)
+                ];
+                
+                const allMarginals = scenarios.map(dy => dy / dx);
+                allMarginals.push(dy_median / dx); // Include median to ensure band contains it
+                
+                marginalROI.push(dy_median / dx);
+                marginalLower.push(Math.min(...allMarginals));
+                marginalUpper.push(Math.max(...allMarginals));
             }
 
-            // Response curve
+            // Response curve with uncertainty band
             const responseTrace = [
+                // Upper bound (invisible line for fill)
+                {
+                    x: spend,
+                    y: responseUpper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                // Lower bound with fill to upper
+                {
+                    x: spend,
+                    y: responseLower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(143, 168, 106, 0.25)',
+                    line: { width: 0 },
+                    name: '80% CI',
+                    hoverinfo: 'skip'
+                },
+                // Median line
                 {
                     x: spend,
                     y: response,
                     type: 'scatter',
                     mode: 'lines',
                     line: { color: colors.primary, width: 3 },
-                    name: 'Response'
+                    name: 'Median Response'
                 },
+                // Current spend marker
                 {
                     x: [params.currentSpend],
                     y: [hillFunction(params.currentSpend, params.K, params.S)],
                     type: 'scatter',
                     mode: 'markers',
                     marker: { color: colors.danger, size: 12, symbol: 'diamond' },
-                    name: 'Current Spend'
+                    name: 'Current Spend',
+                    error_y: {
+                        type: 'data',
+                        symmetric: false,
+                        array: [(() => {
+                            const yMed = hillFunction(params.currentSpend, params.K, params.S);
+                            const scenarios = [
+                                hillFunction(params.currentSpend, K_low, S_low),
+                                hillFunction(params.currentSpend, K_low, S_high),
+                                hillFunction(params.currentSpend, K_high, S_low),
+                                hillFunction(params.currentSpend, K_high, S_high)
+                            ];
+                            return Math.max(...scenarios) - yMed;
+                        })()],
+                        arrayminus: [(() => {
+                            const yMed = hillFunction(params.currentSpend, params.K, params.S);
+                            const scenarios = [
+                                hillFunction(params.currentSpend, K_low, S_low),
+                                hillFunction(params.currentSpend, K_low, S_high),
+                                hillFunction(params.currentSpend, K_high, S_low),
+                                hillFunction(params.currentSpend, K_high, S_high)
+                            ];
+                            return yMed - Math.min(...scenarios);
+                        })()],
+                        color: colors.danger,
+                        thickness: 2,
+                        width: 6
+                    }
                 }
             ];
 
@@ -1281,23 +1422,56 @@
 
             Plotly.newPlot('saturationCurve', responseTrace, responseLayout, chartConfig);
 
-            // Marginal ROI curve
+            // Marginal ROI curve with uncertainty
+            const currentIdx = Math.floor(spend.length * params.currentSpend / maxSpend);
             const marginalTrace = [
+                // Upper bound
+                {
+                    x: spend,
+                    y: marginalUpper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                // Lower bound with fill
+                {
+                    x: spend,
+                    y: marginalLower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(106, 143, 168, 0.25)',
+                    line: { width: 0 },
+                    name: '80% CI',
+                    hoverinfo: 'skip'
+                },
+                // Median
                 {
                     x: spend,
                     y: marginalROI,
                     type: 'scatter',
                     mode: 'lines',
                     line: { color: colors.accent, width: 3 },
-                    fill: 'tozeroy',
-                    fillcolor: 'rgba(106, 143, 168, 0.2)'
+                    name: 'Median Marginal ROI'
                 },
+                // Current spend marker
                 {
                     x: [params.currentSpend],
-                    y: [marginalROI[Math.floor(spend.indexOf(params.currentSpend) || spend.length / 2)]],
+                    y: [marginalROI[currentIdx] || marginalROI[Math.floor(marginalROI.length / 2)]],
                     type: 'scatter',
                     mode: 'markers',
-                    marker: { color: colors.danger, size: 12, symbol: 'diamond' }
+                    marker: { color: colors.danger, size: 12, symbol: 'diamond' },
+                    error_y: {
+                        type: 'data',
+                        symmetric: false,
+                        array: [(marginalUpper[currentIdx] || 0) - (marginalROI[currentIdx] || 0)],
+                        arrayminus: [(marginalROI[currentIdx] || 0) - (marginalLower[currentIdx] || 0)],
+                        color: colors.danger,
+                        thickness: 2,
+                        width: 6
+                    }
                 }
             ];
 
@@ -1339,22 +1513,77 @@
         function initAdstockChart() {
             const weeks = Array.from({ length: 12 }, (_, i) => i);
             
-            function adstock(decay, weeks) {
-                return weeks.map(w => Math.pow(decay, w));
+            // Adstock parameters with uncertainty (decay, decay_sd)
+            const adstockParams = {
+                'TV': { decay: 0.80, sd: 0.06, color: channelColors['TV'] },
+                'Paid Social': { decay: 0.55, sd: 0.08, color: channelColors['Paid Social'] },
+                'Display': { decay: 0.45, sd: 0.10, color: channelColors['Display'] },
+                'Paid Search': { decay: 0.20, sd: 0.08, color: channelColors['Paid Search'] }
+            };
+            
+            function adstock(decay, week) {
+                return Math.pow(decay, week);
             }
 
-            const traces = [
-                { x: weeks, y: adstock(0.8, weeks), name: 'TV (decay=0.80)', line: { color: channelColors['TV'], width: 2 } },
-                { x: weeks, y: adstock(0.55, weeks), name: 'Paid Social (decay=0.55)', line: { color: channelColors['Paid Social'], width: 2 } },
-                { x: weeks, y: adstock(0.45, weeks), name: 'Display (decay=0.45)', line: { color: channelColors['Display'], width: 2 } },
-                { x: weeks, y: adstock(0.2, weeks), name: 'Paid Search (decay=0.20)', line: { color: channelColors['Paid Search'], width: 2 } }
-            ];
+            const traces = [];
+            
+            // Add uncertainty bands and median lines for each channel
+            Object.entries(adstockParams).forEach(([name, params]) => {
+                const decayLow = Math.max(0.01, params.decay - 1.28 * params.sd);
+                const decayHigh = Math.min(0.99, params.decay + 1.28 * params.sd);
+                
+                const yMedian = weeks.map(w => adstock(params.decay, w));
+                const yLower = weeks.map(w => adstock(decayLow, w));
+                const yUpper = weeks.map(w => adstock(decayHigh, w));
+                
+                // Upper bound (invisible)
+                traces.push({
+                    x: weeks,
+                    y: yUpper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                });
+                
+                // Lower bound with fill
+                traces.push({
+                    x: weeks,
+                    y: yLower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: params.color + '30',  // 30 = ~19% opacity in hex
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                });
+                
+                // Median line
+                traces.push({
+                    x: weeks,
+                    y: yMedian,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `${name} (α=${params.decay.toFixed(2)} [${decayLow.toFixed(2)}, ${decayHigh.toFixed(2)}])`,
+                    line: { color: params.color, width: 2.5 },
+                    hovertemplate: `${name}<br>Week %{x}<br>Remaining: %{y:.0%}<extra></extra>`
+                });
+            });
 
             const layout = {
                 ...baseLayout,
                 xaxis: { title: 'Weeks After Spend', gridcolor: colors.grid, dtick: 1 },
-                yaxis: { title: 'Remaining Effect (%)', gridcolor: colors.grid, tickformat: '.0%' },
-                legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center' }
+                yaxis: { title: 'Remaining Effect (%)', gridcolor: colors.grid, tickformat: '.0%', range: [0, 1.05] },
+                legend: { orientation: 'h', y: 1.2, x: 0.5, xanchor: 'center', font: { size: 10 } },
+                annotations: [{
+                    x: 6,
+                    y: 0.85,
+                    text: 'Shaded regions = 80% CI',
+                    showarrow: false,
+                    font: { size: 10, color: colors.textMuted }
+                }]
             };
 
             Plotly.newPlot('adstockChart', traces, layout, chartConfig);

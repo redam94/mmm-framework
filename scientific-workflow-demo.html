@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <style>
         :root {
             --color-primary: #8fa86a;
@@ -560,12 +561,13 @@
 </head>
 <body>
     <div class="container">
-
+        <!-- Back Navigation -->
         <nav style="margin-bottom: 1rem;">
             <a href="scientific-modeling.html" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; transition: all 0.2s;">
                 <span>←</span> Back to Scientific Modeling
             </a>
         </nav>
+
         <!-- Header -->
         <header class="header">
             <h1>Scientific Modeling Workflow</h1>
@@ -698,80 +700,195 @@ validation:
             <p class="step-subtitle">How do we believe the data were generated?</p>
 
             <p>
-                A <strong>generative story</strong> is a narrative description of the data-generating process. 
-                If you can't simulate data from your model, you don't fully understand it.
+                Before we fit any model, we need to articulate our <strong>story</strong> about how marketing 
+                drives sales. This isn't just a statistical exercise—it's how we encode our business understanding 
+                into a framework that can learn from data.
             </p>
 
             <div class="callout insight">
-                <h4>📖 Our Generative Story</h4>
-                <ol style="margin: 1rem 0 0 1.5rem;">
-                    <li><strong>Baseline sales</strong> occur without any marketing, varying with trend and seasonality</li>
-                    <li><strong>Media investments</strong> increase sales above baseline</li>
-                    <li>Each channel has <strong>carryover</strong> (geometric adstock) and <strong>diminishing returns</strong> (Hill saturation)</li>
-                    <li><strong>External factors</strong> (holidays, weather) create additional variation</li>
-                    <li>Observed sales = baseline + Σ(media effects) + controls + noise</li>
-                </ol>
+                <h4>💡 Why Stories Matter</h4>
+                <p>
+                    A model without a story is just curve-fitting. The story forces us to make our assumptions 
+                    explicit, which means we can question them, test them, and communicate them to stakeholders. 
+                    If we can't explain <em>why</em> the model works the way it does, we can't trust its recommendations.
+                </p>
             </div>
 
-            <h3>Mathematical Formulation</h3>
+            <h3>The Story of Acme's Sales</h3>
+            
+            <p>
+                Imagine you could watch Acme's revenue being generated week by week. Here's what we believe is happening:
+            </p>
 
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">model_specification.md</span>
-                    <span>Mathematical model</span>
-                </div>
-                <pre><code class="language-markdown">## Model Structure
+            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-primary);">
+                <p style="margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem;">Chapter 1: The Baseline</strong>
+                </p>
+                <p style="margin-bottom: 0.75rem;">
+                    Every week, Acme generates sales even without any marketing. This <em>baseline</em> comes from 
+                    brand equity, loyal customers, and organic demand. It's not constant—it follows a gentle upward 
+                    <strong>trend</strong> as the brand grows, and it rises and falls with <strong>seasonal patterns</strong> 
+                    (holiday shopping in Q4, summer slowdowns, etc.).
+                </p>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0;">
+                    <em>For Acme, baseline accounts for roughly 85% of total revenue—marketing adds the incremental 15%.</em>
+                </p>
+            </div>
+
+            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-accent);">
+                <p style="margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem;">Chapter 2: Marketing Lifts Sales</strong>
+                </p>
+                <p style="margin-bottom: 0.75rem;">
+                    When Acme spends on TV, Search, Social, or other channels, it lifts sales above the baseline. 
+                    But the relationship isn't simple—two key phenomena shape how marketing dollars translate to revenue:
+                </p>
+                <ul style="margin: 1rem 0 0.75rem 1.5rem;">
+                    <li>
+                        <strong>Carryover (Adstock):</strong> A TV ad doesn't just affect the week it airs. 
+                        People remember the ad, talk about it, and may buy later. We model this as a 
+                        <em>decay curve</em>—the effect starts strong and fades over time. TV might decay slowly 
+                        (half-life of 3+ weeks), while Search decays quickly (most effect in the same week).
+                    </li>
+                    <li style="margin-top: 0.75rem;">
+                        <strong>Diminishing Returns (Saturation):</strong> The first million dollars of TV spend 
+                        has more impact than the tenth million. Eventually, you've reached everyone who's reachable 
+                        through that channel. We model this as a <em>saturation curve</em> that bends as spend increases.
+                    </li>
+                </ul>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0;">
+                    <em>Each channel has its own decay rate and saturation point—these are what the model learns from data.</em>
+                </p>
+            </div>
+
+            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-warning);">
+                <p style="margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem;">Chapter 3: The World Intervenes</strong>
+                </p>
+                <p style="margin-bottom: 0.75rem;">
+                    Marketing isn't the only thing affecting sales. Holidays create spikes. Price changes shift demand. 
+                    Competitor actions, weather events, and economic conditions all play a role. We include 
+                    <strong>control variables</strong> for factors we can measure, so the model doesn't mistakenly 
+                    credit (or blame) marketing for effects caused by something else.
+                </p>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0;">
+                    <em>Controls are confounders we must account for—omitting them would bias our marketing estimates.</em>
+                </p>
+            </div>
+
+            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-text-muted);">
+                <p style="margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem;">Chapter 4: Reality is Noisy</strong>
+                </p>
+                <p style="margin-bottom: 0;">
+                    Even if we knew every true parameter perfectly, we wouldn't predict sales exactly. 
+                    Thousands of micro-decisions by individual consumers create randomness we can't model. 
+                    We acknowledge this with an <strong>error term</strong>—the model's honest admission that 
+                    it can't explain everything.
+                </p>
+            </div>
+
+            <h3>Putting It All Together</h3>
+            <p>
+                The complete story, in one sentence: <em>Weekly revenue equals baseline (with trend and seasonality) 
+                plus the sum of each channel's contribution (after accounting for carryover and saturation) plus 
+                control effects plus random noise.</em>
+            </p>
+
+            <div class="callout warning">
+                <h4>⚠️ The Story Is Not The Truth</h4>
+                <p>
+                    This is a <em>useful simplification</em>, not reality. Real consumers don't follow Hill functions. 
+                    But if the story captures the essential dynamics well enough, the model's recommendations will 
+                    improve decisions—and that's what matters.
+                </p>
+            </div>
+
+            <h3>Technical Specification</h3>
+            <p>
+                For technical stakeholders, here's the mathematical formulation. Click to expand:
+            </p>
+
+            <details style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; margin: 1rem 0;">
+                <summary style="padding: 1rem; cursor: pointer; font-weight: 600; color: var(--color-accent-dark);">
+                    📐 Mathematical Model Specification
+                </summary>
+                <div style="padding: 0 1rem 1rem 1rem;">
+                    <div class="code-block" style="margin-top: 0;">
+                        <div class="code-header">
+                            <span class="file-path">model_specification.md</span>
+                            <span>Mathematical model</span>
+                        </div>
+                        <pre><code class="language-markdown">## Model Structure
 
 y_t = α + trend_t + seasonality_t + Σ_c β_c · f(x_c,t) + γ'z_t + ε_t
 
 Where:
-- y_t: Weekly revenue (log-transformed)
-- α: Intercept
-- trend_t: Linear trend component
-- seasonality_t: Fourier series (yearly, order=2)
+- y_t: Weekly revenue (log-transformed for multiplicative effects)
+- α: Intercept (baseline level)
+- trend_t: Linear trend component (captures gradual growth)
+- seasonality_t: Fourier series (yearly, order=2) for cyclic patterns
 - f(x_c,t): Transformed media for channel c
   - Adstock: x̃_c,t = Σ_{l=0}^{L} θ_c^l · x_{c,t-l}  (geometric decay)
   - Saturation: f(x̃) = x̃^α / (K^α + x̃^α)  (Hill function)
-- β_c: Media effect coefficients (≥ 0)
-- z_t: Control variables (holidays, price, etc.)
-- ε_t ~ Normal(0, σ²)</code></pre>
-            </div>
-
-            <p>
-                The mmm-framework encodes this structure using configuration builders:
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">src/mmm_framework/config.py</span>
-                    <span>Framework configuration</span>
+- β_c: Media effect coefficients (constrained ≥ 0)
+- z_t: Control variables (holidays, price, distribution, etc.)
+- ε_t ~ Normal(0, σ²): Observation noise</code></pre>
+                    </div>
                 </div>
-                <pre><code class="language-python">class AdstockConfig(BaseModel):
-    """Configuration for adstock transformation."""
+            </details>
+
+            <details style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; margin: 1rem 0;">
+                <summary style="padding: 1rem; cursor: pointer; font-weight: 600; color: var(--color-accent-dark);">
+                    🔧 Framework Configuration Code
+                </summary>
+                <div style="padding: 0 1rem 1rem 1rem;">
+                    <p style="margin-bottom: 1rem; color: var(--color-text-muted);">
+                        The mmm-framework encodes this story using configuration builders. The code directly 
+                        maps to the narrative above:
+                    </p>
+                    <div class="code-block" style="margin-top: 0;">
+                        <div class="code-header">
+                            <span class="file-path">src/mmm_framework/config.py</span>
+                            <span>Framework configuration</span>
+                        </div>
+                        <pre><code class="language-python">class AdstockConfig(BaseModel):
+    """Carryover effect configuration.
+    
+    Models "Chapter 2" - how marketing effects persist over time.
+    Geometric decay: effect_t = spend_t + θ·spend_{t-1} + θ²·spend_{t-2} + ...
+    """
     type: AdstockType = AdstockType.GEOMETRIC
-    l_max: int = 8  # Maximum lag
+    l_max: int = 8  # Maximum weeks of carryover
     normalize: bool = True
     
-    # Prior on decay parameter
+    # Prior belief: decay is probably moderate (centered at 0.5)
     prior: PriorConfig = Field(
         default_factory=lambda: PriorConfig(
             distribution=PriorType.BETA,
-            params={"alpha": 2, "beta": 2}  # Centered at 0.5
+            params={"alpha": 2, "beta": 2}
         )
     )
 
 class SaturationConfig(BaseModel):
-    """Configuration for saturation transformation."""
+    """Diminishing returns configuration.
+    
+    Models "Chapter 2" - how returns decrease at higher spend.
+    Hill function: response = K · spend² / (S² + spend²)
+    K = maximum achievable response, S = half-saturation spend
+    """
     type: SaturationType = SaturationType.HILL
     
-    # Prior on half-saturation point
+    # Prior belief: moderate diminishing returns
     lam_prior: PriorConfig = Field(
         default_factory=lambda: PriorConfig(
             distribution=PriorType.GAMMA,
             params={"alpha": 2, "mu": 1}
         )
     )</code></pre>
-            </div>
+                    </div>
+                </div>
+            </details>
 
             <div class="step-nav">
                 <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
@@ -786,7 +903,9 @@ class SaturationConfig(BaseModel):
 
             <p>
                 Now we implement our pre-specified model using the mmm-framework. Notice how the code 
-                directly reflects our generative story.
+                directly reflects our generative story—baseline with trend and seasonality (Chapter 1), 
+                media effects with adstock and saturation (Chapter 2), controls (Chapter 3), and the 
+                likelihood that acknowledges noise (Chapter 4).
             </p>
 
             <div class="code-block">
@@ -875,33 +994,33 @@ print(f"Model parameters: {[v.name for v in mmm.model.free_RVs]}")</code></pre>
             X_control_data = pm.Data("X_control", self.X_control_scaled)
             
             # === Priors (from pre-registration) ===
-            intercept = pm.Normal("intercept", mu=0, sigma=1)
-            sigma = pm.HalfNormal("sigma", sigma=0.5)
+            intercept = pm.Normal("intercept", mu=0, sigma=1)  # Ch.1: Baseline
+            sigma = pm.HalfNormal("sigma", sigma=0.5)          # Ch.4: Noise
             
-            # Media effects (constrained positive)
+            # Ch.2: Media effects (constrained positive—ads don't hurt sales)
             beta_media = pm.HalfNormal(
                 "beta_media", 
                 sigma=0.5, 
                 dims="channel"
             )
             
-            # Control effects (unconstrained)
+            # Ch.3: Control effects (can be positive or negative)
             beta_control = pm.Normal(
                 "beta_control", 
                 mu=0, sigma=0.5, 
                 dims="control"
             )
             
-            # === Structural model ===
+            # === Structural model: The complete story ===
             mu = (
-                intercept 
-                + self._build_trend()
-                + self._build_seasonality()
-                + pt.dot(X_media_data, beta_media)
-                + pt.dot(X_control_data, beta_control)
+                intercept                              # Ch.1: Baseline level
+                + self._build_trend()                  # Ch.1: Growth over time
+                + self._build_seasonality()            # Ch.1: Seasonal patterns
+                + pt.dot(X_media_data, beta_media)     # Ch.2: Marketing lift
+                + pt.dot(X_control_data, beta_control) # Ch.3: External factors
             )
             
-            # === Likelihood ===
+            # === Likelihood: Ch.4 - Reality is noisy ===
             pm.Normal("y", mu=mu, sigma=sigma, observed=self.y_scaled)
             
         return model</code></pre>
