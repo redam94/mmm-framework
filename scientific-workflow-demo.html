@@ -3,1961 +3,1422 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scientific Modeling Workflow | MMM Framework</title>
+    <title>Interactive MMM Workflow | Complete 9-Step Guide</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
-    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <style>
         :root {
-            --color-primary: #8fa86a;
-            --color-primary-dark: #6d8a4a;
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
             --color-accent: #6a8fa8;
             --color-accent-dark: #4a6d8a;
-            --color-warning: #d4a86a;
+            --color-warning: #c9a067;
             --color-danger: #c97067;
-            --color-success: #6abf8a;
+            --color-success: #67c99a;
             --color-text: #2d3a2d;
             --color-text-muted: #5a6b5a;
-            --color-bg: #fafbf9;
-            --color-bg-alt: #f0f4ed;
+            --color-bg: #fafbf8;
+            --color-bg-alt: #f5f7f2;
             --color-surface: #ffffff;
-            --color-border: #d4ddd4;
-            --shadow-sm: 0 1px 3px rgba(45, 58, 45, 0.08);
-            --shadow-md: 0 4px 12px rgba(45, 58, 45, 0.1);
-            --shadow-lg: 0 8px 24px rgba(45, 58, 45, 0.12);
+            --color-border: #e0e5dc;
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --transition-smooth: all 0.3s ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Source Sans 3', sans-serif; background: var(--color-bg); color: var(--color-text); line-height: 1.7; font-size: 17px; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+        .back-nav { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); margin-bottom: 1.5rem; }
+        .header { text-align: center; margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+        .header h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .header .subtitle { font-size: 1.15rem; color: var(--color-text-muted); }
         
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: var(--color-bg); 
-            color: var(--color-text); 
-            line-height: 1.7; 
-        }
+        /* Progress - 9 steps */
+        .progress-container { margin-bottom: 2.5rem; overflow-x: auto; }
+        .progress-steps { display: flex; justify-content: space-between; position: relative; padding: 0 0.5rem; min-width: 800px; }
+        .progress-steps::before { content: ''; position: absolute; top: 18px; left: 0; right: 0; height: 3px; background: var(--color-border); border-radius: 2px; }
+        .progress-fill { position: absolute; top: 18px; left: 0; height: 3px; background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light)); border-radius: 2px; transition: width 0.5s ease; }
+        .step-indicator { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; cursor: pointer; z-index: 2; }
+        .step-circle { width: 36px; height: 36px; border-radius: 50%; background: var(--color-surface); border: 3px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; color: var(--color-text-muted); transition: var(--transition-smooth); }
+        .step-indicator.active .step-circle { border-color: var(--color-primary); background: var(--color-primary); color: white; }
+        .step-indicator.completed .step-circle { border-color: var(--color-success); background: var(--color-success); color: white; }
+        .step-label { font-size: 0.65rem; color: var(--color-text-muted); font-weight: 500; text-align: center; max-width: 70px; }
+        .step-indicator.active .step-label { color: var(--color-primary); font-weight: 600; }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
+        /* Workflow Steps */
+        .workflow-step { display: none; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 2.5rem; box-shadow: var(--shadow-md); }
+        .workflow-step.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .workflow-step h2 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 1rem; }
+        .step-num { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; background: var(--color-primary); color: white; border-radius: 50%; font-size: 1.1rem; font-weight: 700; }
+        .step-subtitle { font-size: 1.05rem; color: var(--color-text-muted); margin-bottom: 1.5rem; padding-left: 58px; }
+        .workflow-step p { margin-bottom: 1.25rem; }
+        .workflow-step h3 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 1rem; }
+        .workflow-step h4 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; }
 
-        /* Header */
-        .header {
-            text-align: center;
-            padding: 3rem 2rem;
-            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-dark) 100%);
-            color: white;
-            border-radius: 16px;
-            margin-bottom: 2rem;
-        }
+        /* Story Chapters */
+        .story-chapter { margin: 2rem 0; padding-bottom: 1.5rem; border-bottom: 1px dashed var(--color-border); }
+        .story-chapter:last-of-type { border-bottom: none; }
 
-        .header h1 {
-            font-family: 'DM Serif Display', serif;
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
+        /* Collapsible Sections */
+        .collapsible { margin: 1.5rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+        .collapsible-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; background: var(--color-bg-alt); cursor: pointer; user-select: none; }
+        .collapsible-header:hover { background: var(--color-border); }
+        .collapsible-header h4 { display: flex; align-items: center; gap: 0.75rem; font-size: 1rem; margin: 0; }
+        .collapsible-header .icon { font-size: 1.25rem; }
+        .collapsible-header .arrow { transition: transform 0.3s ease; color: var(--color-text-muted); }
+        .collapsible.open .collapsible-header .arrow { transform: rotate(180deg); }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+        .collapsible.open .collapsible-content { max-height: 3000px; }
+        .collapsible-inner { padding: 1.5rem; border-top: 1px solid var(--color-border); }
 
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
+        /* Story to Math Connection */
+        .story-math-connection { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center; margin: 1.5rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(143,168,106,0.08) 0%, rgba(106,143,168,0.08) 100%); border-radius: var(--radius-md); }
+        .story-box, .math-box { padding: 1.25rem; border-radius: var(--radius-sm); background: var(--color-surface); }
+        .story-box { border: 1px solid var(--color-border); }
+        .story-box h5 { color: var(--color-accent-dark); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .math-box { border: 1px solid var(--color-primary); }
+        .math-box h5 { color: var(--color-primary-dark); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .arrow-connector { font-size: 1.5rem; color: var(--color-primary); }
+        .formula { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; background: var(--color-bg-alt); padding: 0.5rem 0.75rem; border-radius: 4px; display: inline-block; margin-top: 0.5rem; }
 
-        /* Progress Bar */
-        .progress-container {
-            background: var(--color-surface);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: var(--shadow-sm);
-            border: 1px solid var(--color-border);
-            position: sticky;
-            top: 1rem;
-            z-index: 100;
-        }
-
-        .progress-steps {
-            display: flex;
-            justify-content: space-between;
-            position: relative;
-        }
-
-        .progress-steps::before {
-            content: '';
-            position: absolute;
-            top: 15px;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--color-border);
-            z-index: 0;
-        }
-
-        .progress-fill {
-            position: absolute;
-            top: 15px;
-            left: 0;
-            height: 3px;
-            background: var(--color-primary);
-            z-index: 1;
-            transition: width 0.5s ease;
-        }
-
-        .step-indicator {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            z-index: 2;
-            cursor: pointer;
-        }
-
-        .step-circle {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--color-surface);
-            border: 3px solid var(--color-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 0.85rem;
-            transition: all 0.3s;
-        }
-
-        .step-indicator.active .step-circle {
-            background: var(--color-primary);
-            border-color: var(--color-primary);
-            color: white;
-        }
-
-        .step-indicator.completed .step-circle {
-            background: var(--color-success);
-            border-color: var(--color-success);
-            color: white;
-        }
-
-        .step-label {
-            font-size: 0.7rem;
-            margin-top: 0.5rem;
-            color: var(--color-text-muted);
-            text-align: center;
-            max-width: 80px;
-        }
-
-        .step-indicator.active .step-label {
-            color: var(--color-primary-dark);
-            font-weight: 600;
-        }
-
-        /* Workflow Step */
-        .workflow-step {
-            background: var(--color-surface);
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: var(--shadow-sm);
-            border: 1px solid var(--color-border);
-            display: none;
-        }
-
-        .workflow-step.active {
-            display: block;
-            animation: fadeIn 0.5s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .workflow-step h2 {
-            font-family: 'DM Serif Display', serif;
-            font-size: 1.8rem;
-            color: var(--color-text);
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .workflow-step h2 .step-num {
-            background: var(--color-primary);
-            color: white;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Inter', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-        }
-
-        .step-subtitle {
-            color: var(--color-text-muted);
-            margin-bottom: 1.5rem;
-            font-size: 1.05rem;
-        }
-
-        .workflow-step h3 {
-            font-size: 1.2rem;
-            margin-top: 2rem;
-            margin-bottom: 0.75rem;
-            color: var(--color-text);
-        }
-
-        .workflow-step p {
-            margin-bottom: 1rem;
-        }
-
-        /* Code blocks */
-        .code-block {
-            background: #f6f8fa;
-            border-radius: 8px;
-            margin: 1.5rem 0;
-            overflow: hidden;
-            border: 1px solid var(--color-border);
-        }
-
-        .code-header {
-            background: var(--color-bg-alt);
-            padding: 0.5rem 1rem;
-            font-size: 0.8rem;
-            color: var(--color-text-muted);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .code-header .file-path {
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .code-block pre {
-            margin: 0;
-            padding: 1rem;
-            overflow-x: auto;
-        }
-
-        .code-block code {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            line-height: 1.5;
-        }
-
-        /* Callout boxes */
-        .callout {
-            border-radius: 12px;
-            padding: 1.25rem;
-            margin: 1.5rem 0;
-        }
-
-        .callout h4 {
-            margin-bottom: 0.5rem;
-            font-size: 1rem;
-        }
-
-        .callout p {
-            margin-bottom: 0;
-            font-size: 0.95rem;
-        }
-
-        .callout.insight {
-            background: rgba(106, 143, 168, 0.1);
-            border: 1px solid rgba(106, 143, 168, 0.3);
-            border-left: 4px solid var(--color-accent);
-        }
-        .callout.insight h4 { color: var(--color-accent-dark); }
-
-        .callout.warning {
-            background: rgba(212, 168, 106, 0.1);
-            border: 1px solid rgba(212, 168, 106, 0.3);
-            border-left: 4px solid var(--color-warning);
-        }
-        .callout.warning h4 { color: #b8860b; }
-
-        .callout.success {
-            background: rgba(106, 191, 138, 0.1);
-            border: 1px solid rgba(106, 191, 138, 0.3);
-            border-left: 4px solid var(--color-success);
-        }
-        .callout.success h4 { color: #3d8b5a; }
-
-        .callout.danger {
-            background: rgba(201, 112, 103, 0.08);
-            border: 1px solid rgba(201, 112, 103, 0.3);
-            border-left: 4px solid var(--color-danger);
-        }
-        .callout.danger h4 { color: var(--color-danger); }
+        /* Boxes */
+        .analogy-box { background: linear-gradient(135deg, var(--color-bg-alt) 0%, var(--color-surface) 100%); border: 1px solid var(--color-border); border-left: 5px solid var(--color-accent); border-radius: var(--radius-md); padding: 1.5rem 1.75rem; margin: 1.5rem 0; position: relative; }
+        .analogy-box::before { content: "💡"; position: absolute; top: -10px; left: 16px; font-size: 1.25rem; background: var(--color-surface); padding: 0 0.4rem; }
+        .analogy-box h4 { color: var(--color-accent-dark); margin-bottom: 0.5rem; font-size: 1rem; }
+        .analogy-box p:last-child { margin-bottom: 0; }
+        .why-box { background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%); border: 1px solid rgba(90,124,101,0.3); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .why-box h4 { color: var(--color-primary-dark); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .why-box h4::before { content: "✦"; color: var(--color-primary); }
+        .warning-box { background: linear-gradient(135deg, rgba(201,160,103,0.1) 0%, rgba(201,112,103,0.05) 100%); border: 1px solid rgba(201,112,103,0.3); border-left: 5px solid var(--color-warning); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .warning-box h4 { color: var(--color-danger); margin-bottom: 0.5rem; }
+        .success-box { background: linear-gradient(135deg, rgba(103,201,154,0.1) 0%, rgba(103,201,154,0.05) 100%); border: 1px solid rgba(103,201,154,0.4); border-left: 5px solid var(--color-success); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .success-box h4 { color: #3d8b5a; margin-bottom: 0.5rem; }
+        .danger-box { background: linear-gradient(135deg, rgba(201,112,103,0.1) 0%, rgba(201,112,103,0.05) 100%); border: 1px solid rgba(201,112,103,0.4); border-left: 5px solid var(--color-danger); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .danger-box h4 { color: var(--color-danger); margin-bottom: 0.5rem; }
 
         /* Charts */
-        .chart-container {
-            width: 100%;
-            height: 350px;
-            margin: 1.5rem 0;
-        }
+        .chart-container { width: 100%; height: 320px; margin: 1rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+        .chart-container.tall { height: 400px; }
+        .chart-container.short { height: 250px; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0; }
+        .chart-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; }
+        .chart-box h4 { font-size: 0.95rem; margin-bottom: 0.75rem; margin-top: 0; }
+        .chart-box .chart-container { height: 250px; margin: 0; border: none; }
+        .chart-explanation { background: var(--color-bg-alt); border-radius: var(--radius-sm); padding: 1rem 1.25rem; font-size: 0.9rem; color: var(--color-text-muted); margin-top: 0.5rem; }
+        .chart-explanation strong { color: var(--color-text); }
 
-        .chart-container-lg {
-            height: 450px;
-        }
+        /* Controls */
+        .control-panel { background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .control-panel h4 { margin-bottom: 1rem; font-size: 1rem; margin-top: 0; }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        .control-row:last-child { margin-bottom: 0; }
+        .control-row label { min-width: 180px; font-weight: 500; font-size: 0.95rem; }
+        .control-row input[type="range"] { flex: 1; height: 6px; border-radius: 3px; background: var(--color-border); appearance: none; cursor: pointer; }
+        .control-row input[type="range"]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--color-primary); cursor: pointer; }
+        .control-row select { flex: 1; padding: 0.5rem 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: inherit; font-size: 0.95rem; background: var(--color-surface); cursor: pointer; }
+        .value-display { min-width: 50px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; font-weight: 600; color: var(--color-primary-dark); background: var(--color-surface); padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); }
 
-        .chart-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin: 1.5rem 0;
-        }
-
-        .chart-box {
-            background: var(--color-bg-alt);
-            border-radius: 12px;
-            padding: 1rem;
-            border: 1px solid var(--color-border);
-        }
-
-        .chart-box h4 {
-            font-size: 0.9rem;
-            margin-bottom: 0.5rem;
-            text-align: center;
-            color: var(--color-text-muted);
-        }
-
-        /* Interactive controls */
-        .control-panel {
-            background: var(--color-bg-alt);
-            border-radius: 12px;
-            padding: 1.25rem;
-            margin: 1.5rem 0;
-            border: 1px solid var(--color-border);
-        }
-
-        .control-panel h4 {
-            font-size: 0.85rem;
-            color: var(--color-text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 1rem;
-        }
-
-        .control-row {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
-            flex-wrap: wrap;
-        }
-
-        .control-row label {
-            font-weight: 500;
-            min-width: 180px;
-            font-size: 0.9rem;
-        }
-
-        .control-row input[type="range"] {
-            flex: 1;
-            min-width: 150px;
-            max-width: 300px;
-        }
-
-        .control-row .value {
-            font-family: 'JetBrains Mono', monospace;
-            background: var(--color-surface);
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
-            min-width: 70px;
-            text-align: center;
-            border: 1px solid var(--color-border);
-            font-size: 0.9rem;
-        }
+        /* Scenario Cards */
+        .scenario-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .scenario-card { background: var(--color-surface); border: 2px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem; cursor: pointer; transition: var(--transition-smooth); }
+        .scenario-card:hover { border-color: var(--color-primary-light); }
+        .scenario-card.selected { border-color: var(--color-primary); background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, var(--color-surface) 100%); }
+        .scenario-card .icon { font-size: 1.75rem; margin-bottom: 0.5rem; }
+        .scenario-card h5 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+        .scenario-card p { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
 
         /* Buttons */
-        .btn {
-            display: inline-block;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            font-size: 0.95rem;
-        }
+        .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); border: none; font-family: inherit; }
+        .btn-primary { background: var(--color-primary); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--color-primary-dark); }
+        .btn-secondary { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); }
+        .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .btn-success { background: var(--color-success); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .step-nav { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
 
-        .btn-primary {
-            background: var(--color-primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--color-primary-dark);
-        }
-
-        .btn-secondary {
-            background: var(--color-surface);
-            color: var(--color-text);
-            border: 1px solid var(--color-border);
-        }
-
-        .btn-secondary:hover {
-            background: var(--color-bg-alt);
-        }
-
-        .btn-success {
-            background: var(--color-success);
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #5aa97a;
-        }
-
-        .step-nav {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 2rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--color-border);
-        }
-
-        /* Simulation output */
-        .simulation-output {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            margin: 1rem 0;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .simulation-output .success { color: #6abf8a; }
-        .simulation-output .warning { color: #d4a86a; }
-        .simulation-output .error { color: #c97067; }
-        .simulation-output .info { color: #6a8fa8; }
-
-        /* Decision point */
-        .decision-point {
-            background: var(--color-bg-alt);
-            border: 2px dashed var(--color-border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            text-align: center;
-        }
-
-        .decision-point h4 {
-            margin-bottom: 1rem;
-        }
-
-        .decision-options {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        /* Checklist */
-        .checklist {
-            list-style: none;
-            padding: 0;
-        }
-
-        .checklist li {
-            padding: 0.5rem 0 0.5rem 2rem;
-            position: relative;
-        }
-
-        .checklist li::before {
-            content: '○';
-            position: absolute;
-            left: 0;
-            color: var(--color-border);
-            font-size: 1.2rem;
-        }
-
-        .checklist li.checked::before {
-            content: '✓';
-            color: var(--color-success);
-        }
-
-        .checklist li.failed::before {
-            content: '✗';
-            color: var(--color-danger);
-        }
+        /* Visual Row */
+        .visual-row { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: center; margin: 1.5rem 0; padding: 1.5rem; background: var(--color-bg-alt); border-radius: var(--radius-md); }
+        .visual-row .icon { font-size: 2.5rem; line-height: 1; }
+        .visual-row h4 { margin-bottom: 0.5rem; color: var(--color-primary-dark); margin-top: 0; }
 
         /* Tables */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1rem 0;
-            font-size: 0.9rem;
-        }
-
-        .data-table th, .data-table td {
-            padding: 0.6rem 0.8rem;
-            text-align: left;
-            border-bottom: 1px solid var(--color-border);
-        }
-
-        .data-table th {
-            background: var(--color-bg-alt);
-            font-weight: 600;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-        }
-
-        .data-table .mono {
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .data-table .positive { color: var(--color-success); }
+        .data-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+        .data-table th, .data-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        .data-table th { background: var(--color-bg-alt); font-weight: 600; color: var(--color-text-muted); font-size: 0.8rem; text-transform: uppercase; }
+        .data-table .mono { font-family: 'JetBrains Mono', monospace; }
+        .data-table .positive { color: #3d8b5a; }
         .data-table .negative { color: var(--color-danger); }
+        .data-table .warning { color: #8a6d2d; }
 
-        /* Final report link */
-        .report-preview {
-            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-            border-radius: 16px;
-            padding: 2rem;
-            text-align: center;
-            color: white;
-            margin: 2rem 0;
+        /* Terminal */
+        .terminal-output { background: #1e2a1e; color: #a8c99a; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 1.25rem; border-radius: var(--radius-md); margin: 1rem 0; max-height: 280px; overflow-y: auto; line-height: 1.6; }
+        .terminal-output .info { color: #6ab0f3; }
+        .terminal-output .success { color: #98c379; }
+        .terminal-output .warning { color: #e5c07b; }
+        .terminal-output .error { color: #e06c75; }
+
+        /* Checklist */
+        .checklist { list-style: none; padding: 0; margin: 1rem 0; }
+        .checklist li { padding: 0.6rem 0; padding-left: 2rem; position: relative; border-bottom: 1px solid var(--color-border); }
+        .checklist li:last-child { border-bottom: none; }
+        .checklist li::before { content: "○"; position: absolute; left: 0; color: var(--color-text-muted); font-weight: bold; }
+        .checklist li.checked::before { content: "✓"; color: var(--color-success); }
+        .checklist li.failed::before { content: "✗"; color: var(--color-danger); }
+        .checklist li.warning::before { content: "⚠"; color: var(--color-warning); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .stat-card { background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; text-align: center; }
+        .stat-card .label { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .stat-card .value { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; }
+        .stat-card .value.good { color: var(--color-success); }
+        .stat-card .value.bad { color: var(--color-danger); }
+        .stat-card .value.warn { color: var(--color-warning); }
+
+        /* Findings List */
+        .finding { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; margin: 0.75rem 0; border-radius: var(--radius-md); }
+        .finding.confident { background: rgba(103,201,154,0.1); border-left: 4px solid var(--color-success); }
+        .finding.uncertain { background: rgba(201,160,103,0.1); border-left: 4px solid var(--color-warning); }
+        .finding.negative { background: rgba(201,112,103,0.1); border-left: 4px solid var(--color-danger); }
+        .finding .icon { font-size: 1.5rem; }
+        .finding h5 { margin: 0 0 0.25rem 0; font-size: 1rem; }
+        .finding p { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+
+        @media (max-width: 900px) {
+            .progress-steps { min-width: 700px; }
+            .step-label { font-size: 0.6rem; max-width: 60px; }
         }
-
-        .report-preview h3 {
-            font-family: 'DM Serif Display', serif;
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .report-preview .btn {
-            background: white;
-            color: var(--color-primary-dark);
-            margin-top: 1rem;
-        }
-
-        .report-preview .btn:hover {
-            background: var(--color-bg-alt);
-        }
-
-        /* Responsive */
         @media (max-width: 768px) {
             .container { padding: 1rem; }
-            .header h1 { font-size: 1.8rem; }
             .chart-grid { grid-template-columns: 1fr; }
-            .step-label { display: none; }
-            .progress-steps { gap: 0.5rem; }
+            .story-math-connection { grid-template-columns: 1fr; }
+            .arrow-connector { transform: rotate(90deg); justify-self: center; }
+            .scenario-selector { grid-template-columns: 1fr; }
+            .control-row { flex-wrap: wrap; }
+            .control-row label { min-width: 100%; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Back Navigation -->
-        <nav style="margin-bottom: 1rem;">
-            <a href="scientific-modeling.html" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; transition: all 0.2s;">
-                <span>←</span> Back to Scientific Modeling
-            </a>
-        </nav>
+<div class="container">
+<a href="scientific-modeling.html" class="back-nav"><span>←</span> Back to Scientific Modeling</a>
+<header class="header">
+    <h1>The Complete Bayesian Workflow</h1>
+    <p class="subtitle">9 steps from question to actionable insights</p>
+</header>
 
-        <!-- Header -->
-        <header class="header">
-            <h1>Scientific Modeling Workflow</h1>
-            <p>An interactive demonstration of principled Bayesian MMM development</p>
-        </header>
-
-        <!-- Progress Bar -->
-        <div class="progress-container">
-            <div class="progress-steps">
-                <div class="progress-fill" id="progressFill"></div>
-                <div class="step-indicator active" onclick="goToStep(1)">
-                    <div class="step-circle">1</div>
-                    <div class="step-label">Question</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(2)">
-                    <div class="step-circle">2</div>
-                    <div class="step-label">Story</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(3)">
-                    <div class="step-circle">3</div>
-                    <div class="step-label">Build</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(4)">
-                    <div class="step-circle">4</div>
-                    <div class="step-label">Prior Check</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(5)">
-                    <div class="step-circle">5</div>
-                    <div class="step-label">Fit</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(6)">
-                    <div class="step-circle">6</div>
-                    <div class="step-label">Diagnose</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(7)">
-                    <div class="step-circle">7</div>
-                    <div class="step-label">Post. Check</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(8)">
-                    <div class="step-circle">8</div>
-                    <div class="step-label">Sensitivity</div>
-                </div>
-                <div class="step-indicator" onclick="goToStep(9)">
-                    <div class="step-circle">9</div>
-                    <div class="step-label">Report</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 1: Define Question -->
-        <div class="workflow-step active" id="step1">
-            <h2><span class="step-num">1</span> Define the Question</h2>
-            <p class="step-subtitle">What decision will this analysis inform?</p>
-
-            <p>
-                Every scientific model begins with a <strong>question</strong>. Not "let's run an MMM" but 
-                "what do we need to know to make a better decision?" The question shapes everything that follows.
-            </p>
-
-            <div class="callout insight">
-                <h4>📋 Our Business Context</h4>
-                <p>
-                    Acme Consumer Products allocates $92M annually across 6 media channels. Leadership wants to 
-                    understand: <strong>Which channels are driving incremental revenue, and how should we 
-                    reallocate budget for 2026?</strong>
-                </p>
-            </div>
-
-            <h3>Pre-Registration: Locking In Our Approach</h3>
-            <p>
-                Before looking at any results, we document our analytical choices. This prevents 
-                <em>specification shopping</em>—iterating until results "look right."
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">analysis_plan.yaml</span>
-                    <span>Pre-registration document</span>
-                </div>
-                <pre><code class="language-yaml"># Pre-registered Analysis Plan
-# Date: 2025-12-01 (before seeing data)
-
-research_questions:
-  primary: "What is the ROI of each marketing channel?"
-  secondary: "What is the optimal budget allocation?"
-
-model_specification:
-  type: "Bayesian MMM with Hill saturation"
-  adstock: "Geometric decay, l_max=8 weeks"
-  trend: "Linear with Fourier seasonality (order=2)"
-  
-channels:
-  - TV (National)
-  - Paid Search
-  - Paid Social
-  - Display
-  - Radio
-  - Print
-
-priors:
-  media_effects: "HalfNormal(sigma=0.5) — positive effects expected"
-  adstock_decay: "Beta(2, 2) — centered at 0.5"
-  saturation: "Gamma(2, 2) — moderate diminishing returns"
-
-validation:
-  - Prior predictive checks
-  - MCMC diagnostics (R-hat < 1.01, ESS > 400)
-  - Posterior predictive checks
-  - Sensitivity to prior specification</code></pre>
-            </div>
-
-            <div class="callout warning">
-                <h4>⚠️ Why Pre-Registration Matters</h4>
-                <p>
-                    When 29 research teams analyzed identical data, effect estimates varied by 3.3x due to 
-                    different analytical choices. Pre-registration forces us to commit before we're tempted 
-                    to adjust until results "make sense."
-                </p>
-            </div>
-
-            <div class="step-nav">
-                <div></div>
-                <button class="btn btn-primary" onclick="nextStep()">Next: Generative Story →</button>
-            </div>
-        </div>
-
-        <!-- Step 2: Generative Story -->
-        <div class="workflow-step" id="step2">
-            <h2><span class="step-num">2</span> The Generative Story</h2>
-            <p class="step-subtitle">How do we believe the data were generated?</p>
-
-            <p>
-                Before we fit any model, we need to articulate our <strong>story</strong> about how marketing 
-                drives sales. This isn't just a statistical exercise—it's how we encode our business understanding 
-                into a framework that can learn from data.
-            </p>
-
-            <div class="callout insight">
-                <h4>💡 Why Stories Matter</h4>
-                <p>
-                    A model without a story is just curve-fitting. The story forces us to make our assumptions 
-                    explicit, which means we can question them, test them, and communicate them to stakeholders. 
-                    If we can't explain <em>why</em> the model works the way it does, we can't trust its recommendations.
-                </p>
-            </div>
-
-            <h3>The Story of Acme's Sales</h3>
-            
-            <p>
-                Imagine you could watch Acme's revenue being generated week by week. Here's what we believe is happening:
-            </p>
-
-            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-primary);">
-                <p style="margin-bottom: 1rem;">
-                    <strong style="font-size: 1.1rem;">Chapter 1: The Baseline</strong>
-                </p>
-                <p style="margin-bottom: 0.75rem;">
-                    Every week, Acme generates sales even without any marketing. This <em>baseline</em> comes from 
-                    brand equity, loyal customers, and organic demand. It's not constant—it follows a gentle upward 
-                    <strong>trend</strong> as the brand grows, and it rises and falls with <strong>seasonal patterns</strong> 
-                    (holiday shopping in Q4, summer slowdowns, etc.).
-                </p>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0;">
-                    <em>For Acme, baseline accounts for roughly 85% of total revenue—marketing adds the incremental 15%.</em>
-                </p>
-            </div>
-
-            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-accent);">
-                <p style="margin-bottom: 1rem;">
-                    <strong style="font-size: 1.1rem;">Chapter 2: Marketing Lifts Sales</strong>
-                </p>
-                <p style="margin-bottom: 0.75rem;">
-                    When Acme spends on TV, Search, Social, or other channels, it lifts sales above the baseline. 
-                    But the relationship isn't simple—two key phenomena shape how marketing dollars translate to revenue:
-                </p>
-                <ul style="margin: 1rem 0 0.75rem 1.5rem;">
-                    <li>
-                        <strong>Carryover (Adstock):</strong> A TV ad doesn't just affect the week it airs. 
-                        People remember the ad, talk about it, and may buy later. We model this as a 
-                        <em>decay curve</em>—the effect starts strong and fades over time. TV might decay slowly 
-                        (half-life of 3+ weeks), while Search decays quickly (most effect in the same week).
-                    </li>
-                    <li style="margin-top: 0.75rem;">
-                        <strong>Diminishing Returns (Saturation):</strong> The first million dollars of TV spend 
-                        has more impact than the tenth million. Eventually, you've reached everyone who's reachable 
-                        through that channel. We model this as a <em>saturation curve</em> that bends as spend increases.
-                    </li>
-                </ul>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0;">
-                    <em>Each channel has its own decay rate and saturation point—these are what the model learns from data.</em>
-                </p>
-            </div>
-
-            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-warning);">
-                <p style="margin-bottom: 1rem;">
-                    <strong style="font-size: 1.1rem;">Chapter 3: The World Intervenes</strong>
-                </p>
-                <p style="margin-bottom: 0.75rem;">
-                    Marketing isn't the only thing affecting sales. Holidays create spikes. Price changes shift demand. 
-                    Competitor actions, weather events, and economic conditions all play a role. We include 
-                    <strong>control variables</strong> for factors we can measure, so the model doesn't mistakenly 
-                    credit (or blame) marketing for effects caused by something else.
-                </p>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0;">
-                    <em>Controls are confounders we must account for—omitting them would bias our marketing estimates.</em>
-                </p>
-            </div>
-
-            <div style="background: var(--color-bg-alt); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; border-left: 4px solid var(--color-text-muted);">
-                <p style="margin-bottom: 1rem;">
-                    <strong style="font-size: 1.1rem;">Chapter 4: Reality is Noisy</strong>
-                </p>
-                <p style="margin-bottom: 0;">
-                    Even if we knew every true parameter perfectly, we wouldn't predict sales exactly. 
-                    Thousands of micro-decisions by individual consumers create randomness we can't model. 
-                    We acknowledge this with an <strong>error term</strong>—the model's honest admission that 
-                    it can't explain everything.
-                </p>
-            </div>
-
-            <h3>Putting It All Together</h3>
-            <p>
-                The complete story, in one sentence: <em>Weekly revenue equals baseline (with trend and seasonality) 
-                plus the sum of each channel's contribution (after accounting for carryover and saturation) plus 
-                control effects plus random noise.</em>
-            </p>
-
-            <div class="callout warning">
-                <h4>⚠️ The Story Is Not The Truth</h4>
-                <p>
-                    This is a <em>useful simplification</em>, not reality. Real consumers don't follow Hill functions. 
-                    But if the story captures the essential dynamics well enough, the model's recommendations will 
-                    improve decisions—and that's what matters.
-                </p>
-            </div>
-
-            <h3>Technical Specification</h3>
-            <p>
-                For technical stakeholders, here's the mathematical formulation. Click to expand:
-            </p>
-
-            <details style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; margin: 1rem 0;">
-                <summary style="padding: 1rem; cursor: pointer; font-weight: 600; color: var(--color-accent-dark);">
-                    📐 Mathematical Model Specification
-                </summary>
-                <div style="padding: 0 1rem 1rem 1rem;">
-                    <div class="code-block" style="margin-top: 0;">
-                        <div class="code-header">
-                            <span class="file-path">model_specification.md</span>
-                            <span>Mathematical model</span>
-                        </div>
-                        <pre><code class="language-markdown">## Model Structure
-
-y_t = α + trend_t + seasonality_t + Σ_c β_c · f(x_c,t) + γ'z_t + ε_t
-
-Where:
-- y_t: Weekly revenue (log-transformed for multiplicative effects)
-- α: Intercept (baseline level)
-- trend_t: Linear trend component (captures gradual growth)
-- seasonality_t: Fourier series (yearly, order=2) for cyclic patterns
-- f(x_c,t): Transformed media for channel c
-  - Adstock: x̃_c,t = Σ_{l=0}^{L} θ_c^l · x_{c,t-l}  (geometric decay)
-  - Saturation: f(x̃) = x̃^α / (K^α + x̃^α)  (Hill function)
-- β_c: Media effect coefficients (constrained ≥ 0)
-- z_t: Control variables (holidays, price, distribution, etc.)
-- ε_t ~ Normal(0, σ²): Observation noise</code></pre>
-                    </div>
-                </div>
-            </details>
-
-            <details style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; margin: 1rem 0;">
-                <summary style="padding: 1rem; cursor: pointer; font-weight: 600; color: var(--color-accent-dark);">
-                    🔧 Framework Configuration Code
-                </summary>
-                <div style="padding: 0 1rem 1rem 1rem;">
-                    <p style="margin-bottom: 1rem; color: var(--color-text-muted);">
-                        The mmm-framework encodes this story using configuration builders. The code directly 
-                        maps to the narrative above:
-                    </p>
-                    <div class="code-block" style="margin-top: 0;">
-                        <div class="code-header">
-                            <span class="file-path">src/mmm_framework/config.py</span>
-                            <span>Framework configuration</span>
-                        </div>
-                        <pre><code class="language-python">class AdstockConfig(BaseModel):
-    """Carryover effect configuration.
+<div class="progress-container">
+    <div class="progress-steps">
+        <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+        <div class="step-indicator active" onclick="goToStep(1)"><div class="step-circle">1</div><div class="step-label">Question</div></div>
+        <div class="step-indicator" onclick="goToStep(2)"><div class="step-circle">2</div><div class="step-label">Story</div></div>
+        <div class="step-indicator" onclick="goToStep(3)"><div class="step-circle">3</div><div class="step-label">Build</div></div>
+        <div class="step-indicator" onclick="goToStep(4)"><div class="step-circle">4</div><div class="step-label">Prior Check</div></div>
+        <div class="step-indicator" onclick="goToStep(5)"><div class="step-circle">5</div><div class="step-label">Fit</div></div>
+        <div class="step-indicator" onclick="goToStep(6)"><div class="step-circle">6</div><div class="step-label">Diagnose</div></div>
+        <div class="step-indicator" onclick="goToStep(7)"><div class="step-circle">7</div><div class="step-label">Post. Check</div></div>
+        <div class="step-indicator" onclick="goToStep(8)"><div class="step-circle">8</div><div class="step-label">Sensitivity</div></div>
+        <div class="step-indicator" onclick="goToStep(9)"><div class="step-circle">9</div><div class="step-label">Report</div></div>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 1: QUESTION -->
+<!-- ================================================================== -->
+<div class="workflow-step active" id="step1">
+    <h2><span class="step-num">1</span> Define the Question</h2>
+    <p class="step-subtitle">What do you actually want to learn?</p>
     
-    Models "Chapter 2" - how marketing effects persist over time.
-    Geometric decay: effect_t = spend_t + θ·spend_{t-1} + θ²·spend_{t-2} + ...
-    """
-    type: AdstockType = AdstockType.GEOMETRIC
-    l_max: int = 8  # Maximum weeks of carryover
-    normalize: bool = True
-    
-    # Prior belief: decay is probably moderate (centered at 0.5)
-    prior: PriorConfig = Field(
-        default_factory=lambda: PriorConfig(
-            distribution=PriorType.BETA,
-            params={"alpha": 2, "beta": 2}
-        )
-    )
+    <p>
+        Every good analysis starts with a clear question. This might seem obvious, but 
+        skipping this step is the most common mistake in marketing measurement. Without 
+        a clear question, you end up with lots of numbers but no insights.
+    </p>
 
-class SaturationConfig(BaseModel):
-    """Diminishing returns configuration.
-    
-    Models "Chapter 2" - how returns decrease at higher spend.
-    Hill function: response = K · spend² / (S² + spend²)
-    K = maximum achievable response, S = half-saturation spend
-    """
-    type: SaturationType = SaturationType.HILL
-    
-    # Prior belief: moderate diminishing returns
-    lam_prior: PriorConfig = Field(
-        default_factory=lambda: PriorConfig(
-            distribution=PriorType.GAMMA,
-            params={"alpha": 2, "mu": 1}
-        )
-    )</code></pre>
-                    </div>
-                </div>
-            </details>
+    <div class="analogy-box">
+        <h4>Think of it like planning a trip</h4>
+        <p>
+            You wouldn't open Google Maps before knowing where you want to go. The destination 
+            determines the route. Similarly, your business question determines what analysis 
+            to run, what data you need, and how to interpret the results.
+        </p>
+    </div>
 
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()">Next: Build Model →</button>
-            </div>
+    <h3>Types of Questions</h3>
+    <div class="scenario-selector">
+        <div class="scenario-card selected">
+            <div class="icon">📊</div>
+            <h5>ROI & Effectiveness</h5>
+            <p>"Which channels work and by how much?"</p>
         </div>
-
-        <!-- Step 3: Build Model -->
-        <div class="workflow-step" id="step3">
-            <h2><span class="step-num">3</span> Build the Model</h2>
-            <p class="step-subtitle">Translating the story into code</p>
-
-            <p>
-                Now we implement our pre-specified model using the mmm-framework. Notice how the code 
-                directly reflects our generative story—baseline with trend and seasonality (Chapter 1), 
-                media effects with adstock and saturation (Chapter 2), controls (Chapter 3), and the 
-                likelihood that acknowledges noise (Chapter 4).
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">build_model.py</span>
-                    <span>Model construction</span>
-                </div>
-                <pre><code class="language-python">from mmm_framework import (
-    MFFConfigBuilder,
-    ModelConfigBuilder,
-    TrendConfig,
-    TrendType,
-    BayesianMMM,
-    load_mff,
-)
-
-# Step 1: Configure data structure (MFF format)
-mff_config = (
-    MFFConfigBuilder()
-    .with_kpi_name("Revenue")
-    .add_national_media("TV", adstock_lmax=8)
-    .add_national_media("Paid_Search", adstock_lmax=4)
-    .add_national_media("Paid_Social", adstock_lmax=6)
-    .add_national_media("Display", adstock_lmax=4)
-    .add_national_media("Radio", adstock_lmax=6)
-    .add_national_media("Print", adstock_lmax=8)
-    .add_control("Holiday_Flag")
-    .add_control("Price_Index")
-    .build()
-)
-
-# Step 2: Load and validate data
-panel = load_mff("acme_weekly_data.csv", mff_config)
-print(f"Loaded: {panel.n_obs} weeks, {panel.n_channels} channels")
-
-# Step 3: Configure model (matches pre-registration)
-model_config = (
-    ModelConfigBuilder()
-    .bayesian_numpyro()  # Fast JAX-based inference
-    .with_chains(4)
-    .with_draws(2000)
-    .with_tune(1000)
-    .with_target_accept(0.9)
-    .build()
-)
-
-# Step 4: Configure trend (as pre-specified)
-trend_config = TrendConfig(
-    type=TrendType.LINEAR,
-    growth_prior_sigma=0.1
-)
-
-# Step 5: Build the model
-mmm = BayesianMMM(panel, model_config, trend_config)
-
-# Inspect model structure
-print(f"Model parameters: {[v.name for v in mmm.model.free_RVs]}")</code></pre>
-            </div>
-
-            <div class="simulation-output" id="buildOutput">
-                <span class="info">[INFO]</span> Loading data from acme_weekly_data.csv...<br>
-                <span class="success">[OK]</span> Loaded: 156 weeks, 6 channels<br>
-                <span class="info">[INFO]</span> Building PyMC model...<br>
-                <span class="success">[OK]</span> Model parameters: ['intercept', 'sigma', 'beta_TV', 'beta_Paid_Search', 'beta_Paid_Social', 'beta_Display', 'beta_Radio', 'beta_Print', 'alpha_TV', 'alpha_Paid_Search', ...]<br>
-                <span class="info">[INFO]</span> Data standardized: y_mean=16.23, y_std=2.41
-            </div>
-
-            <h3>Model Architecture</h3>
-            <p>
-                The BayesianMMM class in mmm-framework handles the PyMC model construction:
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">src/mmm_framework/model.py</span>
-                    <span>BayesianMMM implementation</span>
-                </div>
-                <pre><code class="language-python">class BayesianMMM:
-    """Bayesian Marketing Mix Model with flexible specification."""
-    
-    def _build_model(self) -> pm.Model:
-        """Build the PyMC model from configuration."""
-        with pm.Model(coords=self._build_coords()) as model:
-            # === Data containers (for prediction) ===
-            X_media_data = pm.Data("X_media", self.X_media_transformed)
-            X_control_data = pm.Data("X_control", self.X_control_scaled)
-            
-            # === Priors (from pre-registration) ===
-            intercept = pm.Normal("intercept", mu=0, sigma=1)  # Ch.1: Baseline
-            sigma = pm.HalfNormal("sigma", sigma=0.5)          # Ch.4: Noise
-            
-            # Ch.2: Media effects (constrained positive—ads don't hurt sales)
-            beta_media = pm.HalfNormal(
-                "beta_media", 
-                sigma=0.5, 
-                dims="channel"
-            )
-            
-            # Ch.3: Control effects (can be positive or negative)
-            beta_control = pm.Normal(
-                "beta_control", 
-                mu=0, sigma=0.5, 
-                dims="control"
-            )
-            
-            # === Structural model: The complete story ===
-            mu = (
-                intercept                              # Ch.1: Baseline level
-                + self._build_trend()                  # Ch.1: Growth over time
-                + self._build_seasonality()            # Ch.1: Seasonal patterns
-                + pt.dot(X_media_data, beta_media)     # Ch.2: Marketing lift
-                + pt.dot(X_control_data, beta_control) # Ch.3: External factors
-            )
-            
-            # === Likelihood: Ch.4 - Reality is noisy ===
-            pm.Normal("y", mu=mu, sigma=sigma, observed=self.y_scaled)
-            
-        return model</code></pre>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()">Next: Prior Predictive Check →</button>
-            </div>
+        <div class="scenario-card">
+            <div class="icon">💰</div>
+            <h5>Budget Allocation</h5>
+            <p>"How should we split our budget?"</p>
         </div>
-
-        <!-- Step 4: Prior Predictive Check -->
-        <div class="workflow-step" id="step4">
-            <h2><span class="step-num">4</span> Prior Predictive Check</h2>
-            <p class="step-subtitle">Do our priors encode sensible assumptions?</p>
-
-            <p>
-                Before seeing any data, we sample from our priors and push through the model. 
-                If the implied predictions are implausible, our priors need adjustment.
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">prior_predictive.py</span>
-                    <span>Prior predictive sampling</span>
-                </div>
-                <pre><code class="language-python"># Sample from priors only (no data influence)
-with mmm.model:
-    prior_pred = pm.sample_prior_predictive(samples=500, random_seed=42)
-
-# Extract implied predictions
-y_prior = prior_pred.prior_predictive["y"].values.flatten()
-
-# Check: Are these plausible for weekly revenue?
-print(f"Prior predictive range: [{y_prior.min():.1f}, {y_prior.max():.1f}]")
-print(f"Observed data range: [{panel.y.min():.1f}, {panel.y.max():.1f}]")
-print(f"Proportion negative: {(y_prior < 0).mean():.1%}")</code></pre>
-            </div>
-
-            <div class="control-panel">
-                <h4>Adjust Prior Parameters</h4>
-                <div class="control-row">
-                    <label>Media Effect Prior SD:</label>
-                    <input type="range" id="priorMediaSD" min="0.1" max="1.5" step="0.1" value="0.5">
-                    <span class="value" id="priorMediaSDVal">0.5</span>
-                </div>
-                <div class="control-row">
-                    <label>Intercept Prior SD:</label>
-                    <input type="range" id="priorInterceptSD" min="0.5" max="3" step="0.1" value="1.0">
-                    <span class="value" id="priorInterceptSDVal">1.0</span>
-                </div>
-                <button class="btn btn-secondary" onclick="runPriorPredictive()" style="margin-top: 0.5rem;">
-                    🔄 Regenerate Prior Samples
-                </button>
-            </div>
-
-            <div class="chart-container" id="priorPredChart"></div>
-
-            <div class="decision-point" id="priorDecision">
-                <h4>🔍 Prior Predictive Assessment</h4>
-                <p id="priorAssessment">Checking prior predictions...</p>
-                <div class="decision-options" id="priorOptions">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()" id="priorNextBtn">Next: Fit Model →</button>
-            </div>
+        <div class="scenario-card">
+            <div class="icon">🔮</div>
+            <h5>Forecasting</h5>
+            <p>"What happens if we change spend?"</p>
         </div>
+    </div>
 
-        <!-- Step 5: Fit Model -->
-        <div class="workflow-step" id="step5">
-            <h2><span class="step-num">5</span> Fit the Model</h2>
-            <p class="step-subtitle">Running MCMC inference</p>
+    <h3>Our Example Question</h3>
+    <p>
+        For this walkthrough: <strong>"What is the ROI of each marketing channel, 
+        and how should we allocate our budget?"</strong>
+    </p>
+    <p>
+        This is a <em>causal</em> question—we want to know if changing our marketing spend 
+        will <em>cause</em> sales to change. That's harder than measuring correlation, 
+        but it's what we need for actual decisions.
+    </p>
 
-            <p>
-                With our priors validated, we fit the model using Hamiltonian Monte Carlo. 
-                The mmm-framework uses NumPyro for fast JAX-based sampling.
-            </p>
+    <div class="why-box">
+        <h4>Why we write this down before analyzing</h4>
+        <p>
+            When you decide your question <em>after</em> seeing the data, you can unconsciously 
+            twist the question to match whatever the data happened to show. That's like drawing 
+            a target around wherever your arrow landed—it looks impressive but doesn't mean you're 
+            a good archer.
+        </p>
+        <p style="margin-bottom: 0;">
+            This practice of deciding your analysis plan beforehand is called <strong>pre-registration</strong>, 
+            and it's one of the most important safeguards against fooling yourself.
+        </p>
+    </div>
 
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">fit_model.py</span>
-                    <span>MCMC inference</span>
-                </div>
-                <pre><code class="language-python"># Fit the model
-print("Starting MCMC sampling...")
-results = mmm.fit(random_seed=42)
+    <h3>What We're Committing To</h3>
+    <ul class="checklist">
+        <li class="checked">Primary question: What is the ROI of each channel?</li>
+        <li class="checked">Secondary question: What's the optimal budget mix?</li>
+        <li class="checked">Channels to analyze: TV, Paid Search, Social, Display, Radio</li>
+        <li class="checked">Time period: 2 years of weekly data</li>
+        <li class="checked">Success metric: Sales revenue</li>
+    </ul>
 
-# Results object contains trace and diagnostics
-print(f"\n=== Sampling Complete ===")
-print(f"Chains: {results.trace.posterior.dims['chain']}")
-print(f"Draws per chain: {results.trace.posterior.dims['draw']}")
-print(f"Total samples: {results.n_samples}")
+    <div class="step-nav">
+        <div></div>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Tell the Story →</button>
+    </div>
+</div>
 
-# Quick diagnostic check
-print(f"\n=== Quick Diagnostics ===")
-print(f"Divergences: {results.diagnostics['divergences']}")
-print(f"Max R-hat: {results.diagnostics['rhat_max']:.4f}")
-print(f"Min ESS (bulk): {results.diagnostics['ess_bulk_min']:.0f}")</code></pre>
-            </div>
+<!-- ================================================================== -->
+<!-- STEP 2: STORY -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step2">
+    <h2><span class="step-num">2</span> Tell the Story</h2>
+    <p class="step-subtitle">How do we think marketing actually drives sales?</p>
 
-            <div class="simulation-output" id="fitOutput">
-                <span class="info">[INFO]</span> Starting MCMC sampling with NumPyro...<br>
-                <span class="info">[INFO]</span> Chains: 4 | Draws: 2000 | Tune: 1000<br>
-                <span id="fitProgress"></span>
-            </div>
+    <p>
+        Before any math, we need a <strong>story</strong> about how things work. This isn't 
+        just a formality—it's how we turn business knowledge into something a computer can 
+        work with. The story forces us to make our assumptions explicit, which means we can 
+        question them, test them, and communicate them to stakeholders.
+    </p>
 
-            <button class="btn btn-success" onclick="runMCMC()" id="runMCMCBtn">▶ Run MCMC Sampling</button>
+    <div class="analogy-box">
+        <h4>Like writing a recipe</h4>
+        <p>
+            A recipe explains how ingredients combine to make a dish: "Take 2 cups flour, 
+            add 1 cup sugar, mix well, bake at 350°." Our statistical story does the same 
+            thing for sales: "Start with baseline demand, add effects from each media channel, 
+            account for seasonality, include some randomness..."
+        </p>
+    </div>
 
-            <div id="mcmcResults" style="display: none;">
-                <div class="chart-container" id="traceChart"></div>
+    <h3>The Story of Acme's Sales</h3>
+    <p>
+        Imagine you could watch Acme's revenue being generated week by week. What would you see? 
+        Let's build up the story piece by piece.
+    </p>
 
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Parameter</th>
-                            <th>Mean</th>
-                            <th>SD</th>
-                            <th>HDI 3%</th>
-                            <th>HDI 97%</th>
-                            <th>R-hat</th>
-                            <th>ESS</th>
-                        </tr>
-                    </thead>
-                    <tbody id="posteriorTable">
-                        <!-- Populated by JS -->
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()" id="fitNextBtn" disabled>Next: Diagnostics →</button>
-            </div>
-        </div>
-
-        <!-- Step 6: Diagnostics -->
-        <div class="workflow-step" id="step6">
-            <h2><span class="step-num">6</span> MCMC Diagnostics</h2>
-            <p class="step-subtitle">Did the sampler explore the posterior properly?</p>
-
-            <p>
-                Before trusting our results, we must verify that MCMC sampling succeeded. 
-                The key diagnostics are R-hat (convergence) and ESS (effective sample size).
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">diagnostics.py</span>
-                    <span>MCMC diagnostics</span>
-                </div>
-                <pre><code class="language-python">import arviz as az
-
-# Comprehensive diagnostics
-diagnostics = az.summary(
-    results.trace, 
-    var_names=["beta_media", "alpha", "sigma"],
-    stat_funcs={"median": np.median}
-)
-
-# Check convergence criteria
-rhat_ok = (diagnostics["r_hat"] < 1.01).all()
-ess_ok = (diagnostics["ess_bulk"] > 400).all()
-divergences = results.trace.sample_stats["diverging"].sum().item()
-
-print(f"R-hat < 1.01: {'✓ PASS' if rhat_ok else '✗ FAIL'}")
-print(f"ESS > 400: {'✓ PASS' if ess_ok else '✗ FAIL'}")
-print(f"Divergences: {divergences} {'✓ PASS' if divergences == 0 else '⚠ WARNING'}")</code></pre>
-            </div>
-
-            <h3>Diagnostic Checklist</h3>
-            <ul class="checklist" id="diagnosticChecklist">
-                <li id="diag-rhat">R-hat < 1.01 for all parameters (chains converged)</li>
-                <li id="diag-ess">ESS > 400 for all parameters (sufficient samples)</li>
-                <li id="diag-div">No divergences (sampler didn't get stuck)</li>
-                <li id="diag-trace">Trace plots show good mixing (chains overlap)</li>
-            </ul>
-
-            <div class="chart-grid">
-                <div class="chart-box">
-                    <h4>R-hat Distribution</h4>
-                    <div class="chart-container" id="rhatChart" style="height: 250px;"></div>
-                </div>
-                <div class="chart-box">
-                    <h4>ESS Distribution</h4>
-                    <div class="chart-container" id="essChart" style="height: 250px;"></div>
-                </div>
-            </div>
-
-            <div class="decision-point" id="diagDecision">
-                <h4>🔍 Diagnostic Assessment</h4>
-                <p id="diagAssessment">Checking MCMC diagnostics...</p>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()">Next: Posterior Predictive →</button>
-            </div>
-        </div>
-
-        <!-- Step 7: Posterior Predictive Check -->
-        <div class="workflow-step" id="step7">
-            <h2><span class="step-num">7</span> Posterior Predictive Check</h2>
-            <p class="step-subtitle">Does the model reproduce the observed data patterns?</p>
-
-            <p>
-                Now we compare model predictions (from the posterior) to actual observations. 
-                This reveals whether our model captures the essential features of the data.
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">posterior_predictive.py</span>
-                    <span>Posterior predictive checking</span>
-                </div>
-                <pre><code class="language-python"># Generate predictions from posterior
-with mmm.model:
-    post_pred = pm.sample_posterior_predictive(
-        results.trace, 
-        random_seed=42
-    )
-
-y_rep = post_pred.posterior_predictive["y"].values
-y_obs = panel.y
-
-# Compare statistics
-print("=== Posterior Predictive Checks ===")
-print(f"Observed mean: {y_obs.mean():.2f}")
-print(f"Predicted mean: {y_rep.mean():.2f} (95% CI: [{np.percentile(y_rep.mean(axis=(0,1)), 2.5):.2f}, {np.percentile(y_rep.mean(axis=(0,1)), 97.5):.2f}])")
-
-# Bayesian p-value (should be ~0.5 if model is adequate)
-pval = (y_rep.mean(axis=2) > y_obs.mean()).mean()
-print(f"Bayesian p-value (mean): {pval:.3f}")</code></pre>
-            </div>
-
-            <div class="chart-container chart-container-lg" id="ppcChart"></div>
-
-            <h3>Test Statistics Comparison</h3>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Statistic</th>
-                        <th>Observed</th>
-                        <th>Predicted (Median)</th>
-                        <th>95% Interval</th>
-                        <th>p-value</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Mean</td>
-                        <td class="mono">16.23</td>
-                        <td class="mono">16.18</td>
-                        <td class="mono">[15.82, 16.54]</td>
-                        <td class="mono">0.48</td>
-                        <td class="positive">✓ Pass</td>
-                    </tr>
-                    <tr>
-                        <td>Std Dev</td>
-                        <td class="mono">2.41</td>
-                        <td class="mono">2.38</td>
-                        <td class="mono">[2.21, 2.58]</td>
-                        <td class="mono">0.52</td>
-                        <td class="positive">✓ Pass</td>
-                    </tr>
-                    <tr>
-                        <td>Autocorr (lag 1)</td>
-                        <td class="mono">0.72</td>
-                        <td class="mono">0.69</td>
-                        <td class="mono">[0.58, 0.79]</td>
-                        <td class="mono">0.61</td>
-                        <td class="positive">✓ Pass</td>
-                    </tr>
-                    <tr>
-                        <td>Max</td>
-                        <td class="mono">22.14</td>
-                        <td class="mono">21.89</td>
-                        <td class="mono">[20.45, 23.67]</td>
-                        <td class="mono">0.55</td>
-                        <td class="positive">✓ Pass</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <div class="callout success">
-                <h4>✓ Posterior Predictive Check Passed</h4>
-                <p>
-                    The model reproduces key data characteristics within uncertainty bounds. 
-                    Bayesian p-values near 0.5 indicate the model is neither systematically over- nor under-predicting.
+    <!-- CHAPTER 1: BASELINE -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">📦</div>
+            <div>
+                <h4>Chapter 1: The Baseline</h4>
+                <p style="margin: 0;">
+                    Even without any marketing, Acme would sell some products. People know the brand, 
+                    stores carry it, there's natural demand from existing customers and word-of-mouth. 
+                    This is our starting point—call it around $15 million per week.
                 </p>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()">Next: Sensitivity Analysis →</button>
-            </div>
-        </div>
-
-        <!-- Step 8: Sensitivity Analysis -->
-        <div class="workflow-step" id="step8">
-            <h2><span class="step-num">8</span> Sensitivity Analysis</h2>
-            <p class="step-subtitle">How robust are our conclusions?</p>
-
-            <p>
-                We test whether our conclusions hold under alternative reasonable assumptions. 
-                Findings that are sensitive to specification choices require additional validation.
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">sensitivity.py</span>
-                    <span>Sensitivity analysis</span>
-                </div>
-                <pre><code class="language-python"># Define alternative specifications (pre-registered)
-specifications = [
-    {"name": "Base Model", "adstock_lmax": 8, "prior_sd": 0.5},
-    {"name": "Shorter Adstock", "adstock_lmax": 4, "prior_sd": 0.5},
-    {"name": "Longer Adstock", "adstock_lmax": 12, "prior_sd": 0.5},
-    {"name": "Tighter Priors", "adstock_lmax": 8, "prior_sd": 0.3},
-    {"name": "Wider Priors", "adstock_lmax": 8, "prior_sd": 1.0},
-    {"name": "Drop Q4 2024", "adstock_lmax": 8, "prior_sd": 0.5, "exclude": "2024-Q4"},
-]
-
-# Fit each specification and collect ROI estimates
-sensitivity_results = {}
-for spec in specifications:
-    model = build_model(**spec)
-    results = model.fit()
-    sensitivity_results[spec["name"]] = extract_roi(results)
-
-# Identify robust vs fragile findings
-for channel in channels:
-    estimates = [r[channel] for r in sensitivity_results.values()]
-    print(f"{channel}: {np.mean(estimates):.2f} (range: {np.min(estimates):.2f} - {np.max(estimates):.2f})")</code></pre>
-            </div>
-
-            <div class="chart-container chart-container-lg" id="sensitivityChart"></div>
-
-            <h3>Robustness Assessment</h3>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Channel</th>
-                        <th>Base ROI</th>
-                        <th>Range Across Specs</th>
-                        <th>Robust Finding?</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Paid Search</td>
-                        <td class="mono">2.41</td>
-                        <td class="mono">[2.28 – 2.55]</td>
-                        <td class="positive">✓ Robust (always > 2.0)</td>
-                    </tr>
-                    <tr>
-                        <td>Paid Social</td>
-                        <td class="mono">1.87</td>
-                        <td class="mono">[1.64 – 2.12]</td>
-                        <td class="positive">✓ Robust (always > 1.5)</td>
-                    </tr>
-                    <tr>
-                        <td>TV</td>
-                        <td class="mono">1.24</td>
-                        <td class="mono">[0.92 – 1.58]</td>
-                        <td><span style="color: var(--color-warning);">⚠ Sensitive to adstock</span></td>
-                    </tr>
-                    <tr>
-                        <td>Print</td>
-                        <td class="mono">0.54</td>
-                        <td class="mono">[0.41 – 0.68]</td>
-                        <td class="positive">✓ Robust (always < 1.0)</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <div class="callout warning">
-                <h4>⚠️ TV ROI is Specification-Sensitive</h4>
-                <p>
-                    TV ROI varies from 0.92 to 1.58 across specifications—crossing the break-even threshold.
-                    This suggests the data is not strongly informative about TV effectiveness. 
-                    <strong>Recommendation:</strong> Conduct a geo-holdout experiment to validate.
-                </p>
-            </div>
-
-            <div class="callout success">
-                <h4>✓ Robust Findings</h4>
-                <p>
-                    <strong>Paid Search outperforms</strong> (ROI > 2.0) across all specifications. 
-                    <strong>Print underperforms</strong> (ROI < 1.0) consistently. 
-                    These findings are safe to act on.
-                </p>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
-                <button class="btn btn-primary" onclick="nextStep()">Next: Generate Report →</button>
-            </div>
-        </div>
-
-        <!-- Step 9: Final Report -->
-        <div class="workflow-step" id="step9">
-            <h2><span class="step-num">9</span> Generate Report</h2>
-            <p class="step-subtitle">Communicating results with honest uncertainty</p>
-
-            <p>
-                The final step is generating a report that honestly communicates findings—including uncertainty, 
-                sensitivity, and recommendations for validation.
-            </p>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span class="file-path">generate_report.py</span>
-                    <span>Report generation</span>
-                </div>
-                <pre><code class="language-python">from mmm_framework.reporting import MMMReportGenerator
-
-# Generate comprehensive report
-report = MMMReportGenerator(
-    results=results,
-    panel=panel,
-    sensitivity=sensitivity_results,
-    config={
-        "title": "Marketing Mix Model Report",
-        "client": "Acme Consumer Products",
-        "period": "Jan 2023 - Dec 2025",
-        "include_uncertainty": True,
-        "include_sensitivity": True,
-        "include_recommendations": True,
-    }
-)
-
-# Export to HTML with interactive charts
-report.to_html("mmm_report_q4_2025.html")
-
-# Also export executive summary
-report.executive_summary("executive_summary.pdf")</code></pre>
-            </div>
-
-            <div class="callout insight">
-                <h4>📊 Report Contents</h4>
-                <ul style="margin: 0.5rem 0 0 1.5rem;">
-                    <li>Executive summary with key metrics and credible intervals</li>
-                    <li>Model fit visualization (actual vs. predicted)</li>
-                    <li>Channel ROI forest plot with uncertainty</li>
-                    <li>Revenue decomposition (waterfall and time series)</li>
-                    <li>Saturation curves and marginal ROI</li>
-                    <li>Sensitivity analysis results</li>
-                    <li>Recommendations categorized by confidence level</li>
-                    <li>Methodology documentation</li>
-                </ul>
-            </div>
-
-            <div class="report-preview">
-                <h3>📄 Your MMM Report is Ready</h3>
-                <p>The report includes all analysis with honest uncertainty quantification.</p>
-                <a href="mmm-example-report.html" target="_blank" class="btn">Open Full Report →</a>
-            </div>
-
-            <h3>Workflow Summary</h3>
-            <ul class="checklist">
-                <li class="checked">Question defined and pre-registered</li>
-                <li class="checked">Generative story articulated</li>
-                <li class="checked">Model built matching pre-specification</li>
-                <li class="checked">Prior predictive check passed</li>
-                <li class="checked">MCMC sampling converged</li>
-                <li class="checked">Diagnostics passed (R-hat, ESS, divergences)</li>
-                <li class="checked">Posterior predictive check passed</li>
-                <li class="checked">Sensitivity analysis completed</li>
-                <li class="checked">Report generated with uncertainty</li>
-            </ul>
-
-            <div class="callout success">
-                <h4>🎉 Scientific Modeling Complete</h4>
-                <p>
-                    You've completed the full Bayesian workflow. Your findings are documented with honest 
-                    uncertainty, sensitivity analysis identifies which conclusions are robust, and the report 
-                    provides actionable recommendations with appropriate caveats.
-                </p>
-            </div>
-
-            <div class="step-nav">
-                <button class="btn btn-secondary" onclick="prevStep()">← Back to Sensitivity</button>
-                <button class="btn btn-primary" onclick="goToStep(1)">↺ Start Over</button>
             </div>
         </div>
     </div>
 
-    <script>
-        // Initialize highlight.js
-        hljs.highlightAll();
+    <!-- CHAPTER 2: MARKETING -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">📺</div>
+            <div>
+                <h4>Chapter 2: Marketing Lifts Sales</h4>
+                <p style="margin: 0;">
+                    Each channel (TV, digital, etc.) adds sales above baseline. But here's 
+                    the catch: the first million dollars of TV spend helps more than the tenth million. 
+                    This is called <strong>diminishing returns</strong>—like eating pizza slices, the first 
+                    few are great but eventually you're full.
+                </p>
+            </div>
+        </div>
+    </div>
 
-        // =====================================================================
-        // Configuration
-        // =====================================================================
-        const colors = {
-            primary: '#8fa86a',
-            primaryDark: '#6d8a4a',
-            accent: '#6a8fa8',
-            accentDark: '#4a6d8a',
-            warning: '#d4a86a',
-            danger: '#c97067',
-            success: '#6abf8a',
-            text: '#2d3a2d',
-            textMuted: '#5a6b5a',
-            grid: '#e8ece8',
-            bg: '#fafbf9'
-        };
+    <!-- CHAPTER 3: CARRYOVER -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">⏰</div>
+            <div>
+                <h4>Chapter 3: Ads Have Lasting Effects</h4>
+                <p style="margin: 0;">
+                    When you see a TV ad, you don't always buy immediately. You might wait until 
+                    next week or next month. This "carryover" effect means today's advertising 
+                    affects sales for several weeks. We call this <strong>adstock</strong>.
+                </p>
+            </div>
+        </div>
+    </div>
 
-        const chartConfig = { displayModeBar: false, responsive: true };
+    <!-- CHAPTER 4: SEASONALITY -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">🎄</div>
+            <div>
+                <h4>Chapter 4: Seasonality Matters</h4>
+                <p style="margin: 0;">
+                    Sales go up around holidays and down in slow periods. This happens regardless 
+                    of marketing—it's just how consumer behavior works. We need to account for 
+                    this so we don't accidentally credit marketing for holiday bumps.
+                </p>
+            </div>
+        </div>
+    </div>
 
-        let currentStep = 1;
-        const totalSteps = 9;
+    <!-- CHAPTER 5: NOISE -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">🎲</div>
+            <div>
+                <h4>Chapter 5: Random Variation</h4>
+                <p style="margin: 0;">
+                    Even after accounting for everything, there's always some unexplained variation. 
+                    A celebrity mentions your product, a competitor has a recall, weather affects 
+                    shopping. We can't predict these, but we can acknowledge they exist.
+                </p>
+            </div>
+        </div>
+    </div>
 
-        // =====================================================================
-        // Navigation
-        // =====================================================================
-        function updateProgress() {
-            const fill = document.getElementById('progressFill');
-            const percentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
-            fill.style.width = `${percentage}%`;
+    <div class="why-box">
+        <h4>Putting the story together</h4>
+        <p style="margin-bottom: 0;">
+            <em>"Sales start from a baseline of existing demand. Marketing channels add to this, 
+            but with diminishing returns as spend increases. The effects carry over for several weeks 
+            as people remember and act on ads. Underlying all of this, sales rise and fall with 
+            natural seasonal patterns. And there's always some random variation we can't explain."</em>
+        </p>
+    </div>
 
-            document.querySelectorAll('.step-indicator').forEach((indicator, idx) => {
-                indicator.classList.remove('active', 'completed');
-                if (idx + 1 === currentStep) {
-                    indicator.classList.add('active');
-                } else if (idx + 1 < currentStep) {
-                    indicator.classList.add('completed');
-                }
-            });
+    <p>
+        This story—these assumptions—will become our mathematical model. If we're wrong 
+        about any part of this story, our results will be wrong. That's why we test our 
+        assumptions later in the workflow.
+    </p>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Build the Model →</button>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 3: BUILD -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step3">
+    <h2><span class="step-num">3</span> Build the Model</h2>
+    <p class="step-subtitle">Translate the story into mathematical components</p>
+
+    <p>
+        Now we translate each part of our story into a specific mathematical component. 
+        Different business situations call for different choices here. Click each section 
+        to explore the options.
+    </p>
+
+    <!-- SATURATION -->
+    <div class="collapsible open" id="saturationSection">
+        <div class="collapsible-header" onclick="toggleCollapsible('saturationSection')">
+            <h4><span class="icon">📈</span> Saturation: Diminishing Returns</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"More spending helps, but each dollar is less effective than the last"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Saturation function</p>
+                        <div class="formula">effect = x<sup>k</sup> / (half<sup>k</sup> + x<sup>k</sup>)</div>
+                    </div>
+                </div>
+
+                <div class="control-panel">
+                    <h4>🎛️ Explore Saturation Curves</h4>
+                    <div class="control-row">
+                        <label>Saturation Shape:</label>
+                        <select id="saturationSelect" onchange="updateSaturationChart()">
+                            <option value="hill">Hill (S-curve) — TV, brand</option>
+                            <option value="michaelis">Michaelis-Menten — Search</option>
+                            <option value="linear">Linear — No saturation</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Steepness (k):</label>
+                        <input type="range" id="saturationK" min="0.5" max="4" step="0.1" value="2" onchange="updateSaturationChart()">
+                        <span class="value-display" id="saturationKVal">2.0</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Half-saturation:</label>
+                        <input type="range" id="saturationHalf" min="20" max="80" step="5" value="50" onchange="updateSaturationChart()">
+                        <span class="value-display" id="saturationHalfVal">50%</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="saturationChart"></div>
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> X-axis is spend level. Y-axis is effect. 
+                    The curve flattening = diminishing returns. Dashed line = half-saturation point.
+                </div>
+
+                <div class="scenario-selector">
+                    <div class="scenario-card" onclick="setSaturation('hill', 2)">
+                        <div class="icon">📺</div>
+                        <h5>TV / Brand</h5>
+                        <p>S-curve. Needs critical mass, then saturates.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setSaturation('michaelis', 1)">
+                        <div class="icon">🔍</div>
+                        <h5>Search</h5>
+                        <p>Immediate returns, gradual diminishing.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setSaturation('hill', 3)">
+                        <div class="icon">📱</div>
+                        <h5>Social / Viral</h5>
+                        <p>Steep S-curve with tipping point.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADSTOCK -->
+    <div class="collapsible" id="adstockSection">
+        <div class="collapsible-header" onclick="toggleCollapsible('adstockSection')">
+            <h4><span class="icon">⏰</span> Adstock: Carryover Effects</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"People remember ads and act on them days or weeks later"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Adstock transformation</p>
+                        <div class="formula">adstock[t] = spend[t] + λ × adstock[t-1]</div>
+                    </div>
+                </div>
+
+                <div class="control-panel">
+                    <h4>🎛️ Explore Adstock Decay</h4>
+                    <div class="control-row">
+                        <label>Adstock Type:</label>
+                        <select id="adstockSelect" onchange="updateAdstockChart()">
+                            <option value="geometric">Geometric — Immediate peak</option>
+                            <option value="delayed">Delayed Peak — Builds then decays</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Decay rate (λ):</label>
+                        <input type="range" id="adstockDecay" min="0.1" max="0.95" step="0.05" value="0.7" onchange="updateAdstockChart()">
+                        <span class="value-display" id="adstockDecayVal">0.70</span>
+                    </div>
+                    <div class="control-row" id="delayRow" style="display:none;">
+                        <label>Peak delay (weeks):</label>
+                        <input type="range" id="adstockDelay" min="1" max="6" step="1" value="3" onchange="updateAdstockChart()">
+                        <span class="value-display" id="adstockDelayVal">3</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="adstockChart"></div>
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> Ad runs in Week 0. Bars show remaining effect each week. 
+                    With λ=0.7, 70% carries to next week, then 49%, and so on.
+                </div>
+
+                <div class="scenario-selector">
+                    <div class="scenario-card" onclick="setAdstock('geometric', 0.4)">
+                        <div class="icon">🍕</div>
+                        <h5>Fast-Moving</h5>
+                        <p>Pizza, snacks. Buy within days.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setAdstock('geometric', 0.75)">
+                        <div class="icon">👟</div>
+                        <h5>Considered</h5>
+                        <p>Shoes, electronics. Weeks to decide.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setAdstock('delayed', 0.7)">
+                        <div class="icon">🚗</div>
+                        <h5>Major Purchase</h5>
+                        <p>Cars, B2B. Months of research.</p>
+                    </div>
+                </div>
+
+                <div class="analogy-box">
+                    <h4>Coffee vs. car</h4>
+                    <p>
+                        A coffee ad makes you want coffee <em>now</em>—fast decay. A car ad plants 
+                        a seed that grows over months as you research—delayed peak.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CROSS-EFFECTS -->
+    <div class="collapsible" id="crossSection">
+        <div class="collapsible-header" onclick="toggleCollapsible('crossSection')">
+            <h4><span class="icon">🔄</span> Cross-Effects: Product Interactions</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"Advertising Product A also affects sales of Product B"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Cross-effect terms</p>
+                        <div class="formula">sales_B = ... + β_cross × media_A</div>
+                    </div>
+                </div>
+
+                <div class="scenario-selector">
+                    <div class="scenario-card">
+                        <div class="icon">☀️</div>
+                        <h5>Halo (+)</h5>
+                        <p>Flagship ads boost whole brand.</p>
+                    </div>
+                    <div class="scenario-card">
+                        <div class="icon">🍽️</div>
+                        <h5>Cannibalization (-)</h5>
+                        <p>New model steals from old.</p>
+                    </div>
+                    <div class="scenario-card">
+                        <div class="icon">🎮</div>
+                        <h5>Complementary (+)</h5>
+                        <p>Console ads boost game sales.</p>
+                    </div>
+                </div>
+
+                <div class="chart-container short" id="crossEffectsChart"></div>
+
+                <div class="warning-box">
+                    <h4>⚠️ Only add with clear business rationale</h4>
+                    <p style="margin-bottom: 0;">
+                        Cross-effects require more data to estimate. Only include if you can explain 
+                        the mechanism: "Why would Product A ads affect Product B sales?"
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NESTED -->
+    <div class="collapsible" id="nestedSection">
+        <div class="collapsible-header" onclick="toggleCollapsible('nestedSection')">
+            <h4><span class="icon">🎯</span> Nested Models: Awareness Mediators</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"TV builds awareness → Awareness drives sales"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Nested/Mediated model</p>
+                        <div class="formula">awareness = f(media)<br>sales = g(awareness)</div>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-box">
+                        <h4>Direct Effects</h4>
+                        <div class="chart-container" id="directModelChart"></div>
+                        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:0.5rem">For established brands.</p>
+                    </div>
+                    <div class="chart-box">
+                        <h4>Mediated Effects</h4>
+                        <div class="chart-container" id="nestedModelChart"></div>
+                        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:0.5rem">For new brands, B2B.</p>
+                    </div>
+                </div>
+
+                <div class="analogy-box">
+                    <h4>The "first date" analogy</h4>
+                    <p>
+                        Coca-Cola ad = bumping into an old friend (buy immediately). New brand ad = 
+                        first date (need to build familiarity before purchase).
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRIORS -->
+    <div class="collapsible" id="priorsSection">
+        <div class="collapsible-header" onclick="toggleCollapsible('priorsSection')">
+            <h4><span class="icon">🎯</span> Prior Distributions: Encoding Beliefs</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Priors encode what we believe <em>before</em> seeing data. They're not arbitrary—
+                    they represent real knowledge: "Media effects are probably positive but not huge."
+                </p>
+
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"We expect positive effects, but with uncertainty"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Prior distribution</p>
+                        <div class="formula">β ~ HalfNormal(σ=0.5)</div>
+                    </div>
+                </div>
+
+                <div class="chart-container short" id="priorDistChart"></div>
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> This shows our belief about media effects before 
+                    seeing data. Most probability is near small positive values, with some chance of larger effects.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="why-box">
+        <h4>The complete model specification</h4>
+        <p style="margin-bottom: 0; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">
+            sales[t] = α + Σ β[c] × saturation(adstock(spend[c,t])) + seasonality[t] + ε[t]
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Prior Predictive Check →</button>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 4: PRIOR PREDICTIVE CHECK -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step4">
+    <h2><span class="step-num">4</span> Prior Predictive Check</h2>
+    <p class="step-subtitle">Do our assumptions generate plausible predictions?</p>
+
+    <p>
+        Before showing the model any real data, we test whether our assumptions could 
+        plausibly generate realistic-looking outcomes. This catches problems early—before 
+        we waste time fitting a broken model.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Like a dress rehearsal</h4>
+        <p>
+            Before opening night, actors do a full rehearsal to catch problems. We run our 
+            model "forward" without real data: given our assumptions about how marketing works, 
+            what kind of sales numbers would we expect to see?
+        </p>
+    </div>
+
+    <div class="control-panel">
+        <h4>🎛️ Adjust Prior Assumptions</h4>
+        <div class="control-row">
+            <label>Media effect uncertainty:</label>
+            <input type="range" id="priorMediaSD" min="0.1" max="1.5" step="0.1" value="0.5" oninput="updatePriorVals()">
+            <span class="value-display" id="priorMediaSDVal">0.5</span>
+        </div>
+        <div class="control-row">
+            <label>Baseline uncertainty:</label>
+            <input type="range" id="priorBaselineSD" min="0.5" max="3" step="0.1" value="1.0" oninput="updatePriorVals()">
+            <span class="value-display" id="priorBaselineSDVal">1.0</span>
+        </div>
+        <button class="btn btn-secondary" onclick="runPriorCheck()" style="margin-top:0.5rem">🔄 Regenerate</button>
+    </div>
+
+    <div class="chart-container tall" id="priorPredChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Each gray line is one "possible world" given your assumptions. 
+        Green dashed lines show the realistic range. If gray lines go negative or wildly high, 
+        assumptions need tightening.
+    </div>
+
+    <div id="priorDecision" class="success-box">
+        <h4 id="priorTitle">Assessment</h4>
+        <p id="priorAssessment">Evaluating...</p>
+    </div>
+
+    <div class="why-box">
+        <h4>What if predictions look wrong?</h4>
+        <p style="margin-bottom: 0;">
+            If the prior predictive shows impossible outcomes (negative sales, values in the trillions), 
+            it means our assumptions are too vague. Tighten the priors—add more knowledge. This is 
+            <em>good</em>—we caught a problem before wasting computation on fitting.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Fit the Model →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 5: FIT -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step5">
+    <h2><span class="step-num">5</span> Fit the Model</h2>
+    <p class="step-subtitle">Let the data update our beliefs</p>
+
+    <p>
+        Now we show our model the actual sales data and let it figure out what the 
+        media effects probably are. This is the core of Bayesian inference: starting 
+        with prior beliefs, updating them with evidence.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Updating opinions with evidence</h4>
+        <p>
+            Imagine you think a coin is fair. Then you flip it 100 times and get 75 heads. 
+            You'd update your belief—maybe it's biased. Our model does the same: it starts 
+            with prior beliefs about media effects and updates them based on the sales data.
+        </p>
+    </div>
+
+    <div class="terminal-output" id="fitOutput">
+        <span class="info">[INFO]</span> Ready to run MCMC sampling...<br>
+    </div>
+    <button class="btn btn-success" onclick="runMCMC()" id="runMCMCBtn">▶ Run MCMC Sampling</button>
+
+    <div id="mcmcResults" style="display:none;">
+        <h3>Posterior Estimates</h3>
+        <p>
+            These are our updated beliefs about each channel's effect, along with uncertainty ranges.
+        </p>
+
+        <div class="chart-container" id="posteriorChart"></div>
+
+        <table class="data-table">
+            <thead>
+                <tr><th>Channel</th><th>Mean Effect</th><th>94% Interval</th><th>Pr(effect > 0)</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>TV</td><td class="mono">0.42</td><td class="mono">[0.28, 0.57]</td><td class="positive">99.8%</td></tr>
+                <tr><td>Paid Search</td><td class="mono">0.31</td><td class="mono">[0.22, 0.41]</td><td class="positive">99.9%</td></tr>
+                <tr><td>Paid Social</td><td class="mono">0.18</td><td class="mono">[0.02, 0.35]</td><td class="positive">97.2%</td></tr>
+                <tr><td>Display</td><td class="mono">0.08</td><td class="mono">[-0.12, 0.29]</td><td class="warning">78.4%</td></tr>
+                <tr><td>Radio</td><td class="mono">0.15</td><td class="mono">[0.03, 0.28]</td><td class="positive">99.1%</td></tr>
+            </tbody>
+        </table>
+
+        <div class="why-box">
+            <h4>Notice the uncertainty</h4>
+            <p style="margin-bottom: 0;">
+                Display's interval includes negative values—we're not confident it's helping. 
+                Social has a wide range. This honest uncertainty is more valuable than false precision.
+            </p>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()" id="fitNextBtn" disabled>Next: Diagnose →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 6: DIAGNOSE -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step6">
+    <h2><span class="step-num">6</span> Computational Diagnostics</h2>
+    <p class="step-subtitle">Did the algorithm actually work?</p>
+
+    <p>
+        Before trusting results, we verify that the MCMC sampling algorithm worked correctly. 
+        These are <em>computational</em> checks—they tell us if the algorithm converged, not 
+        whether the model is correct.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Like checking your calculator</h4>
+        <p>
+            Before trusting a calculation, you might verify the calculator is working. 
+            These diagnostics check if our statistical "calculator" (MCMC) ran correctly.
+        </p>
+    </div>
+
+    <h3>Diagnostic Summary</h3>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="label">R-hat (max)</div>
+            <div class="value good">1.003</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">ESS (min)</div>
+            <div class="value good">1,842</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Divergences</div>
+            <div class="value good">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Tree Depth</div>
+            <div class="value good">OK</div>
+        </div>
+    </div>
+
+    <h3>Diagnostic Checklist</h3>
+    <ul class="checklist">
+        <li class="checked"><strong>R-hat < 1.01:</strong> All chains agree (convergence)</li>
+        <li class="checked"><strong>ESS > 400:</strong> Enough independent samples</li>
+        <li class="checked"><strong>No divergences:</strong> Sampler explored properly</li>
+        <li class="checked"><strong>No max tree depth:</strong> No pathological geometry</li>
+    </ul>
+
+    <h3>Trace Plots</h3>
+    <p>
+        Trace plots show the sampling history. Good traces look like "fuzzy caterpillars"—
+        random but stationary. Bad traces show trends, stuck periods, or disagreement between chains.
+    </p>
+    <div class="chart-container" id="tracePlot"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Each color is a different chain (parallel sampler). 
+        They should mix together and look stationary. Gaps or trends indicate problems.
+    </div>
+
+    <div class="success-box">
+        <h4>✓ All diagnostics pass</h4>
+        <p style="margin-bottom: 0;">
+            The algorithm converged properly. We can trust these samples represent the posterior distribution.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Posterior Predictive →</button>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 7: POSTERIOR PREDICTIVE CHECK -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step7">
+    <h2><span class="step-num">7</span> Posterior Predictive Check</h2>
+    <p class="step-subtitle">Does the model reproduce key data patterns?</p>
+
+    <p>
+        The algorithm worked (Step 6), but is the <em>model</em> any good? We check by 
+        asking: can this model reproduce data that looks like what we actually observed? 
+        If not, the model is missing something important.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Checking your understanding</h4>
+        <p>
+            If you truly understand how something works, you should be able to recreate it. 
+            If our model truly captures how sales are generated, it should produce realistic 
+            fake data that matches the patterns in real data.
+        </p>
+    </div>
+
+    <h3>Model Fit: Predictions vs. Reality</h3>
+    <div class="chart-container tall" id="ppcChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Black line = actual sales. Blue band = model predictions 
+        with uncertainty. If the black line mostly stays inside the blue band, the model captures 
+        real patterns.
+    </div>
+
+    <h3>Response Curves by Channel</h3>
+    <p>
+        These curves show how sales respond to spend for each channel, incorporating 
+        all the effects we modeled (saturation, carryover).
+    </p>
+    <div class="chart-container tall" id="responseCurvesChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Steeper curves = more effective channels. 
+        Flattening = saturation (diminishing returns). Uncertainty bands show how confident 
+        we are in each curve.
+    </div>
+
+    <h3>Key Patterns to Check</h3>
+    <ul class="checklist">
+        <li class="checked">Captures seasonal peaks (holidays)</li>
+        <li class="checked">Captures seasonal troughs (slow periods)</li>
+        <li class="checked">Captures overall trend</li>
+        <li class="checked">Captures week-to-week variation</li>
+        <li class="warning">Some outliers not fully explained (expected)</li>
+    </ul>
+
+    <div class="success-box">
+        <h4>✓ Model captures main patterns</h4>
+        <p style="margin-bottom: 0;">
+            The model reproduces the key features of the data. Some individual weeks are off—
+            that's expected (random events we can't predict). The overall patterns are captured.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Sensitivity Analysis →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 8: SENSITIVITY ANALYSIS -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step8">
+    <h2><span class="step-num">8</span> Sensitivity Analysis</h2>
+    <p class="step-subtitle">Are conclusions robust to different assumptions?</p>
+
+    <p>
+        We made many choices building this model: saturation shape, adstock decay, priors. 
+        What if we'd made different (reasonable) choices? Sensitivity analysis checks 
+        whether our conclusions would change.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Stress-testing a bridge</h4>
+        <p>
+            Engineers don't just test a bridge under normal conditions—they test under extreme 
+            loads, wind, earthquakes. We stress-test our conclusions under different model specifications.
+        </p>
+    </div>
+
+    <h3>Specifications Tested</h3>
+    <table class="data-table">
+        <thead>
+            <tr><th>Spec</th><th>Saturation</th><th>Adstock</th><th>Priors</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Base</td><td>Hill (k=2)</td><td>Geometric (λ=0.7)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 1</td><td>Hill (k=1.5)</td><td>Geometric (λ=0.7)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 2</td><td>Hill (k=2)</td><td>Geometric (λ=0.5)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 3</td><td>Hill (k=2)</td><td>Geometric (λ=0.7)</td><td>HalfNormal(1.0)</td></tr>
+            <tr><td>Alt 4</td><td>Michaelis</td><td>Geometric (λ=0.7)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 5</td><td>Hill (k=2)</td><td>Delayed (θ=2)</td><td>HalfNormal(0.5)</td></tr>
+        </tbody>
+    </table>
+
+    <h3>ROI Across Specifications</h3>
+    <div class="chart-container tall" id="sensitivityChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Each dot is an ROI estimate from one specification. 
+        Thick bars show the range. Red dashed line = break-even (ROI=1). Channels consistently 
+        above the line are robust winners.
+    </div>
+
+    <h3>Robustness Summary</h3>
+    <table class="data-table">
+        <thead>
+            <tr><th>Channel</th><th>Mean ROI</th><th>Range</th><th>Robust?</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>TV</td><td class="mono">2.1</td><td class="mono">[1.8 – 2.5]</td><td class="positive">✓ Always profitable</td></tr>
+            <tr><td>Paid Search</td><td class="mono">2.4</td><td class="mono">[2.1 – 2.8]</td><td class="positive">✓ Always profitable</td></tr>
+            <tr><td>Paid Social</td><td class="mono">1.3</td><td class="mono">[0.8 – 1.9]</td><td class="warning">⚠ Sometimes below break-even</td></tr>
+            <tr><td>Display</td><td class="mono">0.7</td><td class="mono">[0.3 – 1.1]</td><td class="negative">✗ Usually unprofitable</td></tr>
+            <tr><td>Radio</td><td class="mono">1.6</td><td class="mono">[1.3 – 2.0]</td><td class="positive">✓ Always profitable</td></tr>
+        </tbody>
+    </table>
+
+    <div class="why-box">
+        <h4>Why sensitivity matters</h4>
+        <p style="margin-bottom: 0;">
+            If conclusions change dramatically with small assumption changes, we can't trust them. 
+            TV, Search, and Radio are robust—conclusions hold regardless of specification. 
+            Social and Display are sensitive—be cautious making decisions based on these estimates.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Report →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 9: REPORT -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step9">
+    <h2><span class="step-num">9</span> Communicate Results</h2>
+    <p class="step-subtitle">What did we learn, and how confident are we?</p>
+
+    <p>
+        The final step: translate technical results into actionable insights. Good reporting 
+        separates confident findings from uncertain ones, and acknowledges limitations honestly.
+    </p>
+
+    <h3>Executive Summary</h3>
+    <div class="chart-container" id="roiChart"></div>
+
+    <h3>Key Findings</h3>
+    
+    <div class="finding confident">
+        <div class="icon">✓</div>
+        <div>
+            <h5>High-Confidence Recommendations</h5>
+            <p><strong>TV, Paid Search, and Radio</strong> are robustly profitable across all reasonable 
+            model specifications. Safe bets for continued or increased investment.</p>
+        </div>
+    </div>
+
+    <div class="finding uncertain">
+        <div class="icon">⚠</div>
+        <div>
+            <h5>Needs More Investigation</h5>
+            <p><strong>Paid Social</strong> shows positive effects but with wide uncertainty and sensitivity 
+            to model assumptions. Consider a controlled experiment (geo-test) before major budget changes.</p>
+        </div>
+    </div>
+
+    <div class="finding negative">
+        <div class="icon">✗</div>
+        <div>
+            <h5>Likely Underperforming</h5>
+            <p><strong>Display</strong> is probably not paying for itself. The ROI range includes 0.3-1.1 
+            across specifications, suggesting reallocation of budget may be warranted.</p>
+        </div>
+    </div>
+
+    <h3>Recommended Budget Allocation</h3>
+    <div class="chart-container short" id="budgetChart"></div>
+    <div class="chart-explanation">
+        <strong>Based on optimization:</strong> Shift budget from Display and Social toward TV and Search. 
+        Maintain Radio at current levels. This recommendation accounts for saturation and uncertainty.
+    </div>
+
+    <h3>Limitations & Caveats</h3>
+    <ul class="checklist">
+        <li class="warning">Model estimates average effects—individual campaigns may vary</li>
+        <li class="warning">Assumes historical relationships continue (no major market changes)</li>
+        <li class="warning">Long-term brand effects may not be fully captured</li>
+        <li class="warning">Display may have unmeasured brand effects not reflected in short-term sales</li>
+        <li class="checked">Conducted sensitivity analysis across 6 specifications</li>
+        <li class="checked">All computational diagnostics passed</li>
+    </ul>
+
+    <div class="why-box">
+        <h4>Why honest uncertainty is valuable</h4>
+        <p>
+            "TV ROI is probably 1.8-2.5" is more useful than "TV ROI is 2.1" because it's honest 
+            about what we actually know. You can confidently invest in TV knowing it's profitable 
+            across the entire range—without false precision that could mislead planning.
+        </p>
+        <p style="margin-bottom: 0;">
+            Similarly, acknowledging uncertainty about Social prevents over-investment in a channel 
+            that might not be working—while also preventing premature abandonment of something that might be.
+        </p>
+    </div>
+
+    <h3>Next Steps</h3>
+    <div class="scenario-selector">
+        <div class="scenario-card">
+            <div class="icon">🧪</div>
+            <h5>Test Social</h5>
+            <p>Run geo-experiment to validate MMM estimates.</p>
+        </div>
+        <div class="scenario-card">
+            <div class="icon">📉</div>
+            <h5>Reduce Display</h5>
+            <p>Reallocate to TV/Search over 3 months.</p>
+        </div>
+        <div class="scenario-card">
+            <div class="icon">📊</div>
+            <h5>Monitor & Update</h5>
+            <p>Refresh model quarterly with new data.</p>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="alert('Workflow complete! 🎉')">Complete ✓</button>
+    </div>
+</div>
+
+</div><!-- end container -->
+<script>
+// State & Navigation
+let currentStep = 1;
+const totalSteps = 9;
+
+function updateProgress() {
+    document.getElementById('progressFill').style.width = ((currentStep-1)/(totalSteps-1)*100)+'%';
+    document.querySelectorAll('.step-indicator').forEach((ind, i) => {
+        ind.classList.remove('active','completed');
+        if (i+1 === currentStep) ind.classList.add('active');
+        else if (i+1 < currentStep) ind.classList.add('completed');
+    });
+}
+
+function showStep(step) {
+    document.querySelectorAll('.workflow-step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step'+step).classList.add('active');
+    currentStep = step;
+    updateProgress();
+    window.scrollTo({top:200,behavior:'smooth'});
+    if (step===3) initBuildCharts();
+    if (step===4) runPriorCheck();
+    if (step===6) initDiagnosticCharts();
+    if (step===7) { initPPCChart(); initResponseCurves(); }
+    if (step===8) initSensitivityChart();
+    if (step===9) { initROIChart(); initBudgetChart(); }
+}
+
+function nextStep() { if (currentStep < totalSteps) showStep(currentStep+1); }
+function prevStep() { if (currentStep > 1) showStep(currentStep-1); }
+function goToStep(s) { showStep(s); }
+
+// Collapsibles
+function toggleCollapsible(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('open');
+    if (el.classList.contains('open')) {
+        if (id==='saturationSection') updateSaturationChart();
+        if (id==='adstockSection') updateAdstockChart();
+        if (id==='crossSection') initCrossEffectsChart();
+        if (id==='nestedSection') initNestedCharts();
+        if (id==='priorsSection') initPriorDistChart();
+    }
+}
+
+// Utilities
+function normalRandom(m=0,s=1) {
+    let u=0,v=0;
+    while(!u) u=Math.random();
+    while(!v) v=Math.random();
+    return m + s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+const cfg = {responsive:true, displayModeBar:false};
+const colors = {primary:'#5a7c65',primaryLight:'#8fa86a',primaryDark:'#3d5a47',accent:'#6a8fa8',success:'#67c99a',warning:'#c9a067',danger:'#c97067',text:'#2d3a2d',grid:'rgba(90,124,101,0.1)'};
+const layout_base = {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Source Sans 3',color:colors.text},margin:{t:30,r:30,b:50,l:60}};
+
+// Step 3: Build Charts
+function initBuildCharts() { updateSaturationChart(); }
+
+function updateSaturationChart() {
+    const type = document.getElementById('saturationSelect')?.value || 'hill';
+    const k = parseFloat(document.getElementById('saturationK')?.value || 2);
+    const half = parseFloat(document.getElementById('saturationHalf')?.value || 50);
+    if(document.getElementById('saturationKVal')) document.getElementById('saturationKVal').textContent = k.toFixed(1);
+    if(document.getElementById('saturationHalfVal')) document.getElementById('saturationHalfVal').textContent = half+'%';
+    const x = Array.from({length:100},(_,i)=>i+1);
+    let y;
+    if (type==='hill') y = x.map(v => Math.pow(v,k)/(Math.pow(half,k)+Math.pow(v,k)));
+    else if (type==='michaelis') y = x.map(v => v/(half+v));
+    else y = x.map(v => v/100);
+    Plotly.newPlot('saturationChart', [
+        {x,y,mode:'lines',line:{color:colors.primary,width:3},fill:'tozeroy',fillcolor:'rgba(90,124,101,0.15)',name:'Effect'},
+        {x:[half,half],y:[0,0.5],mode:'lines',line:{color:colors.accent,dash:'dash',width:2},name:'Half-sat'},
+        {x:[0,half],y:[0.5,0.5],mode:'lines',line:{color:colors.accent,dash:'dash',width:2},showlegend:false}
+    ], {...layout_base,xaxis:{title:'Spend Level (%)',gridcolor:colors.grid},yaxis:{title:'Effect',gridcolor:colors.grid,range:[0,1.1]},legend:{orientation:'h',y:1.1}}, cfg);
+}
+
+function setSaturation(type, k) {
+    document.getElementById('saturationSelect').value = type;
+    document.getElementById('saturationK').value = k;
+    updateSaturationChart();
+}
+
+function updateAdstockChart() {
+    const type = document.getElementById('adstockSelect')?.value || 'geometric';
+    const decay = parseFloat(document.getElementById('adstockDecay')?.value || 0.7);
+    const delay = parseInt(document.getElementById('adstockDelay')?.value || 3);
+    if(document.getElementById('adstockDecayVal')) document.getElementById('adstockDecayVal').textContent = decay.toFixed(2);
+    if(document.getElementById('adstockDelayVal')) document.getElementById('adstockDelayVal').textContent = delay;
+    if(document.getElementById('delayRow')) document.getElementById('delayRow').style.display = type==='delayed'?'flex':'none';
+    const weeks = 10, x = Array.from({length:weeks},(_,i)=>i);
+    let y;
+    if (type==='geometric') y = x.map(t => Math.pow(decay,t));
+    else y = x.map(t => t<delay ? Math.pow(1.3,t)/Math.pow(1.3,delay) : Math.pow(decay,t-delay));
+    const maxY = Math.max(...y);
+    y = y.map(v=>v/maxY);
+    Plotly.newPlot('adstockChart', [{x,y,type:'bar',marker:{color:y.map((v,i)=>i===0?colors.primary:`rgba(90,124,101,${0.3+0.7*v})`)}}], {...layout_base,xaxis:{title:'Weeks After Ad',gridcolor:colors.grid,dtick:1},yaxis:{title:'Remaining Effect',gridcolor:colors.grid,range:[0,1.1]},showlegend:false}, cfg);
+}
+
+function setAdstock(type, decay) {
+    document.getElementById('adstockSelect').value = type;
+    document.getElementById('adstockDecay').value = decay;
+    updateAdstockChart();
+}
+
+function initCrossEffectsChart() {
+    const products = ['Prod A','Prod B','Prod C'];
+    const effects = [[1.0,0.15,0.05],[0.1,1.0,-0.2],[0.05,-0.15,1.0]];
+    const annotations = [];
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) annotations.push({x:j,y:i,text:effects[i][j].toFixed(2),showarrow:false,font:{color:Math.abs(effects[i][j])>0.5?'white':colors.text}});
+    Plotly.newPlot('crossEffectsChart', [{z:effects,x:products,y:products,type:'heatmap',colorscale:[[0,colors.danger],[0.5,'#fff'],[1,colors.primary]],zmin:-0.3,zmax:1,showscale:false}], {...layout_base,margin:{t:20,r:20,b:40,l:60},annotations}, cfg);
+}
+
+function initNestedCharts() {
+    Plotly.newPlot('directModelChart', [{type:'sankey',orientation:'h',node:{pad:15,thickness:20,label:['TV','Digital','Sales'],color:[colors.accent,colors.accent,colors.primary]},link:{source:[0,1],target:[2,2],value:[30,25],color:['rgba(106,143,168,0.4)','rgba(106,143,168,0.4)']}}], {paper_bgcolor:'transparent',margin:{t:10,r:10,b:10,l:10}}, cfg);
+    Plotly.newPlot('nestedModelChart', [{type:'sankey',orientation:'h',node:{pad:15,thickness:20,label:['TV','Digital','Aware','Sales'],color:[colors.accent,colors.accent,colors.warning,colors.primary]},link:{source:[0,1,2],target:[2,2,3],value:[30,25,50],color:['rgba(106,143,168,0.4)','rgba(106,143,168,0.4)','rgba(201,160,103,0.4)']}}], {paper_bgcolor:'transparent',margin:{t:10,r:10,b:10,l:10}}, cfg);
+}
+
+function initPriorDistChart() {
+    const x = Array.from({length:100},(_,i)=>i*0.03);
+    const y = x.map(v => Math.exp(-v*v/0.5) * 2/Math.sqrt(Math.PI*0.5));
+    Plotly.newPlot('priorDistChart', [{x,y,mode:'lines',fill:'tozeroy',line:{color:colors.primary,width:2},fillcolor:'rgba(90,124,101,0.2)'}], {...layout_base,xaxis:{title:'Effect Size',gridcolor:colors.grid},yaxis:{title:'Density',gridcolor:colors.grid}}, cfg);
+}
+
+// Step 4: Prior Predictive
+function updatePriorVals() {
+    if(document.getElementById('priorMediaSDVal')) document.getElementById('priorMediaSDVal').textContent = parseFloat(document.getElementById('priorMediaSD').value).toFixed(1);
+    if(document.getElementById('priorBaselineSDVal')) document.getElementById('priorBaselineSDVal').textContent = parseFloat(document.getElementById('priorBaselineSD').value).toFixed(1);
+}
+
+function runPriorCheck() {
+    updatePriorVals();
+    const mediaSD = parseFloat(document.getElementById('priorMediaSD')?.value || 0.5);
+    const baseSD = parseFloat(document.getElementById('priorBaselineSD')?.value || 1.0);
+    const n=52, traces=[], allY=[];
+    for (let d=0;d<40;d++) {
+        const base = 15+normalRandom(0,baseSD);
+        const betas = Array.from({length:5},()=>Math.abs(normalRandom(0,mediaSD)));
+        const y = [];
+        for (let t=0;t<n;t++) {
+            const val = base + 0.015*t + 2*Math.sin(2*Math.PI*t/52) + betas.reduce((s,b)=>s+b*(0.3+0.2*Math.random()),0) + normalRandom(0,0.8);
+            y.push(val); allY.push(val);
         }
+        traces.push({x:Array.from({length:n},(_,i)=>i+1),y,mode:'lines',line:{color:'rgba(90,124,101,0.12)',width:1.5},showlegend:false,hoverinfo:'skip'});
+    }
+    traces.push({x:[1,52],y:[12,12],mode:'lines',name:'Min',line:{color:colors.success,dash:'dash',width:2}});
+    traces.push({x:[1,52],y:[22,22],mode:'lines',name:'Max',line:{color:colors.success,dash:'dash',width:2}});
+    Plotly.newPlot('priorPredChart', traces, {...layout_base,xaxis:{title:'Week',gridcolor:colors.grid},yaxis:{title:'Sales ($M)',gridcolor:colors.grid,zeroline:true,zerolinecolor:colors.danger},legend:{orientation:'h',y:1.1}}, cfg);
+    const negProp = allY.filter(y=>y<0).length/allY.length;
+    const box = document.getElementById('priorDecision');
+    if (negProp > 0.05) {
+        box.className = 'warning-box';
+        document.getElementById('priorTitle').textContent = '⚠️ Too Loose';
+        document.getElementById('priorAssessment').textContent = `${(negProp*100).toFixed(1)}% negative. Tighten priors.`;
+    } else {
+        box.className = 'success-box';
+        document.getElementById('priorTitle').textContent = '✓ Looks Good';
+        document.getElementById('priorAssessment').textContent = 'Predictions within realistic bounds.';
+    }
+}
 
-        function showStep(step) {
-            document.querySelectorAll('.workflow-step').forEach(s => s.classList.remove('active'));
-            document.getElementById(`step${step}`).classList.add('active');
-            currentStep = step;
-            updateProgress();
-            window.scrollTo({ top: 200, behavior: 'smooth' });
+// Step 5: Fit
+function runMCMC() {
+    const btn = document.getElementById('runMCMCBtn'), out = document.getElementById('fitOutput');
+    btn.disabled = true; btn.textContent = '⏳ Running...';
+    const steps = ['<span class="info">[INFO]</span> Compiling...','<span class="success">[OK]</span> Compiled (2.3s)','<span class="info">[INFO]</span> NUTS init...','<span class="info">[WARMUP]</span> ████████████████████ 100%','<span class="info">[SAMPLE]</span> ████████████████████ 100%','<span class="success">[OK]</span> Done (47s)','<span class="success">[DIAG]</span> R-hat: 1.003 ✓','<span class="success">[DIAG]</span> ESS: 1842 ✓','<span class="success">[DIAG]</span> Divergences: 0 ✓'];
+    let i=0;
+    const iv = setInterval(()=>{
+        if (i<steps.length) { out.innerHTML += steps[i]+'<br>'; out.scrollTop=out.scrollHeight; i++; }
+        else { clearInterval(iv); btn.textContent='✓ Done'; document.getElementById('mcmcResults').style.display='block'; document.getElementById('fitNextBtn').disabled=false; initPosteriorChart(); }
+    }, 280);
+}
 
-            // Initialize step-specific content
-            if (step === 4) initPriorPredictive();
-            if (step === 5) initFitStep();
-            if (step === 6) initDiagnostics();
-            if (step === 7) initPPC();
-            if (step === 8) initSensitivity();
-        }
+function initPosteriorChart() {
+    const ch=['TV','Search','Social','Display','Radio'], m=[0.42,0.31,0.18,0.08,0.15], lo=[0.28,0.22,0.02,-0.12,0.03], hi=[0.57,0.41,0.35,0.29,0.28];
+    Plotly.newPlot('posteriorChart', [{y:ch,x:m,type:'bar',orientation:'h',error_x:{type:'data',symmetric:false,array:hi.map((h,i)=>h-m[i]),arrayminus:m.map((v,i)=>v-lo[i]),color:colors.primaryDark},marker:{color:m.map(v=>v>0.1?colors.primary:colors.warning)}}], {...layout_base,margin:{t:20,r:30,b:50,l:80},xaxis:{title:'Effect',gridcolor:colors.grid,zeroline:true,zerolinecolor:colors.danger},yaxis:{gridcolor:colors.grid}}, cfg);
+}
 
-        function nextStep() {
-            if (currentStep < totalSteps) showStep(currentStep + 1);
-        }
+// Step 6: Diagnostics
+function initDiagnosticCharts() {
+    const n=200, traces=[], chainColors=[colors.primary,colors.accent,colors.warning,colors.success];
+    for (let c=0;c<4;c++) {
+        let val=0.4+normalRandom(0,0.02);
+        const y=[];
+        for (let i=0;i<n;i++) { val += normalRandom(0,0.015); y.push(val); }
+        traces.push({x:Array.from({length:n},(_,i)=>i),y,mode:'lines',line:{color:chainColors[c],width:1},name:`Chain ${c+1}`});
+    }
+    Plotly.newPlot('tracePlot', traces, {...layout_base,xaxis:{title:'Iteration',gridcolor:colors.grid},yaxis:{title:'TV Effect',gridcolor:colors.grid},legend:{orientation:'h',y:1.1}}, cfg);
+}
 
-        function prevStep() {
-            if (currentStep > 1) showStep(currentStep - 1);
-        }
+// Step 7: Posterior Predictive
+function initPPCChart() {
+    const n=52, x=Array.from({length:n},(_,i)=>i+1);
+    const actual=x.map(t=>15+0.02*t+2*Math.sin(2*Math.PI*t/52)+normalRandom(0,0.5)+2*Math.random());
+    const pred=actual.map(y=>y+normalRandom(0,0.2));
+    const lo=pred.map(y=>y-1.5-Math.random()*0.5), hi=pred.map(y=>y+1.5+Math.random()*0.5);
+    Plotly.newPlot('ppcChart', [
+        {x:[...x,...x.slice().reverse()],y:[...hi,...lo.slice().reverse()],fill:'toself',fillcolor:'rgba(106,143,168,0.25)',line:{color:'transparent'},name:'94% CI'},
+        {x,y:pred,mode:'lines',name:'Model',line:{color:colors.accent,width:2}},
+        {x,y:actual,mode:'lines',name:'Actual',line:{color:colors.text,width:2.5}}
+    ], {...layout_base,xaxis:{title:'Week',gridcolor:colors.grid},yaxis:{title:'Sales ($M)',gridcolor:colors.grid},legend:{orientation:'h',y:1.12}}, cfg);
+}
 
-        function goToStep(step) {
-            showStep(step);
-        }
+function initResponseCurves() {
+    const x=Array.from({length:100},(_,i)=>i);
+    const chs=[{name:'TV',k:2,half:40,color:colors.primary},{name:'Search',k:1.2,half:30,color:colors.accent},{name:'Social',k:2.5,half:50,color:colors.warning},{name:'Radio',k:1.5,half:45,color:colors.success}];
+    Plotly.newPlot('responseCurvesChart', chs.map(c=>({x,y:x.map(v=>0.5*Math.pow(v,c.k)/(Math.pow(c.half,c.k)+Math.pow(v,c.k))),mode:'lines',name:c.name,line:{color:c.color,width:2.5}})), {...layout_base,xaxis:{title:'Spend',gridcolor:colors.grid},yaxis:{title:'Contribution',gridcolor:colors.grid},legend:{orientation:'h',y:1.12}}, cfg);
+}
 
-        // =====================================================================
-        // Utility Functions
-        // =====================================================================
-        function normalRandom(mean = 0, std = 1) {
-            let u = 0, v = 0;
-            while (u === 0) u = Math.random();
-            while (v === 0) v = Math.random();
-            return mean + std * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-        }
+// Step 8: Sensitivity
+function initSensitivityChart() {
+    const ch=['TV','Search','Social','Display','Radio'], base=[2.1,2.4,1.3,0.7,1.6], vars=[0.35,0.35,0.55,0.4,0.35];
+    const traces=[{x:[-0.5,4.5],y:[1,1],mode:'lines',name:'Break-even',line:{color:colors.danger,dash:'dash',width:2}}];
+    ch.forEach((c,i)=>{
+        const specs=Array.from({length:6},()=>base[i]+normalRandom(0,vars[i]));
+        traces.push({x:[i,i],y:[Math.min(...specs),Math.max(...specs)],mode:'lines',line:{color:colors.primary,width:8},showlegend:false});
+        traces.push({x:specs.map(()=>i+(Math.random()-0.5)*0.2),y:specs,mode:'markers',marker:{size:8,color:specs.map(s=>s>1?colors.success:colors.danger)},showlegend:false});
+    });
+    Plotly.newPlot('sensitivityChart', traces, {...layout_base,xaxis:{tickvals:[0,1,2,3,4],ticktext:ch,gridcolor:colors.grid},yaxis:{title:'ROI',gridcolor:colors.grid,range:[0,3.5]},legend:{orientation:'h',y:1.1}}, cfg);
+}
 
-        // =====================================================================
-        // Step 4: Prior Predictive
-        // =====================================================================
-        function initPriorPredictive() {
-            document.getElementById('priorMediaSD').addEventListener('input', updatePriorValues);
-            document.getElementById('priorInterceptSD').addEventListener('input', updatePriorValues);
-            runPriorPredictive();
-        }
+// Step 9: Report
+function initROIChart() {
+    const ch=['Search','TV','Radio','Social','Display'], roi=[2.4,2.1,1.6,1.3,0.7], lo=[2.1,1.8,1.3,0.8,0.3], hi=[2.8,2.5,2.0,1.9,1.1];
+    Plotly.newPlot('roiChart', [
+        {y:ch,x:roi,type:'bar',orientation:'h',error_x:{type:'data',symmetric:false,array:hi.map((h,i)=>h-roi[i]),arrayminus:roi.map((r,i)=>r-lo[i])},marker:{color:roi.map(r=>r>1?colors.primary:colors.danger)}},
+        {y:[ch[0],ch[ch.length-1]],x:[1,1],mode:'lines',name:'Break-even',line:{color:colors.danger,dash:'dash',width:2}}
+    ], {...layout_base,margin:{t:20,r:30,b:50,l:80},xaxis:{title:'ROI',gridcolor:colors.grid},yaxis:{gridcolor:colors.grid},showlegend:false}, cfg);
+}
 
-        function updatePriorValues() {
-            document.getElementById('priorMediaSDVal').textContent = 
-                parseFloat(document.getElementById('priorMediaSD').value).toFixed(1);
-            document.getElementById('priorInterceptSDVal').textContent = 
-                parseFloat(document.getElementById('priorInterceptSD').value).toFixed(1);
-        }
+function initBudgetChart() {
+    const labels=['TV','Search','Social','Display','Radio'];
+    const current=[30,25,20,15,10], recommended=[35,30,15,5,15];
+    Plotly.newPlot('budgetChart', [
+        {x:labels,y:current,type:'bar',name:'Current',marker:{color:colors.accent}},
+        {x:labels,y:recommended,type:'bar',name:'Recommended',marker:{color:colors.primary}}
+    ], {...layout_base,xaxis:{gridcolor:colors.grid},yaxis:{title:'Budget %',gridcolor:colors.grid},legend:{orientation:'h',y:1.1},barmode:'group'}, cfg);
+}
 
-        function runPriorPredictive() {
-            const mediaSD = parseFloat(document.getElementById('priorMediaSD').value);
-            const interceptSD = parseFloat(document.getElementById('priorInterceptSD').value);
-            
-            const n = 52;
-            const traces = [];
-            const allY = [];
-            
-            // Generate 50 prior predictive draws
-            for (let draw = 0; draw < 50; draw++) {
-                const intercept = 16 + normalRandom(0, interceptSD);
-                const betas = Array.from({length: 6}, () => Math.abs(normalRandom(0, mediaSD)));
-                
-                const y = [];
-                for (let t = 0; t < n; t++) {
-                    const trend = 0.02 * t;
-                    const seasonality = 2 * Math.sin(2 * Math.PI * t / 52);
-                    const mediaEffect = betas.reduce((sum, b) => sum + b * (0.5 + 0.3 * Math.random()), 0);
-                    const noise = normalRandom(0, 0.5);
-                    const val = intercept + trend + seasonality + mediaEffect + noise;
-                    y.push(val);
-                    allY.push(val);
-                }
-                
-                traces.push({
-                    x: Array.from({length: n}, (_, i) => i + 1),
-                    y: y,
-                    mode: 'lines',
-                    line: { color: colors.accent, width: 1 },
-                    opacity: 0.2,
-                    showlegend: false,
-                    hoverinfo: 'skip'
-                });
-            }
-
-            // Add observed data range
-            traces.push({
-                x: [1, n],
-                y: [12, 12],
-                mode: 'lines',
-                name: 'Observed Min',
-                line: { color: colors.success, width: 2, dash: 'dash' }
-            });
-            traces.push({
-                x: [1, n],
-                y: [22, 22],
-                mode: 'lines',
-                name: 'Observed Max',
-                line: { color: colors.success, width: 2, dash: 'dash' }
-            });
-
-            const layout = {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                font: { family: 'Inter, sans-serif', color: colors.text },
-                margin: { t: 30, r: 30, b: 50, l: 60 },
-                xaxis: { title: 'Week', gridcolor: colors.grid },
-                yaxis: { title: 'Prior Predictive (Revenue)', gridcolor: colors.grid },
-                legend: { orientation: 'h', y: 1.1 },
-                showlegend: true
-            };
-
-            Plotly.newPlot('priorPredChart', traces, layout, chartConfig);
-
-            // Assess prior quality
-            const minY = Math.min(...allY);
-            const maxY = Math.max(...allY);
-            const negProp = allY.filter(y => y < 0).length / allY.length;
-            
-            const assessment = document.getElementById('priorAssessment');
-            const options = document.getElementById('priorOptions');
-            
-            if (negProp > 0.05) {
-                assessment.innerHTML = `<span style="color: ${colors.danger};">⚠️ ${(negProp * 100).toFixed(1)}% of prior predictions are negative. Priors may be too diffuse.</span>`;
-                options.innerHTML = `
-                    <button class="btn btn-secondary" onclick="document.getElementById('priorMediaSD').value = 0.3; updatePriorValues(); runPriorPredictive();">Tighten Media Prior</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('priorInterceptSD').value = 0.5; updatePriorValues(); runPriorPredictive();">Tighten Intercept Prior</button>
-                `;
-            } else if (maxY > 40 || minY < 5) {
-                assessment.innerHTML = `<span style="color: ${colors.warning};">⚠️ Prior range [${minY.toFixed(1)}, ${maxY.toFixed(1)}] extends beyond plausible values. Consider adjusting.</span>`;
-                options.innerHTML = `<button class="btn btn-primary" onclick="nextStep();">Proceed Anyway →</button>`;
-            } else {
-                assessment.innerHTML = `<span style="color: ${colors.success};">✓ Priors look reasonable. Range [${minY.toFixed(1)}, ${maxY.toFixed(1)}] covers observed data [12, 22].</span>`;
-                options.innerHTML = `<button class="btn btn-success" onclick="nextStep();">✓ Prior Check Passed — Continue →</button>`;
-            }
-        }
-
-        // =====================================================================
-        // Step 5: Fit Model
-        // =====================================================================
-        function initFitStep() {
-            document.getElementById('runMCMCBtn').disabled = false;
-            document.getElementById('fitNextBtn').disabled = true;
-            document.getElementById('mcmcResults').style.display = 'none';
-        }
-
-        function runMCMC() {
-            const btn = document.getElementById('runMCMCBtn');
-            const output = document.getElementById('fitOutput');
-            const progress = document.getElementById('fitProgress');
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Sampling...';
-
-            let step = 0;
-            const steps = [
-                '<span class="info">[INFO]</span> Compiling model with JAX...',
-                '<span class="success">[OK]</span> Model compiled in 2.3s',
-                '<span class="info">[INFO]</span> Running warmup (1000 iterations)...',
-                '<span class="info">[CHAIN 1]</span> Warmup: 100% ████████████████████ 1000/1000',
-                '<span class="info">[CHAIN 2]</span> Warmup: 100% ████████████████████ 1000/1000',
-                '<span class="info">[CHAIN 3]</span> Warmup: 100% ████████████████████ 1000/1000',
-                '<span class="info">[CHAIN 4]</span> Warmup: 100% ████████████████████ 1000/1000',
-                '<span class="info">[INFO]</span> Running sampling (2000 iterations)...',
-                '<span class="info">[CHAIN 1]</span> Sampling: 100% ████████████████████ 2000/2000',
-                '<span class="info">[CHAIN 2]</span> Sampling: 100% ████████████████████ 2000/2000',
-                '<span class="info">[CHAIN 3]</span> Sampling: 100% ████████████████████ 2000/2000',
-                '<span class="info">[CHAIN 4]</span> Sampling: 100% ████████████████████ 2000/2000',
-                '<span class="success">[OK]</span> Sampling complete in 47.2s',
-                '<span class="success">[OK]</span> Divergences: 0',
-                '<span class="success">[OK]</span> Max R-hat: 1.003',
-                '<span class="success">[OK]</span> Min ESS: 1842'
-            ];
-
-            const interval = setInterval(() => {
-                if (step < steps.length) {
-                    progress.innerHTML += steps[step] + '<br>';
-                    output.scrollTop = output.scrollHeight;
-                    step++;
-                } else {
-                    clearInterval(interval);
-                    btn.textContent = '✓ Complete';
-                    showMCMCResults();
-                    document.getElementById('fitNextBtn').disabled = false;
-                }
-            }, 200);
-        }
-
-        function showMCMCResults() {
-            document.getElementById('mcmcResults').style.display = 'block';
-            
-            // Posterior table
-            const posteriorData = [
-                { param: 'β_TV', mean: 0.12, sd: 0.04, hdi_low: 0.05, hdi_high: 0.19, rhat: 1.001, ess: 2341 },
-                { param: 'β_Paid_Search', mean: 0.28, sd: 0.03, hdi_low: 0.22, hdi_high: 0.34, rhat: 1.002, ess: 2156 },
-                { param: 'β_Paid_Social', mean: 0.18, sd: 0.04, hdi_low: 0.11, hdi_high: 0.25, rhat: 1.001, ess: 2089 },
-                { param: 'β_Display', mean: 0.08, sd: 0.03, hdi_low: 0.02, hdi_high: 0.14, rhat: 1.003, ess: 1956 },
-                { param: 'β_Radio', mean: 0.05, sd: 0.03, hdi_low: 0.00, hdi_high: 0.11, rhat: 1.002, ess: 2234 },
-                { param: 'β_Print', mean: 0.02, sd: 0.02, hdi_low: 0.00, hdi_high: 0.06, rhat: 1.001, ess: 2445 },
-                { param: 'σ', mean: 0.48, sd: 0.03, hdi_low: 0.43, hdi_high: 0.54, rhat: 1.001, ess: 3012 }
-            ];
-
-            const tbody = document.getElementById('posteriorTable');
-            tbody.innerHTML = posteriorData.map(row => `
-                <tr>
-                    <td>${row.param}</td>
-                    <td class="mono">${row.mean.toFixed(2)}</td>
-                    <td class="mono">${row.sd.toFixed(2)}</td>
-                    <td class="mono">${row.hdi_low.toFixed(2)}</td>
-                    <td class="mono">${row.hdi_high.toFixed(2)}</td>
-                    <td class="mono ${row.rhat < 1.01 ? 'positive' : 'negative'}">${row.rhat.toFixed(3)}</td>
-                    <td class="mono ${row.ess > 400 ? 'positive' : 'negative'}">${row.ess}</td>
-                </tr>
-            `).join('');
-
-            // Trace plot (simplified)
-            const traces = [];
-            for (let chain = 0; chain < 4; chain++) {
-                const y = Array.from({length: 500}, (_, i) => 0.12 + normalRandom(0, 0.02) + 0.001 * Math.sin(i / 50));
-                traces.push({
-                    y: y,
-                    mode: 'lines',
-                    name: `Chain ${chain + 1}`,
-                    line: { width: 1 },
-                    opacity: 0.7
-                });
-            }
-
-            const layout = {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                font: { family: 'Inter, sans-serif', color: colors.text },
-                margin: { t: 30, r: 30, b: 40, l: 60 },
-                xaxis: { title: 'Iteration', gridcolor: colors.grid },
-                yaxis: { title: 'β_TV', gridcolor: colors.grid },
-                legend: { orientation: 'h', y: 1.1 },
-                title: { text: 'Trace Plot: TV Effect', font: { size: 14 } }
-            };
-
-            Plotly.newPlot('traceChart', traces, layout, chartConfig);
-        }
-
-        // =====================================================================
-        // Step 6: Diagnostics
-        // =====================================================================
-        function initDiagnostics() {
-            // R-hat histogram
-            const rhats = Array.from({length: 20}, () => 1 + Math.abs(normalRandom(0, 0.002)));
-            Plotly.newPlot('rhatChart', [{
-                x: rhats,
-                type: 'histogram',
-                marker: { color: rhats.every(r => r < 1.01) ? colors.success : colors.danger },
-                nbinsx: 15
-            }], {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                margin: { t: 20, r: 20, b: 40, l: 50 },
-                xaxis: { title: 'R-hat', gridcolor: colors.grid },
-                yaxis: { title: 'Count', gridcolor: colors.grid },
-                shapes: [{ type: 'line', x0: 1.01, x1: 1.01, y0: 0, y1: 10, line: { color: colors.danger, dash: 'dash' } }]
-            }, chartConfig);
-
-            // ESS histogram
-            const ess = Array.from({length: 20}, () => 1500 + normalRandom(0, 500));
-            Plotly.newPlot('essChart', [{
-                x: ess,
-                type: 'histogram',
-                marker: { color: ess.every(e => e > 400) ? colors.success : colors.danger },
-                nbinsx: 15
-            }], {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                margin: { t: 20, r: 20, b: 40, l: 50 },
-                xaxis: { title: 'ESS', gridcolor: colors.grid },
-                yaxis: { title: 'Count', gridcolor: colors.grid },
-                shapes: [{ type: 'line', x0: 400, x1: 400, y0: 0, y1: 10, line: { color: colors.warning, dash: 'dash' } }]
-            }, chartConfig);
-
-            // Update checklist
-            ['diag-rhat', 'diag-ess', 'diag-div', 'diag-trace'].forEach(id => {
-                document.getElementById(id).classList.add('checked');
-            });
-
-            document.getElementById('diagAssessment').innerHTML = 
-                `<span style="color: ${colors.success};">✓ All diagnostics passed. Sampling was successful.</span>`;
-        }
-
-        // =====================================================================
-        // Step 7: PPC
-        // =====================================================================
-        function initPPC() {
-            const n = 156;
-            const weeks = Array.from({length: n}, (_, i) => {
-                const d = new Date(2023, 0, 1);
-                d.setDate(d.getDate() + i * 7);
-                return d.toISOString().split('T')[0];
-            });
-
-            // Observed data
-            const observed = weeks.map((_, i) => 
-                16 + 0.02 * i + 2 * Math.sin(2 * Math.PI * i / 52) + normalRandom(0, 1)
-            );
-
-            // Posterior predictive (multiple draws)
-            const ppDraws = [];
-            for (let d = 0; d < 100; d++) {
-                ppDraws.push(weeks.map((_, i) => 
-                    16 + 0.02 * i + 2 * Math.sin(2 * Math.PI * i / 52) + normalRandom(0, 0.8)
-                ));
-            }
-
-            // Compute percentiles
-            const lower = weeks.map((_, i) => {
-                const vals = ppDraws.map(d => d[i]).sort((a, b) => a - b);
-                return vals[Math.floor(vals.length * 0.1)];
-            });
-            const upper = weeks.map((_, i) => {
-                const vals = ppDraws.map(d => d[i]).sort((a, b) => a - b);
-                return vals[Math.floor(vals.length * 0.9)];
-            });
-            const median = weeks.map((_, i) => {
-                const vals = ppDraws.map(d => d[i]).sort((a, b) => a - b);
-                return vals[Math.floor(vals.length * 0.5)];
-            });
-
-            const traces = [
-                { x: weeks, y: upper, mode: 'lines', line: { width: 0 }, showlegend: false },
-                { x: weeks, y: lower, mode: 'lines', fill: 'tonexty', fillcolor: 'rgba(143, 168, 106, 0.3)', line: { width: 0 }, name: '80% Interval' },
-                { x: weeks, y: median, mode: 'lines', line: { color: colors.primary, width: 2 }, name: 'Predicted (Median)' },
-                { x: weeks, y: observed, mode: 'markers', marker: { color: colors.accent, size: 4 }, name: 'Observed' }
-            ];
-
-            Plotly.newPlot('ppcChart', traces, {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                font: { family: 'Inter, sans-serif', color: colors.text },
-                margin: { t: 30, r: 30, b: 50, l: 60 },
-                xaxis: { title: '', gridcolor: colors.grid, tickformat: '%b %Y' },
-                yaxis: { title: 'Weekly Revenue ($M)', gridcolor: colors.grid },
-                legend: { orientation: 'h', y: 1.1 },
-                title: { text: 'Posterior Predictive Check', font: { size: 14 } }
-            }, chartConfig);
-        }
-
-        // =====================================================================
-        // Step 8: Sensitivity
-        // =====================================================================
-        function initSensitivity() {
-            const specs = ['Base', 'Short Adstock', 'Long Adstock', 'Tight Prior', 'Wide Prior', 'Drop Q4'];
-            const channels = ['TV', 'Paid Search', 'Print'];
-            
-            const data = {
-                'TV': [1.24, 1.45, 0.92, 1.31, 1.18, 1.28],
-                'Paid Search': [2.41, 2.35, 2.52, 2.48, 2.28, 2.44],
-                'Print': [0.54, 0.61, 0.48, 0.52, 0.58, 0.51]
-            };
-
-            const traces = channels.map(ch => ({
-                x: specs,
-                y: data[ch],
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: ch,
-                marker: { size: 10 }
-            }));
-
-            traces.push({
-                x: specs,
-                y: Array(specs.length).fill(1),
-                mode: 'lines',
-                name: 'Break-even',
-                line: { color: colors.text, width: 2, dash: 'dash' }
-            });
-
-            Plotly.newPlot('sensitivityChart', traces, {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                font: { family: 'Inter, sans-serif', color: colors.text },
-                margin: { t: 30, r: 30, b: 80, l: 60 },
-                xaxis: { title: '', gridcolor: colors.grid, tickangle: -30 },
-                yaxis: { title: 'ROI Estimate', gridcolor: colors.grid },
-                legend: { orientation: 'h', y: 1.15 },
-                shapes: [{
-                    type: 'rect',
-                    x0: -0.5, x1: specs.length - 0.5,
-                    y0: 0, y1: 1,
-                    fillcolor: 'rgba(201, 112, 103, 0.1)',
-                    line: { width: 0 }
-                }]
-            }, chartConfig);
-        }
-
-        // =====================================================================
-        // Initialize
-        // =====================================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            updateProgress();
-        });
-    </script>
+// Init
+document.addEventListener('DOMContentLoaded', ()=>updateProgress());
+</script>
 </body>
 </html>
