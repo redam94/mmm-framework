@@ -1157,7 +1157,8 @@ class BayesianMMM:
             sigma = pm.HalfNormal("sigma", sigma=0.5)
 
             # Likelihood
-            pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+            y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+            pm.Deterministic("y_obs_scaled", y_obs*self.y_std + self.y_mean, dims="obs")
 
         return model
 

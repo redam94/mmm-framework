@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 import numpy as np
 import pandas as pd
-
+from loguru import logger
 try:
     import arviz as az
 except ImportError:
@@ -188,7 +188,8 @@ class BayesianMMMExtractor(DataExtractor):
         panel: Any | None = None,
         results: Any | None = None,
         ci_prob: float = 0.8,
-    ):
+    ):  
+        logger.debug("Initializing BayesianMMMExtractor")
         self.mmm = mmm
         self.panel = panel or getattr(mmm, "panel", None)
         self.results = results or getattr(mmm, "_results", None)
@@ -197,7 +198,7 @@ class BayesianMMMExtractor(DataExtractor):
     def extract(self) -> MMMDataBundle:
         """Extract all available data from BayesianMMM."""
         bundle = MMMDataBundle()
-        
+        logger.debug("Extracting data from BayesianMMM model")
         # Extract basic info
         bundle.channel_names = self._get_channel_names()
         bundle.dates = self._get_dates()
@@ -207,6 +208,7 @@ class BayesianMMMExtractor(DataExtractor):
         
         # Extract predictions if model is fitted
         if self.results is not None or getattr(self.mmm, "_trace", None) is not None:
+            logger.debug("Model appears to be fitted, extracting predictions and diagnostics")
             bundle.predicted = self._get_predictions()
             bundle.fit_statistics = self._compute_fit_statistics(bundle.actual, bundle.predicted)
             bundle.diagnostics = self._extract_diagnostics(getattr(self.mmm, "_trace", None))
@@ -241,54 +243,69 @@ class BayesianMMMExtractor(DataExtractor):
     def _get_channel_names(self) -> list[str]:
         """Get channel names from model or panel."""
         if hasattr(self.mmm, "channel_names"):
+            logger.debug("Retrieving channel names from model")
             return list(self.mmm.channel_names)
         if self.panel is not None and hasattr(self.panel, "channel_names"):
+            logger.debug("Retrieving channel names from panel data")
             return list(self.panel.channel_names)
+        logger.debug("Channel names not found")
         return []
     
     def _get_dates(self) -> np.ndarray | None:
         """Get date index."""
         if self.panel is not None:
+            logger.debug("Retrieving dates from panel data")
             if hasattr(self.panel, "dates"):
+                logger.debug("Using 'dates' attribute from panel")
                 return np.array(self.panel.dates)
             if hasattr(self.panel, "index"):
+                logger.debug("Using 'index' attribute from panel")
                 return np.array(self.panel.index)
+        logger.debug("Dates not found")
         return None
     
     def _get_actual(self) -> np.ndarray | None:
         """Get actual KPI values."""
         if hasattr(self.mmm, "y"):
+            logger.debug("Retrieving actual values from model")
             y = self.mmm.y
             # Unstandardize if needed
             if hasattr(self.mmm, "y_mean") and hasattr(self.mmm, "y_std"):
+                logger.debug("Unstandardizing actual values")
                 return y * self.mmm.y_std + self.mmm.y_mean
             return np.array(y)
         if self.panel is not None and hasattr(self.panel, "y"):
+            logger.debug("Retrieving actual values from panel data")
             return np.array(self.panel.y)
+        logger.debug("Actual values not found")
         return None
     
     def _get_predictions(self) -> dict[str, np.ndarray] | None:
         """Get posterior predictive mean and CI."""
         try:
             if hasattr(self.mmm, "predict"):
+                logger.debug("Generating predictions using model's predict method")
                 pred = self.mmm.predict()
                 return {
                     "mean": np.array(pred.y_pred_mean),
-                    "lower": np.array(pred.y_pred_lower),
-                    "upper": np.array(pred.y_pred_upper),
+                    "lower": np.array(pred.y_pred_hdi_low),
+                    "upper": np.array(pred.y_pred_hdi_high),
                 }
             
             # Try to get from trace
             trace = getattr(self.mmm, "_trace", None)
             if trace is not None and hasattr(trace, "posterior_predictive"):
+                logger.debug("Extracting predictions from model trace")
                 pp = trace.posterior_predictive
-                if "y_pred" in pp:
-                    samples = pp["y_pred"].values.reshape(-1, pp["y_pred"].shape[-1])
+                if "y_obs" in pp:
+                    samples = pp["y_obs"].values.reshape(-1, pp["y_obs"].shape[-1])
                     mean = samples.mean(axis=0)
                     lower, upper = np.percentile(samples, [10, 90], axis=0)
                     return {"mean": mean, "lower": lower, "upper": upper}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error extracting predictions: {e}")
             pass
+        logger.debug("Predictions not found")
         return None
     
     def _compute_fit_statistics(
@@ -297,6 +314,7 @@ class BayesianMMMExtractor(DataExtractor):
         predicted: dict[str, np.ndarray] | None,
     ) -> dict[str, float] | None:
         """Compute R², RMSE, MAE, MAPE."""
+        logger.debug("Computing fit statistics")
         if actual is None or predicted is None:
             return None
         
@@ -323,13 +341,16 @@ class BayesianMMMExtractor(DataExtractor):
     def _compute_channel_roi(self) -> dict[str, dict[str, float]] | None:
         """Compute ROI with uncertainty for each channel."""
         try:
+            logger.debug("Computing channel ROI")
             if hasattr(self.mmm, "compute_roi"):
+                logger.debug("Using model's compute_roi method")
                 roi_results = self.mmm.compute_roi()
                 return roi_results
-            
+            logger.debug("Computing channel ROI manually from trace")
             # Manual computation from trace
             trace = getattr(self.mmm, "_trace", None)
             if trace is None:
+                logger.debug("Model trace not found for ROI computation")
                 return None
             
             channels = self._get_channel_names()
@@ -346,36 +367,47 @@ class BayesianMMMExtractor(DataExtractor):
                     channel_roi[ch] = {"mean": mean, "lower": lower, "upper": upper}
             
             return channel_roi if channel_roi else None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error computing channel ROI: {e}")
             return None
     
     def _get_component_totals(self) -> dict[str, float] | None:
         """Get total contribution by component."""
         try:
+            logger.debug("Retrieving component totals for decomposition")
             if hasattr(self.mmm, "compute_contributions"):
+                logger.debug("Using model's compute_contributions method")
                 contrib = self.mmm.compute_contributions()
                 if hasattr(contrib, "component_totals"):
+                    logger.debug("Component totals found")
                     return dict(contrib.component_totals)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error retrieving component totals: {e}")
             pass
         return None
     
     def _get_component_time_series(self) -> dict[str, np.ndarray] | None:
         """Get component time series for decomposition chart."""
         try:
+            logger.debug("Retrieving component time series for decomposition")
             if hasattr(self.mmm, "compute_contributions"):
+                logger.debug("Using model's compute_contributions method")
                 contrib = self.mmm.compute_contributions()
                 if hasattr(contrib, "component_time_series"):
                     return {k: np.array(v) for k, v in contrib.component_time_series.items()}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error retrieving component time series: {e}")
             pass
         return None
     
     def _compute_marketing_attribution(self) -> dict[str, float] | None:
         """Compute total marketing-attributed revenue with uncertainty."""
         try:
+            logger.debug("Computing total marketing-attributed revenue")
             trace = getattr(self.mmm, "_trace", None)
+            logger.debug("Accessing model trace for attribution computation")
             if trace is None:
+                logger.debug("Model trace not found for attribution computation")
                 return None
             
             channels = self._get_channel_names()
@@ -385,18 +417,24 @@ class BayesianMMMExtractor(DataExtractor):
             for ch in channels:
                 contrib_name = f"contribution_{ch}"
                 if hasattr(trace, "posterior") and contrib_name in trace.posterior:
+                    logger.debug(f"Adding contribution samples for channel: {ch}")
                     ch_samples = trace.posterior[contrib_name].values.sum(axis=-1).flatten()
                     if total_samples is None:
+                        logger.debug("Initializing total samples for attribution")
                         total_samples = ch_samples
                     else:
+                        logger.debug("Accumulating total samples for attribution")
                         total_samples = total_samples + ch_samples
             
             if total_samples is not None:
+                logger.debug("Computing mean and HDI for total marketing attribution")
                 mean = float(total_samples.mean())
                 lower, upper = self._compute_hdi(total_samples, self.ci_prob)
                 return {"mean": mean, "lower": lower, "upper": upper}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error computing marketing attribution: {e}")
             pass
+        
         return None
     
     def _compute_blended_roi(self) -> dict[str, float] | None:
