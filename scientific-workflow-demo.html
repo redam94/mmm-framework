@@ -191,6 +191,157 @@
         .finding h5 { margin: 0 0 0.25rem 0; font-size: 1rem; }
         .finding p { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
 
+        /* Scenario Grid */
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .scenario-card {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .scenario-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .scenario-card.selected {
+            border-color: var(--color-primary);
+            background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, rgba(90,124,101,0.03) 100%);
+        }
+
+        .scenario-card .scenario-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .scenario-card h5 {
+            font-size: 1rem;
+            margin: 0 0 0.5rem 0;
+            color: var(--color-text);
+        }
+
+        .scenario-card p {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin: 0 0 0.75rem 0;
+            line-height: 1.5;
+        }
+
+        .scenario-implication {
+            font-size: 0.8rem;
+            padding: 0.5rem;
+            background: var(--color-bg-alt);
+            border-radius: 6px;
+            color: var(--color-primary-dark);
+        }
+
+        /* Options Table */
+        .options-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .options-table th {
+            background: var(--color-bg-alt);
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .options-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+
+        .options-table .option-row {
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .options-table .option-row:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .options-table .option-row.selected {
+            background: linear-gradient(135deg, rgba(90,124,101,0.1) 0%, rgba(90,124,101,0.05) 100%);
+        }
+
+        .options-table .option-row.selected td:first-child {
+            border-left: 3px solid var(--color-primary);
+        }
+
+        .options-table .pro {
+            color: var(--color-success);
+            font-size: 0.8rem;
+        }
+
+        .options-table .con {
+            color: var(--color-danger);
+            font-size: 0.8rem;
+        }
+
+        /* Trend/Seasonality Controls */
+        .trend-controls, .seasonality-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+        }
+
+        .trend-controls label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            padding: 0.5rem 0.75rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .trend-controls label:hover {
+            border-color: var(--color-primary);
+        }
+
+        .trend-controls input[type="radio"]:checked + label,
+        .trend-controls label:has(input:checked) {
+            border-color: var(--color-primary);
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .seasonality-controls input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+        }
+
+        #fourierOrderVal {
+            font-weight: 600;
+            background: var(--color-surface);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+        }
+
         @media (max-width: 900px) {
             .progress-steps { min-width: 700px; }
             .step-label { font-size: 0.6rem; max-width: 60px; }
@@ -310,11 +461,11 @@
 </div>
 
 <!-- ================================================================== -->
-<!-- STEP 2: STORY -->
+<!-- STEP 2: STORY - Enhanced with Trend/Seasonality Narratives -->
 <!-- ================================================================== -->
 <div class="workflow-step" id="step2">
     <h2><span class="step-num">2</span> Tell the Story</h2>
-    <p class="step-subtitle">How do we think marketing actually drives sales?</p>
+    <p class="step-subtitle">How do we think sales are actually generated?</p>
 
     <p>
         Before any math, we need a <strong>story</strong> about how things work. This isn't 
@@ -324,7 +475,7 @@
     </p>
 
     <div class="analogy-box">
-        <h4>Like writing a recipe</h4>
+        <h4>🍳 Like writing a recipe</h4>
         <p>
             A recipe explains how ingredients combine to make a dish: "Take 2 cups flour, 
             add 1 cup sugar, mix well, bake at 350°." Our statistical story does the same 
@@ -354,12 +505,169 @@
         </div>
     </div>
 
-    <!-- CHAPTER 2: MARKETING -->
+    <!-- CHAPTER 2: TREND - NEW -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">📈</div>
+            <div>
+                <h4>Chapter 2: The Underlying Trajectory</h4>
+                <p style="margin: 0; margin-bottom: 1rem;">
+                    Is the business growing, stable, or declining? This <strong>trend</strong> captures 
+                    the long-term trajectory independent of marketing. Without modeling trend correctly, 
+                    we might credit marketing for growth that was happening anyway—or miss that marketing 
+                    is working in a declining market.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Trend Scenario Cards -->
+        <div class="scenario-grid">
+            <div class="scenario-card" data-trend="steady">
+                <div class="scenario-icon">➡️</div>
+                <h5>Steady Eddie</h5>
+                <p>
+                    <em>"Acme's core business is mature and stable."</em><br>
+                    Sales have been flat for years. No major market shifts, no dramatic growth. 
+                    The baseline holds steady—marketing is the main lever for change.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>No trend</strong> or <strong>linear (flat)</strong>
+                </div>
+            </div>
+            
+            <div class="scenario-card selected" data-trend="linear">
+                <div class="scenario-icon">📈</div>
+                <h5>Steady Growth</h5>
+                <p>
+                    <em>"Acme's been growing 3% year-over-year like clockwork."</em><br>
+                    Distribution expanding, category growing, brand equity building. 
+                    This consistent upward trajectory needs to be separated from marketing effects.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>Linear trend</strong>
+                </div>
+            </div>
+            
+            <div class="scenario-card" data-trend="piecewise">
+                <div class="scenario-icon">📉📈</div>
+                <h5>The Inflection</h5>
+                <p>
+                    <em>"Everything changed when we launched the new product line."</em><br>
+                    Growth was flat, then the new SKUs hit shelves and trajectory shifted. 
+                    Or: COVID hit and shopping patterns fundamentally changed.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>Piecewise trend</strong> with changepoints
+                </div>
+            </div>
+            
+            <div class="scenario-card" data-trend="gp">
+                <div class="scenario-icon">🌊</div>
+                <h5>The Rollercoaster</h5>
+                <p>
+                    <em>"Our market's been through a lot—I can't point to one big change."</em><br>
+                    Multiple small shifts, gradual evolution, no clean breakpoints. 
+                    The trajectory wanders but we can't identify specific causes.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>Gaussian Process</strong> (flexible)
+                </div>
+            </div>
+        </div>
+        
+        <div class="why-box" style="margin-top: 1.5rem;">
+            <h4>⚠️ Why trend choice matters</h4>
+            <p style="margin-bottom: 0;">
+                If Acme is growing 3% annually and we don't model this, the model will attribute 
+                that growth to <em>something</em>—probably whichever media channel happened to 
+                increase over time. This inflates media ROI and leads to bad budget decisions.
+            </p>
+        </div>
+    </div>
+
+    <!-- CHAPTER 3: SEASONALITY - ENHANCED -->
+    <div class="story-chapter">
+        <div class="visual-row">
+            <div class="icon">🎄</div>
+            <div>
+                <h4>Chapter 3: The Rhythm of the Year</h4>
+                <p style="margin: 0; margin-bottom: 1rem;">
+                    Sales rise and fall with the calendar—holidays, back-to-school, summer slowdowns. 
+                    This <strong>seasonality</strong> happens regardless of marketing. If we don't 
+                    account for it, we'll credit Q4 TV spend for sales that were coming anyway 
+                    from holiday shopping.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Seasonality Scenario Cards -->
+        <div class="scenario-grid">
+            <div class="scenario-card" data-season="none">
+                <div class="scenario-icon">📊</div>
+                <h5>B2B Steady</h5>
+                <p>
+                    <em>"Our business clients buy consistently year-round."</em><br>
+                    Enterprise software, industrial supplies, professional services. 
+                    Business doesn't stop for holidays.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>No seasonality</strong>
+                </div>
+            </div>
+            
+            <div class="scenario-card selected" data-season="simple">
+                <div class="scenario-icon">📅</div>
+                <h5>Holiday Bumps</h5>
+                <p>
+                    <em>"Q4 is big, summer is slow, pretty predictable."</em><br>
+                    Classic retail pattern: Christmas/Black Friday spike, 
+                    January hangover, summer lull. One clear cycle.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>Fourier (order 1-2)</strong>
+                </div>
+            </div>
+            
+            <div class="scenario-card" data-season="complex">
+                <div class="scenario-icon">🗓️</div>
+                <h5>Multiple Peaks</h5>
+                <p>
+                    <em>"We spike at Valentine's, Easter, Halloween, AND Christmas."</em><br>
+                    Confectionery, flowers, greeting cards. Multiple distinct peaks 
+                    throughout the year, not just one smooth wave.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>Fourier (order 3-5)</strong>
+                </div>
+            </div>
+            
+            <div class="scenario-card" data-season="weekly">
+                <div class="scenario-icon">📆</div>
+                <h5>Weekly Patterns</h5>
+                <p>
+                    <em>"Weekends are 2x weekdays, plus we have the annual cycle."</em><br>
+                    Restaurants, entertainment, retail with daily data. 
+                    Need to capture both weekly and yearly rhythms.
+                </p>
+                <div class="scenario-implication">
+                    → <strong>Multiple Fourier periods</strong>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container" id="seasonalityStoryChart" style="height: 280px;"></div>
+        <div class="chart-explanation">
+            <strong>Reading this chart:</strong> The blue line shows how sales naturally rise and fall 
+            through the year—this is what we need to separate from marketing effects.
+        </div>
+    </div>
+
+    <!-- CHAPTER 4: MARKETING -->
     <div class="story-chapter">
         <div class="visual-row">
             <div class="icon">📺</div>
             <div>
-                <h4>Chapter 2: Marketing Lifts Sales</h4>
+                <h4>Chapter 4: Marketing Lifts Sales</h4>
                 <p style="margin: 0;">
                     Each channel (TV, digital, etc.) adds sales above baseline. But here's 
                     the catch: the first million dollars of TV spend helps more than the tenth million. 
@@ -370,12 +678,12 @@
         </div>
     </div>
 
-    <!-- CHAPTER 3: CARRYOVER -->
+    <!-- CHAPTER 5: CARRYOVER -->
     <div class="story-chapter">
         <div class="visual-row">
             <div class="icon">⏰</div>
             <div>
-                <h4>Chapter 3: Ads Have Lasting Effects</h4>
+                <h4>Chapter 5: Ads Have Lasting Effects</h4>
                 <p style="margin: 0;">
                     When you see a TV ad, you don't always buy immediately. You might wait until 
                     next week or next month. This "carryover" effect means today's advertising 
@@ -385,27 +693,12 @@
         </div>
     </div>
 
-    <!-- CHAPTER 4: SEASONALITY -->
-    <div class="story-chapter">
-        <div class="visual-row">
-            <div class="icon">🎄</div>
-            <div>
-                <h4>Chapter 4: Seasonality Matters</h4>
-                <p style="margin: 0;">
-                    Sales go up around holidays and down in slow periods. This happens regardless 
-                    of marketing—it's just how consumer behavior works. We need to account for 
-                    this so we don't accidentally credit marketing for holiday bumps.
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- CHAPTER 5: NOISE -->
+    <!-- CHAPTER 6: NOISE -->
     <div class="story-chapter">
         <div class="visual-row">
             <div class="icon">🎲</div>
             <div>
-                <h4>Chapter 5: Random Variation</h4>
+                <h4>Chapter 6: Random Variation</h4>
                 <p style="margin: 0;">
                     Even after accounting for everything, there's always some unexplained variation. 
                     A celebrity mentions your product, a competitor has a recall, weather affects 
@@ -418,10 +711,11 @@
     <div class="why-box">
         <h4>Putting the story together</h4>
         <p style="margin-bottom: 0;">
-            <em>"Sales start from a baseline of existing demand. Marketing channels add to this, 
-            but with diminishing returns as spend increases. The effects carry over for several weeks 
-            as people remember and act on ads. Underlying all of this, sales rise and fall with 
-            natural seasonal patterns. And there's always some random variation we can't explain."</em>
+            <em>"Sales start from a baseline of existing demand, following an underlying trend 
+            (growth or decline). This foundation rises and falls with seasonal patterns. 
+            Marketing channels add to this, but with diminishing returns as spend increases, 
+            and effects carry over for several weeks. And there's always some random variation 
+            we can't explain."</em>
         </p>
     </div>
 
@@ -437,7 +731,7 @@
     </div>
 </div>
 <!-- ================================================================== -->
-<!-- STEP 3: BUILD -->
+<!-- STEP 3: BUILD - Enhanced with Trend/Seasonality Options -->
 <!-- ================================================================== -->
 <div class="workflow-step" id="step3">
     <h2><span class="step-num">3</span> Build the Model</h2>
@@ -445,9 +739,231 @@
 
     <p>
         Now we translate each part of our story into a specific mathematical component. 
-        Different business situations call for different choices here. Click each section 
-        to explore the options.
+        The choices here should flow directly from the business context we just described—
+        not from "what makes the results look good."
     </p>
+
+    <div class="why-box">
+        <h4>🔒 Pre-specification principle</h4>
+        <p style="margin-bottom: 0;">
+            We make these choices <em>before</em> seeing results. If we adjusted them afterward 
+            to improve fit or achieve desired coefficients, we'd be doing specification shopping—
+            and our uncertainty estimates would be meaningless.
+        </p>
+    </div>
+
+    <!-- TREND SECTION - NEW -->
+    <div class="collapsible open" id="trendSection">
+        <div class="collapsible-header" onclick="toggleCollapsible('trendSection')">
+            <h4><span class="icon">📈</span> Trend Component</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Based on our story, we need to capture the underlying trajectory. 
+                    Here are the options and when each makes sense:
+                </p>
+                
+                <!-- Trend Options Table -->
+                <table class="options-table">
+                    <thead>
+                        <tr>
+                            <th>Option</th>
+                            <th>The Business Story</th>
+                            <th>Math</th>
+                            <th>Pros/Cons</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>None</strong></td>
+                            <td>
+                                <em>"Business is stable—no real growth or decline pattern."</em>
+                                <br>Mature category, flat market, steady demand.
+                            </td>
+                            <td><code>τ(t) = 0</code></td>
+                            <td>
+                                <span class="pro">✓ Simplest</span><br>
+                                <span class="con">✗ Misses real trends</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row selected" data-selected="true">
+                            <td><strong>Linear</strong></td>
+                            <td>
+                                <em>"We've been growing 3% year-over-year consistently."</em>
+                                <br>Organic growth, category expansion, steady trajectory.
+                            </td>
+                            <td><code>τ(t) = δ · t</code></td>
+                            <td>
+                                <span class="pro">✓ Interpretable slope</span><br>
+                                <span class="pro">✓ Well-identified</span><br>
+                                <span class="con">✗ Assumes constant rate</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>Piecewise</strong></td>
+                            <td>
+                                <em>"COVID hit in March 2020 and everything changed."</em>
+                                <br>Product launches, market disruptions, known structural breaks.
+                            </td>
+                            <td>Linear segments<br>joined at changepoints</td>
+                            <td>
+                                <span class="pro">✓ Captures known breaks</span><br>
+                                <span class="pro">✓ Interpretable changes</span><br>
+                                <span class="con">✗ Need to specify when</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>B-Spline</strong></td>
+                            <td>
+                                <em>"Things have been shifting gradually—can't point to one moment."</em>
+                                <br>Gradual evolution, multiple small changes, smooth trajectory.
+                            </td>
+                            <td>Smooth spline basis<br>functions</td>
+                            <td>
+                                <span class="pro">✓ Flexible shape</span><br>
+                                <span class="pro">✓ Smoother than piecewise</span><br>
+                                <span class="con">✗ Less interpretable</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>Gaussian Process</strong></td>
+                            <td>
+                                <em>"I genuinely don't know what's driving the underlying pattern."</em>
+                                <br>Uncertain trajectory, want uncertainty in trend itself.
+                            </td>
+                            <td><code>τ(t) ~ GP(0, k)</code></td>
+                            <td>
+                                <span class="pro">✓ Maximum flexibility</span><br>
+                                <span class="pro">✓ Uncertainty quantified</span><br>
+                                <span class="con">✗ Computationally expensive</span><br>
+                                <span class="con">✗ Can absorb real signal</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- Interactive Trend Visualization -->
+                <h5 style="margin-top: 1.5rem;">Compare Trend Shapes</h5>
+                <div class="trend-controls">
+                    <label>
+                        <input type="radio" name="trendType" value="none"> None
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="linear" checked> Linear
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="piecewise"> Piecewise
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="spline"> B-Spline
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="gp"> GP
+                    </label>
+                </div>
+                
+                <div class="chart-container" id="trendCompareChart" style="height: 250px;"></div>
+                
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 Acme's Story</h5>
+                        <p id="trendStoryText">"We've been growing steadily—about 3% year-over-year."</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 Our Choice</h5>
+                        <p id="trendMathText">Linear trend</p>
+                        <div class="formula" id="trendFormula">τ(t) = δ · t</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEASONALITY SECTION - NEW -->
+    <div class="collapsible" id="seasonalitySection">
+        <div class="collapsible-header" onclick="toggleCollapsible('seasonalitySection')">
+            <h4><span class="icon">🌊</span> Seasonality Component</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Seasonality captures predictable calendar patterns. The key choice is 
+                    <strong>how complex</strong> the pattern is—more Fourier terms capture 
+                    finer patterns but risk overfitting.
+                </p>
+                
+                <!-- Seasonality Options -->
+                <table class="options-table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>The Business Story</th>
+                            <th>What It Captures</th>
+                            <th>When to Use</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>0 (None)</strong></td>
+                            <td><em>"Our B2B clients buy consistently year-round."</em></td>
+                            <td>No seasonal pattern</td>
+                            <td>B2B, subscription, industrial</td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>1</strong></td>
+                            <td><em>"Q4 is big, summer is slow—one smooth wave."</em></td>
+                            <td>Simple sine wave</td>
+                            <td>Basic retail pattern</td>
+                        </tr>
+                        <tr class="option-row selected" data-selected="true">
+                            <td><strong>2</strong></td>
+                            <td><em>"Holiday spike is sharp—rises fast, falls fast."</em></td>
+                            <td>Peaked pattern</td>
+                            <td>Typical CPG, retail</td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>3-5</strong></td>
+                            <td><em>"We have distinct peaks at Valentine's, Easter, Halloween, Christmas."</em></td>
+                            <td>Multiple peaks</td>
+                            <td>Confectionery, flowers, gifts</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h5 style="margin-top: 1.5rem;">Compare Fourier Orders</h5>
+                <div class="seasonality-controls">
+                    <label>Fourier Order:</label>
+                    <input type="range" id="fourierOrder" min="0" max="5" value="2" step="1">
+                    <span id="fourierOrderVal">2</span>
+                </div>
+                
+                <div class="chart-container" id="seasonalityCompareChart" style="height: 250px;"></div>
+                
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> Higher orders capture more complex patterns. 
+                    Order 1 = simple wave; Order 2+ = can capture sharper peaks; Order 5 = very detailed 
+                    (risk of overfitting with limited data).
+                </div>
+                
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 Acme's Story</h5>
+                        <p>"Big Q4 spike, sharp drop in January, summer lull."</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 Our Choice</h5>
+                        <p>Fourier seasonality, order 2</p>
+                        <div class="formula">s(t) = Σ [aₙsin(2πnt/P) + bₙcos(2πnt/P)]</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- SATURATION -->
     <div class="collapsible open" id="saturationSection">
@@ -728,10 +1244,14 @@
         </div>
     </div>
 
-    <div class="why-box">
+    <!-- Complete Model Specification -->
+    <div class="why-box" style="margin-top: 2rem;">
         <h4>The complete model specification</h4>
-        <p style="margin-bottom: 0; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">
-            sales[t] = α + Σ β[c] × saturation(adstock(spend[c,t])) + seasonality[t] + ε[t]
+        <p style="margin-bottom: 0.5rem;">Putting all the pieces together:</p>
+        <p style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; margin-bottom: 0; background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+            sales[t] = α + <span style="color: var(--color-primary);">τ(t)</span> + <span style="color: var(--color-accent);">s(t)</span> + Σ β[c] × saturation(adstock(spend[c,t])) + ε[t]
+            <br><br>
+            where: <span style="color: var(--color-primary);">τ(t) = linear trend</span>, <span style="color: var(--color-accent);">s(t) = Fourier(order=2)</span>
         </p>
     </div>
 
@@ -1419,6 +1939,228 @@ function initBudgetChart() {
 
 // Init
 document.addEventListener('DOMContentLoaded', ()=>updateProgress());
+</script>
+<script>
+    // Trend stories mapping
+    const trendStories = {
+        none: {
+            story: '"Business is stable—no real growth or decline pattern."',
+            math: 'No trend component',
+            formula: 'τ(t) = 0'
+        },
+        linear: {
+            story: '"We\'ve been growing steadily—about 3% year-over-year."',
+            math: 'Linear trend',
+            formula: 'τ(t) = δ · t'
+        },
+        piecewise: {
+            story: '"Everything changed when COVID hit—before and after are different worlds."',
+            math: 'Piecewise linear',
+            formula: 'τ(t) = k·t + Σδⱼ·(t-sⱼ)₊'
+        },
+        spline: {
+            story: '"Things have been shifting gradually—can\'t point to one moment."',
+            math: 'B-spline trend',
+            formula: 'τ(t) = Σwᵢ·Bᵢ(t)'
+        },
+        gp: {
+            story: '"I genuinely don\'t know the pattern—let the data tell us."',
+            math: 'Gaussian Process',
+            formula: 'τ(t) ~ GP(0, k(t,t\'))'
+        }
+    };
+
+    // Initialize charts and interactivity
+    function initTrendSeasonalityCharts() {
+        const colors = {
+            primary: '#5a7c65',
+            accent: '#6a8fa8',
+            warning: '#c9a067',
+            text: '#2d3a2d',
+            grid: 'rgba(45, 58, 45, 0.1)',
+            bg: 'transparent'
+        };
+        
+        const cfg = { responsive: true, displayModeBar: false };
+        const layout_base = {
+            paper_bgcolor: colors.bg,
+            plot_bgcolor: colors.bg,
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 30, r: 30, b: 50, l: 60 }
+        };
+        
+        // Seasonality story chart
+        const weeks = Array.from({length: 52}, (_, i) => i + 1);
+        const seasonality = weeks.map(w => {
+            const t = w / 52;
+            return 0.15 * Math.sin(2 * Math.PI * t - Math.PI/2) + 
+                0.08 * Math.sin(4 * Math.PI * t);
+        });
+        
+        Plotly.newPlot('seasonalityStoryChart', [{
+            x: weeks,
+            y: seasonality,
+            type: 'scatter',
+            mode: 'lines',
+            fill: 'tozeroy',
+            line: { color: colors.accent, width: 2.5 },
+            fillcolor: 'rgba(106, 143, 168, 0.2)'
+        }], {
+            ...layout_base,
+            xaxis: { title: 'Week of Year', gridcolor: colors.grid, range: [1, 52] },
+            yaxis: { title: 'Seasonal Effect', gridcolor: colors.grid, zeroline: true, zerolinecolor: colors.grid }
+        }, cfg);
+        
+        // Trend comparison chart
+        updateTrendChart('linear');
+        
+        // Seasonality comparison chart  
+        updateSeasonalityChart(2);
+        
+        // Setup event listeners
+        document.querySelectorAll('input[name="trendType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                updateTrendChart(e.target.value);
+                updateTrendStory(e.target.value);
+            });
+        });
+        
+        document.getElementById('fourierOrder').addEventListener('input', (e) => {
+            const order = parseInt(e.target.value);
+            document.getElementById('fourierOrderVal').textContent = order;
+            updateSeasonalityChart(order);
+        });
+    }
+
+    function updateTrendChart(type) {
+        const colors = {
+            primary: '#5a7c65',
+            accent: '#6a8fa8', 
+            warning: '#c9a067',
+            text: '#2d3a2d',
+            grid: 'rgba(45, 58, 45, 0.1)'
+        };
+        
+        const t = Array.from({length: 104}, (_, i) => i);
+        let y;
+        
+        switch(type) {
+            case 'none':
+                y = t.map(() => 0);
+                break;
+            case 'linear':
+                y = t.map(x => x * 0.02);
+                break;
+            case 'piecewise':
+                y = t.map(x => x < 52 ? x * 0.01 : 52 * 0.01 + (x - 52) * 0.04);
+                break;
+            case 'spline':
+                y = t.map(x => 0.02 * x + 0.3 * Math.sin(x / 30) * Math.exp(-x / 150));
+                break;
+            case 'gp':
+                // Simulate GP-like smooth wiggle
+                y = t.map(x => 0.015 * x + 0.4 * Math.sin(x / 20) * 0.5 + 0.3 * Math.cos(x / 35));
+                break;
+        }
+        
+        Plotly.react('trendCompareChart', [{
+            x: t,
+            y: y,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: colors.primary, width: 3 }
+        }], {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 20, r: 30, b: 40, l: 60 },
+            xaxis: { title: 'Week', gridcolor: colors.grid },
+            yaxis: { title: 'Trend Effect', gridcolor: colors.grid }
+        }, { responsive: true, displayModeBar: false });
+    }
+
+    function updateTrendStory(type) {
+        const info = trendStories[type];
+        document.getElementById('trendStoryText').textContent = info.story;
+        document.getElementById('trendMathText').textContent = info.math;
+        document.getElementById('trendFormula').textContent = info.formula;
+    }
+
+    function updateSeasonalityChart(order) {
+        const colors = {
+            primary: '#5a7c65',
+            accent: '#6a8fa8',
+            warning: '#c9a067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            grid: 'rgba(45, 58, 45, 0.1)'
+        };
+        
+        const weeks = Array.from({length: 52}, (_, i) => i + 1);
+        const traces = [];
+        
+        // Individual harmonics
+        const harmonicColors = ['#e74c3c', '#f39c12', '#27ae60', '#3498db', '#9b59b6'];
+        for (let n = 1; n <= order; n++) {
+            const y = weeks.map(w => {
+                const t = w / 52;
+                const amp = 0.3 / n;
+                return amp * Math.sin(2 * Math.PI * n * t - Math.PI/2);
+            });
+            traces.push({
+                x: weeks,
+                y: y,
+                type: 'scatter',
+                mode: 'lines',
+                name: `Harmonic ${n}`,
+                line: { color: harmonicColors[n-1], width: 1.5, dash: 'dot' },
+                opacity: 0.6
+            });
+        }
+        
+        // Combined seasonality
+        if (order > 0) {
+            const combined = weeks.map(w => {
+                const t = w / 52;
+                let sum = 0;
+                for (let n = 1; n <= order; n++) {
+                    sum += (0.3 / n) * Math.sin(2 * Math.PI * n * t - Math.PI/2);
+                }
+                return sum;
+            });
+            traces.push({
+                x: weeks,
+                y: combined,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Combined',
+                line: { color: colors.text, width: 3 }
+            });
+        } else {
+            traces.push({
+                x: weeks,
+                y: weeks.map(() => 0),
+                type: 'scatter',
+                mode: 'lines',
+                name: 'No seasonality',
+                line: { color: colors.text, width: 2, dash: 'dash' }
+            });
+        }
+        
+        Plotly.react('seasonalityCompareChart', traces, {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 20, r: 30, b: 40, l: 60 },
+            xaxis: { title: 'Week of Year', gridcolor: colors.grid, range: [1, 52] },
+            yaxis: { title: 'Seasonal Effect', gridcolor: colors.grid },
+            legend: { orientation: 'h', y: 1.15 },
+            showlegend: order > 0
+        }, { responsive: true, displayModeBar: false });
+    }
+
+    // Call init when DOM ready
+    document.addEventListener('DOMContentLoaded', initTrendSeasonalityCharts);
 </script>
 </body>
 </html>
