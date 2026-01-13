@@ -1528,8 +1528,13 @@
                 decline). This foundation rises and falls with seasonal patterns. Marketing channels add 
                 to this, but with diminishing returns as spend increases, and effects carry over for several 
                 weeks. Meanwhile, other factors—distribution, pricing, competition—affect both media decisions 
-                and sales, creating spurious correlations we must control for. And there's always random 
-                variation we can't explain."
+                and sales, creating spurious correlations we must control for. Weather <i>and other external events</i> 
+                which effect sales but do not impact media spend can help isolate the media effect, but if excluded won't bias results.
+                We avoid controlling for variables that lie on the causal path from media to sales (like brand awareness) 
+                to get the total effect of marketing, unless we specifically want to decompose paths. 
+                And we never control for colliders like survey response, which would introduce bias. Finally, 
+                even after accounting for all these factors, some variation in sales remains unexplained.
+                "
             </blockquote>
             <p>
                 This story—these assumptions—will become our mathematical model. If we're wrong about any 
