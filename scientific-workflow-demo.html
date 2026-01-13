@@ -1036,9 +1036,12 @@
                 <div>
                     <h4>Chapter 5: What Else Affects Sales?</h4>
                     <p style="margin: 0;">
-                        Here's where many models go wrong. Marketing doesn't happen in isolation—other 
-                        factors affect both your media spending decisions AND your sales. If we don't 
-                        account for these, we'll confuse correlation with causation and get the wrong answer.
+                        The brand increased distribution to stave off the effects of an economic downturn 
+                        and ran more media to support this push into new markets&mdash;<strong>confounder</strong>. Some competitors started to run a new campaign in Q3,
+                        which the brand matched with extra spend to maintain share of voice&mdash;<strong>confounder</strong>. 
+                        Weather patterns influence consumer behavior, with warmer weeks boosting in store sales&mdash;<strong>precision control</strong>.
+                        We want to isolate the total effect of marketing on sales, so we will leave out brand awareness&mdash;<strong>mediator</strong>.
+                        The brand provided survey responses on customer satisfaction, but since this is influenced by sales (only people who buy are given the survey)&mdash;<strong>collider</strong>&mdash;we will exclude it to avoid bias.
                     </p>
                 </div>
             </div>
@@ -1332,7 +1335,7 @@
                                 When you include a variable to control for confounding, its coefficient may not be 
                                 interpretable as a causal effect. Distribution might show a <em>negative</em> coefficient 
                                 because other omitted variables (market saturation, competitive intensity) are correlated 
-                                with it.
+                                with it. <i>This is sometimes called the table 2 fallacy</i>
                             </p>
                             <p style="margin-bottom: 0;">
                                 <strong>The goal</strong>: Get unbiased media effects, not to understand distribution's 
