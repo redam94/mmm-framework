@@ -21,7 +21,7 @@ from components import (
     page_header,
     format_datetime,
     format_number,
-    format_percentage,
+    format_percent,
     display_api_error,
     init_session_state,
     status_icon,

@@ -164,7 +164,7 @@ def render_job_form():
 
             with st.spinner("Submitting job..."):
                 try:
-                    result = client.start_model_fit(
+                    result = client.submit_fit_job(
                         data_id=data_id,
                         config_id=config_id,
                         name=job_name or None,
@@ -371,7 +371,7 @@ def render_job_list():
                     is_monitoring = (
                         st.session_state.monitoring_model_id == model.model_id
                     )
-                    icon = "👁️" if is_monitoring else status_icon(model.status.value)
+                    icon = "👁️" if is_monitoring else status_icon(model.status)
                     st.markdown(f"**{icon} {model.name or model.model_id[:8]}**")
 
                 with col2:
@@ -379,7 +379,7 @@ def render_job_list():
 
                 with col3:
                     st.markdown(
-                        f"{status_icon(model.status.value)} {model.status.value.capitalize()}"
+                        f"{status_icon(model.status)} {model.status}"
                     )
 
                 with col4:
@@ -390,7 +390,7 @@ def render_job_list():
                     elif model.progress == "failed":
                         st.error("Failed", icon="❌")
                     else:
-                        st.caption(model.status.value)
+                        st.caption(model.status)
 
                 with col5:
                     if st.button("👁️", key=f"monitor_{model.model_id}", help="Monitor"):
@@ -417,12 +417,12 @@ def render_active_jobs_summary():
         client = get_api_client()
 
         # Get all models
-        models, _ = client.list_models(limit=100)
+        models = client.list_models(limit=100)
 
         # Count by status
         status_counts = {}
         for model in models:
-            status = model.status.value
+            status = model.status
             status_counts[status] = status_counts.get(status, 0) + 1
 
         # Display metrics

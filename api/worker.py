@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import asyncio
 import sys
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -88,7 +88,7 @@ async def fit_model_task(
                 "status": status.value,
                 "progress": str(progress),
                 "progress_message": message or "",
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
                 **{k: str(v) if v is not None else "" for k, v in extra.items()},
             },
         )
@@ -102,7 +102,7 @@ async def fit_model_task(
             model_id,
             {
                 "status": JobStatus.RUNNING.value,
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -140,7 +140,11 @@ async def fit_model_task(
             SeasonalityConfigBuilder,
             TrendConfigBuilder,
         )
+        import pytensor
 
+        pytensor.config.exception_verbosity = 'high'
+        pytensor.config.mode == 'NUMBA'
+        pytensor.config.cxx = "" 
         # Build MFF config from dict
         mff_builder = MFFConfigBuilder()
 
@@ -395,7 +399,7 @@ async def fit_model_task(
             model_id,
             {
                 "status": JobStatus.COMPLETED.value,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
                 "diagnostics": diagnostics,
             },
         )
@@ -499,6 +503,156 @@ async def run_scenario_task(
             "error": str(e),
         }
 
+async def generate_report_task(
+    ctx: dict,
+    model_id: str,
+    report_id: str,
+    config: dict,
+) -> dict:
+    """
+    Generate HTML report for a fitted model.
+
+    Parameters
+    ----------
+    ctx : dict
+        ARQ context with Redis connection.
+    model_id : str
+        Model ID to generate report for.
+    report_id : str
+        Unique report ID for tracking.
+    config : dict
+        Report configuration options.
+
+    Returns
+    -------
+    dict
+        Report generation results.
+    """
+    import redis.asyncio as aioredis
+    import logging
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+    storage = get_storage()
+    settings = get_settings()
+    redis_client: aioredis.Redis = ctx["redis"]
+
+    async def update_report_status(status: str, message: str = None, **extra):
+        """Update report status in Redis."""
+        report_key = f"mmm:report:{report_id}"
+        await redis_client.hset(
+            report_key,
+            mapping={
+                "status": status,
+                "message": message or "",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                **{k: str(v) for k, v in extra.items()},
+            },
+        )
+        await redis_client.expire(report_key, 86400)  # 24 hour TTL
+
+    try:
+        await update_report_status("generating", "Loading model artifacts...")
+
+        # Load model artifacts
+        logger.info(f"Loading model artifacts for report: {model_id}")
+        mmm = storage.load_model_artifact(model_id, "mmm")
+        panel = storage.load_model_artifact(model_id, "panel")
+
+        # Try to load results
+        try:
+            results = storage.load_model_artifact(model_id, "results")
+        except Exception:
+            results = None
+
+        await update_report_status("generating", "Extracting report data...")
+
+        # Import reporting module
+        from mmm_framework.reporting import (
+            MMMReportGenerator,
+            ReportConfig,
+            SectionConfig,
+        )
+
+        report_config = ReportConfig(
+            title=config.get("title") or "Marketing Mix Model Report",
+            client=config.get("client"),
+            subtitle=config.get("subtitle"),
+            analysis_period=config.get("analysis_period"),
+            currency_symbol=config.get("currency_symbol", "$"),
+            default_credible_interval=config.get("credible_interval", 0.8),
+            # Section configs
+            executive_summary=SectionConfig(
+                enabled=config.get("include_executive_summary", True)
+            ),
+            model_fit=SectionConfig(enabled=config.get("include_model_fit", True)),
+            channel_roi=SectionConfig(enabled=config.get("include_channel_roi", True)),
+            decomposition=SectionConfig(
+                enabled=config.get("include_decomposition", True)
+            ),
+            saturation=SectionConfig(enabled=config.get("include_saturation", True)),
+            diagnostics=SectionConfig(enabled=config.get("include_diagnostics", True)),
+            methodology=SectionConfig(enabled=config.get("include_methodology", True)),
+            # Disable sections we don't have data for by default
+            geographic=SectionConfig(enabled=False),
+            mediators=SectionConfig(enabled=False),
+            cannibalization=SectionConfig(enabled=False),
+            sensitivity=SectionConfig(enabled=False),
+        )
+
+        await update_report_status("generating", "Generating report...")
+
+        # Generate report
+        generator = MMMReportGenerator(
+            model=mmm,
+            config=report_config,
+            panel=panel,
+            results=results,
+        )
+
+        html_content = generator.render()
+
+        # Save report to storage
+        reports_dir = Path(settings.storage_path) / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        report_filename = f"{model_id}_{report_id}.html"
+        report_path = reports_dir / report_filename
+
+        report_path.write_text(html_content, encoding="utf-8")
+        logger.info(f"Report saved to: {report_path}")
+
+        # Update status
+        await update_report_status(
+            "completed",
+            "Report generated successfully",
+            filepath=str(report_path),
+            filename=report_filename,
+        )
+
+        return {
+            "report_id": report_id,
+            "model_id": model_id,
+            "status": "completed",
+            "filepath": str(report_path),
+            "filename": report_filename,
+        }
+
+    except Exception as e:
+        logger.error(f"Report generation failed: {e}")
+        import traceback
+
+        tb = traceback.format_exc()
+        logger.error(tb)
+
+        await update_report_status("failed", str(e))
+
+        return {
+            "report_id": report_id,
+            "model_id": model_id,
+            "status": "failed",
+            "error": str(e),
+        }
 
 # =============================================================================
 # Cron Jobs
@@ -515,7 +669,7 @@ async def cleanup_old_jobs(ctx: dict):
     # Find all job keys
     job_keys = await redis_client.keys("mmm:job:*")
 
-    cutoff = datetime.utcnow() - timedelta(days=settings.data_retention_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.data_retention_days)
 
     cleaned = 0
     for key in job_keys:
@@ -530,6 +684,7 @@ async def cleanup_old_jobs(ctx: dict):
                 continue
 
     return {"cleaned_jobs": cleaned}
+
 
 
 # =============================================================================
@@ -566,6 +721,7 @@ class WorkerSettings:
         fit_model_task,
         compute_contributions_task,
         run_scenario_task,
+        generate_report_task
     ]
 
     # cron_jobs = [

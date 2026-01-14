@@ -390,6 +390,63 @@ class PredictionResponse(BaseModel):
     y_pred_hdi_high: list[float]
     y_pred_samples: list[list[float]] | None = None
 
+# ============================================================================
+# Report Models
+# ============================================================================
+class ReportRequest(BaseModel):
+    """Request for HTML report generation."""
+
+    title: str | None = Field(default=None, description="Report title")
+    client: str | None = Field(default=None, description="Client name")
+    subtitle: str | None = Field(default=None, description="Report subtitle")
+    analysis_period: str | None = Field(
+        default=None, description="Analysis period description"
+    )
+
+    # Section toggles
+    include_executive_summary: bool = True
+    include_model_fit: bool = True
+    include_channel_roi: bool = True
+    include_decomposition: bool = True
+    include_saturation: bool = True
+    include_diagnostics: bool = True
+    include_methodology: bool = True
+
+    # Formatting options
+    credible_interval: float = Field(default=0.8, gt=0.5, lt=1.0)
+    currency_symbol: str = "$"
+    currency_scale: float = 1.0
+
+    # Color scheme
+    color_scheme: Literal["default", "corporate", "minimal"] = "default"
+
+
+class ReportResponse(BaseModel):
+    """Report generation response."""
+
+    model_id: str
+    report_id: str
+    status: Literal["generating", "completed", "failed"]
+    message: str | None = None
+    download_url: str | None = None
+    created_at: datetime
+
+
+class ReportStatusResponse(BaseModel):
+    """Report status response."""
+
+    report_id: str
+    model_id: str
+    status: str
+    message: str | None = None
+    filename: str | None = None
+
+
+class ReportListResponse(BaseModel):
+    """List of reports."""
+
+    model_id: str
+    reports: list[dict]
 
 # =============================================================================
 # Generic Response Models

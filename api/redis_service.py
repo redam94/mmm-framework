@@ -207,7 +207,7 @@ class RedisService:
         r = await self.connect()
 
         # Get queue lengths
-        pending = await r.llen("arq:queue")
+        pending = await r.zcard("arq:queue")
 
         # Get active jobs (approximate)
         active_keys = await r.keys("mmm:job:*")

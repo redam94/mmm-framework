@@ -46,6 +46,19 @@ from .charts import (
     create_mediator_time_series,
     create_cannibalization_heatmap,
 )
+from .helpers import (
+    compute_roi_with_uncertainty,
+    compute_marginal_roi,
+    get_prior_posterior_comparison,
+    compute_shrinkage_summary,
+    compute_saturation_curves_with_uncertainty,
+    compute_adstock_weights,
+    compute_component_decomposition,
+    compute_decomposition_waterfall,
+    compute_mediated_effects,
+    compute_cross_effects,
+    generate_model_summary,
+)
 
 __version__ = "1.0.0"
 __all__ = [

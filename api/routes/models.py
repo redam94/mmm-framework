@@ -33,10 +33,15 @@ from schemas import (
     ScenarioRequest,
     ScenarioResponse,
     SuccessResponse,
+    ReportRequest,
+    ReportResponse,
+    ReportStatusResponse,
+    ReportListResponse,
 )
 from storage import StorageError, StorageService, get_storage
 
 router = APIRouter(prefix="/models", tags=["Models"])
+
 
 
 # Custom JSON encoder that handles NaN/Inf values
@@ -181,6 +186,187 @@ def _check_model_completed(storage: StorageService, model_id: str):
 
     return metadata
 
+
+
+@router.post(
+    "/{model_id}/report",
+    response_model=ReportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        404: {"model": ErrorResponse},
+        400: {"model": ErrorResponse},
+    },
+)
+async def generate_report(
+    model_id: str,
+    request: ReportRequest,
+    storage: StorageService = Depends(get_storage),
+    arq_pool: ArqRedis = Depends(get_arq_pool),
+    redis: RedisService = Depends(get_redis),
+):
+    """
+    Generate an HTML report for a fitted model.
+
+    This is an async operation. Use the returned report_id to track progress
+    and download the report when complete.
+    """
+    _check_model_completed(storage, model_id)
+
+    # Generate report ID
+    report_id = storage.generate_id()[:12]
+
+    # Queue the report generation task
+    await arq_pool.enqueue_job(
+        "generate_report_task",
+        model_id=model_id,
+        report_id=report_id,
+        config={
+            "title": request.title,
+            "client": request.client,
+            "subtitle": request.subtitle,
+            "analysis_period": request.analysis_period,
+            "include_executive_summary": request.include_executive_summary,
+            "include_model_fit": request.include_model_fit,
+            "include_channel_roi": request.include_channel_roi,
+            "include_decomposition": request.include_decomposition,
+            "include_saturation": request.include_saturation,
+            "include_diagnostics": request.include_diagnostics,
+            "include_methodology": request.include_methodology,
+            "credible_interval": request.credible_interval,
+            "currency_symbol": request.currency_symbol,
+            "currency_scale": request.currency_scale,
+            "color_scheme": request.color_scheme,
+        },
+    )
+
+    logger.info(f"Queued report generation: {report_id} for model {model_id}")
+
+    return ReportResponse(
+        model_id=model_id,
+        report_id=report_id,
+        status="generating",
+        message="Report generation started",
+        created_at=datetime.utcnow(),
+    )
+
+
+@router.get(
+    "/{model_id}/report/{report_id}/status",
+    response_model=ReportStatusResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+async def get_report_status(
+    model_id: str,
+    report_id: str,
+    redis: RedisService = Depends(get_redis),
+):
+    """Get report generation status."""
+    r = await redis.connect()
+    report_key = f"mmm:report:{report_id}"
+
+    report_data = await r.hgetall(report_key)
+
+    if not report_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report not found: {report_id}",
+        )
+
+    return ReportStatusResponse(
+        report_id=report_id,
+        model_id=model_id,
+        status=report_data.get(b"status", b"unknown").decode(),
+        message=report_data.get(b"message", b"").decode() or None,
+        filename=report_data.get(b"filename", b"").decode() or None,
+    )
+
+
+@router.get(
+    "/{model_id}/report/{report_id}/download",
+    responses={
+        404: {"model": ErrorResponse},
+        400: {"model": ErrorResponse},
+    },
+)
+async def download_report(
+    model_id: str,
+    report_id: str,
+    storage: StorageService = Depends(get_storage),
+    redis: RedisService = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+):
+    """Download a generated report."""
+    r = await redis.connect()
+    report_key = f"mmm:report:{report_id}"
+
+    report_data = await r.hgetall(report_key)
+
+    if not report_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report not found: {report_id}",
+        )
+
+    status_val = report_data.get(b"status", b"").decode()
+    if status_val != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Report not ready. Status: {status_val}",
+        )
+
+    filepath = report_data.get(b"filepath", b"").decode()
+    filename = report_data.get(b"filename", b"").decode()
+
+    if not filepath or not Path(filepath).exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report file not found",
+        )
+
+    return FileResponse(
+        path=filepath,
+        filename=filename,
+        media_type="text/html",
+    )
+
+
+@router.get(
+    "/{model_id}/reports",
+    response_model=ReportListResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+async def list_model_reports(
+    model_id: str,
+    storage: StorageService = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+):
+    """List all reports for a model."""
+    if not storage.model_exists(model_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model not found: {model_id}",
+        )
+
+    reports_dir = Path(settings.storage_path) / "reports"
+
+    reports = []
+    if reports_dir.exists():
+        for report_file in reports_dir.glob(f"{model_id}_*.html"):
+            reports.append(
+                {
+                    "filename": report_file.name,
+                    "report_id": report_file.stem.split("_")[-1],
+                    "created_at": datetime.fromtimestamp(
+                        report_file.stat().st_mtime
+                    ).isoformat(),
+                    "size_bytes": report_file.stat().st_size,
+                }
+            )
+
+    # Sort by created_at descending
+    reports.sort(key=lambda x: x["created_at"], reverse=True)
+
+    return ReportListResponse(model_id=model_id, reports=reports)
 
 @router.post(
     "/fit",

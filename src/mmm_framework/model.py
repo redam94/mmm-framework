@@ -714,7 +714,7 @@ class BayesianMMM:
         # Add trend-specific coordinates
         if self.trend_config.type == TrendType.SPLINE:
             n_coef = self.trend_features.get("n_spline_coef", 0)
-            coords["spline_coef"] = list(range(n_coef))
+            coords["spline_idx"] = list(range(n_coef))
 
         elif self.trend_config.type == TrendType.PIECEWISE:
             n_cp = len(self.trend_features.get("changepoints", []))
@@ -807,7 +807,7 @@ class BayesianMMM:
         # Spline coefficients with smoothness prior
         # Using random walk prior for smooth trends
         spline_coef_raw = pm.Normal(
-            "spline_coef_raw", mu=0, sigma=1, shape=n_coef, dims="spline_coef"
+            "spline_coef_raw", mu=0, sigma=1, shape=n_coef, dims="spline_idx"
         )
 
         # Scale parameter for smoothness
@@ -817,7 +817,7 @@ class BayesianMMM:
 
         # Apply cumulative sum for random walk behavior (smoother trends)
         spline_coef = pm.Deterministic(
-            "spline_coef", spline_scale * pt.cumsum(spline_coef_raw), dims="spline_coef"
+            "spline_coef", spline_scale * pt.cumsum(spline_coef_raw), dims="spline_idx"
         )
 
         # FIX: Convert basis to PyTensor tensor

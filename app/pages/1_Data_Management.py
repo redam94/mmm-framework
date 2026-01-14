@@ -74,7 +74,7 @@ def render_upload_section():
                     try:
                         client = get_api_client()
                         content = uploaded_file.getvalue()
-                        result = client.upload_data(content, uploaded_file.name)
+                        result = client.upload_dataset(content, uploaded_file.name)
 
                         st.success(f"✅ Uploaded successfully! ID: {result.data_id}")
                         st.session_state.selected_data_id = result.data_id
