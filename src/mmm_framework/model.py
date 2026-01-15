@@ -1168,7 +1168,23 @@ class BayesianMMM:
         if self._model is None:
             self._model = self._build_model()
         return self._model
+    
+    def get_prior(self,
+                  samples: int = 500,
+                  random_seed: int | None = None
+                  ) -> az.InferenceData:
+        """
+        Sample from the prior distribution of the model.
 
+        Returns
+        -------
+        az.InferenceData
+            InferenceData object containing prior samples.
+        """
+        with self.model:
+            prior_trace = pm.sample_prior_predictive(samples=samples, random_seed=random_seed)
+        return prior_trace
+    
     def fit(
         self,
         draws: int | None = None,
@@ -1210,8 +1226,11 @@ class BayesianMMM:
         # Sampler
         nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
 
+        prior = self.get_prior(samples=1000, random_seed=random_seed)
+
         with self.model:
-            trace = pm.sample(
+
+            trace: az.InferenceData = pm.sample(
                 draws=draws,
                 tune=tune,
                 chains=chains,
@@ -1221,6 +1240,7 @@ class BayesianMMM:
                 init="adapt_diag",
                 **kwargs,
             )
+        trace.extend(prior)
 
         self._trace = trace
 

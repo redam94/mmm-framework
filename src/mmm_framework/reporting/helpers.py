@@ -264,7 +264,57 @@ class MediatedEffectResult:
 # =============================================================================
 # Utility Functions
 # =============================================================================
-
+def _safe_to_numpy(data: Any) -> np.ndarray | None:
+    """Convert DataFrame or array-like to numpy array safely."""
+    if data is None:
+        return None
+    
+    if isinstance(data, np.ndarray):
+        return data
+    
+    if hasattr(data, 'values'):
+        return data.values
+    
+    try:
+        return np.asarray(data)
+    except Exception:
+        return None
+    
+def safe_get_samples(posterior, var_name, channel_idx=None):
+    """
+    Safely extract samples from posterior, handling both xarray and numpy.
+    
+    This is a diagnostic wrapper to help identify indexing issues.
+    """
+    if var_name not in posterior:
+        return None
+    
+    data = posterior[var_name]
+    
+    # Log what we're working with
+    logger.debug(f"Extracting {var_name}: type={type(data)}, "
+                 f"hasattr values={hasattr(data, 'values')}, "
+                 f"hasattr dims={hasattr(data, 'dims')}")
+    
+    # If it's an xarray DataArray, get the numpy array first
+    if hasattr(data, 'values'):
+        logger.debug(f"  dims={getattr(data, 'dims', 'N/A')}, shape before .values: {data.shape}")
+        arr = data.values
+    else:
+        arr = data
+    
+    logger.debug(f"  After .values: type={type(arr)}, shape={arr.shape}, ndim={arr.ndim}")
+    
+    # Now do any indexing on the numpy array
+    if channel_idx is not None and arr.ndim > 2:
+        logger.debug(f"  Indexing with channel_idx={channel_idx}")
+        # Flatten chain x draw first, then index channel
+        n_chains, n_draws = arr.shape[0], arr.shape[1]
+        arr = arr.reshape(n_chains * n_draws, *arr.shape[2:])
+        if channel_idx < arr.shape[-1]:
+            arr = arr[..., channel_idx]
+    
+    return arr
 
 def _compute_hdi(
     samples: np.ndarray,
@@ -337,8 +387,15 @@ def _get_scaling_params(model: Any) -> tuple[float, float]:
     return float(y_mean), float(y_std)
 
 
-def _flatten_samples(arr: np.ndarray) -> np.ndarray:
+def _flatten_samples(data) -> np.ndarray:
     """Flatten chain and draw dimensions from posterior samples."""
+    # FIRST: Convert to numpy if it's xarray
+    if hasattr(data, 'values'):
+        arr = data.values
+    else:
+        arr = np.asarray(data)
+    
+    # THEN: Flatten
     if arr.ndim >= 2:
         return arr.reshape(-1, *arr.shape[2:]) if arr.ndim > 2 else arr.flatten()
     return arr.flatten()
@@ -350,6 +407,40 @@ def _check_model_fitted(model: Any) -> None:
     if trace is None:
         raise ValueError("Model not fitted. Call fit() first.")
 
+def _safe_get_column(data: Any, col_idx: int, col_name: str = None) -> np.ndarray | None:
+    """
+    Safely extract a column from DataFrame or numpy array.
+    
+    Handles both DataFrame (needs .iloc or column name) and numpy array (needs [:, idx]).
+    """
+    if data is None:
+        return None
+    
+    try:
+        # If it's a DataFrame with the column name
+        if col_name is not None and hasattr(data, 'columns') and col_name in data.columns:
+            return data[col_name].values
+        
+        # If it's a DataFrame, use .iloc
+        if hasattr(data, 'iloc'):
+            if col_idx < data.shape[1]:
+                return data.iloc[:, col_idx].values
+        
+        # If it has .values (DataFrame-like), convert first
+        elif hasattr(data, 'values'):
+            arr = data.values
+            if col_idx < arr.shape[1]:
+                return arr[:, col_idx]
+        
+        # Plain numpy array
+        else:
+            if col_idx < data.shape[1]:
+                return data[:, col_idx]
+                
+    except Exception as e:
+        logger.debug(f"_safe_get_column failed for col_idx={col_idx}, col_name={col_name}: {e}")
+    
+    return None
 
 # =============================================================================
 # ROI Computation
@@ -463,28 +554,47 @@ def _extract_spend_from_model(model: Any) -> dict[str, float]:
     spend = {}
     channels = _get_channel_names(model)
     
+    def _get_column_sum(data, col_idx: int, col_name: str) -> float | None:
+        """Safely get sum of a column from DataFrame or array."""
+        if data is None:
+            return None
+        try:
+            if hasattr(data, 'columns') and col_name in data.columns:
+                # DataFrame with matching column name
+                return float(data[col_name].sum())
+            elif hasattr(data, 'iloc'):
+                # DataFrame - use iloc
+                if col_idx < data.shape[1]:
+                    return float(data.iloc[:, col_idx].sum())
+            elif hasattr(data, 'values'):
+                # Has .values attribute (DataFrame-like)
+                arr = data.values
+                if col_idx < arr.shape[1]:
+                    return float(arr[:, col_idx].sum())
+            else:
+                # Numpy array
+                if col_idx < data.shape[1]:
+                    return float(data[:, col_idx].sum())
+        except Exception:
+            pass
+        return None
+    
     # Try panel data
+    X_media = None
     if hasattr(model, "panel") and model.panel is not None:
-        panel = model.panel
-        if hasattr(panel, "X_media") and panel.X_media is not None:
-            X_media = panel.X_media
-            for i, ch in enumerate(channels):
-                if i < X_media.shape[1]:
-                    spend[ch] = float(X_media[:, i].sum())
+        X_media = getattr(model.panel, "X_media", None)
     
-    # Try X_media_raw
-    if not spend and hasattr(model, "X_media_raw"):
-        X_media = model.X_media_raw
-        for i, ch in enumerate(channels):
-            if i < X_media.shape[1]:
-                spend[ch] = float(X_media[:, i].sum())
+    if X_media is None:
+        X_media = getattr(model, "X_media_raw", None)
     
-    # Try X_media
-    if not spend and hasattr(model, "X_media"):
-        X_media = model.X_media
+    if X_media is None:
+        X_media = getattr(model, "X_media", None)
+    
+    if X_media is not None:
         for i, ch in enumerate(channels):
-            if i < X_media.shape[1]:
-                spend[ch] = float(X_media[:, i].sum())
+            val = _get_column_sum(X_media, i, ch)
+            if val is not None:
+                spend[ch] = val
     
     return spend
 
@@ -496,13 +606,11 @@ def _get_contribution_samples(
     y_mean: float,
     y_std: float,
 ) -> np.ndarray | None:
-    """
-    Extract contribution samples for a channel.
-    
-    Tries multiple variable naming conventions used across model types.
-    """
+    """Extract contribution samples for a channel."""
     if posterior is None:
         return None
+    
+    channels = _get_channel_names(model)
     
     # Try different variable naming conventions
     possible_names = [
@@ -513,36 +621,72 @@ def _get_contribution_samples(
     
     for var_name in possible_names:
         if var_name in posterior:
-            samples = posterior[var_name].values
-            samples = _flatten_samples(samples)
-            # Sum over time if needed
+            # ALWAYS get .values before any operations
+            arr = posterior[var_name].values
+            samples = _flatten_samples(arr)
             if samples.ndim > 1:
                 samples = samples.sum(axis=-1)
-            # Scale to original units
             return samples * y_std
     
-    # Fall back to computing from beta and transformed media
-    beta_names = [f"beta_{channel}", f"beta_media_{channel}"]
-    for beta_name in beta_names:
+    # Fall back to channel_contributions with index
+    if "channel_contributions" in posterior:
+        try:
+            ch_idx = channels.index(channel)
+            
+            # Get the DataArray
+            da = posterior["channel_contributions"]
+            
+            # Method 1: Try dimension-aware selection (preferred for xarray)
+            if hasattr(da, 'dims'):
+                dims = da.dims
+                logger.debug(f"channel_contributions dims: {dims}")
+                
+                # If there's a channel dimension, use .isel or .sel
+                if 'channel' in dims:
+                    # Use integer index
+                    arr = da.isel(channel=ch_idx).values
+                elif len(dims) > 2:
+                    # Assume last dim is channel: (chain, draw, time, channel) or (chain, draw, channel)
+                    arr = da.values  # Get numpy FIRST
+                    arr = _flatten_samples(arr)
+                    if arr.ndim > 1 and ch_idx < arr.shape[-1]:
+                        arr = arr[..., ch_idx]
+                else:
+                    arr = da.values
+                    arr = _flatten_samples(arr)
+            else:
+                # No dims attribute, just get values
+                arr = da.values
+                arr = _flatten_samples(arr)
+                if arr.ndim > 1 and ch_idx < arr.shape[-1]:
+                    arr = arr[..., ch_idx]
+            
+            # Sum over time if still multidimensional
+            if arr.ndim > 1:
+                arr = arr.sum(axis=-1)
+            
+            return arr * y_std
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract channel_contributions for {channel}: {e}")
+    
+    # Fall back to beta * media
+    for beta_name in [f"beta_{channel}", f"beta_media_{channel}"]:
         if beta_name in posterior:
-            beta_samples = _flatten_samples(posterior[beta_name].values)
+            beta_arr = posterior[beta_name].values  # .values FIRST!
+            beta_samples = _flatten_samples(beta_arr)
             
-            # Try to get channel contributions deterministic
-            if "channel_contributions" in posterior:
-                ch_idx = _get_channel_names(model).index(channel)
-                contrib = posterior["channel_contributions"].values
-                contrib = _flatten_samples(contrib)
-                if contrib.ndim > 1:
-                    contrib = contrib[:, :, ch_idx].sum(axis=-1)
-                return contrib * y_std
-            
-            # Rough estimate from beta * mean_media
+            # Try to get media data
             if hasattr(model, "panel") and model.panel is not None:
-                ch_idx = _get_channel_names(model).index(channel)
-                X_media = model.panel.X_media
-                if X_media is not None:
-                    media_sum = X_media[:, ch_idx].sum()
+                try:
+                    ch_idx = channels.index(channel)
+                    X_media = model.panel.X_media
+                    if hasattr(X_media, 'values'):
+                        X_media = X_media.values
+                    media_sum = float(X_media[:, ch_idx].sum())
                     return beta_samples * media_sum * y_std
+                except Exception:
+                    pass
             
             return beta_samples * y_std
     
@@ -1653,6 +1797,47 @@ def compute_cross_effects(
 # =============================================================================
 # Summary Report Generation
 # =============================================================================
+def debug_posterior_structure(mmm):
+    """Print posterior structure for debugging."""
+    import traceback
+    
+    posterior = mmm._trace.posterior
+    
+    print("\n" + "="*60)
+    print("POSTERIOR STRUCTURE DEBUG")
+    print("="*60)
+    
+    for var_name in list(posterior.data_vars):
+        da = posterior[var_name]
+        print(f"{var_name}: dims={da.dims}, shape={da.shape}")
+    
+    # Test the exact operation that's failing
+    print("\n" + "-"*40)
+    print("Testing problematic operations:")
+    print("-"*40)
+    
+    if "channel_contributions" in posterior:
+        da = posterior["channel_contributions"]
+        print(f"\nchannel_contributions: dims={da.dims}, shape={da.shape}")
+        
+        # The error (slice(None, None, None), 0) means [:, 0] on xarray
+        # Let's test what works
+        
+        print("\nTest 1: da.values first, then index...")
+        try:
+            arr = da.values
+            result = arr[:, 0]
+            print(f"  SUCCESS: shape={result.shape}")
+        except Exception as e:
+            print(f"  FAILED: {e}")
+        
+        print("\nTest 2: Direct indexing on DataArray...")
+        try:
+            result = da[:, 0]
+            print(f"  SUCCESS: {type(result)}")
+        except Exception as e:
+            print(f"  FAILED: {e}")
+            print("  ^ THIS IS LIKELY YOUR BUG!")
 
 
 def generate_model_summary(
@@ -1690,12 +1875,15 @@ def generate_model_summary(
         "diagnostics": _get_diagnostics(model),
     }
     
+    #debug_posterior_structure(model)
     # ROI
     try:
         roi_df = compute_roi_with_uncertainty(model, hdi_prob=hdi_prob)
         summary["roi_summary"] = roi_df.to_dict(orient="records")
     except Exception as e:
         logger.warning(f"ROI computation failed: {e}")
+        logger.exception("ROI error traceback:")
+        logger.debug(f"ROI error traceback:", exc_info=True) 
         summary["roi_summary"] = None
     
     # Decomposition
@@ -1718,6 +1906,8 @@ def generate_model_summary(
         }
     except Exception as e:
         logger.warning(f"Saturation computation failed: {e}")
+        logger.exception("Saturation error traceback:")
+        logger.debug(f"Saturation error traceback:", exc_info=True)
         summary["saturation_summary"] = None
     
     # Adstock

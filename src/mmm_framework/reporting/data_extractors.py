@@ -22,7 +22,7 @@ try:
     import arviz as az
 except ImportError:
     az = None
-
+from .helpers import _safe_get_column, _safe_to_numpy
 
 @dataclass
 class MMMDataBundle:
@@ -339,66 +339,252 @@ class BayesianMMMExtractor(DataExtractor):
         return {"r2": r2, "rmse": rmse, "mae": mae, "mape": mape}
     
     def _compute_channel_roi(self) -> dict[str, dict[str, float]] | None:
-        """Compute ROI with uncertainty for each channel."""
+        """Compute channel ROI with uncertainty - FIXED VERSION."""
         try:
-            logger.debug("Computing channel ROI")
-            if hasattr(self.mmm, "compute_roi"):
-                logger.debug("Using model's compute_roi method")
-                roi_results = self.mmm.compute_roi()
-                return roi_results
-            logger.debug("Computing channel ROI manually from trace")
-            # Manual computation from trace
-            trace = getattr(self.mmm, "_trace", None)
-            if trace is None:
-                logger.debug("Model trace not found for ROI computation")
+            channels = self._get_channel_names()
+            if not channels:
                 return None
             
-            channels = self._get_channel_names()
-            channel_roi = {}
+            current_spend = self._get_current_spend()
+            if not current_spend:
+                logger.debug("No spend data for ROI computation")
+                return None
+            
+            trace = getattr(self.mmm, "_trace", None)
+            if trace is None or not hasattr(trace, "posterior"):
+                return None
+            
+            posterior = trace.posterior
+            y_std = getattr(self.mmm, "y_std", 1.0)
+            n_obs = getattr(self.mmm, "n_obs", 52)
+            
+            roi_results = {}
             
             for ch in channels:
-                # Look for beta coefficients
-                beta_name = f"beta_{ch}"
-                if hasattr(trace, "posterior") and beta_name in trace.posterior:
-                    samples = trace.posterior[beta_name].values.flatten()
-                    # This is simplified - actual ROI needs contribution / spend
-                    mean = float(samples.mean())
-                    lower, upper = self._compute_hdi(samples, self.ci_prob)
-                    channel_roi[ch] = {"mean": mean, "lower": lower, "upper": upper}
+                spend = current_spend.get(ch, 0)
+                if spend <= 0:
+                    continue
+                
+                # Try to get contribution samples
+                contrib_samples = None
+                
+                # Method 1: Direct contribution variable
+                contrib_names = [
+                    f"contribution_{ch}",
+                    f"channel_contribution_{ch}",
+                ]
+                for contrib_name in contrib_names:
+                    if contrib_name in posterior:
+                        vals = posterior[contrib_name].values
+                        # Flatten chains and draws, sum over time if needed
+                        if vals.ndim > 2:
+                            contrib_samples = vals.reshape(-1, *vals.shape[2:]).sum(axis=-1) * y_std
+                        else:
+                            contrib_samples = vals.flatten() * y_std * n_obs
+                        break
+                
+                # Method 2: From channel_contributions array
+                if contrib_samples is None and "channel_contributions" in posterior:
+                    try:
+                        ch_idx = channels.index(ch)
+                        contrib_da = posterior["channel_contributions"]
+                        vals = contrib_da.values  # numpy first!
+                        
+                        # Flatten chains/draws, extract channel, sum over time
+                        flat = vals.reshape(-1, *vals.shape[2:])
+                        if flat.ndim == 2:  # (samples, time)
+                            contrib_samples = flat.sum(axis=-1) * y_std
+                        elif flat.ndim == 3:  # (samples, time, channels)
+                            contrib_samples = flat[:, :, ch_idx].sum(axis=-1) * y_std
+                    except Exception as e:
+                        logger.debug(f"Could not extract from channel_contributions: {e}")
+                
+                # Method 3: Estimate from beta
+                if contrib_samples is None:
+                    for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
+                        if beta_name in posterior:
+                            beta_vals = posterior[beta_name].values.flatten()
+                            # Rough estimate
+                            contrib_samples = beta_vals * y_std * n_obs * 0.5
+                            break
+                
+                if contrib_samples is not None and len(contrib_samples) > 0:
+                    roi_samples = contrib_samples / spend
+                    
+                    roi_results[ch] = {
+                        "mean": float(np.mean(roi_samples)),
+                        "lower": float(np.percentile(roi_samples, (1 - self.ci_prob) / 2 * 100)),
+                        "upper": float(np.percentile(roi_samples, (1 + self.ci_prob) / 2 * 100)),
+                    }
             
-            return channel_roi if channel_roi else None
+            return roi_results if roi_results else None
+            
         except Exception as e:
             logger.warning(f"Error computing channel ROI: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             return None
     
     def _get_component_totals(self) -> dict[str, float] | None:
-        """Get total contribution by component."""
+        """Get total contribution by component"""
         try:
-            logger.debug("Retrieving component totals for decomposition")
+            logger.debug("Computing component totals")
+            
+            # Try model's method first
             if hasattr(self.mmm, "compute_contributions"):
-                logger.debug("Using model's compute_contributions method")
                 contrib = self.mmm.compute_contributions()
                 if hasattr(contrib, "component_totals"):
-                    logger.debug("Component totals found")
                     return dict(contrib.component_totals)
+            
+            trace = getattr(self.mmm, "_trace", None)
+            if trace is None or not hasattr(trace, "posterior"):
+                return None
+            
+            posterior = trace.posterior
+            y_std = getattr(self.mmm, "y_std", 1.0)
+            n_obs = getattr(self.mmm, "n_obs", 52)
+            
+            totals = {}
+            
+            # Baseline/Intercept
+            if "intercept" in posterior:
+                intercept = float(posterior["intercept"].values.mean()) * y_std * n_obs
+                totals["Baseline"] = intercept
+            
+            # Media channels
+            channels = self._get_channel_names()
+            current_spend = self._get_current_spend()
+            
+            for ch in channels:
+                # Try to get contribution from trace
+                contrib_names = [
+                    f"contribution_{ch}",
+                    f"channel_contribution_{ch}",
+                    f"media_contribution_{ch}",
+                ]
+                
+                found = False
+                for contrib_name in contrib_names:
+                    if contrib_name in posterior:
+                        # Sum over time
+                        contrib_vals = posterior[contrib_name].values
+                        total_contrib = float(contrib_vals.mean()) * y_std
+                        if contrib_vals.ndim > 2:
+                            # Has time dimension - sum it
+                            total_contrib = float(contrib_vals.sum(axis=-1).mean()) * y_std
+                        totals[ch] = total_contrib
+                        found = True
+                        break
+                
+                if not found:
+                    # Estimate from beta
+                    for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
+                        if beta_name in posterior:
+                            beta_val = float(posterior[beta_name].values.mean())
+                            
+                            # Try to get media sum
+                            if current_spend and ch in current_spend:
+                                # Rough estimate
+                                totals[ch] = beta_val * y_std * n_obs * 0.5  # Approximate
+                            else:
+                                totals[ch] = beta_val * y_std * n_obs
+                            break
+            
+            return totals if totals else None
+            
         except Exception as e:
-            logger.warning(f"Error retrieving component totals: {e}")
-            pass
-        return None
+            logger.warning(f"Error computing component totals: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return None
     
     def _get_component_time_series(self) -> dict[str, np.ndarray] | None:
-        """Get component time series for decomposition chart."""
+        """Get component time series for decomposition chart - FIXED VERSION."""
         try:
-            logger.debug("Retrieving component time series for decomposition")
-            if hasattr(self.mmm, "compute_contributions"):
-                logger.debug("Using model's compute_contributions method")
-                contrib = self.mmm.compute_contributions()
-                if hasattr(contrib, "component_time_series"):
-                    return {k: np.array(v) for k, v in contrib.component_time_series.items()}
+            logger.debug("Computing component time series")
+            
+            trace = getattr(self.mmm, "_trace", None)
+            if trace is None or not hasattr(trace, "posterior"):
+                return None
+            
+            posterior = trace.posterior
+            y_std = getattr(self.mmm, "y_std", 1.0)
+            n_obs = getattr(self.mmm, "n_obs", 52)
+            
+            components = {}
+            
+            # Baseline - constant
+            if "intercept" in posterior:
+                intercept = float(posterior["intercept"].values.mean()) * y_std
+                components["Baseline"] = np.full(n_obs, intercept)
+            
+            # Trend
+            trend_names = ["trend", "trend_contribution", "trend_component"]
+            for trend_name in trend_names:
+                if trend_name in posterior:
+                    trend_vals = posterior[trend_name].values
+                    # Average over chains and draws
+                    trend_mean = trend_vals.mean(axis=(0, 1))
+                    if len(trend_mean) == n_obs:
+                        components["Trend"] = trend_mean * y_std
+                    break
+            
+            # Seasonality
+            seas_names = ["seasonality", "seasonality_component", "seasonal_effect"]
+            for seas_name in seas_names:
+                if seas_name in posterior:
+                    seas_vals = posterior[seas_name].values
+                    seas_mean = seas_vals.mean(axis=(0, 1))
+                    if len(seas_mean) == n_obs:
+                        components["Seasonality"] = seas_mean * y_std
+                    break
+            
+            # Channel contributions
+            channels = self._get_channel_names()
+            
+            # Try channel_contributions array
+            if "channel_contributions" in posterior:
+                contrib_da = posterior["channel_contributions"]
+                contrib_vals = contrib_da.values  # Get numpy first!
+                
+                # Average over chains and draws
+                if contrib_vals.ndim >= 3:
+                    contrib_mean = contrib_vals.mean(axis=(0, 1))  # (time, channels) or (channels,)
+                    
+                    if contrib_mean.ndim == 2 and contrib_mean.shape[0] == n_obs:
+                        # Shape is (time, channels)
+                        for i, ch in enumerate(channels):
+                            if i < contrib_mean.shape[1]:
+                                components[ch] = contrib_mean[:, i] * y_std
+                    elif contrib_mean.ndim == 2 and contrib_mean.shape[1] == n_obs:
+                        # Shape is (channels, time)
+                        for i, ch in enumerate(channels):
+                            if i < contrib_mean.shape[0]:
+                                components[ch] = contrib_mean[i, :] * y_std
+            else:
+                # Try individual contribution variables
+                for ch in channels:
+                    contrib_names = [
+                        f"contribution_{ch}",
+                        f"channel_contribution_{ch}",
+                        f"media_contribution_{ch}",
+                    ]
+                    
+                    for contrib_name in contrib_names:
+                        if contrib_name in posterior:
+                            contrib_vals = posterior[contrib_name].values
+                            contrib_mean = contrib_vals.mean(axis=(0, 1))
+                            if len(contrib_mean) == n_obs:
+                                components[ch] = contrib_mean * y_std
+                            break
+            
+            return components if components else None
+            
         except Exception as e:
-            logger.warning(f"Error retrieving component time series: {e}")
-            pass
-        return None
+            logger.warning(f"Error computing component time series: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return None
     
     def _compute_marketing_attribution(self) -> dict[str, float] | None:
         """Compute total marketing-attributed revenue with uncertainty."""
@@ -476,77 +662,180 @@ class BayesianMMMExtractor(DataExtractor):
         }
     
     def _get_saturation_curves(self) -> dict[str, dict[str, np.ndarray]] | None:
-        """Get saturation curve data for each channel."""
+        """Get saturation curve data for each channel - FIXED VERSION."""
         try:
+            # If model has a method for this, use it
             if hasattr(self.mmm, "compute_saturation_curves"):
-                return self.mmm.compute_saturation_curves()
+                result = self.mmm.compute_saturation_curves()
+                if result:
+                    return result
             
-            # Generate from parameters
             channels = self._get_channel_names()
+            if not channels:
+                return None
+            
+            # Get current spend for setting spend range
+            current_spend = self._get_current_spend()
+            
+            trace = getattr(self.mmm, "_trace", None)
+            if trace is None or not hasattr(trace, "posterior"):
+                logger.debug("No trace/posterior found for saturation curves")
+                return None
+            
+            posterior = trace.posterior
             curves = {}
             
             for ch in channels:
-                # Get current spend range
-                spend_range = np.linspace(0, 1e6, 100)  # Placeholder
+                # Determine spend range
+                max_spend = 1e6  # Default
+                if current_spend and ch in current_spend:
+                    max_spend = current_spend[ch] * 2  # 2x current spend
                 
-                # Try to get saturation parameters
-                trace = getattr(self.mmm, "_trace", None)
-                if trace is not None and hasattr(trace, "posterior"):
-                    # Look for Hill parameters
-                    k_name = f"kappa_{ch}"
-                    s_name = f"slope_{ch}"
+                spend_range = np.linspace(0, max_spend, 100)
+                
+                # Try Hill saturation parameters
+                kappa_names = [f"kappa_{ch}", f"K_{ch}", f"sat_K_{ch}"]
+                slope_names = [f"slope_{ch}", f"S_{ch}", f"sat_S_{ch}", f"n_{ch}"]
+                
+                kappa_val = None
+                slope_val = None
+                
+                for k_name in kappa_names:
+                    if k_name in posterior:
+                        kappa_val = float(posterior[k_name].values.mean())
+                        break
+                
+                for s_name in slope_names:
+                    if s_name in posterior:
+                        slope_val = float(posterior[s_name].values.mean())
+                        break
+                
+                if kappa_val is not None and slope_val is not None:
+                    # Hill function
+                    response = spend_range ** slope_val / (kappa_val ** slope_val + spend_range ** slope_val)
                     
-                    if k_name in trace.posterior and s_name in trace.posterior:
-                        k = float(trace.posterior[k_name].values.mean())
-                        s = float(trace.posterior[s_name].values.mean())
+                    # Scale by beta if available
+                    for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
+                        if beta_name in posterior:
+                            beta_val = float(posterior[beta_name].values.mean())
+                            response = response * beta_val
+                            break
+                    
+                    curves[ch] = {"spend": spend_range, "response": response}
+                    logger.debug(f"Generated Hill saturation curve for {ch}")
+                    continue
+                
+                # Try exponential saturation (sat_lam)
+                for lam_name in [f"sat_lam_{ch}", f"saturation_lam_{ch}", f"lam_{ch}"]:
+                    if lam_name in posterior:
+                        lam_val = float(posterior[lam_name].values.mean())
                         
-                        # Hill function
-                        response = spend_range ** s / (k ** s + spend_range ** s)
+                        # Exponential saturation: 1 - exp(-lam * x)
+                        response = 1 - np.exp(-lam_val * spend_range / max(spend_range.max(), 1))
+                        
+                        # Scale by beta if available
+                        for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
+                            if beta_name in posterior:
+                                beta_val = float(posterior[beta_name].values.mean())
+                                response = response * beta_val
+                                break
+                        
                         curves[ch] = {"spend": spend_range, "response": response}
+                        logger.debug(f"Generated exponential saturation curve for {ch}")
+                        break
             
             return curves if curves else None
-        except Exception:
+            
+        except Exception as e:
+            logger.warning(f"Error getting saturation curves: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             return None
+
     
     def _get_adstock_curves(self) -> dict[str, np.ndarray] | None:
-        """Get adstock decay weights for each channel."""
+        """Get adstock decay weights for each channel"""
         try:
             if hasattr(self.mmm, "compute_adstock_curves"):
-                return self.mmm.compute_adstock_curves()
+                result = self.mmm.compute_adstock_curves()
+                if result:
+                    return result
             
             channels = self._get_channel_names()
-            curves = {}
+            if not channels:
+                return None
             
             trace = getattr(self.mmm, "_trace", None)
-            if trace is not None and hasattr(trace, "posterior"):
-                for ch in channels:
-                    alpha_name = f"alpha_{ch}"
-                    if alpha_name in trace.posterior:
-                        alpha = float(trace.posterior[alpha_name].values.mean())
-                        l_max = getattr(self.mmm, "adstock_lmax", 8)
-                        
-                        # Geometric decay
-                        lags = np.arange(l_max)
-                        weights = alpha ** lags
-                        weights = weights / weights.sum()
-                        curves[ch] = weights
+            if trace is None or not hasattr(trace, "posterior"):
+                return None
+            
+            posterior = trace.posterior
+            curves = {}
+            
+            for ch in channels:
+                # Try different alpha parameter names
+                alpha_names = [f"alpha_{ch}", f"adstock_{ch}", f"decay_{ch}", f"adstock_alpha_{ch}"]
+                
+                alpha_val = None
+                for alpha_name in alpha_names:
+                    if alpha_name in posterior:
+                        alpha_val = float(posterior[alpha_name].values.mean())
+                        break
+                
+                if alpha_val is not None and 0 < alpha_val < 1:
+                    # Get l_max from model config or default
+                    l_max = getattr(self.mmm, "adstock_lmax", 8)
+                    if hasattr(self.mmm, "model_config"):
+                        l_max = getattr(self.mmm.model_config, "adstock_lmax", l_max)
+                    
+                    # Geometric decay weights
+                    lags = np.arange(l_max)
+                    weights = alpha_val ** lags
+                    weights = weights / weights.sum()  # Normalize
+                    
+                    curves[ch] = weights
+                    logger.debug(f"Generated adstock curve for {ch}: alpha={alpha_val:.3f}")
             
             return curves if curves else None
-        except Exception:
+            
+        except Exception as e:
+            logger.warning(f"Error getting adstock curves: {e}")
             return None
     
     def _get_current_spend(self) -> dict[str, float] | None:
-        """Get current spend levels by channel."""
+        """Get current spend levels by channel"""
         try:
+            channels = self._get_channel_names()
+            if not channels:
+                logger.debug("No channel names found for spend extraction")
+                return None
+            
+            # Try to get X_media from panel
+            X_media = None
             if self.panel is not None and hasattr(self.panel, "X_media"):
-                channels = self._get_channel_names()
                 X_media = self.panel.X_media
-                
-                if X_media is not None:
-                    return {ch: float(X_media[:, i].sum()) for i, ch in enumerate(channels)}
-        except Exception:
-            pass
-        return None
+            elif hasattr(self.mmm, "X_media_raw"):
+                X_media = self.mmm.X_media_raw
+            elif hasattr(self.mmm, "X_media"):
+                X_media = self.mmm.X_media
+            
+            if X_media is None:
+                logger.debug("No X_media found for spend extraction")
+                return None
+            
+            spend = {}
+            for i, ch in enumerate(channels):
+                col_data = _safe_get_column(X_media, i, ch)
+                if col_data is not None:
+                    spend[ch] = float(col_data.sum())
+                else:
+                    logger.debug(f"Could not extract spend for channel {ch}")
+            
+            return spend if spend else None
+            
+        except Exception as e:
+            logger.warning(f"Error getting current spend: {e}")
+            return None
     
     def _get_trace_data(self) -> tuple[dict[str, np.ndarray] | None, list[str] | None]:
         """Get trace data for diagnostic plots."""
@@ -576,26 +865,151 @@ class BayesianMMMExtractor(DataExtractor):
         try:
             trace = getattr(self.mmm, "_trace", None)
             if trace is None:
+                logger.debug("No trace found for prior/posterior extraction")
                 return None, None
             
             posterior_samples = {}
             prior_samples = {}
             
-            # Get posterior
+            # Get posterior samples
             if hasattr(trace, "posterior"):
+                # Select key parameters to include
+                key_prefixes = ["beta", "sigma", "intercept", "alpha", "adstock", 
+                            "sat_lam", "kappa", "slope"]
+                
                 for var_name in trace.posterior.data_vars:
-                    if any(prefix in var_name for prefix in ["beta", "sigma"]):
-                        posterior_samples[var_name] = trace.posterior[var_name].values.flatten()
+                    # Only include key parameters (not all deterministics)
+                    if any(prefix in var_name for prefix in key_prefixes):
+                        try:
+                            samples = trace.posterior[var_name].values.flatten()
+                            # Subsample if too many
+                            if len(samples) > 2000:
+                                idx = np.random.choice(len(samples), 2000, replace=False)
+                                samples = samples[idx]
+                            posterior_samples[var_name] = samples
+                        except Exception as e:
+                            logger.debug(f"Could not extract posterior for {var_name}: {e}")
             
-            # Get prior if available
+            if not posterior_samples:
+                logger.debug("No posterior samples extracted")
+                return None, None
+            
+            # Try to get prior samples from trace (if sample_prior_predictive was called)
             if hasattr(trace, "prior"):
                 for var_name in trace.prior.data_vars:
                     if var_name in posterior_samples:
-                        prior_samples[var_name] = trace.prior[var_name].values.flatten()
+                        try:
+                            samples = trace.prior[var_name].values.flatten()
+                            if len(samples) > 2000:
+                                idx = np.random.choice(len(samples), 2000, replace=False)
+                                samples = samples[idx]
+                            prior_samples[var_name] = samples
+                        except Exception as e:
+                            logger.debug(f"Could not extract prior for {var_name}: {e}")
             
-            return prior_samples if prior_samples else None, posterior_samples if posterior_samples else None
-        except Exception:
+            # If no prior samples in trace, try to generate from model
+            if not prior_samples:
+                prior_samples = self._generate_prior_samples(posterior_samples.keys())
+            
+            logger.debug(f"Extracted {len(posterior_samples)} posterior params, {len(prior_samples)} prior params")
+            
+            return (
+                prior_samples if prior_samples else None, 
+                posterior_samples if posterior_samples else None
+            )
+            
+        except Exception as e:
+            logger.warning(f"Error in _get_prior_posterior: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             return None, None
+
+
+    def _generate_prior_samples(self, param_names: list[str], n_samples: int = 1000) -> dict[str, np.ndarray]:
+        """
+        Generate prior samples from model specification.
+        
+        This is used when sample_prior_predictive wasn't called during fitting.
+        """
+        import pymc as pm
+        
+        prior_samples = {}
+        
+        try:
+            model = getattr(self.mmm, "model", None) or getattr(self.mmm, "_model", None)
+            if model is None:
+                logger.debug("No PyMC model found for prior sampling")
+                return {}
+            
+            # Sample from prior
+            with model:
+                prior_trace = pm.sample_prior_predictive(samples=n_samples, random_seed=42)
+            
+            if hasattr(prior_trace, "prior"):
+                prior_data = prior_trace.prior
+                for param in param_names:
+                    if param in prior_data:
+                        try:
+                            samples = prior_data[param].values.flatten()
+                            if len(samples) > n_samples:
+                                idx = np.random.choice(len(samples), n_samples, replace=False)
+                                samples = samples[idx]
+                            prior_samples[param] = samples
+                        except Exception:
+                            pass
+            
+            logger.debug(f"Generated {len(prior_samples)} prior sample sets")
+            
+        except Exception as e:
+            logger.debug(f"Could not generate prior samples: {e}")
+            # Fall back to generating from known prior distributions
+            prior_samples = self._generate_fallback_priors(param_names, n_samples)
+        
+        return prior_samples
+
+
+    def _generate_fallback_priors(self, param_names: list[str], n_samples: int = 1000) -> dict[str, np.ndarray]:
+        """
+        Generate fallback prior samples based on common MMM prior conventions.
+        
+        Used when we can't sample from the actual model.
+        """
+        prior_samples = {}
+        
+        for param in param_names:
+            try:
+                if param.startswith("beta_") or param.startswith("beta_media_"):
+                    # Beta coefficients: HalfNormal(sigma=2)
+                    prior_samples[param] = np.abs(np.random.normal(0, 2, n_samples))
+                
+                elif param == "sigma":
+                    # Noise scale: HalfNormal(sigma=1)
+                    prior_samples[param] = np.abs(np.random.normal(0, 1, n_samples))
+                
+                elif param == "intercept":
+                    # Intercept: Normal(0, 5)
+                    prior_samples[param] = np.random.normal(0, 5, n_samples)
+                
+                elif param.startswith("alpha_") or param.startswith("adstock_"):
+                    # Adstock decay: Beta(1, 3) - favors lower values
+                    prior_samples[param] = np.random.beta(1, 3, n_samples)
+                
+                elif param.startswith("sat_lam_") or param.startswith("saturation_"):
+                    # Saturation rate: Gamma(2, 1)
+                    prior_samples[param] = np.random.gamma(2, 1, n_samples)
+                
+                elif param.startswith("kappa_") or param.startswith("K_"):
+                    # Hill half-saturation: Gamma(2, 1)
+                    prior_samples[param] = np.random.gamma(2, 1, n_samples)
+                
+                elif param.startswith("slope_") or param.startswith("S_"):
+                    # Hill slope: Gamma(3, 1)
+                    prior_samples[param] = np.random.gamma(3, 1, n_samples)
+                
+            except Exception:
+                pass
+        
+        return prior_samples
     
     def _get_model_specification(self) -> dict[str, Any] | None:
         """Get model specification details."""
