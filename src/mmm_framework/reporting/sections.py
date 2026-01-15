@@ -673,12 +673,14 @@ class DiagnosticsSection(Section):
         
         # Prior/posterior comparison
         if self.data.prior_samples and self.data.posterior_samples:
+            parameter_names = list(self.data.posterior_samples.keys())
+            len_params = len(parameter_names)
             prior_post_chart = charts.create_prior_posterior_chart(
-                parameter_names=list(self.data.posterior_samples.keys())[:6],
+                parameter_names=parameter_names,
                 prior_samples=self.data.prior_samples,
                 posterior_samples=self.data.posterior_samples,
                 config=self.config,
-                chart_config=ChartConfig(height=250),
+                chart_config=ChartConfig(height=int(250*min(len_params/6, 1))),
             )
             content_parts.append(f'''
                 <h3>Prior vs Posterior</h3>
