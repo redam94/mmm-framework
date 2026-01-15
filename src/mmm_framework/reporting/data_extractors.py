@@ -34,7 +34,20 @@ class MMMDataBundle:
     
     # Time index
     dates: np.ndarray | pd.DatetimeIndex | list | None = None
+
     
+    # Metadata
+    geo_names: list[str] | None = None
+    
+    # Geo-level observed values: {geo_name: ndarray of shape (n_periods,)}
+    actual_by_geo: dict[str, np.ndarray] | None = None
+    
+    # Geo-level predictions: {geo_name: {"mean": ndarray, "lower": ndarray, "upper": ndarray}}
+    predicted_by_geo: dict[str, dict[str, np.ndarray]] | None = None
+    
+    # Geo-level fit statistics: {geo_name: {"r2": float, "rmse": float, "mape": float}}
+    fit_statistics_by_geo: dict[str, dict[str, float]] | None = None
+
     # Actual vs predicted
     actual: np.ndarray | None = None
     predicted: dict[str, np.ndarray] | None = None  # {"mean", "lower", "upper"}
@@ -101,7 +114,28 @@ class MMMDataBundle:
     product_names: list[str] | None = None
     cannibalization_matrix: dict[str, dict[str, dict[str, float]]] | None = None  # {source: {target: {"mean", "lower", "upper"}}}
     net_product_effects: dict[str, dict[str, float]] | None = None  # {product: {"direct", "cannibalization", "net"}}
+    component_time_series_by_geo: dict[str, dict[str, np.ndarray]] | None = None
+    
+    # Geo-level component totals: {geo_name: {component_name: float}}
+    component_totals_by_geo: dict[str, dict[str, float]] | None = None
 
+    @property
+    def has_geo_data(self) -> bool:
+        """Check if geo-level data is available."""
+        return (
+            self.geo_names is not None 
+            and len(self.geo_names) > 1
+            and self.actual_by_geo is not None
+        )
+    
+    @property
+    def has_geo_decomposition(self) -> bool:
+        """Check if geo-level decomposition is available."""
+        return (
+            self.geo_names is not None
+            and len(self.geo_names) > 1
+            and self.component_time_series_by_geo is not None
+        )
 
 @runtime_checkable
 class HasTrace(Protocol):
@@ -165,6 +199,286 @@ class DataExtractor(ABC):
         except Exception:
             return {}
 
+class BayesianMMMExtractorGeoMixin:
+    """
+    Mixin class with geo-level extraction methods.
+    
+    Add these methods to the existing BayesianMMMExtractor class.
+    """
+    
+    def _extract_geo_level_fit_data(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract geo-level model fit data.
+        
+        Populates:
+        - bundle.actual_by_geo
+        - bundle.predicted_by_geo
+        - bundle.fit_statistics_by_geo
+        """
+        # Check if we have geo-level data
+        if not hasattr(self, 'panel') or self.panel is None:
+            return bundle
+        
+        panel = self.panel
+        mmm = self.mmm
+        
+        # Get geo info
+        geo_names = self._get_geo_names()
+        if geo_names is None or len(geo_names) <= 1:
+            return bundle
+        
+        bundle.geo_names = geo_names
+        
+        try:
+            # Get indices
+            geo_idx = self._get_geo_indices()
+            if geo_idx is None:
+                return bundle
+            
+            # Get observed values (original scale)
+            y_obs = self._get_actual_original_scale()
+            if y_obs is None:
+                return bundle
+            
+            # Get predictions
+            y_pred_mean, y_pred_lower, y_pred_upper = self._get_predictions_original_scale()
+            if y_pred_mean is None:
+                return bundle
+            
+            # Get period info
+            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+            n_geos = len(geo_names)
+            
+            # Initialize geo-level storage
+            bundle.actual_by_geo = {}
+            bundle.predicted_by_geo = {}
+            bundle.fit_statistics_by_geo = {}
+            
+            # Aggregate by geo (sum over products if applicable)
+            for g_idx, geo in enumerate(geo_names):
+                # Get mask for this geo
+                geo_mask = (geo_idx == g_idx)
+                
+                # Aggregate observed values for this geo over time
+                y_obs_geo = self._aggregate_by_period(y_obs[geo_mask], n_periods, geo_mask)
+                y_pred_mean_geo = self._aggregate_by_period(y_pred_mean[geo_mask], n_periods, geo_mask)
+                y_pred_lower_geo = self._aggregate_by_period(y_pred_lower[geo_mask], n_periods, geo_mask)
+                y_pred_upper_geo = self._aggregate_by_period(y_pred_upper[geo_mask], n_periods, geo_mask)
+                
+                bundle.actual_by_geo[geo] = y_obs_geo
+                bundle.predicted_by_geo[geo] = {
+                    "mean": y_pred_mean_geo,
+                    "lower": y_pred_lower_geo,
+                    "upper": y_pred_upper_geo,
+                }
+                
+                # Compute fit statistics for this geo
+                bundle.fit_statistics_by_geo[geo] = self._compute_fit_statistics(
+                    y_obs_geo, 
+                    {"mean": y_pred_mean_geo, "lower": y_pred_lower_geo, "upper": y_pred_upper_geo}
+                )
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract geo-level fit data: {e}")
+        
+        return bundle
+    
+    def _extract_geo_level_decomposition(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract geo-level decomposition data.
+        
+        Populates:
+        - bundle.component_time_series_by_geo
+        - bundle.component_totals_by_geo
+        """
+        if bundle.geo_names is None or len(bundle.geo_names) <= 1:
+            return bundle
+        
+        try:
+            mmm = self.mmm
+            panel = self.panel
+            
+            geo_names = bundle.geo_names
+            geo_idx = self._get_geo_indices()
+            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+            
+            # Get decomposition components at observation level
+            components = self._get_decomposition_components_obs_level()
+            if components is None:
+                return bundle
+            
+            bundle.component_time_series_by_geo = {}
+            bundle.component_totals_by_geo = {}
+            
+            for g_idx, geo in enumerate(geo_names):
+                geo_mask = (geo_idx == g_idx)
+                
+                bundle.component_time_series_by_geo[geo] = {}
+                bundle.component_totals_by_geo[geo] = {}
+                
+                for comp_name, comp_values in components.items():
+                    # Aggregate this component for this geo over time
+                    comp_geo = self._aggregate_by_period(
+                        comp_values[geo_mask], n_periods, geo_mask
+                    )
+                    bundle.component_time_series_by_geo[geo][comp_name] = comp_geo
+                    bundle.component_totals_by_geo[geo][comp_name] = float(comp_geo.sum())
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract geo-level decomposition: {e}")
+        
+        return bundle
+    
+    def _get_geo_names(self) -> list[str] | None:
+        """Get geography names from panel or model."""
+        if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'geographies'):
+            return list(self.panel.coords.geographies)
+        if hasattr(self.mmm, 'geo_names'):
+            return list(self.mmm.geo_names)
+        return None
+    
+    def _get_geo_indices(self) -> np.ndarray | None:
+        """Get geo index for each observation."""
+        if hasattr(self.panel, 'geo_idx'):
+            return np.array(self.panel.geo_idx)
+        return None
+    
+    def _get_actual_original_scale(self) -> np.ndarray | None:
+        """Get observed values in original scale."""
+        if self.panel is None:
+            return None
+        
+        y_standardized = self.panel.y.values.flatten()
+        y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+        y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+        
+        return y_standardized * y_std + y_mean
+    
+    def _get_predictions_original_scale(self) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[None, None, None]:
+        """Get predictions in original scale with uncertainty."""
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None:
+            return None, None, None
+        
+        try:
+            if hasattr(trace, 'posterior_predictive') and 'y' in trace.posterior_predictive:
+                y_samples = trace.posterior_predictive['y'].values
+                y_samples = y_samples.reshape(-1, y_samples.shape[-1])
+            elif hasattr(trace, 'posterior') and 'mu' in trace.posterior:
+                y_samples = trace.posterior['mu'].values
+                y_samples = y_samples.reshape(-1, y_samples.shape[-1])
+            else:
+                return None, None, None
+            
+            # Transform to original scale
+            y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+            y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+            
+            y_samples_orig = y_samples * y_std + y_mean
+            
+            y_pred_mean = y_samples_orig.mean(axis=0)
+            alpha = (1 - self.ci_prob) / 2
+            y_pred_lower = np.percentile(y_samples_orig, alpha * 100, axis=0)
+            y_pred_upper = np.percentile(y_samples_orig, (1 - alpha) * 100, axis=0)
+            
+            return y_pred_mean, y_pred_lower, y_pred_upper
+            
+        except Exception:
+            return None, None, None
+    
+    def _aggregate_by_period(
+        self,
+        values: np.ndarray,
+        n_periods: int,
+        geo_mask: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Aggregate values by period for a specific geo.
+        
+        If there are multiple products, this sums over products within each period.
+        """
+        # Simple case: one observation per period per geo
+        n_obs = len(values)
+        if n_obs == n_periods:
+            return values
+        
+        # Multiple products case: need to reshape and sum
+        # Assumes data is ordered: periods are innermost, then geos, then products
+        n_products = n_obs // n_periods
+        if n_products * n_periods == n_obs:
+            return values.reshape(n_products, n_periods).sum(axis=0)
+        
+        # Fallback: return as-is (may need custom handling)
+        return values
+    
+    def _get_decomposition_components_obs_level(self) -> dict[str, np.ndarray] | None:
+        """
+        Get decomposition components at observation level (not yet aggregated).
+        
+        Returns dict mapping component name to array of shape (n_obs,).
+        """
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None:
+            return None
+        
+        components = {}
+        posterior = trace.posterior
+        
+        y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+        y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+        n_obs = len(self.panel.y.values.flatten())
+        
+        try:
+            # Intercept/Baseline
+            if 'intercept' in posterior:
+                intercept = float(posterior['intercept'].values.mean())
+                # Baseline is intercept * y_std + y_mean spread over observations
+                components['Baseline'] = np.full(n_obs, intercept * y_std + y_mean / n_obs)
+            
+            # Trend
+            if 'trend' in posterior:
+                trend_samples = posterior['trend'].values
+                trend_mean = trend_samples.mean(axis=(0, 1))
+                if len(trend_mean) == n_obs:
+                    components['Trend'] = trend_mean * y_std
+            
+            # Seasonality
+            if 'seasonality' in posterior:
+                seas_samples = posterior['seasonality'].values
+                seas_mean = seas_samples.mean(axis=(0, 1))
+                if len(seas_mean) == n_obs:
+                    components['Seasonality'] = seas_mean * y_std
+            
+            # Media channels
+            channel_names = self._get_channel_names()
+            for ch in channel_names:
+                contrib_key = f'channel_contribution_{ch}'
+                if contrib_key in posterior:
+                    contrib = posterior[contrib_key].values.mean(axis=(0, 1))
+                    if len(contrib) == n_obs:
+                        components[ch] = contrib * y_std
+            
+            # Controls
+            if hasattr(self.mmm, 'control_names'):
+                for ctrl in self.mmm.control_names:
+                    ctrl_key = f'control_contribution_{ctrl}'
+                    if ctrl_key in posterior:
+                        ctrl_contrib = posterior[ctrl_key].values.mean(axis=(0, 1))
+                        if len(ctrl_contrib) == n_obs:
+                            components[f'Control: {ctrl}'] = ctrl_contrib * y_std
+            
+            return components if components else None
+            
+        except Exception:
+            return None
 
 class BayesianMMMExtractor(DataExtractor):
     """
@@ -234,6 +548,9 @@ class BayesianMMMExtractor(DataExtractor):
             
             # Prior/posterior
             bundle.prior_samples, bundle.posterior_samples = self._get_prior_posterior()
+
+            bundle = self._extract_geo_level_fit_data(bundle)
+            bundle = self._extract_geo_level_decomposition(bundle)
         
         # Model specification
         bundle.model_specification = self._get_model_specification()
@@ -337,6 +654,279 @@ class BayesianMMMExtractor(DataExtractor):
         mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask]))
         
         return {"r2": r2, "rmse": rmse, "mae": mae, "mape": mape}
+    def _extract_geo_level_fit_data(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract geo-level model fit data.
+        
+        Populates:
+        - bundle.actual_by_geo
+        - bundle.predicted_by_geo
+        - bundle.fit_statistics_by_geo
+        """
+        # Check if we have geo-level data
+        if not hasattr(self, 'panel') or self.panel is None:
+            return bundle
+        
+        panel = self.panel
+        mmm = self.mmm
+        
+        # Get geo info
+        geo_names = self._get_geo_names()
+        if geo_names is None or len(geo_names) <= 1:
+            return bundle
+        
+        bundle.geo_names = geo_names
+        
+        try:
+            # Get indices
+            geo_idx = self._get_geo_indices()
+            if geo_idx is None:
+                return bundle
+            
+            # Get observed values (original scale)
+            y_obs = self._get_actual_original_scale()
+            if y_obs is None:
+                return bundle
+            
+            # Get predictions
+            y_pred_mean, y_pred_lower, y_pred_upper = self._get_predictions_original_scale()
+            if y_pred_mean is None:
+                return bundle
+            
+            # Get period info
+            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+            n_geos = len(geo_names)
+            
+            # Initialize geo-level storage
+            bundle.actual_by_geo = {}
+            bundle.predicted_by_geo = {}
+            bundle.fit_statistics_by_geo = {}
+            
+            # Aggregate by geo (sum over products if applicable)
+            for g_idx, geo in enumerate(geo_names):
+                # Get mask for this geo
+                geo_mask = (geo_idx == g_idx)
+                
+                # Aggregate observed values for this geo over time
+                y_obs_geo = self._aggregate_by_period(y_obs[geo_mask], n_periods, geo_mask)
+                y_pred_mean_geo = self._aggregate_by_period(y_pred_mean[geo_mask], n_periods, geo_mask)
+                y_pred_lower_geo = self._aggregate_by_period(y_pred_lower[geo_mask], n_periods, geo_mask)
+                y_pred_upper_geo = self._aggregate_by_period(y_pred_upper[geo_mask], n_periods, geo_mask)
+                
+                bundle.actual_by_geo[geo] = y_obs_geo
+                bundle.predicted_by_geo[geo] = {
+                    "mean": y_pred_mean_geo,
+                    "lower": y_pred_lower_geo,
+                    "upper": y_pred_upper_geo,
+                }
+                
+                # Compute fit statistics for this geo
+                bundle.fit_statistics_by_geo[geo] = self._compute_fit_statistics(
+                    y_obs_geo, 
+                    {"mean": y_pred_mean_geo, "lower": y_pred_lower_geo, "upper": y_pred_upper_geo}
+                )
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract geo-level fit data: {e}")
+        
+        return bundle
+    
+    def _extract_geo_level_decomposition(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract geo-level decomposition data.
+        
+        Populates:
+        - bundle.component_time_series_by_geo
+        - bundle.component_totals_by_geo
+        """
+        if bundle.geo_names is None or len(bundle.geo_names) <= 1:
+            return bundle
+        
+        try:
+            mmm = self.mmm
+            panel = self.panel
+            
+            geo_names = bundle.geo_names
+            geo_idx = self._get_geo_indices()
+            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+            
+            # Get decomposition components at observation level
+            components = self._get_decomposition_components_obs_level()
+            if components is None:
+                return bundle
+            
+            bundle.component_time_series_by_geo = {}
+            bundle.component_totals_by_geo = {}
+            
+            for g_idx, geo in enumerate(geo_names):
+                geo_mask = (geo_idx == g_idx)
+                
+                bundle.component_time_series_by_geo[geo] = {}
+                bundle.component_totals_by_geo[geo] = {}
+                
+                for comp_name, comp_values in components.items():
+                    # Aggregate this component for this geo over time
+                    comp_geo = self._aggregate_by_period(
+                        comp_values[geo_mask], n_periods, geo_mask
+                    )
+                    bundle.component_time_series_by_geo[geo][comp_name] = comp_geo
+                    bundle.component_totals_by_geo[geo][comp_name] = float(comp_geo.sum())
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract geo-level decomposition: {e}")
+        
+        return bundle
+    
+    def _get_geo_names(self) -> list[str] | None:
+        """Get geography names from panel or model."""
+        if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'geographies'):
+            return list(self.panel.coords.geographies)
+        if hasattr(self.mmm, 'geo_names'):
+            return list(self.mmm.geo_names)
+        return None
+    
+    def _get_geo_indices(self) -> np.ndarray | None:
+        """Get geo index for each observation."""
+        if hasattr(self.panel, 'geo_idx'):
+            return np.array(self.panel.geo_idx)
+        return None
+    
+    def _get_actual_original_scale(self) -> np.ndarray | None:
+        """Get observed values in original scale."""
+        if self.panel is None:
+            return None
+        
+        y_standardized = self.panel.y.values.flatten()
+        y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+        y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+        
+        return y_standardized * y_std + y_mean
+    
+    def _get_predictions_original_scale(self) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[None, None, None]:
+        """Get predictions in original scale with uncertainty."""
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None:
+            return None, None, None
+        
+        try:
+            if hasattr(trace, 'posterior_predictive') and 'y' in trace.posterior_predictive:
+                y_samples = trace.posterior_predictive['y'].values
+                y_samples = y_samples.reshape(-1, y_samples.shape[-1])
+            elif hasattr(trace, 'posterior') and 'mu' in trace.posterior:
+                y_samples = trace.posterior['mu'].values
+                y_samples = y_samples.reshape(-1, y_samples.shape[-1])
+            else:
+                return None, None, None
+            
+            # Transform to original scale
+            y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+            y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+            
+            y_samples_orig = y_samples * y_std + y_mean
+            
+            y_pred_mean = y_samples_orig.mean(axis=0)
+            alpha = (1 - self.ci_prob) / 2
+            y_pred_lower = np.percentile(y_samples_orig, alpha * 100, axis=0)
+            y_pred_upper = np.percentile(y_samples_orig, (1 - alpha) * 100, axis=0)
+            
+            return y_pred_mean, y_pred_lower, y_pred_upper
+            
+        except Exception:
+            return None, None, None
+    
+    def _aggregate_by_period(
+        self,
+        values: np.ndarray,
+        n_periods: int,
+        geo_mask: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Aggregate values by period for a specific geo.
+        
+        If there are multiple products, this sums over products within each period.
+        """
+        # Simple case: one observation per period per geo
+        n_obs = len(values)
+        if n_obs == n_periods:
+            return values
+        
+        # Multiple products case: need to reshape and sum
+        # Assumes data is ordered: periods are innermost, then geos, then products
+        n_products = n_obs // n_periods
+        if n_products * n_periods == n_obs:
+            return values.reshape(n_products, n_periods).sum(axis=0)
+        
+        # Fallback: return as-is (may need custom handling)
+        return values
+    
+    def _get_decomposition_components_obs_level(self) -> dict[str, np.ndarray] | None:
+        """
+        Get decomposition components at observation level (not yet aggregated).
+        
+        Returns dict mapping component name to array of shape (n_obs,).
+        """
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None:
+            return None
+        
+        components = {}
+        posterior = trace.posterior
+        
+        y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+        y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+        n_obs = len(self.panel.y.values.flatten())
+        
+        try:
+            # Intercept/Baseline
+            if 'intercept' in posterior:
+                intercept = float(posterior['intercept'].values.mean())
+                # Baseline is intercept * y_std + y_mean spread over observations
+                components['Baseline'] = np.full(n_obs, intercept * y_std + y_mean / n_obs)
+            
+            # Trend
+            if 'trend' in posterior:
+                trend_samples = posterior['trend'].values
+                trend_mean = trend_samples.mean(axis=(0, 1))
+                if len(trend_mean) == n_obs:
+                    components['Trend'] = trend_mean * y_std
+            
+            # Seasonality
+            if 'seasonality' in posterior:
+                seas_samples = posterior['seasonality'].values
+                seas_mean = seas_samples.mean(axis=(0, 1))
+                if len(seas_mean) == n_obs:
+                    components['Seasonality'] = seas_mean * y_std
+            
+            # Media channels
+            channel_names = self._get_channel_names()
+            for ch in channel_names:
+                contrib_key = f'channel_contribution_{ch}'
+                if contrib_key in posterior:
+                    contrib = posterior[contrib_key].values.mean(axis=(0, 1))
+                    if len(contrib) == n_obs:
+                        components[ch] = contrib * y_std
+            
+            # Controls
+            if hasattr(self.mmm, 'control_names'):
+                for ctrl in self.mmm.control_names:
+                    ctrl_key = f'control_contribution_{ctrl}'
+                    if ctrl_key in posterior:
+                        ctrl_contrib = posterior[ctrl_key].values.mean(axis=(0, 1))
+                        if len(ctrl_contrib) == n_obs:
+                            components[f'Control: {ctrl}'] = ctrl_contrib * y_std
+            
+            return components if components else None
+            
+        except Exception:
+            return None
     
     def _compute_channel_roi(self) -> dict[str, dict[str, float]] | None:
         """Compute channel ROI with uncertainty - FIXED VERSION."""
@@ -589,6 +1179,24 @@ class BayesianMMMExtractor(DataExtractor):
     def _compute_marketing_attribution(self) -> dict[str, float] | None:
         """Compute total marketing-attributed revenue with uncertainty."""
         try:
+            # First, try using the model's compute_contributions method
+            if hasattr(self.mmm, "compute_counterfactual_contributions"):
+                contrib_results = self.mmm.compute_counterfactual_contributions(
+                    compute_uncertainty=True,
+                    hdi_prob=self.ci_prob,
+                )
+                total = float(contrib_results.total_contributions.sum())
+                # Get uncertainty from HDI if available
+                if contrib_results.contribution_hdi_low is not None:
+                    lower = float(contrib_results.contribution_hdi_low.sum())
+                    upper = float(contrib_results.contribution_hdi_high.sum())
+                else:
+                    # Rough estimate: ±15% of total
+                    lower = total * 0.85
+                    upper = total * 1.15
+                return {"mean": total, "lower": lower, "upper": upper}
+            
+            
             logger.debug("Computing total marketing-attributed revenue")
             trace = getattr(self.mmm, "_trace", None)
             logger.debug("Accessing model trace for attribution computation")

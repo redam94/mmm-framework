@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from .data_extractors import MMMDataBundle
 
 
-class Section(ABC):
+class Section:
     """Base class for report sections."""
     
     section_id: str = "section"
@@ -38,18 +38,14 @@ class Section(ABC):
     
     @property
     def title(self) -> str:
-        """Get section title."""
         return self.section_config.title or self.default_title
     
     @property
     def is_enabled(self) -> bool:
-        """Check if section should be rendered."""
         return self.section_config.enabled
     
-    @abstractmethod
     def render(self) -> str:
-        """Render section HTML."""
-        pass
+        raise NotImplementedError
     
     def _render_section_wrapper(self, content: str) -> str:
         """Wrap content in section div with title."""
@@ -73,14 +69,6 @@ class Section(ABC):
             {notes}
         </section>
         '''
-    
-    def _format_currency(self, value: float) -> str:
-        """Format value as currency using report config."""
-        return self.config.format_currency(value)
-    
-    def _format_percentage(self, value: float) -> str:
-        """Format value as percentage."""
-        return f"{value:{self.config.percentage_format}}"
 
 
 class ExecutiveSummarySection(Section):
@@ -223,7 +211,13 @@ class ExecutiveSummarySection(Section):
 
 
 class ModelFitSection(Section):
-    """Model fit visualization with actual vs predicted."""
+    """
+    Model fit visualization with actual vs predicted.
+    
+    UPDATED: Now includes geo-level dropdown selector when geo data is available.
+    The default view shows aggregated (total) model fit, with option to drill
+    down to individual geographies.
+    """
     
     section_id: str = "model-fit"
     default_title: str = "Model Fit"
@@ -232,70 +226,76 @@ class ModelFitSection(Section):
         if not self.is_enabled:
             return ""
         
-        # Check if we have the required data
+        # Check for required data
         if self.data.dates is None or self.data.actual is None or self.data.predicted is None:
             return ""
         
         chart_config = ChartConfig(
-            height=self.section_config.chart_height,
-            ci_level=self.section_config.credible_interval,
+            height=self.section_config.chart_height or 400,
+            ci_level=self.section_config.credible_interval or 0.8,
         )
         
-        # Model fit chart
-        fit_chart = charts.create_model_fit_chart(
+        # Determine if we have geo-level data
+        has_geo = self.data.has_geo_data
+        
+        # Create model fit chart with geo selector
+        fit_chart = charts.create_model_fit_chart_with_geo_selector(
             dates=self.data.dates,
-            actual=self.data.actual,
-            predicted_mean=self.data.predicted["mean"],
-            predicted_lower=self.data.predicted["lower"],
-            predicted_upper=self.data.predicted["upper"],
+            actual_agg=self.data.actual,
+            predicted_agg=self.data.predicted,
+            actual_by_geo=self.data.actual_by_geo if has_geo else None,
+            predicted_by_geo=self.data.predicted_by_geo if has_geo else None,
+            geo_names=self.data.geo_names if has_geo else None,
             config=self.config,
             chart_config=chart_config,
         )
         
-        # Fit statistics
-        stats_html = self._render_fit_statistics()
+        # Fit statistics with geo selector
+        stats_html = self._render_fit_statistics_with_geo()
+        
+        # Methodology note about aggregation
+        aggregation_note = ""
+        if has_geo:
+            aggregation_note = '''
+            <div class="methodology-note">
+                <p><strong>About this view:</strong> The default "Aggregated (Total)" view shows 
+                model fit summed across all geographies. Use the dropdown to examine fit for 
+                individual geographies. Good aggregate fit does not guarantee good fit in all 
+                regions—check individual geos if regional performance matters.</p>
+            </div>
+            '''
         
         content = f'''
+            <p>
+                The model fit shows observed data against posterior predictions. The shaded band 
+                represents the {int(chart_config.ci_level * 100)}% credible interval, capturing 
+                both parameter uncertainty and residual variance.
+            </p>
             {fit_chart}
             {stats_html}
+            {aggregation_note}
         '''
         
         return self._render_section_wrapper(content)
     
-    def _render_fit_statistics(self) -> str:
-        """Render model fit statistics."""
+    def _render_fit_statistics_with_geo(self) -> str:
+        """Render model fit statistics with geo selector."""
         if self.data.fit_statistics is None:
             return ""
         
-        stats = self.data.fit_statistics
+        has_geo = (
+            self.data.geo_names is not None 
+            and len(self.data.geo_names) > 1
+            and self.data.fit_statistics_by_geo is not None
+        )
         
-        rows = []
-        stat_labels = {
-            "r2": ("R²", ".3f"),
-            "rmse": ("RMSE", ",.0f"),
-            "mae": ("MAE", ",.0f"),
-            "mape": ("MAPE", ".1%"),
-        }
-        
-        for key, (label, fmt) in stat_labels.items():
-            if key in stats:
-                rows.append(f'''
-                    <tr>
-                        <td>{label}</td>
-                        <td class="mono">{stats[key]:{fmt}}</td>
-                    </tr>
-                ''')
-        
-        if not rows:
-            return ""
-        
-        return f'''
-            <h3>Fit Statistics</h3>
-            <table class="data-table" style="max-width: 400px;">
-                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
-                <tbody>{''.join(rows)}</tbody>
-            </table>
-        '''
+        return charts.create_fit_statistics_with_geo_selector(
+            fit_stats_agg=self.data.fit_statistics,
+            fit_stats_by_geo=self.data.fit_statistics_by_geo if has_geo else None,
+            geo_names=self.data.geo_names if has_geo else None,
+            config=self.config,
+            div_id="modelFitStats",
+        )
 
 
 class ChannelROISection(Section):
@@ -415,7 +415,13 @@ class ChannelROISection(Section):
 
 
 class DecompositionSection(Section):
-    """Revenue decomposition visualizations."""
+    """
+    Revenue decomposition showing contribution of each component.
+    
+    UPDATED: Now includes geo-level dropdown selector when geo data is available.
+    Features both stacked area (time series) and waterfall (total contribution) views,
+    each with independent geo selectors.
+    """
     
     section_id: str = "decomposition"
     default_title: str = "Revenue Decomposition"
@@ -424,38 +430,164 @@ class DecompositionSection(Section):
         if not self.is_enabled:
             return ""
         
-        content_parts = []
-        
-        # Waterfall chart
-        if self.data.component_totals:
-            waterfall = charts.create_waterfall_chart(
-                categories=list(self.data.component_totals.keys()),
-                values=np.array(list(self.data.component_totals.values())),
-                config=self.config,
-                chart_config=ChartConfig(height=400),
-            )
-            content_parts.append(f'''
-                <h3>Total Contribution by Component</h3>
-                {waterfall}
-            ''')
-        
-        # Time series decomposition
-        if self.data.component_time_series and self.data.dates is not None:
-            stacked = charts.create_stacked_area_chart(
-                dates=self.data.dates,
-                components=self.data.component_time_series,
-                config=self.config,
-                chart_config=ChartConfig(height=400),
-            )
-            content_parts.append(f'''
-                <h3>Contribution Over Time</h3>
-                {stacked}
-            ''')
-        
-        if not content_parts:
+        # Check for required data
+        if self.data.component_time_series is None or self.data.dates is None:
             return ""
         
+        chart_config = ChartConfig(
+            height=self.section_config.chart_height or 450,
+        )
+        
+        # Determine if we have geo-level decomposition
+        has_geo = self.data.has_geo_decomposition
+        
+        content_parts = []
+        
+        # Introduction
+        content_parts.append('''
+            <p>
+                Revenue decomposition breaks down the predicted outcome into component contributions: 
+                baseline, trend, seasonality, media channels, and control variables. Each component's 
+                contribution sums to the total predicted revenue.
+            </p>
+        ''')
+        
+        # Aggregation note for geo models
+        if has_geo:
+            content_parts.append('''
+            <div class="callout insight">
+                <p><strong>Multi-geography model:</strong> The default view shows contributions 
+                aggregated across all geographies. Use the dropdown selectors to examine 
+                contribution patterns for individual regions.</p>
+            </div>
+            ''')
+        
+        # =====================================================================
+        # STACKED AREA CHART (Time Series View)
+        # =====================================================================
+        
+        content_parts.append('<h3>Component Contributions Over Time</h3>')
+        
+        stacked_chart = charts.create_stacked_area_chart_with_geo_selector(
+            dates=self.data.dates,
+            components_agg=self.data.component_time_series,
+            components_by_geo=self.data.component_time_series_by_geo if has_geo else None,
+            geo_names=self.data.geo_names if has_geo else None,
+            config=self.config,
+            chart_config=chart_config,
+        )
+        content_parts.append(stacked_chart)
+        
+        # =====================================================================
+        # WATERFALL CHART (Total Contribution View)
+        # =====================================================================
+        
+        if self.data.component_totals is not None:
+            content_parts.append('<h3>Total Contribution Breakdown</h3>')
+            
+            waterfall_chart = charts.create_waterfall_chart_with_geo_selector(
+                component_totals_agg=self.data.component_totals,
+                component_totals_by_geo=self.data.component_totals_by_geo if has_geo else None,
+                geo_names=self.data.geo_names if has_geo else None,
+                config=self.config,
+                chart_config=ChartConfig(height=400),
+            )
+            content_parts.append(waterfall_chart)
+        
+        # =====================================================================
+        # CONTRIBUTION SUMMARY TABLE
+        # =====================================================================
+        
+        content_parts.append(self._render_contribution_summary_with_geo())
+        
         return self._render_section_wrapper('\n'.join(content_parts))
+    
+    def _render_contribution_summary_with_geo(self) -> str:
+        """Render contribution summary table with geo selector."""
+        if self.data.component_totals is None:
+            return ""
+        
+        has_geo = self.data.has_geo_decomposition
+        
+        total = sum(abs(v) for v in self.data.component_totals.values())
+        if total == 0:
+            total = 1.0
+        
+        # Build aggregated table
+        rows = []
+        for comp, value in self.data.component_totals.items():
+            pct = value / total
+            formatted_value = self.config.format_currency(value) if hasattr(self.config, 'format_currency') else f"{value:,.0f}"
+            rows.append(f'''
+                <tr data-geo="agg">
+                    <td>{comp}</td>
+                    <td class="mono">{formatted_value}</td>
+                    <td class="mono">{pct:.1%}</td>
+                </tr>
+            ''')
+        
+        # Build geo-level rows (hidden by default)
+        geo_rows = ""
+        if has_geo and self.data.component_totals_by_geo:
+            for geo in self.data.geo_names:
+                geo_totals = self.data.component_totals_by_geo.get(geo, {})
+                geo_total = sum(abs(v) for v in geo_totals.values())
+                if geo_total == 0:
+                    geo_total = 1.0
+                
+                for comp, value in geo_totals.items():
+                    pct = value / geo_total
+                    formatted_value = self.config.format_currency(value) if hasattr(self.config, 'format_currency') else f"{value:,.0f}"
+                    geo_rows += f'''
+                        <tr data-geo="{geo}" style="display: none;">
+                            <td>{comp}</td>
+                            <td class="mono">{formatted_value}</td>
+                            <td class="mono">{pct:.1%}</td>
+                        </tr>
+                    '''
+        
+        # Dropdown selector
+        dropdown_html = ""
+        if has_geo:
+            options = '<option value="agg" selected>Aggregated (Total)</option>'
+            for geo in self.data.geo_names:
+                options += f'<option value="{geo}">{geo}</option>'
+            
+            dropdown_html = f'''
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; color: var(--color-text-muted);">View: </label>
+                <select id="contribSummarySelect" style="padding: 0.25rem 0.5rem; border: 1px solid var(--color-border); border-radius: 4px; font-size: 0.85rem;">
+                    {options}
+                </select>
+            </div>
+            <script>
+                document.getElementById('contribSummarySelect').addEventListener('change', function() {{
+                    var selected = this.value;
+                    var rows = document.querySelectorAll('#contribSummaryTable tr[data-geo]');
+                    rows.forEach(function(row) {{
+                        row.style.display = row.getAttribute('data-geo') === selected ? '' : 'none';
+                    }});
+                }});
+            </script>
+            '''
+        
+        return f'''
+            <h3>Contribution Summary</h3>
+            {dropdown_html}
+            <table class="data-table" id="contribSummaryTable">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Total Contribution</th>
+                        <th>% of Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(rows)}
+                    {geo_rows}
+                </tbody>
+            </table>
+        '''
 
 
 class SaturationSection(Section):

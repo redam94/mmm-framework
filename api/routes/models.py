@@ -307,15 +307,16 @@ async def download_report(
             detail=f"Report not found: {report_id}",
         )
 
-    status_val = report_data.get(b"status", b"").decode()
+    # FIX: Use string keys, not bytes
+    status_val = report_data.get("status", "")
     if status_val != "completed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Report not ready. Status: {status_val}",
         )
 
-    filepath = report_data.get(b"filepath", b"").decode()
-    filename = report_data.get(b"filename", b"").decode()
+    filepath = report_data.get("filepath", "")
+    filename = report_data.get("filename", "")
 
     if not filepath or not Path(filepath).exists():
         raise HTTPException(
