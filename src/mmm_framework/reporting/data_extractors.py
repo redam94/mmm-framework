@@ -384,10 +384,28 @@ class BayesianMMMExtractorGeoMixin:
     
     def _get_geo_indices(self) -> np.ndarray | None:
         """Get geo index for each observation."""
-        if hasattr(self.mmm, 'geo_idx'):
+        if hasattr(self.mmm, 'geo_idx') and self.mmm.geo_idx is not None:
             return np.array(self.mmm.geo_idx)
-        if hasattr(self.panel, 'geo_idx'):
+        if hasattr(self.panel, 'geo_idx') and self.panel.geo_idx is not None:
             return np.array(self.panel.geo_idx)
+
+        # Try to extract from panel's MultiIndex
+        if self.panel is not None:
+            geo_names = self._get_geo_names()
+            if geo_names is not None and len(geo_names) > 1:
+                # Try to get from y.index if it's a MultiIndex
+                if hasattr(self.panel, 'y') and hasattr(self.panel.y, 'index'):
+                    idx = self.panel.y.index
+                    if hasattr(idx, 'get_level_values'):
+                        # Try both cases for geography level name
+                        for level_name in ['geography', 'Geography']:
+                            try:
+                                geo_values = idx.get_level_values(level_name)
+                                # Convert geo names to indices
+                                geo_to_idx = {g: i for i, g in enumerate(geo_names)}
+                                return np.array([geo_to_idx.get(str(g), 0) for g in geo_values])
+                            except KeyError:
+                                continue
         return None
 
     def _get_product_names(self) -> list[str] | None:
@@ -410,9 +428,38 @@ class BayesianMMMExtractorGeoMixin:
 
     def _get_time_indices(self) -> np.ndarray | None:
         """Get time index for each observation."""
-        if hasattr(self.mmm, 'time_idx'):
+        if hasattr(self.mmm, 'time_idx') and self.mmm.time_idx is not None:
             return np.array(self.mmm.time_idx)
-        # Fallback: construct from panel index
+
+        # Try to extract from panel's MultiIndex
+        if self.panel is not None:
+            unique_periods = self._get_unique_periods()
+            if unique_periods is not None and len(unique_periods) > 0:
+                if hasattr(self.panel, 'y') and hasattr(self.panel.y, 'index'):
+                    idx = self.panel.y.index
+                    if hasattr(idx, 'get_level_values'):
+                        # Try both cases for period level name
+                        for level_name in ['period', 'Period']:
+                            try:
+                                period_values = idx.get_level_values(level_name)
+                                # Convert periods to indices
+                                period_to_idx = {str(p): i for i, p in enumerate(unique_periods)}
+                                return np.array([period_to_idx.get(str(p), 0) for p in period_values])
+                            except KeyError:
+                                continue
+                        # Try first level if period not found by name
+                        try:
+                            period_values = idx.get_level_values(0)
+                            period_to_idx = {str(p): i for i, p in enumerate(unique_periods)}
+                            return np.array([period_to_idx.get(str(p), 0) for p in period_values])
+                        except Exception:
+                            pass
+                    else:
+                        # Simple index - assume it's period only
+                        period_to_idx = {str(p): i for i, p in enumerate(unique_periods)}
+                        return np.array([period_to_idx.get(str(p), 0) for p in idx])
+
+        # Fallback: construct from panel coords
         if self.panel is not None and hasattr(self.panel, 'coords'):
             n_obs = len(self.panel.y)
             n_periods = self.panel.coords.n_periods
@@ -552,8 +599,11 @@ class BayesianMMMExtractorGeoMixin:
             # Intercept/Baseline
             if 'intercept' in posterior:
                 intercept = float(posterior['intercept'].values.mean())
-                # Baseline is intercept * y_std + y_mean spread over observations
-                components['Baseline'] = np.full(n_obs, intercept * y_std + y_mean / n_obs)
+                # Baseline in original scale includes both the intercept contribution
+                # and the mean offset (y_mean) to ensure decomposition sums to predictions
+                # Per-observation baseline = intercept * y_std + y_mean
+                baseline_per_obs = intercept * y_std + y_mean
+                components['Baseline'] = np.full(n_obs, baseline_per_obs)
             
             # Trend
             if 'trend' in posterior:
@@ -571,13 +621,32 @@ class BayesianMMMExtractorGeoMixin:
             
             # Media channels
             channel_names = self._get_channel_names()
-            for ch in channel_names:
-                contrib_key = f'channel_contribution_{ch}'
-                if contrib_key in posterior:
-                    contrib = posterior[contrib_key].values.mean(axis=(0, 1))
-                    if len(contrib) == n_obs:
-                        components[ch] = contrib * y_std
-            
+
+            # First try the channel_contributions array (most common for geo models)
+            if 'channel_contributions' in posterior:
+                contrib_da = posterior['channel_contributions']
+                contrib_vals = contrib_da.values  # (chains, draws, obs, channels)
+                contrib_mean = contrib_vals.mean(axis=(0, 1))  # (obs, channels)
+
+                # Check shape and extract per-channel
+                if contrib_mean.ndim == 2:
+                    if contrib_mean.shape[0] == n_obs and contrib_mean.shape[1] == len(channel_names):
+                        # Shape is (obs, channels)
+                        for i, ch in enumerate(channel_names):
+                            components[ch] = contrib_mean[:, i] * y_std
+                    elif contrib_mean.shape[1] == n_obs and contrib_mean.shape[0] == len(channel_names):
+                        # Shape is (channels, obs)
+                        for i, ch in enumerate(channel_names):
+                            components[ch] = contrib_mean[i, :] * y_std
+            else:
+                # Fall back to individual channel contribution variables
+                for ch in channel_names:
+                    contrib_key = f'channel_contribution_{ch}'
+                    if contrib_key in posterior:
+                        contrib = posterior[contrib_key].values.mean(axis=(0, 1))
+                        if len(contrib) == n_obs:
+                            components[ch] = contrib * y_std
+
             # Controls
             if hasattr(self.mmm, 'control_names'):
                 for ctrl in self.mmm.control_names:
@@ -693,59 +762,63 @@ class BayesianMMMExtractor(DataExtractor):
     ) -> dict[str, np.ndarray] | None:
         """
         Aggregate predictions while properly propagating uncertainty.
-        
-        The key insight: we must sum the posterior samples first, 
+
+        The key insight: we must sum the posterior samples first,
         THEN compute percentiles. Summing percentiles directly gives
         invalid (too wide) bounds.
         """
         import pandas as pd
-        
-        trace = getattr(self.mmm, '_trace', None)
-        if trace is None:
-            return None
-        
+
         try:
-            # Get posterior samples (chains x draws x observations)
-            if hasattr(trace, 'posterior_predictive') and 'y' in trace.posterior_predictive:
-                y_samples = trace.posterior_predictive['y'].values
-            elif hasattr(trace, 'posterior') and 'mu' in trace.posterior:
-                y_samples = trace.posterior['mu'].values
-            else:
+            import logging
+
+            # Method 1: Use model's predict() method (most reliable)
+            y_samples_orig = None
+            if hasattr(self.mmm, 'predict'):
+                try:
+                    logging.info("Attempting to get predictions via model.predict()")
+                    pred_results = self.mmm.predict(return_original_scale=True, hdi_prob=self.ci_prob)
+                    y_samples_orig = pred_results.y_pred_samples  # (n_samples, n_obs)
+                    logging.info(f"predict() successful, samples shape: {y_samples_orig.shape}, mean: {y_samples_orig.mean():.2f}")
+                except Exception as e:
+                    logging.warning(f"predict() failed: {e}")
+                    y_samples_orig = None
+
+            # Method 2: Try to reconstruct from trace components
+            if y_samples_orig is None:
+                logging.info("Attempting to reconstruct predictions from trace")
+                y_samples_orig = self._reconstruct_predictions_from_trace()
+                if y_samples_orig is not None:
+                    logging.info(f"Reconstruction successful, samples shape: {y_samples_orig.shape}, mean: {y_samples_orig.mean():.2f}")
+
+            if y_samples_orig is None:
+                logging.warning("Could not obtain prediction samples")
                 return None
-            
-            # Reshape to (n_samples, n_obs)
-            n_chains, n_draws = y_samples.shape[:2]
-            n_samples = n_chains * n_draws
-            n_obs = y_samples.shape[-1]
-            y_samples = y_samples.reshape(n_samples, n_obs)
-            
-            # Transform to original scale
-            y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
-            y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
-            y_samples_orig = y_samples * y_std + y_mean
-            
+
+            n_samples, n_obs = y_samples_orig.shape
+
             # Create period index for aggregation
             period_to_idx = {p: i for i, p in enumerate(unique_periods)}
             obs_period_idx = np.array([period_to_idx[p] for p in periods])
-            
+
             n_periods = len(unique_periods)
-            
+
             # Aggregate samples by period (sum over geo/product for each sample)
             # Result: (n_samples, n_periods)
             y_samples_agg = np.zeros((n_samples, n_periods))
-            
+
             for t in range(n_periods):
                 mask = (obs_period_idx == t)
                 if mask.any():
                     # Sum across all observations in this period (across geos/products)
                     y_samples_agg[:, t] = y_samples_orig[:, mask].sum(axis=1)
-            
+
             # Now compute statistics on the aggregated samples
             y_pred_mean = y_samples_agg.mean(axis=0)
             alpha = (1 - self.ci_prob) / 2
             y_pred_lower = np.percentile(y_samples_agg, alpha * 100, axis=0)
             y_pred_upper = np.percentile(y_samples_agg, (1 - alpha) * 100, axis=0)
-            
+
             return {
                 "mean": y_pred_mean,
                 "lower": y_pred_lower,
@@ -756,6 +829,141 @@ class BayesianMMMExtractor(DataExtractor):
             import logging
             logging.warning(f"Failed to aggregate predictions with uncertainty: {e}")
             import traceback
+            logging.warning(traceback.format_exc())
+            return None
+
+    def _reconstruct_predictions_from_trace(self) -> np.ndarray | None:
+        """
+        Reconstruct prediction samples by summing component samples.
+
+        This is a fallback when predict() isn't available.
+        Returns shape (n_samples, n_obs) in original scale.
+        """
+        import logging
+
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None or not hasattr(trace, 'posterior'):
+            logging.warning("No trace or posterior found")
+            return None
+
+        try:
+            posterior = trace.posterior
+            y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+            y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+
+            logging.info(f"Reconstruction: y_std={y_std:.4f}, y_mean={y_mean:.4f}")
+
+            # Method 1: Try to get y_obs from posterior_predictive and transform
+            # (This is only populated if sample_posterior_predictive was called)
+            if hasattr(trace, 'posterior_predictive') and 'y_obs' in trace.posterior_predictive:
+                y_ppc = trace.posterior_predictive['y_obs'].values  # (chains, draws, obs)
+                n_chains, n_draws, n_obs = y_ppc.shape
+                y_samples = y_ppc.reshape(n_chains * n_draws, n_obs)
+                y_samples_orig = y_samples * y_std + y_mean
+                logging.info(f"Using y_obs from posterior_predictive: shape {y_samples_orig.shape}, mean={y_samples_orig.mean():.2f}")
+                return y_samples_orig
+
+            # Method 2: Reconstruct mu from component samples
+            # Note: y_obs_scaled in posterior contains observed data, not predictions
+            # Get shapes from a known variable
+            if 'intercept' in posterior:
+                intercept_samples = posterior['intercept'].values
+                n_chains, n_draws = intercept_samples.shape[:2]
+                logging.info(f"Intercept samples shape: {intercept_samples.shape}, mean: {intercept_samples.mean():.4f}")
+            else:
+                logging.warning("No intercept found in posterior")
+                return None
+
+            n_obs = len(self.panel.y) if self.panel is not None else None
+            if n_obs is None:
+                return None
+
+            n_samples = n_chains * n_draws
+
+            # Start with intercept (broadcast to all observations)
+            intercept_flat = intercept_samples.reshape(n_samples, -1)
+            if intercept_flat.shape[1] == 1:
+                mu_samples = np.broadcast_to(intercept_flat, (n_samples, n_obs)).copy()
+            else:
+                mu_samples = intercept_flat
+
+            logging.info(f"After intercept: mu mean={mu_samples.mean():.4f}")
+
+            # Add trend if present
+            if 'trend_component' in posterior:
+                trend = posterior['trend_component'].values.reshape(n_samples, -1)
+                if trend.shape[1] == n_obs:
+                    mu_samples = mu_samples + trend
+                    logging.info(f"After trend: mu mean={mu_samples.mean():.4f}")
+
+            # Add seasonality if present
+            if 'seasonality_component' in posterior:
+                seas = posterior['seasonality_component'].values.reshape(n_samples, -1)
+                if seas.shape[1] == n_obs:
+                    mu_samples = mu_samples + seas
+                    logging.info(f"After seasonality: mu mean={mu_samples.mean():.4f}")
+
+            # Add geo effect if present (hierarchical geo model)
+            if 'geo_offset' in posterior and 'geo_sigma' in posterior:
+                geo_idx = self._get_geo_indices()
+                if geo_idx is not None:
+                    geo_sigma = posterior['geo_sigma'].values.reshape(n_samples, 1)
+                    geo_offset = posterior['geo_offset'].values.reshape(n_samples, -1)
+                    geo_effect = geo_sigma * geo_offset  # (n_samples, n_geos)
+                    geo_contrib = geo_effect[:, geo_idx]  # (n_samples, n_obs)
+                    mu_samples = mu_samples + geo_contrib
+                    logging.info(f"After geo effect: mu mean={mu_samples.mean():.4f}")
+
+            # Add product effect if present (hierarchical product model)
+            if 'product_offset' in posterior and 'product_sigma' in posterior:
+                product_idx = self._get_product_indices()
+                if product_idx is not None:
+                    product_sigma = posterior['product_sigma'].values.reshape(n_samples, 1)
+                    product_offset = posterior['product_offset'].values.reshape(n_samples, -1)
+                    product_effect = product_sigma * product_offset
+                    product_contrib = product_effect[:, product_idx]
+                    mu_samples = mu_samples + product_contrib
+                    logging.info(f"After product effect: mu mean={mu_samples.mean():.4f}")
+
+            # Add media contribution
+            if 'media_total' in posterior:
+                media = posterior['media_total'].values.reshape(n_samples, -1)
+                if media.shape[1] == n_obs:
+                    mu_samples = mu_samples + media
+                    logging.info(f"After media: mu mean={mu_samples.mean():.4f}")
+
+            # Add control contribution if present
+            # First check for stored control_contributions
+            if 'control_contributions' in posterior:
+                ctrl = posterior['control_contributions'].values
+                # Sum over control dimension if needed
+                if ctrl.ndim > 3:
+                    ctrl = ctrl.sum(axis=-1)  # Sum over controls
+                ctrl = ctrl.reshape(n_samples, -1)
+                if ctrl.shape[1] == n_obs:
+                    mu_samples = mu_samples + ctrl
+                    logging.info(f"After controls: mu mean={mu_samples.mean():.4f}")
+            # Otherwise, compute from beta_controls and X_controls
+            elif 'beta_controls' in posterior and hasattr(self.mmm, 'X_controls') and self.mmm.X_controls is not None:
+                beta_samples = posterior['beta_controls'].values  # (chains, draws, n_controls)
+                beta_samples = beta_samples.reshape(n_samples, -1)  # (n_samples, n_controls)
+                X_controls = self.mmm.X_controls  # (n_obs, n_controls), already standardized
+                # Control contribution = X_controls @ beta_controls for each sample
+                ctrl = np.einsum('oc,sc->so', X_controls, beta_samples)  # (n_samples, n_obs)
+                mu_samples = mu_samples + ctrl
+                logging.info(f"After controls (computed from beta): mu mean={mu_samples.mean():.4f}")
+
+            # Convert to original scale: y_original = mu_standardized * y_std + y_mean
+            logging.info(f"Final mu (standardized) mean={mu_samples.mean():.4f}")
+            y_samples_orig = mu_samples * y_std + y_mean
+            logging.info(f"Final y (original scale) mean={y_samples_orig.mean():.4f}")
+
+            return y_samples_orig
+
+        except Exception as e:
+            import logging
+            import traceback
+            logging.warning(f"Failed to reconstruct predictions: {e}")
             logging.warning(traceback.format_exc())
             return None
 
@@ -879,25 +1087,34 @@ class BayesianMMMExtractor(DataExtractor):
                 return None
             time_idx = self.panel.time_idx
             return [unique_periods[int(t)] for t in time_idx]
-        
+
         # Fallback: try to get from panel index
         if hasattr(self.panel, 'y') and hasattr(self.panel.y, 'index'):
             idx = self.panel.y.index
             if hasattr(idx, 'get_level_values'):
-                # MultiIndex - get period level
+                # MultiIndex - get period level (try both cases)
+                for level_name in ['period', 'Period']:
+                    try:
+                        periods = idx.get_level_values(level_name)
+                        if hasattr(periods[0], 'strftime'):
+                            return [p.strftime('%Y-%m-%d') for p in periods]
+                        return list(periods)
+                    except KeyError:
+                        continue
+                # Try first level if period not found by name
                 try:
-                    periods = idx.get_level_values('period')
+                    periods = idx.get_level_values(0)
                     if hasattr(periods[0], 'strftime'):
                         return [p.strftime('%Y-%m-%d') for p in periods]
                     return list(periods)
-                except KeyError:
+                except Exception:
                     pass
             else:
                 # Simple index (period only)
                 if hasattr(idx[0], 'strftime'):
                     return [p.strftime('%Y-%m-%d') for p in idx]
                 return list(idx)
-        
+
         return None
     
     def _get_actual(self) -> np.ndarray | None:
@@ -1127,29 +1344,47 @@ class BayesianMMMExtractor(DataExtractor):
 
     def _get_posterior_samples_original_scale(self) -> np.ndarray | None:
         """Get posterior samples in original scale, shape (n_samples, n_obs)."""
-        trace = getattr(self.mmm, '_trace', None)
-        if trace is None:
-            return None
-        
         try:
-            if hasattr(trace, 'posterior_predictive') and 'y' in trace.posterior_predictive:
-                y_samples = trace.posterior_predictive['y'].values
-            elif hasattr(trace, 'posterior') and 'mu' in trace.posterior:
-                y_samples = trace.posterior['mu'].values
-            else:
+            # Method 1: Use model's predict() method (most reliable)
+            if hasattr(self.mmm, 'predict'):
+                try:
+                    pred_results = self.mmm.predict(return_original_scale=True, hdi_prob=self.ci_prob)
+                    return pred_results.y_pred_samples  # (n_samples, n_obs)
+                except Exception:
+                    pass
+
+            # Method 2: Reconstruct from trace components
+            y_samples_orig = self._reconstruct_predictions_from_trace()
+            if y_samples_orig is not None:
+                return y_samples_orig
+
+            # Method 3: Try to get from trace directly (legacy)
+            trace = getattr(self.mmm, '_trace', None)
+            if trace is None:
                 return None
-            
+
+            y_samples = None
+            if hasattr(trace, 'posterior_predictive'):
+                pp = trace.posterior_predictive
+                for var_name in ['y', 'y_obs', 'likelihood']:
+                    if var_name in pp:
+                        y_samples = pp[var_name].values
+                        break
+
+            if y_samples is None:
+                return None
+
             # Reshape to (n_samples, n_obs)
             n_chains, n_draws = y_samples.shape[:2]
             n_obs = y_samples.shape[-1]
             y_samples = y_samples.reshape(n_chains * n_draws, n_obs)
-            
+
             # Transform to original scale
             y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
             y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
-            
+
             return y_samples * y_std + y_mean
-            
+
         except Exception:
             return None
 
@@ -1386,10 +1621,28 @@ class BayesianMMMExtractor(DataExtractor):
     
     def _get_geo_indices(self) -> np.ndarray | None:
         """Get geo index for each observation."""
-        if hasattr(self.mmm, 'geo_idx'):
+        if hasattr(self.mmm, 'geo_idx') and self.mmm.geo_idx is not None:
             return np.array(self.mmm.geo_idx)
-        if hasattr(self.panel, 'geo_idx'):
+        if hasattr(self.panel, 'geo_idx') and self.panel.geo_idx is not None:
             return np.array(self.panel.geo_idx)
+
+        # Try to extract from panel's MultiIndex
+        if self.panel is not None:
+            geo_names = self._get_geo_names()
+            if geo_names is not None and len(geo_names) > 1:
+                # Try to get from y.index if it's a MultiIndex
+                if hasattr(self.panel, 'y') and hasattr(self.panel.y, 'index'):
+                    idx = self.panel.y.index
+                    if hasattr(idx, 'get_level_values'):
+                        # Try both cases for geography level name
+                        for level_name in ['geography', 'Geography']:
+                            try:
+                                geo_values = idx.get_level_values(level_name)
+                                # Convert geo names to indices
+                                geo_to_idx = {g: i for i, g in enumerate(geo_names)}
+                                return np.array([geo_to_idx.get(str(g), 0) for g in geo_values])
+                            except KeyError:
+                                continue
         return None
 
     def _get_product_names(self) -> list[str] | None:
@@ -1412,9 +1665,38 @@ class BayesianMMMExtractor(DataExtractor):
 
     def _get_time_indices(self) -> np.ndarray | None:
         """Get time index for each observation."""
-        if hasattr(self.mmm, 'time_idx'):
+        if hasattr(self.mmm, 'time_idx') and self.mmm.time_idx is not None:
             return np.array(self.mmm.time_idx)
-        # Fallback: construct from panel index
+
+        # Try to extract from panel's MultiIndex
+        if self.panel is not None:
+            unique_periods = self._get_unique_periods()
+            if unique_periods is not None and len(unique_periods) > 0:
+                if hasattr(self.panel, 'y') and hasattr(self.panel.y, 'index'):
+                    idx = self.panel.y.index
+                    if hasattr(idx, 'get_level_values'):
+                        # Try both cases for period level name
+                        for level_name in ['period', 'Period']:
+                            try:
+                                period_values = idx.get_level_values(level_name)
+                                # Convert periods to indices
+                                period_to_idx = {str(p): i for i, p in enumerate(unique_periods)}
+                                return np.array([period_to_idx.get(str(p), 0) for p in period_values])
+                            except KeyError:
+                                continue
+                        # Try first level if period not found by name
+                        try:
+                            period_values = idx.get_level_values(0)
+                            period_to_idx = {str(p): i for i, p in enumerate(unique_periods)}
+                            return np.array([period_to_idx.get(str(p), 0) for p in period_values])
+                        except Exception:
+                            pass
+                    else:
+                        # Simple index - assume it's period only
+                        period_to_idx = {str(p): i for i, p in enumerate(unique_periods)}
+                        return np.array([period_to_idx.get(str(p), 0) for p in idx])
+
+        # Fallback: construct from panel coords
         if self.panel is not None and hasattr(self.panel, 'coords'):
             n_obs = len(self.panel.y)
             n_periods = self.panel.coords.n_periods
@@ -1553,8 +1835,11 @@ class BayesianMMMExtractor(DataExtractor):
             # Intercept/Baseline
             if 'intercept' in posterior:
                 intercept = float(posterior['intercept'].values.mean())
-                # Baseline is intercept * y_std + y_mean spread over observations
-                components['Baseline'] = np.full(n_obs, intercept * y_std + y_mean / n_obs)
+                # Baseline in original scale includes both the intercept contribution
+                # and the mean offset (y_mean) to ensure decomposition sums to predictions
+                # Per-observation baseline = intercept * y_std + y_mean
+                baseline_per_obs = intercept * y_std + y_mean
+                components['Baseline'] = np.full(n_obs, baseline_per_obs)
             
             # Trend
             if 'trend' in posterior:
@@ -1572,13 +1857,32 @@ class BayesianMMMExtractor(DataExtractor):
             
             # Media channels
             channel_names = self._get_channel_names()
-            for ch in channel_names:
-                contrib_key = f'channel_contribution_{ch}'
-                if contrib_key in posterior:
-                    contrib = posterior[contrib_key].values.mean(axis=(0, 1))
-                    if len(contrib) == n_obs:
-                        components[ch] = contrib * y_std
-            
+
+            # First try the channel_contributions array (most common for geo models)
+            if 'channel_contributions' in posterior:
+                contrib_da = posterior['channel_contributions']
+                contrib_vals = contrib_da.values  # (chains, draws, obs, channels)
+                contrib_mean = contrib_vals.mean(axis=(0, 1))  # (obs, channels)
+
+                # Check shape and extract per-channel
+                if contrib_mean.ndim == 2:
+                    if contrib_mean.shape[0] == n_obs and contrib_mean.shape[1] == len(channel_names):
+                        # Shape is (obs, channels)
+                        for i, ch in enumerate(channel_names):
+                            components[ch] = contrib_mean[:, i] * y_std
+                    elif contrib_mean.shape[1] == n_obs and contrib_mean.shape[0] == len(channel_names):
+                        # Shape is (channels, obs)
+                        for i, ch in enumerate(channel_names):
+                            components[ch] = contrib_mean[i, :] * y_std
+            else:
+                # Fall back to individual channel contribution variables
+                for ch in channel_names:
+                    contrib_key = f'channel_contribution_{ch}'
+                    if contrib_key in posterior:
+                        contrib = posterior[contrib_key].values.mean(axis=(0, 1))
+                        if len(contrib) == n_obs:
+                            components[ch] = contrib * y_std
+
             # Controls
             if hasattr(self.mmm, 'control_names'):
                 for ctrl in self.mmm.control_names:

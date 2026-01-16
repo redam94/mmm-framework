@@ -15,25 +15,33 @@ import pandas as pd
 from .config import ChartConfig, ColorScheme, ChannelColors, ReportConfig
 
 
-def _to_json(data: Any) -> str:
-    """Convert data to JSON string for Plotly."""
-    return json.dumps(data, cls=NumpyEncoder)
-
-
 class NumpyEncoder(json.JSONEncoder):
     """JSON encoder that handles numpy types."""
     
     def default(self, obj):
         if isinstance(obj, np.ndarray):
+            # Handle datetime64 arrays
+            if np.issubdtype(obj.dtype, np.datetime64):
+                return [str(d) for d in obj]
             return obj.tolist()
         if isinstance(obj, (np.integer,)):
             return int(obj)
         if isinstance(obj, (np.floating,)):
             return float(obj)
+        # Handle numpy datetime64 scalar
+        if isinstance(obj, np.datetime64):
+            return str(obj)
+        # Handle numpy generic types (includes datetime64 when accessed as item)
+        if isinstance(obj, np.generic):
+            return obj.item() if hasattr(obj, 'item') else str(obj)
         if isinstance(obj, pd.Timestamp):
             return obj.isoformat()
         if pd.isna(obj):
             return None
+        # Catch-all for datetime-like types by checking type name
+        type_name = type(obj).__name__
+        if 'datetime' in type_name.lower():
+            return str(obj)
         return super().default(obj)
 
 
@@ -47,6 +55,24 @@ def _hex_to_rgb(hex_color: str) -> str:
     hex_color = hex_color.lstrip('#')
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return f"{r}, {g}, {b}"
+
+
+def _dates_to_strings(dates: list | np.ndarray | pd.DatetimeIndex) -> list[str]:
+    """Convert dates to string format for JSON serialization."""
+    if len(dates) == 0:
+        return []
+    if hasattr(dates, 'strftime'):
+        # pandas DatetimeIndex
+        return [d.strftime('%Y-%m-%d') for d in dates]
+    elif hasattr(dates[0], 'strftime'):
+        # List of Timestamps/datetime objects
+        return [d.strftime('%Y-%m-%d') for d in dates]
+    elif isinstance(dates[0], np.datetime64):
+        # numpy datetime64
+        return [str(d)[:10] for d in dates]
+    else:
+        # Already strings or other format
+        return [str(d) for d in dates]
 
 
 def create_plotly_div(
@@ -117,15 +143,10 @@ def create_model_fit_chart_with_geo_selector(
     """
     chart_config = chart_config or ChartConfig(height=400, ci_level=0.8)
     colors = config.color_scheme if config else ColorScheme()
-    
+
     # Convert dates to string format for JSON
-    if hasattr(dates, 'strftime'):
-        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
-    elif hasattr(dates[0], 'strftime'):
-        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
-    else:
-        dates_str = list(dates)
-    
+    dates_str = _dates_to_strings(dates)
+
     traces = []
     
     # =========================================================================
@@ -376,15 +397,10 @@ def create_stacked_area_chart_with_geo_selector(
     chart_config = chart_config or ChartConfig(height=450)
     colors = config.color_scheme if config else ColorScheme()
     channel_colors = config.channel_colors if config else {}
-    
+
     # Convert dates to string
-    if hasattr(dates, 'strftime'):
-        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
-    elif hasattr(dates[0], 'strftime'):
-        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
-    else:
-        dates_str = list(dates)
-    
+    dates_str = _dates_to_strings(dates)
+
     # Component ordering and colors
     component_names = list(components_agg.keys())
     n_components = len(component_names)
@@ -905,12 +921,7 @@ def create_model_fit_chart_with_dimension_filter(
     colors = config.color_scheme if config else ColorScheme()
 
     # Convert dates to string format for JSON
-    if hasattr(dates, 'strftime'):
-        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
-    elif hasattr(dates[0], 'strftime'):
-        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
-    else:
-        dates_str = list(dates)
+    dates_str = _dates_to_strings(dates)
 
     traces = []
     trace_metadata = []  # Track what each trace represents
@@ -1207,71 +1218,56 @@ def _build_dimension_filter_html(
     geo_colors: dict[str, str],
     product_colors: dict[str, str],
 ) -> str:
-    """Build HTML for multi-select dimension filters."""
+    """Build HTML for dropdown dimension filters."""
     if not geo_names and not product_names:
         return ""
 
     filter_groups = []
 
-    # Geo filter group
+    # Geo dropdown
     if geo_names:
-        geo_checkboxes = f'''
-        <label class="filter-checkbox">
-            <input type="checkbox" id="{div_id}_geo_agg" checked onchange="updateDimensionFilter_{div_id}()">
-            <span class="filter-label">Aggregated</span>
-        </label>
-        '''
+        geo_options = '<option value="agg" selected>Aggregated (Total)</option>'
         for geo in geo_names:
-            color = geo_colors.get(geo, "#3498db")
-            geo_checkboxes += f'''
-            <label class="filter-checkbox">
-                <input type="checkbox" id="{div_id}_geo_{geo.replace(' ', '_')}" onchange="updateDimensionFilter_{div_id}()">
-                <span class="color-dot" style="background-color: {color}"></span>
-                <span class="filter-label">{geo}</span>
-            </label>
-            '''
+            geo_options += f'<option value="{geo}">{geo}</option>'
         filter_groups.append(f'''
-        <fieldset class="filter-group">
-            <legend>Geography</legend>
-            <div class="checkbox-group">{geo_checkboxes}</div>
-        </fieldset>
+        <div class="filter-group">
+            <label for="{div_id}_geo_select">View:</label>
+            <select id="{div_id}_geo_select" onchange="updateDimensionFilter_{div_id}()">
+                {geo_options}
+            </select>
+        </div>
         ''')
 
-    # Product filter group
+    # Product dropdown
     if product_names:
-        prod_checkboxes = f'''
-        <label class="filter-checkbox">
-            <input type="checkbox" id="{div_id}_product_agg" checked onchange="updateDimensionFilter_{div_id}()">
-            <span class="filter-label">Aggregated</span>
-        </label>
-        '''
+        prod_options = '<option value="agg" selected>Aggregated (Total)</option>'
         for product in product_names:
-            color = product_colors.get(product, "#e74c3c")
-            prod_checkboxes += f'''
-            <label class="filter-checkbox">
-                <input type="checkbox" id="{div_id}_product_{product.replace(' ', '_')}" onchange="updateDimensionFilter_{div_id}()">
-                <span class="color-dot" style="background-color: {color}"></span>
-                <span class="filter-label">{product}</span>
-            </label>
-            '''
+            prod_options += f'<option value="{product}">{product}</option>'
         filter_groups.append(f'''
-        <fieldset class="filter-group">
-            <legend>Product</legend>
-            <div class="checkbox-group">{prod_checkboxes}</div>
-        </fieldset>
+        <div class="filter-group">
+            <label for="{div_id}_product_select">Product:</label>
+            <select id="{div_id}_product_select" onchange="updateDimensionFilter_{div_id}()">
+                {prod_options}
+            </select>
+        </div>
         ''')
 
     return f'''
     <style>
         .dimension-filter-container {{ margin-bottom: 1rem; }}
-        .dimension-filters {{ display: flex; gap: 1.5rem; margin-bottom: 1rem; flex-wrap: wrap; }}
-        .filter-group {{ border: 1px solid var(--color-border, #e0e0e0); border-radius: 6px; padding: 0.75rem; min-width: 150px; }}
-        .filter-group legend {{ font-size: 0.85rem; font-weight: 600; padding: 0 0.5rem; color: var(--color-text-muted, #666); }}
-        .checkbox-group {{ display: flex; flex-direction: column; gap: 0.4rem; }}
-        .filter-checkbox {{ display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem; }}
-        .filter-checkbox input {{ cursor: pointer; }}
-        .color-dot {{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }}
-        .filter-label {{ color: var(--color-text, #333); }}
+        .dimension-filters {{ display: flex; gap: 1.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }}
+        .filter-group {{ display: flex; align-items: center; gap: 0.5rem; }}
+        .filter-group label {{ font-size: 0.9rem; font-weight: 500; color: var(--color-text-muted, #666); }}
+        .filter-group select {{
+            padding: 0.4rem 0.75rem;
+            border: 1px solid var(--color-border, #e0e0e0);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            background: white;
+            cursor: pointer;
+            min-width: 180px;
+        }}
+        .filter-group select:focus {{ outline: none; border-color: var(--color-primary, #3498db); }}
     </style>
     <div class="dimension-filters">
         {''.join(filter_groups)}
@@ -1285,7 +1281,7 @@ def _build_dimension_filter_js(
     has_geo: bool,
     has_product: bool,
 ) -> str:
-    """Build JavaScript for multi-select dimension filter functionality."""
+    """Build JavaScript for dropdown dimension filter functionality."""
     metadata_json = _to_json(trace_metadata)
 
     return f'''
@@ -1297,27 +1293,12 @@ def _build_dimension_filter_js(
             var visibility = [];
             var metadata = traceMetadata_{div_id};
 
-            // Check which options are selected
-            var showAggGeo = document.getElementById('{div_id}_geo_agg');
-            var showAggProduct = document.getElementById('{div_id}_product_agg');
-            var aggGeoChecked = showAggGeo ? showAggGeo.checked : true;
-            var aggProductChecked = showAggProduct ? showAggProduct.checked : true;
+            // Get selected values from dropdowns
+            var geoSelect = document.getElementById('{div_id}_geo_select');
+            var productSelect = document.getElementById('{div_id}_product_select');
 
-            // Get selected geos
-            var selectedGeos = [];
-            {'var geoNames = ' + _to_json(list(set(m['value'] for m in trace_metadata if m['dim'] == 'geo'))) + ';' if has_geo else 'var geoNames = [];'}
-            geoNames.forEach(function(geo) {{
-                var cb = document.getElementById('{div_id}_geo_' + geo.replace(/ /g, '_'));
-                if (cb && cb.checked) selectedGeos.push(geo);
-            }});
-
-            // Get selected products
-            var selectedProducts = [];
-            {'var productNames = ' + _to_json(list(set(m['value'] for m in trace_metadata if m['dim'] == 'product'))) + ';' if has_product else 'var productNames = [];'}
-            productNames.forEach(function(product) {{
-                var cb = document.getElementById('{div_id}_product_' + product.replace(/ /g, '_'));
-                if (cb && cb.checked) selectedProducts.push(product);
-            }});
+            var selectedGeo = geoSelect ? geoSelect.value : 'agg';
+            var selectedProduct = productSelect ? productSelect.value : 'agg';
 
             // Determine visibility for each trace
             for (var i = 0; i < metadata.length; i++) {{
@@ -1325,15 +1306,14 @@ def _build_dimension_filter_js(
                 var show = false;
 
                 if (m.type === 'agg') {{
-                    // Show aggregated if both geo and product aggregated are checked
-                    // (or if no dimension filter exists for that dimension)
-                    var geoOk = !showAggGeo || aggGeoChecked;
-                    var productOk = !showAggProduct || aggProductChecked;
-                    show = geoOk && productOk && selectedGeos.length === 0 && selectedProducts.length === 0;
+                    // Show aggregated only when both dropdowns are set to "agg"
+                    show = (selectedGeo === 'agg') && (selectedProduct === 'agg');
                 }} else if (m.dim === 'geo') {{
-                    show = selectedGeos.indexOf(m.value) !== -1;
+                    // Show this geo's traces if it's selected
+                    show = (m.value === selectedGeo);
                 }} else if (m.dim === 'product') {{
-                    show = selectedProducts.indexOf(m.value) !== -1;
+                    // Show this product's traces if it's selected
+                    show = (m.value === selectedProduct);
                 }}
 
                 visibility.push(show);
@@ -1342,28 +1322,6 @@ def _build_dimension_filter_js(
             Plotly.restyle('{div_id}', {{'visible': visibility}});
         }};
     }})();
-    </script>
-    '''
-
-
-def create_plotly_div(
-    traces: list[dict],
-    layout: dict,
-    div_id: str,
-    config: dict | None = None
-) -> str:
-    """Create an HTML div with embedded Plotly chart."""
-    config = config or {"displayModeBar": False, "responsive": True}
-
-    return f'''
-    <div id="{div_id}" class="chart-container"></div>
-    <script>
-        Plotly.newPlot(
-            "{div_id}",
-            {_to_json(traces)},
-            {_to_json(layout)},
-            {_to_json(config)}
-        );
     </script>
     '''
 
@@ -2135,15 +2093,8 @@ def create_sensitivity_chart(
     layout = chart_config.to_plotly_layout(colors)
     layout["title"] = {"text": "Sensitivity Analysis", "font": {"size": 16}}
     layout["barmode"] = "group"
-    
+
     return create_plotly_div(traces, layout, div_id)
-
-
-def _hex_to_rgb(hex_color: str) -> str:
-    """Convert hex color to RGB string for Plotly rgba()."""
-    hex_color = hex_color.lstrip('#')
-    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    return f"{r}, {g}, {b}"
 
 
 def create_geo_roi_heatmap(
