@@ -548,6 +548,8 @@ class BayesianMMMExtractor(DataExtractor):
             
             # Prior/posterior
             bundle.prior_samples, bundle.posterior_samples = self._get_prior_posterior()
+            bundle = self._extract_aggregated_fit_data(bundle)
+            bundle = self._extract_aggregated_decomposition(bundle)
 
             bundle = self._extract_geo_level_fit_data(bundle)
             bundle = self._extract_geo_level_decomposition(bundle)
@@ -557,6 +559,167 @@ class BayesianMMMExtractor(DataExtractor):
         
         return bundle
     
+    def _get_unique_periods(self) -> list | None:
+        """Get unique period labels in order."""
+        if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'periods'):
+            periods = self.panel.coords.periods
+            if hasattr(periods[0], 'strftime'):
+                return [p.strftime('%Y-%m-%d') for p in periods]
+            return list(periods)
+        if hasattr(self, '_dates') and self._dates is not None:
+            return list(self._dates)
+        return None
+    
+    def _aggregate_predictions_with_uncertainty(
+        self,
+        periods: list,
+        unique_periods: list,
+    ) -> dict[str, np.ndarray] | None:
+        """
+        Aggregate predictions while properly propagating uncertainty.
+        
+        The key insight: we must sum the posterior samples first, 
+        THEN compute percentiles. Summing percentiles directly gives
+        invalid (too wide) bounds.
+        """
+        import pandas as pd
+        
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None:
+            return None
+        
+        try:
+            # Get posterior samples (chains x draws x observations)
+            if hasattr(trace, 'posterior_predictive') and 'y' in trace.posterior_predictive:
+                y_samples = trace.posterior_predictive['y'].values
+            elif hasattr(trace, 'posterior') and 'mu' in trace.posterior:
+                y_samples = trace.posterior['mu'].values
+            else:
+                return None
+            
+            # Reshape to (n_samples, n_obs)
+            n_chains, n_draws = y_samples.shape[:2]
+            n_samples = n_chains * n_draws
+            n_obs = y_samples.shape[-1]
+            y_samples = y_samples.reshape(n_samples, n_obs)
+            
+            # Transform to original scale
+            y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+            y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+            y_samples_orig = y_samples * y_std + y_mean
+            
+            # Create period index for aggregation
+            period_to_idx = {p: i for i, p in enumerate(unique_periods)}
+            obs_period_idx = np.array([period_to_idx[p] for p in periods])
+            
+            n_periods = len(unique_periods)
+            
+            # Aggregate samples by period (sum over geo/product for each sample)
+            # Result: (n_samples, n_periods)
+            y_samples_agg = np.zeros((n_samples, n_periods))
+            
+            for t in range(n_periods):
+                mask = (obs_period_idx == t)
+                if mask.any():
+                    # Sum across all observations in this period (across geos/products)
+                    y_samples_agg[:, t] = y_samples_orig[:, mask].sum(axis=1)
+            
+            # Now compute statistics on the aggregated samples
+            y_pred_mean = y_samples_agg.mean(axis=0)
+            alpha = (1 - self.ci_prob) / 2
+            y_pred_lower = np.percentile(y_samples_agg, alpha * 100, axis=0)
+            y_pred_upper = np.percentile(y_samples_agg, (1 - alpha) * 100, axis=0)
+            
+            return {
+                "mean": y_pred_mean,
+                "lower": y_pred_lower,
+                "upper": y_pred_upper,
+            }
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to aggregate predictions with uncertainty: {e}")
+            import traceback
+            logging.warning(traceback.format_exc())
+            return None
+
+    def _extract_aggregated_fit_data(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract properly aggregated model fit data for multi-geo models.
+        
+        This ensures bundle.dates, bundle.actual, and bundle.predicted are
+        aggregated to period-level (summed over geo and product).
+        
+        For single-geo models, this is a pass-through.
+        For multi-geo models, this aggregates by period.
+        
+        IMPORTANT: Uncertainty bounds must be computed from aggregated samples,
+        not by summing bounds directly.
+        """
+        import pandas as pd
+        
+        if not hasattr(self, 'panel') or self.panel is None:
+            return bundle
+        
+        # Get unique periods
+        unique_periods = self._get_unique_periods()
+        if unique_periods is None:
+            return bundle
+        
+        # Check if we have multi-dimensional data
+        geo_idx = self._get_geo_indices()
+        has_geo = geo_idx is not None and len(set(geo_idx)) > 1
+        
+        if not has_geo:
+            # Single geo - just ensure dates are unique periods
+            bundle.dates = unique_periods
+            return bundle
+        
+        try:
+            # Get period labels for each observation
+            periods = self._get_period_labels_per_obs()
+            if periods is None:
+                return bundle
+            
+            # Get observed values (original scale)
+            y_obs = self._get_actual_original_scale()
+            if y_obs is None:
+                return bundle
+            
+            # Aggregate observed values by period
+            df_obs = pd.DataFrame({
+                'period': periods,
+                'actual': y_obs,
+            })
+            agg_obs = df_obs.groupby('period')['actual'].sum()
+            agg_obs = agg_obs.reindex(unique_periods).fillna(0)
+            
+            # Update bundle with aggregated observed data
+            bundle.dates = unique_periods
+            bundle.actual = agg_obs.values
+            
+            # For predictions, we need to aggregate samples properly to get valid bounds
+            bundle.predicted = self._aggregate_predictions_with_uncertainty(
+                periods, unique_periods
+            )
+            
+            if bundle.predicted is not None:
+                # Recompute fit statistics on aggregated data
+                bundle.fit_statistics = self._compute_fit_statistics(
+                    bundle.actual, bundle.predicted
+                )
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract aggregated fit data: {e}")
+            import traceback
+            logging.warning(traceback.format_exc())
+        
+        return bundle
+
     def _get_channel_names(self) -> list[str]:
         """Get channel names from model or panel."""
         if hasattr(self.mmm, "channel_names"):
@@ -579,6 +742,46 @@ class BayesianMMMExtractor(DataExtractor):
                 logger.debug("Using 'index' attribute from panel")
                 return np.array(self.panel.index)
         logger.debug("Dates not found")
+        return None
+    
+    def _get_unique_periods(self) -> list | None:
+        """Get unique period labels in order."""
+        if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'periods'):
+            periods = self.panel.coords.periods
+            if hasattr(periods[0], 'strftime'):
+                return [p.strftime('%Y-%m-%d') for p in periods]
+            return list(periods)
+        if hasattr(self, '_dates') and self._dates is not None:
+            return list(self._dates)
+        return None
+    
+    def _get_period_labels_per_obs(self) -> list | None:
+        """Get period label for each observation."""
+        if hasattr(self.panel, 'time_idx') and self.panel.time_idx is not None:
+            unique_periods = self._get_unique_periods()
+            if unique_periods is None:
+                return None
+            time_idx = self.panel.time_idx
+            return [unique_periods[int(t)] for t in time_idx]
+        
+        # Fallback: try to get from panel index
+        if hasattr(self.panel, 'y') and hasattr(self.panel.y, 'index'):
+            idx = self.panel.y.index
+            if hasattr(idx, 'get_level_values'):
+                # MultiIndex - get period level
+                try:
+                    periods = idx.get_level_values('period')
+                    if hasattr(periods[0], 'strftime'):
+                        return [p.strftime('%Y-%m-%d') for p in periods]
+                    return list(periods)
+                except KeyError:
+                    pass
+            else:
+                # Simple index (period only)
+                if hasattr(idx[0], 'strftime'):
+                    return [p.strftime('%Y-%m-%d') for p in idx]
+                return list(idx)
+        
         return None
     
     def _get_actual(self) -> np.ndarray | None:
@@ -654,6 +857,7 @@ class BayesianMMMExtractor(DataExtractor):
         mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask]))
         
         return {"r2": r2, "rmse": rmse, "mae": mae, "mape": mape}
+    
     def _extract_geo_level_fit_data(
         self,
         bundle: MMMDataBundle,
@@ -661,11 +865,19 @@ class BayesianMMMExtractor(DataExtractor):
         """
         Extract geo-level model fit data.
         
+        Aggregation strategy:
+        - For each geo: sum over products (if any) for each period
+        - Result is a time series of length n_periods for each geo
+        
+        IMPORTANT: Uncertainty must be computed from aggregated samples per geo.
+        
         Populates:
         - bundle.actual_by_geo
         - bundle.predicted_by_geo
         - bundle.fit_statistics_by_geo
         """
+        import pandas as pd
+        
         # Check if we have geo-level data
         if not hasattr(self, 'panel') or self.panel is None:
             return bundle
@@ -681,60 +893,150 @@ class BayesianMMMExtractor(DataExtractor):
         bundle.geo_names = geo_names
         
         try:
-            # Get indices
+            # Get period labels (unique periods in order)
+            unique_periods = self._get_unique_periods()
+            if unique_periods is None:
+                return bundle
+            
+            # Get period index for each observation
+            periods = self._get_period_labels_per_obs()
+            if periods is None:
+                return bundle
+            
+            # Get geo index for each observation
             geo_idx = self._get_geo_indices()
             if geo_idx is None:
                 return bundle
+            
+            # Map geo indices to names
+            geo_labels = [geo_names[int(g)] for g in geo_idx]
             
             # Get observed values (original scale)
             y_obs = self._get_actual_original_scale()
             if y_obs is None:
                 return bundle
             
-            # Get predictions
-            y_pred_mean, y_pred_lower, y_pred_upper = self._get_predictions_original_scale()
-            if y_pred_mean is None:
-                return bundle
-            
-            # Get period info
-            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
-            n_geos = len(geo_names)
+            # Build DataFrame for observed data aggregation
+            df_obs = pd.DataFrame({
+                'period': periods,
+                'geo': geo_labels,
+                'actual': y_obs,
+            })
             
             # Initialize geo-level storage
             bundle.actual_by_geo = {}
             bundle.predicted_by_geo = {}
             bundle.fit_statistics_by_geo = {}
             
-            # Aggregate by geo (sum over products if applicable)
-            for g_idx, geo in enumerate(geo_names):
-                # Get mask for this geo
-                geo_mask = (geo_idx == g_idx)
+            # Get posterior samples for proper uncertainty propagation
+            y_samples_orig = self._get_posterior_samples_original_scale()
+            
+            # Aggregate observed and predicted by geo
+            for geo in geo_names:
+                geo_df = df_obs[df_obs['geo'] == geo]
+                if len(geo_df) == 0:
+                    continue
                 
-                # Aggregate observed values for this geo over time
-                y_obs_geo = self._aggregate_by_period(y_obs[geo_mask], n_periods, geo_mask)
-                y_pred_mean_geo = self._aggregate_by_period(y_pred_mean[geo_mask], n_periods, geo_mask)
-                y_pred_lower_geo = self._aggregate_by_period(y_pred_lower[geo_mask], n_periods, geo_mask)
-                y_pred_upper_geo = self._aggregate_by_period(y_pred_upper[geo_mask], n_periods, geo_mask)
+                # Aggregate observed values for this geo
+                agg_obs = geo_df.groupby('period')['actual'].sum()
+                agg_obs = agg_obs.reindex(unique_periods).fillna(0)
                 
+                y_obs_geo = agg_obs.values
                 bundle.actual_by_geo[geo] = y_obs_geo
-                bundle.predicted_by_geo[geo] = {
-                    "mean": y_pred_mean_geo,
-                    "lower": y_pred_lower_geo,
-                    "upper": y_pred_upper_geo,
-                }
                 
-                # Compute fit statistics for this geo
-                bundle.fit_statistics_by_geo[geo] = self._compute_fit_statistics(
-                    y_obs_geo, 
-                    {"mean": y_pred_mean_geo, "lower": y_pred_lower_geo, "upper": y_pred_upper_geo}
-                )
+                # Aggregate predictions with proper uncertainty for this geo
+                if y_samples_orig is not None:
+                    geo_mask = np.array(geo_labels) == geo
+                    pred_geo = self._aggregate_samples_by_period(
+                        y_samples_orig[:, geo_mask],
+                        [p for p, g in zip(periods, geo_labels) if g == geo],
+                        unique_periods,
+                    )
+                    
+                    if pred_geo is not None:
+                        bundle.predicted_by_geo[geo] = pred_geo
+                        bundle.fit_statistics_by_geo[geo] = self._compute_fit_statistics(
+                            y_obs_geo, pred_geo
+                        )
             
         except Exception as e:
             import logging
             logging.warning(f"Failed to extract geo-level fit data: {e}")
+            import traceback
+            logging.warning(traceback.format_exc())
         
         return bundle
     
+    def _aggregate_samples_by_period(
+        self,
+        samples: np.ndarray,  # (n_samples, n_obs_subset)
+        periods: list,  # period label for each obs in subset
+        unique_periods: list,
+    ) -> dict[str, np.ndarray] | None:
+        """
+        Aggregate samples by period, properly propagating uncertainty.
+        
+        For each period, sums across observations (products) in that period,
+        then computes percentiles on the summed samples.
+        """
+        if samples is None or len(periods) == 0:
+            return None
+        
+        try:
+            period_to_idx = {p: i for i, p in enumerate(unique_periods)}
+            obs_period_idx = np.array([period_to_idx[p] for p in periods])
+            
+            n_samples = samples.shape[0]
+            n_periods = len(unique_periods)
+            
+            # Aggregate samples by period
+            samples_agg = np.zeros((n_samples, n_periods))
+            
+            for t in range(n_periods):
+                mask = (obs_period_idx == t)
+                if mask.any():
+                    samples_agg[:, t] = samples[:, mask].sum(axis=1)
+            
+            # Compute statistics
+            alpha = (1 - self.ci_prob) / 2
+            
+            return {
+                "mean": samples_agg.mean(axis=0),
+                "lower": np.percentile(samples_agg, alpha * 100, axis=0),
+                "upper": np.percentile(samples_agg, (1 - alpha) * 100, axis=0),
+            }
+            
+        except Exception:
+            return None
+
+    def _get_posterior_samples_original_scale(self) -> np.ndarray | None:
+        """Get posterior samples in original scale, shape (n_samples, n_obs)."""
+        trace = getattr(self.mmm, '_trace', None)
+        if trace is None:
+            return None
+        
+        try:
+            if hasattr(trace, 'posterior_predictive') and 'y' in trace.posterior_predictive:
+                y_samples = trace.posterior_predictive['y'].values
+            elif hasattr(trace, 'posterior') and 'mu' in trace.posterior:
+                y_samples = trace.posterior['mu'].values
+            else:
+                return None
+            
+            # Reshape to (n_samples, n_obs)
+            n_chains, n_draws = y_samples.shape[:2]
+            n_obs = y_samples.shape[-1]
+            y_samples = y_samples.reshape(n_chains * n_draws, n_obs)
+            
+            # Transform to original scale
+            y_mean = self.mmm.y_mean if hasattr(self.mmm, 'y_mean') else 0
+            y_std = self.mmm.y_std if hasattr(self.mmm, 'y_std') else 1
+            
+            return y_samples * y_std + y_mean
+            
+        except Exception:
+            return None
+
     def _extract_geo_level_decomposition(
         self,
         bundle: MMMDataBundle,
@@ -742,10 +1044,16 @@ class BayesianMMMExtractor(DataExtractor):
         """
         Extract geo-level decomposition data.
         
+        Aggregation strategy:
+        - For each geo and component: sum over products (if any) for each period
+        - Result is a time series of length n_periods for each geo-component pair
+        
         Populates:
         - bundle.component_time_series_by_geo
         - bundle.component_totals_by_geo
         """
+        import pandas as pd
+        
         if bundle.geo_names is None or len(bundle.geo_names) <= 1:
             return bundle
         
@@ -754,8 +1062,16 @@ class BayesianMMMExtractor(DataExtractor):
             panel = self.panel
             
             geo_names = bundle.geo_names
+            
+            # Get period and geo info for each observation
+            unique_periods = self._get_unique_periods()
+            periods = self._get_period_labels_per_obs()
             geo_idx = self._get_geo_indices()
-            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+            
+            if periods is None or geo_idx is None or unique_periods is None:
+                return bundle
+            
+            geo_labels = [geo_names[int(g)] for g in geo_idx]
             
             # Get decomposition components at observation level
             components = self._get_decomposition_components_obs_level()
@@ -765,23 +1081,35 @@ class BayesianMMMExtractor(DataExtractor):
             bundle.component_time_series_by_geo = {}
             bundle.component_totals_by_geo = {}
             
-            for g_idx, geo in enumerate(geo_names):
-                geo_mask = (geo_idx == g_idx)
-                
+            for geo in geo_names:
                 bundle.component_time_series_by_geo[geo] = {}
                 bundle.component_totals_by_geo[geo] = {}
                 
                 for comp_name, comp_values in components.items():
-                    # Aggregate this component for this geo over time
-                    comp_geo = self._aggregate_by_period(
-                        comp_values[geo_mask], n_periods, geo_mask
-                    )
+                    # Build DataFrame for this component
+                    df = pd.DataFrame({
+                        'period': periods,
+                        'geo': geo_labels,
+                        'value': comp_values,
+                    })
+                    
+                    # Filter to this geo and aggregate by period
+                    geo_df = df[df['geo'] == geo]
+                    if len(geo_df) == 0:
+                        continue
+                    
+                    agg = geo_df.groupby('period')['value'].sum()
+                    agg = agg.reindex(unique_periods).fillna(0)
+                    
+                    comp_geo = agg.values
                     bundle.component_time_series_by_geo[geo][comp_name] = comp_geo
                     bundle.component_totals_by_geo[geo][comp_name] = float(comp_geo.sum())
             
         except Exception as e:
             import logging
             logging.warning(f"Failed to extract geo-level decomposition: {e}")
+            import traceback
+            logging.warning(traceback.format_exc())
         
         return bundle
     
@@ -838,7 +1166,6 @@ class BayesianMMMExtractor(DataExtractor):
             y_pred_upper = np.percentile(y_samples_orig, (1 - alpha) * 100, axis=0)
             
             return y_pred_mean, y_pred_lower, y_pred_upper
-            
         except Exception:
             return None, None, None
     
@@ -1467,6 +1794,63 @@ class BayesianMMMExtractor(DataExtractor):
             return data, params
         except Exception:
             return None, None
+        
+    def _extract_aggregated_decomposition(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract properly aggregated decomposition for multi-geo models.
+        
+        Ensures bundle.component_time_series and bundle.component_totals
+        are aggregated to period-level.
+        """
+        import pandas as pd
+        
+        if not hasattr(self, 'panel') or self.panel is None:
+            return bundle
+        
+        # Check if we have multi-dimensional data
+        geo_idx = self._get_geo_indices()
+        has_geo = geo_idx is not None and len(set(geo_idx)) > 1
+        
+        if not has_geo:
+            return bundle
+        
+        try:
+            unique_periods = self._get_unique_periods()
+            periods = self._get_period_labels_per_obs()
+            
+            if unique_periods is None or periods is None:
+                return bundle
+            
+            # Get decomposition components at observation level
+            components = self._get_decomposition_components_obs_level()
+            if components is None:
+                return bundle
+            
+            bundle.component_time_series = {}
+            bundle.component_totals = {}
+            
+            for comp_name, comp_values in components.items():
+                df = pd.DataFrame({
+                    'period': periods,
+                    'value': comp_values,
+                })
+                
+                agg = df.groupby('period')['value'].sum()
+                agg = agg.reindex(unique_periods).fillna(0)
+                
+                bundle.component_time_series[comp_name] = agg.values
+                bundle.component_totals[comp_name] = float(agg.sum())
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract aggregated decomposition: {e}")
+            import traceback
+            logging.warning(traceback.format_exc())
+        
+        return bundle
     
     def _get_prior_posterior(self) -> tuple[dict[str, np.ndarray] | None, dict[str, np.ndarray] | None]:
         """Get prior and posterior samples for comparison."""
