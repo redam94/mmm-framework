@@ -15,9 +15,6 @@ import pandas as pd
 from .config import ChartConfig, ColorScheme, ChannelColors, ReportConfig
 
 
-def _to_json(data: Any) -> str:
-    """Convert data to JSON string for Plotly."""
-    return json.dumps(data, cls=NumpyEncoder)
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -25,18 +22,29 @@ class NumpyEncoder(json.JSONEncoder):
     
     def default(self, obj):
         if isinstance(obj, np.ndarray):
+            # Handle datetime64 arrays
+            if np.issubdtype(obj.dtype, np.datetime64):
+                return [str(d) for d in obj]
             return obj.tolist()
         if isinstance(obj, (np.integer,)):
             return int(obj)
         if isinstance(obj, (np.floating,)):
             return float(obj)
+        # Handle numpy datetime64 scalar
+        if isinstance(obj, np.datetime64):
+            return str(obj)
+        # Handle numpy generic types (includes datetime64)
+        if isinstance(obj, np.generic):
+            return obj.item() if hasattr(obj, 'item') else str(obj)
         if isinstance(obj, pd.Timestamp):
             return obj.isoformat()
         if pd.isna(obj):
             return None
+        # Catch-all for datetime-like types
+        type_name = type(obj).__name__
+        if 'datetime' in type_name.lower():
+            return str(obj)
         return super().default(obj)
-
-
 def _to_json(data: Any) -> str:
     """Convert data to JSON string for Plotly."""
     return json.dumps(data, cls=NumpyEncoder)
@@ -1346,26 +1354,6 @@ def _build_dimension_filter_js(
     '''
 
 
-def create_plotly_div(
-    traces: list[dict],
-    layout: dict,
-    div_id: str,
-    config: dict | None = None
-) -> str:
-    """Create an HTML div with embedded Plotly chart."""
-    config = config or {"displayModeBar": False, "responsive": True}
-
-    return f'''
-    <div id="{div_id}" class="chart-container"></div>
-    <script>
-        Plotly.newPlot(
-            "{div_id}",
-            {_to_json(traces)},
-            {_to_json(layout)},
-            {_to_json(config)}
-        );
-    </script>
-    '''
 
 
 def create_model_fit_chart(
