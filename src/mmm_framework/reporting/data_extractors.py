@@ -115,9 +115,24 @@ class MMMDataBundle:
     cannibalization_matrix: dict[str, dict[str, dict[str, float]]] | None = None  # {source: {target: {"mean", "lower", "upper"}}}
     net_product_effects: dict[str, dict[str, float]] | None = None  # {product: {"direct", "cannibalization", "net"}}
     component_time_series_by_geo: dict[str, dict[str, np.ndarray]] | None = None
-    
+
     # Geo-level component totals: {geo_name: {component_name: float}}
     component_totals_by_geo: dict[str, dict[str, float]] | None = None
+
+    # Product-level observed values: {product_name: ndarray of shape (n_periods,)}
+    actual_by_product: dict[str, np.ndarray] | None = None
+
+    # Product-level predictions: {product_name: {"mean": ndarray, "lower": ndarray, "upper": ndarray}}
+    predicted_by_product: dict[str, dict[str, np.ndarray]] | None = None
+
+    # Product-level fit statistics: {product_name: {"r2": float, "rmse": float, "mape": float}}
+    fit_statistics_by_product: dict[str, dict[str, float]] | None = None
+
+    # Product-level component time series: {product_name: {component_name: ndarray}}
+    component_time_series_by_product: dict[str, dict[str, np.ndarray]] | None = None
+
+    # Product-level component totals: {product_name: {component_name: float}}
+    component_totals_by_product: dict[str, dict[str, float]] | None = None
 
     @property
     def has_geo_data(self) -> bool:
@@ -135,6 +150,24 @@ class MMMDataBundle:
             self.geo_names is not None
             and len(self.geo_names) > 1
             and self.component_time_series_by_geo is not None
+        )
+
+    @property
+    def has_product_data(self) -> bool:
+        """Check if product-level data is available."""
+        return (
+            self.product_names is not None
+            and len(self.product_names) > 1
+            and self.actual_by_product is not None
+        )
+
+    @property
+    def has_product_decomposition(self) -> bool:
+        """Check if product-level decomposition is available."""
+        return (
+            self.product_names is not None
+            and len(self.product_names) > 1
+            and self.component_time_series_by_product is not None
         )
 
 @runtime_checkable
@@ -340,17 +373,56 @@ class BayesianMMMExtractorGeoMixin:
     def _get_geo_names(self) -> list[str] | None:
         """Get geography names from panel or model."""
         if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'geographies'):
-            return list(self.panel.coords.geographies)
+            geographies = self.panel.coords.geographies
+            if geographies is not None:
+                return list(geographies)
         if hasattr(self.mmm, 'geo_names'):
-            return list(self.mmm.geo_names)
+            geo_names = self.mmm.geo_names
+            if geo_names is not None:
+                return list(geo_names)
         return None
     
     def _get_geo_indices(self) -> np.ndarray | None:
         """Get geo index for each observation."""
+        if hasattr(self.mmm, 'geo_idx'):
+            return np.array(self.mmm.geo_idx)
         if hasattr(self.panel, 'geo_idx'):
             return np.array(self.panel.geo_idx)
         return None
-    
+
+    def _get_product_names(self) -> list[str] | None:
+        """Get product names from panel or model."""
+        if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'products'):
+            products = self.panel.coords.products
+            if products is not None:
+                return list(products)
+        if hasattr(self.mmm, 'product_names'):
+            return list(self.mmm.product_names)
+        return None
+
+    def _get_product_indices(self) -> np.ndarray | None:
+        """Get product index for each observation."""
+        if hasattr(self.mmm, 'product_idx'):
+            return np.array(self.mmm.product_idx)
+        if hasattr(self.panel, 'product_idx'):
+            return np.array(self.panel.product_idx)
+        return None
+
+    def _get_time_indices(self) -> np.ndarray | None:
+        """Get time index for each observation."""
+        if hasattr(self.mmm, 'time_idx'):
+            return np.array(self.mmm.time_idx)
+        # Fallback: construct from panel index
+        if self.panel is not None and hasattr(self.panel, 'coords'):
+            n_obs = len(self.panel.y)
+            n_periods = self.panel.coords.n_periods
+            n_geos = self.panel.coords.n_geos
+            n_products = self.panel.coords.n_products
+            # Assumes data ordered as periods innermost
+            if n_obs == n_periods * n_geos * n_products:
+                return np.tile(np.arange(n_periods), n_geos * n_products)
+        return None
+
     def _get_actual_original_scale(self) -> np.ndarray | None:
         """Get observed values in original scale."""
         if self.panel is None:
@@ -418,7 +490,47 @@ class BayesianMMMExtractorGeoMixin:
         
         # Fallback: return as-is (may need custom handling)
         return values
-    
+
+    def _aggregate_by_period_with_indices(
+        self,
+        values: np.ndarray,
+        time_idx: np.ndarray,
+        dim_mask: np.ndarray,
+        n_periods: int,
+    ) -> np.ndarray:
+        """
+        Aggregate values by period using explicit time indices.
+
+        This is a more robust aggregation method that uses the time_idx array
+        to properly group observations by period, regardless of data ordering.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Values to aggregate, shape (n_obs,)
+        time_idx : np.ndarray
+            Time period index for each observation, shape (n_obs,)
+        dim_mask : np.ndarray
+            Boolean mask for filtering (e.g., specific geo or product), shape (n_obs,)
+        n_periods : int
+            Number of unique time periods
+
+        Returns
+        -------
+        np.ndarray
+            Aggregated values by period, shape (n_periods,)
+        """
+        result = np.zeros(n_periods)
+        filtered_values = values[dim_mask]
+        filtered_time_idx = time_idx[dim_mask]
+
+        for t in range(n_periods):
+            time_mask = (filtered_time_idx == t)
+            if time_mask.any():
+                result[t] = filtered_values[time_mask].sum()
+
+        return result
+
     def _get_decomposition_components_obs_level(self) -> dict[str, np.ndarray] | None:
         """
         Get decomposition components at observation level (not yet aggregated).
@@ -551,7 +663,11 @@ class BayesianMMMExtractor(DataExtractor):
 
             bundle = self._extract_geo_level_fit_data(bundle)
             bundle = self._extract_geo_level_decomposition(bundle)
-        
+
+            # Product-level data
+            bundle = self._extract_product_level_fit_data(bundle)
+            bundle = self._extract_product_level_decomposition(bundle)
+
         # Model specification
         bundle.model_specification = self._get_model_specification()
         
@@ -784,21 +900,203 @@ class BayesianMMMExtractor(DataExtractor):
             logging.warning(f"Failed to extract geo-level decomposition: {e}")
         
         return bundle
+
+    def _extract_product_level_fit_data(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract product-level model fit data.
+
+        Populates:
+        - bundle.product_names
+        - bundle.actual_by_product
+        - bundle.predicted_by_product
+        - bundle.fit_statistics_by_product
+        """
+        # Check if we have product-level data
+        if not hasattr(self, 'panel') or self.panel is None:
+            return bundle
+
+        mmm = self.mmm
+
+        # Get product info
+        product_names = self._get_product_names()
+        if product_names is None or len(product_names) <= 1:
+            return bundle
+
+        bundle.product_names = product_names
+
+        try:
+            # Get indices
+            product_idx = self._get_product_indices()
+            time_idx = self._get_time_indices()
+            if product_idx is None or time_idx is None:
+                return bundle
+
+            # Get observed values (original scale)
+            y_obs = self._get_actual_original_scale()
+            if y_obs is None:
+                return bundle
+
+            # Get predictions
+            y_pred_mean, y_pred_lower, y_pred_upper = self._get_predictions_original_scale()
+            if y_pred_mean is None:
+                return bundle
+
+            # Get period info
+            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+
+            # Initialize product-level storage
+            bundle.actual_by_product = {}
+            bundle.predicted_by_product = {}
+            bundle.fit_statistics_by_product = {}
+
+            # Aggregate by product (sum over geos within each period)
+            for p_idx, product in enumerate(product_names):
+                # Get mask for this product
+                product_mask = (product_idx == p_idx)
+
+                # Aggregate observed values for this product over time
+                y_obs_prod = self._aggregate_by_period_with_indices(
+                    y_obs, time_idx, product_mask, n_periods
+                )
+                y_pred_mean_prod = self._aggregate_by_period_with_indices(
+                    y_pred_mean, time_idx, product_mask, n_periods
+                )
+                y_pred_lower_prod = self._aggregate_by_period_with_indices(
+                    y_pred_lower, time_idx, product_mask, n_periods
+                )
+                y_pred_upper_prod = self._aggregate_by_period_with_indices(
+                    y_pred_upper, time_idx, product_mask, n_periods
+                )
+
+                bundle.actual_by_product[product] = y_obs_prod
+                bundle.predicted_by_product[product] = {
+                    "mean": y_pred_mean_prod,
+                    "lower": y_pred_lower_prod,
+                    "upper": y_pred_upper_prod,
+                }
+
+                # Compute fit statistics for this product
+                bundle.fit_statistics_by_product[product] = self._compute_fit_statistics(
+                    y_obs_prod,
+                    {"mean": y_pred_mean_prod, "lower": y_pred_lower_prod, "upper": y_pred_upper_prod}
+                )
+
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract product-level fit data: {e}")
+
+        return bundle
+
+    def _extract_product_level_decomposition(
+        self,
+        bundle: MMMDataBundle,
+    ) -> MMMDataBundle:
+        """
+        Extract product-level decomposition data.
+
+        Populates:
+        - bundle.component_time_series_by_product
+        - bundle.component_totals_by_product
+        """
+        if bundle.product_names is None or len(bundle.product_names) <= 1:
+            return bundle
+
+        try:
+            mmm = self.mmm
+
+            product_names = bundle.product_names
+            product_idx = self._get_product_indices()
+            time_idx = self._get_time_indices()
+            if product_idx is None or time_idx is None:
+                return bundle
+
+            n_periods = mmm.n_periods if hasattr(mmm, 'n_periods') else len(bundle.dates)
+
+            # Get decomposition components at observation level
+            components = self._get_decomposition_components_obs_level()
+            if components is None:
+                return bundle
+
+            bundle.component_time_series_by_product = {}
+            bundle.component_totals_by_product = {}
+
+            for p_idx, product in enumerate(product_names):
+                product_mask = (product_idx == p_idx)
+
+                bundle.component_time_series_by_product[product] = {}
+                bundle.component_totals_by_product[product] = {}
+
+                for comp_name, comp_values in components.items():
+                    # Aggregate this component for this product over time
+                    comp_prod = self._aggregate_by_period_with_indices(
+                        comp_values, time_idx, product_mask, n_periods
+                    )
+                    bundle.component_time_series_by_product[product][comp_name] = comp_prod
+                    bundle.component_totals_by_product[product][comp_name] = float(comp_prod.sum())
+
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to extract product-level decomposition: {e}")
+
+        return bundle
+
     
     def _get_geo_names(self) -> list[str] | None:
         """Get geography names from panel or model."""
         if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'geographies'):
-            return list(self.panel.coords.geographies)
+            geographies = self.panel.coords.geographies
+            if geographies is not None:
+                return list(geographies)
         if hasattr(self.mmm, 'geo_names'):
-            return list(self.mmm.geo_names)
+            geo_names = self.mmm.geo_names
+            if geo_names is not None:
+                return list(geo_names)
         return None
     
     def _get_geo_indices(self) -> np.ndarray | None:
         """Get geo index for each observation."""
+        if hasattr(self.mmm, 'geo_idx'):
+            return np.array(self.mmm.geo_idx)
         if hasattr(self.panel, 'geo_idx'):
             return np.array(self.panel.geo_idx)
         return None
-    
+
+    def _get_product_names(self) -> list[str] | None:
+        """Get product names from panel or model."""
+        if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'products'):
+            products = self.panel.coords.products
+            if products is not None:
+                return list(products)
+        if hasattr(self.mmm, 'product_names'):
+            return list(self.mmm.product_names)
+        return None
+
+    def _get_product_indices(self) -> np.ndarray | None:
+        """Get product index for each observation."""
+        if hasattr(self.mmm, 'product_idx'):
+            return np.array(self.mmm.product_idx)
+        if hasattr(self.panel, 'product_idx'):
+            return np.array(self.panel.product_idx)
+        return None
+
+    def _get_time_indices(self) -> np.ndarray | None:
+        """Get time index for each observation."""
+        if hasattr(self.mmm, 'time_idx'):
+            return np.array(self.mmm.time_idx)
+        # Fallback: construct from panel index
+        if self.panel is not None and hasattr(self.panel, 'coords'):
+            n_obs = len(self.panel.y)
+            n_periods = self.panel.coords.n_periods
+            n_geos = self.panel.coords.n_geos
+            n_products = self.panel.coords.n_products
+            # Assumes data ordered as periods innermost
+            if n_obs == n_periods * n_geos * n_products:
+                return np.tile(np.arange(n_periods), n_geos * n_products)
+        return None
+
     def _get_actual_original_scale(self) -> np.ndarray | None:
         """Get observed values in original scale."""
         if self.panel is None:
@@ -866,7 +1164,47 @@ class BayesianMMMExtractor(DataExtractor):
         
         # Fallback: return as-is (may need custom handling)
         return values
-    
+
+    def _aggregate_by_period_with_indices(
+        self,
+        values: np.ndarray,
+        time_idx: np.ndarray,
+        dim_mask: np.ndarray,
+        n_periods: int,
+    ) -> np.ndarray:
+        """
+        Aggregate values by period using explicit time indices.
+
+        This is a more robust aggregation method that uses the time_idx array
+        to properly group observations by period, regardless of data ordering.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Values to aggregate, shape (n_obs,)
+        time_idx : np.ndarray
+            Time period index for each observation, shape (n_obs,)
+        dim_mask : np.ndarray
+            Boolean mask for filtering (e.g., specific geo or product), shape (n_obs,)
+        n_periods : int
+            Number of unique time periods
+
+        Returns
+        -------
+        np.ndarray
+            Aggregated values by period, shape (n_periods,)
+        """
+        result = np.zeros(n_periods)
+        filtered_values = values[dim_mask]
+        filtered_time_idx = time_idx[dim_mask]
+
+        for t in range(n_periods):
+            time_mask = (filtered_time_idx == t)
+            if time_mask.any():
+                result[t] = filtered_values[time_mask].sum()
+
+        return result
+
     def _get_decomposition_components_obs_level(self) -> dict[str, np.ndarray] | None:
         """
         Get decomposition components at observation level (not yet aggregated).

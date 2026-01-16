@@ -225,57 +225,80 @@ class ModelFitSection(Section):
     def render(self) -> str:
         if not self.is_enabled:
             return ""
-        
+
         # Check for required data
         if self.data.dates is None or self.data.actual is None or self.data.predicted is None:
             return ""
-        
+
         chart_config = ChartConfig(
             height=self.section_config.chart_height or 400,
             ci_level=self.section_config.credible_interval or 0.8,
         )
-        
-        # Determine if we have geo-level data
+
+        # Determine if we have geo-level and/or product-level data
         has_geo = self.data.has_geo_data
-        
-        # Create model fit chart with geo selector
-        fit_chart = charts.create_model_fit_chart_with_geo_selector(
-            dates=self.data.dates,
-            actual_agg=self.data.actual,
-            predicted_agg=self.data.predicted,
-            actual_by_geo=self.data.actual_by_geo if has_geo else None,
-            predicted_by_geo=self.data.predicted_by_geo if has_geo else None,
-            geo_names=self.data.geo_names if has_geo else None,
-            config=self.config,
-            chart_config=chart_config,
-        )
-        
+        has_product = self.data.has_product_data
+
+        # Use new dimension filter chart if we have geo or product data
+        if has_geo or has_product:
+            fit_chart = charts.create_model_fit_chart_with_dimension_filter(
+                dates=self.data.dates,
+                actual_agg=self.data.actual,
+                predicted_agg=self.data.predicted,
+                actual_by_geo=self.data.actual_by_geo if has_geo else None,
+                predicted_by_geo=self.data.predicted_by_geo if has_geo else None,
+                actual_by_product=self.data.actual_by_product if has_product else None,
+                predicted_by_product=self.data.predicted_by_product if has_product else None,
+                geo_names=self.data.geo_names if has_geo else None,
+                product_names=self.data.product_names if has_product else None,
+                config=self.config,
+                chart_config=chart_config,
+            )
+        else:
+            # Fallback to simple geo selector for backwards compatibility
+            fit_chart = charts.create_model_fit_chart_with_geo_selector(
+                dates=self.data.dates,
+                actual_agg=self.data.actual,
+                predicted_agg=self.data.predicted,
+                actual_by_geo=None,
+                predicted_by_geo=None,
+                geo_names=None,
+                config=self.config,
+                chart_config=chart_config,
+            )
+
         # Fit statistics with geo selector
         stats_html = self._render_fit_statistics_with_geo()
-        
+
         # Methodology note about aggregation
         aggregation_note = ""
-        if has_geo:
-            aggregation_note = '''
+        if has_geo or has_product:
+            dims = []
+            if has_geo:
+                dims.append("geographies")
+            if has_product:
+                dims.append("products")
+            dim_str = " and ".join(dims)
+            aggregation_note = f'''
             <div class="methodology-note">
-                <p><strong>About this view:</strong> The default "Aggregated (Total)" view shows 
-                model fit summed across all geographies. Use the dropdown to examine fit for 
-                individual geographies. Good aggregate fit does not guarantee good fit in all 
-                regions—check individual geos if regional performance matters.</p>
+                <p><strong>About this view:</strong> The default view shows
+                model fit aggregated across all {dim_str}. Use the filters to examine fit for
+                individual {dim_str}. Good aggregate fit does not guarantee good fit across all
+                segments—check individual cross-sections if segment performance matters.</p>
             </div>
             '''
-        
+
         content = f'''
             <p>
-                The model fit shows observed data against posterior predictions. The shaded band 
-                represents the {int(chart_config.ci_level * 100)}% credible interval, capturing 
+                The model fit shows observed data against posterior predictions. The shaded band
+                represents the {int(chart_config.ci_level * 100)}% credible interval, capturing
                 both parameter uncertainty and residual variance.
             </p>
             {fit_chart}
             {stats_html}
             {aggregation_note}
         '''
-        
+
         return self._render_section_wrapper(content)
     
     def _render_fit_statistics_with_geo(self) -> str:

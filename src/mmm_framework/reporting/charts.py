@@ -843,6 +843,509 @@ def create_fit_statistics_with_geo_selector(
     
     return html
 
+
+# =============================================================================
+# MULTI-SELECT DIMENSION FILTER CHARTS
+# =============================================================================
+
+def create_model_fit_chart_with_dimension_filter(
+    dates: list | np.ndarray | pd.DatetimeIndex,
+    actual_agg: np.ndarray,
+    predicted_agg: dict[str, np.ndarray],
+    actual_by_geo: dict[str, np.ndarray] | None = None,
+    predicted_by_geo: dict[str, dict[str, np.ndarray]] | None = None,
+    actual_by_product: dict[str, np.ndarray] | None = None,
+    predicted_by_product: dict[str, dict[str, np.ndarray]] | None = None,
+    geo_names: list[str] | None = None,
+    product_names: list[str] | None = None,
+    config: ReportConfig = None,
+    chart_config: ChartConfig | None = None,
+    div_id: str = "modelFitChartFiltered",
+) -> str:
+    """
+    Create model fit visualization with multi-select dimension filters.
+
+    Supports filtering by geography and/or product with checkbox-based UI.
+    Default view shows aggregated data; users can select multiple
+    specific geos/products to compare.
+
+    Parameters
+    ----------
+    dates : array-like
+        Time index for x-axis
+    actual_agg : ndarray
+        Aggregated observed values (sum over all dimensions)
+    predicted_agg : dict
+        Aggregated predictions with keys "mean", "lower", "upper"
+    actual_by_geo : dict, optional
+        Per-geo observed values: {geo_name: ndarray}
+    predicted_by_geo : dict, optional
+        Per-geo predictions: {geo_name: {"mean", "lower", "upper"}}
+    actual_by_product : dict, optional
+        Per-product observed values: {product_name: ndarray}
+    predicted_by_product : dict, optional
+        Per-product predictions: {product_name: {"mean", "lower", "upper"}}
+    geo_names : list, optional
+        List of geography names
+    product_names : list, optional
+        List of product names
+    config : ReportConfig
+        Report configuration
+    chart_config : ChartConfig, optional
+        Chart-specific configuration
+    div_id : str
+        HTML div ID for the chart
+
+    Returns
+    -------
+    str
+        HTML string with embedded Plotly chart and multi-select filters
+    """
+    chart_config = chart_config or ChartConfig(height=400, ci_level=0.8)
+    colors = config.color_scheme if config else ColorScheme()
+
+    # Convert dates to string format for JSON
+    if hasattr(dates, 'strftime'):
+        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
+    elif hasattr(dates[0], 'strftime'):
+        dates_str = [d.strftime('%Y-%m-%d') for d in dates]
+    else:
+        dates_str = list(dates)
+
+    traces = []
+    trace_metadata = []  # Track what each trace represents
+
+    # =========================================================================
+    # AGGREGATED TRACES (visible by default) - 3 traces
+    # =========================================================================
+
+    # Trace 0: Uncertainty band (fill)
+    traces.append({
+        "type": "scatter",
+        "x": dates_str + dates_str[::-1],
+        "y": list(predicted_agg["upper"]) + list(predicted_agg["lower"])[::-1],
+        "fill": "toself",
+        "fillcolor": f"rgba({_hex_to_rgb(colors.primary)}, 0.2)",
+        "line": {"width": 0},
+        "name": f"{int(chart_config.ci_level * 100)}% CI",
+        "showlegend": True,
+        "hoverinfo": "skip",
+        "visible": True,
+    })
+    trace_metadata.append({"type": "agg", "dim": None, "value": None})
+
+    # Trace 1: Predicted mean
+    traces.append({
+        "type": "scatter",
+        "x": dates_str,
+        "y": list(predicted_agg["mean"]),
+        "mode": "lines",
+        "name": "Predicted",
+        "line": {"color": colors.primary, "width": 2},
+        "hovertemplate": "Predicted: %{y:,.0f}<extra></extra>",
+        "visible": True,
+    })
+    trace_metadata.append({"type": "agg", "dim": None, "value": None})
+
+    # Trace 2: Actual values
+    traces.append({
+        "type": "scatter",
+        "x": dates_str,
+        "y": list(actual_agg),
+        "mode": "lines+markers",
+        "name": "Actual",
+        "line": {"color": colors.text, "width": 1.5, "dash": "dot"},
+        "marker": {"color": colors.text, "size": 4},
+        "hovertemplate": "Actual: %{y:,.0f}<extra></extra>",
+        "visible": True,
+    })
+    trace_metadata.append({"type": "agg", "dim": None, "value": None})
+
+    n_agg_traces = 3
+
+    # =========================================================================
+    # GEO-LEVEL TRACES (hidden by default) - 3 traces per geo
+    # =========================================================================
+
+    has_geo = (
+        geo_names is not None
+        and len(geo_names) > 1
+        and actual_by_geo is not None
+        and predicted_by_geo is not None
+    )
+
+    geo_colors = _generate_dimension_colors(geo_names, colors) if has_geo else {}
+
+    if has_geo:
+        for geo in geo_names:
+            geo_actual = actual_by_geo.get(geo, [])
+            geo_pred = predicted_by_geo.get(geo, {})
+
+            geo_pred_mean = geo_pred.get("mean", [])
+            geo_pred_lower = geo_pred.get("lower", [])
+            geo_pred_upper = geo_pred.get("upper", [])
+            geo_color = geo_colors.get(geo, colors.primary)
+
+            if len(geo_pred_mean) == 0:
+                for _ in range(3):
+                    traces.append({"type": "scatter", "x": [], "y": [], "visible": False})
+                    trace_metadata.append({"type": "geo", "dim": "geo", "value": geo})
+                continue
+
+            # CI band
+            traces.append({
+                "type": "scatter",
+                "x": dates_str + dates_str[::-1],
+                "y": list(geo_pred_upper) + list(geo_pred_lower)[::-1],
+                "fill": "toself",
+                "fillcolor": f"rgba({_hex_to_rgb(geo_color)}, 0.15)",
+                "line": {"width": 0},
+                "name": f"{geo} CI",
+                "showlegend": False,
+                "hoverinfo": "skip",
+                "visible": False,
+            })
+            trace_metadata.append({"type": "geo", "dim": "geo", "value": geo})
+
+            # Predicted
+            traces.append({
+                "type": "scatter",
+                "x": dates_str,
+                "y": list(geo_pred_mean),
+                "mode": "lines",
+                "name": f"{geo}",
+                "line": {"color": geo_color, "width": 2},
+                "hovertemplate": f"{geo} Pred: %{{y:,.0f}}<extra></extra>",
+                "visible": False,
+            })
+            trace_metadata.append({"type": "geo", "dim": "geo", "value": geo})
+
+            # Actual
+            traces.append({
+                "type": "scatter",
+                "x": dates_str,
+                "y": list(geo_actual),
+                "mode": "markers",
+                "name": f"{geo} Actual",
+                "marker": {"color": geo_color, "size": 5, "symbol": "circle-open"},
+                "hovertemplate": f"{geo} Actual: %{{y:,.0f}}<extra></extra>",
+                "visible": False,
+                "showlegend": False,
+            })
+            trace_metadata.append({"type": "geo", "dim": "geo", "value": geo})
+
+    # =========================================================================
+    # PRODUCT-LEVEL TRACES (hidden by default) - 3 traces per product
+    # =========================================================================
+
+    has_product = (
+        product_names is not None
+        and len(product_names) > 1
+        and actual_by_product is not None
+        and predicted_by_product is not None
+    )
+
+    product_colors = _generate_dimension_colors(product_names, colors, offset=len(geo_names or [])) if has_product else {}
+
+    if has_product:
+        for product in product_names:
+            prod_actual = actual_by_product.get(product, [])
+            prod_pred = predicted_by_product.get(product, {})
+
+            prod_pred_mean = prod_pred.get("mean", [])
+            prod_pred_lower = prod_pred.get("lower", [])
+            prod_pred_upper = prod_pred.get("upper", [])
+            prod_color = product_colors.get(product, colors.secondary)
+
+            if len(prod_pred_mean) == 0:
+                for _ in range(3):
+                    traces.append({"type": "scatter", "x": [], "y": [], "visible": False})
+                    trace_metadata.append({"type": "product", "dim": "product", "value": product})
+                continue
+
+            # CI band
+            traces.append({
+                "type": "scatter",
+                "x": dates_str + dates_str[::-1],
+                "y": list(prod_pred_upper) + list(prod_pred_lower)[::-1],
+                "fill": "toself",
+                "fillcolor": f"rgba({_hex_to_rgb(prod_color)}, 0.15)",
+                "line": {"width": 0},
+                "name": f"{product} CI",
+                "showlegend": False,
+                "hoverinfo": "skip",
+                "visible": False,
+            })
+            trace_metadata.append({"type": "product", "dim": "product", "value": product})
+
+            # Predicted
+            traces.append({
+                "type": "scatter",
+                "x": dates_str,
+                "y": list(prod_pred_mean),
+                "mode": "lines",
+                "name": f"{product}",
+                "line": {"color": prod_color, "width": 2, "dash": "dash"},
+                "hovertemplate": f"{product} Pred: %{{y:,.0f}}<extra></extra>",
+                "visible": False,
+            })
+            trace_metadata.append({"type": "product", "dim": "product", "value": product})
+
+            # Actual
+            traces.append({
+                "type": "scatter",
+                "x": dates_str,
+                "y": list(prod_actual),
+                "mode": "markers",
+                "name": f"{product} Actual",
+                "marker": {"color": prod_color, "size": 5, "symbol": "diamond-open"},
+                "hovertemplate": f"{product} Actual: %{{y:,.0f}}<extra></extra>",
+                "visible": False,
+                "showlegend": False,
+            })
+            trace_metadata.append({"type": "product", "dim": "product", "value": product})
+
+    # =========================================================================
+    # LAYOUT
+    # =========================================================================
+
+    layout = {
+        "title": {"text": "Model Fit", "font": {"size": 16}},
+        "paper_bgcolor": "transparent",
+        "plot_bgcolor": "transparent",
+        "font": {"family": "Inter, sans-serif", "color": colors.text, "size": 12},
+        "margin": {"t": 60, "r": 30, "b": 60, "l": 70},
+        "height": chart_config.height,
+        "xaxis": {
+            "title": "Period",
+            "gridcolor": colors.border,
+            "showgrid": True,
+            "zeroline": False,
+        },
+        "yaxis": {
+            "title": chart_config.y_title or "Revenue",
+            "gridcolor": colors.border,
+            "showgrid": True,
+            "zeroline": False,
+        },
+        "legend": {
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "left",
+            "x": 0,
+        },
+        "hovermode": "x unified",
+    }
+
+    # =========================================================================
+    # BUILD HTML WITH MULTI-SELECT FILTERS
+    # =========================================================================
+
+    filter_html = _build_dimension_filter_html(
+        div_id=div_id,
+        geo_names=geo_names if has_geo else None,
+        product_names=product_names if has_product else None,
+        geo_colors=geo_colors,
+        product_colors=product_colors,
+    )
+
+    js_code = _build_dimension_filter_js(
+        div_id=div_id,
+        trace_metadata=trace_metadata,
+        has_geo=has_geo,
+        has_product=has_product,
+    )
+
+    chart_html = f'''
+    <div id="{div_id}" class="chart-container"></div>
+    <script>
+        Plotly.newPlot(
+            "{div_id}",
+            {_to_json(traces)},
+            {_to_json(layout)},
+            {{"displayModeBar": false, "responsive": true}}
+        );
+    </script>
+    '''
+
+    return f'''
+    <div class="dimension-filter-container">
+        {filter_html}
+        {chart_html}
+        {js_code}
+    </div>
+    '''
+
+
+def _generate_dimension_colors(
+    names: list[str] | None,
+    colors: ColorScheme,
+    offset: int = 0
+) -> dict[str, str]:
+    """Generate distinct colors for dimension values."""
+    if not names:
+        return {}
+
+    # Color palette for dimensions
+    palette = [
+        "#3498db", "#e74c3c", "#2ecc71", "#9b59b6", "#f39c12",
+        "#1abc9c", "#e67e22", "#34495e", "#16a085", "#c0392b",
+        "#8e44ad", "#27ae60", "#d35400", "#2980b9", "#7f8c8d",
+    ]
+
+    result = {}
+    for i, name in enumerate(names):
+        result[name] = palette[(i + offset) % len(palette)]
+    return result
+
+
+def _build_dimension_filter_html(
+    div_id: str,
+    geo_names: list[str] | None,
+    product_names: list[str] | None,
+    geo_colors: dict[str, str],
+    product_colors: dict[str, str],
+) -> str:
+    """Build HTML for multi-select dimension filters."""
+    if not geo_names and not product_names:
+        return ""
+
+    filter_groups = []
+
+    # Geo filter group
+    if geo_names:
+        geo_checkboxes = f'''
+        <label class="filter-checkbox">
+            <input type="checkbox" id="{div_id}_geo_agg" checked onchange="updateDimensionFilter_{div_id}()">
+            <span class="filter-label">Aggregated</span>
+        </label>
+        '''
+        for geo in geo_names:
+            color = geo_colors.get(geo, "#3498db")
+            geo_checkboxes += f'''
+            <label class="filter-checkbox">
+                <input type="checkbox" id="{div_id}_geo_{geo.replace(' ', '_')}" onchange="updateDimensionFilter_{div_id}()">
+                <span class="color-dot" style="background-color: {color}"></span>
+                <span class="filter-label">{geo}</span>
+            </label>
+            '''
+        filter_groups.append(f'''
+        <fieldset class="filter-group">
+            <legend>Geography</legend>
+            <div class="checkbox-group">{geo_checkboxes}</div>
+        </fieldset>
+        ''')
+
+    # Product filter group
+    if product_names:
+        prod_checkboxes = f'''
+        <label class="filter-checkbox">
+            <input type="checkbox" id="{div_id}_product_agg" checked onchange="updateDimensionFilter_{div_id}()">
+            <span class="filter-label">Aggregated</span>
+        </label>
+        '''
+        for product in product_names:
+            color = product_colors.get(product, "#e74c3c")
+            prod_checkboxes += f'''
+            <label class="filter-checkbox">
+                <input type="checkbox" id="{div_id}_product_{product.replace(' ', '_')}" onchange="updateDimensionFilter_{div_id}()">
+                <span class="color-dot" style="background-color: {color}"></span>
+                <span class="filter-label">{product}</span>
+            </label>
+            '''
+        filter_groups.append(f'''
+        <fieldset class="filter-group">
+            <legend>Product</legend>
+            <div class="checkbox-group">{prod_checkboxes}</div>
+        </fieldset>
+        ''')
+
+    return f'''
+    <style>
+        .dimension-filter-container {{ margin-bottom: 1rem; }}
+        .dimension-filters {{ display: flex; gap: 1.5rem; margin-bottom: 1rem; flex-wrap: wrap; }}
+        .filter-group {{ border: 1px solid var(--color-border, #e0e0e0); border-radius: 6px; padding: 0.75rem; min-width: 150px; }}
+        .filter-group legend {{ font-size: 0.85rem; font-weight: 600; padding: 0 0.5rem; color: var(--color-text-muted, #666); }}
+        .checkbox-group {{ display: flex; flex-direction: column; gap: 0.4rem; }}
+        .filter-checkbox {{ display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem; }}
+        .filter-checkbox input {{ cursor: pointer; }}
+        .color-dot {{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }}
+        .filter-label {{ color: var(--color-text, #333); }}
+    </style>
+    <div class="dimension-filters">
+        {''.join(filter_groups)}
+    </div>
+    '''
+
+
+def _build_dimension_filter_js(
+    div_id: str,
+    trace_metadata: list[dict],
+    has_geo: bool,
+    has_product: bool,
+) -> str:
+    """Build JavaScript for multi-select dimension filter functionality."""
+    metadata_json = _to_json(trace_metadata)
+
+    return f'''
+    <script>
+    (function() {{
+        var traceMetadata_{div_id} = {metadata_json};
+
+        window.updateDimensionFilter_{div_id} = function() {{
+            var visibility = [];
+            var metadata = traceMetadata_{div_id};
+
+            // Check which options are selected
+            var showAggGeo = document.getElementById('{div_id}_geo_agg');
+            var showAggProduct = document.getElementById('{div_id}_product_agg');
+            var aggGeoChecked = showAggGeo ? showAggGeo.checked : true;
+            var aggProductChecked = showAggProduct ? showAggProduct.checked : true;
+
+            // Get selected geos
+            var selectedGeos = [];
+            {'var geoNames = ' + _to_json(list(set(m['value'] for m in trace_metadata if m['dim'] == 'geo'))) + ';' if has_geo else 'var geoNames = [];'}
+            geoNames.forEach(function(geo) {{
+                var cb = document.getElementById('{div_id}_geo_' + geo.replace(/ /g, '_'));
+                if (cb && cb.checked) selectedGeos.push(geo);
+            }});
+
+            // Get selected products
+            var selectedProducts = [];
+            {'var productNames = ' + _to_json(list(set(m['value'] for m in trace_metadata if m['dim'] == 'product'))) + ';' if has_product else 'var productNames = [];'}
+            productNames.forEach(function(product) {{
+                var cb = document.getElementById('{div_id}_product_' + product.replace(/ /g, '_'));
+                if (cb && cb.checked) selectedProducts.push(product);
+            }});
+
+            // Determine visibility for each trace
+            for (var i = 0; i < metadata.length; i++) {{
+                var m = metadata[i];
+                var show = false;
+
+                if (m.type === 'agg') {{
+                    // Show aggregated if both geo and product aggregated are checked
+                    // (or if no dimension filter exists for that dimension)
+                    var geoOk = !showAggGeo || aggGeoChecked;
+                    var productOk = !showAggProduct || aggProductChecked;
+                    show = geoOk && productOk && selectedGeos.length === 0 && selectedProducts.length === 0;
+                }} else if (m.dim === 'geo') {{
+                    show = selectedGeos.indexOf(m.value) !== -1;
+                }} else if (m.dim === 'product') {{
+                    show = selectedProducts.indexOf(m.value) !== -1;
+                }}
+
+                visibility.push(show);
+            }}
+
+            Plotly.restyle('{div_id}', {{'visible': visibility}});
+        }};
+    }})();
+    </script>
+    '''
+
+
 def create_plotly_div(
     traces: list[dict],
     layout: dict,
@@ -851,7 +1354,7 @@ def create_plotly_div(
 ) -> str:
     """Create an HTML div with embedded Plotly chart."""
     config = config or {"displayModeBar": False, "responsive": True}
-    
+
     return f'''
     <div id="{div_id}" class="chart-container"></div>
     <script>
