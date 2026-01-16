@@ -340,9 +340,13 @@ class BayesianMMMExtractorGeoMixin:
     def _get_geo_names(self) -> list[str] | None:
         """Get geography names from panel or model."""
         if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'geographies'):
-            return list(self.panel.coords.geographies)
+            geographies = self.panel.coords.geographies
+            if geographies is not None:
+                return list(geographies)
         if hasattr(self.mmm, 'geo_names'):
-            return list(self.mmm.geo_names)
+            geo_names = self.mmm.geo_names
+            if geo_names is not None:
+                return list(geo_names)
         return None
     
     def _get_geo_indices(self) -> np.ndarray | None:
@@ -1116,9 +1120,13 @@ class BayesianMMMExtractor(DataExtractor):
     def _get_geo_names(self) -> list[str] | None:
         """Get geography names from panel or model."""
         if hasattr(self.panel, 'coords') and hasattr(self.panel.coords, 'geographies'):
-            return list(self.panel.coords.geographies)
+            geographies = self.panel.coords.geographies
+            if geographies is not None:
+                return list(geographies)
         if hasattr(self.mmm, 'geo_names'):
-            return list(self.mmm.geo_names)
+            geo_names = self.mmm.geo_names
+            if geo_names is not None:
+                return list(geo_names)
         return None
     
     def _get_geo_indices(self) -> np.ndarray | None:
