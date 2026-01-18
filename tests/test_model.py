@@ -11,6 +11,10 @@ Tests cover:
 Note: Tests requiring MCMC sampling are marked with @pytest.mark.slow
 and can be skipped with: pytest -m "not slow"
 """
+import pytensor
+pytensor.config.exception_verbosity = 'high'
+pytensor.config.mode == 'NUMBA'
+pytensor.config.cxx = "" 
 
 import numpy as np
 import pandas as pd
