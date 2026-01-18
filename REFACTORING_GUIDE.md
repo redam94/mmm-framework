@@ -395,8 +395,8 @@ Create utility function for HDI bounds computation.
 ## 5. Config Lookup Consolidation
 
 **Priority**: LOW
-**Status**: [ ] Not Started
-**Estimated Impact**: Cleaner config access pattern
+**Status**: [x] **COMPLETED** (2026-01-18)
+**Estimated Impact**: Cleaner config access pattern, reduced code duplication
 
 ### Problem
 
@@ -404,36 +404,66 @@ Similar lookup methods in `config.py` (lines 409-421):
 - `get_media_config()`
 - `get_control_config()`
 
+Both implemented identical loop-and-compare logic.
+
 ### Solution
 
-Create generic lookup method or use dict-based access.
+Created generic `_get_config_by_name()` helper method with TypeVar for type safety.
+Also added new `get_variable_config()` method for unified lookup across all variable types.
 
 ### Implementation Steps
 
-- [ ] **Step 5.1**: Add generic lookup to `MFFConfig`
+- [x] **Step 5.1**: Add TypeVar import for generic typing
   ```python
-  def _get_config_by_name(
-      self,
-      configs: list[T],
-      name: str
-  ) -> T | None:
+  from typing import Any, Literal, TypeVar
+  T = TypeVar("T", bound="VariableConfig")
+  ```
+
+- [x] **Step 5.2**: Add generic lookup helper to `MFFConfig`
+  ```python
+  def _get_config_by_name(self, configs: list[T], name: str) -> T | None:
       """Generic config lookup by name."""
       for config in configs:
           if config.name == name:
               return config
       return None
+  ```
 
+- [x] **Step 5.3**: Update `get_media_config()` to use helper
+  ```python
   def get_media_config(self, name: str) -> MediaChannelConfig | None:
       return self._get_config_by_name(self.media_channels, name)
+  ```
 
+- [x] **Step 5.4**: Update `get_control_config()` to use helper
+  ```python
   def get_control_config(self, name: str) -> ControlVariableConfig | None:
       return self._get_config_by_name(self.controls, name)
   ```
 
-- [ ] **Step 5.2**: Run tests: `make tests`
+- [x] **Step 5.5**: Add new `get_variable_config()` method for unified lookup
+  ```python
+  def get_variable_config(self, name: str) -> VariableConfig | None:
+      """Get any variable config by name (media, control, or KPI)."""
+      if self.kpi.name == name:
+          return self.kpi
+      return self._get_config_by_name(self.media_channels, name) or \
+             self._get_config_by_name(self.controls, name)
+  ```
+
+- [x] **Step 5.6**: Write comprehensive tests (`tests/test_config_lookup.py`)
+  - 26 tests covering:
+    - MFFConfig lookup (6 tests)
+    - New get_variable_config method (5 tests)
+    - Generic helper (5 tests)
+    - Backward compatibility (4 tests)
+    - Edge cases (3 tests)
+    - Type annotations (3 tests)
+  - All tests passing
 
 ### Files Modified
-- `src/mmm_framework/config.py`
+- `src/mmm_framework/config.py` (added generic helper, updated lookup methods)
+- `tests/test_config_lookup.py` (new - 26 tests)
 
 ---
 
@@ -807,7 +837,7 @@ Keep separate dataclass-based configs in extension for their specific use cases.
 | 2. Data Standardization Utility | HIGH | [x] **COMPLETED** | `DataStandardizer` in `utils/` |
 | 3. Time-Period Masking Helper | MEDIUM | [x] **COMPLETED** | `_get_time_mask()` added |
 | 4. HDI Calculation Utility | MEDIUM | [x] **COMPLETED** | `compute_hdi_bounds()` in `utils/` |
-| 5. Config Lookup Consolidation | LOW | [ ] Not Started | |
+| 5. Config Lookup Consolidation | LOW | [x] **COMPLETED** | Generic `_get_config_by_name()` helper |
 | 6. Naming Consistency Fixes | MEDIUM | [x] **COMPLETED** | `_scaled` suffix, builder docs |
 | 7. BayesianMMM Decomposition | HIGH | [x] **COMPLETED** | All 3 phases: serialization, data_preparation, analysis |
 | 8. Transform Utilities Module | MEDIUM | [x] **COMPLETED** | `transforms/` module with 4 submodules |
@@ -875,4 +905,5 @@ uv run python examples/ex_model_workflow.py
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 3) | Complete | Created `analysis.py` with `MMMAnalyzer`, `MarginalAnalysisResult`, `ScenarioResult` classes and helper functions. 11 new tests, all 196 refactoring tests passing |
 | 2026-01-18 | Task 9: Reporting Extractor Abstraction | Complete | Enhanced `DataExtractor` base class with `_compute_fit_statistics`, `_compute_percentile_bounds`, and `ci_prob` property. Created `AggregationMixin` for data aggregation utilities. Updated all 3 extractor classes. 34 new tests, all 230 refactoring tests passing |
 | 2026-01-18 | Task 10: Config Hierarchy Unification | Complete | Unified `SaturationType` enum by importing from main config into extension config. Kept `AdstockConfig` and `SaturationConfig` separate (different class systems: Pydantic vs dataclass). 31 new tests verifying unification and backward compatibility, all 310 refactoring tests passing |
+| 2026-01-18 | Task 5: Config Lookup Consolidation | Complete | Created generic `_get_config_by_name()` helper with TypeVar. Updated `get_media_config()` and `get_control_config()` to use helper. Added new `get_variable_config()` for unified lookup. 26 new tests, all 331 refactoring tests passing |
 
