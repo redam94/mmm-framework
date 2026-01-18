@@ -726,40 +726,76 @@ an `AggregationMixin` class for data aggregation utilities.
 ## 10. Config Hierarchy Unification
 
 **Priority**: MEDIUM
-**Status**: [ ] Not Started
-**Estimated Impact**: Reduced maintenance burden
+**Status**: [x] **COMPLETED** (2026-01-18)
+**Estimated Impact**: Reduced maintenance burden, single source of truth for shared enums
 
 ### Problem
 
 Overlapping config definitions in:
-- `config.py` (main)
-- `mmm_extensions/config.py`
+- `config.py` (main) - Uses Pydantic `BaseModel` with nested `PriorConfig` objects
+- `mmm_extensions/config.py` - Uses frozen `dataclass` with flat prior parameters
 
-Both define `AdstockConfig`, `SaturationConfig`, `SaturationType`.
+Both define `SaturationType`, `AdstockConfig`, `SaturationConfig`.
+
+### Analysis
+
+After auditing the differences:
+
+**Can be shared (enum values identical):**
+- `SaturationType` - Main config has superset (HILL, LOGISTIC, MICHAELIS_MENTEN, TANH, NONE),
+  extension only used (LOGISTIC, HILL). Extension can import from main and use directly.
+
+**Must remain separate (different structure/purpose):**
+- `AdstockConfig` - Main uses Pydantic with `PriorConfig` nesting, extension uses frozen dataclass
+  with flat prior params (`prior_alpha`, `prior_beta`)
+- `SaturationConfig` - Same pattern: different class structures for different use cases
 
 ### Solution
 
-Share base configs, extend in mmm_extensions only when needed.
+Import shared enums from main config to establish single source of truth.
+Keep separate dataclass-based configs in extension for their specific use cases.
 
 ### Implementation Steps
 
-- [ ] **Step 10.1**: Audit differences between main and extension configs
+- [x] **Step 10.1**: Audit differences between main and extension configs
+  - Identified: `SaturationType` can be shared (enum)
+  - Identified: `AdstockConfig` and `SaturationConfig` need to stay separate
+    (Pydantic vs dataclass, different field structures)
 
-- [ ] **Step 10.2**: Determine which configs can be shared vs need extension
+- [x] **Step 10.2**: Determine which configs can be shared vs need extension
+  - Shared: `SaturationType` (enum)
+  - Separate: `AdstockConfig`, `SaturationConfig` (different class systems)
 
-- [ ] **Step 10.3**: Update `mmm_extensions/config.py` to import from main config
+- [x] **Step 10.3**: Update `mmm_extensions/config.py` to import from main config
   ```python
-  from ..config import AdstockConfig, SaturationConfig, SaturationType
-  # Only define extension-specific configs here
+  # Import shared enum from main config to avoid duplication
+  from mmm_framework.config import SaturationType
+
+  # Extension-specific enums (not in main config)
+  class MediatorType(str, Enum): ...
+  class CrossEffectType(str, Enum): ...
+  class EffectConstraint(str, Enum): ...
   ```
 
-- [ ] **Step 10.4**: Update imports in `mmm_extensions/` modules
+- [x] **Step 10.4**: Verify imports work correctly in all `mmm_extensions/` modules
+  - `__init__.py`, `components.py`, `builders.py`, `models.py` all import from `.config`
+  - All correctly get the unified `SaturationType` through re-export
 
-- [ ] **Step 10.5**: Run tests: `make tests`
+- [x] **Step 10.5**: Write comprehensive tests (`tests/test_config_unification.py`)
+  - 31 tests covering:
+    - SaturationType unification (7 tests)
+    - AdstockConfig separation (5 tests)
+    - SaturationConfig separation (3 tests)
+    - Extension-specific enums (3 tests)
+    - Package exports (3 tests)
+    - Backward compatibility (4 tests)
+    - Config creation (3 tests)
+    - Module imports (3 tests)
+  - All tests passing
 
 ### Files Modified
-- `src/mmm_framework/mmm_extensions/config.py`
-- `src/mmm_framework/mmm_extensions/builders.py`
+- `src/mmm_framework/mmm_extensions/config.py` (import SaturationType from main config)
+- `tests/test_config_unification.py` (new - 31 tests)
 
 ---
 
@@ -776,7 +812,7 @@ Share base configs, extend in mmm_extensions only when needed.
 | 7. BayesianMMM Decomposition | HIGH | [x] **COMPLETED** | All 3 phases: serialization, data_preparation, analysis |
 | 8. Transform Utilities Module | MEDIUM | [x] **COMPLETED** | `transforms/` module with 4 submodules |
 | 9. Reporting Extractor Abstraction | HIGH | [x] **COMPLETED** | Enhanced `DataExtractor`, created `AggregationMixin` |
-| 10. Config Hierarchy Unification | MEDIUM | [ ] Not Started | |
+| 10. Config Hierarchy Unification | MEDIUM | [x] **COMPLETED** | Shared `SaturationType` from main config |
 
 ---
 
@@ -838,4 +874,5 @@ uv run python examples/ex_model_workflow.py
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 2) | Complete | Created `data_preparation.py` with `DataPreparator`, `ScalingParameters`, `PreparedData` classes and standardization utilities. 17 new tests, all passing |
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 3) | Complete | Created `analysis.py` with `MMMAnalyzer`, `MarginalAnalysisResult`, `ScenarioResult` classes and helper functions. 11 new tests, all 196 refactoring tests passing |
 | 2026-01-18 | Task 9: Reporting Extractor Abstraction | Complete | Enhanced `DataExtractor` base class with `_compute_fit_statistics`, `_compute_percentile_bounds`, and `ci_prob` property. Created `AggregationMixin` for data aggregation utilities. Updated all 3 extractor classes. 34 new tests, all 230 refactoring tests passing |
+| 2026-01-18 | Task 10: Config Hierarchy Unification | Complete | Unified `SaturationType` enum by importing from main config into extension config. Kept `AdstockConfig` and `SaturationConfig` separate (different class systems: Pydantic vs dataclass). 31 new tests verifying unification and backward compatibility, all 310 refactoring tests passing |
 
