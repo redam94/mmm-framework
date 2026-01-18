@@ -15,6 +15,8 @@ import pandas as pd
 from .config import ChartConfig, ColorScheme, ChannelColors, ReportConfig
 
 
+
+
 class NumpyEncoder(json.JSONEncoder):
     """JSON encoder that handles numpy types."""
     
@@ -31,20 +33,18 @@ class NumpyEncoder(json.JSONEncoder):
         # Handle numpy datetime64 scalar
         if isinstance(obj, np.datetime64):
             return str(obj)
-        # Handle numpy generic types (includes datetime64 when accessed as item)
+        # Handle numpy generic types (includes datetime64)
         if isinstance(obj, np.generic):
             return obj.item() if hasattr(obj, 'item') else str(obj)
         if isinstance(obj, pd.Timestamp):
             return obj.isoformat()
         if pd.isna(obj):
             return None
-        # Catch-all for datetime-like types by checking type name
+        # Catch-all for datetime-like types
         type_name = type(obj).__name__
         if 'datetime' in type_name.lower():
             return str(obj)
         return super().default(obj)
-
-
 def _to_json(data: Any) -> str:
     """Convert data to JSON string for Plotly."""
     return json.dumps(data, cls=NumpyEncoder)
@@ -1324,6 +1324,8 @@ def _build_dimension_filter_js(
     }})();
     </script>
     '''
+
+
 
 
 def create_model_fit_chart(
