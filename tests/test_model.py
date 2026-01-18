@@ -1108,5 +1108,531 @@ class TestModelIntegration:
         assert results.trace is not None
 
 
+# =============================================================================
+# BayesianMMM Tests - _get_time_mask
+# =============================================================================
+
+
+class TestBayesianMMMTimeMask:
+    """Tests for BayesianMMM _get_time_mask method."""
+
+    def test_time_mask_none_returns_all_true(self, simple_panel, model_config, trend_config):
+        """Test that time_period=None returns all True mask."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        mask = mmm._get_time_mask(None)
+
+        assert mask.dtype == bool
+        assert len(mask) == mmm.n_obs
+        assert mask.all()
+
+    def test_time_mask_with_range(self, simple_panel, model_config, trend_config):
+        """Test time mask with specific range."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Test first 10 time indices
+        mask = mmm._get_time_mask((0, 9))
+
+        assert mask.dtype == bool
+        assert len(mask) == mmm.n_obs
+        # Should have 10 True values for time indices 0-9
+        assert mask.sum() == 10
+
+    def test_time_mask_middle_range(self, simple_panel, model_config, trend_config):
+        """Test time mask with middle range."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Test middle range (10-20)
+        mask = mmm._get_time_mask((10, 20))
+
+        assert mask.sum() == 11  # Inclusive on both ends
+
+    def test_time_mask_end_range(self, simple_panel, model_config, trend_config):
+        """Test time mask with range at end."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Test last 5 periods
+        mask = mmm._get_time_mask((47, 51))
+
+        assert mask.sum() == 5
+
+    def test_time_mask_geo_panel(self, geo_panel, model_config, trend_config):
+        """Test time mask with geo panel (multi-index)."""
+        mmm = BayesianMMM(geo_panel, model_config, trend_config)
+
+        # First 5 time indices - should select observations across all geos
+        mask = mmm._get_time_mask((0, 4))
+
+        # 5 time periods * 3 geographies = 15 observations
+        assert mask.sum() == 15
+
+
+# =============================================================================
+# BayesianMMM Tests - Error Handling
+# =============================================================================
+
+
+class TestBayesianMMMErrorHandling:
+    """Tests for BayesianMMM error handling."""
+
+    def test_predict_requires_fit(self, simple_panel, model_config, trend_config):
+        """Test that predict raises error before fit."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        with pytest.raises(ValueError, match="not fitted"):
+            mmm.predict()
+
+    def test_compute_counterfactual_requires_fit(
+        self, simple_panel, model_config, trend_config
+    ):
+        """Test that compute_counterfactual_contributions raises error before fit."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        with pytest.raises(ValueError, match="not fitted"):
+            mmm.compute_counterfactual_contributions()
+
+    def test_compute_marginal_requires_fit(
+        self, simple_panel, model_config, trend_config
+    ):
+        """Test that compute_marginal_contributions raises error before fit."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        with pytest.raises(ValueError, match="not fitted"):
+            mmm.compute_marginal_contributions()
+
+    def test_what_if_scenario_requires_fit(
+        self, simple_panel, model_config, trend_config
+    ):
+        """Test that what_if_scenario raises error before fit."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        with pytest.raises(ValueError, match="not fitted"):
+            mmm.what_if_scenario(spend_changes={"TV": 1.2})
+
+    def test_compute_component_decomposition_requires_fit(
+        self, simple_panel, model_config, trend_config
+    ):
+        """Test that compute_component_decomposition raises error before fit."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        with pytest.raises(ValueError, match="not fitted"):
+            mmm.compute_component_decomposition()
+
+    def test_save_trace_only_requires_fit(
+        self, simple_panel, model_config, trend_config, tmp_path
+    ):
+        """Test that save_trace_only raises error before fit."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        with pytest.raises(ValueError, match="No trace"):
+            mmm.save_trace_only(tmp_path / "trace.nc")
+
+
+# =============================================================================
+# BayesianMMM Tests - Model Properties
+# =============================================================================
+
+
+class TestBayesianMMMProperties:
+    """Tests for BayesianMMM properties."""
+
+    def test_n_time_periods_property(self, simple_panel, model_config, trend_config):
+        """Test n_periods property."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert mmm.n_periods == 52
+
+    def test_has_product_false(self, simple_panel, model_config, trend_config):
+        """Test has_product is False for simple panel."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert mmm.has_product is False
+
+    def test_adstock_alphas_default(self, simple_panel, model_config, trend_config):
+        """Test default adstock alphas."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert mmm.adstock_alphas == [0.0, 0.3, 0.5, 0.7, 0.9]
+
+    def test_adstock_alphas_custom(self, simple_panel, model_config, trend_config):
+        """Test custom adstock alphas."""
+        custom_alphas = [0.2, 0.5, 0.8]
+        mmm = BayesianMMM(
+            simple_panel, model_config, trend_config, adstock_alphas=custom_alphas
+        )
+
+        assert mmm.adstock_alphas == custom_alphas
+
+    def test_scaling_params_stored(self, simple_panel, model_config, trend_config):
+        """Test that scaling parameters are stored."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert "y_mean" in mmm._scaling_params
+        assert "y_std" in mmm._scaling_params
+        assert "media_max" in mmm._scaling_params
+
+    def test_version_attribute(self, simple_panel, model_config, trend_config):
+        """Test _VERSION class attribute."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert hasattr(mmm, "_VERSION")
+        assert isinstance(BayesianMMM._VERSION, str)
+
+
+# =============================================================================
+# BayesianMMM Tests - Data Preparation
+# =============================================================================
+
+
+class TestBayesianMMMDataPreparation:
+    """Tests for BayesianMMM data preparation."""
+
+    def test_media_data_is_normalized(self, simple_panel, model_config, trend_config):
+        """Test that media data is normalized to [0, 1]."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Check adstocked media is normalized
+        for alpha in mmm.adstock_alphas:
+            media = mmm.X_media_adstocked[alpha]
+            assert media.max() <= 1.0 + 1e-8
+            assert media.min() >= -1e-8
+
+    def test_y_is_standardized(self, simple_panel, model_config, trend_config):
+        """Test that y is standardized."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Standardized y should have mean ~0 and std ~1
+        assert np.abs(mmm.y.mean()) < 0.01
+        assert np.abs(mmm.y.std() - 1.0) < 0.01
+
+    def test_controls_are_standardized(self, simple_panel, model_config, trend_config):
+        """Test that controls are standardized."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        if mmm.X_controls is not None:
+            # Standardized controls should have mean ~0 and std ~1
+            for col_idx in range(mmm.X_controls.shape[1]):
+                col = mmm.X_controls[:, col_idx]
+                assert np.abs(col.mean()) < 0.01
+                assert np.abs(col.std() - 1.0) < 0.01
+
+    def test_time_index_is_computed(self, simple_panel, model_config, trend_config):
+        """Test that time_idx is computed correctly."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert len(mmm.time_idx) == mmm.n_obs
+        assert mmm.time_idx.min() == 0
+        assert mmm.time_idx.max() == mmm.n_periods - 1
+
+    def test_geo_index_for_national(self, simple_panel, model_config, trend_config):
+        """Test geo_idx is zeros for national data."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert len(mmm.geo_idx) == mmm.n_obs
+        assert (mmm.geo_idx == 0).all()
+
+    def test_geo_index_for_geo_panel(self, geo_panel, model_config, trend_config):
+        """Test geo_idx for geo-level data."""
+        mmm = BayesianMMM(geo_panel, model_config, trend_config)
+
+        assert len(mmm.geo_idx) == mmm.n_obs
+        # Should have 3 unique values for 3 geos
+        assert len(np.unique(mmm.geo_idx)) == 3
+
+
+# =============================================================================
+# BayesianMMM Tests - Seasonality
+# =============================================================================
+
+
+class TestBayesianMMMSeasonality:
+    """Tests for BayesianMMM seasonality preparation."""
+
+    def test_seasonality_features_yearly(self, simple_panel, model_config, trend_config):
+        """Test yearly seasonality features."""
+        # Enable yearly seasonality
+        model_config.seasonality = SeasonalityConfig(yearly=4)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        if "yearly" in mmm.seasonality_features:
+            features = mmm.seasonality_features["yearly"]
+            # 4 order = 8 features (sin + cos for each)
+            assert features.shape == (mmm.n_periods, 8)
+
+    def test_no_seasonality_when_zero(self, simple_panel, model_config, trend_config):
+        """Test no seasonality features when order is 0."""
+        model_config.seasonality = SeasonalityConfig(yearly=0)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Should have empty or no yearly features
+        assert "yearly" not in mmm.seasonality_features or mmm.seasonality_features[
+            "yearly"
+        ].shape[1] == 0
+
+
+# =============================================================================
+# BayesianMMM Tests - Trend Types
+# =============================================================================
+
+
+class TestBayesianMMMTrendTypes:
+    """Tests for different trend type configurations."""
+
+    def test_trend_none(self, simple_panel, model_config):
+        """Test model with no trend."""
+        trend_config = TrendConfig(type=TrendType.NONE)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert mmm.trend_config.type == TrendType.NONE
+        # Model should still build
+        assert mmm.model is not None
+
+    def test_trend_piecewise_features(self, simple_panel, model_config):
+        """Test piecewise trend features are prepared."""
+        trend_config = TrendConfig(type=TrendType.PIECEWISE, n_changepoints=5)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert "changepoints" in mmm.trend_features
+        assert "changepoint_matrix" in mmm.trend_features
+        assert len(mmm.trend_features["changepoints"]) == 5
+
+    def test_trend_spline_features(self, simple_panel, model_config):
+        """Test spline trend features are prepared."""
+        trend_config = TrendConfig(type=TrendType.SPLINE, n_knots=8)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert "spline_basis" in mmm.trend_features
+        assert "n_spline_coef" in mmm.trend_features
+
+    def test_trend_gp_features(self, simple_panel, model_config):
+        """Test GP trend features are prepared."""
+        trend_config = TrendConfig(type=TrendType.GP, gp_n_basis=15)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        assert "gp_config" in mmm.trend_features
+        assert mmm.trend_features["gp_config"]["n_basis"] == 15
+
+
+# =============================================================================
+# BayesianMMM Tests - Model Coordinates
+# =============================================================================
+
+
+class TestBayesianMMMCoords:
+    """Tests for BayesianMMM model coordinate building."""
+
+    def test_build_coords_basic(self, simple_panel, model_config, trend_config):
+        """Test basic coordinate building."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+        coords = mmm._build_coords()
+
+        assert "obs" in coords
+        assert "channel" in coords
+        assert len(coords["obs"]) == mmm.n_obs
+        assert list(coords["channel"]) == ["TV", "Digital"]
+
+    def test_build_coords_with_controls(self, simple_panel, model_config, trend_config):
+        """Test coords include control dimension."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+        coords = mmm._build_coords()
+
+        assert "control" in coords
+        assert coords["control"] == ["Price"]
+
+    def test_build_coords_with_geo(self, geo_panel, model_config, trend_config):
+        """Test coords include geo dimension."""
+        mmm = BayesianMMM(geo_panel, model_config, trend_config)
+        coords = mmm._build_coords()
+
+        assert "geo" in coords
+        assert len(coords["geo"]) == 3
+
+    def test_build_coords_spline(self, simple_panel, model_config):
+        """Test coords include spline index for spline trend."""
+        trend_config = TrendConfig(type=TrendType.SPLINE, n_knots=5)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+        coords = mmm._build_coords()
+
+        assert "spline_idx" in coords
+
+    def test_build_coords_piecewise(self, simple_panel, model_config):
+        """Test coords include changepoint dimension for piecewise trend."""
+        trend_config = TrendConfig(type=TrendType.PIECEWISE, n_changepoints=5)
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+        coords = mmm._build_coords()
+
+        assert "changepoint" in coords
+        assert len(coords["changepoint"]) == 5
+
+
+# =============================================================================
+# ComponentDecomposition Tests - Controls Summary
+# =============================================================================
+
+
+class TestComponentDecompositionControlsSummary:
+    """Tests for ComponentDecomposition.controls_summary method."""
+
+    def test_controls_summary_with_controls(self):
+        """Test controls_summary when controls exist."""
+        decomp = ComponentDecomposition(
+            intercept=np.ones(10) * 100,
+            trend=np.zeros(10),
+            seasonality=np.zeros(10),
+            media_total=np.ones(10) * 50,
+            media_by_channel=pd.DataFrame({"TV": np.ones(10) * 50}),
+            controls_total=np.ones(10) * 30,
+            controls_by_var=pd.DataFrame(
+                {
+                    "Price": np.ones(10) * 20,
+                    "Promo": np.ones(10) * 10,
+                }
+            ),
+            geo_effects=None,
+            product_effects=None,
+            total_intercept=1000.0,
+            total_trend=0.0,
+            total_seasonality=0.0,
+            total_media=500.0,
+            total_controls=300.0,
+            total_geo=None,
+            total_product=None,
+            y_mean=100.0,
+            y_std=10.0,
+        )
+
+        controls_summary = decomp.controls_summary()
+
+        assert controls_summary is not None
+        assert "Variable" in controls_summary.columns
+        assert "Total Contribution" in controls_summary.columns
+        assert "Share of Controls %" in controls_summary.columns
+        assert len(controls_summary) == 2
+
+    def test_controls_summary_no_controls(self):
+        """Test controls_summary returns None when no controls."""
+        decomp = ComponentDecomposition(
+            intercept=np.ones(10) * 100,
+            trend=np.zeros(10),
+            seasonality=np.zeros(10),
+            media_total=np.ones(10) * 50,
+            media_by_channel=pd.DataFrame({"TV": np.ones(10) * 50}),
+            controls_total=np.zeros(10),
+            controls_by_var=None,
+            geo_effects=None,
+            product_effects=None,
+            total_intercept=1000.0,
+            total_trend=0.0,
+            total_seasonality=0.0,
+            total_media=500.0,
+            total_controls=0.0,
+            total_geo=None,
+            total_product=None,
+            y_mean=100.0,
+            y_std=10.0,
+        )
+
+        controls_summary = decomp.controls_summary()
+
+        assert controls_summary is None
+
+
+# =============================================================================
+# MMMResults Tests - Methods
+# =============================================================================
+
+
+class TestMMMResultsMethods:
+    """Tests for MMMResults methods."""
+
+    def test_summary_method(self):
+        """Test MMMResults.summary method."""
+        import arviz as az
+        from unittest.mock import MagicMock, patch
+
+        mock_trace = MagicMock(spec=az.InferenceData)
+        mock_model = MagicMock()
+        mock_panel = MagicMock()
+
+        results = MMMResults(
+            trace=mock_trace,
+            model=mock_model,
+            panel=mock_panel,
+        )
+
+        with patch("arviz.summary") as mock_summary:
+            mock_summary.return_value = pd.DataFrame({"mean": [1.0], "sd": [0.1]})
+            summary = results.summary(var_names=["intercept"])
+
+            mock_summary.assert_called_once_with(mock_trace, var_names=["intercept"])
+
+
+# =============================================================================
+# BayesianMMM Tests - Prepare Media Data
+# =============================================================================
+
+
+class TestBayesianMMMPrepareMediaData:
+    """Tests for _prepare_media_data_for_model method."""
+
+    def test_prepare_media_data_default(self, simple_panel, model_config, trend_config):
+        """Test preparing media data with defaults."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        X_low, X_high = mmm._prepare_media_data_for_model()
+
+        assert X_low.shape == (mmm.n_obs, mmm.n_channels)
+        assert X_high.shape == (mmm.n_obs, mmm.n_channels)
+        # Should be normalized
+        assert X_low.max() <= 1.0 + 1e-8
+        assert X_high.max() <= 1.0 + 1e-8
+
+    def test_prepare_media_data_custom(self, simple_panel, model_config, trend_config):
+        """Test preparing custom media data."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        # Create custom media data
+        X_media_custom = np.ones((mmm.n_obs, mmm.n_channels)) * 100
+
+        X_low, X_high = mmm._prepare_media_data_for_model(X_media_custom)
+
+        assert X_low.shape == (mmm.n_obs, mmm.n_channels)
+        assert X_high.shape == (mmm.n_obs, mmm.n_channels)
+
+
+# =============================================================================
+# BayesianMMM Tests - Get Prior
+# =============================================================================
+
+
+class TestBayesianMMMGetPrior:
+    """Tests for get_prior method."""
+
+    def test_get_prior_returns_inference_data(
+        self, simple_panel, model_config, trend_config
+    ):
+        """Test that get_prior returns InferenceData."""
+        import arviz as az
+
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        prior = mmm.get_prior(samples=10, random_seed=42)
+
+        assert isinstance(prior, az.InferenceData)
+        assert "prior" in prior.groups()
+
+    def test_get_prior_sample_count(self, simple_panel, model_config, trend_config):
+        """Test that get_prior returns correct number of samples."""
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+
+        prior = mmm.get_prior(samples=50, random_seed=42)
+
+        # Check prior predictive shape
+        if "prior_predictive" in prior.groups():
+            y_prior = prior.prior_predictive["y_obs"]
+            # Last dimension should be n_obs
+            assert y_prior.shape[-1] == mmm.n_obs
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-m", "not slow"])

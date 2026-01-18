@@ -803,5 +803,539 @@ class TestIntegration:
         assert len(pymc_coords["geo"]) == 3
 
 
+# =============================================================================
+# validate_variable_dimensions Tests
+# =============================================================================
+
+
+class TestValidateVariableDimensions:
+    """Tests for validate_variable_dimensions function."""
+
+    def test_valid_dimensions(self, national_mff_data, national_config):
+        """Test validation with valid dimensions."""
+        sales_config = national_config.kpi
+
+        is_valid, msg = validate_variable_dimensions(
+            national_mff_data, sales_config, national_config
+        )
+
+        assert is_valid is True
+        assert msg == "OK"
+
+    def test_missing_variable_returns_false(self, sample_periods, national_config):
+        """Test validation for variable not in data."""
+        df = pd.DataFrame(
+            {
+                "VariableName": ["Sales"] * 10,
+                "VariableValue": [100] * 10,
+                "Period": sample_periods[:10],
+                "Geography": [None] * 10,
+                "Product": [None] * 10,
+                "Campaign": [None] * 10,
+                "Outlet": [None] * 10,
+                "Creative": [None] * 10,
+            }
+        )
+
+        # Try to validate a variable that doesn't exist
+        missing_var_config = MediaChannelConfig(
+            name="Radio",
+            dimensions=[DimensionType.PERIOD],
+        )
+
+        is_valid, msg = validate_variable_dimensions(df, missing_var_config, national_config)
+
+        assert is_valid is False
+        assert "No data found" in msg
+
+
+# =============================================================================
+# MFFLoader Advanced Tests
+# =============================================================================
+
+
+class TestMFFLoaderAdvanced:
+    """Advanced tests for MFFLoader class."""
+
+    def test_load_from_file_csv(self, national_mff_data, national_config, tmp_path):
+        """Test loading from CSV file."""
+        # Save to temp file
+        csv_path = tmp_path / "test_data.csv"
+        national_mff_data.to_csv(csv_path, index=False)
+
+        # Load from file
+        loader = MFFLoader(national_config)
+        loader.load(str(csv_path))
+        panel = loader.build_panel()
+
+        assert panel.n_obs == 52
+
+    def test_load_from_file_parquet(self, national_mff_data, national_config, tmp_path):
+        """Test loading from Parquet file."""
+        # Save to temp file
+        parquet_path = tmp_path / "test_data.parquet"
+        national_mff_data.to_parquet(parquet_path, index=False)
+
+        # Load from file
+        loader = MFFLoader(national_config)
+        loader.load(str(parquet_path))
+        panel = loader.build_panel()
+
+        assert panel.n_obs == 52
+
+    def test_build_panel_before_load_raises(self, national_config):
+        """Test that build_panel raises error before load."""
+        loader = MFFLoader(national_config)
+
+        with pytest.raises(RuntimeError, match="No data loaded"):
+            loader.build_panel()
+
+    def test_set_allocation_weights_dict(self, geo_config):
+        """Test setting allocation weights from dict."""
+        loader = MFFLoader(geo_config)
+
+        weights = {"East": 0.5, "West": 0.3, "Central": 0.2}
+        result = loader.set_allocation_weights(DimensionType.GEOGRAPHY, weights)
+
+        # Should return self for chaining
+        assert result is loader
+        # DimensionType.GEOGRAPHY.value is "Geography"
+        assert DimensionType.GEOGRAPHY.value in loader._allocation_weights
+
+    def test_set_allocation_weights_series(self, geo_config):
+        """Test setting allocation weights from Series."""
+        loader = MFFLoader(geo_config)
+
+        weights = pd.Series({"East": 0.4, "West": 0.4, "Central": 0.2})
+        loader.set_allocation_weights(DimensionType.GEOGRAPHY, weights)
+
+        # Check weights are normalized - use actual dimension value
+        dim_key = DimensionType.GEOGRAPHY.value
+        assert np.isclose(loader._allocation_weights[dim_key].sum(), 1.0)
+
+    def test_method_chaining(self, national_mff_data, national_config):
+        """Test method chaining on loader."""
+        panel = (
+            MFFLoader(national_config)
+            .load(national_mff_data)
+            .build_panel()
+        )
+
+        assert isinstance(panel, PanelDataset)
+
+
+# =============================================================================
+# PanelDataset Summary Tests
+# =============================================================================
+
+
+class TestPanelDatasetSummary:
+    """Tests for PanelDataset.summary method."""
+
+    def test_summary_returns_string(self, sample_periods, national_config):
+        """Test that summary returns a string."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            channels=["TV", "Digital"],
+            controls=["Price"],
+        )
+
+        panel = PanelDataset(
+            y=pd.Series(np.random.randn(52) * 100 + 1000),
+            X_media=pd.DataFrame({
+                "TV": np.ones(52) * 100,
+                "Digital": np.ones(52) * 50,
+            }),
+            X_controls=pd.DataFrame({"Price": np.random.randn(52)}),
+            coords=coords,
+            index=sample_periods,
+            config=national_config,
+        )
+
+        summary = panel.summary()
+
+        assert isinstance(summary, str)
+        assert "PanelDataset Summary" in summary
+        assert "Observations: 52" in summary
+        assert "Media channels: 2" in summary
+
+    def test_summary_no_controls(self, sample_periods, national_config):
+        """Test summary with no controls."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            channels=["TV"],
+        )
+
+        panel = PanelDataset(
+            y=pd.Series(np.random.randn(52)),
+            X_media=pd.DataFrame({"TV": np.random.randn(52)}),
+            X_controls=None,
+            coords=coords,
+            index=sample_periods,
+            config=national_config,
+        )
+
+        summary = panel.summary()
+
+        assert "Control variables: 0" in summary
+
+
+# =============================================================================
+# PanelDataset Edge Cases
+# =============================================================================
+
+
+class TestPanelDatasetEdgeCases:
+    """Edge case tests for PanelDataset."""
+
+    def test_n_controls_with_none(self, sample_periods, national_config):
+        """Test n_controls when X_controls is None."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            channels=["TV"],
+        )
+
+        panel = PanelDataset(
+            y=pd.Series(np.random.randn(52)),
+            X_media=pd.DataFrame({"TV": np.random.randn(52)}),
+            X_controls=None,
+            coords=coords,
+            index=sample_periods,
+            config=national_config,
+        )
+
+        assert panel.n_controls == 0
+
+    def test_to_numpy_no_controls(self, sample_periods, national_config):
+        """Test to_numpy when X_controls is None."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            channels=["TV"],
+        )
+
+        panel = PanelDataset(
+            y=pd.Series(np.random.randn(52)),
+            X_media=pd.DataFrame({"TV": np.random.randn(52)}),
+            X_controls=None,
+            coords=coords,
+            index=sample_periods,
+            config=national_config,
+        )
+
+        y_np, X_media_np, X_controls_np = panel.to_numpy()
+
+        assert X_controls_np is None
+
+
+# =============================================================================
+# PanelCoordinates Edge Cases
+# =============================================================================
+
+
+class TestPanelCoordinatesEdgeCases:
+    """Edge case tests for PanelCoordinates."""
+
+    def test_empty_geographies_list(self, sample_periods):
+        """Test with empty geographies list."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            geographies=[],  # Empty list
+            channels=["TV"],
+        )
+
+        # Empty list should be treated as no geo
+        assert coords.has_geo is False
+
+    def test_empty_products_list(self, sample_periods):
+        """Test with empty products list."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            products=[],  # Empty list
+            channels=["TV"],
+        )
+
+        # Empty list should be treated as no product
+        assert coords.has_product is False
+
+    def test_to_pymc_coords_with_all_dimensions(
+        self, sample_periods, sample_geographies, sample_products
+    ):
+        """Test PyMC coords with all dimensions."""
+        coords = PanelCoordinates(
+            periods=sample_periods,
+            geographies=sample_geographies,
+            products=sample_products,
+            channels=["TV"],
+            controls=["Price"],
+        )
+
+        pymc_coords = coords.to_pymc_coords()
+
+        assert "date" in pymc_coords
+        assert "geo" in pymc_coords
+        assert "product" in pymc_coords
+        assert "channel" in pymc_coords
+        assert "control" in pymc_coords
+
+
+# =============================================================================
+# Ragged Data Handler Tests
+# =============================================================================
+
+
+class TestRaggedDataUtilities:
+    """Tests for ragged data handling utilities."""
+
+    def test_generate_complete_date_range(self):
+        """Test complete date range generation."""
+        from mmm_framework.data_loader import generate_complete_date_range
+
+        start_date = pd.Timestamp("2020-01-06")
+        end_date = pd.Timestamp("2020-12-28")
+
+        date_range = generate_complete_date_range(start_date, end_date, "W")
+
+        assert isinstance(date_range, pd.DatetimeIndex)
+        assert date_range[0] >= start_date
+        assert date_range[-1] <= end_date
+
+    def test_build_complete_index_national(self, sample_periods):
+        """Test build_complete_index for national data."""
+        from mmm_framework.data_loader import build_complete_index
+
+        index = build_complete_index(sample_periods)
+
+        assert isinstance(index, pd.DatetimeIndex)
+        assert len(index) == 52
+
+    def test_build_complete_index_geo(self, sample_periods, sample_geographies):
+        """Test build_complete_index with geo."""
+        from mmm_framework.data_loader import build_complete_index
+
+        index = build_complete_index(
+            sample_periods,
+            geographies=sample_geographies,
+        )
+
+        assert isinstance(index, pd.MultiIndex)
+        assert len(index) == 52 * 3
+
+    def test_build_complete_index_geo_product(
+        self, sample_periods, sample_geographies, sample_products
+    ):
+        """Test build_complete_index with geo and product."""
+        from mmm_framework.data_loader import build_complete_index
+
+        index = build_complete_index(
+            sample_periods,
+            geographies=sample_geographies,
+            products=sample_products,
+        )
+
+        assert isinstance(index, pd.MultiIndex)
+        assert len(index) == 52 * 3 * 2
+
+
+# =============================================================================
+# Extract with NaN Tracking Tests
+# =============================================================================
+
+
+class TestExtractWithNaNTracking:
+    """Tests for extract_with_nan_tracking function."""
+
+    def test_extract_basic(self, sample_periods):
+        """Test basic extraction."""
+        from mmm_framework.data_loader import extract_with_nan_tracking
+
+        cols = MFFColumnConfig()
+
+        df = pd.DataFrame({
+            cols.variable_name: ["Sales"] * 10,
+            cols.variable_value: [100 + i for i in range(10)],
+            cols.period: sample_periods[:10],
+            cols.geography: [None] * 10,
+            cols.product: [None] * 10,
+            cols.campaign: [None] * 10,
+            cols.outlet: [None] * 10,
+            cols.creative: [None] * 10,
+        })
+
+        target_index = pd.DatetimeIndex(sample_periods[:10], name=cols.period)
+
+        values, nan_mask = extract_with_nan_tracking(
+            df, "Sales", cols, target_index, fill_value=0.0
+        )
+
+        assert len(values) == 10
+        assert len(nan_mask) == 10
+        assert not nan_mask.any()  # No explicit NaN
+
+    def test_extract_missing_variable(self, sample_periods):
+        """Test extraction of variable not in data."""
+        from mmm_framework.data_loader import extract_with_nan_tracking
+
+        cols = MFFColumnConfig()
+
+        df = pd.DataFrame({
+            cols.variable_name: ["Sales"] * 5,
+            cols.variable_value: [100] * 5,
+            cols.period: sample_periods[:5],
+            cols.geography: [None] * 5,
+            cols.product: [None] * 5,
+            cols.campaign: [None] * 5,
+            cols.outlet: [None] * 5,
+            cols.creative: [None] * 5,
+        })
+
+        target_index = pd.DatetimeIndex(sample_periods[:10], name=cols.period)
+
+        # Extract missing variable "TV"
+        values, nan_mask = extract_with_nan_tracking(
+            df, "TV", cols, target_index, fill_value=0.0
+        )
+
+        # Should return all fill values
+        assert (values == 0.0).all()
+        assert not nan_mask.any()
+
+
+# =============================================================================
+# RaggedMFFLoader Tests
+# =============================================================================
+
+
+class TestRaggedMFFLoader:
+    """Tests for RaggedMFFLoader class."""
+
+    def test_init(self, national_config):
+        """Test RaggedMFFLoader initialization."""
+        from mmm_framework.data_loader import RaggedMFFLoader
+
+        loader = RaggedMFFLoader(national_config)
+
+        assert loader.config == national_config
+        assert loader._raw_data is None
+
+    def test_load_basic(self, national_mff_data, national_config):
+        """Test basic data loading."""
+        from mmm_framework.data_loader import RaggedMFFLoader
+
+        loader = RaggedMFFLoader(national_config)
+        result = loader.load(national_mff_data)
+
+        # Should return self for chaining
+        assert result is loader
+        assert loader._raw_data is not None
+
+    def test_build_panel_before_load_raises(self, national_config):
+        """Test that build_panel raises before load."""
+        from mmm_framework.data_loader import RaggedMFFLoader
+
+        loader = RaggedMFFLoader(national_config)
+
+        with pytest.raises(RuntimeError, match="No data loaded"):
+            loader.build_panel()
+
+
+# =============================================================================
+# load_ragged_mff Tests
+# =============================================================================
+
+
+class TestLoadRaggedMFF:
+    """Tests for load_ragged_mff convenience function."""
+
+    def test_function_exists(self):
+        """Test that load_ragged_mff function exists and is callable."""
+        from mmm_framework.data_loader import load_ragged_mff
+
+        assert callable(load_ragged_mff)
+
+
+# =============================================================================
+# Allocation Methods Tests
+# =============================================================================
+
+
+class TestAllocationMethods:
+    """Tests for allocation weight methods."""
+
+    def test_custom_allocation_weights(self, geo_mff_data, geo_config):
+        """Test using custom allocation weights."""
+        custom_weights = {"East": 0.5, "West": 0.3, "Central": 0.2}
+
+        panel = load_mff(
+            geo_mff_data,
+            geo_config,
+            geo_weights=custom_weights,
+        )
+
+        # Verify panel was created with custom weights
+        assert panel.n_obs == 52 * 3
+
+
+# =============================================================================
+# Date Format Tests
+# =============================================================================
+
+
+class TestDateFormats:
+    """Tests for different date format handling."""
+
+    def test_invalid_date_format_raises(self, sample_periods):
+        """Test that invalid date format raises error."""
+        config = MFFConfig(
+            kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
+            media_channels=[],
+            date_format="%d/%m/%Y",  # Format that doesn't match data
+        )
+
+        df = pd.DataFrame({
+            "VariableName": ["Sales"] * 10,
+            "VariableValue": [100] * 10,
+            "Period": ["2020-01-06"] * 10,  # ISO format, not matching config
+            "Geography": [None] * 10,
+            "Product": [None] * 10,
+            "Campaign": [None] * 10,
+            "Outlet": [None] * 10,
+            "Creative": [None] * 10,
+        })
+
+        with pytest.raises(MFFValidationError, match="parse"):
+            validate_mff_structure(df, config)
+
+
+# =============================================================================
+# MFF Column Config Tests
+# =============================================================================
+
+
+class TestMFFColumnConfig:
+    """Tests for MFFColumnConfig."""
+
+    def test_default_column_names(self):
+        """Test default column names."""
+        cols = MFFColumnConfig()
+
+        assert cols.period == "Period"
+        assert cols.geography == "Geography"
+        assert cols.product == "Product"
+        assert cols.variable_name == "VariableName"
+        assert cols.variable_value == "VariableValue"
+
+    def test_all_columns_property(self):
+        """Test all_columns property."""
+        cols = MFFColumnConfig()
+
+        all_cols = cols.all_columns
+
+        assert "Period" in all_cols
+        assert "Geography" in all_cols
+        assert "Product" in all_cols
+        assert "VariableName" in all_cols
+        assert "VariableValue" in all_cols
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
