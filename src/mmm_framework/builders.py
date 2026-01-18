@@ -2,6 +2,29 @@
 Builder classes for MMM configuration objects.
 
 Provides fluent API for constructing complex configuration objects step-by-step.
+
+Method Naming Conventions
+-------------------------
+This module follows these builder method naming patterns:
+
+1. **with_* pattern** (preferred for setting values):
+   - ``with_display_name(name)`` - Set a display name
+   - ``with_unit(unit)`` - Set a unit of measurement
+   - ``with_dimensions(*dims)`` - Set dimensions
+   - ``with_prior(prior)`` - Set a prior configuration
+   - ``with_max_lag(lag)`` - Set maximum lag
+
+2. **Convenience methods** (shorthand for common configurations):
+   - ``national()`` - Set as national-level (Period only)
+   - ``by_geo()`` - Set as geo-level (Period + Geography)
+   - ``by_product()`` - Set as product-level (Period + Product)
+   - ``by_geo_and_product()`` - Set as geo+product level
+   - ``enabled()`` / ``disabled()`` - Toggle boolean settings
+   - ``positive_only()`` - Constrain to positive values
+
+3. **Action methods**:
+   - ``build()`` - Construct the final configuration object
+   - ``add_*()`` - Add items to collections
 """
 
 from __future__ import annotations
@@ -36,6 +59,154 @@ from .config import (
 
 if TYPE_CHECKING:
     from typing import Self
+
+
+# =============================================================================
+# Variable Config Builder Mixin
+# =============================================================================
+
+
+class VariableConfigBuilderMixin:
+    """
+    Mixin providing shared methods for variable configuration builders.
+
+    This mixin provides common functionality for builders that configure
+    variables with display names, units, and dimensions. It should be used
+    by MediaChannelConfigBuilder, ControlVariableConfigBuilder, and
+    KPIConfigBuilder to eliminate code duplication.
+
+    Attributes
+    ----------
+    _display_name : str | None
+        Human-readable display name for the variable.
+    _unit : str | None
+        Unit of measurement (e.g., 'USD', 'GRPs').
+    _dimensions : list[DimensionType]
+        Dimensions this variable is defined over.
+    """
+
+    _display_name: str | None
+    _unit: str | None
+    _dimensions: list[DimensionType]
+
+    def _init_variable_fields(self) -> None:
+        """Initialize common variable fields. Call in subclass __init__."""
+        self._display_name = None
+        self._unit = None
+        self._dimensions = [DimensionType.PERIOD]
+
+    def with_display_name(self, name: str) -> Self:
+        """Set human-readable display name.
+
+        Parameters
+        ----------
+        name : str
+            Display name for the variable.
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._display_name = name
+        return self
+
+    def with_unit(self, unit: str) -> Self:
+        """Set unit of measurement.
+
+        Parameters
+        ----------
+        unit : str
+            Unit of measurement (e.g., 'USD', 'GRPs', 'Index').
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._unit = unit
+        return self
+
+    def with_dimensions(self, *dims: DimensionType) -> Self:
+        """Set dimensions this variable is defined over.
+
+        If PERIOD is not included in the provided dimensions, it will be
+        automatically inserted at the beginning.
+
+        Parameters
+        ----------
+        *dims : DimensionType
+            Variable number of dimension types.
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._dimensions = list(dims)
+        if DimensionType.PERIOD not in self._dimensions:
+            self._dimensions.insert(0, DimensionType.PERIOD)
+        return self
+
+    def national(self) -> Self:
+        """Set as national-level (Period only).
+
+        This is a convenience method equivalent to:
+        `with_dimensions(DimensionType.PERIOD)`
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._dimensions = [DimensionType.PERIOD]
+        return self
+
+    def by_geo(self) -> Self:
+        """Set as geo-level (Period + Geography).
+
+        This is a convenience method equivalent to:
+        `with_dimensions(DimensionType.PERIOD, DimensionType.GEOGRAPHY)`
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._dimensions = [DimensionType.PERIOD, DimensionType.GEOGRAPHY]
+        return self
+
+    def by_product(self) -> Self:
+        """Set as product-level (Period + Product).
+
+        This is a convenience method equivalent to:
+        `with_dimensions(DimensionType.PERIOD, DimensionType.PRODUCT)`
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._dimensions = [DimensionType.PERIOD, DimensionType.PRODUCT]
+        return self
+
+    def by_geo_and_product(self) -> Self:
+        """Set as geo+product level (Period + Geography + Product).
+
+        This is a convenience method equivalent to:
+        `with_dimensions(DimensionType.PERIOD, DimensionType.GEOGRAPHY, DimensionType.PRODUCT)`
+
+        Returns
+        -------
+        Self
+            Builder instance for method chaining.
+        """
+        self._dimensions = [
+            DimensionType.PERIOD,
+            DimensionType.GEOGRAPHY,
+            DimensionType.PRODUCT,
+        ]
+        return self
 
 
 # =============================================================================
@@ -306,7 +477,7 @@ class SaturationConfigBuilder:
 # =============================================================================
 
 
-class MediaChannelConfigBuilder:
+class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
     """
     Builder for MediaChannelConfig objects.
 
@@ -328,55 +499,12 @@ class MediaChannelConfigBuilder:
 
     def __init__(self, name: str) -> None:
         self._name = name
-        self._display_name: str | None = None
-        self._unit: str | None = None
-        self._dimensions: list[DimensionType] = [DimensionType.PERIOD]
+        self._init_variable_fields()  # From VariableConfigBuilderMixin
         self._adstock: AdstockConfig | None = None
         self._saturation: SaturationConfig | None = None
         self._coefficient_prior: PriorConfig | None = None
         self._parent_channel: str | None = None
         self._split_dimensions: list[DimensionType] = []
-
-    def with_display_name(self, name: str) -> Self:
-        """Set human-readable display name."""
-        self._display_name = name
-        return self
-
-    def with_unit(self, unit: str) -> Self:
-        """Set unit of measurement (e.g., 'USD', 'GRPs')."""
-        self._unit = unit
-        return self
-
-    def with_dimensions(self, *dims: DimensionType) -> Self:
-        """Set dimensions this variable is defined over."""
-        self._dimensions = list(dims)
-        if DimensionType.PERIOD not in self._dimensions:
-            self._dimensions.insert(0, DimensionType.PERIOD)
-        return self
-
-    def national(self) -> Self:
-        """Set as national-level (Period only)."""
-        self._dimensions = [DimensionType.PERIOD]
-        return self
-
-    def by_geo(self) -> Self:
-        """Set as geo-level (Period + Geography)."""
-        self._dimensions = [DimensionType.PERIOD, DimensionType.GEOGRAPHY]
-        return self
-
-    def by_product(self) -> Self:
-        """Set as product-level (Period + Product)."""
-        self._dimensions = [DimensionType.PERIOD, DimensionType.PRODUCT]
-        return self
-
-    def by_geo_and_product(self) -> Self:
-        """Set as geo+product level."""
-        self._dimensions = [
-            DimensionType.PERIOD,
-            DimensionType.GEOGRAPHY,
-            DimensionType.PRODUCT,
-        ]
-        return self
 
     def with_adstock(self, config: AdstockConfig) -> Self:
         """Set adstock configuration."""
@@ -457,7 +585,7 @@ class MediaChannelConfigBuilder:
 # =============================================================================
 
 
-class ControlVariableConfigBuilder:
+class ControlVariableConfigBuilder(VariableConfigBuilderMixin):
     """
     Builder for ControlVariableConfig objects.
 
@@ -477,44 +605,10 @@ class ControlVariableConfigBuilder:
 
     def __init__(self, name: str) -> None:
         self._name = name
-        self._display_name: str | None = None
-        self._unit: str | None = None
-        self._dimensions: list[DimensionType] = [DimensionType.PERIOD]
+        self._init_variable_fields()  # From VariableConfigBuilderMixin
         self._allow_negative: bool = True
         self._coefficient_prior: PriorConfig | None = None
         self._use_shrinkage: bool = False
-
-    def with_display_name(self, name: str) -> Self:
-        """Set human-readable display name."""
-        self._display_name = name
-        return self
-
-    def with_unit(self, unit: str) -> Self:
-        """Set unit of measurement."""
-        self._unit = unit
-        return self
-
-    def with_dimensions(self, *dims: DimensionType) -> Self:
-        """Set dimensions this variable is defined over."""
-        self._dimensions = list(dims)
-        if DimensionType.PERIOD not in self._dimensions:
-            self._dimensions.insert(0, DimensionType.PERIOD)
-        return self
-
-    def national(self) -> Self:
-        """Set as national-level (Period only)."""
-        self._dimensions = [DimensionType.PERIOD]
-        return self
-
-    def by_geo(self) -> Self:
-        """Set as geo-level."""
-        self._dimensions = [DimensionType.PERIOD, DimensionType.GEOGRAPHY]
-        return self
-
-    def by_product(self) -> Self:
-        """Set as product-level."""
-        self._dimensions = [DimensionType.PERIOD, DimensionType.PRODUCT]
-        return self
 
     def allow_negative(self, allow: bool = True) -> Self:
         """Allow negative coefficient (e.g., for price)."""
@@ -566,7 +660,7 @@ class ControlVariableConfigBuilder:
 # =============================================================================
 
 
-class KPIConfigBuilder:
+class KPIConfigBuilder(VariableConfigBuilderMixin):
     """
     Builder for KPIConfig objects.
 
@@ -580,52 +674,9 @@ class KPIConfigBuilder:
 
     def __init__(self, name: str) -> None:
         self._name = name
-        self._display_name: str | None = None
-        self._unit: str | None = None
-        self._dimensions: list[DimensionType] = [DimensionType.PERIOD]
+        self._init_variable_fields()  # From VariableConfigBuilderMixin
         self._log_transform: bool = False
         self._floor_value: float = 1e-6
-
-    def with_display_name(self, name: str) -> Self:
-        """Set human-readable display name."""
-        self._display_name = name
-        return self
-
-    def with_unit(self, unit: str) -> Self:
-        """Set unit of measurement."""
-        self._unit = unit
-        return self
-
-    def with_dimensions(self, *dims: DimensionType) -> Self:
-        """Set dimensions for the KPI."""
-        self._dimensions = list(dims)
-        if DimensionType.PERIOD not in self._dimensions:
-            self._dimensions.insert(0, DimensionType.PERIOD)
-        return self
-
-    def national(self) -> Self:
-        """Set as national-level (Period only)."""
-        self._dimensions = [DimensionType.PERIOD]
-        return self
-
-    def by_geo(self) -> Self:
-        """Set as geo-level."""
-        self._dimensions = [DimensionType.PERIOD, DimensionType.GEOGRAPHY]
-        return self
-
-    def by_product(self) -> Self:
-        """Set as product-level."""
-        self._dimensions = [DimensionType.PERIOD, DimensionType.PRODUCT]
-        return self
-
-    def by_geo_and_product(self) -> Self:
-        """Set as geo+product level."""
-        self._dimensions = [
-            DimensionType.PERIOD,
-            DimensionType.GEOGRAPHY,
-            DimensionType.PRODUCT,
-        ]
-        return self
 
     def additive(self) -> Self:
         """Use additive model specification (no log transform)."""

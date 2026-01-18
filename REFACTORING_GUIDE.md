@@ -1,0 +1,814 @@
+# MMM Framework Refactoring Guide
+
+This document tracks code quality improvements for the MMM Framework. Each section contains specific refactoring tasks with implementation details and progress tracking.
+
+---
+
+## Table of Contents
+
+1. [Builder Method Consolidation](#1-builder-method-consolidation)
+2. [Data Standardization Utility](#2-data-standardization-utility)
+3. [Time-Period Masking Helper](#3-time-period-masking-helper)
+4. [HDI Calculation Utility](#4-hdi-calculation-utility)
+5. [Config Lookup Consolidation](#5-config-lookup-consolidation)
+6. [Naming Consistency Fixes](#6-naming-consistency-fixes)
+7. [BayesianMMM Decomposition](#7-bayesianmmm-decomposition)
+8. [Transform Utilities Module](#8-transform-utilities-module)
+9. [Reporting Extractor Abstraction](#9-reporting-extractor-abstraction)
+10. [Config Hierarchy Unification](#10-config-hierarchy-unification)
+
+---
+
+## 1. Builder Method Consolidation
+
+**Priority**: HIGH
+**Status**: [x] **COMPLETED** (2026-01-17)
+**Estimated Impact**: ~90 lines of duplicated code removed
+
+### Problem
+
+Three builder classes in `builders.py` implement identical methods:
+- `MediaChannelConfigBuilder` (lines 340-379)
+- `ControlVariableConfigBuilder` (lines 487-517)
+- `KPIConfigBuilder` (lines 589-628)
+
+Duplicated methods:
+- `with_display_name()`
+- `with_unit()`
+- `with_dimensions()`
+- `national()`
+- `by_geo()`
+- `by_product()`
+- `by_geo_and_product()`
+
+### Solution
+
+Create a `VariableConfigBuilderMixin` class that provides shared functionality.
+
+### Implementation Steps
+
+- [ ] **Step 1.1**: Create mixin class at top of `builders.py`
+  ```python
+  class VariableConfigBuilderMixin:
+      """Shared methods for variable configuration builders."""
+
+      _display_name: str | None
+      _unit: str | None
+      _dimensions: list[DimensionType]
+
+      def _init_variable_fields(self) -> None:
+          """Initialize common variable fields. Call in subclass __init__."""
+          self._display_name = None
+          self._unit = None
+          self._dimensions = [DimensionType.PERIOD]
+
+      def with_display_name(self, name: str) -> Self:
+          """Set human-readable display name."""
+          self._display_name = name
+          return self
+
+      def with_unit(self, unit: str) -> Self:
+          """Set unit of measurement."""
+          self._unit = unit
+          return self
+
+      def with_dimensions(self, *dims: DimensionType) -> Self:
+          """Set dimensions this variable is defined over."""
+          self._dimensions = list(dims)
+          if DimensionType.PERIOD not in self._dimensions:
+              self._dimensions.insert(0, DimensionType.PERIOD)
+          return self
+
+      def national(self) -> Self:
+          """Set as national-level (Period only)."""
+          self._dimensions = [DimensionType.PERIOD]
+          return self
+
+      def by_geo(self) -> Self:
+          """Set as geo-level (Period + Geography)."""
+          self._dimensions = [DimensionType.PERIOD, DimensionType.GEOGRAPHY]
+          return self
+
+      def by_product(self) -> Self:
+          """Set as product-level (Period + Product)."""
+          self._dimensions = [DimensionType.PERIOD, DimensionType.PRODUCT]
+          return self
+
+      def by_geo_and_product(self) -> Self:
+          """Set as geo+product level."""
+          self._dimensions = [
+              DimensionType.PERIOD,
+              DimensionType.GEOGRAPHY,
+              DimensionType.PRODUCT,
+          ]
+          return self
+  ```
+
+- [ ] **Step 1.2**: Update `MediaChannelConfigBuilder` to use mixin
+  ```python
+  class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
+      def __init__(self, name: str) -> None:
+          self._name = name
+          self._init_variable_fields()  # From mixin
+          # ... rest of init (adstock, saturation, etc.)
+  ```
+
+- [ ] **Step 1.3**: Update `ControlVariableConfigBuilder` to use mixin
+
+- [ ] **Step 1.4**: Update `KPIConfigBuilder` to use mixin
+
+- [ ] **Step 1.5**: Remove duplicated methods from all three classes
+
+- [ ] **Step 1.6**: Run tests to verify: `make tests`
+
+### Files Modified
+- `src/mmm_framework/builders.py`
+
+### Testing
+```bash
+make tests
+uv run python -c "from mmm_framework.builders import MediaChannelConfigBuilder; print(MediaChannelConfigBuilder('test').by_geo().build())"
+```
+
+---
+
+## 2. Data Standardization Utility
+
+**Priority**: HIGH
+**Status**: [x] **COMPLETED** (2026-01-17) - Utility created, model.py not yet updated to use it
+**Estimated Impact**: Cleaner data handling, ~30 lines consolidated
+
+### Problem
+
+Standardization logic repeated in `model.py`:
+- Lines 539-545 (y standardization)
+- Lines 574-581 (controls standardization)
+- Lines 2167+ (reload standardization)
+
+### Solution
+
+Create a `DataStandardizer` utility class.
+
+### Implementation Steps
+
+- [ ] **Step 2.1**: Create new file `src/mmm_framework/utils/standardization.py`
+  ```python
+  """Data standardization utilities."""
+  from __future__ import annotations
+
+  from dataclasses import dataclass
+  from typing import TYPE_CHECKING
+
+  import numpy as np
+
+  if TYPE_CHECKING:
+      from numpy.typing import NDArray
+
+
+  @dataclass
+  class StandardizationParams:
+      """Parameters from standardization fit."""
+      mean: float | NDArray
+      std: float | NDArray
+
+      def to_dict(self) -> dict:
+          """Convert to serializable dict."""
+          return {
+              "mean": self.mean if isinstance(self.mean, float) else self.mean.tolist(),
+              "std": self.std if isinstance(self.std, float) else self.std.tolist(),
+          }
+
+      @classmethod
+      def from_dict(cls, d: dict) -> StandardizationParams:
+          """Create from dict."""
+          return cls(
+              mean=np.array(d["mean"]) if isinstance(d["mean"], list) else d["mean"],
+              std=np.array(d["std"]) if isinstance(d["std"], list) else d["std"],
+          )
+
+
+  class DataStandardizer:
+      """Standardize data with zero mean and unit variance."""
+
+      def __init__(self, epsilon: float = 1e-8):
+          self.epsilon = epsilon
+          self._params: StandardizationParams | None = None
+
+      def fit(self, data: NDArray) -> StandardizationParams:
+          """Compute standardization parameters."""
+          mean = data.mean(axis=0)
+          std = data.std(axis=0) + self.epsilon
+          self._params = StandardizationParams(mean=mean, std=std)
+          return self._params
+
+      def transform(self, data: NDArray, params: StandardizationParams | None = None) -> NDArray:
+          """Apply standardization."""
+          p = params or self._params
+          if p is None:
+              raise ValueError("Must call fit() first or provide params")
+          return (data - p.mean) / p.std
+
+      def fit_transform(self, data: NDArray) -> tuple[NDArray, StandardizationParams]:
+          """Fit and transform in one step."""
+          params = self.fit(data)
+          return self.transform(data, params), params
+
+      def inverse_transform(self, data: NDArray, params: StandardizationParams | None = None) -> NDArray:
+          """Reverse standardization."""
+          p = params or self._params
+          if p is None:
+              raise ValueError("Must call fit() first or provide params")
+          return data * p.std + p.mean
+  ```
+
+- [ ] **Step 2.2**: Create `src/mmm_framework/utils/__init__.py`
+  ```python
+  """Utility modules for MMM Framework."""
+  from .standardization import DataStandardizer, StandardizationParams
+
+  __all__ = ["DataStandardizer", "StandardizationParams"]
+  ```
+
+- [ ] **Step 2.3**: Update `model.py` to use `DataStandardizer`
+  - Replace y standardization (lines 539-545)
+  - Replace controls standardization (lines 574-581)
+  - Update `_scaling_params` storage to use `StandardizationParams.to_dict()`
+
+- [ ] **Step 2.4**: Update `load()` method to use `StandardizationParams.from_dict()`
+
+- [ ] **Step 2.5**: Run tests: `make tests`
+
+### Files Modified
+- `src/mmm_framework/utils/standardization.py` (new)
+- `src/mmm_framework/utils/__init__.py` (new)
+- `src/mmm_framework/model.py`
+
+### Testing
+```bash
+make tests
+uv run python -c "from mmm_framework.utils import DataStandardizer; import numpy as np; s = DataStandardizer(); data, params = s.fit_transform(np.random.randn(100)); print(params)"
+```
+
+---
+
+## 3. Time-Period Masking Helper
+
+**Priority**: MEDIUM
+**Status**: [x] **COMPLETED** (2026-01-17)
+**Estimated Impact**: ~15 lines consolidated, improved readability
+
+### Problem
+
+Same masking logic in 3 methods in `model.py`:
+- `compute_counterfactual_contributions()` (lines 1620-1625)
+- `compute_marginal_contributions()` (lines 1771-1775)
+- `what_if_scenario()` (lines 1849-1853)
+
+```python
+if time_period is not None:
+    start_idx, end_idx = time_period
+    time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+else:
+    time_mask = np.ones(self.n_obs, dtype=bool)
+```
+
+### Solution
+
+Extract to private helper method.
+
+### Implementation Steps
+
+- [ ] **Step 3.1**: Add helper method to `BayesianMMM` class
+  ```python
+  def _get_time_mask(self, time_period: tuple[int, int] | None) -> NDArray[np.bool_]:
+      """Create boolean mask for time period filtering.
+
+      Parameters
+      ----------
+      time_period : tuple[int, int] | None
+          (start_idx, end_idx) inclusive range, or None for all observations.
+
+      Returns
+      -------
+      NDArray[np.bool_]
+          Boolean mask array of shape (n_obs,).
+      """
+      if time_period is not None:
+          start_idx, end_idx = time_period
+          return (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+      return np.ones(self.n_obs, dtype=bool)
+  ```
+
+- [ ] **Step 3.2**: Update `compute_counterfactual_contributions()` to use helper
+
+- [ ] **Step 3.3**: Update `compute_marginal_contributions()` to use helper
+
+- [ ] **Step 3.4**: Update `what_if_scenario()` to use helper
+
+- [ ] **Step 3.5**: Run tests: `make tests`
+
+### Files Modified
+- `src/mmm_framework/model.py`
+
+---
+
+## 4. HDI Calculation Utility
+
+**Priority**: MEDIUM
+**Status**: [x] **COMPLETED** (2026-01-17)
+**Estimated Impact**: ~10 lines consolidated
+
+### Problem
+
+HDI percentile calculation repeated in `model.py`:
+- `predict()` (lines 1426-1429)
+- `compute_counterfactual_contributions()` (lines 1699-1700)
+
+```python
+hdi_low_pct = (1 - hdi_prob) / 2 * 100
+hdi_high_pct = (1 + hdi_prob) / 2 * 100
+```
+
+### Solution
+
+Create utility function for HDI bounds computation.
+
+### Implementation Steps
+
+- [ ] **Step 4.1**: Add to `src/mmm_framework/utils/statistics.py`
+  ```python
+  """Statistical utility functions."""
+  from __future__ import annotations
+
+  from typing import TYPE_CHECKING
+
+  import numpy as np
+
+  if TYPE_CHECKING:
+      from numpy.typing import NDArray
+
+
+  def compute_hdi_bounds(
+      samples: NDArray,
+      hdi_prob: float = 0.94,
+      axis: int = 0,
+  ) -> tuple[NDArray, NDArray]:
+      """Compute highest density interval bounds.
+
+      Parameters
+      ----------
+      samples : NDArray
+          Sample array.
+      hdi_prob : float
+          Probability mass for HDI (default 0.94).
+      axis : int
+          Axis along which to compute percentiles.
+
+      Returns
+      -------
+      tuple[NDArray, NDArray]
+          (lower_bound, upper_bound) arrays.
+      """
+      hdi_low_pct = (1 - hdi_prob) / 2 * 100
+      hdi_high_pct = (1 + hdi_prob) / 2 * 100
+      return (
+          np.percentile(samples, hdi_low_pct, axis=axis),
+          np.percentile(samples, hdi_high_pct, axis=axis),
+      )
+  ```
+
+- [ ] **Step 4.2**: Update `utils/__init__.py` to export
+
+- [ ] **Step 4.3**: Update `predict()` method to use `compute_hdi_bounds()`
+
+- [ ] **Step 4.4**: Update `compute_counterfactual_contributions()` to use utility
+
+- [ ] **Step 4.5**: Run tests: `make tests`
+
+### Files Modified
+- `src/mmm_framework/utils/statistics.py` (new)
+- `src/mmm_framework/utils/__init__.py`
+- `src/mmm_framework/model.py`
+
+---
+
+## 5. Config Lookup Consolidation
+
+**Priority**: LOW
+**Status**: [ ] Not Started
+**Estimated Impact**: Cleaner config access pattern
+
+### Problem
+
+Similar lookup methods in `config.py` (lines 409-421):
+- `get_media_config()`
+- `get_control_config()`
+
+### Solution
+
+Create generic lookup method or use dict-based access.
+
+### Implementation Steps
+
+- [ ] **Step 5.1**: Add generic lookup to `MFFConfig`
+  ```python
+  def _get_config_by_name(
+      self,
+      configs: list[T],
+      name: str
+  ) -> T | None:
+      """Generic config lookup by name."""
+      for config in configs:
+          if config.name == name:
+              return config
+      return None
+
+  def get_media_config(self, name: str) -> MediaChannelConfig | None:
+      return self._get_config_by_name(self.media_channels, name)
+
+  def get_control_config(self, name: str) -> ControlVariableConfig | None:
+      return self._get_config_by_name(self.controls, name)
+  ```
+
+- [ ] **Step 5.2**: Run tests: `make tests`
+
+### Files Modified
+- `src/mmm_framework/config.py`
+
+---
+
+## 6. Naming Consistency Fixes
+
+**Priority**: MEDIUM
+**Status**: [x] **COMPLETED** (2026-01-17)
+**Estimated Impact**: Improved code clarity
+
+### Problem
+
+Several naming inconsistencies identified:
+
+1. **`_std` suffix overloaded** - Sometimes "standard deviation", sometimes "standardized data"
+2. **Builder method patterns** - Mixed `with_*`, adjective, and state patterns
+3. **Contribution naming** - Inconsistent singular/plural
+
+### Solution
+
+Standardize naming conventions across the codebase.
+
+### Implementation Steps
+
+#### 6A. Fix `_std` Suffix Ambiguity
+
+- [x] **Step 6A.1**: In `model.py`, rename standardized data variables:
+  - `X_controls_std` → `X_controls_scaled` (standardized data uses `_scaled`)
+  - `intercept_std`, `trend_std`, etc. → `intercept_scaled`, `trend_scaled`, etc.
+  - Keep `y_std`, `control_std` for standard deviation values (correct naming)
+
+- [x] **Step 6A.2**: Update all references to renamed variables
+
+#### 6B. Standardize Builder Methods (Documentation Only)
+
+- [x] **Step 6B.1**: Document current conventions in module docstring
+  - Added comprehensive documentation of `with_*`, convenience, and action patterns
+  - See `builders.py` module docstring for details
+
+#### 6C. Contribution Naming
+
+- [x] **Step 6C.1**: Standardize on plural `contributions` for collections
+  - Renamed `channel_contrib_std` → `channel_contributions_scaled`
+  - Renamed `control_contrib_std` → `control_contributions_scaled`
+
+### Files Modified
+- `src/mmm_framework/model.py` - Variable renaming
+- `src/mmm_framework/builders.py` - Added method naming conventions documentation
+
+---
+
+## 7. BayesianMMM Decomposition
+
+**Priority**: HIGH (Long-term)
+**Status**: [x] **COMPLETED** (2026-01-17) - All 3 phases done
+**Estimated Impact**: Major maintainability improvement
+
+### Problem
+
+`BayesianMMM` class is ~2300 lines with mixed responsibilities:
+- Data preparation
+- PyMC model building
+- Prediction logic
+- Analysis methods
+- Serialization
+
+### Solution
+
+Extract focused helper classes while maintaining the public API.
+
+### Implementation Steps
+
+This is a large refactoring effort. Recommended approach:
+
+#### Phase 1: Extract Serialization ✓ COMPLETED
+
+- [x] **Step 7.1**: Create `src/mmm_framework/serialization.py`
+  ```python
+  class MMMSerializer:
+      """Handle save/load for BayesianMMM models."""
+
+      @classmethod
+      def save(cls, model: BayesianMMM, path: str | Path, ...) -> None: ...
+
+      @classmethod
+      def load(cls, path: str | Path, panel: PanelDataset, ...) -> BayesianMMM: ...
+
+      @classmethod
+      def save_trace_only(cls, trace: az.InferenceData, path: str | Path) -> None: ...
+
+      @classmethod
+      def load_trace_only(cls, path: str | Path) -> az.InferenceData: ...
+  ```
+
+- [x] **Step 7.2**: Move `save()` and `load()` logic to `MMMSerializer`
+  - Extracted metadata collection: `_collect_metadata()`
+  - Extracted config collection: `_collect_configs()`
+  - Extracted scaling params: `_collect_scaling_params()`, `_restore_scaling_params()`
+  - Extracted trace handling: `_save_trace()`, `_load_trace()`
+  - Extracted validation: `_check_version()`, `_validate_panel_compatibility()`
+  - Extracted feature saving: `_save_trend_features()`, `_save_seasonality_features()`
+  - Extracted feature loading: `_load_trend_features()`, `_load_seasonality_features()`
+
+- [x] **Step 7.3**: Keep `save()` and `load()` on `BayesianMMM` as thin wrappers
+  - `save()` delegates to `MMMSerializer.save()`
+  - `load()` delegates to `MMMSerializer.load()`
+  - `save_trace_only()` delegates to `MMMSerializer.save_trace_only()`
+  - `load_trace_only()` delegates to `MMMSerializer.load_trace_only()`
+
+#### Phase 2: Extract Data Preparation ✓ COMPLETED
+
+- [x] **Step 7.4**: Create `src/mmm_framework/data_preparation.py`
+  - `ScalingParameters` dataclass for storing standardization parameters
+  - `PreparedData` dataclass for storing all prepared model data
+  - `DataPreparator` class for data preparation logic
+  - `standardize_array()` and `unstandardize_array()` utility functions
+
+- [x] **Step 7.5**: Create comprehensive tests in `tests/test_data_preparation.py`
+  - 17 tests covering all functionality
+  - All tests passing
+
+#### Phase 3: Extract Analysis Methods ✓ COMPLETED
+
+- [x] **Step 7.6**: Create `src/mmm_framework/analysis.py`
+  - `MarginalAnalysisResult` dataclass for marginal analysis results
+  - `ScenarioResult` dataclass for what-if scenario results
+  - `MMMAnalyzer` class for post-fitting analysis
+  - `compute_contribution_summary()` and `compute_period_contributions()` helper functions
+
+- [x] **Step 7.7**: Create comprehensive tests in `tests/test_analysis.py`
+  - 11 tests covering all functionality
+  - All tests passing
+
+### Files Modified
+- `src/mmm_framework/serialization.py` (new - ~485 lines)
+- `src/mmm_framework/data_preparation.py` (new - ~400 lines)
+- `src/mmm_framework/analysis.py` (new - ~300 lines)
+- `src/mmm_framework/model.py` (reduced by ~260 lines)
+- `tests/test_serialization.py` (new - 22 tests)
+- `tests/test_data_preparation.py` (new - 17 tests)
+- `tests/test_analysis.py` (new - 11 tests)
+
+---
+
+## 8. Transform Utilities Module
+
+**Priority**: MEDIUM
+**Status**: [x] **COMPLETED** (2026-01-17)
+**Estimated Impact**: Better code organization, reusability
+
+### Problem
+
+Utility functions scattered in `model.py` (lines 159-272):
+- `create_fourier_features()`
+- `geometric_adstock_np()` / `geometric_adstock_2d()`
+- `logistic_saturation_np()`
+- `create_bspline_basis()`
+- `create_piecewise_trend_matrix()`
+
+### Solution
+
+Create dedicated transform modules.
+
+### Implementation Steps
+
+- [x] **Step 8.1**: Create `src/mmm_framework/transforms/__init__.py`
+
+- [x] **Step 8.2**: Create `src/mmm_framework/transforms/adstock.py`
+  ```python
+  """Adstock transformation functions."""
+
+  def geometric_adstock(x: NDArray, alpha: float) -> NDArray: ...
+  def geometric_adstock_2d(X: NDArray, alpha: float) -> NDArray: ...
+  ```
+
+- [x] **Step 8.3**: Create `src/mmm_framework/transforms/saturation.py`
+  ```python
+  """Saturation transformation functions."""
+
+  def logistic_saturation(x: NDArray, lam: float) -> NDArray: ...
+  ```
+
+- [x] **Step 8.4**: Create `src/mmm_framework/transforms/seasonality.py`
+  ```python
+  """Seasonality feature creation."""
+
+  def create_fourier_features(t: NDArray, period: float, order: int) -> NDArray: ...
+  ```
+
+- [x] **Step 8.5**: Create `src/mmm_framework/transforms/trend.py`
+  ```python
+  """Trend feature creation."""
+
+  def create_bspline_basis(t: NDArray, n_knots: int, degree: int) -> NDArray: ...
+  def create_piecewise_trend_matrix(t: NDArray, n_changepoints: int, changepoint_range: float) -> tuple: ...
+  ```
+
+- [x] **Step 8.6**: Update `model.py` to import from transforms module (with backward compatibility aliases)
+
+- [x] **Step 8.7**: Run tests: `make tests` - All 146 tests passing
+
+### Files Modified
+- `src/mmm_framework/transforms/` (new directory)
+- `src/mmm_framework/model.py`
+
+---
+
+## 9. Reporting Extractor Abstraction
+
+**Priority**: HIGH
+**Status**: [ ] Not Started
+**Estimated Impact**: ~500+ lines of potential deduplication
+
+### Problem
+
+`reporting/data_extractors.py` has 3 parallel classes (~2894 lines):
+- `BayesianMMMExtractor`
+- `ExtendedMMMExtractor`
+- `PyMCMarketingExtractor`
+
+Each implements similar extraction methods independently.
+
+### Solution
+
+Create base `Extractor` class with template methods.
+
+### Implementation Steps
+
+- [ ] **Step 9.1**: Analyze common methods across all three extractors
+
+- [ ] **Step 9.2**: Create `BaseExtractor` ABC
+  ```python
+  from abc import ABC, abstractmethod
+
+  class BaseExtractor(ABC):
+      """Base class for model data extractors."""
+
+      @abstractmethod
+      def extract_contributions(self) -> pd.DataFrame: ...
+
+      @abstractmethod
+      def extract_predictions(self) -> pd.DataFrame: ...
+
+      @abstractmethod
+      def extract_channel_effects(self) -> pd.DataFrame: ...
+
+      # Shared utility methods
+      def _format_hdi_columns(self, df: pd.DataFrame) -> pd.DataFrame: ...
+      def _aggregate_by_period(self, df: pd.DataFrame) -> pd.DataFrame: ...
+  ```
+
+- [ ] **Step 9.3**: Refactor `BayesianMMMExtractor` to extend `BaseExtractor`
+
+- [ ] **Step 9.4**: Refactor `ExtendedMMMExtractor` to extend `BaseExtractor`
+
+- [ ] **Step 9.5**: Refactor `PyMCMarketingExtractor` to extend `BaseExtractor`
+
+- [ ] **Step 9.6**: Run tests: `make tests`
+
+### Files Modified
+- `src/mmm_framework/reporting/data_extractors.py`
+
+---
+
+## 10. Config Hierarchy Unification
+
+**Priority**: MEDIUM
+**Status**: [ ] Not Started
+**Estimated Impact**: Reduced maintenance burden
+
+### Problem
+
+Overlapping config definitions in:
+- `config.py` (main)
+- `mmm_extensions/config.py`
+
+Both define `AdstockConfig`, `SaturationConfig`, `SaturationType`.
+
+### Solution
+
+Share base configs, extend in mmm_extensions only when needed.
+
+### Implementation Steps
+
+- [ ] **Step 10.1**: Audit differences between main and extension configs
+
+- [ ] **Step 10.2**: Determine which configs can be shared vs need extension
+
+- [ ] **Step 10.3**: Update `mmm_extensions/config.py` to import from main config
+  ```python
+  from ..config import AdstockConfig, SaturationConfig, SaturationType
+  # Only define extension-specific configs here
+  ```
+
+- [ ] **Step 10.4**: Update imports in `mmm_extensions/` modules
+
+- [ ] **Step 10.5**: Run tests: `make tests`
+
+### Files Modified
+- `src/mmm_framework/mmm_extensions/config.py`
+- `src/mmm_framework/mmm_extensions/builders.py`
+
+---
+
+## Progress Summary
+
+| Task | Priority | Status | Notes |
+|------|----------|--------|-------|
+| 1. Builder Method Consolidation | HIGH | [x] **COMPLETED** | `VariableConfigBuilderMixin` created |
+| 2. Data Standardization Utility | HIGH | [x] **COMPLETED** | `DataStandardizer` in `utils/` |
+| 3. Time-Period Masking Helper | MEDIUM | [x] **COMPLETED** | `_get_time_mask()` added |
+| 4. HDI Calculation Utility | MEDIUM | [x] **COMPLETED** | `compute_hdi_bounds()` in `utils/` |
+| 5. Config Lookup Consolidation | LOW | [ ] Not Started | |
+| 6. Naming Consistency Fixes | MEDIUM | [x] **COMPLETED** | `_scaled` suffix, builder docs |
+| 7. BayesianMMM Decomposition | HIGH | [x] **COMPLETED** | All 3 phases: serialization, data_preparation, analysis |
+| 8. Transform Utilities Module | MEDIUM | [x] **COMPLETED** | `transforms/` module with 4 submodules |
+| 9. Reporting Extractor Abstraction | HIGH | [ ] Not Started | |
+| 10. Config Hierarchy Unification | MEDIUM | [ ] Not Started | |
+
+---
+
+## Recommended Order of Implementation
+
+1. **Phase 1 - Quick Wins** (can be done independently)
+   - Task 1: Builder Method Consolidation
+   - Task 3: Time-Period Masking Helper
+   - Task 4: HDI Calculation Utility
+
+2. **Phase 2 - Utilities Infrastructure**
+   - Task 2: Data Standardization Utility
+   - Task 8: Transform Utilities Module
+
+3. **Phase 3 - Naming & Consistency**
+   - Task 5: Config Lookup Consolidation
+   - Task 6: Naming Consistency Fixes
+   - Task 10: Config Hierarchy Unification
+
+4. **Phase 4 - Major Refactoring**
+   - Task 9: Reporting Extractor Abstraction
+   - Task 7: BayesianMMM Decomposition (phased)
+
+---
+
+## Testing Strategy
+
+After each task:
+
+```bash
+# Run all tests
+make tests
+
+# Run fast tests during development
+make fast_tests
+
+# Format code
+make format
+
+# Verify example still works
+uv run python examples/ex_model_workflow.py
+```
+
+---
+
+## Change Log
+
+| Date | Task | Status | Notes |
+|------|------|--------|-------|
+| 2026-01-17 | Initial guide created | Complete | All tasks documented |
+| 2026-01-17 | Task 1: Builder Method Consolidation | Complete | Created `VariableConfigBuilderMixin`, updated 3 builders |
+| 2026-01-17 | Task 2: Data Standardization Utility | Complete | Created `utils/standardization.py` with `DataStandardizer` |
+| 2026-01-17 | Task 3: Time-Period Masking Helper | Complete | Added `_get_time_mask()` to BayesianMMM, updated 3 methods |
+| 2026-01-17 | Task 4: HDI Calculation Utility | Complete | Created `utils/statistics.py` with `compute_hdi_bounds()`, updated model.py |
+| 2026-01-17 | Tests created | Complete | 68 builder tests + 17 utility tests, all passing |
+| 2026-01-17 | Task 8: Transform Utilities Module | Complete | Created `transforms/` module with adstock.py, saturation.py, seasonality.py, trend.py. Updated model.py with backward-compatible imports. 28 new tests added, all 146 tests passing |
+| 2026-01-17 | Task 6: Naming Consistency Fixes | Complete | Renamed `_std` variables to `_scaled` for standardized data, documented builder conventions in module docstring |
+| 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 1) | Complete | Created `serialization.py` with `MMMSerializer` class. Extracted 260+ lines from model.py. Updated save/load methods to use thin wrappers. 22 new serialization tests, all 168 tests passing |
+| 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 2) | Complete | Created `data_preparation.py` with `DataPreparator`, `ScalingParameters`, `PreparedData` classes and standardization utilities. 17 new tests, all passing |
+| 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 3) | Complete | Created `analysis.py` with `MMMAnalyzer`, `MarginalAnalysisResult`, `ScenarioResult` classes and helper functions. 11 new tests, all 196 refactoring tests passing |
+

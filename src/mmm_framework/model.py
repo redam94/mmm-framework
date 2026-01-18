@@ -37,6 +37,19 @@ from .config import (
     HierarchicalConfig,
 )
 from .data_loader import PanelDataset
+from .utils import compute_hdi_bounds
+from .transforms import (
+    geometric_adstock,
+    geometric_adstock_2d,
+    logistic_saturation,
+    create_fourier_features,
+    create_bspline_basis,
+    create_piecewise_trend_matrix,
+)
+
+# Backward compatibility aliases (original names from this module)
+geometric_adstock_np = geometric_adstock
+logistic_saturation_np = logistic_saturation
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -154,121 +167,10 @@ class TrendConfig:
 # =============================================================================
 # Helper functions
 # =============================================================================
-
-
-def create_fourier_features(t: np.ndarray, period: float, order: int) -> np.ndarray:
-    """Create Fourier features for seasonality."""
-    features = []
-    for i in range(1, order + 1):
-        features.append(np.sin(2 * np.pi * i * t / period))
-        features.append(np.cos(2 * np.pi * i * t / period))
-    return np.column_stack(features) if features else np.zeros((len(t), 0))
-
-
-def geometric_adstock_np(x: np.ndarray, alpha: float) -> np.ndarray:
-    """
-    Apply geometric adstock transformation.
-
-    y[t] = x[t] + alpha * y[t-1]
-
-    Normalized so that sum of weights = 1/(1-alpha)
-    """
-    n = len(x)
-    result = np.zeros(n)
-    result[0] = x[0]
-    for t in range(1, n):
-        result[t] = x[t] + alpha * result[t - 1]
-    return result
-
-
-def geometric_adstock_2d(X: np.ndarray, alpha: float) -> np.ndarray:
-    """Apply geometric adstock to 2D array (n_obs, n_channels)."""
-    result = np.zeros_like(X)
-    for c in range(X.shape[1]):
-        result[:, c] = geometric_adstock_np(X[:, c], alpha)
-    return result
-
-
-def logistic_saturation_np(x: np.ndarray, lam: float) -> np.ndarray:
-    """Logistic saturation: 1 - exp(-lam * x)"""
-    return 1.0 - np.exp(-lam * np.clip(x, 0, None))
-
-
-def create_bspline_basis(t: np.ndarray, n_knots: int, degree: int = 3) -> np.ndarray:
-    """
-    Create B-spline basis matrix.
-
-    Parameters
-    ----------
-    t : np.ndarray
-        Time values scaled to [0, 1].
-    n_knots : int
-        Number of interior knots.
-    degree : int
-        Spline degree (default 3 for cubic).
-
-    Returns
-    -------
-    np.ndarray
-        Basis matrix of shape (len(t), n_knots + degree + 1).
-    """
-    try:
-        from scipy.interpolate import BSpline
-    except ImportError:
-        raise ImportError("scipy is required for spline trends")
-
-    # Create knot sequence with appropriate boundary knots
-    n_interior = n_knots
-
-    # Interior knots evenly spaced
-    interior_knots = np.linspace(0, 1, n_interior + 2)[1:-1]
-
-    # Add boundary knots (repeated for clamping)
-    knots = np.concatenate([np.zeros(degree + 1), interior_knots, np.ones(degree + 1)])
-
-    # Number of basis functions
-    n_basis = len(knots) - degree - 1
-
-    # Create basis matrix
-    basis = np.zeros((len(t), n_basis))
-    for i in range(n_basis):
-        c = np.zeros(n_basis)
-        c[i] = 1
-        spline = BSpline(knots, c, degree)
-        basis[:, i] = spline(np.clip(t, 0, 1))
-
-    return basis
-
-
-def create_piecewise_trend_matrix(
-    t: np.ndarray, n_changepoints: int, changepoint_range: float = 0.8
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Create design matrix for piecewise linear trend (Prophet-style).
-
-    Parameters
-    ----------
-    t : np.ndarray
-        Time values scaled to [0, 1].
-    n_changepoints : int
-        Number of potential changepoints.
-    changepoint_range : float
-        Proportion of time range to place changepoints.
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray]
-        (changepoint_locations, design_matrix)
-    """
-    # Place changepoints in first changepoint_range of data
-    s = np.linspace(0, changepoint_range, n_changepoints + 2)[1:-1]
-
-    # Create design matrix A where A[t, j] = (t - s[j])+ indicator
-    A = np.zeros((len(t), len(s)))
-    for j, sj in enumerate(s):
-        A[:, j] = (t >= sj).astype(float)
-
-    return s, A
+# NOTE: Transform functions (adstock, saturation, seasonality, trend) are now
+# imported from mmm_framework.transforms module. The imports at the top of this
+# file and the backward compatibility aliases ensure existing code continues
+# to work. See src/mmm_framework/transforms/ for the implementations.
 
 
 # =============================================================================
@@ -689,6 +591,38 @@ class BayesianMMM:
                 "n_basis": self.trend_config.gp_n_basis,
                 "c": self.trend_config.gp_c,
             }
+
+    def _get_time_mask(
+        self, time_period: tuple[int, int] | None
+    ) -> NDArray[np.bool_]:
+        """Create boolean mask for time period filtering.
+
+        Parameters
+        ----------
+        time_period : tuple[int, int] | None
+            (start_idx, end_idx) inclusive range, or None for all observations.
+            Both start and end indices are inclusive.
+
+        Returns
+        -------
+        NDArray[np.bool_]
+            Boolean mask array of shape (n_obs,). True for observations
+            within the specified time period.
+
+        Examples
+        --------
+        >>> # Mask for time indices 10 through 20
+        >>> mask = mmm._get_time_mask((10, 20))
+        >>> filtered_y = mmm.y_raw[mask]
+
+        >>> # No filtering (all observations)
+        >>> mask = mmm._get_time_mask(None)
+        >>> assert mask.all()
+        """
+        if time_period is not None:
+            start_idx, end_idx = time_period
+            return (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+        return np.ones(self.n_obs, dtype=bool)
 
     def _build_coords(self) -> dict:
         """Build PyMC coordinate dictionary."""
@@ -1364,11 +1298,11 @@ class BayesianMMM:
 
         # Prepare controls (standardize)
         if X_controls is not None:
-            X_controls_std = (X_controls - self.control_mean) / self.control_std
+            X_controls_scaled = (X_controls - self.control_mean) / self.control_std
         elif self.X_controls is not None:
-            X_controls_std = self.X_controls
+            X_controls_scaled = self.X_controls
         else:
-            X_controls_std = None
+            X_controls_scaled = None
 
         # Update model data
         with self.model:
@@ -1382,8 +1316,8 @@ class BayesianMMM:
                 }
             )
 
-            if X_controls_std is not None and self.n_controls > 0:
-                pm.set_data({"X_controls": X_controls_std})
+            if X_controls_scaled is not None and self.n_controls > 0:
+                pm.set_data({"X_controls": X_controls_scaled})
 
             # Sample posterior predictive
             ppc = pm.sample_posterior_predictive(
@@ -1423,10 +1357,9 @@ class BayesianMMM:
         y_pred_mean = y_pred_samples.mean(axis=0)
         y_pred_std = y_pred_samples.std(axis=0)
 
-        hdi_low_pct = (1 - hdi_prob) / 2 * 100
-        hdi_high_pct = (1 + hdi_prob) / 2 * 100
-        y_pred_hdi_low = np.percentile(y_pred_samples, hdi_low_pct, axis=0)
-        y_pred_hdi_high = np.percentile(y_pred_samples, hdi_high_pct, axis=0)
+        y_pred_hdi_low, y_pred_hdi_high = compute_hdi_bounds(
+            y_pred_samples, hdi_prob=hdi_prob, axis=0
+        )
 
         return PredictionResults(
             posterior_predictive=ppc,
@@ -1474,42 +1407,42 @@ class BayesianMMM:
                 return posterior[var_name].mean(dim=["chain", "draw"]).values
             return np.zeros(self.n_obs)
 
-        # Extract all components (standardized scale)
-        intercept_std = get_mean("intercept_component")
-        trend_std = get_mean("trend_component")
-        seasonality_std = get_mean("seasonality_component")
-        media_total_std = get_mean("media_total")
-        controls_total_std = get_mean("controls_total")
-        geo_std = get_mean("geo_component") if self.has_geo else None
-        product_std = get_mean("product_component") if self.has_product else None
+        # Extract all components (standardized/scaled space)
+        intercept_scaled = get_mean("intercept_component")
+        trend_scaled = get_mean("trend_component")
+        seasonality_scaled = get_mean("seasonality_component")
+        media_total_scaled = get_mean("media_total")
+        controls_total_scaled = get_mean("controls_total")
+        geo_scaled = get_mean("geo_component") if self.has_geo else None
+        product_scaled = get_mean("product_component") if self.has_product else None
 
-        # Channel-level media
-        channel_contrib_std = get_mean("channel_contributions")
+        # Channel-level media contributions (scaled space)
+        channel_contributions_scaled = get_mean("channel_contributions")
 
-        # Control-level contributions
+        # Control-level contributions (scaled space)
         if self.n_controls > 0 and "control_contributions" in posterior:
-            control_contrib_std = get_mean("control_contributions")
+            control_contributions_scaled = get_mean("control_contributions")
         else:
-            control_contrib_std = None
+            control_contributions_scaled = None
 
         # Convert to original scale
-        intercept = intercept_std * self.y_std + self.y_mean
-        trend = trend_std * self.y_std
-        seasonality = seasonality_std * self.y_std
-        media_total = media_total_std * self.y_std
-        controls_total = controls_total_std * self.y_std
+        intercept = intercept_scaled * self.y_std + self.y_mean
+        trend = trend_scaled * self.y_std
+        seasonality = seasonality_scaled * self.y_std
+        media_total = media_total_scaled * self.y_std
+        controls_total = controls_total_scaled * self.y_std
 
         # Channel contributions (original scale)
         media_by_channel = pd.DataFrame(
-            channel_contrib_std * self.y_std,
+            channel_contributions_scaled * self.y_std,
             index=self.panel.index,
             columns=self.channel_names,
         )
 
         # Control contributions (original scale)
-        if control_contrib_std is not None:
+        if control_contributions_scaled is not None:
             controls_by_var = pd.DataFrame(
-                control_contrib_std * self.y_std,
+                control_contributions_scaled * self.y_std,
                 index=self.panel.index,
                 columns=self.control_names,
             )
@@ -1517,8 +1450,8 @@ class BayesianMMM:
             controls_by_var = None
 
         # Geo/product effects
-        geo_effects = geo_std * self.y_std if geo_std is not None else None
-        product_effects = product_std * self.y_std if product_std is not None else None
+        geo_effects = geo_scaled * self.y_std if geo_scaled is not None else None
+        product_effects = product_scaled * self.y_std if product_scaled is not None else None
 
         # Compute totals
         total_intercept = float(intercept.sum())
@@ -1618,11 +1551,7 @@ class BayesianMMM:
             raise ValueError(f"Unknown channels: {invalid_channels}")
 
         # Determine observation mask for time period
-        if time_period is not None:
-            start_idx, end_idx = time_period
-            time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
-        else:
-            time_mask = np.ones(self.n_obs, dtype=bool)
+        time_mask = self._get_time_mask(time_period)
 
         # Get baseline prediction
         baseline_pred = self.predict(
@@ -1696,9 +1625,6 @@ class BayesianMMM:
         contribution_hdi_high = None
 
         if compute_uncertainty:
-            hdi_low_pct = (1 - hdi_prob) / 2 * 100
-            hdi_high_pct = (1 + hdi_prob) / 2 * 100
-
             hdi_low_values = {}
             hdi_high_values = {}
 
@@ -1710,8 +1636,9 @@ class BayesianMMM:
                 # Sum over time for each sample
                 total_samples = samples.sum(axis=1)
 
-                hdi_low_values[channel] = np.percentile(total_samples, hdi_low_pct)
-                hdi_high_values[channel] = np.percentile(total_samples, hdi_high_pct)
+                low, high = compute_hdi_bounds(total_samples, hdi_prob=hdi_prob, axis=0)
+                hdi_low_values[channel] = low
+                hdi_high_values[channel] = high
 
             contribution_hdi_low = pd.Series(hdi_low_values)
             contribution_hdi_high = pd.Series(hdi_high_values)
@@ -1768,11 +1695,7 @@ class BayesianMMM:
         multiplier = 1.0 + spend_increase_pct / 100.0
 
         # Determine time mask
-        if time_period is not None:
-            start_idx, end_idx = time_period
-            time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
-        else:
-            time_mask = np.ones(self.n_obs, dtype=bool)
+        time_mask = self._get_time_mask(time_period)
 
         # Get baseline prediction
         baseline_pred = self.predict(random_seed=random_seed)
@@ -1846,11 +1769,7 @@ class BayesianMMM:
             raise ValueError("Model not fitted. Call fit() first.")
 
         # Determine time mask
-        if time_period is not None:
-            start_idx, end_idx = time_period
-            time_mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
-        else:
-            time_mask = np.ones(self.n_obs, dtype=bool)
+        time_mask = self._get_time_mask(time_period)
 
         # Get baseline
         baseline_pred = self.predict(random_seed=random_seed)
@@ -1956,98 +1875,14 @@ class BayesianMMM:
         -----
         The saved model does NOT include the panel data. When loading,
         you must provide compatible panel data (same structure, channels, etc.).
+
+        See Also
+        --------
+        MMMSerializer : The underlying serialization class.
         """
-        path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
+        from .serialization import MMMSerializer
 
-        # 1. Save metadata and version info
-        metadata = {
-            "version": self._VERSION,
-            "fitted": self._trace is not None,
-            "n_obs": self.n_obs,
-            "n_channels": self.n_channels,
-            "n_controls": self.n_controls,
-            "channel_names": self.channel_names,
-            "control_names": self.control_names,
-            "has_geo": self.has_geo,
-            "has_product": self.has_product,
-            "n_geos": self.n_geos,
-            "n_products": self.n_products,
-            "n_periods": self.n_periods,
-            "adstock_alphas": self.adstock_alphas,
-        }
-
-        if self.has_geo:
-            metadata["geo_names"] = self.geo_names
-        if self.has_product:
-            metadata["product_names"] = self.product_names
-
-        with open(path / "metadata.json", "w") as f:
-            json.dump(metadata, f, indent=2)
-
-        # 2. Save configurations
-        configs = {
-            "model_config": self.model_config.model_dump(),
-            "trend_config": self.trend_config.to_dict(),
-            "mff_config": self.mff_config.model_dump(),
-        }
-
-        with open(path / "configs.json", "w") as f:
-            json.dump(configs, f, indent=2, default=str)
-
-        # 3. Save scaling parameters
-        scaling_params = {
-            "y_mean": self.y_mean,
-            "y_std": self.y_std,
-            "media_max": {k: float(v) for k, v in self._media_max.items()},
-        }
-
-        if self.X_controls_raw is not None:
-            scaling_params["control_mean"] = self.control_mean.tolist()
-            scaling_params["control_std"] = self.control_std.tolist()
-
-        with open(path / "scaling_params.json", "w") as f:
-            json.dump(scaling_params, f, indent=2)
-
-        # 4. Save trace (if fitted and requested)
-        if save_trace and self._trace is not None:
-            trace_path = path / "trace.nc"
-            self._trace.to_netcdf(str(trace_path))
-
-            if compress:
-                import gzip
-                import shutil
-
-                with open(trace_path, "rb") as f_in:
-                    with gzip.open(str(trace_path) + ".gz", "wb") as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-                trace_path.unlink()  # Remove uncompressed file
-
-        # 5. Save trend features if they exist
-        trend_features_to_save = {}
-        for key, value in self.trend_features.items():
-            if isinstance(value, np.ndarray):
-                trend_features_to_save[key] = value.tolist()
-            elif isinstance(value, dict):
-                trend_features_to_save[key] = value
-            else:
-                trend_features_to_save[key] = value
-
-        if trend_features_to_save:
-            with open(path / "trend_features.json", "w") as f:
-                json.dump(trend_features_to_save, f, indent=2)
-
-        # 6. Save seasonality features
-        season_features_to_save = {}
-        for key, value in self.seasonality_features.items():
-            if isinstance(value, np.ndarray):
-                season_features_to_save[key] = value.tolist()
-
-        if season_features_to_save:
-            with open(path / "seasonality_features.json", "w") as f:
-                json.dump(season_features_to_save, f, indent=2)
-
-        print(f"Model saved to {path}")
+        MMMSerializer.save(self, path, save_trace=save_trace, compress=compress)
 
     @classmethod
     def load(
@@ -2093,152 +1928,14 @@ class BayesianMMM:
             If the panel data is incompatible with the saved model.
         FileNotFoundError
             If the model files are not found.
+
+        See Also
+        --------
+        MMMSerializer : The underlying serialization class.
         """
-        path = Path(path)
+        from .serialization import MMMSerializer
 
-        if not path.exists():
-            raise FileNotFoundError(f"Model directory not found: {path}")
-
-        # 1. Load metadata
-        with open(path / "metadata.json", "r") as f:
-            metadata = json.load(f)
-
-        # Version check
-        saved_version = metadata.get("version", "0.0.0")
-        if saved_version != cls._VERSION:
-            warnings.warn(
-                f"Model was saved with version {saved_version}, "
-                f"current version is {cls._VERSION}. "
-                "There may be compatibility issues."
-            )
-
-        # 2. Load configurations
-        with open(path / "configs.json", "r") as f:
-            configs = json.load(f)
-
-        # Reconstruct configs
-        from .config import ModelConfig, MFFConfig
-
-        model_config = ModelConfig(**configs["model_config"])
-        trend_config = TrendConfig.from_dict(configs["trend_config"])
-
-        # 3. Validate panel compatibility
-        if panel.coords.channels != metadata["channel_names"]:
-            raise ValueError(
-                f"Panel channels {panel.coords.channels} don't match "
-                f"saved model channels {metadata['channel_names']}"
-            )
-
-        if panel.coords.controls != metadata["control_names"]:
-            raise ValueError(
-                f"Panel controls {panel.coords.controls} don't match "
-                f"saved model controls {metadata['control_names']}"
-            )
-
-        # 4. Create instance
-        adstock_alphas = metadata.get("adstock_alphas", [0.0, 0.3, 0.5, 0.7, 0.9])
-
-        instance = cls(
-            panel=panel,
-            model_config=model_config,
-            trend_config=trend_config,
-            adstock_alphas=adstock_alphas,
-        )
-
-        # 5. Load scaling parameters
-        with open(path / "scaling_params.json", "r") as f:
-            scaling_params = json.load(f)
-
-        # Override scaling params with saved values (for consistent predictions)
-        instance.y_mean = scaling_params["y_mean"]
-        instance.y_std = scaling_params["y_std"]
-        instance._media_max = scaling_params["media_max"]
-        instance._scaling_params["y_mean"] = scaling_params["y_mean"]
-        instance._scaling_params["y_std"] = scaling_params["y_std"]
-        instance._scaling_params["media_max"] = scaling_params["media_max"]
-
-        if "control_mean" in scaling_params:
-            instance.control_mean = np.array(scaling_params["control_mean"])
-            instance.control_std = np.array(scaling_params["control_std"])
-            instance._scaling_params["control_mean"] = instance.control_mean
-            instance._scaling_params["control_std"] = instance.control_std
-
-        # Re-standardize y with loaded params
-        instance.y = (instance.y_raw - instance.y_mean) / instance.y_std
-
-        # Re-normalize media with loaded max values
-        for alpha in instance.adstock_alphas:
-            adstocked = geometric_adstock_2d(instance.X_media_raw, alpha)
-            normalized = np.zeros_like(adstocked)
-            for c, ch_name in enumerate(instance.channel_names):
-                normalized[:, c] = adstocked[:, c] / (
-                    instance._media_max[ch_name] + 1e-8
-                )
-            instance.X_media_adstocked[alpha] = normalized
-
-        # Re-standardize controls with loaded params
-        if instance.X_controls_raw is not None and "control_mean" in scaling_params:
-            instance.X_controls = (
-                instance.X_controls_raw - instance.control_mean
-            ) / instance.control_std
-
-        # 6. Load trend features if present
-        trend_features_path = path / "trend_features.json"
-        if trend_features_path.exists():
-            with open(trend_features_path, "r") as f:
-                trend_features = json.load(f)
-
-            # Convert lists back to numpy arrays
-            for key, value in trend_features.items():
-                if isinstance(value, list):
-                    instance.trend_features[key] = np.array(value)
-                else:
-                    instance.trend_features[key] = value
-
-        # 7. Load seasonality features if present
-        season_features_path = path / "seasonality_features.json"
-        if season_features_path.exists():
-            with open(season_features_path, "r") as f:
-                season_features = json.load(f)
-
-            for key, value in season_features.items():
-                if isinstance(value, list):
-                    instance.seasonality_features[key] = np.array(value)
-
-        # 8. Load trace (if available)
-        trace_path_gz = path / "trace.nc.gz"
-        trace_path = path / "trace.nc"
-
-        if trace_path_gz.exists():
-            import gzip
-            import tempfile
-
-            # Decompress to temporary file
-            with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
-                tmp_path = tmp.name
-
-            with gzip.open(trace_path_gz, "rb") as f_in:
-                with open(tmp_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-            instance._trace = az.from_netcdf(tmp_path)
-            os.unlink(tmp_path)  # Clean up temp file
-
-        elif trace_path.exists():
-            instance._trace = az.from_netcdf(str(trace_path))
-
-        # 9. Build model if requested
-        if rebuild_model:
-            instance._model = instance._build_model()
-
-        print(f"Model loaded from {path}")
-        if instance._trace is not None:
-            print(
-                f"  Trace loaded: {instance._trace.posterior.dims['chain']} chains, "
-                f"{instance._trace.posterior.dims['draw']} draws"
-            )
-
-        return instance
+        return MMMSerializer.load(path, panel, rebuild_model=rebuild_model)
 
     def save_trace_only(self, path: str | Path) -> None:
         """
@@ -2255,23 +1952,9 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("No trace to save. Fit the model first.")
 
-        path = Path(path)
+        from .serialization import MMMSerializer
 
-        if str(path).endswith(".gz"):
-            # Save compressed
-            base_path = Path(str(path)[:-3])  # Remove .gz
-            self._trace.to_netcdf(str(base_path))
-
-            import gzip
-
-            with open(base_path, "rb") as f_in:
-                with gzip.open(path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            base_path.unlink()
-        else:
-            self._trace.to_netcdf(str(path))
-
-        print(f"Trace saved to {path}")
+        MMMSerializer.save_trace_only(self._trace, path)
 
     def load_trace_only(self, path: str | Path) -> None:
         """
@@ -2282,22 +1965,6 @@ class BayesianMMM:
         path : str or Path
             File path to the trace (.nc or .nc.gz).
         """
-        path = Path(path)
+        from .serialization import MMMSerializer
 
-        if str(path).endswith(".gz"):
-            import gzip
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
-                tmp_path = tmp.name
-
-            with gzip.open(path, "rb") as f_in:
-                with open(tmp_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-            self._trace = az.from_netcdf(tmp_path)
-            os.unlink(tmp_path)
-        else:
-            self._trace = az.from_netcdf(str(path))
-
-        print(f"Trace loaded from {path}")
+        self._trace = MMMSerializer.load_trace_only(path)
