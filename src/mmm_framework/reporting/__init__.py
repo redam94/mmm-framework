@@ -14,7 +14,15 @@ Features:
 
 from .generator import MMMReportGenerator, ReportBuilder
 from .config import ReportConfig, SectionConfig, ColorScheme, ColorPalette
-from .data_extractors import MMMDataBundle
+from .data_extractors import (
+    MMMDataBundle,
+    DataExtractor,
+    AggregationMixin,
+    BayesianMMMExtractor,
+    ExtendedMMMExtractor,
+    PyMCMarketingExtractor,
+    create_extractor,
+)
 from .sections import (
     Section,
     ExecutiveSummarySection,
@@ -65,8 +73,14 @@ __all__ = [
     # Main generator
     "MMMReportGenerator",
     "ReportBuilder",
-    # Data
+    # Data & Extractors
     "MMMDataBundle",
+    "DataExtractor",
+    "AggregationMixin",
+    "BayesianMMMExtractor",
+    "ExtendedMMMExtractor",
+    "PyMCMarketingExtractor",
+    "create_extractor",
     # Configuration
     "ReportConfig",
     "SectionConfig",
