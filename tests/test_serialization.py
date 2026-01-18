@@ -380,7 +380,8 @@ class TestBayesianMMMSerializationIntegration:
 
         source = inspect.getsource(BayesianMMM.save)
         assert "MMMSerializer" in source
-        assert "from .serialization import MMMSerializer" in source
+        # Check that it imports from serialization module (relative import depth may vary)
+        assert "serialization import MMMSerializer" in source
 
     def test_load_method_uses_serializer(self):
         """Test that BayesianMMM.load uses MMMSerializer."""
