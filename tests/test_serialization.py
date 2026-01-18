@@ -408,3 +408,145 @@ class TestBayesianMMMSerializationIntegration:
 
         source = inspect.getsource(BayesianMMM.load_trace_only)
         assert "MMMSerializer" in source
+
+
+class TestMMMSerializerLoadTrace:
+    """Tests for trace loading."""
+
+    def test_load_trace_missing_file(self, tmp_path):
+        """Test loading trace when file doesn't exist."""
+        from mmm_framework.serialization import MMMSerializer
+
+        path = tmp_path / "test_model"
+        path.mkdir()
+
+        result = MMMSerializer._load_trace(path)
+
+        assert result is None
+
+
+class TestMMMSerializerSaveTraceOnly:
+    """Tests for save_trace_only method."""
+
+    def test_save_trace_only_method_exists(self):
+        """Test that save_trace_only method exists on class."""
+        from mmm_framework.serialization import MMMSerializer
+
+        assert hasattr(MMMSerializer, "save_trace_only")
+        assert callable(MMMSerializer.save_trace_only)
+
+
+class TestMMMSerializerLoadTraceOnly:
+    """Tests for load_trace_only method."""
+
+    def test_load_trace_only_method_exists(self):
+        """Test that load_trace_only method exists on class."""
+        from mmm_framework.serialization import MMMSerializer
+
+        assert hasattr(MMMSerializer, "load_trace_only")
+        assert callable(MMMSerializer.load_trace_only)
+
+    def test_load_trace_only_missing_file_raises(self, tmp_path):
+        """Test that load_trace_only raises on missing file."""
+        from mmm_framework.serialization import MMMSerializer
+
+        nonexistent_path = tmp_path / "nonexistent.nc"
+
+        with pytest.raises(FileNotFoundError):
+            MMMSerializer.load_trace_only(nonexistent_path)
+
+
+class TestMMMSerializerEdgeCases:
+    """Edge case tests for serializer."""
+
+    def test_collect_metadata_with_minimal_model(self):
+        """Test metadata collection with minimal model attributes."""
+        from mmm_framework.serialization import MMMSerializer
+
+        class MinimalModel:
+            _VERSION = "1.0.0"
+            n_obs = 10
+            n_channels = 1
+            n_controls = 0
+            n_time_periods = 10
+            channel_names = ["TV"]
+            control_names = []
+            has_geo = False
+            has_product = False
+            adstock_alphas = None
+
+        metadata = MMMSerializer._collect_metadata(MinimalModel())
+
+        assert metadata["n_controls"] == 0
+        assert metadata["control_names"] == []
+        assert metadata["adstock_alphas"] is None
+
+    def test_format_version_format(self):
+        """Test format version is correctly formatted."""
+        from mmm_framework.serialization import MMMSerializer
+
+        # Format version should be a simple string
+        assert isinstance(MMMSerializer._FORMAT_VERSION, str)
+        assert len(MMMSerializer._FORMAT_VERSION) > 0
+
+
+class TestMMMSerializerSaveLoadPath:
+    """Tests for path handling in save/load."""
+
+    def test_save_creates_directory(self, tmp_path):
+        """Test that save creates directory if it doesn't exist."""
+        from mmm_framework.serialization import MMMSerializer
+        from pathlib import Path
+
+        # Create minimal mock model
+        class MockConfig:
+            def model_dump(self):
+                return {}
+
+        class MockTrendConfig:
+            def to_dict(self):
+                return {}
+
+        class MockModel:
+            _VERSION = "1.0.0"
+            n_obs = 10
+            n_channels = 1
+            n_controls = 0
+            n_time_periods = 10
+            channel_names = ["TV"]
+            control_names = []
+            has_geo = False
+            has_product = False
+            adstock_alphas = [0.5]
+            _trace = None
+            model_config = MockConfig()
+            trend_config = MockTrendConfig()
+            mff_config = MockConfig()
+            y_mean = 100.0
+            y_std = 25.0
+            _media_max = {"TV": 1000.0}
+            X_controls_raw = None
+            trend_features = {}
+            seasonality_features = {}
+
+        new_dir = tmp_path / "new_model_dir"
+        assert not new_dir.exists()
+
+        MMMSerializer.save(MockModel(), new_dir)
+
+        assert new_dir.exists()
+        assert (new_dir / "metadata.json").exists()
+        assert (new_dir / "configs.json").exists()
+        assert (new_dir / "scaling_params.json").exists()
+
+    def test_load_raises_on_missing_directory(self, tmp_path):
+        """Test that load raises on missing directory."""
+        from mmm_framework.serialization import MMMSerializer
+
+        class MockPanel:
+            pass
+
+        nonexistent_path = tmp_path / "nonexistent_model"
+
+        with pytest.raises(FileNotFoundError):
+            MMMSerializer.load(nonexistent_path, MockPanel())
