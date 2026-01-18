@@ -812,7 +812,7 @@ Keep separate dataclass-based configs in extension for their specific use cases.
 | 7. BayesianMMM Decomposition | HIGH | [x] **COMPLETED** | All 3 phases: serialization, data_preparation, analysis |
 | 8. Transform Utilities Module | MEDIUM | [x] **COMPLETED** | `transforms/` module with 4 submodules |
 | 9. Reporting Extractor Abstraction | HIGH | [x] **COMPLETED** | Enhanced `DataExtractor`, created `AggregationMixin` |
-| 10. Config Hierarchy Unification | MEDIUM | [ ] Not Started | |
+| 10. Config Hierarchy Unification | MEDIUM | [x] **COMPLETED** | Shared `SaturationType` from main config |
 
 ---
 
@@ -874,4 +874,5 @@ uv run python examples/ex_model_workflow.py
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 2) | Complete | Created `data_preparation.py` with `DataPreparator`, `ScalingParameters`, `PreparedData` classes and standardization utilities. 17 new tests, all passing |
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 3) | Complete | Created `analysis.py` with `MMMAnalyzer`, `MarginalAnalysisResult`, `ScenarioResult` classes and helper functions. 11 new tests, all 196 refactoring tests passing |
 | 2026-01-18 | Task 9: Reporting Extractor Abstraction | Complete | Enhanced `DataExtractor` base class with `_compute_fit_statistics`, `_compute_percentile_bounds`, and `ci_prob` property. Created `AggregationMixin` for data aggregation utilities. Updated all 3 extractor classes. 34 new tests, all 230 refactoring tests passing |
+| 2026-01-18 | Task 10: Config Hierarchy Unification | Complete | Unified `SaturationType` enum by importing from main config into extension config. Kept `AdstockConfig` and `SaturationConfig` separate (different class systems: Pydantic vs dataclass). 31 new tests verifying unification and backward compatibility, all 310 refactoring tests passing |
 
