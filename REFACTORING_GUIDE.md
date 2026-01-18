@@ -643,7 +643,7 @@ Create dedicated transform modules.
 ## 9. Reporting Extractor Abstraction
 
 **Priority**: HIGH
-**Status**: [ ] Not Started
+**Status**: [x] **COMPLETED** (2026-01-18)
 **Estimated Impact**: ~500+ lines of potential deduplication
 
 ### Problem
@@ -657,43 +657,69 @@ Each implements similar extraction methods independently.
 
 ### Solution
 
-Create base `Extractor` class with template methods.
+Enhanced the existing `DataExtractor` ABC with shared utility methods and created
+an `AggregationMixin` class for data aggregation utilities.
 
 ### Implementation Steps
 
-- [ ] **Step 9.1**: Analyze common methods across all three extractors
+- [x] **Step 9.1**: Analyze common methods across all three extractors
+  - Identified: `_compute_fit_statistics`, `_compute_hdi`, aggregation methods
+  - Identified: `ci_prob` property pattern needed across all extractors
 
-- [ ] **Step 9.2**: Create `BaseExtractor` ABC
+- [x] **Step 9.2**: Enhance `DataExtractor` ABC
   ```python
-  from abc import ABC, abstractmethod
-
-  class BaseExtractor(ABC):
+  class DataExtractor(ABC):
       """Base class for model data extractors."""
 
-      @abstractmethod
-      def extract_contributions(self) -> pd.DataFrame: ...
+      @property
+      def ci_prob(self) -> float:
+          """Credible interval probability. Override in subclass."""
+          return getattr(self, '_ci_prob', 0.8)
 
       @abstractmethod
-      def extract_predictions(self) -> pd.DataFrame: ...
+      def extract(self) -> MMMDataBundle: ...
 
-      @abstractmethod
-      def extract_channel_effects(self) -> pd.DataFrame: ...
-
-      # Shared utility methods
-      def _format_hdi_columns(self, df: pd.DataFrame) -> pd.DataFrame: ...
-      def _aggregate_by_period(self, df: pd.DataFrame) -> pd.DataFrame: ...
+      def _compute_hdi(self, samples, prob=None) -> tuple[float, float]: ...
+      def _compute_percentile_bounds(self, samples, prob=None, axis=0) -> tuple: ...
+      def _compute_fit_statistics(self, actual, predicted) -> dict | None: ...
+      def _extract_diagnostics(self, trace) -> dict: ...
   ```
 
-- [ ] **Step 9.3**: Refactor `BayesianMMMExtractor` to extend `BaseExtractor`
+- [x] **Step 9.3**: Create `AggregationMixin` class
+  ```python
+  class AggregationMixin:
+      """Mixin providing data aggregation utilities for extractors."""
 
-- [ ] **Step 9.4**: Refactor `ExtendedMMMExtractor` to extend `BaseExtractor`
+      def _aggregate_by_period_simple(self, values, periods, unique_periods) -> np.ndarray: ...
+      def _aggregate_samples_by_period(self, samples, periods, unique_periods, ci_prob) -> dict: ...
+      def _aggregate_by_group(self, values, group_idx, n_groups) -> np.ndarray: ...
+  ```
 
-- [ ] **Step 9.5**: Refactor `PyMCMarketingExtractor` to extend `BaseExtractor`
+- [x] **Step 9.4**: Update `BayesianMMMExtractor` to inherit from both
+  - Now inherits from `DataExtractor` and `AggregationMixin`
+  - Removed duplicate `_compute_fit_statistics` (uses inherited version)
+  - Uses `_ci_prob` property pattern
 
-- [ ] **Step 9.6**: Run tests: `make tests`
+- [x] **Step 9.5**: Update `ExtendedMMMExtractor` to use enhanced base
+  - Uses `_ci_prob` property pattern
+  - Inherits shared methods from `DataExtractor`
+
+- [x] **Step 9.6**: Update `PyMCMarketingExtractor` to use enhanced base
+  - Uses `_ci_prob` property pattern
+  - Inherits shared methods from `DataExtractor`
+
+- [x] **Step 9.7**: Update `reporting/__init__.py` exports
+  - Added: `DataExtractor`, `AggregationMixin`, `BayesianMMMExtractor`,
+    `ExtendedMMMExtractor`, `PyMCMarketingExtractor`, `create_extractor`
+
+- [x] **Step 9.8**: Write comprehensive tests (`tests/test_extractors.py`)
+  - 34 tests covering all functionality
+  - All tests passing
 
 ### Files Modified
-- `src/mmm_framework/reporting/data_extractors.py`
+- `src/mmm_framework/reporting/data_extractors.py` (enhanced base classes)
+- `src/mmm_framework/reporting/__init__.py` (added exports)
+- `tests/test_extractors.py` (new - 34 tests)
 
 ---
 
@@ -749,7 +775,7 @@ Share base configs, extend in mmm_extensions only when needed.
 | 6. Naming Consistency Fixes | MEDIUM | [x] **COMPLETED** | `_scaled` suffix, builder docs |
 | 7. BayesianMMM Decomposition | HIGH | [x] **COMPLETED** | All 3 phases: serialization, data_preparation, analysis |
 | 8. Transform Utilities Module | MEDIUM | [x] **COMPLETED** | `transforms/` module with 4 submodules |
-| 9. Reporting Extractor Abstraction | HIGH | [ ] Not Started | |
+| 9. Reporting Extractor Abstraction | HIGH | [x] **COMPLETED** | Enhanced `DataExtractor`, created `AggregationMixin` |
 | 10. Config Hierarchy Unification | MEDIUM | [ ] Not Started | |
 
 ---
@@ -811,4 +837,5 @@ uv run python examples/ex_model_workflow.py
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 1) | Complete | Created `serialization.py` with `MMMSerializer` class. Extracted 260+ lines from model.py. Updated save/load methods to use thin wrappers. 22 new serialization tests, all 168 tests passing |
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 2) | Complete | Created `data_preparation.py` with `DataPreparator`, `ScalingParameters`, `PreparedData` classes and standardization utilities. 17 new tests, all passing |
 | 2026-01-17 | Task 7: BayesianMMM Decomposition (Phase 3) | Complete | Created `analysis.py` with `MMMAnalyzer`, `MarginalAnalysisResult`, `ScenarioResult` classes and helper functions. 11 new tests, all 196 refactoring tests passing |
+| 2026-01-18 | Task 9: Reporting Extractor Abstraction | Complete | Enhanced `DataExtractor` base class with `_compute_fit_statistics`, `_compute_percentile_bounds`, and `ci_prob` property. Created `AggregationMixin` for data aggregation utilities. Updated all 3 extractor classes. 34 new tests, all 230 refactoring tests passing |
 

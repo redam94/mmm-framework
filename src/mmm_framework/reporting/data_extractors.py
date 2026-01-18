@@ -185,19 +185,68 @@ class HasModel(Protocol):
 
 
 class DataExtractor(ABC):
-    """Base class for model data extractors."""
-    
+    """
+    Base class for model data extractors.
+
+    All concrete extractors should inherit from this class and implement
+    the `extract()` method. Shared utilities for HDI computation, diagnostics
+    extraction, and fit statistics are provided.
+
+    Attributes
+    ----------
+    ci_prob : float
+        Credible interval probability (default 0.8).
+
+    Examples
+    --------
+    >>> class MyExtractor(DataExtractor):
+    ...     def __init__(self, model, ci_prob=0.8):
+    ...         self.model = model
+    ...         self._ci_prob = ci_prob
+    ...
+    ...     @property
+    ...     def ci_prob(self):
+    ...         return self._ci_prob
+    ...
+    ...     def extract(self):
+    ...         bundle = MMMDataBundle()
+    ...         # ... extract data
+    ...         return bundle
+    """
+
+    @property
+    def ci_prob(self) -> float:
+        """Credible interval probability. Override in subclass."""
+        return getattr(self, '_ci_prob', 0.8)
+
     @abstractmethod
     def extract(self) -> MMMDataBundle:
         """Extract data from model into unified bundle."""
         pass
-    
+
     def _compute_hdi(
         self,
         samples: np.ndarray,
-        prob: float = 0.8,
+        prob: float | None = None,
     ) -> tuple[float, float]:
-        """Compute highest density interval from samples."""
+        """
+        Compute highest density interval from samples.
+
+        Parameters
+        ----------
+        samples : np.ndarray
+            MCMC samples.
+        prob : float, optional
+            HDI probability. If None, uses self.ci_prob.
+
+        Returns
+        -------
+        tuple[float, float]
+            (lower, upper) bounds.
+        """
+        if prob is None:
+            prob = self.ci_prob
+
         if az is not None:
             hdi = az.hdi(samples, hdi_prob=prob)
             return float(hdi[0]), float(hdi[1])
@@ -205,32 +254,241 @@ class DataExtractor(ABC):
             # Fallback to percentile-based interval
             alpha = (1 - prob) / 2
             return float(np.percentile(samples, alpha * 100)), float(np.percentile(samples, (1 - alpha) * 100))
-    
+
+    def _compute_percentile_bounds(
+        self,
+        samples: np.ndarray,
+        prob: float | None = None,
+        axis: int = 0,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute percentile-based credible interval bounds.
+
+        Parameters
+        ----------
+        samples : np.ndarray
+            Sample array.
+        prob : float, optional
+            Credible interval probability. If None, uses self.ci_prob.
+        axis : int
+            Axis along which to compute percentiles.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            (lower, upper) bound arrays.
+        """
+        if prob is None:
+            prob = self.ci_prob
+
+        alpha = (1 - prob) / 2
+        lower = np.percentile(samples, alpha * 100, axis=axis)
+        upper = np.percentile(samples, (1 - alpha) * 100, axis=axis)
+        return lower, upper
+
+    def _compute_fit_statistics(
+        self,
+        actual: np.ndarray | None,
+        predicted: dict[str, np.ndarray] | None,
+    ) -> dict[str, float] | None:
+        """
+        Compute model fit statistics: R², RMSE, MAE, MAPE.
+
+        Parameters
+        ----------
+        actual : np.ndarray or None
+            Actual observed values.
+        predicted : dict or None
+            Predictions dict with "mean" key.
+
+        Returns
+        -------
+        dict[str, float] or None
+            Dictionary with "r2", "rmse", "mae", "mape" keys.
+        """
+        if actual is None or predicted is None:
+            return None
+
+        y_true = actual
+        y_pred = predicted.get("mean")
+        if y_pred is None:
+            return None
+
+        # R²
+        ss_res = np.sum((y_true - y_pred) ** 2)
+        ss_tot = np.sum((y_true - y_true.mean()) ** 2)
+        r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+        # RMSE
+        rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+
+        # MAE
+        mae = np.mean(np.abs(y_true - y_pred))
+
+        # MAPE (handle zeros)
+        mask = y_true != 0
+        if mask.any():
+            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask]))
+        else:
+            mape = np.nan
+
+        return {"r2": float(r2), "rmse": float(rmse), "mae": float(mae), "mape": float(mape)}
+
     def _extract_diagnostics(self, trace: Any) -> dict[str, Any]:
         """Extract MCMC diagnostics from ArviZ trace."""
         if az is None or trace is None:
             return {}
-        
+
         try:
             # Get summary stats
             summary = az.summary(trace)
-            
+
             diagnostics = {
                 "rhat_max": float(summary["r_hat"].max()),
                 "ess_bulk_min": float(summary["ess_bulk"].min()),
                 "ess_tail_min": float(summary["ess_tail"].min()),
             }
-            
+
             # Check for divergences in sample stats
             if hasattr(trace, "sample_stats") and "diverging" in trace.sample_stats:
                 divergences = trace.sample_stats["diverging"].values.sum()
                 diagnostics["divergences"] = int(divergences)
             else:
                 diagnostics["divergences"] = 0
-            
+
             return diagnostics
         except Exception:
             return {}
+
+
+class AggregationMixin:
+    """
+    Mixin providing data aggregation utilities for extractors.
+
+    Provides methods for aggregating data by period, geography, and product
+    while properly propagating uncertainty through sample aggregation.
+    """
+
+    def _aggregate_by_period_simple(
+        self,
+        values: np.ndarray,
+        periods: list,
+        unique_periods: list,
+    ) -> np.ndarray:
+        """
+        Aggregate values by period using simple summation.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Values to aggregate, shape (n_obs,).
+        periods : list
+            Period label for each observation.
+        unique_periods : list
+            Unique periods in order.
+
+        Returns
+        -------
+        np.ndarray
+            Aggregated values, shape (n_periods,).
+        """
+        period_to_idx = {p: i for i, p in enumerate(unique_periods)}
+        n_periods = len(unique_periods)
+
+        result = np.zeros(n_periods)
+        for i, (val, period) in enumerate(zip(values, periods)):
+            if period in period_to_idx:
+                result[period_to_idx[period]] += val
+
+        return result
+
+    def _aggregate_samples_by_period(
+        self,
+        samples: np.ndarray,
+        periods: list,
+        unique_periods: list,
+        ci_prob: float = 0.8,
+    ) -> dict[str, np.ndarray] | None:
+        """
+        Aggregate samples by period while preserving uncertainty.
+
+        This method properly propagates uncertainty by aggregating
+        samples first, then computing statistics on aggregated values.
+
+        Parameters
+        ----------
+        samples : np.ndarray
+            Sample array of shape (n_samples, n_obs).
+        periods : list
+            Period label for each observation.
+        unique_periods : list
+            Unique periods in order.
+        ci_prob : float
+            Credible interval probability.
+
+        Returns
+        -------
+        dict[str, np.ndarray] or None
+            Dictionary with "mean", "lower", "upper" arrays.
+        """
+        if samples is None or len(periods) == 0:
+            return None
+
+        try:
+            period_to_idx = {p: i for i, p in enumerate(unique_periods)}
+            obs_period_idx = np.array([period_to_idx.get(p, -1) for p in periods])
+
+            n_samples = samples.shape[0]
+            n_periods = len(unique_periods)
+
+            # Aggregate samples by period
+            samples_agg = np.zeros((n_samples, n_periods))
+
+            for t in range(n_periods):
+                mask = (obs_period_idx == t)
+                if mask.any():
+                    samples_agg[:, t] = samples[:, mask].sum(axis=1)
+
+            # Compute statistics
+            alpha = (1 - ci_prob) / 2
+
+            return {
+                "mean": samples_agg.mean(axis=0),
+                "lower": np.percentile(samples_agg, alpha * 100, axis=0),
+                "upper": np.percentile(samples_agg, (1 - alpha) * 100, axis=0),
+            }
+
+        except Exception:
+            return None
+
+    def _aggregate_by_group(
+        self,
+        values: np.ndarray,
+        group_idx: np.ndarray,
+        n_groups: int,
+    ) -> np.ndarray:
+        """
+        Aggregate values by group index.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Values to aggregate.
+        group_idx : np.ndarray
+            Group index for each value.
+        n_groups : int
+            Number of groups.
+
+        Returns
+        -------
+        np.ndarray
+            Aggregated values per group.
+        """
+        result = np.zeros(n_groups)
+        for i, val in enumerate(values):
+            if 0 <= group_idx[i] < n_groups:
+                result[group_idx[i]] += val
+        return result
 
 class BayesianMMMExtractorGeoMixin:
     """
@@ -661,10 +919,13 @@ class BayesianMMMExtractorGeoMixin:
         except Exception:
             return None
 
-class BayesianMMMExtractor(DataExtractor):
+class BayesianMMMExtractor(DataExtractor, AggregationMixin):
     """
     Extract data from mmm-framework's BayesianMMM class.
-    
+
+    Inherits shared utilities from DataExtractor and AggregationMixin
+    for HDI computation, fit statistics, and data aggregation.
+
     Parameters
     ----------
     mmm : BayesianMMM
@@ -676,19 +937,24 @@ class BayesianMMMExtractor(DataExtractor):
     ci_prob : float
         Credible interval probability (default 0.8)
     """
-    
+
     def __init__(
         self,
         mmm: Any,
         panel: Any | None = None,
         results: Any | None = None,
         ci_prob: float = 0.8,
-    ):  
+    ):
         logger.debug("Initializing BayesianMMMExtractor")
         self.mmm = mmm
         self.panel = panel or getattr(mmm, "panel", None)
         self.results = results or getattr(mmm, "_results", None)
-        self.ci_prob = ci_prob
+        self._ci_prob = ci_prob
+
+    @property
+    def ci_prob(self) -> float:
+        """Credible interval probability."""
+        return self._ci_prob
     
     def extract(self) -> MMMDataBundle:
         """Extract all available data from BayesianMMM."""
@@ -1161,36 +1427,8 @@ class BayesianMMMExtractor(DataExtractor):
         logger.debug("Predictions not found")
         return None
     
-    def _compute_fit_statistics(
-        self,
-        actual: np.ndarray | None,
-        predicted: dict[str, np.ndarray] | None,
-    ) -> dict[str, float] | None:
-        """Compute R², RMSE, MAE, MAPE."""
-        logger.debug("Computing fit statistics")
-        if actual is None or predicted is None:
-            return None
-        
-        y_true = actual
-        y_pred = predicted["mean"]
-        
-        # R²
-        ss_res = np.sum((y_true - y_pred) ** 2)
-        ss_tot = np.sum((y_true - y_true.mean()) ** 2)
-        r2 = 1 - (ss_res / ss_tot)
-        
-        # RMSE
-        rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
-        
-        # MAE
-        mae = np.mean(np.abs(y_true - y_pred))
-        
-        # MAPE (handle zeros)
-        mask = y_true != 0
-        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask]))
-        
-        return {"r2": r2, "rmse": rmse, "mae": mae, "mape": mape}
-    
+    # _compute_fit_statistics inherited from DataExtractor
+
     def _extract_geo_level_fit_data(
         self,
         bundle: MMMDataBundle,
@@ -2674,18 +2912,26 @@ class BayesianMMMExtractor(DataExtractor):
 class ExtendedMMMExtractor(DataExtractor):
     """
     Extract data from mmm-framework's extended MMM models.
-    
+
+    Inherits shared utilities from DataExtractor for HDI computation,
+    fit statistics, and MCMC diagnostics.
+
     Supports NestedMMM, MultivariateMMM, and CombinedMMM.
     """
-    
+
     def __init__(
         self,
         model: Any,
         ci_prob: float = 0.8,
     ):
         self.model = model
-        self.ci_prob = ci_prob
+        self._ci_prob = ci_prob
         self._base_extractor = None
+
+    @property
+    def ci_prob(self) -> float:
+        """Credible interval probability."""
+        return self._ci_prob
     
     def extract(self) -> MMMDataBundle:
         """Extract data from extended MMM model."""
@@ -2795,17 +3041,25 @@ class ExtendedMMMExtractor(DataExtractor):
 class PyMCMarketingExtractor(DataExtractor):
     """
     Extract data from pymc-marketing's MMM class.
-    
+
+    Inherits shared utilities from DataExtractor for HDI computation,
+    fit statistics, and MCMC diagnostics.
+
     Provides compatibility with the standard pymc-marketing MMM.
     """
-    
+
     def __init__(
         self,
         mmm: Any,
         ci_prob: float = 0.8,
     ):
         self.mmm = mmm
-        self.ci_prob = ci_prob
+        self._ci_prob = ci_prob
+
+    @property
+    def ci_prob(self) -> float:
+        """Credible interval probability."""
+        return self._ci_prob
     
     def extract(self) -> MMMDataBundle:
         """Extract data from pymc-marketing MMM."""
