@@ -282,6 +282,58 @@
             </div>
             <p>Coefficients now represent <strong>elasticities</strong>: percent change in sales per percent change in media.</p>
 
+            <h4>Framework Usage: Complete Model Setup</h4>
+            <pre><code class="python">from mmm_framework import (
+    BayesianMMM,
+    MFFConfigBuilder,
+    ModelConfigBuilder,
+    MediaChannelConfigBuilder,
+    ControlVariableConfigBuilder,
+    KPIConfigBuilder,
+    load_mff,
+)
+
+# 1. Configure the data specification (MFF = Master Flat File)
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_builder(KPIConfigBuilder("Sales").national().additive())
+    .add_media_builder(
+        MediaChannelConfigBuilder("TV")
+        .national()
+        .with_geometric_adstock(l_max=8)
+        .with_hill_saturation()
+    )
+    .add_media_builder(
+        MediaChannelConfigBuilder("Digital")
+        .national()
+        .with_geometric_adstock(l_max=4)
+        .with_hill_saturation()
+    )
+    .add_control_builder(
+        ControlVariableConfigBuilder("Price")
+        .national()
+        .allow_negative()
+    )
+    .weekly()
+    .build()
+)
+
+# 2. Load data
+panel = load_mff(dataframe, mff_config)
+
+# 3. Configure and fit model
+model_config = (
+    ModelConfigBuilder()
+    .additive()
+    .bayesian_numpyro()  # Fast JAX backend
+    .with_chains(4)
+    .with_draws(2000)
+    .build()
+)
+
+model = BayesianMMM(panel, model_config)
+results = model.fit()</code></pre>
+
             <h3 id="standard-adstock">Adstock Transformation</h3>
             <p>
                 Adstock captures carryover effects—the idea that today's advertising continues to 
@@ -378,12 +430,43 @@
                 <div id="adstock-demo-chart" class="chart-container" style="height: 300px;"></div>
             </div>
 
-            <pre><code># Adstock configuration
-adstock = (AdstockConfigBuilder()
+            <h4>Framework Usage: Adstock Configuration</h4>
+            <pre><code class="python">from mmm_framework import AdstockConfigBuilder, PriorConfigBuilder
+
+# Geometric adstock with 8-week max lag (recommended for most media)
+adstock_geometric = (
+    AdstockConfigBuilder()
     .geometric()
     .with_max_lag(8)
-    .with_alpha_prior(PriorConfig.beta(alpha=1, beta=3))
-    .build())</code></pre>
+    .with_alpha_prior(PriorConfigBuilder().beta(alpha=1, beta=3).build())
+    .build()
+)
+
+# Fast decay variant for performance media (search, social)
+adstock_fast = (
+    AdstockConfigBuilder()
+    .geometric()
+    .with_fast_decay()  # Uses Beta(1, 3) - skews toward lower alpha
+    .with_max_lag(4)
+    .build()
+)
+
+# Channel-specific adstock via MediaChannelConfigBuilder
+tv_channel = (
+    MediaChannelConfigBuilder("TV")
+    .national()
+    .with_geometric_adstock(l_max=8)  # Long carryover for TV
+    .with_hill_saturation()
+    .build()
+)
+
+digital_channel = (
+    MediaChannelConfigBuilder("Digital")
+    .national()
+    .with_geometric_adstock(l_max=4)  # Shorter carryover for digital
+    .with_hill_saturation()
+    .build()
+)</code></pre>
 
             <h3 id="standard-saturation">Saturation Functions</h3>
             <p>Saturation captures diminishing returns—each additional dollar produces less incremental effect.</p>
@@ -461,6 +544,38 @@ adstock = (AdstockConfigBuilder()
                     Hill function parameters can be weakly identified. <strong>Constrain K's prior to the observed data range.</strong>
                 </p>
             </div>
+
+            <h4>Framework Usage: Saturation Configuration</h4>
+            <pre><code class="python">from mmm_framework import SaturationConfigBuilder, PriorConfigBuilder
+
+# Hill saturation with data-driven bounds (recommended)
+saturation_hill = (
+    SaturationConfigBuilder()
+    .hill()
+    .with_kappa_prior(PriorConfigBuilder().beta(2, 2).build())
+    .with_slope_prior(PriorConfigBuilder().half_normal(1.5).build())
+    .with_beta_prior(PriorConfigBuilder().half_normal(2.0).build())
+    .with_kappa_bounds(0.1, 0.9)  # Constrain K to percentile bounds
+    .build()
+)
+
+# Strong saturation variant (expect heavy diminishing returns)
+saturation_strong = (
+    SaturationConfigBuilder()
+    .hill()
+    .with_strong_saturation()  # Higher slope prior
+    .build()
+)
+
+# Channel-specific saturation via MediaChannelConfigBuilder
+tv_with_saturation = (
+    MediaChannelConfigBuilder("TV")
+    .national()
+    .with_geometric_adstock(l_max=8)
+    .with_hill_saturation()  # Default Hill saturation
+    .with_positive_prior(sigma=2.0)  # Prior for media coefficient
+    .build()
+)</code></pre>
 
             <h3 id="standard-trend">Trend & Seasonality</h3>
             
@@ -582,10 +697,45 @@ adstock = (AdstockConfigBuilder()
                     <li>Provide cleaner counterfactual estimation (what would sales be with zero media?)</li>
                 </ul>
                 <p style="margin-top: 1rem; margin-bottom: 0;">
-                    <strong>Rule of thumb:</strong> Always include trend and seasonality components. Let controls capture 
+                    <strong>Rule of thumb:</strong> Always include trend and seasonality components. Let controls capture
                     their incremental effects <em>beyond</em> structural time patterns, not instead of them.
                 </p>
             </div>
+
+            <h4>Framework Usage: Trend & Seasonality Configuration</h4>
+            <pre><code class="python">from mmm_framework import (
+    SeasonalityConfigBuilder,
+    TrendConfig,
+    TrendType,
+    ModelConfigBuilder,
+)
+
+# Seasonality configuration: annual + monthly patterns
+seasonality = (
+    SeasonalityConfigBuilder()
+    .with_yearly(order=2)   # N=2 Fourier terms for annual pattern
+    .with_monthly(order=1)  # N=1 for monthly variation
+    .build()
+)
+
+# Trend configuration (use TrendConfig enum)
+trend = TrendConfig(
+    trend_type=TrendType.LINEAR,  # Options: LINEAR, PIECEWISE, SPLINE, GP
+    # For PIECEWISE: specify changepoint dates
+    # For SPLINE: specify n_knots
+)
+
+# Include in model configuration
+model_config = (
+    ModelConfigBuilder()
+    .additive()
+    .bayesian_numpyro()
+    .with_seasonality(seasonality)
+    # Trend is included by default; customize via TrendConfig if needed
+    .with_chains(4)
+    .with_draws(2000)
+    .build()
+)</code></pre>
 
             <h3 id="standard-priors">Prior Specification</h3>
             <pre><code># Recommended default priors for standardized data
@@ -599,6 +749,40 @@ gamma ~ Normal(mu=0, sigma=0.5)          # Control coefficients
 sigma ~ HalfNormal(sigma=0.5)            # Noise
 delta ~ Normal(mu=0, sigma=0.1)          # Trend growth
 season_coef ~ Normal(mu=0, sigma=0.3)    # Seasonality</code></pre>
+
+            <h4>Framework Usage: Prior Configuration</h4>
+            <pre><code class="python">from mmm_framework import PriorConfigBuilder, MediaChannelConfigBuilder
+
+# Build custom priors using PriorConfigBuilder
+media_prior = PriorConfigBuilder().half_normal(sigma=0.5).build()
+adstock_prior = PriorConfigBuilder().beta(alpha=1, beta=3).build()
+control_prior = PriorConfigBuilder().normal(mu=0, sigma=0.5).build()
+
+# Apply priors to media channels
+tv_channel = (
+    MediaChannelConfigBuilder("TV")
+    .national()
+    .with_geometric_adstock(l_max=8)
+    .with_hill_saturation()
+    .with_positive_prior(sigma=2.0)  # HalfNormal prior for coefficient
+    .build()
+)
+
+# Control variables with different prior specifications
+price_control = (
+    ControlVariableConfigBuilder("Price")
+    .national()
+    .allow_negative()
+    .with_normal_prior(mu=-0.5, sigma=0.5)  # Expect negative price effect
+    .build()
+)
+
+distribution_control = (
+    ControlVariableConfigBuilder("Distribution")
+    .national()
+    .positive_only()  # Use HalfNormal by default
+    .build()
+)</code></pre>
 
             <h2 id="nested">Nested Model</h2>
             <p>
@@ -648,6 +832,51 @@ season_coef ~ Normal(mu=0, sigma=0.3)    # Seasonality</code></pre>
                 </tbody>
             </table>
 
+            <h4>Framework Usage: Nested Model Configuration</h4>
+            <pre><code class="python">from mmm_framework.mmm_extensions import (
+    MediatorConfigBuilder,
+    NestedModelConfigBuilder,
+    awareness_mediator,  # Factory function for common mediators
+    NestedMMM,
+)
+
+# Option 1: Use factory function for common mediator types
+awareness = awareness_mediator(
+    name="brand_awareness",
+    observation_noise=0.15,  # For partially observed mediators
+)
+
+# Option 2: Full control with MediatorConfigBuilder
+awareness_custom = (
+    MediatorConfigBuilder("brand_awareness")
+    .partially_observed(observation_noise=0.15)
+    .with_positive_media_effect(sigma=1.0)
+    .with_slow_adstock(l_max=12)  # Brand awareness has longer carryover
+    .with_direct_effect(sigma=0.3)
+    .build()
+)
+
+# Build nested configuration
+nested_config = (
+    NestedModelConfigBuilder()
+    .add_mediator(awareness_custom)
+    .map_channels_to_mediator(
+        "brand_awareness",
+        ["TV", "Digital", "Social"],  # These channels build awareness
+    )
+    .share_adstock(True)  # Share adstock parameters across paths
+    .build()
+)
+
+# Create and fit the nested model
+nested_model = NestedMMM(
+    panel=panel,
+    mff_config=mff_config,
+    model_config=model_config,
+    nested_config=nested_config,
+)
+results = nested_model.fit()</code></pre>
+
             <h2 id="multivariate">Multivariate Model</h2>
             <p>
                 The multivariate model jointly estimates effects on multiple outcomes, capturing 
@@ -685,6 +914,55 @@ season_coef ~ Normal(mu=0, sigma=0.3)    # Seasonality</code></pre>
                 <span class="equation-label">(12)</span>
                 $$\boldsymbol{\epsilon}_t \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Sigma}), \quad \boldsymbol{\Sigma} = \text{diag}(\boldsymbol{\sigma}) \cdot \mathbf{R} \cdot \text{diag}(\boldsymbol{\sigma}), \quad \mathbf{R} \sim \text{LKJ}(\eta)$$
             </div>
+
+            <h4>Framework Usage: Multivariate Model Configuration</h4>
+            <pre><code class="python">from mmm_framework.mmm_extensions import (
+    OutcomeConfigBuilder,
+    CrossEffectConfigBuilder,
+    MultivariateModelConfigBuilder,
+    MultivariateMMM,
+    halo_effect,           # Factory for positive cross-effects
+    cannibalization_effect,  # Factory for negative cross-effects
+)
+
+# Configure multiple outcomes
+product_a = OutcomeConfigBuilder("ProductA_Sales").build()
+product_b = OutcomeConfigBuilder("ProductB_Sales").build()
+
+# Define cross-effects between products
+# Halo effect: Product A lifts Product B
+halo = halo_effect(
+    from_outcome="ProductA_Sales",
+    to_outcome="ProductB_Sales",
+    lag=2,  # 2-week delayed effect
+)
+
+# Cannibalization: Product B steals from Product A
+cannibalization = cannibalization_effect(
+    from_outcome="ProductB_Sales",
+    to_outcome="ProductA_Sales",
+    lag=0,  # Immediate effect
+)
+
+# Build multivariate configuration
+multivariate_config = (
+    MultivariateModelConfigBuilder()
+    .add_outcome(product_a)
+    .add_outcome(product_b)
+    .add_cross_effect(halo)
+    .add_cross_effect(cannibalization)
+    .with_correlated_errors(eta=2.0)  # LKJ prior for error correlation
+    .build()
+)
+
+# Create and fit
+multivariate_model = MultivariateMMM(
+    panel=panel,
+    mff_config=mff_config,
+    model_config=model_config,
+    multivariate_config=multivariate_config,
+)
+results = multivariate_model.fit()</code></pre>
 
             <h2 id="combined">Combined Model</h2>
             <p>The combined model integrates nested pathways and multivariate outcomes.</p>
@@ -742,6 +1020,34 @@ flowchart TB
                 </pre>
             </div>
 
+            <h4>Framework Usage: Combined Model Configuration</h4>
+            <pre><code class="python">from mmm_framework.mmm_extensions import (
+    CombinedMMM,
+    CombinedModelConfigBuilder,
+)
+
+# Combine nested and multivariate configurations
+combined_config = (
+    CombinedModelConfigBuilder()
+    .with_nested_config(nested_config)       # From NestedModelConfigBuilder
+    .with_multivariate_config(multivariate_config)  # From MultivariateModelConfigBuilder
+    .build()
+)
+
+# Create and fit the combined model
+combined_model = CombinedMMM(
+    panel=panel,
+    mff_config=mff_config,
+    model_config=model_config,
+    combined_config=combined_config,
+)
+results = combined_model.fit()
+
+# Access decomposed effects
+print(results.direct_effects)     # Direct media → outcome
+print(results.indirect_effects)   # Media → mediator → outcome
+print(results.cross_effects)      # Outcome → outcome</code></pre>
+
             <h2 id="hierarchical">Hierarchical Structure</h2>
             <p>
                 Hierarchical models provide <strong>partial pooling</strong>—sharing information across groups while allowing heterogeneity.
@@ -781,6 +1087,56 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                 </div>
             </div>
 
+            <h4>Framework Usage: Hierarchical Configuration</h4>
+            <pre><code class="python">from mmm_framework import (
+    HierarchicalConfigBuilder,
+    KPIConfigBuilder,
+    MediaChannelConfigBuilder,
+    ModelConfigBuilder,
+    PriorConfigBuilder,
+)
+
+# Configure hierarchical pooling
+hierarchical = (
+    HierarchicalConfigBuilder()
+    .enabled()
+    .pool_across_geo()      # Share information across geographies
+    .pool_across_product()  # Share information across products
+    .use_non_centered()     # Better for sparse data
+    .with_non_centered_threshold(20)  # Switch at 20 obs per group
+    .with_mu_prior(PriorConfigBuilder().normal(0, 1).build())
+    .with_sigma_prior(PriorConfigBuilder().half_normal(0.5).build())
+    .build()
+)
+
+# Geo-level KPI configuration
+geo_kpi = (
+    KPIConfigBuilder("Sales")
+    .by_geo()  # Period + Geography dimensions
+    .additive()
+    .build()
+)
+
+# Geo-level media (has regional variation)
+local_radio = (
+    MediaChannelConfigBuilder("LocalRadio")
+    .by_geo()  # Media varies by geography
+    .with_geometric_adstock(6)
+    .with_hill_saturation()
+    .build()
+)
+
+# Include hierarchical config in model
+model_config = (
+    ModelConfigBuilder()
+    .additive()
+    .bayesian_numpyro()
+    .with_hierarchical(hierarchical)
+    .with_chains(4)
+    .with_draws(2000)
+    .build()
+)</code></pre>
+
             <h2 id="variable-selection">Variable Selection Methods</h2>
             
             <div class="warning">
@@ -819,6 +1175,49 @@ beta_g = mu_beta + tau * offset_g</code></pre>
                     <tr><td>< 0.25</td><td>Little evidence of effect</td></tr>
                 </tbody>
             </table>
+
+            <h4>Framework Usage: Variable Selection Configuration</h4>
+            <pre><code class="python">from mmm_framework import (
+    ControlSelectionConfigBuilder,
+    ControlVariableConfigBuilder,
+    MFFConfigBuilder,
+)
+
+# Configure variable selection for precision controls
+control_selection = (
+    ControlSelectionConfigBuilder()
+    .horseshoe()  # Regularized horseshoe prior
+    .with_expected_nonzero(5)  # Expect ~5 important controls
+    .build()
+)
+
+# Add controls with shrinkage enabled
+weather_control = (
+    ControlVariableConfigBuilder("Temperature")
+    .national()
+    .allow_negative()
+    .with_shrinkage()  # Enable variable selection
+    .build()
+)
+
+promo_control = (
+    ControlVariableConfigBuilder("Promotion")
+    .national()
+    .positive_only()
+    .with_shrinkage()  # Enable variable selection
+    .build()
+)
+
+# Build MFF config with control selection
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_builder(...)
+    .add_media_builder(...)
+    .add_control_builder(weather_control)
+    .add_control_builder(promo_control)
+    .with_control_selection(control_selection)
+    .build()
+)</code></pre>
 
             <h2 id="diagnostics">Model Diagnostics</h2>
             
