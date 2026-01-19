@@ -72,10 +72,14 @@
         .collapsible-header h4 { display: flex; align-items: center; gap: 0.75rem; font-size: 1rem; margin: 0; }
         .collapsible-header .icon { font-size: 1.25rem; }
         .collapsible-header .arrow { transition: transform 0.3s ease; color: var(--color-text-muted); }
-        .collapsible.open .collapsible-header .arrow { transform: rotate(180deg); }
-        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
-        .collapsible.open .collapsible-content { max-height: none; }
+        .collapsible.open > .collapsible-header .arrow { transform: rotate(180deg); }
+        .collapsible > .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
+        .collapsible.open > .collapsible-content { max-height: none; overflow: visible; }
         .collapsible-inner { padding: 1.5rem; border-top: 1px solid var(--color-border); }
+        /* Nested collapsibles need their own overflow handling */
+        .collapsible-inner .collapsible { margin: 1rem 0; }
+        .collapsible-inner .collapsible > .collapsible-content { max-height: 0; overflow: hidden; }
+        .collapsible-inner .collapsible.open > .collapsible-content { max-height: none; overflow: visible; }
 
         /* Story to Math Connection */
         .story-math-connection { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center; margin: 1.5rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(143,168,106,0.08) 0%, rgba(106,143,168,0.08) 100%); border-radius: var(--radius-md); }
@@ -1416,7 +1420,7 @@
 
     <!-- CHAPTER 1: BASELINE - Interactive -->
     <div class="collapsible" id="chapterBaseline">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
             <h4><span class="icon">🏠</span> Chapter 1: The Baseline—Your Brand Without Marketing</h4>
             <span class="arrow">▼</span>
         </div>
@@ -1468,7 +1472,7 @@
 
     <!-- CHAPTER 2: TRENDS - Interactive -->
     <div class="collapsible" id="chapterTrend">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
             <h4><span class="icon">📈</span> Chapter 2: The Underlying Trend—Where Are You Headed?</h4>
             <span class="arrow">▼</span>
         </div>
@@ -1513,7 +1517,7 @@
 
     <!-- CHAPTER 3: SEASONALITY - Interactive -->
     <div class="collapsible" id="chapterSeasonality">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
             <h4><span class="icon">🌊</span> Chapter 3: Seasonal Rhythms—The Predictable Waves</h4>
             <span class="arrow">▼</span>
         </div>
@@ -1551,7 +1555,7 @@
 
     <!-- CHAPTER 4: MARKETING - Interactive -->
     <div class="collapsible" id="chapterMarketing">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
             <h4><span class="icon">📺</span> Chapter 4: Marketing Effects—The Part You Control</h4>
             <span class="arrow">▼</span>
         </div>
@@ -1605,7 +1609,7 @@
 
     <!-- CHAPTER 5: CONTROL FACTORS - Interactive -->
     <div class="collapsible" id="chapterControls">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
             <h4><span class="icon">⚖️</span> Chapter 5: External Factors—The Confounders and Friends</h4>
             <span class="arrow">▼</span>
         </div>
@@ -1896,7 +1900,7 @@
 
             <!-- Deep Dive: Confounders -->
             <div class="collapsible">
-                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
                     <h4><span class="icon">🔍</span> Deep Dive: Why Confounders Must Be Included</h4>
                     <span class="arrow">▼</span>
                 </div>
@@ -1960,7 +1964,7 @@
 
             <!-- Deep Dive: Precision Controls -->
             <div class="collapsible">
-                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
                     <h4><span class="icon">🎯</span> Deep Dive: Precision Controls & Variable Selection</h4>
                     <span class="arrow">▼</span>
                 </div>
@@ -2002,7 +2006,7 @@
 
             <!-- Deep Dive: Mediators -->
             <div class="collapsible">
-                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
                     <h4><span class="icon">🔗</span> Deep Dive: Mediators—Handle with Care</h4>
                     <span class="arrow">▼</span>
                 </div>
@@ -2047,7 +2051,7 @@
 
             <!-- Deep Dive: Colliders -->
             <div class="collapsible">
-                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
                     <h4><span class="icon">💥</span> Deep Dive: Colliders—The Hidden Trap</h4>
                     <span class="arrow">▼</span>
                 </div>
@@ -2120,7 +2124,7 @@
 
     <!-- CHAPTER 6: NOISE - Collapsible -->
     <div class="collapsible" id="chapterNoise">
-        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="collapsible-header" onclick="toggleCollapsible(this, event)">
             <h4><span class="icon">🎲</span> Chapter 6: Random Variation—The Unexplained</h4>
             <span class="arrow">▼</span>
         </div>
@@ -3196,7 +3200,11 @@ function prevStep() { if (currentStep > 1) showStep(currentStep-1); }
 function goToStep(s) { showStep(s); }
 
 // Collapsibles - accepts either a header element or an ID string
-function toggleCollapsible(headerOrId) {
+function toggleCollapsible(headerOrId, event) {
+    // Stop event from bubbling to parent collapsibles
+    if (event) {
+        event.stopPropagation();
+    }
     let el;
     if (typeof headerOrId === 'string') {
         el = document.getElementById(headerOrId);
