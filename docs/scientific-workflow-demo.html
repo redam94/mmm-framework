@@ -852,6 +852,341 @@
                 align-items: flex-start;
             }
         }
+
+        /* ==================== */
+        /* STORY BUILDER STYLES */
+        /* ==================== */
+        .story-builder {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .chapter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chapter-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--color-bg-alt);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .chapter-toggle:hover {
+            border-color: var(--color-primary-light);
+        }
+
+        .chapter-toggle.active {
+            border-color: var(--color-primary);
+            background: linear-gradient(135deg, rgba(90,124,101,0.1) 0%, var(--color-surface) 100%);
+        }
+
+        .chapter-icon {
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+
+        .chapter-info {
+            flex: 1;
+        }
+
+        .chapter-info h5 {
+            font-size: 0.85rem;
+            margin: 0 0 0.15rem 0;
+            color: var(--color-text);
+        }
+
+        .chapter-info p {
+            font-size: 0.7rem;
+            color: var(--color-text-muted);
+            margin: 0;
+        }
+
+        .chapter-switch {
+            width: 36px;
+            height: 20px;
+            background: var(--color-border);
+            border-radius: 10px;
+            position: relative;
+            transition: var(--transition-smooth);
+        }
+
+        .chapter-switch::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: var(--transition-smooth);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .chapter-switch.on {
+            background: var(--color-primary);
+        }
+
+        .chapter-switch.on::after {
+            left: 18px;
+        }
+
+        .story-narrative {
+            background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, rgba(106,143,168,0.05) 100%);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .narrative-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .narrative-icon {
+            font-size: 1.25rem;
+        }
+
+        .narrative-header h4 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--color-primary-dark);
+        }
+
+        .story-narrative p {
+            margin: 0;
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        /* Baseline Factors Grid */
+        .baseline-factors {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .factor-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            text-align: center;
+            transition: var(--transition-smooth);
+        }
+
+        .factor-card:hover {
+            border-color: var(--color-primary-light);
+            transform: translateY(-2px);
+        }
+
+        .factor-icon {
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .factor-card h6 {
+            font-size: 0.85rem;
+            margin: 0 0 0.25rem 0;
+            color: var(--color-text);
+        }
+
+        .factor-card p {
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+            margin: 0;
+        }
+
+        /* Trend Insight Box */
+        .trend-insight {
+            background: var(--color-bg-alt);
+            border-left: 3px solid var(--color-primary);
+            padding: 0.75rem 1rem;
+            margin-top: 0.75rem;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+
+        .trend-insight p {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        /* Season Buttons */
+        .season-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .season-btn {
+            padding: 0.5rem 1rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-family: inherit;
+            transition: var(--transition-smooth);
+        }
+
+        .season-btn:hover {
+            border-color: var(--color-primary);
+        }
+
+        .season-btn.active {
+            background: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
+
+        /* Concept Cards */
+        .concept-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .concept-card {
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+        }
+
+        .concept-card h5 {
+            font-size: 0.95rem;
+            margin: 0 0 0.5rem 0;
+            color: var(--color-primary-dark);
+        }
+
+        .concept-card p {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin: 0 0 0.75rem 0;
+        }
+
+        .mini-chart {
+            height: 100px;
+            background: var(--color-surface);
+            border-radius: var(--radius-sm);
+        }
+
+        /* Story Timeline */
+        .story-example {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+        }
+
+        .story-example h5 {
+            margin: 0 0 1rem 0;
+            color: var(--color-primary-dark);
+        }
+
+        .story-timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .story-timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--color-border);
+        }
+
+        .timeline-event {
+            position: relative;
+            padding-bottom: 1.25rem;
+        }
+
+        .timeline-event:last-child {
+            padding-bottom: 0;
+        }
+
+        .event-dot {
+            position: absolute;
+            left: -26px;
+            top: 4px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px var(--color-border);
+        }
+
+        .event-dot.confounder {
+            background: var(--color-danger);
+            box-shadow: 0 0 0 2px var(--color-danger);
+        }
+
+        .event-dot.precision {
+            background: var(--color-success);
+            box-shadow: 0 0 0 2px var(--color-success);
+        }
+
+        .event-dot.mediator {
+            background: var(--color-warning);
+            box-shadow: 0 0 0 2px var(--color-warning);
+        }
+
+        .event-content strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .event-content p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+
+        .event-content em {
+            color: var(--color-text);
+        }
+
+        /* Responsive Story Builder */
+        @media (max-width: 768px) {
+            .chapter-controls {
+                grid-template-columns: 1fr;
+            }
+            .baseline-factors {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .concept-cards {
+                grid-template-columns: 1fr;
+            }
+            .season-buttons {
+                flex-direction: column;
+            }
+            .season-btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -967,97 +1302,361 @@
 </div>
 
 <!-- ================================================================== -->
-<!-- STEP 2: STORY - Enhanced with Trend/Seasonality Narratives -->
+<!-- STEP 2: STORY - Interactive Story Builder -->
 <!-- ================================================================== -->
 <div class="workflow-step" id="step2">
-   <h2><span class="step-num">2</span> Tell the Story of Your Data</h2>
-        <p class="step-subtitle">What process generated these observations? Think causally.</p>
+    <h2><span class="step-num">2</span> Tell the Story of Your Data</h2>
+    <p class="step-subtitle">What process generated these observations? Think causally.</p>
 
+    <p>
+        Before touching any model code, write down the <strong>generative story</strong>—a narrative
+        of how you believe your data came to be. This isn't just about marketing effects; it's about
+        everything that affects sales, including <em>what else</em> might create spurious associations
+        between media and outcomes.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Think of it like writing a novel</h4>
         <p>
-            Before touching any model code, write down the <strong>generative story</strong>—a narrative 
-            of how you believe your data came to be. This isn't just about marketing effects; it's about 
-            everything that affects sales, including <em>what else</em> might create spurious associations 
-            between media and outcomes.
+            Every data point in your sales figures has an origin story. Your job is to imagine the invisible
+            forces that shaped each observation—like a novelist explaining why their character ended up where
+            they did. Miss a key plot element (a confounder), and your story doesn't make sense. Include
+            irrelevant details (a collider), and you'll mislead the reader.
         </p>
+    </div>
 
-        <!-- CHAPTER 1: BASELINE -->
-        <div class="story-chapter">
-            <div class="visual-row">
-                <div class="icon">🏠</div>
-                <div>
-                    <h4>Chapter 1: The Baseline</h4>
-                    <p style="margin: 0;">
-                        Even without any marketing, your brand would sell some products. People who already 
-                        know and love you, people who stumble upon you in stores, repeat customers. This is 
-                        your <strong>baseline demand</strong>—the foundation everything else builds upon.
+    <!-- INTERACTIVE STORY BUILDER -->
+    <h3>Build Your Sales Story</h3>
+    <p>
+        Watch how different factors combine to create the sales pattern you observe. Toggle each chapter
+        on or off to see its contribution. This is the <strong>generative process</strong> your model will learn.
+    </p>
+
+    <div class="story-builder">
+        <!-- Chapter Controls -->
+        <div class="chapter-controls">
+            <div class="chapter-toggle active" data-chapter="baseline" onclick="toggleStoryChapter('baseline', this)">
+                <div class="chapter-icon">🏠</div>
+                <div class="chapter-info">
+                    <h5>Chapter 1: Baseline</h5>
+                    <p>Organic demand without marketing</p>
+                </div>
+                <div class="chapter-switch on"></div>
+            </div>
+
+            <div class="chapter-toggle active" data-chapter="trend" onclick="toggleStoryChapter('trend', this)">
+                <div class="chapter-icon">📈</div>
+                <div class="chapter-info">
+                    <h5>Chapter 2: Trend</h5>
+                    <p>Long-term growth or decline</p>
+                </div>
+                <div class="chapter-switch on"></div>
+            </div>
+
+            <div class="chapter-toggle active" data-chapter="seasonality" onclick="toggleStoryChapter('seasonality', this)">
+                <div class="chapter-icon">🌊</div>
+                <div class="chapter-info">
+                    <h5>Chapter 3: Seasonality</h5>
+                    <p>Predictable annual rhythms</p>
+                </div>
+                <div class="chapter-switch on"></div>
+            </div>
+
+            <div class="chapter-toggle active" data-chapter="marketing" onclick="toggleStoryChapter('marketing', this)">
+                <div class="chapter-icon">📺</div>
+                <div class="chapter-info">
+                    <h5>Chapter 4: Marketing</h5>
+                    <p>Channel contributions with carryover</p>
+                </div>
+                <div class="chapter-switch on"></div>
+            </div>
+
+            <div class="chapter-toggle active" data-chapter="controls" onclick="toggleStoryChapter('controls', this)">
+                <div class="chapter-icon">⚖️</div>
+                <div class="chapter-info">
+                    <h5>Chapter 5: External Factors</h5>
+                    <p>Distribution, competition, weather</p>
+                </div>
+                <div class="chapter-switch on"></div>
+            </div>
+
+            <div class="chapter-toggle active" data-chapter="noise" onclick="toggleStoryChapter('noise', this)">
+                <div class="chapter-icon">🎲</div>
+                <div class="chapter-info">
+                    <h5>Chapter 6: Random Noise</h5>
+                    <p>Unexplained variation</p>
+                </div>
+                <div class="chapter-switch on"></div>
+            </div>
+        </div>
+
+        <!-- Story Chart -->
+        <div class="chart-container" id="storyBuilderChart" style="height: 400px;"></div>
+
+        <!-- Dynamic Story Narrative -->
+        <div class="story-narrative" id="storyNarrative">
+            <div class="narrative-header">
+                <span class="narrative-icon">📖</span>
+                <h4>The Complete Story</h4>
+            </div>
+            <p id="narrativeText">
+                Sales start from a <strong>baseline</strong> of ~$50K/week from loyal customers.
+                The brand is <strong>growing 2% annually</strong> as it gains market share.
+                <strong>Seasonal patterns</strong> drive a holiday surge in Q4.
+                <strong>Marketing channels</strong> add incremental sales with diminishing returns and carryover effects.
+                <strong>External factors</strong> like distribution and weather affect sales independently.
+                Finally, <strong>random variation</strong> accounts for unpredictable events.
+            </p>
+        </div>
+    </div>
+
+    <!-- Chapter Deep Dives -->
+    <h3>Explore Each Chapter</h3>
+    <p>Click each chapter below to understand its role in your data story.</p>
+
+    <!-- CHAPTER 1: BASELINE - Interactive -->
+    <div class="collapsible" id="chapterBaseline">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+            <h4><span class="icon">🏠</span> Chapter 1: The Baseline—Your Brand Without Marketing</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Imagine you turned off all advertising tomorrow. Sales wouldn't drop to zero—people who
+                    already love your product would still buy it. This is your <strong>baseline demand</strong>:
+                    the foundation everything else builds upon.
+                </p>
+
+                <div class="interactive-demo" style="margin: 1.5rem 0;">
+                    <h5>What Creates Your Baseline?</h5>
+                    <div class="baseline-factors">
+                        <div class="factor-card">
+                            <div class="factor-icon">❤️</div>
+                            <h6>Brand Loyalty</h6>
+                            <p>Repeat customers who buy habitually</p>
+                        </div>
+                        <div class="factor-card">
+                            <div class="factor-icon">🏪</div>
+                            <h6>Store Presence</h6>
+                            <p>Shoppers who discover you on shelf</p>
+                        </div>
+                        <div class="factor-card">
+                            <div class="factor-icon">💬</div>
+                            <h6>Word of Mouth</h6>
+                            <p>Referrals from satisfied customers</p>
+                        </div>
+                        <div class="factor-card">
+                            <div class="factor-icon">🔍</div>
+                            <h6>Organic Search</h6>
+                            <p>People actively seeking your product</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="why-box">
+                    <h4>Why This Matters</h4>
+                    <p style="margin-bottom: 0;">
+                        If you overestimate your baseline, marketing looks less effective than it really is
+                        (you're crediting baseline with sales that marketing created). If you underestimate it,
+                        marketing looks too effective. Getting the baseline right is crucial for accurate ROI.
                     </p>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- CHAPTER 2: TRENDS -->
-        <div class="story-chapter">
-            <div class="visual-row">
-                <div class="icon">📈</div>
-                <div>
-                    <h4>Chapter 2: The Underlying Trend</h4>
-                    <p style="margin: 0;">
-                        Is your category growing, stable, or declining? Your brand might be gaining share 
-                        or losing it. This underlying trajectory exists independent of weekly marketing 
-                        fluctuations. A new market entrant grows; a legacy brand in a dying category 
-                        declines. The <strong>trend</strong> captures this long-term direction.
+    <!-- CHAPTER 2: TRENDS - Interactive -->
+    <div class="collapsible" id="chapterTrend">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+            <h4><span class="icon">📈</span> Chapter 2: The Underlying Trend—Where Are You Headed?</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Zoom out from weekly fluctuations and ask: Is your business growing, stable, or declining?
+                    This long-term trajectory exists independent of marketing tactics—it's the <strong>tide</strong>
+                    that lifts or lowers all boats.
+                </p>
+
+                <div class="interactive-demo" style="margin: 1.5rem 0;">
+                    <h5>Explore Different Trend Scenarios</h5>
+                    <div class="control-row">
+                        <label>Brand trajectory:</label>
+                        <select id="trendScenario" onchange="updateTrendDemo()">
+                            <option value="growth">🚀 Growth Brand (+15%/year)</option>
+                            <option value="stable">➡️ Mature Brand (Stable)</option>
+                            <option value="decline">📉 Declining Category (-10%/year)</option>
+                            <option value="turnaround">↗️ Turnaround Story (V-shaped)</option>
+                        </select>
+                    </div>
+                    <div class="chart-container" id="trendDemoChart" style="height: 250px;"></div>
+                    <div class="trend-insight" id="trendInsight">
+                        <p><strong>Growth Brand:</strong> New market entrant gaining share. Risk: Marketing gets
+                        credited for organic growth if trend is ignored.</p>
+                    </div>
+                </div>
+
+                <div class="analogy-box">
+                    <h4>The Escalator Analogy</h4>
+                    <p style="margin-bottom: 0;">
+                        Trend is like an escalator. A growth brand is on an up escalator—even standing still,
+                        you move forward. Marketing is like walking on the escalator; it adds to your movement
+                        but isn't the whole picture. If you ignore the escalator, you'll think walking (marketing)
+                        is more powerful than it really is.
                     </p>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- CHAPTER 3: SEASONALITY -->
-        <div class="story-chapter">
-            <div class="visual-row">
-                <div class="icon">🌊</div>
-                <div>
-                    <h4>Chapter 3: Seasonal Rhythms</h4>
-                    <p style="margin: 0;">
-                        Sales don't flow evenly through the year. Ice cream peaks in summer, toys in 
-                        December, fitness products in January. These <strong>seasonal patterns</strong> 
-                        are predictable rhythms that repeat year after year, driven by weather, 
-                        holidays, and cultural cycles—not by marketing.
+    <!-- CHAPTER 3: SEASONALITY - Interactive -->
+    <div class="collapsible" id="chapterSeasonality">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+            <h4><span class="icon">🌊</span> Chapter 3: Seasonal Rhythms—The Predictable Waves</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Sales don't flow evenly through the year. Ice cream peaks in summer, toys in December,
+                    fitness products in January. These <strong>seasonal patterns</strong> are predictable
+                    rhythms driven by weather, holidays, and cultural cycles—not by marketing.
+                </p>
+
+                <div class="interactive-demo" style="margin: 1.5rem 0;">
+                    <h5>What's Your Seasonal Pattern?</h5>
+                    <div class="season-buttons">
+                        <button class="season-btn active" onclick="setSeasonPattern('retail', this)">🛍️ Retail (Q4 Peak)</button>
+                        <button class="season-btn" onclick="setSeasonPattern('summer', this)">☀️ Summer Products</button>
+                        <button class="season-btn" onclick="setSeasonPattern('fitness', this)">💪 Fitness (New Year)</button>
+                        <button class="season-btn" onclick="setSeasonPattern('flat', this)">📊 Minimal Seasonality</button>
+                    </div>
+                    <div class="chart-container" id="seasonDemoChart" style="height: 250px;"></div>
+                </div>
+
+                <div class="warning-box">
+                    <h4>The Holiday Attribution Trap</h4>
+                    <p style="margin-bottom: 0;">
+                        Companies often run big campaigns during Q4 holidays—exactly when sales would spike
+                        anyway due to seasonal demand. Without proper seasonality modeling, you'll credit your
+                        holiday campaign with sales that would have happened regardless. This is why
+                        <strong>seasonality is a confounder</strong>: it affects both media planning AND sales.
                     </p>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- CHAPTER 4: MARKETING -->
-        <div class="story-chapter">
-            <div class="visual-row">
-                <div class="icon">📺</div>
-                <div>
-                    <h4>Chapter 4: Marketing Lifts Sales</h4>
-                    <p style="margin: 0;">
-                        Each channel (TV, digital, etc.) adds sales above baseline. But the first million 
-                        dollars of TV spend helps more than the tenth million—<strong>diminishing returns</strong>. 
-                        And today's ad affects sales for several weeks—<strong>carryover effects</strong>.
+    <!-- CHAPTER 4: MARKETING - Interactive -->
+    <div class="collapsible" id="chapterMarketing">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+            <h4><span class="icon">📺</span> Chapter 4: Marketing Effects—The Part You Control</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Each marketing channel can lift sales above what baseline, trend, and seasonality would
+                    predict. But marketing effects have two crucial properties that make them tricky to measure:
+                </p>
+
+                <div class="concept-cards">
+                    <div class="concept-card">
+                        <h5>📉 Diminishing Returns</h5>
+                        <p>The first dollar of TV spend is more valuable than the millionth. Saturation sets in.</p>
+                        <div class="mini-chart" id="diminishingReturnsDemo"></div>
+                    </div>
+                    <div class="concept-card">
+                        <h5>⏳ Carryover Effects</h5>
+                        <p>Today's ad doesn't just affect today's sales—its impact lingers for weeks.</p>
+                        <div class="mini-chart" id="carryoverDemo"></div>
+                    </div>
+                </div>
+
+                <div class="interactive-demo" style="margin: 1.5rem 0;">
+                    <h5>Build a Marketing Impulse</h5>
+                    <p>See how a single week of advertising ripples through time with carryover effects.</p>
+                    <div class="control-row">
+                        <label>Ad spend in Week 10:</label>
+                        <input type="range" min="0" max="100" value="50" id="impulseSpend" oninput="updateImpulseDemo()">
+                        <span class="value-display" id="impulseValue">$50K</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Carryover decay rate:</label>
+                        <input type="range" min="0" max="95" value="60" id="carryoverRate" oninput="updateImpulseDemo()">
+                        <span class="value-display" id="carryoverValue">60%</span>
+                    </div>
+                    <div class="chart-container" id="impulseDemoChart" style="height: 220px;"></div>
+                </div>
+
+                <div class="why-box">
+                    <h4>Why Carryover Matters for Attribution</h4>
+                    <p style="margin-bottom: 0;">
+                        If you ignore carryover, you'll think last week's campaign had no effect because you
+                        only look at same-week sales. But a TV ad seen on Monday might drive a purchase on
+                        Friday—or three Fridays later. Carryover modeling captures this delayed response.
                     </p>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- CHAPTER 5: CONTROL FACTORS (NEW - THE KEY ADDITION) -->
-        <div class="story-chapter" style="border: none; padding-bottom: 0;">
-            <div class="visual-row">
-                <div class="icon">⚖️</div>
-                <div>
-                    <h4>Chapter 5: What Else Affects Sales?</h4>
-                    <p style="margin: 0;">
-                        The brand increased distribution to stave off the effects of an economic downturn 
-                        and ran more media to support this push into new markets&mdash;<strong>confounder</strong>. Some competitors started to run a new campaign in Q3,
-                        which the brand matched with extra spend to maintain share of voice&mdash;<strong>confounder</strong>. 
-                        Weather patterns influence consumer behavior, with warmer weeks boosting in store sales&mdash;<strong>precision control</strong>.
-                        We want to isolate the total effect of marketing on sales, so we will leave out brand awareness&mdash;<strong>mediator</strong>.
-                        The brand provided survey responses on customer satisfaction, but since this is influenced by sales (only people who buy are given the survey)&mdash;<strong>collider</strong>&mdash;we will exclude it to avoid bias.
+    <!-- CHAPTER 5: CONTROL FACTORS - Interactive -->
+    <div class="collapsible" id="chapterControls">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+            <h4><span class="icon">⚖️</span> Chapter 5: External Factors—The Confounders and Friends</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Here's where things get subtle. Besides baseline, trend, seasonality, and marketing,
+                    <strong>other factors</strong> affect your sales. Some of these factors are harmless.
+                    Others will completely bias your results if you handle them wrong.
+                </p>
+
+                <div class="analogy-box">
+                    <h4>The Detective's Challenge</h4>
+                    <p style="margin-bottom: 0;">
+                        You're a detective trying to solve "Who drove these sales?" Media is your prime suspect,
+                        but there are accomplices, witnesses, and red herrings. <strong>Confounders</strong> are
+                        accomplices who also left fingerprints—ignore them and you'll blame the wrong suspect.
+                        <strong>Colliders</strong> are red herrings that will lead you astray if you follow them.
                     </p>
                 </div>
-            </div>
+
+                <!-- Example Story -->
+                <div class="story-example">
+                    <h5>A Brand's Story: The Confounders</h5>
+                    <div class="story-timeline">
+                        <div class="timeline-event">
+                            <div class="event-dot confounder"></div>
+                            <div class="event-content">
+                                <strong>Q1: Distribution Expansion</strong>
+                                <p>The brand expanded to 500 new stores. They increased media spend to support the launch.
+                                Sales rose 20%. Was it the media or the new stores? <em>Both—distribution is a confounder.</em></p>
+                            </div>
+                        </div>
+                        <div class="timeline-event">
+                            <div class="event-dot confounder"></div>
+                            <div class="event-content">
+                                <strong>Q3: Competitor Launch</strong>
+                                <p>A competitor launched an aggressive campaign. The brand increased media to maintain
+                                share of voice. Sales dipped slightly. <em>Ignoring competitor activity makes media look ineffective.</em></p>
+                            </div>
+                        </div>
+                        <div class="timeline-event">
+                            <div class="event-dot precision"></div>
+                            <div class="event-content">
+                                <strong>Summer: Heatwave</strong>
+                                <p>An unusual heatwave boosted store traffic. The brand didn't change media spend in response.
+                                Sales rose. <em>Weather is a precision control—include it to reduce noise.</em></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
             <h3>The Causal Categories of Control Variables</h3>
             
@@ -2544,6 +3143,7 @@ function showStep(step) {
     currentStep = step;
     updateProgress();
     window.scrollTo({top:200,behavior:'smooth'});
+    if (step===2) initStoryBuilder();
     if (step===3) initBuildCharts();
     if (step===4) runPriorCheck();
     if (step===6) initDiagnosticCharts();
@@ -3097,9 +3697,416 @@ function initBudgetChart() {
                 updateConfounderChart();
             }
         }
+
+        // ========================================
+        // INTERACTIVE STORY BUILDER
+        // ========================================
+
+        // Story state
+        const storyState = {
+            baseline: true,
+            trend: true,
+            seasonality: true,
+            marketing: true,
+            controls: true,
+            noise: true
+        };
+
+        // Generate story components
+        function generateStoryData() {
+            const weeks = 104; // 2 years
+            const data = {
+                weeks: Array.from({length: weeks}, (_, i) => i + 1),
+                baseline: [],
+                trend: [],
+                seasonality: [],
+                marketing: [],
+                controls: [],
+                noise: [],
+                total: []
+            };
+
+            // Base values
+            const baselineValue = 50; // $50K baseline
+            const trendGrowth = 0.08; // 8% growth over 2 years per week
+
+            for (let w = 0; w < weeks; w++) {
+                // Baseline: constant
+                data.baseline[w] = baselineValue;
+
+                // Trend: gradual growth
+                data.trend[w] = trendGrowth * w;
+
+                // Seasonality: Q4 holiday surge + summer dip
+                const weekOfYear = w % 52;
+                data.seasonality[w] = 8 * Math.sin(2 * Math.PI * (weekOfYear - 13) / 52) +
+                                      4 * Math.sin(4 * Math.PI * (weekOfYear - 13) / 52);
+
+                // Marketing: variable spend with carryover effect simulation
+                const baseSpend = 5 + 3 * Math.sin(2 * Math.PI * w / 52 + 1); // Aligns with seasons
+                const spendVariation = 2 * Math.sin(w / 3) + Math.random() * 2;
+                data.marketing[w] = Math.max(0, baseSpend + spendVariation);
+
+                // Controls: distribution effect + weather
+                const distributionEffect = w < 30 ? 0 : (w < 50 ? 3 : 5); // Distribution expansion
+                const weatherEffect = 2 * Math.sin(2 * Math.PI * (weekOfYear + 5) / 52) * Math.random();
+                data.controls[w] = distributionEffect + weatherEffect;
+
+                // Noise: random variation
+                data.noise[w] = normalRandom(0, 2);
+
+                // Total
+                data.total[w] = baselineValue;
+                if (storyState.baseline) data.total[w] = baselineValue;
+                if (storyState.trend) data.total[w] += data.trend[w];
+                if (storyState.seasonality) data.total[w] += data.seasonality[w];
+                if (storyState.marketing) data.total[w] += data.marketing[w];
+                if (storyState.controls) data.total[w] += data.controls[w];
+                if (storyState.noise) data.total[w] += data.noise[w];
+            }
+
+            return data;
+        }
+
+        function updateStoryChart() {
+            const data = generateStoryData();
+            const traces = [];
+
+            // Stacked area showing components
+            const componentColors = {
+                baseline: 'rgba(90, 124, 101, 0.7)',
+                trend: 'rgba(143, 168, 106, 0.7)',
+                seasonality: 'rgba(106, 143, 168, 0.7)',
+                marketing: 'rgba(201, 160, 103, 0.7)',
+                controls: 'rgba(103, 201, 154, 0.7)',
+                noise: 'rgba(180, 180, 180, 0.5)'
+            };
+
+            // Build stacked values
+            let cumulative = data.weeks.map(() => 0);
+            const activeComponents = [];
+
+            if (storyState.baseline) {
+                activeComponents.push({name: 'Baseline', key: 'baseline', values: data.baseline});
+            }
+            if (storyState.trend) {
+                activeComponents.push({name: 'Trend', key: 'trend', values: data.trend});
+            }
+            if (storyState.seasonality) {
+                activeComponents.push({name: 'Seasonality', key: 'seasonality', values: data.seasonality});
+            }
+            if (storyState.marketing) {
+                activeComponents.push({name: 'Marketing', key: 'marketing', values: data.marketing});
+            }
+            if (storyState.controls) {
+                activeComponents.push({name: 'External Factors', key: 'controls', values: data.controls});
+            }
+            if (storyState.noise) {
+                activeComponents.push({name: 'Noise', key: 'noise', values: data.noise});
+            }
+
+            // Create stacked traces
+            activeComponents.forEach((comp, idx) => {
+                const prevCumulative = [...cumulative];
+                cumulative = cumulative.map((v, i) => v + comp.values[i]);
+
+                traces.push({
+                    x: data.weeks,
+                    y: cumulative,
+                    name: comp.name,
+                    mode: 'lines',
+                    fill: idx === 0 ? 'tozeroy' : 'tonexty',
+                    fillcolor: componentColors[comp.key],
+                    line: { color: componentColors[comp.key].replace('0.7', '1').replace('0.5', '0.8'), width: 1 }
+                });
+            });
+
+            // Total line on top
+            const totalY = data.weeks.map((_, i) => {
+                let sum = 0;
+                if (storyState.baseline) sum += data.baseline[i];
+                if (storyState.trend) sum += data.trend[i];
+                if (storyState.seasonality) sum += data.seasonality[i];
+                if (storyState.marketing) sum += data.marketing[i];
+                if (storyState.controls) sum += data.controls[i];
+                if (storyState.noise) sum += data.noise[i];
+                return sum;
+            });
+
+            traces.push({
+                x: data.weeks,
+                y: totalY,
+                name: 'Total Sales',
+                mode: 'lines',
+                line: { color: '#2d3a2d', width: 2.5 }
+            });
+
+            const layout = {
+                ...layout_base,
+                xaxis: { title: 'Week', gridcolor: colors.grid },
+                yaxis: { title: 'Sales ($K)', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center' },
+                showlegend: true
+            };
+
+            Plotly.newPlot('storyBuilderChart', traces, layout, cfg);
+        }
+
+        function toggleStoryChapter(chapter, el) {
+            storyState[chapter] = !storyState[chapter];
+
+            // Update UI
+            el.classList.toggle('active', storyState[chapter]);
+            el.querySelector('.chapter-switch').classList.toggle('on', storyState[chapter]);
+
+            // Update chart
+            updateStoryChart();
+
+            // Update narrative
+            updateNarrative();
+        }
+
+        function updateNarrative() {
+            const parts = [];
+
+            if (storyState.baseline) {
+                parts.push('Sales start from a <strong>baseline</strong> of ~$50K/week from loyal customers.');
+            }
+            if (storyState.trend) {
+                parts.push('The brand is <strong>growing steadily</strong> as it gains market share.');
+            }
+            if (storyState.seasonality) {
+                parts.push('<strong>Seasonal patterns</strong> drive a holiday surge in Q4 and a summer dip.');
+            }
+            if (storyState.marketing) {
+                parts.push('<strong>Marketing channels</strong> add incremental sales with diminishing returns.');
+            }
+            if (storyState.controls) {
+                parts.push('<strong>External factors</strong> like distribution expansion and weather affect sales.');
+            }
+            if (storyState.noise) {
+                parts.push('Finally, <strong>random variation</strong> accounts for unpredictable events.');
+            }
+
+            if (parts.length === 0) {
+                parts.push('<em>Toggle chapters above to build your story.</em>');
+            }
+
+            document.getElementById('narrativeText').innerHTML = parts.join(' ');
+        }
+
+        // ========================================
+        // CHAPTER DEMOS
+        // ========================================
+
+        // Trend Demo
+        function updateTrendDemo() {
+            const scenario = document.getElementById('trendScenario').value;
+            const weeks = 104;
+            const x = Array.from({length: weeks}, (_, i) => i + 1);
+            let y, insight;
+
+            switch(scenario) {
+                case 'growth':
+                    y = x.map(w => 50 + w * 0.3);
+                    insight = '<strong>Growth Brand:</strong> New market entrant gaining share. Risk: Marketing gets credited for organic growth if trend is ignored.';
+                    break;
+                case 'stable':
+                    y = x.map(w => 50 + normalRandom(0, 1));
+                    insight = '<strong>Mature Brand:</strong> Established player in stable category. Trend component may be unnecessary and can cause overfitting.';
+                    break;
+                case 'decline':
+                    y = x.map(w => 70 - w * 0.2);
+                    insight = '<strong>Declining Category:</strong> Legacy brand losing relevance. Without trend, marketing will look more effective than it is (masking natural decline).';
+                    break;
+                case 'turnaround':
+                    y = x.map(w => w < 52 ? 60 - w * 0.3 : 44 + (w - 52) * 0.35);
+                    insight = '<strong>Turnaround Story:</strong> Brand hit bottom and recovered. Consider piecewise trend with a changepoint at the inflection.';
+                    break;
+            }
+
+            Plotly.newPlot('trendDemoChart', [{
+                x: x,
+                y: y,
+                mode: 'lines',
+                line: { color: colors.primary, width: 2.5 },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(90, 124, 101, 0.15)'
+            }], {
+                ...layout_base,
+                margin: { t: 10, r: 20, b: 40, l: 50 },
+                xaxis: { title: 'Week', gridcolor: colors.grid },
+                yaxis: { title: 'Sales ($K)', gridcolor: colors.grid }
+            }, cfg);
+
+            document.getElementById('trendInsight').innerHTML = '<p>' + insight + '</p>';
+        }
+
+        // Season Demo
+        let currentSeasonPattern = 'retail';
+
+        function setSeasonPattern(pattern, btn) {
+            currentSeasonPattern = pattern;
+            document.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateSeasonDemo();
+        }
+
+        function updateSeasonDemo() {
+            const weeks = 52;
+            const x = Array.from({length: weeks}, (_, i) => i + 1);
+            const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            let y;
+
+            switch(currentSeasonPattern) {
+                case 'retail':
+                    y = x.map(w => 50 + 20 * Math.max(0, Math.cos(2 * Math.PI * (w - 48) / 52)) +
+                                    5 * Math.sin(4 * Math.PI * w / 52));
+                    break;
+                case 'summer':
+                    y = x.map(w => 50 + 15 * Math.sin(2 * Math.PI * (w - 13) / 52));
+                    break;
+                case 'fitness':
+                    y = x.map(w => 50 + 20 * Math.exp(-Math.pow(w - 4, 2) / 50) +
+                                    5 * Math.exp(-Math.pow(w - 52, 2) / 30));
+                    break;
+                case 'flat':
+                    y = x.map(w => 50 + normalRandom(0, 2));
+                    break;
+            }
+
+            Plotly.newPlot('seasonDemoChart', [{
+                x: x,
+                y: y,
+                mode: 'lines',
+                line: { color: colors.accent, width: 2.5 },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(106, 143, 168, 0.15)'
+            }], {
+                ...layout_base,
+                margin: { t: 10, r: 20, b: 40, l: 50 },
+                xaxis: {
+                    title: 'Week of Year',
+                    gridcolor: colors.grid,
+                    tickvals: [1, 13, 26, 39, 52],
+                    ticktext: ['Jan', 'Apr', 'Jul', 'Oct', 'Dec']
+                },
+                yaxis: { title: 'Sales Index', gridcolor: colors.grid }
+            }, cfg);
+        }
+
+        // Marketing Impulse Demo
+        function updateImpulseDemo() {
+            const spend = parseInt(document.getElementById('impulseSpend').value);
+            const decay = parseInt(document.getElementById('carryoverRate').value) / 100;
+
+            document.getElementById('impulseValue').textContent = '$' + spend + 'K';
+            document.getElementById('carryoverValue').textContent = Math.round(decay * 100) + '%';
+
+            const weeks = 20;
+            const x = Array.from({length: weeks}, (_, i) => i + 1);
+
+            // Original spend (impulse at week 10)
+            const originalSpend = x.map(w => w === 10 ? spend : 0);
+
+            // Adstocked effect
+            const effect = x.map((w, i) => {
+                if (w < 10) return 0;
+                const weeksAfter = w - 10;
+                return spend * Math.pow(decay, weeksAfter) * 0.3; // 0.3 is effect multiplier
+            });
+
+            Plotly.newPlot('impulseDemoChart', [
+                {
+                    x: x,
+                    y: originalSpend,
+                    type: 'bar',
+                    name: 'Ad Spend',
+                    marker: { color: colors.accent }
+                },
+                {
+                    x: x,
+                    y: effect,
+                    mode: 'lines',
+                    name: 'Sales Effect',
+                    line: { color: colors.primary, width: 3 },
+                    yaxis: 'y2'
+                }
+            ], {
+                ...layout_base,
+                margin: { t: 10, r: 60, b: 40, l: 50 },
+                xaxis: { title: 'Week', gridcolor: colors.grid },
+                yaxis: { title: 'Spend ($K)', gridcolor: colors.grid, range: [0, 110] },
+                yaxis2: {
+                    title: 'Sales Lift ($K)',
+                    overlaying: 'y',
+                    side: 'right',
+                    gridcolor: 'transparent',
+                    range: [0, 20]
+                },
+                legend: { orientation: 'h', y: 1.15 },
+                barmode: 'overlay'
+            }, cfg);
+        }
+
+        // Mini charts for concept cards
+        function initMiniCharts() {
+            // Diminishing returns mini chart
+            if (document.getElementById('diminishingReturnsDemo')) {
+                const x = Array.from({length: 50}, (_, i) => i * 2);
+                const y = x.map(v => 10 * Math.pow(v, 0.5) / Math.pow(100, 0.5));
+
+                Plotly.newPlot('diminishingReturnsDemo', [{
+                    x: x,
+                    y: y,
+                    mode: 'lines',
+                    line: { color: colors.primary, width: 2 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(90, 124, 101, 0.2)'
+                }], {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    margin: { t: 5, r: 5, b: 5, l: 5 },
+                    xaxis: { visible: false },
+                    yaxis: { visible: false }
+                }, { responsive: true, displayModeBar: false });
+            }
+
+            // Carryover mini chart
+            if (document.getElementById('carryoverDemo')) {
+                const x = Array.from({length: 8}, (_, i) => i);
+                const y = x.map(t => Math.pow(0.65, t));
+
+                Plotly.newPlot('carryoverDemo', [{
+                    x: x,
+                    y: y,
+                    type: 'bar',
+                    marker: { color: x.map((_, i) => `rgba(90, 124, 101, ${1 - i * 0.1})`) }
+                }], {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    margin: { t: 5, r: 5, b: 5, l: 5 },
+                    xaxis: { visible: false },
+                    yaxis: { visible: false }
+                }, { responsive: true, displayModeBar: false });
+            }
+        }
+
+        // Initialize story builder on step 2
+        function initStoryBuilder() {
+            if (document.getElementById('storyBuilderChart')) {
+                updateStoryChart();
+                updateTrendDemo();
+                updateSeasonDemo();
+                updateImpulseDemo();
+                initMiniCharts();
+            }
+        }
+
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
             initTrendSeasonalityCharts();
+            initStoryBuilder();
             updateProgress();
         });
     </script>
