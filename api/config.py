@@ -62,7 +62,12 @@ class Settings(BaseSettings):
 
     # CORS settings
     cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:8501", "http://localhost:3000"]
+        default_factory=lambda: [
+            "http://localhost:8501",  # Streamlit
+            "http://localhost:3000",  # React (create-react-app)
+            "http://localhost:5173",  # Vite dev server
+            "http://127.0.0.1:5173",  # Vite dev server (alternate)
+        ]
     )
     cors_allow_credentials: bool = True
 

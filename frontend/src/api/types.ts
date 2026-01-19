@@ -192,7 +192,7 @@ export interface DataUploadResponse {
 export interface DatasetInfo {
   data_id: string;
   filename: string;
-  format: DataFormat;
+  format?: DataFormat;
   rows: number;
   columns: number;
   variables: string[];
