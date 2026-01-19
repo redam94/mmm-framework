@@ -14,3 +14,6 @@ wheels/
 *.csv
 .DS_Store
 storage/
+
+!package.json
+!package-lock.json
