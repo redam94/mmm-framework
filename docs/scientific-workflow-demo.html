@@ -2086,11 +2086,10 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Interactive Demo: Confounder Bias -->
-        <div class="interactive-demo">
-            <h4>🔬 Interactive: What Happens When You Drop a Confounder?</h4>
+            <!-- Interactive Demo: Confounder Bias -->
+            <div class="interactive-demo">
+                <h4>🔬 Interactive: What Happens When You Drop a Confounder?</h4>
             <p>
                 See how omitting a confounder (distribution) biases your media effect estimate. Toggle 
                 between including and excluding it to see the effect on your results.
@@ -2109,51 +2108,91 @@
             <div id="confounderMessage" class="why-box">
                 <h4>✓ Correct Model</h4>
                 <p style="margin-bottom: 0;">
-                    With distribution included, we isolate the <strong>true causal effect of media (0.25)</strong>. 
-                    The correlation between media and sales that was actually due to distribution is properly 
+                    With distribution included, we isolate the <strong>true causal effect of media (0.25)</strong>.
+                    The correlation between media and sales that was actually due to distribution is properly
                     attributed—not falsely credited to media.
                 </p>
             </div>
+            </div>
+            </div>
         </div>
+    </div>
 
-        <!-- CHAPTER 6: NOISE -->
-        <div class="story-chapter">
+    <!-- CHAPTER 6: NOISE - Collapsible -->
+    <div class="collapsible" id="chapterNoise">
+        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+            <h4><span class="icon">🎲</span> Chapter 6: Random Variation—The Unexplained</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-chapter" style="border: none; padding-bottom: 0;">
             <div class="visual-row">
                 <div class="icon">🎲</div>
                 <div>
-                    <h4>Chapter 6: Random Variation</h4>
+                    <h4>The Irreducible Uncertainty</h4>
                     <p style="margin: 0;">
-                        Even after accounting for everything—baseline, trend, seasonality, marketing, and 
-                        control factors—there's always unexplained variation. A celebrity mentions your 
-                        product, a competitor has a recall, an unexpected weather event. We can't predict 
+                        Even after accounting for everything—baseline, trend, seasonality, marketing, and
+                        control factors—there's always unexplained variation. A celebrity mentions your
+                        product, a competitor has a recall, an unexpected weather event. We can't predict
                         these, but we acknowledge they exist as the <strong>error term</strong>.
                     </p>
                 </div>
             </div>
-        </div>
+                </div>
 
-        <!-- Summary Box -->
-        <div class="summary-box">
-            <h4>📖 Putting the Story Together</h4>
-            <blockquote>
-                "Sales start from a baseline of existing demand, following an underlying trend (growth or 
-                decline). This foundation rises and falls with seasonal patterns. Marketing channels add 
-                to this, but with diminishing returns as spend increases, and effects carry over for several 
-                weeks. Meanwhile, other factors—distribution, pricing, competition—affect both media decisions 
-                and sales, creating spurious correlations we must control for. Weather <i>and other external events</i> 
-                which effect sales but do not impact media spend can help isolate the media effect, but if excluded won't bias results.
-                We avoid controlling for variables that lie on the causal path from media to sales (like brand awareness) 
-                to get the total effect of marketing, unless we specifically want to decompose paths. 
-                And we never control for colliders like survey response, which would introduce bias. Finally, 
-                even after accounting for all these factors, some variation in sales remains unexplained.
-                "
-            </blockquote>
-            <p>
-                This story—these assumptions—will become our mathematical model. If we're wrong about any 
-                part, especially the causal structure, our results will be wrong. That's why we classify 
-                variables <strong>before</strong> seeing results, not after.
-            </p>
+                <div class="why-box">
+                    <h4>Why We Embrace Uncertainty</h4>
+                    <p>
+                        Some analysts try to explain every wiggle in the data. This is a mistake. Overfitting
+                        to noise makes your model look good on historical data but perform poorly on future
+                        predictions. A good model acknowledges that some variation is fundamentally unpredictable.
+                    </p>
+                    <p style="margin-bottom: 0;">
+                        The error term isn't a failure—it's honesty. It says: "Given everything we know, this
+                        is how uncertain we are about any given week's sales."
+                    </p>
+                </div>
+
+                <div class="analogy-box">
+                    <h4>The Weather Forecast Analogy</h4>
+                    <p style="margin-bottom: 0;">
+                        Meteorologists can predict that next Tuesday will be warmer than Monday based on
+                        seasonal patterns and weather systems. But they can't predict whether a random cloud
+                        will pass overhead at 2pm. The random cloud is the error term—real, unpredictable,
+                        and important to acknowledge.
+                    </p>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <!-- Summary Box -->
+    <div class="summary-box">
+        <h4>📖 Putting the Story Together</h4>
+        <blockquote>
+            "Sales start from a baseline of existing demand, following an underlying trend (growth or
+            decline). This foundation rises and falls with seasonal patterns. Marketing channels add
+            to this, but with diminishing returns as spend increases, and effects carry over for several
+            weeks. Meanwhile, other factors—distribution, pricing, competition—affect both media decisions
+            and sales, creating spurious correlations we must control for. Weather <i>and other external events</i>
+            which affect sales but do not impact media spend can help isolate the media effect, but if excluded won't bias results.
+            We avoid controlling for variables that lie on the causal path from media to sales (like brand awareness)
+            to get the total effect of marketing, unless we specifically want to decompose paths.
+            And we never control for colliders like survey response, which would introduce bias. Finally,
+            even after accounting for all these factors, some variation in sales remains unexplained."
+        </blockquote>
+        <p>
+            This story—these assumptions—will become our mathematical model. If we're wrong about any
+            part, especially the causal structure, our results will be wrong. That's why we classify
+            variables <strong>before</strong> seeing results, not after.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back: Define Question</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Build the Model →</button>
+    </div>
 </div>
 <!-- ================================================================== -->
 <!-- STEP 3: BUILD - Enhanced with Trend/Seasonality Options -->
