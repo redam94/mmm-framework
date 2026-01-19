@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Guide | MMM Framework</title>
+    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/technical-guide.html">
+    <meta property="og:title" content="Technical Guide | MMM Framework">
+    <meta property="og:description" content="A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models. This guide covers mathematical foundations, model specifications, and practical considerations for each model type in the framework.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/technical-guide.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
+            font-size: 17px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        .page-layout { display: grid; grid-template-columns: 280px 1fr; max-width: 1400px; margin: 0 auto; padding-top: 5rem; }
+        
+        .sidebar {
+            position: sticky; top: 5rem; height: calc(100vh - 5rem);
+            overflow-y: auto; padding: 2rem; border-right: 1px solid var(--color-border); background: var(--color-bg);
+        }
+        .sidebar h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: 1rem; margin-top: 1.5rem; }
+        .sidebar h3:first-child { margin-top: 0; }
+        .sidebar-nav { list-style: none; }
+        .sidebar-nav a { display: block; padding: 0.5rem 0; color: var(--color-text-muted); text-decoration: none; font-size: 0.95rem; transition: var(--transition-smooth); border-left: 2px solid transparent; padding-left: 1rem; margin-left: -1rem; }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); }
+        .sidebar-nav .sub-item a { padding-left: 2rem; font-size: 0.9rem; } */
+
+        .main-content { padding: 3rem 4rem; max-width: 900px; }
+        .main-content h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; color: var(--color-text); }
+        .main-content h2 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); color: var(--color-text); }
+        .main-content h2:first-of-type { border-top: none; margin-top: 2rem; }
+        .main-content h3 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--color-text); }
+        .main-content h4 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--color-text-muted); }
+        .lead { font-size: 1.15rem; color: var(--color-text-muted); margin-bottom: 2rem; }
+        p { margin-bottom: 1rem; }
+
+        .math-block { background: var(--color-bg-alt); padding: 1.5rem; border-radius: 8px; margin: 1.5rem 0; overflow-x: auto; position: relative; }
+        .equation-label { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); font-size: 0.9rem; }
+
+        pre { background: var(--color-bg-alt); padding: 1.5rem; border-radius: 8px; overflow-x: auto; margin: 1.5rem 0; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+        p code, li code { background: var(--color-bg-alt); padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--color-surface); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm); }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        th { background: var(--color-bg-alt); font-weight: 600; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .definition { background: rgba(106, 143, 168, 0.1); border-left: 4px solid var(--color-accent); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .definition h4 { color: var(--color-accent-dark); margin-top: 0; margin-bottom: 0.5rem; }
+        .warning { background: rgba(201, 112, 103, 0.1); border-left: 4px solid var(--color-danger); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .warning h4 { color: var(--color-danger); margin-top: 0; margin-bottom: 0.5rem; }
+        .note { background: rgba(143, 168, 106, 0.1); border-left: 4px solid var(--color-primary); padding: 1.5rem; border-radius: 0 8px 8px 0; margin: 1.5rem 0; }
+        .note h4 { color: var(--color-primary-dark); margin-top: 0; margin-bottom: 0.5rem; }
+
+        .model-diagram { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; }
+        .dag-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .dag-box .mermaid { background: transparent; margin: 0; padding: 0; }
+        .dag-box .mermaid svg { max-width: 100%; height: auto; }
+
+        .chart-container { width: 100%; height: 320px; margin: 1rem 0; }
+        .interactive-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+        .interactive-box h4 { margin-top: 0; margin-bottom: 1rem; color: var(--color-text); }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .control-row label { font-weight: 500; min-width: 80px; }
+        .control-row input[type="range"] { flex: 1; min-width: 150px; max-width: 300px; }
+        .control-row .value { font-family: 'JetBrains Mono', monospace; background: var(--color-bg-alt); padding: 0.25rem 0.5rem; border-radius: 4px; min-width: 60px; text-align: center; }
+
+        ul, ol { margin: 1rem 0 1rem 1.5rem; }
+        li { margin-bottom: 0.5rem; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0; }
+        .method-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.5rem; }
+        .method-card h4 { margin-top: 0; margin-bottom: 0.5rem; color: var(--color-primary-dark); }
+        .method-card .use-for { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 1rem; }
+
+        @media (max-width: 1024px) {
+            .page-layout { grid-template-columns: 1fr; }
+            .sidebar { position: relative; top: auto; height: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
+            .main-content { padding: 2rem; }
+            .two-col { grid-template-columns: 1fr; }
+        }
+        /* Footer */
+        footer {
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+            padding: 3rem 0;
+        }
+        .footer-content { display: flex; justify-content: space-between; align-items: center; }
+        .footer-links { display: flex; gap: 2rem; }
+        .footer-links a { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; }
+        .footer-links a:hover { color: var(--color-primary); }
+    </style>
+</head>
+<body>
+    <!-- <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="about.html">About</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="#" class="active">Technical Guide</a></li>
+                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
+                <li><a href="scientific-modeling.html">Scientific Modeling</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav> -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Getting Started</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#bayesian-basics">Bayesian Basics</a></li>
+                <li><a href="#choosing-model">Choosing a Model</a></li>
+            </ul>
+
+            <h3>Standard MMM</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#standard">Model Structure</a></li>
+                <li><a href="#standard-adstock">Adstock Transformation</a></li>
+                <li><a href="#standard-saturation">Saturation Functions</a></li>
+                <li><a href="#standard-trend">Trend & Seasonality</a></li>
+                <li><a href="#standard-priors">Prior Specification</a></li>
+            </ul>
+
+            <h3>Nested Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#nested">Model Structure</a></li>
+                <li><a href="#nested-effects">Effect Decomposition</a></li>
+                <li><a href="#nested-mediators">Mediator Types</a></li>
+                <li><a href="#nested-identification">Identification</a></li>
+            </ul>
+
+            <h3>Multivariate Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#multivariate">Model Structure</a></li>
+                <li><a href="#cross-effects">Cross-Effects</a></li>
+                <li><a href="#multivariate-correlation">Correlated Errors</a></li>
+            </ul>
+
+            <h3>Combined Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#combined">Full Specification</a></li>
+                <li><a href="#combined-dag">DAG Representation</a></li>
+            </ul>
+
+            <h3>Hierarchical Structure</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#hierarchical">Partial Pooling</a></li>
+                <li><a href="#hierarchical-geo">Geographic Effects</a></li>
+                <li><a href="#hierarchical-param">Parameterization</a></li>
+            </ul>
+
+            <h3>Variable Selection</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#variable-selection">Overview & Cautions</a></li>
+                <li><a href="#vs-horseshoe">Regularized Horseshoe</a></li>
+                <li><a href="#vs-spike-slab">Spike-and-Slab</a></li>
+                <li><a href="#vs-lasso">Bayesian LASSO</a></li>
+                <li><a href="#vs-interpretation">Interpretation</a></li>
+            </ul>
+
+            <h3>Diagnostics</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#diagnostics">Convergence</a></li>
+                <li><a href="#diagnostics-ident">Identifiability</a></li>
+                <li><a href="#diagnostics-comparison">Model Comparison</a></li>
+            </ul>
+
+            <h3>Prior Explorer</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#prior-explorer">Distribution Viewer</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Technical Guide</h1>
+            <p class="lead">
+                A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models.
+                This guide covers mathematical foundations, model specifications, and practical considerations
+                for each model type in the framework.
+            </p>
+
+            <h2 id="overview">Overview</h2>
+            <p>
+                Marketing Mix Modeling (MMM) estimates the incremental impact of marketing activities on business
+                outcomes like sales or conversions. This framework implements MMM using Bayesian inference,
+                which provides several advantages over traditional frequentist approaches:
+            </p>
+            <ul>
+                <li><strong>Uncertainty quantification:</strong> Full posterior distributions, not just point estimates</li>
+                <li><strong>Prior incorporation:</strong> Domain knowledge can be encoded in priors</li>
+                <li><strong>Regularization:</strong> Priors act as natural regularizers, preventing overfitting</li>
+                <li><strong>Hierarchical modeling:</strong> Partial pooling across geographies and products</li>
+                <li><strong>Decision-ready outputs:</strong> Credible intervals directly answer "how confident are we?"</li>
+            </ul>
+
+            <h2 id="bayesian-basics">Bayesian Basics</h2>
+            <p>
+                At its core, Bayesian inference combines prior beliefs with observed data to form posterior beliefs.
+                For a parameter θ given data y:
+            </p>
+            <div class="math-block">
+                $$p(\theta | y) = \frac{p(y | \theta) \cdot p(\theta)}{p(y)} \propto p(y | \theta) \cdot p(\theta)$$
+            </div>
+            <p>Where:</p>
+            <ul>
+                <li><strong>p(θ)</strong> — Prior: what we believe before seeing data</li>
+                <li><strong>p(y|θ)</strong> — Likelihood: probability of data given parameters</li>
+                <li><strong>p(θ|y)</strong> — Posterior: updated beliefs after seeing data</li>
+            </ul>
+
+            <div class="definition">
+                <h4>Credible Intervals vs. Confidence Intervals</h4>
+                <p>
+                    A 94% Bayesian credible interval means "there is a 94% probability the true parameter lies
+                    in this range, given our prior and data." This is a direct probability statement about the
+                    parameter—unlike frequentist confidence intervals, which are statements about the procedure.
+                </p>
+            </div>
+
+            <h3>Positivity Constraints via Priors</h3>
+            <p>
+                Media coefficients should generally be positive (advertising shouldn't decrease sales). Rather than
+                post-hoc filtering (which invalidates inference), we encode this through priors that
+                concentrate probability mass on positive values:
+            </p>
+            <div class="math-block">
+                $$\beta \sim \text{HalfNormal}(\sigma = 0.5)$$
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ Specification Shopping</h4>
+                <p>
+                    Running multiple models and selecting one with "reasonable" coefficients is specification
+                    shopping. This practice destroys the statistical properties of your estimates. Instead,
+                    encode constraints through priors <em>before</em> seeing the data, then report
+                    the single resulting posterior.
+                </p>
+            </div>
+
+            <h2 id="choosing-model">Choosing a Model</h2>
+            
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Use When</th><th>Complexity</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Standard MMM</strong></td>
+                        <td>Single outcome, no intermediate metrics, simple attribution</td>
+                        <td>Low</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nested MMM</strong></td>
+                        <td>Upper-funnel metrics available (awareness, consideration), want direct/indirect decomposition</td>
+                        <td>Medium</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Multivariate MMM</strong></td>
+                        <td>Multiple outcomes that may interact (product portfolio, cannibalization)</td>
+                        <td>Medium</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Combined MMM</strong></td>
+                        <td>Both mediators AND multiple interacting outcomes</td>
+                        <td>High</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Data Structure Considerations</h3>
+            <table>
+                <thead>
+                    <tr><th>Data Structure</th><th>Recommended Model</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>National aggregate only</td><td>Single time-series model; acknowledge wide uncertainty</td></tr>
+                    <tr><td>Multiple geographies, national media</td><td>Hierarchical model with random intercepts by geo</td></tr>
+                    <tr><td>Multiple geographies, regional media variation</td><td>Hierarchical model with random slopes on media</td></tr>
+                    <tr><td>Many geographies, rich regional variation</td><td>Full hierarchical model with geo-level covariates</td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="standard">Standard MMM</h2>
+            <p>
+                The standard model relates marketing inputs to a single outcome through transformed 
+                media variables. Channel contributions flow through three sequential components: 
+                adstock (carryover), saturation (diminishing returns), and coefficient scaling.
+            </p>
+
+            <div class="model-diagram">
+                <svg viewBox="0 0 600 100" width="100%">
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#5a6b5a"/>
+                        </marker>
+                    </defs>
+                    <rect x="10" y="30" width="80" height="40" rx="8" fill="#8fa86a" opacity="0.8"/>
+                    <text x="50" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media Spend</text>
+                    <rect x="130" y="25" width="90" height="50" rx="8" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="2"/>
+                    <text x="175" y="47" text-anchor="middle" fill="#5a6b5a" font-size="10" font-weight="600">Adstock</text>
+                    <text x="175" y="62" text-anchor="middle" fill="#5a6b5a" font-size="9">g(x)</text>
+                    <rect x="260" y="25" width="90" height="50" rx="8" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="2"/>
+                    <text x="305" y="47" text-anchor="middle" fill="#5a6b5a" font-size="10" font-weight="600">Saturation</text>
+                    <text x="305" y="62" text-anchor="middle" fill="#5a6b5a" font-size="9">f(·)</text>
+                    <rect x="390" y="30" width="60" height="40" rx="8" fill="#6a8fa8" opacity="0.8"/>
+                    <text x="420" y="55" text-anchor="middle" fill="white" font-size="12" font-weight="600">β</text>
+                    <rect x="490" y="30" width="80" height="40" rx="8" fill="#d4a86a" opacity="0.8"/>
+                    <text x="530" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                    <path d="M 95 50 L 125 50" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <path d="M 225 50 L 255 50" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <path d="M 355 50 L 385 50" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <path d="M 455 50 L 485 50" stroke="#5a6b5a" stroke-width="2" marker-end="url(#arrowhead)"/>
+                </svg>
+            </div>
+
+            <h3>Full Model Specification</h3>
+            <p>The complete generative model for the standard MMM is:</p>
+            <div class="math-block">
+                <span class="equation-label">(1)</span>
+                $$y_t = \alpha + \underbrace{\sum_{m=1}^{M} \beta_m \cdot f_{\text{sat}}\left(g_{\text{adstock}}(x_{m,t})\right)}_{\text{Media Effects}} + \underbrace{\tau(t)}_{\text{Trend}} + \underbrace{s(t)}_{\text{Seasonality}} + \underbrace{\gamma' \mathbf{z}_t}_{\text{Controls}} + \epsilon_t$$
+            </div>
+            <p>Where:</p>
+            <ul>
+                <li>$y_t$ is the outcome at time $t$ (optionally log-transformed)</li>
+                <li>$x_{m,t}$ is spend for media channel $m$ at time $t$</li>
+                <li>$g_{\text{adstock}}(\cdot)$ is the adstock transformation (carryover)</li>
+                <li>$f_{\text{sat}}(\cdot)$ is the saturation function (diminishing returns)</li>
+                <li>$\tau(t)$ is the trend component</li>
+                <li>$s(t)$ is the seasonality component</li>
+                <li>$\mathbf{z}_t$ is a vector of control variables</li>
+                <li>$\epsilon_t \sim \mathcal{N}(0, \sigma^2)$ is the error term</li>
+            </ul>
+
+            <h4>Multiplicative (Log-Log) Specification</h4>
+            <p>For elasticity interpretation, use the multiplicative form:</p>
+            <div class="math-block">
+                $$\log(y_t) = \log(\beta_0) + \sum_{m=1}^{M} \beta_m \log\left(f_m(x_{m,t})\right) + \gamma' \mathbf{z}_t + \epsilon_t$$
+            </div>
+            <p>Coefficients now represent <strong>elasticities</strong>: percent change in sales per percent change in media.</p>
+
+            <h3 id="standard-adstock">Adstock Transformation</h3>
+            <p>
+                Adstock captures carryover effects—the idea that today's advertising continues to 
+                influence sales in future periods.
+            </p>
+
+            <div class="definition">
+                <h4>Geometric Adstock (Default)</h4>
+                <p>The simplest form with a single decay parameter $\alpha \in [0, 1)$:</p>
+            </div>
+            <div class="math-block">
+                <span class="equation-label">(2)</span>
+                $$A_t = x_t + \alpha \cdot A_{t-1} = \sum_{l=0}^{L} \alpha^l \cdot x_{t-l}$$
+            </div>
+            <p>The <strong>half-life</strong> (time for effect to decay by 50%) is:</p>
+            <div class="math-block">
+                $$t_{1/2} = \frac{\log(0.5)}{\log(\alpha)} = \frac{-0.693}{\log(\alpha)}$$
+            </div>
+            <p>For $\alpha = 0.7$: half-life ≈ 1.9 periods. For $\alpha = 0.9$: half-life ≈ 6.6 periods.</p>
+
+            <h4>Weibull/Delayed Adstock</h4>
+            <p>For channels where peak effect is delayed (e.g., brand campaigns, content marketing):</p>
+            <div class="math-block">
+                <span class="equation-label">(3)</span>
+                $$w_l = \exp\left(-\left(\frac{l}{\theta}\right)^k\right) - \exp\left(-\left(\frac{l+1}{\theta}\right)^k\right)$$
+            </div>
+            <p>Where <strong>θ</strong> (scale) controls delay and <strong>k</strong> (shape) controls peak sharpness.</p>
+
+            <!-- Interactive Adstock Plots -->
+            <div class="interactive-box">
+                <h4>Interactive: Geometric Adstock Decay</h4>
+                <p style="margin-bottom: 1rem;">See how the decay parameter α affects carryover. Higher α = longer memory.</p>
+                <div class="control-row">
+                    <label>Decay (α):</label>
+                    <input type="range" id="adstock-alpha-slider" min="0.1" max="0.95" step="0.05" value="0.7">
+                    <span class="value" id="adstock-alpha-value">0.70</span>
+                    <span style="margin-left: 1rem; color: var(--color-text-muted);">Half-life: <span id="adstock-halflife">1.9</span> periods</span>
+                </div>
+                <div id="adstock-decay-chart" class="chart-container" style="height: 280px;"></div>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Interactive: Compare Adstock Types</h4>
+                <p style="margin-bottom: 1rem;">Geometric vs Weibull: see how delayed peak effects differ from immediate decay.</p>
+                <div class="two-col" style="margin: 0 0 1rem 0;">
+                    <div>
+                        <div class="control-row">
+                            <label>Geometric α:</label>
+                            <input type="range" id="adstock-compare-alpha" min="0.3" max="0.9" step="0.05" value="0.7">
+                            <span class="value" id="adstock-compare-alpha-value">0.70</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="control-row">
+                            <label>Weibull θ (scale):</label>
+                            <input type="range" id="adstock-weibull-theta" min="1" max="6" step="0.5" value="3">
+                            <span class="value" id="adstock-weibull-theta-value">3.0</span>
+                        </div>
+                        <div class="control-row">
+                            <label>Weibull k (shape):</label>
+                            <input type="range" id="adstock-weibull-k" min="1" max="4" step="0.25" value="2">
+                            <span class="value" id="adstock-weibull-k-value">2.0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="adstock-compare-chart" class="chart-container" style="height: 300px;"></div>
+                <div class="two-col" style="margin-top: 1rem;">
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>Geometric (k=1)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Peak effect is immediate, then decays exponentially. Best for performance media (search, social).
+                        </span>
+                    </div>
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>Weibull (k&gt;1)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Peak effect is delayed. Best for brand campaigns, TV, content where awareness builds over time.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Interactive: Adstock Applied to Media Spend</h4>
+                <p style="margin-bottom: 1rem;">See how a pulse of spend gets transformed by adstock:</p>
+                <div class="control-row">
+                    <label>Adstock type:</label>
+                    <select id="adstock-demo-type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="geometric">Geometric (α=0.7)</option>
+                        <option value="geometric-high">Geometric (α=0.9)</option>
+                        <option value="weibull">Weibull Delayed</option>
+                    </select>
+                </div>
+                <div id="adstock-demo-chart" class="chart-container" style="height: 300px;"></div>
+            </div>
+
+            <pre><code># Adstock configuration
+adstock = (AdstockConfigBuilder()
+    .geometric()
+    .with_max_lag(8)
+    .with_alpha_prior(PriorConfig.beta(alpha=1, beta=3))
+    .build())</code></pre>
+
+            <h3 id="standard-saturation">Saturation Functions</h3>
+            <p>Saturation captures diminishing returns—each additional dollar produces less incremental effect.</p>
+
+            <div class="definition">
+                <h4>Logistic Saturation (Recommended)</h4>
+            </div>
+            <div class="math-block">
+                <span class="equation-label">(4)</span>
+                $$f_{\text{logistic}}(x) = 1 - \exp(-\lambda x)$$
+            </div>
+
+            <h4>Hill Function</h4>
+            <div class="math-block">
+                <span class="equation-label">(5)</span>
+                $$f_{\text{Hill}}(x) = \frac{x^S}{K^S + x^S}$$
+            </div>
+            <p>Where <strong>K</strong> is the half-saturation point (EC50) and <strong>S</strong> is slope (steepness).</p>
+
+            <!-- Interactive Saturation Plots -->
+            <div class="interactive-box">
+                <h4>Interactive: Compare Saturation Functions</h4>
+                <div class="two-col" style="margin: 0;">
+                    <div>
+                        <div class="control-row">
+                            <label>λ (logistic):</label>
+                            <input type="range" id="lambda-slider" min="0.5" max="5" step="0.1" value="2">
+                            <span class="value" id="lambda-value">2.0</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="control-row">
+                            <label>K (Hill):</label>
+                            <input type="range" id="kappa-slider" min="0.1" max="0.9" step="0.05" value="0.5">
+                            <span class="value" id="kappa-value">0.50</span>
+                        </div>
+                        <div class="control-row">
+                            <label>S (Hill):</label>
+                            <input type="range" id="slope-slider" min="0.5" max="4" step="0.1" value="2">
+                            <span class="value" id="slope-value">2.0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="saturation-chart" class="chart-container"></div>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0.5rem 0 0 0;">
+                    <strong>Key insight:</strong> The logistic function has one parameter (λ) controlling saturation speed, 
+                    while Hill has two (K, S) offering more flexibility but risking identifiability issues.
+                </p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Hill Function: Effect of Parameters</h4>
+                <p style="margin-bottom: 1rem;">See how K (half-saturation) and S (slope) independently affect the curve shape:</p>
+                <div id="hill-params-chart" class="chart-container"></div>
+                <div class="two-col" style="margin-top: 1rem;">
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>K (Half-saturation point)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            The spend level where you achieve 50% of maximum effect. 
+                            Lower K = saturation kicks in earlier.
+                        </span>
+                    </div>
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>S (Slope/Steepness)</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Controls how sharply the curve rises. S &lt; 1 = concave; S &gt; 1 = S-shaped; S = 1 = Michaelis-Menten.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ Identification Warning</h4>
+                <p>
+                    Hill function parameters can be weakly identified. <strong>Constrain K's prior to the observed data range.</strong>
+                </p>
+            </div>
+
+            <h3 id="standard-trend">Trend & Seasonality</h3>
+            
+            <table>
+                <thead><tr><th>Type</th><th>Description</th><th>Use When</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>Linear</strong></td><td>$\tau(t) = \delta \cdot t$</td><td>Stable growth/decline</td></tr>
+                    <tr><td><strong>Piecewise</strong></td><td>Linear segments with changepoints</td><td>Known structural breaks</td></tr>
+                    <tr><td><strong>B-Spline</strong></td><td>Smooth nonlinear trend</td><td>Flexible trend</td></tr>
+                    <tr><td><strong>Gaussian Process</strong></td><td>$\tau(t) \sim \mathcal{GP}(0, k(t, t'))$</td><td>Maximum flexibility</td></tr>
+                </tbody>
+            </table>
+
+            <!-- Interactive Trend Comparison -->
+            <div class="interactive-box">
+                <h4>Interactive: Compare Trend Types</h4>
+                <p style="margin-bottom: 1rem;">See how different trend specifications capture underlying patterns:</p>
+                <div class="control-row">
+                    <label>Linear slope (δ):</label>
+                    <input type="range" id="trend-slope-slider" min="-0.5" max="0.5" step="0.05" value="0.2">
+                    <span class="value" id="trend-slope-value">0.20</span>
+                </div>
+                <div class="control-row">
+                    <label>Changepoint location:</label>
+                    <input type="range" id="trend-cp-slider" min="0.2" max="0.8" step="0.05" value="0.5">
+                    <span class="value" id="trend-cp-value">0.50</span>
+                </div>
+                <div class="control-row">
+                    <label>Spline flexibility:</label>
+                    <input type="range" id="trend-spline-slider" min="3" max="8" step="1" value="5">
+                    <span class="value" id="trend-spline-value">5 knots</span>
+                </div>
+                <div id="trend-chart" class="chart-container" style="height: 320px;"></div>
+                <div class="two-col" style="margin-top: 1rem;">
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>Linear & Piecewise</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Simple, interpretable. Use piecewise when you know structural breaks occurred (e.g., COVID, new product launch).
+                        </span>
+                    </div>
+                    <div style="background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+                        <strong>B-Spline & GP</strong><br>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem;">
+                            Flexible, data-driven. Risk overfitting short series. GP provides uncertainty bands but is computationally expensive.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Fourier Seasonality</h4>
+            <div class="math-block">
+                <span class="equation-label">(6)</span>
+                $$s(t) = \sum_{n=1}^{N} \left[ a_n \sin\left(\frac{2\pi n t}{P}\right) + b_n \cos\left(\frac{2\pi n t}{P}\right) \right]$$
+            </div>
+
+            <!-- Interactive Seasonality Visualization -->
+            <div class="interactive-box">
+                <h4>Interactive: Fourier Seasonality Components</h4>
+                <p style="margin-bottom: 1rem;">Higher order N captures finer seasonal patterns. P is the period (e.g., 52 for weekly data with annual seasonality).</p>
+                <div class="control-row">
+                    <label>Order (N):</label>
+                    <input type="range" id="season-order-slider" min="1" max="6" step="1" value="2">
+                    <span class="value" id="season-order-value">2</span>
+                </div>
+                <div id="seasonality-chart" class="chart-container" style="height: 320px;"></div>
+                <table style="margin-top: 1rem;">
+                    <thead><tr><th>Order</th><th>Pattern Captured</th><th>Typical Use</th></tr></thead>
+                    <tbody>
+                        <tr><td>N = 1</td><td>Single annual wave</td><td>Simple annual cycle</td></tr>
+                        <tr><td>N = 2</td><td>+ Semi-annual</td><td>Summer/winter peaks</td></tr>
+                        <tr><td>N = 3</td><td>+ Quarterly</td><td>Q4 holiday spike</td></tr>
+                        <tr><td>N ≥ 4</td><td>+ Finer patterns</td><td>Complex seasonality</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Combined Trend + Seasonality -->
+            <div class="interactive-box">
+                <h4>Interactive: Combined Trend + Seasonality</h4>
+                <p style="margin-bottom: 1rem;">See how trend and seasonality combine to form the baseline (before media effects):</p>
+                <div class="control-row">
+                    <label>Trend type:</label>
+                    <select id="combined-trend-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="linear">Linear</option>
+                        <option value="piecewise">Piecewise</option>
+                        <option value="spline">B-Spline</option>
+                    </select>
+                    <label style="margin-left: 1rem;">Seasonality order:</label>
+                    <select id="combined-season-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="0">None</option>
+                        <option value="1">N = 1</option>
+                        <option value="2" selected>N = 2</option>
+                        <option value="3">N = 3</option>
+                    </select>
+                </div>
+                <div id="combined-trend-season-chart" class="chart-container" style="height: 320px;"></div>
+            </div>
+
+            <div class="note">
+                <h4>💡 Why Explicit Trend & Seasonality Matter</h4>
+                <p>
+                    You might wonder: "If my control variables (e.g., temperature, holidays) already capture seasonal patterns, 
+                    why include explicit seasonality components?" The answer lies in how media spending correlates with time.
+                </p>
+                <p>
+                    <strong>The problem:</strong> Advertisers typically increase spend during high-demand periods (Q4 holidays, 
+                    summer travel season). This means media spend is correlated with seasonality. If you rely on control 
+                    variables to absorb seasonal patterns, any correlation between those controls and media will bias your 
+                    media effect estimates.
+                </p>
+                <p>
+                    <strong>The solution:</strong> Explicit trend and seasonality components isolate the structural time 
+                    patterns that exist <em>regardless of marketing activity</em>. This allows the model to:
+                </p>
+                <ul style="margin-top: 0.5rem; margin-bottom: 0;">
+                    <li>Separate "sales are high because it's December" from "sales are high because we spent on TV"</li>
+                    <li>Prevent media from getting credit for seasonal uplift it didn't cause</li>
+                    <li>Allow controls to capture their specific effects without also serving as proxies for time</li>
+                    <li>Provide cleaner counterfactual estimation (what would sales be with zero media?)</li>
+                </ul>
+                <p style="margin-top: 1rem; margin-bottom: 0;">
+                    <strong>Rule of thumb:</strong> Always include trend and seasonality components. Let controls capture 
+                    their incremental effects <em>beyond</em> structural time patterns, not instead of them.
+                </p>
+            </div>
+
+            <h3 id="standard-priors">Prior Specification</h3>
+            <pre><code># Recommended default priors for standardized data
+beta_media ~ HalfNormal(sigma=0.5)      # Media coefficients
+alpha ~ Beta(alpha=1, beta=3)            # Adstock decay
+kappa ~ Beta(alpha=2, beta=2)            # Hill half-saturation
+slope ~ HalfNormal(sigma=1.5)            # Hill slope
+lambda_sat ~ Gamma(alpha=2, beta=1)      # Logistic saturation rate
+intercept ~ Normal(mu=0, sigma=1)        # Intercept
+gamma ~ Normal(mu=0, sigma=0.5)          # Control coefficients
+sigma ~ HalfNormal(sigma=0.5)            # Noise
+delta ~ Normal(mu=0, sigma=0.1)          # Trend growth
+season_coef ~ Normal(mu=0, sigma=0.3)    # Seasonality</code></pre>
+
+            <h2 id="nested">Nested Model</h2>
+            <p>
+                Nested models estimate causal pathways where media affects intermediate outcomes 
+                (mediators) which in turn affect the final outcome.
+            </p>
+
+            <h3>Core Structure</h3>
+            <div class="definition"><h4>Stage 1 — Media → Mediator</h4></div>
+            <div class="math-block">
+                <span class="equation-label">(7)</span>
+                $$M_t = \alpha_M + \sum_{c=1}^{C} \beta^{(M)}_c \cdot f_c(x_{c,t}) + \epsilon^{(M)}_t$$
+            </div>
+
+            <div class="definition"><h4>Stage 2 — Mediator → Outcome</h4></div>
+            <div class="math-block">
+                <span class="equation-label">(8)</span>
+                $$y_t = \alpha_y + \gamma \cdot M_t + \sum_{c=1}^{C} \beta^{(D)}_c \cdot f_c(x_{c,t}) + \epsilon^{(y)}_t$$
+            </div>
+
+            <h3 id="nested-effects">Effect Decomposition</h3>
+            <div class="math-block">
+                <span class="equation-label">(9)</span>
+                $$\text{Total Effect}_c = \underbrace{\beta^{(D)}_c}_{\text{Direct}} + \underbrace{\beta^{(M)}_c \cdot \gamma}_{\text{Indirect}}$$
+            </div>
+            <div class="math-block">
+                $$\text{Proportion Mediated}_c = \frac{\beta^{(M)}_c \cdot \gamma}{\beta^{(D)}_c + \beta^{(M)}_c \cdot \gamma}$$
+            </div>
+
+            <h3 id="nested-mediators">Mediator Types</h3>
+            <table>
+                <thead><tr><th>Type</th><th>Data Requirement</th><th>Observation Model</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>Fully Observed</strong></td><td>Complete time series</td><td>$M^{obs}_t = M_t + \nu_t$</td></tr>
+                    <tr><td><strong>Partially Observed</strong></td><td>Sparse survey data</td><td>$M^{obs}_{t_i} = M_{t_i} + \nu_{t_i}$ for observed periods</td></tr>
+                    <tr><td><strong>Fully Latent</strong></td><td>No direct observations</td><td>Inferred from outcome; requires strong priors</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="nested-identification">Identification Considerations</h3>
+            <table>
+                <thead><tr><th>Model</th><th>Key Requirements</th></tr></thead>
+                <tbody>
+                    <tr><td>Nested (fully observed)</td><td>Variation in media, complete mediator data</td></tr>
+                    <tr><td>Nested (partially observed)</td><td>Sufficient survey observations, informative priors</td></tr>
+                    <tr><td>Nested (fully latent)</td><td>Strong priors, non-zero mediator effect assumed</td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="multivariate">Multivariate Model</h2>
+            <p>
+                The multivariate model jointly estimates effects on multiple outcomes, capturing 
+                correlations and cross-effects between products.
+            </p>
+
+            <h3>Model Structure</h3>
+            <div class="math-block">
+                <span class="equation-label">(10)</span>
+                $$y_{k,t} = \alpha_k + \sum_{c=1}^{C} \beta_{kc} \cdot f_c(x_{c,t}) + \sum_{j \neq k} \psi_{jk} \cdot y_{j,t} + \epsilon_{k,t}$$
+            </div>
+
+            <h3 id="cross-effects">Cross-Effects</h3>
+            <div class="two-col">
+                <div class="method-card">
+                    <h4>Cannibalization (ψ < 0)</h4>
+                    <p class="use-for">Product j steals from product k</p>
+                    <div class="math-block" style="padding: 1rem; margin: 0.5rem 0;">$$\psi_{jk} \sim \mathcal{N}^-(0, 0.3)$$</div>
+                </div>
+                <div class="method-card">
+                    <h4>Halo Effect (ψ > 0)</h4>
+                    <p class="use-for">Product j lifts product k</p>
+                    <div class="math-block" style="padding: 1rem; margin: 0.5rem 0;">$$\psi_{jk} \sim \mathcal{N}^+(0, 0.3)$$</div>
+                </div>
+            </div>
+
+            <h4>Promotion-Modulated Cross-Effects</h4>
+            <div class="math-block">
+                <span class="equation-label">(11)</span>
+                $$y_{k,t} = \ldots + \psi_{jk} \cdot P_{j,t} \cdot y_{j,t} + \ldots$$
+            </div>
+
+            <h3 id="multivariate-correlation">Correlated Errors</h3>
+            <div class="math-block">
+                <span class="equation-label">(12)</span>
+                $$\boldsymbol{\epsilon}_t \sim \mathcal{N}(\mathbf{0}, \boldsymbol{\Sigma}), \quad \boldsymbol{\Sigma} = \text{diag}(\boldsymbol{\sigma}) \cdot \mathbf{R} \cdot \text{diag}(\boldsymbol{\sigma}), \quad \mathbf{R} \sim \text{LKJ}(\eta)$$
+            </div>
+
+            <h2 id="combined">Combined Model</h2>
+            <p>The combined model integrates nested pathways and multivariate outcomes.</p>
+
+            <h3 id="combined-dag">Full Specification</h3>
+            <p><strong>Mediator equations:</strong></p>
+            <div class="math-block">
+                <span class="equation-label">(13)</span>
+                $$M_{m,t} = \alpha_m + \sum_{c \in \mathcal{C}_m} \beta^{(M)}_{mc} \cdot f_c(x_{c,t}) + \epsilon^{(M)}_{m,t}$$
+            </div>
+            <p><strong>Outcome equations:</strong></p>
+            <div class="math-block">
+                <span class="equation-label">(14)</span>
+                $$y_{k,t} = \alpha_k + \underbrace{\sum_{c=1}^{C} \beta^{(D)}_{kc} \cdot f_c(x_{c,t})}_{\text{Direct}} + \underbrace{\sum_{m \in \mathcal{M}_k} \gamma_{km} \cdot M_{m,t}}_{\text{Mediator}} + \underbrace{\sum_{j \neq k} \psi_{jk} \cdot y_{j,t}}_{\text{Cross-effects}} + \epsilon_{k,t}$$
+            </div>
+
+            <h3>DAG Representation</h3>
+            <div class="dag-box" style="display: flex; justify-content: center;">
+                <pre class="mermaid">
+flowchart TB
+    Media["🎯 Media Channels"]
+    
+    M1["Mediator 1<br/>Awareness"]
+    M2["Mediator 2<br/>Consideration"]
+    Direct["Direct Effects"]
+    
+    Y1["Y₁ Product A"]
+    Y2["Y₂ Product B"]
+    
+    Sigma["Correlated Errors Σ"]
+    
+    Media --> M1
+    Media --> M2
+    Media --> Direct
+    
+    M1 --> Y1
+    M1 --> Y2
+    M2 --> Y1
+    M2 --> Y2
+    Direct --> Y1
+    Direct --> Y2
+    
+    Y1 <-.->|"Cross-effects ψ"| Y2
+    
+    Y1 -.-> Sigma
+    Y2 -.-> Sigma
+    
+    style Media fill:#8fa86a,stroke:#6d8a4a,color:#fff
+    style M1 fill:#6a8fa8,stroke:#4a6d8a,color:#fff
+    style M2 fill:#6a8fa8,stroke:#4a6d8a,color:#fff
+    style Direct fill:#e5e8e0,stroke:#c4cdc4,color:#5a6b5a
+    style Y1 fill:#d4a86a,stroke:#b8860b,color:#fff
+    style Y2 fill:#d4a86a,stroke:#b8860b,color:#fff
+    style Sigma fill:#f5f7f3,stroke:#d4ddd4,color:#5a6b5a
+                </pre>
+            </div>
+
+            <h2 id="hierarchical">Hierarchical Structure</h2>
+            <p>
+                Hierarchical models provide <strong>partial pooling</strong>—sharing information across groups while allowing heterogeneity.
+            </p>
+
+            <h3 id="hierarchical-geo">Geographic Hierarchy</h3>
+            <div class="math-block">
+                <span class="equation-label">(15)</span>
+                $$\beta_g \sim \mathcal{N}(\bar{\beta}, \tau^2)$$
+            </div>
+            <div class="math-block">
+                <span class="equation-label">(16)</span>
+                $$y_{gt} = \alpha_g + \beta_g x_{gt} + \gamma' \mathbf{z}_{gt} + \epsilon_{gt}$$
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ National Media Limitation</h4>
+                <p>
+                    Geo-level random effects on <strong>national</strong> media coefficients cannot be
+                    interpreted as differential causal response—national media provides no geo-level
+                    exposure variation.
+                </p>
+            </div>
+
+            <h3 id="hierarchical-param">Parameterization</h3>
+            <div class="two-col">
+                <div class="method-card">
+                    <h4>Centered (Default)</h4>
+                    <pre><code>beta_g ~ Normal(mu_beta, tau)</code></pre>
+                    <p>Works well with sufficient data per group.</p>
+                </div>
+                <div class="method-card">
+                    <h4>Non-Centered</h4>
+                    <pre><code>offset_g ~ Normal(0, 1)
+beta_g = mu_beta + tau * offset_g</code></pre>
+                    <p>Use when groups have < 20 observations.</p>
+                </div>
+            </div>
+
+            <h2 id="variable-selection">Variable Selection Methods</h2>
+            
+            <div class="warning">
+                <h4>⚠️ Critical: Variable Classification Required</h4>
+                <p>
+                    Variable selection should <strong>only</strong> be applied to precision control variables.
+                    <strong>Confounders</strong> must be EXCLUDED from selection. See <a href="variable-selection.html">Variable Selection page</a> for details.
+                </p>
+            </div>
+
+            <h3 id="vs-horseshoe">Regularized Horseshoe Prior</h3>
+            <div class="math-block">
+                <span class="equation-label">(17)</span>
+                $$\beta_j = z_j \cdot \tau \cdot \tilde{\lambda}_j, \quad \tau_0 = \frac{D_0}{D - D_0} \cdot \frac{\sigma}{\sqrt{N}}$$
+            </div>
+
+            <h3 id="vs-spike-slab">Spike-and-Slab Prior</h3>
+            <div class="math-block">
+                <span class="equation-label">(18)</span>
+                $$\beta_j = \gamma_j \cdot \beta_{\text{slab},j} + (1 - \gamma_j) \cdot \beta_{\text{spike},j}$$
+            </div>
+
+            <h3 id="vs-lasso">Bayesian LASSO</h3>
+            <div class="math-block">
+                <span class="equation-label">(19)</span>
+                $$\beta_j | \sigma^2, \lambda^2 \sim \mathcal{N}(0, \sigma^2 \tau_j^2), \quad \tau_j^2 \sim \text{Exp}(\lambda^2/2)$$
+            </div>
+
+            <h3 id="vs-interpretation">Interpreting Results</h3>
+            <table>
+                <thead><tr><th>PIP Range</th><th>Interpretation</th></tr></thead>
+                <tbody>
+                    <tr><td>> 0.75</td><td>Strong evidence of effect</td></tr>
+                    <tr><td>0.50 - 0.75</td><td>Moderate evidence</td></tr>
+                    <tr><td>0.25 - 0.50</td><td>Weak evidence</td></tr>
+                    <tr><td>< 0.25</td><td>Little evidence of effect</td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="diagnostics">Model Diagnostics</h2>
+            
+            <h3>Convergence Diagnostics</h3>
+            <table>
+                <thead><tr><th>Diagnostic</th><th>Target</th><th>Interpretation</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>$\hat{R}$</strong></td><td>< 1.01</td><td>Chains converged</td></tr>
+                    <tr><td><strong>ESS</strong></td><td>> 400</td><td>Sufficient independent samples</td></tr>
+                    <tr><td><strong>Divergences</strong></td><td>0</td><td>No pathological behavior</td></tr>
+                    <tr><td><strong>Tree Depth</strong></td><td>< max</td><td>Not hitting limits</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="diagnostics-ident">Identifiability Checks</h3>
+            <ul>
+                <li><strong>Prior-posterior overlap:</strong> Wide overlap suggests weak identification</li>
+                <li><strong>Posterior correlations:</strong> High correlation indicates potential redundancy</li>
+                <li><strong>Posterior predictive checks:</strong> Does the model reproduce observed patterns?</li>
+            </ul>
+
+            <h3 id="diagnostics-comparison">Model Comparison</h3>
+            <table>
+                <thead><tr><th>Metric</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>WAIC</strong></td><td>Widely Applicable Information Criterion</td></tr>
+                    <tr><td><strong>LOO-CV</strong></td><td>Leave-One-Out Cross-Validation</td></tr>
+                    <tr><td><strong>Out-of-sample RMSE</strong></td><td>Prediction error on held-out data</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Computational Scaling</h3>
+            <table>
+                <thead><tr><th>Component</th><th>Cost Multiplier</th></tr></thead>
+                <tbody>
+                    <tr><td>Additional mediator</td><td>~1.3×</td></tr>
+                    <tr><td>Additional outcome</td><td>~1.5×</td></tr>
+                    <tr><td>Cross-effects</td><td>~1.1×</td></tr>
+                    <tr><td>Partial observation</td><td>~1.2×</td></tr>
+                    <tr><td>Hierarchical pooling</td><td>~1.5×</td></tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <h4>💡 Performance Tip</h4>
+                <p>For complex models, use <code>nuts_sampler="numpyro"</code> for 4-10× speedup via JAX.</p>
+            </div>
+
+            <!-- Prior Explorer Section -->
+            <h2 id="prior-explorer">Prior Explorer</h2>
+            <p>
+                Understanding how prior distributions behave is crucial for encoding domain knowledge in your MMM.
+                Use this interactive explorer to visualize common prior choices and see how their parameters 
+                affect the distribution shape.
+            </p>
+
+            <div class="interactive-box">
+                <h4>Interactive Prior Distribution Viewer</h4>
+                <div class="control-row">
+                    <label>Distribution:</label>
+                    <select id="prior-dist-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: 180px;">
+                        <option value="halfnormal">HalfNormal</option>
+                        <option value="normal">Normal</option>
+                        <option value="beta">Beta</option>
+                        <option value="gamma">Gamma</option>
+                        <option value="lognormal">LogNormal</option>
+                        <option value="exponential">Exponential</option>
+                    </select>
+                </div>
+                
+                <div id="prior-params-container">
+                    <!-- Parameters will be dynamically inserted here -->
+                </div>
+                
+                <div id="prior-chart" class="chart-container" style="height: 350px;"></div>
+                
+                <div id="prior-description" class="definition" style="margin-top: 1rem;">
+                    <!-- Description will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <h3>Common Prior Choices in MMM</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Distribution</th>
+                        <th>Typical Values</th>
+                        <th>Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Media coefficients (β)</td>
+                        <td><code>HalfNormal(σ)</code></td>
+                        <td>σ = 0.3 – 0.5</td>
+                        <td>Enforces positivity; regularizes toward zero</td>
+                    </tr>
+                    <tr>
+                        <td>Adstock decay (α)</td>
+                        <td><code>Beta(a, b)</code></td>
+                        <td>a=1, b=3 or a=2, b=2</td>
+                        <td>Bounded [0,1]; controls half-life distribution</td>
+                    </tr>
+                    <tr>
+                        <td>Saturation λ</td>
+                        <td><code>Gamma(α, β)</code></td>
+                        <td>α=2, β=1</td>
+                        <td>Positive; mildly regularizes saturation speed</td>
+                    </tr>
+                    <tr>
+                        <td>Hill K (half-sat)</td>
+                        <td><code>Beta(a, b)</code></td>
+                        <td>a=2, b=2</td>
+                        <td>Bounded to data range; centered prior</td>
+                    </tr>
+                    <tr>
+                        <td>Control coefficients (γ)</td>
+                        <td><code>Normal(μ, σ)</code></td>
+                        <td>μ=0, σ=0.5</td>
+                        <td>Can be positive or negative; regularized</td>
+                    </tr>
+                    <tr>
+                        <td>Intercept (α)</td>
+                        <td><code>Normal(μ, σ)</code></td>
+                        <td>μ=0, σ=1</td>
+                        <td>Weakly informative for standardized data</td>
+                    </tr>
+                    <tr>
+                        <td>Noise (σ)</td>
+                        <td><code>HalfNormal(σ)</code></td>
+                        <td>σ = 0.5</td>
+                        <td>Positive; expect residual ~0.3-0.5 for standardized y</td>
+                    </tr>
+                    <tr>
+                        <td>Hierarchical σ</td>
+                        <td><code>HalfNormal(σ)</code></td>
+                        <td>σ = 0.3</td>
+                        <td>Controls pooling strength; smaller = more pooling</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="interactive-box">
+                <h4>Compare Multiple Priors</h4>
+                <p style="margin-bottom: 1rem;">See how different parameterizations affect your prior beliefs:</p>
+                <div id="prior-comparison-chart" class="chart-container" style="height: 400px;"></div>
+                <div class="control-row" style="margin-top: 1rem;">
+                    <label>Compare:</label>
+                    <select id="prior-compare-select" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border);">
+                        <option value="media">Media Coefficient Priors</option>
+                        <option value="adstock">Adstock Decay Priors</option>
+                        <option value="control">Control Coefficient Priors</option>
+                        <option value="noise">Noise/Scale Priors</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 Prior Selection Principles</h4>
+                <ul style="margin-bottom: 0;">
+                    <li><strong>Weakly informative:</strong> Regularize extreme values without dominating the likelihood</li>
+                    <li><strong>Scientifically motivated:</strong> Encode known constraints (e.g., media effects should be positive)</li>
+                    <li><strong>Scale-appropriate:</strong> Match prior scale to standardized data (coefficients typically &lt; 1)</li>
+                    <li><strong>Sensitivity check:</strong> If results change dramatically with different reasonable priors, your data is weakly informative</li>
+                </ul>
+            </div>
+
+        </main>
+    </div>
+    <script src="shared/components.js"></script>
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            flowchart: {
+                curve: 'basis',
+                padding: 15,
+                useMaxWidth: true
+            }
+        });
+
+        // Color scheme
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            border: '#d4ddd4',
+            bgAlt: '#f0f2ed'
+        };
+
+        const plotConfig = { displayModeBar: false, responsive: true };
+        const baseLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { l: 50, r: 100, t: 30, b: 50 },
+            showlegend: true,
+            legend: { 
+                x: 1.06, 
+                y: 1, 
+                xanchor: 'left',
+                yanchor: 'top',
+                bgcolor: 'rgba(255,255,255,0.95)',
+                bordercolor: colors.border,
+                borderwidth: 1,
+                font: { size: 11 },
+                orientation: "h",
+                entrywidthmode: "fraction", // Use percentages (0 to 1) instead of pixels
+                entrywidth: .51,
+ 
+            }
+        };
+
+        // Saturation functions
+        function logisticSat(x, lambda) {
+            return 1 - Math.exp(-lambda * x);
+        }
+
+        function hillSat(x, kappa, slope) {
+            const xPow = Math.pow(x, slope);
+            const kPow = Math.pow(kappa, slope);
+            return xPow / (kPow + xPow);
+        }
+
+        // Generate x values (0 to 1, representing normalized spend)
+        function linspace(start, end, n) {
+            const arr = [];
+            const step = (end - start) / (n - 1);
+            for (let i = 0; i < n; i++) arr.push(start + step * i);
+            return arr;
+        }
+
+        const xVals = linspace(0, 1, 100);
+
+        // =====================================================================
+        // ADSTOCK VISUALIZATIONS
+        // =====================================================================
+        
+        // Geometric adstock weights
+        function geometricWeights(alpha, maxLag) {
+            const weights = [];
+            for (let l = 0; l <= maxLag; l++) {
+                weights.push(Math.pow(alpha, l));
+            }
+            // Normalize
+            const sum = weights.reduce((a, b) => a + b, 0);
+            return weights.map(w => w / sum);
+        }
+        
+        // Weibull adstock weights (delayed peak)
+        function weibullWeights(theta, k, maxLag) {
+            const weights = [];
+            for (let l = 0; l <= maxLag; l++) {
+                const w = Math.exp(-Math.pow(l / theta, k)) - Math.exp(-Math.pow((l + 1) / theta, k));
+                weights.push(Math.max(0, w));
+            }
+            // Normalize
+            const sum = weights.reduce((a, b) => a + b, 0);
+            return sum > 0 ? weights.map(w => w / sum) : weights;
+        }
+        
+        // Apply adstock to a time series
+        function applyAdstock(spend, weights) {
+            const n = spend.length;
+            const maxLag = weights.length - 1;
+            const adstocked = new Array(n).fill(0);
+            
+            for (let t = 0; t < n; t++) {
+                for (let l = 0; l <= Math.min(maxLag, t); l++) {
+                    adstocked[t] += weights[l] * spend[t - l];
+                }
+            }
+            return adstocked;
+        }
+        
+        // Calculate half-life from alpha
+        function halfLife(alpha) {
+            if (alpha <= 0 || alpha >= 1) return Infinity;
+            return -Math.log(2) / Math.log(alpha);
+        }
+        
+        function updateAdstockDecayChart() {
+            const alpha = parseFloat(document.getElementById('adstock-alpha-slider').value);
+            document.getElementById('adstock-alpha-value').textContent = alpha.toFixed(2);
+            document.getElementById('adstock-halflife').textContent = halfLife(alpha).toFixed(1);
+            
+            const maxLag = 15;
+            const lags = Array.from({length: maxLag + 1}, (_, i) => i);
+            const weights = geometricWeights(alpha, maxLag);
+            
+            // Also show cumulative
+            const cumulative = [];
+            let cum = 0;
+            for (const w of weights) {
+                cum += w;
+                cumulative.push(cum);
+            }
+            
+            const data = [
+                {
+                    x: lags, y: weights,
+                    name: 'Weight',
+                    type: 'bar',
+                    marker: { color: colors.primary, opacity: 0.8 }
+                },
+                {
+                    x: lags, y: cumulative,
+                    name: 'Cumulative',
+                    type: 'scatter', mode: 'lines+markers',
+                    line: { color: colors.accent, width: 2 },
+                    marker: { size: 6 },
+                    yaxis: 'y2'
+                }
+            ];
+            
+            const hl = halfLife(alpha);
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Lag (periods)', gridcolor: colors.border, dtick: 2 },
+                yaxis: { title: 'Weight', gridcolor: colors.border, zeroline: false },
+                yaxis2: { title: 'Cumulative', overlaying: 'y', side: 'right', range: [0, 1.05], showgrid: false },
+                shapes: [{
+                    type: 'line', x0: hl, x1: hl, y0: 0, y1: 0.5, yref: 'y2',
+                    line: { color: colors.warning, width: 2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: hl, y: 0.52, yref: 'y2', text: 'Half-life',
+                    showarrow: false, font: { size: 10, color: colors.warning }
+                }],
+                margin: { l: 50, r: 60, t: 30, b: 50 },
+                bargap: 0.3
+            };
+            
+            Plotly.react('adstock-decay-chart', data, layout, plotConfig);
+        }
+        
+        function updateAdstockCompareChart() {
+            const alpha = parseFloat(document.getElementById('adstock-compare-alpha').value);
+            const theta = parseFloat(document.getElementById('adstock-weibull-theta').value);
+            const k = parseFloat(document.getElementById('adstock-weibull-k').value);
+            
+            document.getElementById('adstock-compare-alpha-value').textContent = alpha.toFixed(2);
+            document.getElementById('adstock-weibull-theta-value').textContent = theta.toFixed(1);
+            document.getElementById('adstock-weibull-k-value').textContent = k.toFixed(2);
+            
+            const maxLag = 12;
+            const lags = Array.from({length: maxLag + 1}, (_, i) => i);
+            const geoWeights = geometricWeights(alpha, maxLag);
+            const weibWeights = weibullWeights(theta, k, maxLag);
+            
+            const data = [
+                {
+                    x: lags, y: geoWeights,
+                    name: `Geometric α=${alpha.toFixed(2)}`,
+                    type: 'scatter', mode: 'lines+markers',
+                    line: { color: colors.primary, width: 2.5 },
+                    marker: { size: 7 }
+                },
+                {
+                    x: lags, y: weibWeights,
+                    name: `Weibull θ=${theta.toFixed(1)}, k=${k.toFixed(1)}`,
+                    type: 'scatter', mode: 'lines+markers',
+                    line: { color: colors.accent, width: 2.5 },
+                    marker: { size: 7 }
+                }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Lag (periods)', gridcolor: colors.border, dtick: 2 },
+                yaxis: { title: 'Normalized Weight', gridcolor: colors.border, zeroline: false }
+            };
+            
+            Plotly.react('adstock-compare-chart', data, layout, plotConfig);
+        }
+        
+        function updateAdstockDemoChart() {
+            const adstockType = document.getElementById('adstock-demo-type').value;
+            
+            // Create sample spend pattern: pulse + steady + pulse
+            const n = 30;
+            const time = Array.from({length: n}, (_, i) => i);
+            const spend = new Array(n).fill(0);
+            // Pulse at t=3
+            spend[3] = 1;
+            // Steady spend t=10-12
+            spend[10] = 0.5; spend[11] = 0.5; spend[12] = 0.5;
+            // Pulse at t=20
+            spend[20] = 0.8;
+            
+            let weights;
+            let adstockLabel;
+            switch(adstockType) {
+                case 'geometric':
+                    weights = geometricWeights(0.7, 10);
+                    adstockLabel = 'Geometric (α=0.7)';
+                    break;
+                case 'geometric-high':
+                    weights = geometricWeights(0.9, 15);
+                    adstockLabel = 'Geometric (α=0.9)';
+                    break;
+                case 'weibull':
+                    weights = weibullWeights(3, 2, 10);
+                    adstockLabel = 'Weibull (θ=3, k=2)';
+                    break;
+            }
+            
+            const adstocked = applyAdstock(spend, weights);
+            
+            const data = [
+                {
+                    x: time, y: spend,
+                    name: 'Raw Spend',
+                    type: 'bar',
+                    marker: { color: colors.textMuted, opacity: 0.5 }
+                },
+                {
+                    x: time, y: adstocked,
+                    name: adstockLabel,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.2)'
+                }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (periods)', gridcolor: colors.border },
+                yaxis: { title: 'Effect', gridcolor: colors.border, zeroline: false },
+                bargap: 0.5,
+                annotations: [
+                    { x: 3, y: 1.1, text: 'Pulse', showarrow: false, font: { size: 10, color: colors.textMuted } },
+                    { x: 11, y: 0.6, text: 'Steady', showarrow: false, font: { size: 10, color: colors.textMuted } },
+                    { x: 20, y: 0.9, text: 'Pulse', showarrow: false, font: { size: 10, color: colors.textMuted } }
+                ]
+            };
+            
+            Plotly.react('adstock-demo-chart', data, layout, plotConfig);
+        }
+
+        // Interactive comparison chart
+        function updateSaturationChart() {
+            const lambda = parseFloat(document.getElementById('lambda-slider').value);
+            const kappa = parseFloat(document.getElementById('kappa-slider').value);
+            const slope = parseFloat(document.getElementById('slope-slider').value);
+
+            document.getElementById('lambda-value').textContent = lambda.toFixed(1);
+            document.getElementById('kappa-value').textContent = kappa.toFixed(2);
+            document.getElementById('slope-value').textContent = slope.toFixed(1);
+
+            const logisticY = xVals.map(x => logisticSat(x, lambda));
+            const hillY = xVals.map(x => hillSat(x, kappa, slope));
+
+            const data = [
+                {
+                    x: xVals, y: logisticY,
+                    name: `Logistic λ=${lambda.toFixed(1)}`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.primary, width: 3 }
+                },
+                {
+                    x: xVals, y: hillY,
+                    name: `Hill K=${kappa.toFixed(2)}`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.accent, width: 3 }
+                },
+                {
+                    x: [0, 1], y: [0, 1],
+                    name: 'Linear',
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.textMuted, width: 1.5, dash: 'dash' }
+                }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Normalized Spend', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Saturation Effect', range: [0, 1.05], gridcolor: colors.border, zeroline: false },
+                shapes: [
+                    // Hill K marker
+                    { type: 'line', x0: kappa, x1: kappa, y0: 0, y1: 0.5, 
+                      line: { color: colors.accent, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: 0, x1: kappa, y0: 0.5, y1: 0.5, 
+                      line: { color: colors.accent, width: 1, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: kappa, y: 0.52, text: 'K (50%)', showarrow: false, 
+                      font: { size: 10, color: colors.accent } }
+                ]
+            };
+
+            Plotly.react('saturation-chart', data, layout, plotConfig);
+        }
+
+        // Hill parameters demonstration chart
+        function initHillParamsChart() {
+            const kappas = [0.3, 0.5, 0.7];
+            const slopes = [0.5, 1, 2, 4];
+            
+            const data = [];
+            
+            // Vary K with fixed S=2
+            kappas.forEach((k, i) => {
+                const y = xVals.map(x => hillSat(x, k, 2));
+                data.push({
+                    x: xVals, y: y,
+                    name: `K=${k} (S=2)`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.primary, width: 2.5, dash: i === 1 ? 'solid' : (i === 0 ? 'dot' : 'dash') },
+                    legendgroup: 'k'
+                });
+            });
+            
+            // Vary S with fixed K=0.5
+            const sColors = [colors.accent, colors.accentDark, colors.warning, colors.danger];
+            slopes.forEach((s, i) => {
+                const y = xVals.map(x => hillSat(x, 0.5, s));
+                data.push({
+                    x: xVals, y: y,
+                    name: `S=${s} (K=0.5)`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: sColors[i], width: 2 },
+                    legendgroup: 's',
+                    visible: 'legendonly'
+                });
+            });
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Normalized Spend', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Saturation Effect', range: [0, 1.05], gridcolor: colors.border, zeroline: false },
+                annotations: [
+                    { x: 0.5, y: 1.08, xref: 'paper', yref: 'paper', text: 'Click legend to toggle S variations', 
+                      showarrow: false, font: { size: 11, color: colors.textMuted } }
+                ]
+            };
+
+            Plotly.newPlot('hill-params-chart', data, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // TREND & SEASONALITY VISUALIZATIONS
+        // =====================================================================
+        
+        // Generate time points (0 to 1 representing normalized time, e.g., 2 years)
+        const tVals = linspace(0, 1, 200);
+        
+        // Trend functions
+        function linearTrend(t, slope) {
+            return slope * t;
+        }
+        
+        function piecewiseTrend(t, slope1, slope2, changepoint) {
+            if (t < changepoint) {
+                return slope1 * t;
+            } else {
+                const y_cp = slope1 * changepoint;
+                return y_cp + slope2 * (t - changepoint);
+            }
+        }
+        
+        // Simple B-spline basis (cubic)
+        function bsplineBasis(t, knots) {
+            // Simplified: return weighted sum creating smooth curve
+            let result = 0;
+            const n = knots.length;
+            for (let i = 0; i < n; i++) {
+                const center = knots[i];
+                const width = 1.5 / n;
+                const weight = Math.exp(-Math.pow((t - center) / width, 2));
+                // Vary heights to create interesting pattern
+                const coef = 0.3 * Math.sin(2 * Math.PI * i / n + 0.5) + 0.1 * Math.cos(4 * Math.PI * i / n);
+                result += coef * weight;
+            }
+            return result;
+        }
+        
+        function splineTrend(t, numKnots) {
+            const knots = linspace(0.1, 0.9, numKnots);
+            return bsplineBasis(t, knots) + 0.15 * t; // Add slight upward trend
+        }
+        
+        // Fourier seasonality
+        function fourierSeasonality(t, order, period = 1, coeffs = null) {
+            let result = 0;
+            for (let n = 1; n <= order; n++) {
+                const freq = 2 * Math.PI * n * t / period;
+                // Default coefficients that create realistic seasonal pattern
+                const a_n = coeffs ? coeffs[n-1][0] : (n === 1 ? 0.3 : 0.15 / n);
+                const b_n = coeffs ? coeffs[n-1][1] : (n === 1 ? 0.1 : 0.1 / n);
+                result += a_n * Math.sin(freq) + b_n * Math.cos(freq);
+            }
+            return result;
+        }
+        
+        function updateTrendChart() {
+            const slope = parseFloat(document.getElementById('trend-slope-slider').value);
+            const cp = parseFloat(document.getElementById('trend-cp-slider').value);
+            const numKnots = parseInt(document.getElementById('trend-spline-slider').value);
+            
+            document.getElementById('trend-slope-value').textContent = slope.toFixed(2);
+            document.getElementById('trend-cp-value').textContent = cp.toFixed(2);
+            document.getElementById('trend-spline-value').textContent = numKnots + ' knots';
+            
+            const linearY = tVals.map(t => linearTrend(t, slope));
+            const piecewiseY = tVals.map(t => piecewiseTrend(t, slope, -slope * 0.5, cp));
+            const splineY = tVals.map(t => splineTrend(t, numKnots));
+            
+            const data = [
+                { x: tVals, y: linearY, name: 'Linear', type: 'scatter', mode: 'lines',
+                  line: { color: colors.primary, width: 2.5 } },
+                { x: tVals, y: piecewiseY, name: 'Piecewise', type: 'scatter', mode: 'lines',
+                  line: { color: colors.accent, width: 2.5 } },
+                { x: tVals, y: splineY, name: 'B-Spline', type: 'scatter', mode: 'lines',
+                  line: { color: colors.warning, width: 2.5 } }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (normalized)', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Trend τ(t)', gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                shapes: [{
+                    type: 'line', x0: cp, x1: cp, y0: -0.3, y1: 0.3,
+                    line: { color: colors.accent, width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: cp, y: 0.32, text: 'Changepoint', showarrow: false,
+                    font: { size: 10, color: colors.accent }
+                }]
+            };
+            
+            Plotly.react('trend-chart', data, layout, plotConfig);
+        }
+        
+        function updateSeasonalityChart() {
+            const order = parseInt(document.getElementById('season-order-slider').value);
+            document.getElementById('season-order-value').textContent = order;
+            
+            const data = [];
+            const seasonColors = [colors.primary, colors.accent, colors.warning, colors.danger, '#9b59b6', '#1abc9c'];
+            
+            // Show individual harmonics
+            for (let n = 1; n <= order; n++) {
+                const y = tVals.map(t => {
+                    const freq = 2 * Math.PI * n * t;
+                    const a_n = n === 1 ? 0.3 : 0.15 / n;
+                    const b_n = n === 1 ? 0.1 : 0.1 / n;
+                    return a_n * Math.sin(freq) + b_n * Math.cos(freq);
+                });
+                data.push({
+                    x: tVals, y: y,
+                    name: `n=${n}`,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: seasonColors[n-1], width: 1.5, dash: 'dot' },
+                    opacity: 0.7
+                });
+            }
+            
+            // Show combined seasonality
+            const combinedY = tVals.map(t => fourierSeasonality(t, order));
+            data.push({
+                x: tVals, y: combinedY,
+                name: 'Combined',
+                type: 'scatter', mode: 'lines',
+                line: { color: colors.text, width: 3 }
+            });
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (1 period)', range: [0, 1], gridcolor: colors.border, zeroline: false },
+                yaxis: { title: 'Seasonality s(t)', gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                margin: { l: 50, r: 150, t: 30, b: 50 }
+            };
+            
+            Plotly.react('seasonality-chart', data, layout, plotConfig);
+        }
+        
+        function updateCombinedTrendSeasonChart() {
+            const trendType = document.getElementById('combined-trend-select').value;
+            const seasonOrder = parseInt(document.getElementById('combined-season-select').value);
+            
+            // Generate trend
+            let trendY;
+            switch(trendType) {
+                case 'linear':
+                    trendY = tVals.map(t => linearTrend(t, 0.2));
+                    break;
+                case 'piecewise':
+                    trendY = tVals.map(t => piecewiseTrend(t, 0.3, -0.1, 0.5));
+                    break;
+                case 'spline':
+                    trendY = tVals.map(t => splineTrend(t, 5));
+                    break;
+            }
+            
+            // Generate seasonality (2 full cycles to show pattern)
+            const seasonY = seasonOrder > 0 
+                ? tVals.map(t => fourierSeasonality(t * 2, seasonOrder))  // 2 cycles
+                : tVals.map(() => 0);
+            
+            // Combined
+            const combinedY = tVals.map((t, i) => trendY[i] + seasonY[i]);
+            
+            const data = [
+                { x: tVals, y: trendY, name: 'Trend', type: 'scatter', mode: 'lines',
+                  line: { color: colors.primary, width: 2, dash: 'dash' } },
+                { x: tVals, y: seasonY, name: 'Seasonality', type: 'scatter', mode: 'lines',
+                  line: { color: colors.accent, width: 2, dash: 'dot' } },
+                { x: tVals, y: combinedY, name: 'Baseline', type: 'scatter', mode: 'lines',
+                  line: { color: colors.text, width: 3 } }
+            ];
+            
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Time (2 years)', range: [0, 1], gridcolor: colors.border, zeroline: false,
+                         tickvals: [0, 0.25, 0.5, 0.75, 1], ticktext: ['0', '6mo', '1yr', '18mo', '2yr'] },
+                yaxis: { title: 'Baseline (before media)', gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted }
+            };
+            
+            Plotly.react('combined-trend-season-chart', data, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // PRIOR EXPLORER
+        // =====================================================================
+        
+        // Mathematical functions for distributions
+        const gamma_fn = (z) => {
+            // Lanczos approximation for gamma function
+            if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gamma_fn(1 - z));
+            z -= 1;
+            const g = 7;
+            const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+                771.32342877765313, -176.61502916214059, 12.507343278686905,
+                -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+            let x = c[0];
+            for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+            const t = z + g + 0.5;
+            return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+        };
+
+        const beta_fn = (a, b) => gamma_fn(a) * gamma_fn(b) / gamma_fn(a + b);
+
+        // PDF functions
+        const priorPDFs = {
+            halfnormal: (x, sigma) => {
+                if (x < 0) return 0;
+                return (2 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-x * x / (2 * sigma * sigma));
+            },
+            normal: (x, mu, sigma) => {
+                return (1 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma));
+            },
+            beta: (x, a, b) => {
+                if (x <= 0 || x >= 1) return 0;
+                return (Math.pow(x, a - 1) * Math.pow(1 - x, b - 1)) / beta_fn(a, b);
+            },
+            gamma: (x, alpha, beta) => {
+                if (x <= 0) return 0;
+                return (Math.pow(beta, alpha) / gamma_fn(alpha)) * Math.pow(x, alpha - 1) * Math.exp(-beta * x);
+            },
+            lognormal: (x, mu, sigma) => {
+                if (x <= 0) return 0;
+                return (1 / (x * sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-((Math.log(x) - mu) ** 2) / (2 * sigma * sigma));
+            },
+            exponential: (x, rate) => {
+                if (x < 0) return 0;
+                return rate * Math.exp(-rate * x);
+            }
+        };
+
+        // Distribution metadata
+        const priorInfo = {
+            halfnormal: {
+                name: 'Half-Normal',
+                params: [{ name: 'σ (sigma)', id: 'sigma', min: 0.1, max: 2, step: 0.1, default: 0.5 }],
+                xRange: [0, 4],
+                description: '<strong>HalfNormal(σ)</strong> — A normal distribution truncated at zero. Commonly used for parameters that must be positive (media coefficients, noise). The mode is always at zero, with σ controlling spread.',
+                useCase: 'Media coefficients, noise σ, hierarchical standard deviations'
+            },
+            normal: {
+                name: 'Normal',
+                params: [
+                    { name: 'μ (mu)', id: 'mu', min: -2, max: 2, step: 0.1, default: 0 },
+                    { name: 'σ (sigma)', id: 'sigma', min: 0.1, max: 2, step: 0.1, default: 0.5 }
+                ],
+                xRange: [-4, 4],
+                description: '<strong>Normal(μ, σ)</strong> — The classic bell curve centered at μ. Used for parameters that can be positive or negative. Width controlled by σ.',
+                useCase: 'Control coefficients, intercepts, trend slopes'
+            },
+            beta: {
+                name: 'Beta',
+                params: [
+                    { name: 'α (alpha)', id: 'alpha', min: 0.5, max: 5, step: 0.25, default: 2 },
+                    { name: 'β (beta)', id: 'beta', min: 0.5, max: 5, step: 0.25, default: 2 }
+                ],
+                xRange: [0, 1],
+                description: '<strong>Beta(α, β)</strong> — Flexible distribution bounded to [0, 1]. α=β=1 is uniform; α=β>1 is bell-shaped and centered; α<β shifts mass left; α>β shifts mass right.',
+                useCase: 'Adstock decay rates, Hill K parameter, any proportion'
+            },
+            gamma: {
+                name: 'Gamma',
+                params: [
+                    { name: 'α (shape)', id: 'alpha', min: 0.5, max: 5, step: 0.25, default: 2 },
+                    { name: 'β (rate)', id: 'beta', min: 0.5, max: 3, step: 0.25, default: 1 }
+                ],
+                xRange: [0, 8],
+                description: '<strong>Gamma(α, β)</strong> — Positive continuous distribution. Shape α controls peakedness (α=1 is exponential); rate β controls scale. Mean = α/β.',
+                useCase: 'Saturation parameters, positive coefficients with flexibility'
+            },
+            lognormal: {
+                name: 'Log-Normal',
+                params: [
+                    { name: 'μ (log-mean)', id: 'mu', min: -1, max: 1, step: 0.1, default: 0 },
+                    { name: 'σ (log-sd)', id: 'sigma', min: 0.2, max: 1.5, step: 0.1, default: 0.5 }
+                ],
+                xRange: [0, 5],
+                description: '<strong>LogNormal(μ, σ)</strong> — If log(X) ~ Normal(μ, σ), then X ~ LogNormal. Always positive with right skew. Useful for multiplicative effects.',
+                useCase: 'Scale parameters, multiplicative coefficients'
+            },
+            exponential: {
+                name: 'Exponential',
+                params: [
+                    { name: 'λ (rate)', id: 'rate', min: 0.5, max: 3, step: 0.25, default: 1 }
+                ],
+                xRange: [0, 6],
+                description: '<strong>Exponential(λ)</strong> — Special case of Gamma(1, λ). Mode at zero, decreasing density. Mean = 1/λ. Strong regularization toward zero.',
+                useCase: 'LASSO-style shrinkage, sparse priors'
+            }
+        };
+
+        function updatePriorParams() {
+            const dist = document.getElementById('prior-dist-select').value;
+            const info = priorInfo[dist];
+            const container = document.getElementById('prior-params-container');
+            
+            container.innerHTML = info.params.map(p => `
+                <div class="control-row">
+                    <label>${p.name}:</label>
+                    <input type="range" id="prior-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}">
+                    <span class="value" id="prior-${p.id}-value">${p.default.toFixed(2)}</span>
+                </div>
+            `).join('');
+            
+            // Add event listeners
+            info.params.forEach(p => {
+                document.getElementById(`prior-${p.id}`).addEventListener('input', updatePriorChart);
+            });
+            
+            updatePriorChart();
+        }
+
+        function updatePriorChart() {
+            const dist = document.getElementById('prior-dist-select').value;
+            const info = priorInfo[dist];
+            
+            // Get parameter values
+            const params = info.params.map(p => {
+                const val = parseFloat(document.getElementById(`prior-${p.id}`).value);
+                document.getElementById(`prior-${p.id}-value`).textContent = val.toFixed(2);
+                return val;
+            });
+            
+            // Generate x values
+            const xMin = info.xRange[0];
+            const xMax = info.xRange[1];
+            const xPrior = linspace(xMin + 0.001, xMax - 0.001, 200);
+            
+            // Compute PDF
+            const yPrior = xPrior.map(x => {
+                switch(dist) {
+                    case 'halfnormal': return priorPDFs.halfnormal(x, params[0]);
+                    case 'normal': return priorPDFs.normal(x, params[0], params[1]);
+                    case 'beta': return priorPDFs.beta(x, params[0], params[1]);
+                    case 'gamma': return priorPDFs.gamma(x, params[0], params[1]);
+                    case 'lognormal': return priorPDFs.lognormal(x, params[0], params[1]);
+                    case 'exponential': return priorPDFs.exponential(x, params[0]);
+                }
+            });
+            
+            // Build parameter string for title
+            const paramStr = info.params.map((p, i) => `${p.name.split(' ')[0]}=${params[i].toFixed(2)}`).join(', ');
+            
+            const data = [{
+                x: xPrior,
+                y: yPrior,
+                type: 'scatter',
+                mode: 'lines',
+                fill: 'tozeroy',
+                fillcolor: 'rgba(143, 168, 106, 0.3)',
+                line: { color: colors.primary, width: 3 },
+                name: `${info.name}<br>(${paramStr})`
+            }];
+            
+            // Add mean line if calculable
+            let mean = null;
+            switch(dist) {
+                case 'halfnormal': mean = params[0] * Math.sqrt(2 / Math.PI); break;
+                case 'normal': mean = params[0]; break;
+                case 'beta': mean = params[0] / (params[0] + params[1]); break;
+                case 'gamma': mean = params[0] / params[1]; break;
+                case 'lognormal': mean = Math.exp(params[0] + params[1]*params[1]/2); break;
+                case 'exponential': mean = 1 / params[0]; break;
+            }
+            
+            const yMax = Math.max(...yPrior) * 1.1;
+            
+            const layout = {
+                ...baseLayout,
+                title: { text: `${info.name} Distribution`, font: { size: 16 } },
+                xaxis: { title: 'Parameter Value', range: info.xRange, gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                yaxis: { title: 'Density', range: [0, yMax], gridcolor: colors.border, zeroline: false },
+                shapes: mean !== null ? [{
+                    type: 'line', x0: mean, x1: mean, y0: 0, y1: yMax * 0.9,
+                    line: { color: colors.accent, width: 2, dash: 'dash' }
+                }] : [],
+                annotations: mean !== null ? [{
+                    x: mean, y: yMax * 0.95, text: `Mean: ${mean.toFixed(3)}`,
+                    showarrow: false, font: { color: colors.accent, size: 11 }
+                }] : []
+            };
+            
+            Plotly.react('prior-chart', data, layout, plotConfig);
+            
+            // Update description
+            document.getElementById('prior-description').innerHTML = `
+                <h4>${info.name} Distribution</h4>
+                <p>${info.description}</p>
+                <p><strong>Common use:</strong> ${info.useCase}</p>
+            `;
+        }
+
+        function updatePriorComparison() {
+            const compareType = document.getElementById('prior-compare-select').value;
+            let data = [];
+            let xRange, title;
+            
+            switch(compareType) {
+                case 'media':
+                    xRange = [0, 2];
+                    title = 'Media Coefficient Priors (must be positive)';
+                    const xMedia = linspace(0.001, 2, 200);
+                    data = [
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HN(0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HN(0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.halfnormal(x, 1.0)), name: 'HN(1.0)', line: { color: colors.warning, width: 2 } },
+                        { x: xMedia, y: xMedia.map(x => priorPDFs.gamma(x, 2, 2)), name: 'Gamma(2,2)', line: { color: colors.danger, width: 2, dash: 'dash' } }
+                    ];
+                    break;
+                case 'adstock':
+                    xRange = [0, 1];
+                    title = 'Adstock Decay Priors (bounded 0-1)';
+                    const xAdstock = linspace(0.001, 0.999, 200);
+                    data = [
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 3)), name: 'B(1,3) low', line: { color: colors.primary, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 2, 2)), name: 'B(2,2) centered', line: { color: colors.accent, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 3, 1)), name: 'B(3,1) high', line: { color: colors.warning, width: 2 } },
+                        { x: xAdstock, y: xAdstock.map(x => priorPDFs.beta(x, 1, 1)), name: 'B(1,1) uniform', line: { color: colors.textMuted, width: 2, dash: 'dash' } }
+                    ];
+                    break;
+                case 'control':
+                    xRange = [-2, 2];
+                    title = 'Control Coefficient Priors (can be +/-)';
+                    const xControl = linspace(-2, 2, 200);
+                    data = [
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.3)), name: 'N(0,0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 0.5)), name: 'N(0,0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xControl, y: xControl.map(x => priorPDFs.normal(x, 0, 1.0)), name: 'N(0,1.0)', line: { color: colors.warning, width: 2 } }
+                    ];
+                    break;
+                case 'noise':
+                    xRange = [0, 2];
+                    title = 'Noise/Scale Parameter Priors';
+                    const xNoise = linspace(0.001, 2, 200);
+                    data = [
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.3)), name: 'HN(0.3)', line: { color: colors.primary, width: 2 } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.halfnormal(x, 0.5)), name: 'HN(0.5)', line: { color: colors.accent, width: 2 } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.exponential(x, 2)), name: 'Exp(2)', line: { color: colors.warning, width: 2, dash: 'dash' } },
+                        { x: xNoise, y: xNoise.map(x => priorPDFs.gamma(x, 2, 4)), name: 'Gamma(2,4)', line: { color: colors.danger, width: 2, dash: 'dash' } }
+                    ];
+                    break;
+            }
+            
+            data.forEach(d => { d.type = 'scatter'; d.mode = 'lines'; });
+            
+            const layout = {
+                ...baseLayout,
+                title: { text: title, font: { size: 14 } },
+                xaxis: { title: 'Parameter Value', range: xRange, gridcolor: colors.border, zeroline: true, zerolinecolor: colors.textMuted },
+                yaxis: { title: 'Density', gridcolor: colors.border, zeroline: false },
+                legend: { 
+                    x: 1.02, 
+                    y: 1, 
+                    xanchor: 'left',
+                    yanchor: 'top',
+                    bgcolor: 'rgba(255,255,255,0.95)',
+                    bordercolor: colors.border,
+                    borderwidth: 1,
+                    font: { size: 11 },
+                    orientation: "h",
+                    entrywidth:140,  // Sets a fixed width (in pixels) for each entry
+                    entrywidthmode: "pixels"
+                },
+                margin: { l: 50, r: 80, t: 40, b: 50 }
+            };
+            
+            Plotly.react('prior-comparison-chart', data, layout, plotConfig);
+        }
+
+        // Event listeners
+        document.getElementById('lambda-slider').addEventListener('input', updateSaturationChart);
+        document.getElementById('kappa-slider').addEventListener('input', updateSaturationChart);
+        document.getElementById('slope-slider').addEventListener('input', updateSaturationChart);
+        document.getElementById('prior-dist-select').addEventListener('change', updatePriorParams);
+        document.getElementById('prior-compare-select').addEventListener('change', updatePriorComparison);
+        
+        // Adstock event listeners
+        document.getElementById('adstock-alpha-slider').addEventListener('input', updateAdstockDecayChart);
+        document.getElementById('adstock-compare-alpha').addEventListener('input', updateAdstockCompareChart);
+        document.getElementById('adstock-weibull-theta').addEventListener('input', updateAdstockCompareChart);
+        document.getElementById('adstock-weibull-k').addEventListener('input', updateAdstockCompareChart);
+        document.getElementById('adstock-demo-type').addEventListener('change', updateAdstockDemoChart);
+        
+        // Trend & Seasonality event listeners
+        document.getElementById('trend-slope-slider').addEventListener('input', updateTrendChart);
+        document.getElementById('trend-cp-slider').addEventListener('input', updateTrendChart);
+        document.getElementById('trend-spline-slider').addEventListener('input', updateTrendChart);
+        document.getElementById('season-order-slider').addEventListener('input', updateSeasonalityChart);
+        document.getElementById('combined-trend-select').addEventListener('change', updateCombinedTrendSeasonChart);
+        document.getElementById('combined-season-select').addEventListener('change', updateCombinedTrendSeasonChart);
+
+        // Initialize on DOM ready
+        document.addEventListener("DOMContentLoaded", function() {
+            // KaTeX
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ],
+                throwOnError: false
+            });
+
+            // Initialize charts
+            updateAdstockDecayChart();
+            updateAdstockCompareChart();
+            updateAdstockDemoChart();
+            updateSaturationChart();
+            initHillParamsChart();
+            updateTrendChart();
+            updateSeasonalityChart();
+            updateCombinedTrendSeasonChart();
+            updatePriorParams();
+            updatePriorComparison();
+        });
+    </script>
+</body>
+</html>

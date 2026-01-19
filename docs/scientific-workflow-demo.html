@@ -1,0 +1,3094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive MMM Workflow | Complete 9-Step Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #c9a067;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf8;
+            --color-bg-alt: #f5f7f2;
+            --color-surface: #ffffff;
+            --color-border: #e0e5dc;
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --transition-smooth: all 0.3s ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Source Sans 3', sans-serif; background: var(--color-bg); color: var(--color-text); line-height: 1.7; font-size: 17px; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+        .back-nav { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); margin-bottom: 1.5rem; }
+        .header { text-align: center; margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+        .header h1 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .header .subtitle { font-size: 1.15rem; color: var(--color-text-muted); }
+        
+        /* Progress - 9 steps */
+        .progress-container { margin-bottom: 2.5rem; overflow-x: auto; }
+        .progress-steps { display: flex; justify-content: space-between; position: relative; padding: 0 0.5rem; min-width: 800px; }
+        .progress-steps::before { content: ''; position: absolute; top: 18px; left: 0; right: 0; height: 3px; background: var(--color-border); border-radius: 2px; }
+        .progress-fill { position: absolute; top: 18px; left: 0; height: 3px; background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light)); border-radius: 2px; transition: width 0.5s ease; }
+        .step-indicator { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; cursor: pointer; z-index: 2; }
+        .step-circle { width: 36px; height: 36px; border-radius: 50%; background: var(--color-surface); border: 3px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; color: var(--color-text-muted); transition: var(--transition-smooth); }
+        .step-indicator.active .step-circle { border-color: var(--color-primary); background: var(--color-primary); color: white; }
+        .step-indicator.completed .step-circle { border-color: var(--color-success); background: var(--color-success); color: white; }
+        .step-label { font-size: 0.65rem; color: var(--color-text-muted); font-weight: 500; text-align: center; max-width: 70px; }
+        .step-indicator.active .step-label { color: var(--color-primary); font-weight: 600; }
+
+        /* Workflow Steps */
+        .workflow-step { display: none; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 2.5rem; box-shadow: var(--shadow-md); }
+        .workflow-step.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .workflow-step h2 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 1rem; }
+        .step-num { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; background: var(--color-primary); color: white; border-radius: 50%; font-size: 1.1rem; font-weight: 700; }
+        .step-subtitle { font-size: 1.05rem; color: var(--color-text-muted); margin-bottom: 1.5rem; padding-left: 58px; }
+        .workflow-step p { margin-bottom: 1.25rem; }
+        .workflow-step h3 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 1rem; }
+        .workflow-step h4 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+
+        /* Story Chapters */
+        .story-chapter { margin: 2rem 0; padding-bottom: 1.5rem; border-bottom: 1px dashed var(--color-border); }
+        .story-chapter:last-of-type { border-bottom: none; }
+
+        /* Collapsible Sections */
+        .collapsible { margin: 1.5rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+        .collapsible-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; background: var(--color-bg-alt); cursor: pointer; user-select: none; }
+        .collapsible-header:hover { background: var(--color-border); }
+        .collapsible-header h4 { display: flex; align-items: center; gap: 0.75rem; font-size: 1rem; margin: 0; }
+        .collapsible-header .icon { font-size: 1.25rem; }
+        .collapsible-header .arrow { transition: transform 0.3s ease; color: var(--color-text-muted); }
+        .collapsible.open .collapsible-header .arrow { transform: rotate(180deg); }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+        .collapsible.open .collapsible-content { max-height: 3000px; }
+        .collapsible-inner { padding: 1.5rem; border-top: 1px solid var(--color-border); }
+
+        /* Story to Math Connection */
+        .story-math-connection { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center; margin: 1.5rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(143,168,106,0.08) 0%, rgba(106,143,168,0.08) 100%); border-radius: var(--radius-md); }
+        .story-box, .math-box { padding: 1.25rem; border-radius: var(--radius-sm); background: var(--color-surface); }
+        .story-box { border: 1px solid var(--color-border); }
+        .story-box h5 { color: var(--color-accent-dark); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .math-box { border: 1px solid var(--color-primary); }
+        .math-box h5 { color: var(--color-primary-dark); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .arrow-connector { font-size: 1.5rem; color: var(--color-primary); }
+        .formula { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; background: var(--color-bg-alt); padding: 0.5rem 0.75rem; border-radius: 4px; display: inline-block; margin-top: 0.5rem; }
+
+        /* Boxes */
+        .analogy-box { background: linear-gradient(135deg, var(--color-bg-alt) 0%, var(--color-surface) 100%); border: 1px solid var(--color-border); border-left: 5px solid var(--color-accent); border-radius: var(--radius-md); padding: 1.5rem 1.75rem; margin: 1.5rem 0; position: relative; }
+        .analogy-box::before { content: "💡"; position: absolute; top: -10px; left: 16px; font-size: 1.25rem; background: var(--color-surface); padding: 0 0.4rem; }
+        .analogy-box h4 { color: var(--color-accent-dark); margin-bottom: 0.5rem; font-size: 1rem; }
+        .analogy-box p:last-child { margin-bottom: 0; }
+        .why-box { background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%); border: 1px solid rgba(90,124,101,0.3); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .why-box h4 { color: var(--color-primary-dark); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .why-box h4::before { content: "✦"; color: var(--color-primary); }
+        .warning-box { background: linear-gradient(135deg, rgba(201,160,103,0.1) 0%, rgba(201,112,103,0.05) 100%); border: 1px solid rgba(201,112,103,0.3); border-left: 5px solid var(--color-warning); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .warning-box h4 { color: var(--color-danger); margin-bottom: 0.5rem; }
+        .success-box { background: linear-gradient(135deg, rgba(103,201,154,0.1) 0%, rgba(103,201,154,0.05) 100%); border: 1px solid rgba(103,201,154,0.4); border-left: 5px solid var(--color-success); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .success-box h4 { color: #3d8b5a; margin-bottom: 0.5rem; }
+        .danger-box { background: linear-gradient(135deg, rgba(201,112,103,0.1) 0%, rgba(201,112,103,0.05) 100%); border: 1px solid rgba(201,112,103,0.4); border-left: 5px solid var(--color-danger); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .danger-box h4 { color: var(--color-danger); margin-bottom: 0.5rem; }
+
+        /* Charts */
+        .chart-container { width: 100%; height: 320px; margin: 1rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+        .chart-container.tall { height: 400px; }
+        .chart-container.short { height: 250px; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0; }
+        .chart-box { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; }
+        .chart-box h4 { font-size: 0.95rem; margin-bottom: 0.75rem; margin-top: 0; }
+        .chart-box .chart-container { height: 250px; margin: 0; border: none; }
+        .chart-explanation { background: var(--color-bg-alt); border-radius: var(--radius-sm); padding: 1rem 1.25rem; font-size: 0.9rem; color: var(--color-text-muted); margin-top: 0.5rem; }
+        .chart-explanation strong { color: var(--color-text); }
+
+        /* Controls */
+        .control-panel { background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.5rem; margin: 1.5rem 0; }
+        .control-panel h4 { margin-bottom: 1rem; font-size: 1rem; margin-top: 0; }
+        .control-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        .control-row:last-child { margin-bottom: 0; }
+        .control-row label { min-width: 180px; font-weight: 500; font-size: 0.95rem; }
+        .control-row input[type="range"] { flex: 1; height: 6px; border-radius: 3px; background: var(--color-border); appearance: none; cursor: pointer; }
+        .control-row input[type="range"]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--color-primary); cursor: pointer; }
+        .control-row select { flex: 1; padding: 0.5rem 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: inherit; font-size: 0.95rem; background: var(--color-surface); cursor: pointer; }
+        .value-display { min-width: 50px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; font-weight: 600; color: var(--color-primary-dark); background: var(--color-surface); padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); }
+
+        /* Scenario Cards */
+        .scenario-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .scenario-card { background: var(--color-surface); border: 2px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem; cursor: pointer; transition: var(--transition-smooth); }
+        .scenario-card:hover { border-color: var(--color-primary-light); }
+        .scenario-card.selected { border-color: var(--color-primary); background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, var(--color-surface) 100%); }
+        .scenario-card .icon { font-size: 1.75rem; margin-bottom: 0.5rem; }
+        .scenario-card h5 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+        .scenario-card p { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
+
+        /* Buttons */
+        .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); border: none; font-family: inherit; }
+        .btn-primary { background: var(--color-primary); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--color-primary-dark); }
+        .btn-secondary { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); }
+        .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .btn-success { background: var(--color-success); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .step-nav { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border); }
+
+        /* Visual Row */
+        .visual-row { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: center; margin: 1.5rem 0; padding: 1.5rem; background: var(--color-bg-alt); border-radius: var(--radius-md); }
+        .visual-row .icon { font-size: 2.5rem; line-height: 1; }
+        .visual-row h4 { margin-bottom: 0.5rem; color: var(--color-primary-dark); margin-top: 0; }
+
+        /* Tables */
+        .data-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+        .data-table th, .data-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        .data-table th { background: var(--color-bg-alt); font-weight: 600; color: var(--color-text-muted); font-size: 0.8rem; text-transform: uppercase; }
+        .data-table .mono { font-family: 'JetBrains Mono', monospace; }
+        .data-table .positive { color: #3d8b5a; }
+        .data-table .negative { color: var(--color-danger); }
+        .data-table .warning { color: #8a6d2d; }
+
+        /* Terminal */
+        .terminal-output { background: #1e2a1e; color: #a8c99a; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 1.25rem; border-radius: var(--radius-md); margin: 1rem 0; max-height: 280px; overflow-y: auto; line-height: 1.6; }
+        .terminal-output .info { color: #6ab0f3; }
+        .terminal-output .success { color: #98c379; }
+        .terminal-output .warning { color: #e5c07b; }
+        .terminal-output .error { color: #e06c75; }
+
+        /* Checklist */
+        .checklist { list-style: none; padding: 0; margin: 1rem 0; }
+        .checklist li { padding: 0.6rem 0; padding-left: 2rem; position: relative; border-bottom: 1px solid var(--color-border); }
+        .checklist li:last-child { border-bottom: none; }
+        .checklist li::before { content: "○"; position: absolute; left: 0; color: var(--color-text-muted); font-weight: bold; }
+        .checklist li.checked::before { content: "✓"; color: var(--color-success); }
+        .checklist li.failed::before { content: "✗"; color: var(--color-danger); }
+        .checklist li.warning::before { content: "⚠"; color: var(--color-warning); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .stat-card { background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; text-align: center; }
+        .stat-card .label { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .stat-card .value { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; }
+        .stat-card .value.good { color: var(--color-success); }
+        .stat-card .value.bad { color: var(--color-danger); }
+        .stat-card .value.warn { color: var(--color-warning); }
+
+        /* Findings List */
+        .finding { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; margin: 0.75rem 0; border-radius: var(--radius-md); }
+        .finding.confident { background: rgba(103,201,154,0.1); border-left: 4px solid var(--color-success); }
+        .finding.uncertain { background: rgba(201,160,103,0.1); border-left: 4px solid var(--color-warning); }
+        .finding.negative { background: rgba(201,112,103,0.1); border-left: 4px solid var(--color-danger); }
+        .finding .icon { font-size: 1.5rem; }
+        .finding h5 { margin: 0 0 0.25rem 0; font-size: 1rem; }
+        .finding p { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+
+        /* Scenario Grid */
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .scenario-card {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .scenario-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .scenario-card.selected {
+            border-color: var(--color-primary);
+            background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, rgba(90,124,101,0.03) 100%);
+        }
+
+        .scenario-card .scenario-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .scenario-card h5 {
+            font-size: 1rem;
+            margin: 0 0 0.5rem 0;
+            color: var(--color-text);
+        }
+
+        .scenario-card p {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin: 0 0 0.75rem 0;
+            line-height: 1.5;
+        }
+
+        .scenario-implication {
+            font-size: 0.8rem;
+            padding: 0.5rem;
+            background: var(--color-bg-alt);
+            border-radius: 6px;
+            color: var(--color-primary-dark);
+        }
+
+        /* Options Table */
+        .options-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .options-table th {
+            background: var(--color-bg-alt);
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .options-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+
+        .options-table .option-row {
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .options-table .option-row:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .options-table .option-row.selected {
+            background: linear-gradient(135deg, rgba(90,124,101,0.1) 0%, rgba(90,124,101,0.05) 100%);
+        }
+
+        .options-table .option-row.selected td:first-child {
+            border-left: 3px solid var(--color-primary);
+        }
+
+        .options-table .pro {
+            color: var(--color-success);
+            font-size: 0.8rem;
+        }
+
+        .options-table .con {
+            color: var(--color-danger);
+            font-size: 0.8rem;
+        }
+
+        /* Trend/Seasonality Controls */
+        .trend-controls, .seasonality-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+        }
+
+        .trend-controls label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            padding: 0.5rem 0.75rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .trend-controls label:hover {
+            border-color: var(--color-primary);
+        }
+
+        .trend-controls input[type="radio"]:checked + label,
+        .trend-controls label:has(input:checked) {
+            border-color: var(--color-primary);
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .seasonality-controls input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+        }
+
+        #fourierOrderVal {
+            font-weight: 600;
+            background: var(--color-surface);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 900px) {
+            .progress-steps { min-width: 700px; }
+            .step-label { font-size: 0.6rem; max-width: 60px; }
+        }
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .chart-grid { grid-template-columns: 1fr; }
+            .story-math-connection { grid-template-columns: 1fr; }
+            .arrow-connector { transform: rotate(90deg); justify-self: center; }
+            .scenario-selector { grid-template-columns: 1fr; }
+            .control-row { flex-wrap: wrap; }
+            .control-row label { min-width: 100%; }
+        }
+    </style>
+    <style>
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-dark: #486654;
+            --color-primary-light: #8fa86a;
+            --color-accent: #c9a067;
+            --color-accent-dark: #a68547;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #f8faf6;
+            --color-bg-alt: #eef3ea;
+            --color-surface: #ffffff;
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 1px 3px rgba(45,58,45,0.08);
+            --shadow-md: 0 4px 12px rgba(45,58,45,0.1);
+            --shadow-lg: 0 8px 24px rgba(45,58,45,0.15);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Source Sans 3', -apple-system, sans-serif; 
+            background: var(--color-bg); 
+            color: var(--color-text); 
+            line-height: 1.7; 
+            padding: 2rem;
+        }
+        
+        .container { max-width: 920px; margin: 0 auto; }
+
+        /* Headers */
+        h2 { 
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 1.9rem; 
+            margin-bottom: 0.5rem; 
+            display: flex; 
+            align-items: center; 
+            gap: 0.75rem;
+            color: var(--color-text);
+        }
+        h3 { font-size: 1.3rem; margin: 2rem 0 1rem; color: var(--color-primary-dark); }
+        h4 { font-size: 1.05rem; margin: 1rem 0 0.5rem; }
+        h5 { font-size: 0.95rem; margin: 0.75rem 0 0.5rem; color: var(--color-text-muted); }
+        p { margin-bottom: 1rem; }
+
+        .step-num { 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            width: 2.75rem; 
+            height: 2.75rem; 
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%); 
+            color: white; 
+            border-radius: 50%; 
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .step-subtitle { 
+            color: var(--color-text-muted); 
+            font-size: 1.1rem; 
+            margin-bottom: 1.75rem;
+            font-style: italic;
+        }
+
+        /* Story Chapters */
+        .story-chapter { 
+            margin: 1.5rem 0; 
+            padding-bottom: 1.5rem; 
+            border-bottom: 1px dashed var(--color-border);
+        }
+        
+        .story-chapter:last-of-type { 
+            border-bottom: none; 
+        }
+        
+        .visual-row { 
+            display: grid; 
+            grid-template-columns: auto 1fr; 
+            gap: 1.5rem; 
+            align-items: center; 
+            margin: 1.5rem 0; 
+            padding: 1.5rem; 
+            background: var(--color-bg-alt); 
+            border-radius: var(--radius-md); 
+        }
+        
+        .visual-row .icon { 
+            font-size: 2.5rem; 
+            line-height: 1;
+        }
+        
+        .visual-row h4 {
+            color: var(--color-primary-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        /* DAG Container */
+        .dag-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .dag-box {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .dag-box.safe {
+            border-color: var(--color-success);
+            background: linear-gradient(135deg, rgba(103,201,154,0.08) 0%, rgba(103,201,154,0.02) 100%);
+        }
+
+        .dag-box.dangerous {
+            border-color: var(--color-danger);
+            background: linear-gradient(135deg, rgba(201,112,103,0.08) 0%, rgba(201,112,103,0.02) 100%);
+        }
+
+        .dag-box.caution {
+            border-color: var(--color-warning);
+            background: linear-gradient(135deg, rgba(212,168,106,0.08) 0%, rgba(212,168,106,0.02) 100%);
+        }
+
+        .dag-box h5 {
+            margin-top: 0;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .dag-box.safe h5 { color: #3d8b5a; }
+        .dag-box.dangerous h5 { color: var(--color-danger); }
+        .dag-box.caution h5 { color: var(--color-accent-dark); }
+
+        .dag-svg {
+            width: 100%;
+            max-width: 300px;
+            height: 140px;
+            margin: 0.75rem auto;
+        }
+
+        .dag-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Variable Classification Table */
+        .var-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        .var-table th {
+            background: var(--color-bg-alt);
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .var-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+
+        .var-table tr:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .badge-confounder { background: rgba(201,112,103,0.2); color: #a85550; }
+        .badge-precision { background: rgba(103,201,154,0.2); color: #3d8b5a; }
+        .badge-mediator { background: rgba(212,168,106,0.2); color: #8a6d35; }
+        .badge-collider { background: rgba(106,143,168,0.2); color: #4a6d8a; }
+
+        /* Boxes */
+        .why-box {
+            background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%);
+            border: 1px solid rgba(90,124,101,0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .why-box h4 {
+            color: var(--color-primary-dark);
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .why-box h4::before {
+            content: "✦";
+            color: var(--color-primary);
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.1) 0%, rgba(201,112,103,0.05) 100%);
+            border: 1px solid rgba(201,112,103,0.3);
+            border-left: 5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .warning-box h4 {
+            color: var(--color-danger);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        .caution-box {
+            background: linear-gradient(135deg, rgba(212,168,106,0.12) 0%, rgba(212,168,106,0.05) 100%);
+            border: 1px solid rgba(212,168,106,0.4);
+            border-left: 5px solid var(--color-warning);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .caution-box h4 {
+            color: var(--color-accent-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        .analogy-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.12) 0%, rgba(201,160,103,0.04) 100%);
+            border-left: 4px solid var(--color-accent);
+            padding: 1.25rem 1.5rem;
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+
+        .analogy-box::before {
+            content: "💡";
+            position: absolute;
+            top: -10px;
+            left: 12px;
+            font-size: 1.1rem;
+            background: var(--color-surface);
+            padding: 0 0.4rem;
+        }
+
+        .analogy-box h4 {
+            color: var(--color-accent-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        /* Example Cards */
+        .example-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .example-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+        }
+
+        .example-card h5 {
+            margin-top: 0;
+            font-size: 0.9rem;
+            color: var(--color-primary-dark);
+        }
+
+        .example-card p {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text-muted);
+        }
+
+        .example-card .direction {
+            font-size: 0.8rem;
+            padding: 0.3rem 0.6rem;
+            background: var(--color-bg-alt);
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        /* Collapsible Sections
+        .collapsible {
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            background: var(--color-bg-alt);
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition-smooth);
+        }
+
+        .collapsible-header:hover {
+            background: var(--color-border);
+        }
+
+        .collapsible-header h4 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1rem;
+            margin: 0;
+        }
+
+        .collapsible-header .arrow {
+            transition: transform 0.3s ease;
+            color: var(--color-text-muted);
+            font-size: 1.2rem;
+        }
+
+        .collapsible.open .collapsible-header .arrow {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .collapsible.open .collapsible-content {
+            max-height: 3000px;
+        }
+
+        .collapsible-inner {
+            padding: 1.5rem;
+            border-top: 1px solid var(--color-border);
+        } */
+
+        /* Charts */
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin: 1rem 0;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface);
+        }
+
+        .chart-explanation {
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Interactive Demo */
+        .interactive-demo {
+            background: var(--color-surface);
+            border: 2px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .interactive-demo h4 {
+            margin-top: 0;
+            color: var(--color-primary-dark);
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+
+        .control-row label {
+            font-weight: 500;
+            min-width: 180px;
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .toggle-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-surface);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+
+        .toggle-btn:hover {
+            border-color: var(--color-primary);
+        }
+
+        .toggle-btn.active {
+            background: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
+
+        .toggle-btn.danger.active {
+            background: var(--color-danger);
+            border-color: var(--color-danger);
+        }
+
+        /* Final Summary */
+        .summary-box {
+            background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%);
+            border: 1px solid rgba(90,124,101,0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .summary-box h4 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            color: var(--color-primary-dark);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .summary-box h4::before {
+            content: "✦";
+            color: var(--color-primary);
+        }
+
+        .summary-box blockquote {
+            font-style: italic;
+            color: var(--color-text);
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+            border-left: 3px solid var(--color-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dag-container {
+                grid-template-columns: 1fr;
+            }
+            .example-grid {
+                grid-template-columns: 1fr;
+            }
+            .control-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+<a href="scientific-modeling.html" class="back-nav"><span>←</span> Back to Scientific Modeling</a>
+<header class="header">
+    <h1>The Complete Bayesian Workflow</h1>
+    <p class="subtitle">9 steps from question to actionable insights</p>
+</header>
+
+<div class="progress-container">
+    <div class="progress-steps">
+        <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+        <div class="step-indicator active" onclick="goToStep(1)"><div class="step-circle">1</div><div class="step-label">Question</div></div>
+        <div class="step-indicator" onclick="goToStep(2)"><div class="step-circle">2</div><div class="step-label">Story</div></div>
+        <div class="step-indicator" onclick="goToStep(3)"><div class="step-circle">3</div><div class="step-label">Build</div></div>
+        <div class="step-indicator" onclick="goToStep(4)"><div class="step-circle">4</div><div class="step-label">Prior Check</div></div>
+        <div class="step-indicator" onclick="goToStep(5)"><div class="step-circle">5</div><div class="step-label">Fit</div></div>
+        <div class="step-indicator" onclick="goToStep(6)"><div class="step-circle">6</div><div class="step-label">Diagnose</div></div>
+        <div class="step-indicator" onclick="goToStep(7)"><div class="step-circle">7</div><div class="step-label">Post. Check</div></div>
+        <div class="step-indicator" onclick="goToStep(8)"><div class="step-circle">8</div><div class="step-label">Sensitivity</div></div>
+        <div class="step-indicator" onclick="goToStep(9)"><div class="step-circle">9</div><div class="step-label">Report</div></div>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 1: QUESTION -->
+<!-- ================================================================== -->
+<div class="workflow-step active" id="step1">
+    <h2><span class="step-num">1</span> Define the Question</h2>
+    <p class="step-subtitle">What do you actually want to learn?</p>
+    
+    <p>
+        Every good analysis starts with a clear question. This might seem obvious, but 
+        skipping this step is the most common mistake in marketing measurement. Without 
+        a clear question, you end up with lots of numbers but no insights.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Think of it like planning a trip</h4>
+        <p>
+            You wouldn't open Google Maps before knowing where you want to go. The destination 
+            determines the route. Similarly, your business question determines what analysis 
+            to run, what data you need, and how to interpret the results.
+        </p>
+    </div>
+
+    <h3>Types of Questions</h3>
+    <div class="scenario-selector">
+        <div class="scenario-card selected">
+            <div class="icon">📊</div>
+            <h5>ROI & Effectiveness</h5>
+            <p>"Which channels work and by how much?"</p>
+        </div>
+        <div class="scenario-card">
+            <div class="icon">💰</div>
+            <h5>Budget Allocation</h5>
+            <p>"How should we split our budget?"</p>
+        </div>
+        <div class="scenario-card">
+            <div class="icon">🔮</div>
+            <h5>Forecasting</h5>
+            <p>"What happens if we change spend?"</p>
+        </div>
+    </div>
+
+    <h3>Our Example Question</h3>
+    <p>
+        For this walkthrough: <strong>"What is the ROI of each marketing channel, 
+        and how should we allocate our budget?"</strong>
+    </p>
+    <p>
+        This is a <em>causal</em> question—we want to know if changing our marketing spend 
+        will <em>cause</em> sales to change. That's harder than measuring correlation, 
+        but it's what we need for actual decisions.
+    </p>
+
+    <div class="why-box">
+        <h4>Why we write this down before analyzing</h4>
+        <p>
+            When you decide your question <em>after</em> seeing the data, you can unconsciously 
+            twist the question to match whatever the data happened to show. That's like drawing 
+            a target around wherever your arrow landed—it looks impressive but doesn't mean you're 
+            a good archer.
+        </p>
+        <p style="margin-bottom: 0;">
+            This practice of deciding your analysis plan beforehand is called <strong>pre-registration</strong>, 
+            and it's one of the most important safeguards against fooling yourself.
+        </p>
+    </div>
+
+    <h3>What We're Committing To</h3>
+    <ul class="checklist">
+        <li class="checked">Primary question: What is the ROI of each channel?</li>
+        <li class="checked">Secondary question: What's the optimal budget mix?</li>
+        <li class="checked">Channels to analyze: TV, Paid Search, Social, Display, Radio</li>
+        <li class="checked">Time period: 2 years of weekly data</li>
+        <li class="checked">Success metric: Sales revenue</li>
+    </ul>
+
+    <div class="step-nav">
+        <div></div>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Tell the Story →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 2: STORY - Enhanced with Trend/Seasonality Narratives -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step2">
+   <h2><span class="step-num">2</span> Tell the Story of Your Data</h2>
+        <p class="step-subtitle">What process generated these observations? Think causally.</p>
+
+        <p>
+            Before touching any model code, write down the <strong>generative story</strong>—a narrative 
+            of how you believe your data came to be. This isn't just about marketing effects; it's about 
+            everything that affects sales, including <em>what else</em> might create spurious associations 
+            between media and outcomes.
+        </p>
+
+        <!-- CHAPTER 1: BASELINE -->
+        <div class="story-chapter">
+            <div class="visual-row">
+                <div class="icon">🏠</div>
+                <div>
+                    <h4>Chapter 1: The Baseline</h4>
+                    <p style="margin: 0;">
+                        Even without any marketing, your brand would sell some products. People who already 
+                        know and love you, people who stumble upon you in stores, repeat customers. This is 
+                        your <strong>baseline demand</strong>—the foundation everything else builds upon.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAPTER 2: TRENDS -->
+        <div class="story-chapter">
+            <div class="visual-row">
+                <div class="icon">📈</div>
+                <div>
+                    <h4>Chapter 2: The Underlying Trend</h4>
+                    <p style="margin: 0;">
+                        Is your category growing, stable, or declining? Your brand might be gaining share 
+                        or losing it. This underlying trajectory exists independent of weekly marketing 
+                        fluctuations. A new market entrant grows; a legacy brand in a dying category 
+                        declines. The <strong>trend</strong> captures this long-term direction.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAPTER 3: SEASONALITY -->
+        <div class="story-chapter">
+            <div class="visual-row">
+                <div class="icon">🌊</div>
+                <div>
+                    <h4>Chapter 3: Seasonal Rhythms</h4>
+                    <p style="margin: 0;">
+                        Sales don't flow evenly through the year. Ice cream peaks in summer, toys in 
+                        December, fitness products in January. These <strong>seasonal patterns</strong> 
+                        are predictable rhythms that repeat year after year, driven by weather, 
+                        holidays, and cultural cycles—not by marketing.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAPTER 4: MARKETING -->
+        <div class="story-chapter">
+            <div class="visual-row">
+                <div class="icon">📺</div>
+                <div>
+                    <h4>Chapter 4: Marketing Lifts Sales</h4>
+                    <p style="margin: 0;">
+                        Each channel (TV, digital, etc.) adds sales above baseline. But the first million 
+                        dollars of TV spend helps more than the tenth million—<strong>diminishing returns</strong>. 
+                        And today's ad affects sales for several weeks—<strong>carryover effects</strong>.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAPTER 5: CONTROL FACTORS (NEW - THE KEY ADDITION) -->
+        <div class="story-chapter" style="border: none; padding-bottom: 0;">
+            <div class="visual-row">
+                <div class="icon">⚖️</div>
+                <div>
+                    <h4>Chapter 5: What Else Affects Sales?</h4>
+                    <p style="margin: 0;">
+                        The brand increased distribution to stave off the effects of an economic downturn 
+                        and ran more media to support this push into new markets&mdash;<strong>confounder</strong>. Some competitors started to run a new campaign in Q3,
+                        which the brand matched with extra spend to maintain share of voice&mdash;<strong>confounder</strong>. 
+                        Weather patterns influence consumer behavior, with warmer weeks boosting in store sales&mdash;<strong>precision control</strong>.
+                        We want to isolate the total effect of marketing on sales, so we will leave out brand awareness&mdash;<strong>mediator</strong>.
+                        The brand provided survey responses on customer satisfaction, but since this is influenced by sales (only people who buy are given the survey)&mdash;<strong>collider</strong>&mdash;we will exclude it to avoid bias.
+                    </p>
+                </div>
+            </div>
+
+            <h3>The Causal Categories of Control Variables</h3>
+            
+            <p>
+                Not all control variables are created equal. Their <strong>causal relationship</strong> to 
+                media and sales determines whether they can be dropped, must be included, or should be 
+                avoided entirely. Getting this wrong is one of the most common sources of bias in MMM.
+            </p>
+
+            <!-- DAG Diagrams -->
+            <div class="dag-container">
+                <!-- Confounder -->
+                <div class="dag-box dangerous">
+                    <h5>🚫 Confounder</h5>
+                    <svg class="dag-svg" viewBox="0 0 300 140">
+                        <!-- Confounder node at top -->
+                        <rect x="110" y="10" width="80" height="35" rx="6" fill="#c97067" opacity="0.9"/>
+                        <text x="150" y="32" text-anchor="middle" fill="white" font-size="11" font-weight="600">Confounder</text>
+                        
+                        <!-- Media node -->
+                        <rect x="20" y="90" width="70" height="35" rx="6" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="112" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="210" y="90" width="70" height="35" rx="6" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="245" y="112" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows from confounder -->
+                        <defs>
+                            <marker id="arrow-d" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                                <path d="M0,0 L0,6 L8,3 z" fill="#5a6b5a"/>
+                            </marker>
+                        </defs>
+                        <path d="M 130 45 L 70 85" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        <path d="M 170 45 L 230 85" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        
+                        <!-- Media to Sales arrow -->
+                        <path d="M 93 107 L 207 107" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                    </svg>
+                    <p class="dag-label">Affects <strong>both</strong> media and sales<br><em>Must always include</em></p>
+                </div>
+
+                <!-- Precision Control -->
+                <div class="dag-box safe">
+                    <h5>✅ Precision Control</h5>
+                    <svg class="dag-svg" viewBox="0 0 300 140">
+                        <!-- Precision node at top -->
+                        <rect x="110" y="10" width="80" height="35" rx="6" fill="#67c99a" opacity="0.9"/>
+                        <text x="150" y="32" text-anchor="middle" fill="white" font-size="11" font-weight="600">Control</text>
+                        
+                        <!-- Media node -->
+                        <rect x="20" y="90" width="70" height="35" rx="6" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="112" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="210" y="90" width="70" height="35" rx="6" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="245" y="112" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Arrow from control to sales only -->
+                        <path d="M 170 45 L 230 85" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        
+                        <!-- Media to Sales arrow -->
+                        <path d="M 93 107 L 207 107" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        
+                        <!-- No arrow to media (X) -->
+                        <text x="75" y="55" font-size="14" fill="#c97067">✗</text>
+                    </svg>
+                    <p class="dag-label">Affects sales only, <strong>not</strong> media<br><em>Safe for variable selection</em></p>
+                </div>
+            </div>
+
+            <div class="dag-container">
+                <!-- Mediator -->
+                <div class="dag-box caution">
+                    <h5>⚠️ Mediator</h5>
+                    <svg class="dag-svg" viewBox="0 0 300 140">
+                        <!-- Media node -->
+                        <rect x="20" y="50" width="70" height="35" rx="6" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="72" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Mediator node -->
+                        <rect x="115" y="50" width="70" height="35" rx="6" fill="#d4a86a" opacity="0.9"/>
+                        <text x="150" y="72" text-anchor="middle" fill="white" font-size="10" font-weight="600">Awareness</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="210" y="50" width="70" height="35" rx="6" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="245" y="72" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows showing causal chain -->
+                        <path d="M 93 67 L 112 67" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        <path d="M 188 67 L 207 67" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        
+                        <!-- Label -->
+                        <text x="150" y="110" text-anchor="middle" font-size="9" fill="#5a6b5a">Media → Awareness → Sales</text>
+                    </svg>
+                    <p class="dag-label">Lies <strong>on the causal path</strong><br><em>Control = block effect!</em></p>
+                </div>
+
+                <!-- Collider -->
+                <div class="dag-box caution">
+                    <h5>⚠️ Collider</h5>
+                    <svg class="dag-svg" viewBox="0 0 300 140">
+                        <!-- Media node -->
+                        <rect x="20" y="20" width="70" height="35" rx="6" fill="#8fa86a" opacity="0.9"/>
+                        <text x="55" y="42" text-anchor="middle" fill="white" font-size="11" font-weight="600">Media</text>
+                        
+                        <!-- Collider node -->
+                        <rect x="115" y="90" width="70" height="35" rx="6" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="150" y="107" text-anchor="middle" fill="white" font-size="9" font-weight="600">Survey Resp</text>
+                        
+                        <!-- Sales node -->
+                        <rect x="210" y="20" width="70" height="35" rx="6" fill="#6a8fa8" opacity="0.9"/>
+                        <text x="245" y="42" text-anchor="middle" fill="white" font-size="11" font-weight="600">Sales</text>
+                        
+                        <!-- Arrows TO collider -->
+                        <path d="M 70 55 L 130 85" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                        <path d="M 230 55 L 170 85" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow-d)"/>
+                    </svg>
+                    <p class="dag-label"><strong>Caused by</strong> both media and sales<br><em>Control = create bias!</em></p>
+                </div>
+            </div>
+
+            <!-- Classification Table with Examples -->
+            <h3>Common Variables by Category</h3>
+
+            <table class="var-table">
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Type</th>
+                        <th>Why?</th>
+                        <th>What to Do</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Distribution/ACV</strong></td>
+                        <td><span class="badge badge-confounder">Confounder</span></td>
+                        <td>Brands with more distribution get more media <em>and</em> have higher sales</td>
+                        <td>✓ Always include; never drop</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Price/Promotions</strong></td>
+                        <td><span class="badge badge-confounder">Confounder</span></td>
+                        <td>Promotional periods often coincide with media flights</td>
+                        <td>✓ Always include; never drop</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Competitor Media</strong></td>
+                        <td><span class="badge badge-confounder">Confounder</span></td>
+                        <td>Competitors react to your media; both affect your sales</td>
+                        <td>✓ Always include; never drop</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Seasonality</strong></td>
+                        <td><span class="badge badge-confounder">Confounder</span></td>
+                        <td>Media planning follows seasonal demand patterns</td>
+                        <td>✓ Always include (Fourier terms)</td>
+                    </tr>
+                    <tr style="background: rgba(103,201,154,0.08);">
+                        <td><strong>Weather</strong></td>
+                        <td><span class="badge badge-precision">Precision</span></td>
+                        <td>Affects store visits but doesn't drive media budgets</td>
+                        <td>✓ Include or apply selection<sup>*</sup></td>
+                    </tr>
+                    <tr style="background: rgba(103,201,154,0.08);">
+                        <td><strong>Gas Prices</strong></td>
+                        <td><span class="badge badge-precision">Precision</span></td>
+                        <td>Affects discretionary spending; not tied to media</td>
+                        <td>✓ Include or apply selection<sup>*</sup></td>
+                    </tr>
+                    <tr style="background: rgba(103,201,154,0.08);">
+                        <td><strong>Minor Holidays</strong></td>
+                        <td><span class="badge badge-precision">Precision</span></td>
+                        <td>Columbus Day affects traffic but not media planning</td>
+                        <td>✓ Include or apply selection</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Brand Awareness</strong></td>
+                        <td><span class="badge badge-mediator">Mediator</span></td>
+                        <td>Media → Awareness → Sales (it's the mechanism!)</td>
+                        <td>⚠️ Usually exclude for total effect</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Purchase Intent</strong></td>
+                        <td><span class="badge badge-mediator">Mediator</span></td>
+                        <td>On the causal path from media to sales</td>
+                        <td>⚠️ Exclude unless decomposing paths</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Survey Response</strong></td>
+                        <td><span class="badge badge-collider">Collider</span></td>
+                        <td>People who saw ads AND bought are more likely to respond</td>
+                        <td>🚫 Never include</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Note about Trend/Seasonality and External Factors -->
+            <div class="why-box">
+                <h4>Trend & Seasonality Are Not Redundant with Seasonal Controls</h4>
+                <p>
+                    You might wonder: "If I include weather (which is seasonal) and gas prices (which have trends), 
+                    do I still need explicit trend and seasonality components?" <strong>Yes, absolutely.</strong>
+                </p>
+                <p>
+                    External factors like weather or gas prices capture <em>specific mechanisms</em>—how temperature 
+                    affects store visits, how fuel costs affect discretionary spending. Your model's <strong>trend 
+                    and seasonality components</strong> capture something different: the <em>overall</em> rhythms 
+                    of demand and long-term trajectory that aren't fully explained by any single external factor.
+                </p>
+                
+                <div class="visual-row" style="margin: 1.5rem 0; padding: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+                    <div class="icon">🌡️</div>
+                    <div>
+                        <h5 style="margin: 0 0 0.25rem 0; color: var(--color-accent-dark);">Weather captures...</h5>
+                        <p style="margin: 0; font-size: 0.95rem;">The specific effect of temperature/precipitation on behavior (e.g., hot days → more ice cream)</p>
+                    </div>
+                </div>
+                
+                <div class="visual-row" style="margin: 1.5rem 0; padding: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+                    <div class="icon">🌊</div>
+                    <div>
+                        <h5 style="margin: 0 0 0.25rem 0; color: var(--color-primary-dark);">Seasonality captures...</h5>
+                        <p style="margin: 0; font-size: 0.95rem;">The overall annual rhythm of demand (e.g., Q4 holiday surge) that persists even controlling for weather</p>
+                    </div>
+                </div>
+                
+                <p style="margin-bottom: 0;">
+                    <strong>Think of it this way:</strong> Even if you perfectly controlled for every external factor, 
+                    would demand still have an annual pattern? Would the brand still be growing or declining? 
+                    If yes, you need trend and seasonality components. These are <em>confounders</em> (they affect 
+                    both media planning and sales), so they must always be included—regardless of what other 
+                    seasonal variables you have.
+                </p>
+            </div>
+
+            <!-- Deep Dive: Confounders -->
+            <div class="collapsible">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <h4><span class="icon">🔍</span> Deep Dive: Why Confounders Must Be Included</h4>
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="collapsible-content">
+                    <div class="collapsible-inner">
+                        <p>
+                            A confounder creates a <strong>spurious correlation</strong> between media and sales that 
+                            has nothing to do with causation. If you don't control for it, your media effect estimate 
+                            will absorb this spurious correlation and be biased.
+                        </p>
+
+                        <div class="analogy-box">
+                            <h4>The Ice Cream & Drowning Fallacy</h4>
+                            <p>
+                                Ice cream sales and drowning deaths are correlated. But ice cream doesn't cause 
+                                drowning—<strong>summer</strong> is the confounder that increases both. If you tried 
+                                to estimate "the effect of ice cream on drowning" without controlling for season, 
+                                you'd get a spuriously positive number.
+                            </p>
+                            <p style="margin-bottom: 0;">
+                                In MMM, <strong>distribution</strong> works the same way: brands with more distribution 
+                                spend more on media AND sell more. If you don't control for distribution, media looks 
+                                more effective than it really is.
+                            </p>
+                        </div>
+
+                        <div class="example-grid">
+                            <div class="example-card">
+                                <h5>Distribution Example</h5>
+                                <p>Expanding to 1,000 new stores triggers both media spend increase AND sales increase.</p>
+                                <div class="direction">If omitted: Media ROI inflated ↑</div>
+                            </div>
+                            <div class="example-card">
+                                <h5>Seasonality Example</h5>
+                                <p>Q4 holiday season drives both ad spending spikes AND natural demand surges.</p>
+                                <div class="direction">If omitted: Holiday campaigns overcredited ↑</div>
+                            </div>
+                            <div class="example-card">
+                                <h5>Competitor Example</h5>
+                                <p>Competitor launches → you increase media → their launch hurts your sales.</p>
+                                <div class="direction">If omitted: Your media looks ineffective ↓</div>
+                            </div>
+                        </div>
+
+                        <div class="warning-box">
+                            <h4>⚠️ Don't Over-Interpret Confounder Coefficients</h4>
+                            <p>
+                                When you include a variable to control for confounding, its coefficient may not be 
+                                interpretable as a causal effect. Distribution might show a <em>negative</em> coefficient 
+                                because other omitted variables (market saturation, competitive intensity) are correlated 
+                                with it. <i>This is sometimes called the table 2 fallacy</i>
+                            </p>
+                            <p style="margin-bottom: 0;">
+                                <strong>The goal</strong>: Get unbiased media effects, not to understand distribution's 
+                                causal impact. Include distribution to isolate media effects—don't agonize over its sign.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deep Dive: Precision Controls -->
+            <div class="collapsible">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <h4><span class="icon">🎯</span> Deep Dive: Precision Controls & Variable Selection</h4>
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="collapsible-content">
+                    <div class="collapsible-inner">
+                        <p>
+                            Precision controls only affect the outcome—they're uncorrelated with your treatment 
+                            (media spending). Including them <strong>reduces noise</strong> and gives you tighter 
+                            credible intervals on media effects, but omitting them doesn't bias your estimates.
+                        </p>
+
+                        <div class="analogy-box">
+                            <h4>The Scale Analogy</h4>
+                            <p style="margin-bottom: 0;">
+                                Imagine weighing packages on a scale that wobbles. The wobble (weather, gas prices) 
+                                adds noise to your measurements but doesn't systematically make packages heavier or 
+                                lighter. Stabilizing the scale (including precision controls) gives more precise 
+                                readings but doesn't change the average weight.
+                            </p>
+                        </div>
+
+                        <p>
+                            Because precision controls don't affect media spending, it's <strong>safe</strong> to 
+                            apply Bayesian variable selection (horseshoe, spike-and-slab) to them. If they turn out 
+                            to be irrelevant, we shrink them toward zero without biasing our media estimates.
+                        </p>
+
+                        <div class="why-box">
+                            <h4>✓ The Key Test</h4>
+                            <p style="margin-bottom: 0;">
+                                Ask: "Does this variable influence how we allocate media budget?" If <strong>no</strong>, 
+                                it's likely a precision control. If <strong>yes</strong>, it's probably a confounder 
+                                and must be protected from variable selection.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deep Dive: Mediators -->
+            <div class="collapsible">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <h4><span class="icon">🔗</span> Deep Dive: Mediators—Handle with Care</h4>
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="collapsible-content">
+                    <div class="collapsible-inner">
+                        <p>
+                            A mediator lies <em>on</em> the causal path between media and sales. Brand awareness is 
+                            the classic example: TV advertising increases awareness, and awareness drives purchase. 
+                            The chain is: <strong>Media → Awareness → Sales</strong>.
+                        </p>
+
+                        <div class="caution-box">
+                            <h4>⚠️ The Blocking Problem</h4>
+                            <p>
+                                If you control for awareness in your model, you're asking: "What's the effect of 
+                                media on sales, holding awareness constant?" But media works <em>through</em> 
+                                awareness! You've just blocked the causal pathway and will dramatically underestimate 
+                                media's true effect.
+                            </p>
+                            <p style="margin-bottom: 0;">
+                                <strong>Rule</strong>: For the <em>total effect</em> of media on sales, exclude 
+                                mediators. Only include mediators if you specifically want to decompose paths 
+                                (direct vs. indirect effects).
+                            </p>
+                        </div>
+
+                        <div class="example-grid">
+                            <div class="example-card" style="border-color: var(--color-success);">
+                                <h5>✓ Exclude Awareness</h5>
+                                <p>"What's TV's total impact on sales?"</p>
+                                <div class="direction">Get full effect through all paths</div>
+                            </div>
+                            <div class="example-card" style="border-color: var(--color-warning);">
+                                <h5>⚠️ Include Awareness</h5>
+                                <p>"How much of TV's effect is through awareness vs. direct?"</p>
+                                <div class="direction">Path decomposition (advanced)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deep Dive: Colliders -->
+            <div class="collapsible">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <h4><span class="icon">💥</span> Deep Dive: Colliders—The Hidden Trap</h4>
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="collapsible-content">
+                    <div class="collapsible-inner">
+                        <p>
+                            A collider is <em>caused by</em> both media and sales. Unlike confounders (which we 
+                            must control) and mediators (which we usually exclude), colliders are dangerous 
+                            specifically <em>when we control for them</em>.
+                        </p>
+
+                        <div class="analogy-box">
+                            <h4>The Hollywood Example</h4>
+                            <p>
+                                Among Hollywood actors, there's a negative correlation between attractiveness and 
+                                acting talent. Does being attractive make you worse at acting? No—it's <strong>selection 
+                                bias</strong>. To become a Hollywood actor (the collider), you need either looks OR 
+                                talent OR both. By conditioning on "is a Hollywood actor," you've created a spurious 
+                                negative relationship.
+                            </p>
+                            <p style="margin-bottom: 0;">
+                                In MMM, "survey respondent" can be a collider: people who both saw your ads AND 
+                                bought your product are more likely to respond to a brand survey. Controlling for 
+                                survey response creates a spurious association between ad exposure and purchase.
+                            </p>
+                        </div>
+
+                        <div class="warning-box">
+                            <h4>🚫 Never Control for Colliders</h4>
+                            <p style="margin-bottom: 0;">
+                                Common colliders in marketing data include: survey response, website visit + purchase 
+                                combinations, and any "engagement metric" that's caused by both advertising and 
+                                underlying purchase intent. When in doubt, draw the DAG and check the arrow directions.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Demo: Confounder Bias -->
+        <div class="interactive-demo">
+            <h4>🔬 Interactive: What Happens When You Drop a Confounder?</h4>
+            <p>
+                See how omitting a confounder (distribution) biases your media effect estimate. Toggle 
+                between including and excluding it to see the effect on your results.
+            </p>
+
+            <div class="control-row">
+                <label>Include distribution?</label>
+                <div class="toggle-group">
+                    <button class="toggle-btn active" onclick="setConfounder(true, this)">✓ Yes (Correct)</button>
+                    <button class="toggle-btn danger" onclick="setConfounder(false, this)">✗ No (Biased)</button>
+                </div>
+            </div>
+
+            <div class="chart-container" id="confounderChart"></div>
+            
+            <div id="confounderMessage" class="why-box">
+                <h4>✓ Correct Model</h4>
+                <p style="margin-bottom: 0;">
+                    With distribution included, we isolate the <strong>true causal effect of media (0.25)</strong>. 
+                    The correlation between media and sales that was actually due to distribution is properly 
+                    attributed—not falsely credited to media.
+                </p>
+            </div>
+        </div>
+
+        <!-- CHAPTER 6: NOISE -->
+        <div class="story-chapter">
+            <div class="visual-row">
+                <div class="icon">🎲</div>
+                <div>
+                    <h4>Chapter 6: Random Variation</h4>
+                    <p style="margin: 0;">
+                        Even after accounting for everything—baseline, trend, seasonality, marketing, and 
+                        control factors—there's always unexplained variation. A celebrity mentions your 
+                        product, a competitor has a recall, an unexpected weather event. We can't predict 
+                        these, but we acknowledge they exist as the <strong>error term</strong>.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Box -->
+        <div class="summary-box">
+            <h4>📖 Putting the Story Together</h4>
+            <blockquote>
+                "Sales start from a baseline of existing demand, following an underlying trend (growth or 
+                decline). This foundation rises and falls with seasonal patterns. Marketing channels add 
+                to this, but with diminishing returns as spend increases, and effects carry over for several 
+                weeks. Meanwhile, other factors—distribution, pricing, competition—affect both media decisions 
+                and sales, creating spurious correlations we must control for. Weather <i>and other external events</i> 
+                which effect sales but do not impact media spend can help isolate the media effect, but if excluded won't bias results.
+                We avoid controlling for variables that lie on the causal path from media to sales (like brand awareness) 
+                to get the total effect of marketing, unless we specifically want to decompose paths. 
+                And we never control for colliders like survey response, which would introduce bias. Finally, 
+                even after accounting for all these factors, some variation in sales remains unexplained.
+                "
+            </blockquote>
+            <p>
+                This story—these assumptions—will become our mathematical model. If we're wrong about any 
+                part, especially the causal structure, our results will be wrong. That's why we classify 
+                variables <strong>before</strong> seeing results, not after.
+            </p>
+        </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 3: BUILD - Enhanced with Trend/Seasonality Options -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step3">
+    <h2><span class="step-num">3</span> Build the Model</h2>
+    <p class="step-subtitle">Translate the story into mathematical components</p>
+
+    <p>
+        Now we translate each part of our story into a specific mathematical component. 
+        The choices here should flow directly from the business context we just described—
+        not from "what makes the results look good."
+    </p>
+
+    <div class="why-box">
+        <h4>🔒 Pre-specification principle</h4>
+        <p style="margin-bottom: 0;">
+            We make these choices <em>before</em> seeing results. If we adjusted them afterward 
+            to improve fit or achieve desired coefficients, we'd be doing specification shopping—
+            and our uncertainty estimates would be meaningless.
+        </p>
+    </div>
+
+    <!-- TREND SECTION - NEW -->
+    <div class="collapsible open" id="trendSection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('trendSection')">
+            <h4><span class="icon">📈</span> Trend Component</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Based on our story, we need to capture the underlying trajectory. 
+                    Here are the options and when each makes sense:
+                </p>
+                
+                <!-- Trend Options Table -->
+                <table class="options-table">
+                    <thead>
+                        <tr>
+                            <th>Option</th>
+                            <th>The Business Story</th>
+                            <th>Math</th>
+                            <th>Pros/Cons</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>None</strong></td>
+                            <td>
+                                <em>"Business is stable—no real growth or decline pattern."</em>
+                                <br>Mature category, flat market, steady demand.
+                            </td>
+                            <td><code>τ(t) = 0</code></td>
+                            <td>
+                                <span class="pro">✓ Simplest</span><br>
+                                <span class="con">✗ Misses real trends</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row selected" data-selected="true">
+                            <td><strong>Linear</strong></td>
+                            <td>
+                                <em>"We've been growing 3% year-over-year consistently."</em>
+                                <br>Organic growth, category expansion, steady trajectory.
+                            </td>
+                            <td><code>τ(t) = δ · t</code></td>
+                            <td>
+                                <span class="pro">✓ Interpretable slope</span><br>
+                                <span class="pro">✓ Well-identified</span><br>
+                                <span class="con">✗ Assumes constant rate</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>Piecewise</strong></td>
+                            <td>
+                                <em>"COVID hit in March 2020 and everything changed."</em>
+                                <br>Product launches, market disruptions, known structural breaks.
+                            </td>
+                            <td>Linear segments<br>joined at changepoints</td>
+                            <td>
+                                <span class="pro">✓ Captures known breaks</span><br>
+                                <span class="pro">✓ Interpretable changes</span><br>
+                                <span class="con">✗ Need to specify when</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>B-Spline</strong></td>
+                            <td>
+                                <em>"Things have been shifting gradually—can't point to one moment."</em>
+                                <br>Gradual evolution, multiple small changes, smooth trajectory.
+                            </td>
+                            <td>Smooth spline basis<br>functions</td>
+                            <td>
+                                <span class="pro">✓ Flexible shape</span><br>
+                                <span class="pro">✓ Smoother than piecewise</span><br>
+                                <span class="con">✗ Less interpretable</span>
+                            </td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>Gaussian Process</strong></td>
+                            <td>
+                                <em>"I genuinely don't know what's driving the underlying pattern."</em>
+                                <br>Uncertain trajectory, want uncertainty in trend itself.
+                            </td>
+                            <td><code>τ(t) ~ GP(0, k)</code></td>
+                            <td>
+                                <span class="pro">✓ Maximum flexibility</span><br>
+                                <span class="pro">✓ Uncertainty quantified</span><br>
+                                <span class="con">✗ Computationally expensive</span><br>
+                                <span class="con">✗ Can absorb real signal</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- Interactive Trend Visualization -->
+                <h5 style="margin-top: 1.5rem;">Compare Trend Shapes</h5>
+                <div class="trend-controls">
+                    <label>
+                        <input type="radio" name="trendType" value="none"> None
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="linear" checked> Linear
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="piecewise"> Piecewise
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="spline"> B-Spline
+                    </label>
+                    <label>
+                        <input type="radio" name="trendType" value="gp"> GP
+                    </label>
+                </div>
+                
+                <div class="chart-container" id="trendCompareChart" style="height: 250px;"></div>
+                
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 Acme's Story</h5>
+                        <p id="trendStoryText">"We've been growing steadily—about 3% year-over-year."</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 Our Choice</h5>
+                        <p id="trendMathText">Linear trend</p>
+                        <div class="formula" id="trendFormula">τ(t) = δ · t</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEASONALITY SECTION - NEW -->
+    <div class="collapsible" id="seasonalitySection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('seasonalitySection')">
+            <h4><span class="icon">🌊</span> Seasonality Component</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Seasonality captures predictable calendar patterns. The key choice is 
+                    <strong>how complex</strong> the pattern is—more Fourier terms capture 
+                    finer patterns but risk overfitting.
+                </p>
+                
+                <!-- Seasonality Options -->
+                <table class="options-table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>The Business Story</th>
+                            <th>What It Captures</th>
+                            <th>When to Use</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>0 (None)</strong></td>
+                            <td><em>"Our B2B clients buy consistently year-round."</em></td>
+                            <td>No seasonal pattern</td>
+                            <td>B2B, subscription, industrial</td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>1</strong></td>
+                            <td><em>"Q4 is big, summer is slow—one smooth wave."</em></td>
+                            <td>Simple sine wave</td>
+                            <td>Basic retail pattern</td>
+                        </tr>
+                        <tr class="option-row selected" data-selected="true">
+                            <td><strong>2</strong></td>
+                            <td><em>"Holiday spike is sharp—rises fast, falls fast."</em></td>
+                            <td>Peaked pattern</td>
+                            <td>Typical CPG, retail</td>
+                        </tr>
+                        <tr class="option-row" data-selected="false">
+                            <td><strong>3-5</strong></td>
+                            <td><em>"We have distinct peaks at Valentine's, Easter, Halloween, Christmas."</em></td>
+                            <td>Multiple peaks</td>
+                            <td>Confectionery, flowers, gifts</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h5 style="margin-top: 1.5rem;">Compare Fourier Orders</h5>
+                <div class="seasonality-controls">
+                    <label>Fourier Order:</label>
+                    <input type="range" id="fourierOrder" min="0" max="5" value="2" step="1">
+                    <span id="fourierOrderVal">2</span>
+                </div>
+                
+                <div class="chart-container" id="seasonalityCompareChart" style="height: 250px;"></div>
+                
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> Higher orders capture more complex patterns. 
+                    Order 1 = simple wave; Order 2+ = can capture sharper peaks; Order 5 = very detailed 
+                    (risk of overfitting with limited data).
+                </div>
+                
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 Acme's Story</h5>
+                        <p>"Big Q4 spike, sharp drop in January, summer lull."</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 Our Choice</h5>
+                        <p>Fourier seasonality, order 2</p>
+                        <div class="formula">s(t) = Σ [aₙsin(2πnt/P) + bₙcos(2πnt/P)]</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SATURATION -->
+    <div class="collapsible open" id="saturationSection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('saturationSection')">
+            <h4><span class="icon">📈</span> Saturation: Diminishing Returns</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"More spending helps, but each dollar is less effective than the last"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Saturation function</p>
+                        <div class="formula">effect = x<sup>k</sup> / (half<sup>k</sup> + x<sup>k</sup>)</div>
+                    </div>
+                </div>
+
+                <div class="control-panel">
+                    <h4>🎛️ Explore Saturation Curves</h4>
+                    <div class="control-row">
+                        <label>Saturation Shape:</label>
+                        <select id="saturationSelect" onchange="updateSaturationChart()">
+                            <option value="hill">Hill (S-curve) — TV, brand</option>
+                            <option value="michaelis">Michaelis-Menten — Search</option>
+                            <option value="linear">Linear — No saturation</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Steepness (k):</label>
+                        <input type="range" id="saturationK" min="0.5" max="4" step="0.1" value="2" onchange="updateSaturationChart()">
+                        <span class="value-display" id="saturationKVal">2.0</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Half-saturation:</label>
+                        <input type="range" id="saturationHalf" min="20" max="80" step="5" value="50" onchange="updateSaturationChart()">
+                        <span class="value-display" id="saturationHalfVal">50%</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="saturationChart"></div>
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> X-axis is spend level. Y-axis is effect. 
+                    The curve flattening = diminishing returns. Dashed line = half-saturation point.
+                </div>
+
+                <div class="scenario-selector">
+                    <div class="scenario-card" onclick="setSaturation('hill', 2)">
+                        <div class="icon">📺</div>
+                        <h5>TV / Brand</h5>
+                        <p>S-curve. Needs critical mass, then saturates.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setSaturation('michaelis', 1)">
+                        <div class="icon">🔍</div>
+                        <h5>Search</h5>
+                        <p>Immediate returns, gradual diminishing.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setSaturation('hill', 3)">
+                        <div class="icon">📱</div>
+                        <h5>Social / Viral</h5>
+                        <p>Steep S-curve with tipping point.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADSTOCK -->
+    <div class="collapsible" id="adstockSection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('adstockSection')">
+            <h4><span class="icon">⏰</span> Adstock: Carryover Effects</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"People remember ads and act on them days or weeks later"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Adstock transformation</p>
+                        <div class="formula">adstock[t] = spend[t] + λ × adstock[t-1]</div>
+                    </div>
+                </div>
+
+                <div class="control-panel">
+                    <h4>🎛️ Explore Adstock Decay</h4>
+                    <div class="control-row">
+                        <label>Adstock Type:</label>
+                        <select id="adstockSelect" onchange="updateAdstockChart()">
+                            <option value="geometric">Geometric — Immediate peak</option>
+                            <option value="delayed">Delayed Peak — Builds then decays</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Decay rate (λ):</label>
+                        <input type="range" id="adstockDecay" min="0.1" max="0.95" step="0.05" value="0.7" onchange="updateAdstockChart()">
+                        <span class="value-display" id="adstockDecayVal">0.70</span>
+                    </div>
+                    <div class="control-row" id="delayRow" style="display:none;">
+                        <label>Peak delay (weeks):</label>
+                        <input type="range" id="adstockDelay" min="1" max="6" step="1" value="3" onchange="updateAdstockChart()">
+                        <span class="value-display" id="adstockDelayVal">3</span>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="adstockChart"></div>
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> Ad runs in Week 0. Bars show remaining effect each week. 
+                    With λ=0.7, 70% carries to next week, then 49%, and so on.
+                </div>
+
+                <div class="scenario-selector">
+                    <div class="scenario-card" onclick="setAdstock('geometric', 0.4)">
+                        <div class="icon">🍕</div>
+                        <h5>Fast-Moving</h5>
+                        <p>Pizza, snacks. Buy within days.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setAdstock('geometric', 0.75)">
+                        <div class="icon">👟</div>
+                        <h5>Considered</h5>
+                        <p>Shoes, electronics. Weeks to decide.</p>
+                    </div>
+                    <div class="scenario-card" onclick="setAdstock('delayed', 0.7)">
+                        <div class="icon">🚗</div>
+                        <h5>Major Purchase</h5>
+                        <p>Cars, B2B. Months of research.</p>
+                    </div>
+                </div>
+
+                <div class="analogy-box">
+                    <h4>Coffee vs. car</h4>
+                    <p>
+                        A coffee ad makes you want coffee <em>now</em>—fast decay. A car ad plants 
+                        a seed that grows over months as you research—delayed peak.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CROSS-EFFECTS -->
+    <div class="collapsible" id="crossSection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('crossSection')">
+            <h4><span class="icon">🔄</span> Cross-Effects: Product Interactions</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"Advertising Product A also affects sales of Product B"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Cross-effect terms</p>
+                        <div class="formula">sales_B = ... + β_cross × media_A</div>
+                    </div>
+                </div>
+
+                <div class="scenario-selector">
+                    <div class="scenario-card">
+                        <div class="icon">☀️</div>
+                        <h5>Halo (+)</h5>
+                        <p>Flagship ads boost whole brand.</p>
+                    </div>
+                    <div class="scenario-card">
+                        <div class="icon">🍽️</div>
+                        <h5>Cannibalization (-)</h5>
+                        <p>New model steals from old.</p>
+                    </div>
+                    <div class="scenario-card">
+                        <div class="icon">🎮</div>
+                        <h5>Complementary (+)</h5>
+                        <p>Console ads boost game sales.</p>
+                    </div>
+                </div>
+
+                <div class="chart-container short" id="crossEffectsChart"></div>
+
+                <div class="warning-box">
+                    <h4>⚠️ Only add with clear business rationale</h4>
+                    <p style="margin-bottom: 0;">
+                        Cross-effects require more data to estimate. Only include if you can explain 
+                        the mechanism: "Why would Product A ads affect Product B sales?"
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NESTED -->
+    <div class="collapsible" id="nestedSection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('nestedSection')">
+            <h4><span class="icon">🎯</span> Nested Models: Awareness Mediators</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"TV builds awareness → Awareness drives sales"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Nested/Mediated model</p>
+                        <div class="formula">awareness = f(media)<br>sales = g(awareness)</div>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-box">
+                        <h4>Direct Effects</h4>
+                        <div class="chart-container" id="directModelChart"></div>
+                        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:0.5rem">For established brands.</p>
+                    </div>
+                    <div class="chart-box">
+                        <h4>Mediated Effects</h4>
+                        <div class="chart-container" id="nestedModelChart"></div>
+                        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:0.5rem">For new brands, B2B.</p>
+                    </div>
+                </div>
+
+                <div class="analogy-box">
+                    <h4>The "first date" analogy</h4>
+                    <p>
+                        Coca-Cola ad = bumping into an old friend (buy immediately). New brand ad = 
+                        first date (need to build familiarity before purchase).
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRIORS -->
+    <div class="collapsible" id="priorsSection">
+        <div class="collapsible-header" onclick="toggleCollapsible1('priorsSection')">
+            <h4><span class="icon">🎯</span> Prior Distributions: Encoding Beliefs</h4>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="collapsible-content">
+            <div class="collapsible-inner">
+                <p>
+                    Priors encode what we believe <em>before</em> seeing data. They're not arbitrary—
+                    they represent real knowledge: "Media effects are probably positive but not huge."
+                </p>
+
+                <div class="story-math-connection">
+                    <div class="story-box">
+                        <h5>📖 The Story</h5>
+                        <p>"We expect positive effects, but with uncertainty"</p>
+                    </div>
+                    <div class="arrow-connector">→</div>
+                    <div class="math-box">
+                        <h5>🔢 The Math</h5>
+                        <p>Prior distribution</p>
+                        <div class="formula">β ~ HalfNormal(σ=0.5)</div>
+                    </div>
+                </div>
+
+                <div class="chart-container short" id="priorDistChart"></div>
+                <div class="chart-explanation">
+                    <strong>Reading this chart:</strong> This shows our belief about media effects before 
+                    seeing data. Most probability is near small positive values, with some chance of larger effects.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Complete Model Specification -->
+    <div class="why-box" style="margin-top: 2rem;">
+        <h4>The complete model specification</h4>
+        <p style="margin-bottom: 0.5rem;">Putting all the pieces together:</p>
+        <p style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; margin-bottom: 0; background: var(--color-bg-alt); padding: 1rem; border-radius: 8px;">
+            sales[t] = α + <span style="color: var(--color-primary);">τ(t)</span> + <span style="color: var(--color-accent);">s(t)</span> + Σ β[c] × saturation(adstock(spend[c,t])) + ε[t]
+            <br><br>
+            where: <span style="color: var(--color-primary);">τ(t) = linear trend</span>, <span style="color: var(--color-accent);">s(t) = Fourier(order=2)</span>
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Prior Predictive Check →</button>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 4: PRIOR PREDICTIVE CHECK -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step4">
+    <h2><span class="step-num">4</span> Prior Predictive Check</h2>
+    <p class="step-subtitle">Do our assumptions generate plausible predictions?</p>
+
+    <p>
+        Before showing the model any real data, we test whether our assumptions could 
+        plausibly generate realistic-looking outcomes. This catches problems early—before 
+        we waste time fitting a broken model.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Like a dress rehearsal</h4>
+        <p>
+            Before opening night, actors do a full rehearsal to catch problems. We run our 
+            model "forward" without real data: given our assumptions about how marketing works, 
+            what kind of sales numbers would we expect to see?
+        </p>
+    </div>
+
+    <div class="control-panel">
+        <h4>🎛️ Adjust Prior Assumptions</h4>
+        <div class="control-row">
+            <label>Media effect uncertainty:</label>
+            <input type="range" id="priorMediaSD" min="0.1" max="1.5" step="0.1" value="0.5" oninput="updatePriorVals()">
+            <span class="value-display" id="priorMediaSDVal">0.5</span>
+        </div>
+        <div class="control-row">
+            <label>Baseline uncertainty:</label>
+            <input type="range" id="priorBaselineSD" min="0.5" max="3" step="0.1" value="1.0" oninput="updatePriorVals()">
+            <span class="value-display" id="priorBaselineSDVal">1.0</span>
+        </div>
+        <button class="btn btn-secondary" onclick="runPriorCheck()" style="margin-top:0.5rem">🔄 Regenerate</button>
+    </div>
+
+    <div class="chart-container tall" id="priorPredChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Each gray line is one "possible world" given your assumptions. 
+        Green dashed lines show the realistic range. If gray lines go negative or wildly high, 
+        assumptions need tightening.
+    </div>
+
+    <div id="priorDecision" class="success-box">
+        <h4 id="priorTitle">Assessment</h4>
+        <p id="priorAssessment">Evaluating...</p>
+    </div>
+
+    <div class="why-box">
+        <h4>What if predictions look wrong?</h4>
+        <p style="margin-bottom: 0;">
+            If the prior predictive shows impossible outcomes (negative sales, values in the trillions), 
+            it means our assumptions are too vague. Tighten the priors—add more knowledge. This is 
+            <em>good</em>—we caught a problem before wasting computation on fitting.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Fit the Model →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 5: FIT -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step5">
+    <h2><span class="step-num">5</span> Fit the Model</h2>
+    <p class="step-subtitle">Let the data update our beliefs</p>
+
+    <p>
+        Now we show our model the actual sales data and let it figure out what the 
+        media effects probably are. This is the core of Bayesian inference: starting 
+        with prior beliefs, updating them with evidence.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Updating opinions with evidence</h4>
+        <p>
+            Imagine you think a coin is fair. Then you flip it 100 times and get 75 heads. 
+            You'd update your belief—maybe it's biased. Our model does the same: it starts 
+            with prior beliefs about media effects and updates them based on the sales data.
+        </p>
+    </div>
+
+    <div class="terminal-output" id="fitOutput">
+        <span class="info">[INFO]</span> Ready to run MCMC sampling...<br>
+    </div>
+    <button class="btn btn-success" onclick="runMCMC()" id="runMCMCBtn">▶ Run MCMC Sampling</button>
+
+    <div id="mcmcResults" style="display:none;">
+        <h3>Posterior Estimates</h3>
+        <p>
+            These are our updated beliefs about each channel's effect, along with uncertainty ranges.
+        </p>
+
+        <div class="chart-container" id="posteriorChart"></div>
+
+        <table class="data-table">
+            <thead>
+                <tr><th>Channel</th><th>Mean Effect</th><th>94% Interval</th><th>Pr(effect > 0)</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>TV</td><td class="mono">0.42</td><td class="mono">[0.28, 0.57]</td><td class="positive">99.8%</td></tr>
+                <tr><td>Paid Search</td><td class="mono">0.31</td><td class="mono">[0.22, 0.41]</td><td class="positive">99.9%</td></tr>
+                <tr><td>Paid Social</td><td class="mono">0.18</td><td class="mono">[0.02, 0.35]</td><td class="positive">97.2%</td></tr>
+                <tr><td>Display</td><td class="mono">0.08</td><td class="mono">[-0.12, 0.29]</td><td class="warning">78.4%</td></tr>
+                <tr><td>Radio</td><td class="mono">0.15</td><td class="mono">[0.03, 0.28]</td><td class="positive">99.1%</td></tr>
+            </tbody>
+        </table>
+
+        <div class="why-box">
+            <h4>Notice the uncertainty</h4>
+            <p style="margin-bottom: 0;">
+                Display's interval includes negative values—we're not confident it's helping. 
+                Social has a wide range. This honest uncertainty is more valuable than false precision.
+            </p>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()" id="fitNextBtn" disabled>Next: Diagnose →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 6: DIAGNOSE -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step6">
+    <h2><span class="step-num">6</span> Computational Diagnostics</h2>
+    <p class="step-subtitle">Did the algorithm actually work?</p>
+
+    <p>
+        Before trusting results, we verify that the MCMC sampling algorithm worked correctly. 
+        These are <em>computational</em> checks—they tell us if the algorithm converged, not 
+        whether the model is correct.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Like checking your calculator</h4>
+        <p>
+            Before trusting a calculation, you might verify the calculator is working. 
+            These diagnostics check if our statistical "calculator" (MCMC) ran correctly.
+        </p>
+    </div>
+
+    <h3>Diagnostic Summary</h3>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="label">R-hat (max)</div>
+            <div class="value good">1.003</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">ESS (min)</div>
+            <div class="value good">1,842</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Divergences</div>
+            <div class="value good">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Tree Depth</div>
+            <div class="value good">OK</div>
+        </div>
+    </div>
+
+    <h3>Diagnostic Checklist</h3>
+    <ul class="checklist">
+        <li class="checked"><strong>R-hat < 1.01:</strong> All chains agree (convergence)</li>
+        <li class="checked"><strong>ESS > 400:</strong> Enough independent samples</li>
+        <li class="checked"><strong>No divergences:</strong> Sampler explored properly</li>
+        <li class="checked"><strong>No max tree depth:</strong> No pathological geometry</li>
+    </ul>
+
+    <h3>Trace Plots</h3>
+    <p>
+        Trace plots show the sampling history. Good traces look like "fuzzy caterpillars"—
+        random but stationary. Bad traces show trends, stuck periods, or disagreement between chains.
+    </p>
+    <div class="chart-container" id="tracePlot"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Each color is a different chain (parallel sampler). 
+        They should mix together and look stationary. Gaps or trends indicate problems.
+    </div>
+
+    <div class="success-box">
+        <h4>✓ All diagnostics pass</h4>
+        <p style="margin-bottom: 0;">
+            The algorithm converged properly. We can trust these samples represent the posterior distribution.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Posterior Predictive →</button>
+    </div>
+</div>
+<!-- ================================================================== -->
+<!-- STEP 7: POSTERIOR PREDICTIVE CHECK -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step7">
+    <h2><span class="step-num">7</span> Posterior Predictive Check</h2>
+    <p class="step-subtitle">Does the model reproduce key data patterns?</p>
+
+    <p>
+        The algorithm worked (Step 6), but is the <em>model</em> any good? We check by 
+        asking: can this model reproduce data that looks like what we actually observed? 
+        If not, the model is missing something important.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Checking your understanding</h4>
+        <p>
+            If you truly understand how something works, you should be able to recreate it. 
+            If our model truly captures how sales are generated, it should produce realistic 
+            fake data that matches the patterns in real data.
+        </p>
+    </div>
+
+    <h3>Model Fit: Predictions vs. Reality</h3>
+    <div class="chart-container tall" id="ppcChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Black line = actual sales. Blue band = model predictions 
+        with uncertainty. If the black line mostly stays inside the blue band, the model captures 
+        real patterns.
+    </div>
+
+    <h3>Response Curves by Channel</h3>
+    <p>
+        These curves show how sales respond to spend for each channel, incorporating 
+        all the effects we modeled (saturation, carryover).
+    </p>
+    <div class="chart-container tall" id="responseCurvesChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Steeper curves = more effective channels. 
+        Flattening = saturation (diminishing returns). Uncertainty bands show how confident 
+        we are in each curve.
+    </div>
+
+    <h3>Key Patterns to Check</h3>
+    <ul class="checklist">
+        <li class="checked">Captures seasonal peaks (holidays)</li>
+        <li class="checked">Captures seasonal troughs (slow periods)</li>
+        <li class="checked">Captures overall trend</li>
+        <li class="checked">Captures week-to-week variation</li>
+        <li class="warning">Some outliers not fully explained (expected)</li>
+    </ul>
+
+    <div class="success-box">
+        <h4>✓ Model captures main patterns</h4>
+        <p style="margin-bottom: 0;">
+            The model reproduces the key features of the data. Some individual weeks are off—
+            that's expected (random events we can't predict). The overall patterns are captured.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Sensitivity Analysis →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 8: SENSITIVITY ANALYSIS -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step8">
+    <h2><span class="step-num">8</span> Sensitivity Analysis</h2>
+    <p class="step-subtitle">Are conclusions robust to different assumptions?</p>
+
+    <p>
+        We made many choices building this model: saturation shape, adstock decay, priors. 
+        What if we'd made different (reasonable) choices? Sensitivity analysis checks 
+        whether our conclusions would change.
+    </p>
+
+    <div class="analogy-box">
+        <h4>Stress-testing a bridge</h4>
+        <p>
+            Engineers don't just test a bridge under normal conditions—they test under extreme 
+            loads, wind, earthquakes. We stress-test our conclusions under different model specifications.
+        </p>
+    </div>
+
+    <h3>Specifications Tested</h3>
+    <table class="data-table">
+        <thead>
+            <tr><th>Spec</th><th>Saturation</th><th>Adstock</th><th>Priors</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Base</td><td>Hill (k=2)</td><td>Geometric (λ=0.7)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 1</td><td>Hill (k=1.5)</td><td>Geometric (λ=0.7)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 2</td><td>Hill (k=2)</td><td>Geometric (λ=0.5)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 3</td><td>Hill (k=2)</td><td>Geometric (λ=0.7)</td><td>HalfNormal(1.0)</td></tr>
+            <tr><td>Alt 4</td><td>Michaelis</td><td>Geometric (λ=0.7)</td><td>HalfNormal(0.5)</td></tr>
+            <tr><td>Alt 5</td><td>Hill (k=2)</td><td>Delayed (θ=2)</td><td>HalfNormal(0.5)</td></tr>
+        </tbody>
+    </table>
+
+    <h3>ROI Across Specifications</h3>
+    <div class="chart-container tall" id="sensitivityChart"></div>
+    <div class="chart-explanation">
+        <strong>Reading this chart:</strong> Each dot is an ROI estimate from one specification. 
+        Thick bars show the range. Red dashed line = break-even (ROI=1). Channels consistently 
+        above the line are robust winners.
+    </div>
+
+    <h3>Robustness Summary</h3>
+    <table class="data-table">
+        <thead>
+            <tr><th>Channel</th><th>Mean ROI</th><th>Range</th><th>Robust?</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>TV</td><td class="mono">2.1</td><td class="mono">[1.8 – 2.5]</td><td class="positive">✓ Always profitable</td></tr>
+            <tr><td>Paid Search</td><td class="mono">2.4</td><td class="mono">[2.1 – 2.8]</td><td class="positive">✓ Always profitable</td></tr>
+            <tr><td>Paid Social</td><td class="mono">1.3</td><td class="mono">[0.8 – 1.9]</td><td class="warning">⚠ Sometimes below break-even</td></tr>
+            <tr><td>Display</td><td class="mono">0.7</td><td class="mono">[0.3 – 1.1]</td><td class="negative">✗ Usually unprofitable</td></tr>
+            <tr><td>Radio</td><td class="mono">1.6</td><td class="mono">[1.3 – 2.0]</td><td class="positive">✓ Always profitable</td></tr>
+        </tbody>
+    </table>
+
+    <div class="why-box">
+        <h4>Why sensitivity matters</h4>
+        <p style="margin-bottom: 0;">
+            If conclusions change dramatically with small assumption changes, we can't trust them. 
+            TV, Search, and Radio are robust—conclusions hold regardless of specification. 
+            Social and Display are sensitive—be cautious making decisions based on these estimates.
+        </p>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="nextStep()">Next: Report →</button>
+    </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- STEP 9: REPORT -->
+<!-- ================================================================== -->
+<div class="workflow-step" id="step9">
+    <h2><span class="step-num">9</span> Communicate Results</h2>
+    <p class="step-subtitle">What did we learn, and how confident are we?</p>
+
+    <p>
+        The final step: translate technical results into actionable insights. Good reporting 
+        separates confident findings from uncertain ones, and acknowledges limitations honestly.
+    </p>
+
+    <h3>Executive Summary</h3>
+    <div class="chart-container" id="roiChart"></div>
+
+    <h3>Key Findings</h3>
+    
+    <div class="finding confident">
+        <div class="icon">✓</div>
+        <div>
+            <h5>High-Confidence Recommendations</h5>
+            <p><strong>TV, Paid Search, and Radio</strong> are robustly profitable across all reasonable 
+            model specifications. Safe bets for continued or increased investment.</p>
+        </div>
+    </div>
+
+    <div class="finding uncertain">
+        <div class="icon">⚠</div>
+        <div>
+            <h5>Needs More Investigation</h5>
+            <p><strong>Paid Social</strong> shows positive effects but with wide uncertainty and sensitivity 
+            to model assumptions. Consider a controlled experiment (geo-test) before major budget changes.</p>
+        </div>
+    </div>
+
+    <div class="finding negative">
+        <div class="icon">✗</div>
+        <div>
+            <h5>Likely Underperforming</h5>
+            <p><strong>Display</strong> is probably not paying for itself. The ROI range includes 0.3-1.1 
+            across specifications, suggesting reallocation of budget may be warranted.</p>
+        </div>
+    </div>
+
+    <h3>Recommended Budget Allocation</h3>
+    <div class="chart-container short" id="budgetChart"></div>
+    <div class="chart-explanation">
+        <strong>Based on optimization:</strong> Shift budget from Display and Social toward TV and Search. 
+        Maintain Radio at current levels. This recommendation accounts for saturation and uncertainty.
+    </div>
+
+    <h3>Limitations & Caveats</h3>
+    <ul class="checklist">
+        <li class="warning">Model estimates average effects—individual campaigns may vary</li>
+        <li class="warning">Assumes historical relationships continue (no major market changes)</li>
+        <li class="warning">Long-term brand effects may not be fully captured</li>
+        <li class="warning">Display may have unmeasured brand effects not reflected in short-term sales</li>
+        <li class="checked">Conducted sensitivity analysis across 6 specifications</li>
+        <li class="checked">All computational diagnostics passed</li>
+    </ul>
+
+    <div class="why-box">
+        <h4>Why honest uncertainty is valuable</h4>
+        <p>
+            "TV ROI is probably 1.8-2.5" is more useful than "TV ROI is 2.1" because it's honest 
+            about what we actually know. You can confidently invest in TV knowing it's profitable 
+            across the entire range—without false precision that could mislead planning.
+        </p>
+        <p style="margin-bottom: 0;">
+            Similarly, acknowledging uncertainty about Social prevents over-investment in a channel 
+            that might not be working—while also preventing premature abandonment of something that might be.
+        </p>
+    </div>
+
+    <h3>Next Steps</h3>
+    <div class="scenario-selector">
+        <div class="scenario-card">
+            <div class="icon">🧪</div>
+            <h5>Test Social</h5>
+            <p>Run geo-experiment to validate MMM estimates.</p>
+        </div>
+        <div class="scenario-card">
+            <div class="icon">📉</div>
+            <h5>Reduce Display</h5>
+            <p>Reallocate to TV/Search over 3 months.</p>
+        </div>
+        <div class="scenario-card">
+            <div class="icon">📊</div>
+            <h5>Monitor & Update</h5>
+            <p>Refresh model quarterly with new data.</p>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+        <button class="btn btn-primary" onclick="alert('Workflow complete! 🎉')">Complete ✓</button>
+    </div>
+</div>
+
+</div><!-- end container -->
+
+<script>
+// State & Navigation
+let currentStep = 1;
+const totalSteps = 9;
+
+function updateProgress() {
+    document.getElementById('progressFill').style.width = ((currentStep-1)/(totalSteps-1)*100)+'%';
+    document.querySelectorAll('.step-indicator').forEach((ind, i) => {
+        ind.classList.remove('active','completed');
+        if (i+1 === currentStep) ind.classList.add('active');
+        else if (i+1 < currentStep) ind.classList.add('completed');
+    });
+}
+
+function showStep(step) {
+    document.querySelectorAll('.workflow-step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step'+step).classList.add('active');
+    currentStep = step;
+    updateProgress();
+    window.scrollTo({top:200,behavior:'smooth'});
+    if (step===3) initBuildCharts();
+    if (step===4) runPriorCheck();
+    if (step===6) initDiagnosticCharts();
+    if (step===7) { initPPCChart(); initResponseCurves(); }
+    if (step===8) initSensitivityChart();
+    if (step===9) { initROIChart(); initBudgetChart(); }
+}
+
+function nextStep() { if (currentStep < totalSteps) showStep(currentStep+1); }
+function prevStep() { if (currentStep > 1) showStep(currentStep-1); }
+function goToStep(s) { showStep(s); }
+
+// Collapsibles
+function toggleCollapsible(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('open');
+    if (el.classList.contains('open')) {
+        if (id==='saturationSection') updateSaturationChart();
+        if (id==='adstockSection') updateAdstockChart();
+        if (id==='crossSection') initCrossEffectsChart();
+        if (id==='nestedSection') initNestedCharts();
+        if (id==='priorsSection') initPriorDistChart();
+    }
+}
+
+// Utilities
+function normalRandom(m=0,s=1) {
+    let u=0,v=0;
+    while(!u) u=Math.random();
+    while(!v) v=Math.random();
+    return m + s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+const cfg = {responsive:true, displayModeBar:false};
+const colors = {primary:'#5a7c65',primaryLight:'#8fa86a',primaryDark:'#3d5a47',accent:'#6a8fa8',success:'#67c99a',warning:'#c9a067',danger:'#c97067',text:'#2d3a2d',grid:'rgba(90,124,101,0.1)'};
+const layout_base = {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Source Sans 3',color:colors.text},margin:{t:30,r:30,b:50,l:60}};
+
+// Step 3: Build Charts
+function initBuildCharts() { updateSaturationChart(); }
+
+function updateSaturationChart() {
+    const type = document.getElementById('saturationSelect')?.value || 'hill';
+    const k = parseFloat(document.getElementById('saturationK')?.value || 2);
+    const half = parseFloat(document.getElementById('saturationHalf')?.value || 50);
+    if(document.getElementById('saturationKVal')) document.getElementById('saturationKVal').textContent = k.toFixed(1);
+    if(document.getElementById('saturationHalfVal')) document.getElementById('saturationHalfVal').textContent = half+'%';
+    const x = Array.from({length:100},(_,i)=>i+1);
+    let y;
+    if (type==='hill') y = x.map(v => Math.pow(v,k)/(Math.pow(half,k)+Math.pow(v,k)));
+    else if (type==='michaelis') y = x.map(v => v/(half+v));
+    else y = x.map(v => v/100);
+    Plotly.newPlot('saturationChart', [
+        {x,y,mode:'lines',line:{color:colors.primary,width:3},fill:'tozeroy',fillcolor:'rgba(90,124,101,0.15)',name:'Effect'},
+        {x:[half,half],y:[0,0.5],mode:'lines',line:{color:colors.accent,dash:'dash',width:2},name:'Half-sat'},
+        {x:[0,half],y:[0.5,0.5],mode:'lines',line:{color:colors.accent,dash:'dash',width:2},showlegend:false}
+    ], {...layout_base,xaxis:{title:'Spend Level (%)',gridcolor:colors.grid},yaxis:{title:'Effect',gridcolor:colors.grid,range:[0,1.1]},legend:{orientation:'h',y:1.1}}, cfg);
+}
+
+function setSaturation(type, k) {
+    document.getElementById('saturationSelect').value = type;
+    document.getElementById('saturationK').value = k;
+    updateSaturationChart();
+}
+
+function updateAdstockChart() {
+    const type = document.getElementById('adstockSelect')?.value || 'geometric';
+    const decay = parseFloat(document.getElementById('adstockDecay')?.value || 0.7);
+    const delay = parseInt(document.getElementById('adstockDelay')?.value || 3);
+    if(document.getElementById('adstockDecayVal')) document.getElementById('adstockDecayVal').textContent = decay.toFixed(2);
+    if(document.getElementById('adstockDelayVal')) document.getElementById('adstockDelayVal').textContent = delay;
+    if(document.getElementById('delayRow')) document.getElementById('delayRow').style.display = type==='delayed'?'flex':'none';
+    const weeks = 10, x = Array.from({length:weeks},(_,i)=>i);
+    let y;
+    if (type==='geometric') y = x.map(t => Math.pow(decay,t));
+    else y = x.map(t => t<delay ? Math.pow(1.3,t)/Math.pow(1.3,delay) : Math.pow(decay,t-delay));
+    const maxY = Math.max(...y);
+    y = y.map(v=>v/maxY);
+    Plotly.newPlot('adstockChart', [{x,y,type:'bar',marker:{color:y.map((v,i)=>i===0?colors.primary:`rgba(90,124,101,${0.3+0.7*v})`)}}], {...layout_base,xaxis:{title:'Weeks After Ad',gridcolor:colors.grid,dtick:1},yaxis:{title:'Remaining Effect',gridcolor:colors.grid,range:[0,1.1]},showlegend:false}, cfg);
+}
+
+function setAdstock(type, decay) {
+    document.getElementById('adstockSelect').value = type;
+    document.getElementById('adstockDecay').value = decay;
+    updateAdstockChart();
+}
+
+function initCrossEffectsChart() {
+    const products = ['Prod A','Prod B','Prod C'];
+    const effects = [[1.0,0.15,0.05],[0.1,1.0,-0.2],[0.05,-0.15,1.0]];
+    const annotations = [];
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) annotations.push({x:j,y:i,text:effects[i][j].toFixed(2),showarrow:false,font:{color:Math.abs(effects[i][j])>0.5?'white':colors.text}});
+    Plotly.newPlot('crossEffectsChart', [{z:effects,x:products,y:products,type:'heatmap',colorscale:[[0,colors.danger],[0.5,'#fff'],[1,colors.primary]],zmin:-0.3,zmax:1,showscale:false}], {...layout_base,margin:{t:20,r:20,b:40,l:60},annotations}, cfg);
+}
+
+function initNestedCharts() {
+    Plotly.newPlot('directModelChart', [{type:'sankey',orientation:'h',node:{pad:15,thickness:20,label:['TV','Digital','Sales'],color:[colors.accent,colors.accent,colors.primary]},link:{source:[0,1],target:[2,2],value:[30,25],color:['rgba(106,143,168,0.4)','rgba(106,143,168,0.4)']}}], {paper_bgcolor:'transparent',margin:{t:10,r:10,b:10,l:10}}, cfg);
+    Plotly.newPlot('nestedModelChart', [{type:'sankey',orientation:'h',node:{pad:15,thickness:20,label:['TV','Digital','Aware','Sales'],color:[colors.accent,colors.accent,colors.warning,colors.primary]},link:{source:[0,1,2],target:[2,2,3],value:[30,25,50],color:['rgba(106,143,168,0.4)','rgba(106,143,168,0.4)','rgba(201,160,103,0.4)']}}], {paper_bgcolor:'transparent',margin:{t:10,r:10,b:10,l:10}}, cfg);
+}
+
+function initPriorDistChart() {
+    const x = Array.from({length:100},(_,i)=>i*0.03);
+    const y = x.map(v => Math.exp(-v*v/0.5) * 2/Math.sqrt(Math.PI*0.5));
+    Plotly.newPlot('priorDistChart', [{x,y,mode:'lines',fill:'tozeroy',line:{color:colors.primary,width:2},fillcolor:'rgba(90,124,101,0.2)'}], {...layout_base,xaxis:{title:'Effect Size',gridcolor:colors.grid},yaxis:{title:'Density',gridcolor:colors.grid}}, cfg);
+}
+
+// Step 4: Prior Predictive
+function updatePriorVals() {
+    if(document.getElementById('priorMediaSDVal')) document.getElementById('priorMediaSDVal').textContent = parseFloat(document.getElementById('priorMediaSD').value).toFixed(1);
+    if(document.getElementById('priorBaselineSDVal')) document.getElementById('priorBaselineSDVal').textContent = parseFloat(document.getElementById('priorBaselineSD').value).toFixed(1);
+}
+
+function runPriorCheck() {
+    updatePriorVals();
+    const mediaSD = parseFloat(document.getElementById('priorMediaSD')?.value || 0.5);
+    const baseSD = parseFloat(document.getElementById('priorBaselineSD')?.value || 1.0);
+    const n=52, traces=[], allY=[];
+    for (let d=0;d<40;d++) {
+        const base = 15+normalRandom(0,baseSD);
+        const betas = Array.from({length:5},()=>Math.abs(normalRandom(0,mediaSD)));
+        const y = [];
+        for (let t=0;t<n;t++) {
+            const val = base + 0.015*t + 2*Math.sin(2*Math.PI*t/52) + betas.reduce((s,b)=>s+b*(0.3+0.2*Math.random()),0) + normalRandom(0,0.8);
+            y.push(val); allY.push(val);
+        }
+        traces.push({x:Array.from({length:n},(_,i)=>i+1),y,mode:'lines',line:{color:'rgba(90,124,101,0.12)',width:1.5},showlegend:false,hoverinfo:'skip'});
+    }
+    traces.push({x:[1,52],y:[12,12],mode:'lines',name:'Min',line:{color:colors.success,dash:'dash',width:2}});
+    traces.push({x:[1,52],y:[22,22],mode:'lines',name:'Max',line:{color:colors.success,dash:'dash',width:2}});
+    Plotly.newPlot('priorPredChart', traces, {...layout_base,xaxis:{title:'Week',gridcolor:colors.grid},yaxis:{title:'Sales ($M)',gridcolor:colors.grid,zeroline:true,zerolinecolor:colors.danger},legend:{orientation:'h',y:1.1}}, cfg);
+    const negProp = allY.filter(y=>y<0).length/allY.length;
+    const box = document.getElementById('priorDecision');
+    if (negProp > 0.05) {
+        box.className = 'warning-box';
+        document.getElementById('priorTitle').textContent = '⚠️ Too Loose';
+        document.getElementById('priorAssessment').textContent = `${(negProp*100).toFixed(1)}% negative. Tighten priors.`;
+    } else {
+        box.className = 'success-box';
+        document.getElementById('priorTitle').textContent = '✓ Looks Good';
+        document.getElementById('priorAssessment').textContent = 'Predictions within realistic bounds.';
+    }
+}
+
+// Step 5: Fit
+function runMCMC() {
+    const btn = document.getElementById('runMCMCBtn'), out = document.getElementById('fitOutput');
+    btn.disabled = true; btn.textContent = '⏳ Running...';
+    const steps = ['<span class="info">[INFO]</span> Compiling...','<span class="success">[OK]</span> Compiled (2.3s)','<span class="info">[INFO]</span> NUTS init...','<span class="info">[WARMUP]</span> ████████████████████ 100%','<span class="info">[SAMPLE]</span> ████████████████████ 100%','<span class="success">[OK]</span> Done (47s)','<span class="success">[DIAG]</span> R-hat: 1.003 ✓','<span class="success">[DIAG]</span> ESS: 1842 ✓','<span class="success">[DIAG]</span> Divergences: 0 ✓'];
+    let i=0;
+    const iv = setInterval(()=>{
+        if (i<steps.length) { out.innerHTML += steps[i]+'<br>'; out.scrollTop=out.scrollHeight; i++; }
+        else { clearInterval(iv); btn.textContent='✓ Done'; document.getElementById('mcmcResults').style.display='block'; document.getElementById('fitNextBtn').disabled=false; initPosteriorChart(); }
+    }, 280);
+}
+
+function initPosteriorChart() {
+    const ch=['TV','Search','Social','Display','Radio'], m=[0.42,0.31,0.18,0.08,0.15], lo=[0.28,0.22,0.02,-0.12,0.03], hi=[0.57,0.41,0.35,0.29,0.28];
+    Plotly.newPlot('posteriorChart', [{y:ch,x:m,type:'bar',orientation:'h',error_x:{type:'data',symmetric:false,array:hi.map((h,i)=>h-m[i]),arrayminus:m.map((v,i)=>v-lo[i]),color:colors.primaryDark},marker:{color:m.map(v=>v>0.1?colors.primary:colors.warning)}}], {...layout_base,margin:{t:20,r:30,b:50,l:80},xaxis:{title:'Effect',gridcolor:colors.grid,zeroline:true,zerolinecolor:colors.danger},yaxis:{gridcolor:colors.grid}}, cfg);
+}
+
+// Step 6: Diagnostics
+function initDiagnosticCharts() {
+    const n=200, traces=[], chainColors=[colors.primary,colors.accent,colors.warning,colors.success];
+    for (let c=0;c<4;c++) {
+        let val=0.4+normalRandom(0,0.02);
+        const y=[];
+        for (let i=0;i<n;i++) { val = normalRandom(.4,0.015); y.push(val); }
+        traces.push({x:Array.from({length:n},(_,i)=>i),y,mode:'lines',line:{color:chainColors[c],width:1},name:`Chain ${c+1}`});
+    }
+    Plotly.newPlot('tracePlot', traces, {...layout_base,xaxis:{title:'Iteration',gridcolor:colors.grid},yaxis:{title:'TV Effect',gridcolor:colors.grid},legend:{orientation:'h',y:1.1}}, cfg);
+}
+
+// Step 7: Posterior Predictive
+function initPPCChart() {
+    const n=52, x=Array.from({length:n},(_,i)=>i+1);
+    const actual=x.map(t=>15+0.02*t+2*Math.sin(2*Math.PI*t/52)+normalRandom(0,0.5)+2*Math.random());
+    const pred=actual.map(y=>y+normalRandom(0,0.2));
+    const lo=pred.map(y=>y-1.5-Math.random()*0.5), hi=pred.map(y=>y+1.5+Math.random()*0.5);
+    Plotly.newPlot('ppcChart', [
+        {x:[...x,...x.slice().reverse()],y:[...hi,...lo.slice().reverse()],fill:'toself',fillcolor:'rgba(106,143,168,0.25)',line:{color:'transparent'},name:'94% CI'},
+        {x,y:pred,mode:'lines',name:'Model',line:{color:colors.accent,width:2}},
+        {x,y:actual,mode:'lines',name:'Actual',line:{color:colors.text,width:2.5}}
+    ], {...layout_base,xaxis:{title:'Week',gridcolor:colors.grid},yaxis:{title:'Sales ($M)',gridcolor:colors.grid},legend:{orientation:'h',y:1.12}}, cfg);
+}
+
+function initResponseCurves() {
+    const x=Array.from({length:100},(_,i)=>i);
+    const chs=[{name:'TV',k:2,half:40,color:colors.primary},{name:'Search',k:1.2,half:30,color:colors.accent},{name:'Social',k:2.5,half:50,color:colors.warning},{name:'Radio',k:1.5,half:45,color:colors.success}];
+    Plotly.newPlot('responseCurvesChart', chs.map(c=>({x,y:x.map(v=>0.5*Math.pow(v,c.k)/(Math.pow(c.half,c.k)+Math.pow(v,c.k))),mode:'lines',name:c.name,line:{color:c.color,width:2.5}})), {...layout_base,xaxis:{title:'Spend',gridcolor:colors.grid},yaxis:{title:'Contribution',gridcolor:colors.grid},legend:{orientation:'h',y:1.12}}, cfg);
+}
+
+// Step 8: Sensitivity
+function initSensitivityChart() {
+    const ch=['TV','Search','Social','Display','Radio'], base=[2.1,2.4,1.3,0.7,1.6], vars=[0.35,0.35,0.55,0.4,0.35];
+    const traces=[{x:[-0.5,4.5],y:[1,1],mode:'lines',name:'Break-even',line:{color:colors.danger,dash:'dash',width:2}}];
+    ch.forEach((c,i)=>{
+        const specs=Array.from({length:6},()=>base[i]+normalRandom(0,vars[i]));
+        traces.push({x:[i,i],y:[Math.min(...specs),Math.max(...specs)],mode:'lines',line:{color:colors.primary,width:8},showlegend:false});
+        traces.push({x:specs.map(()=>i+(Math.random()-0.5)*0.2),y:specs,mode:'markers',marker:{size:8,color:specs.map(s=>s>1?colors.success:colors.danger)},showlegend:false});
+    });
+    Plotly.newPlot('sensitivityChart', traces, {...layout_base,xaxis:{tickvals:[0,1,2,3,4],ticktext:ch,gridcolor:colors.grid},yaxis:{title:'ROI',gridcolor:colors.grid,range:[0,3.5]},legend:{orientation:'h',y:1.1}}, cfg);
+}
+
+// Step 9: Report
+function initROIChart() {
+    const ch=['Search','TV','Radio','Social','Display'], roi=[2.4,2.1,1.6,1.3,0.7], lo=[2.1,1.8,1.3,0.8,0.3], hi=[2.8,2.5,2.0,1.9,1.1];
+    Plotly.newPlot('roiChart', [
+        {y:ch,x:roi,type:'bar',orientation:'h',error_x:{type:'data',symmetric:false,array:hi.map((h,i)=>h-roi[i]),arrayminus:roi.map((r,i)=>r-lo[i])},marker:{color:roi.map(r=>r>1?colors.primary:colors.danger)}},
+        {y:[ch[0],ch[ch.length-1]],x:[1,1],mode:'lines',name:'Break-even',line:{color:colors.danger,dash:'dash',width:2}}
+    ], {...layout_base,margin:{t:20,r:30,b:50,l:80},xaxis:{title:'ROI',gridcolor:colors.grid},yaxis:{gridcolor:colors.grid},showlegend:false}, cfg);
+}
+
+function initBudgetChart() {
+    const labels=['TV','Search','Social','Display','Radio'];
+    const current=[30,25,20,15,10], recommended=[35,30,15,5,15];
+    Plotly.newPlot('budgetChart', [
+        {x:labels,y:current,type:'bar',name:'Current',marker:{color:colors.accent}},
+        {x:labels,y:recommended,type:'bar',name:'Recommended',marker:{color:colors.primary}}
+    ], {...layout_base,xaxis:{gridcolor:colors.grid},yaxis:{title:'Budget %',gridcolor:colors.grid},legend:{orientation:'h',y:1.1},barmode:'group'}, cfg);
+}
+
+
+
+    // Trend stories mapping
+    const trendStories = {
+        none: {
+            story: '"Business is stable—no real growth or decline pattern."',
+            math: 'No trend component',
+            formula: 'τ(t) = 0'
+        },
+        linear: {
+            story: '"We\'ve been growing steadily—about 3% year-over-year."',
+            math: 'Linear trend',
+            formula: 'τ(t) = δ · t'
+        },
+        piecewise: {
+            story: '"Everything changed when COVID hit—before and after are different worlds."',
+            math: 'Piecewise linear',
+            formula: 'τ(t) = k·t + Σδⱼ·(t-sⱼ)₊'
+        },
+        spline: {
+            story: '"Things have been shifting gradually—can\'t point to one moment."',
+            math: 'B-spline trend',
+            formula: 'τ(t) = Σwᵢ·Bᵢ(t)'
+        },
+        gp: {
+            story: '"I genuinely don\'t know the pattern—let the data tell us."',
+            math: 'Gaussian Process',
+            formula: 'τ(t) ~ GP(0, k(t,t\'))'
+        }
+    };
+
+    // Initialize charts and interactivity
+    function initTrendSeasonalityCharts() {
+        initConfounderDemo();
+        const colors = {
+            primary: '#5a7c65',
+            accent: '#6a8fa8',
+            warning: '#c9a067',
+            text: '#2d3a2d',
+            grid: 'rgba(45, 58, 45, 0.1)',
+            bg: 'transparent'
+        };
+        
+        const cfg = { responsive: true, displayModeBar: false };
+        const layout_base = {
+            paper_bgcolor: colors.bg,
+            plot_bgcolor: colors.bg,
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 30, r: 30, b: 50, l: 60 }
+        };
+        
+        
+        // Trend comparison chart
+        updateTrendChart('linear');
+        
+        // Seasonality comparison chart  
+        updateSeasonalityChart(2);
+        
+        // Setup event listeners
+        document.querySelectorAll('input[name="trendType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                updateTrendChart(e.target.value);
+                updateTrendStory(e.target.value);
+            });
+        });
+        
+        document.getElementById('fourierOrder').addEventListener('input', (e) => {
+            const order = parseInt(e.target.value);
+            document.getElementById('fourierOrderVal').textContent = order;
+            updateSeasonalityChart(order);
+        });
+    }
+
+    function updateTrendChart(type) {
+        const colors = {
+            primary: '#5a7c65',
+            accent: '#6a8fa8', 
+            warning: '#c9a067',
+            text: '#2d3a2d',
+            grid: 'rgba(45, 58, 45, 0.1)'
+        };
+        
+        const t = Array.from({length: 104}, (_, i) => i);
+        let y;
+        
+        switch(type) {
+            case 'none':
+                y = t.map(() => 0);
+                break;
+            case 'linear':
+                y = t.map(x => x * 0.02);
+                break;
+            case 'piecewise':
+                y = t.map(x => x < 52 ? x * 0.01 : 52 * 0.01 + (x - 52) * 0.04);
+                break;
+            case 'spline':
+                y = t.map(x => 0.02 * x + 0.3 * Math.sin(x / 30) * Math.exp(-x / 150));
+                break;
+            case 'gp':
+                // Simulate GP-like smooth wiggle
+                y = t.map(x => 0.015 * x + 0.4 * Math.sin(x / 20) * 0.5 + 0.3 * Math.cos(x / 35));
+                break;
+        }
+        
+        Plotly.react('trendCompareChart', [{
+            x: t,
+            y: y,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: colors.primary, width: 3 }
+        }], {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 20, r: 30, b: 40, l: 60 },
+            xaxis: { title: 'Week', gridcolor: colors.grid },
+            yaxis: { title: 'Trend Effect', gridcolor: colors.grid }
+        }, { responsive: true, displayModeBar: false });
+    }
+
+    function updateTrendStory(type) {
+        const info = trendStories[type];
+        document.getElementById('trendStoryText').textContent = info.story;
+        document.getElementById('trendMathText').textContent = info.math;
+        document.getElementById('trendFormula').textContent = info.formula;
+    }
+
+    function updateSeasonalityChart(order) {
+        const colors = {
+            primary: '#5a7c65',
+            accent: '#6a8fa8',
+            warning: '#c9a067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            grid: 'rgba(45, 58, 45, 0.1)'
+        };
+        
+        const weeks = Array.from({length: 52}, (_, i) => i + 1);
+        const traces = [];
+        
+        // Individual harmonics
+        const harmonicColors = ['#e74c3c', '#f39c12', '#27ae60', '#3498db', '#9b59b6'];
+        for (let n = 1; n <= order; n++) {
+            const y = weeks.map(w => {
+                const t = w / 52;
+                const amp = 0.3 / n;
+                return amp * Math.sin(2 * Math.PI * n * t - Math.PI/2);
+            });
+            traces.push({
+                x: weeks,
+                y: y,
+                type: 'scatter',
+                mode: 'lines',
+                name: `Harmonic ${n}`,
+                line: { color: harmonicColors[n-1], width: 1.5, dash: 'dot' },
+                opacity: 0.6
+            });
+        }
+        
+        // Combined seasonality
+        if (order > 0) {
+            const combined = weeks.map(w => {
+                const t = w / 52;
+                let sum = 0;
+                for (let n = 1; n <= order; n++) {
+                    sum += (0.3 / n) * Math.sin(2 * Math.PI * n * t - Math.PI/2);
+                }
+                return sum;
+            });
+            traces.push({
+                x: weeks,
+                y: combined,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Combined',
+                line: { color: colors.text, width: 3 }
+            });
+        } else {
+            traces.push({
+                x: weeks,
+                y: weeks.map(() => 0),
+                type: 'scatter',
+                mode: 'lines',
+                name: 'No seasonality',
+                line: { color: colors.text, width: 2, dash: 'dash' }
+            });
+        }
+        
+        Plotly.react('seasonalityCompareChart', traces, {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+            margin: { t: 20, r: 30, b: 40, l: 60 },
+            xaxis: { title: 'Week of Year', gridcolor: colors.grid, range: [1, 52] },
+            yaxis: { title: 'Seasonal Effect', gridcolor: colors.grid },
+            legend: { orientation: 'h', y: 1.15 },
+            showlegend: order > 0
+        }, 
+        { responsive: true, displayModeBar: false }
+    );
+    }
+
+    // Call init when DOM ready
+    // document.addEventListener('DOMContentLoaded', initTrendSeasonalityCharts);
+
+        // Colors matching the CSS
+        
+        const chartConfig = {
+            displayModeBar: false,
+            responsive: true
+        };
+
+        // Collapsible sections
+        function toggleCollapsible(header) {
+            const collapsible = header.parentElement;
+            collapsible.classList.toggle('open');
+        }
+        function toggleCollapsible1(id) {
+            const el = document.getElementById(id);
+            el.classList.toggle('open');
+            if (el.classList.contains('open')) {
+                if (id==='saturationSection') updateSaturationChart();
+                if (id==='adstockSection') updateAdstockChart();
+                if (id==='crossSection') initCrossEffectsChart();
+                if (id==='nestedSection') initNestedCharts();
+                if (id==='priorsSection') initPriorDistChart();
+            }
+        }
+        // Confounder demo
+        let includeConfounder = true;
+
+        function setConfounder(include, btn) {
+            includeConfounder = include;
+            
+            // Update button states
+            document.querySelectorAll('.toggle-group .toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            updateConfounderChart();
+        }
+
+        function updateConfounderChart() {
+            const messageBox = document.getElementById('confounderMessage');
+            
+            let data, title, message;
+
+            if (includeConfounder) {
+                // Correct model
+                data = [{
+                    x: ['Media Effect<br>(True Causal)', 'Distribution Effect', 'Residual'],
+                    y: [0.25, 0.35, 0.15],
+                    type: 'bar',
+                    marker: {
+                        color: [colors.success, colors.danger, colors.textMuted],
+                        line: { color: ['#4a8f5f', '#a85550', '#4a5a4a'], width: 2 }
+                    },
+                    text: ['0.25', '0.35', '0.15'],
+                    textposition: 'outside',
+                    textfont: { size: 14, color: colors.text },
+                    hovertemplate: '%{x}<br>Effect: %{y:.2f}<extra></extra>'
+                }];
+                
+                messageBox.className = 'why-box';
+                messageBox.innerHTML = `
+                    <h4>✓ Correct Model</h4>
+                    <p style="margin-bottom: 0;">
+                        With distribution included, we isolate the <strong>true causal effect of media (0.25)</strong>. 
+                        The correlation that was actually due to distribution is properly attributed—not falsely credited to media.
+                    </p>
+                `;
+            } else {
+                // Biased model
+                data = [{
+                    x: ['Media "Effect"<br>(BIASED!)', 'Distribution<br>(Omitted)', 'Residual'],
+                    y: [0.45, 0, 0.30],
+                    type: 'bar',
+                    marker: {
+                        color: [colors.danger, '#cccccc', colors.textMuted],
+                        line: { color: ['#a85550', '#999999', '#4a5a4a'], width: 2 }
+                    },
+                    text: ['0.45 ⚠️', '(Hidden)', '0.30'],
+                    textposition: 'outside',
+                    textfont: { size: 14, color: colors.text },
+                    hovertemplate: '%{x}<br>Value: %{y:.2f}<extra></extra>'
+                }];
+                
+                messageBox.className = 'warning-box';
+                messageBox.innerHTML = `
+                    <h4>⚠️ Biased Results!</h4>
+                    <p style="margin-bottom: 0;">
+                        Without distribution, media appears to have an effect of <strong>0.45</strong>—<strong>80% inflated!</strong> 
+                        The spurious correlation from distribution (high-distribution markets get more media AND have higher sales) 
+                        has been absorbed into the media coefficient. This is the bias that specification shopping exploits.
+                    </p>
+                `;
+            }
+
+            const layout = {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+                margin: { t: 40, r: 30, b: 80, l: 50 },
+                yaxis: {
+                    title: 'Effect Size',
+                    range: [0, 0.6],
+                    gridcolor: colors.border,
+                    zeroline: false
+                },
+                xaxis: {
+                    gridcolor: colors.border
+                },
+                annotations: includeConfounder ? [{
+                    x: 0,
+                    y: 0.4,
+                    text: '✓ Unbiased',
+                    showarrow: false,
+                    font: { color: colors.success, size: 12 }
+                }] : [{
+                    x: 0,
+                    y: 0.6,
+                    text: '⚠️ 80% inflated!',
+                    showarrow: false,
+                    font: { color: colors.danger, size: 12, weight: 'bold' }
+                }]
+            };
+
+            Plotly.react('confounderChart', data, layout, chartConfig);
+        }
+        function initConfounderDemo() {
+            if (document.getElementById('confounderChart')) {
+                updateConfounderChart();
+            }
+        }
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initTrendSeasonalityCharts();
+            updateProgress();
+        });
+    </script>
+</body>
+</html>

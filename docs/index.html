@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMM Framework | Bayesian Marketing Mix Modeling</title>
+    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/index.html">
+    <meta property="og:title" content="MMM Framework | Bayesian Marketing Mix Modeling">
+    <meta property="og:description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/index.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script type="application/ld+json">
+        {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Your MMM Framework Name",
+        "operatingSystem": "Python",
+        "applicationCategory": "BusinessApplication",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "description": "Open-source Python library for Marketing Mix Modeling, addressing adstock decay and channel saturation."
+        }
+    </script>
+
+    <!-- <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --shadow-lg: 0 16px 48px rgba(45, 58, 45, 0.12);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+            font-size: 17px;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+
+        /* Navigation */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.5rem;
+            color: var(--color-primary-dark);
+            text-decoration: none;
+        }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a {
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 6rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -20%;
+            width: 80%; height: 150%;
+            background: radial-gradient(ellipse at center, rgba(143, 168, 106, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .hero-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+        .hero-text { position: relative; z-index: 1; }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(143, 168, 106, 0.1);
+            border: 1px solid rgba(143, 168, 106, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+            margin-bottom: 1.5rem;
+        }
+        .hero h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 3.5rem;
+            line-height: 1.15;
+            margin-bottom: 1.5rem;
+            color: var(--color-text);
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-description {
+            font-size: 1.25rem;
+            color: var(--color-text-muted);
+            margin-bottom: 2.5rem;
+        }
+        .hero-cta { display: flex; gap: 1rem; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            border: none;
+            text-decoration: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+        .btn-secondary {
+            background: var(--color-surface);
+            color: var(--color-text);
+            border: 2px solid var(--color-border);
+        }
+        .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .hero-chart {
+            background: var(--color-surface);
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            padding: 2rem;
+            border: 1px solid var(--color-border);
+        }
+
+        /* Sections */
+        section { padding: 6rem 0; }
+        .section-header { text-align: center; margin-bottom: 4rem; }
+        .section-header h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+        .section-header p {
+            font-size: 1.2rem;
+            color: var(--color-text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Problem Section */
+        .problem-section { background: var(--color-bg-alt); }
+        .problem-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 4rem;
+            align-items: start;
+        }
+        .problem-content h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+        .problem-content p { color: var(--color-text-muted); margin-bottom: 1.5rem; }
+
+        /* Dartboard */
+        .dartboard-demo {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--color-border);
+        }
+        .dartboard-svg { width: 100%; max-width: 300px; margin: 0 auto; display: block; }
+        .dartboard-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+        }
+        .stat-label { font-size: 0.8rem; color: var(--color-text-muted); display: block; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.accuracy { color: var(--color-danger); }
+        .dartboard-explanation {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--color-border);
+        }
+        .dartboard-explanation h4 { font-size: 1rem; margin-bottom: 0.5rem; }
+        .dartboard-explanation p { font-size: 0.9rem; color: var(--color-text-muted); }
+        #punchline {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(201, 112, 103, 0.1);
+            border-radius: 8px;
+            font-weight: 600;
+            color: var(--color-danger);
+        }
+        .hidden { display: none; }
+        .restart-btn {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+        .restart-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .dart { animation: dartThrow 0.3s ease-out forwards; }
+        .dart-miss { animation: dartFade 1s ease-out 0.3s forwards; }
+        @keyframes dartThrow { from { opacity: 0; transform: scale(2); } to { opacity: 1; transform: scale(1); } }
+        @keyframes dartFade { to { opacity: 0.15; } }
+
+        /* Models */
+        .models-section { background: var(--color-bg); }
+        .model-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .model-card {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--color-border);
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+        .model-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
+        }
+        .model-icon {
+            width: 64px; height: 64px;
+            background: linear-gradient(135deg, rgba(143, 168, 106, 0.1), rgba(106, 143, 168, 0.1));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        .model-icon svg { width: 32px; height: 32px; }
+        .model-card h3 { font-size: 1.3rem; margin-bottom: 0.75rem; }
+        .model-card .use-case {
+            font-size: 0.9rem;
+            color: var(--color-primary-dark);
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        .model-card p { color: var(--color-text-muted); font-size: 0.95rem; margin-bottom: 1rem; }
+        .model-visual {
+            margin-top: 1.5rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 120px;
+        }
+        .learn-more {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--color-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+        }
+        .learn-more:hover { text-decoration: underline; }
+
+        /* Variable Selection Feature */
+        .feature-section { background: var(--color-bg-alt); }
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; }
+        .feature-content h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+        }
+        .feature-content p { color: var(--color-text-muted); margin-bottom: 1.5rem; }
+        .feature-visual {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-md);
+        }
+        .warning-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(201, 112, 103, 0.1);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--color-danger);
+            margin-bottom: 1rem;
+        }
+
+        /* Demo */
+        .demo-section { background: var(--color-bg-alt); }
+        .demo-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 3rem; align-items: start; }
+        .demo-controls {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--color-border);
+        }
+        .demo-controls h3 { font-size: 1.2rem; margin-bottom: 1.5rem; }
+        .control-group { margin-bottom: 1.5rem; }
+        .control-group label { display: block; font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 0.5rem; }
+        .control-group input[type="range"] {
+            width: 100%; height: 6px;
+            border-radius: 3px;
+            background: var(--color-bg-alt);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+        }
+        .control-value {
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+        .demo-chart-area {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
+        }
+        .chart-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .chart-tab {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--color-border);
+            background: var(--color-bg);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+        .chart-tab.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+        .chart-container { height: 350px; }
+
+        /* Cross Effects */
+        .cross-effects-section { background: var(--color-bg); }
+        .cross-effects-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+        .cross-effects-visual {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--color-border);
+        }
+        .cross-effects-insight { display: flex; flex-direction: column; justify-content: center; }
+        .insight-card {
+            background: var(--color-surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+        .insight-icon { font-size: 1.5rem; flex-shrink: 0; }
+        .insight-card strong { display: block; margin-bottom: 0.25rem; }
+
+        /* CTA */
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            color: white;
+            text-align: center;
+            padding: 5rem 0;
+        }
+        .cta-section h2 { font-family: 'DM Serif Display', serif; font-size: 2.5rem; margin-bottom: 1rem; }
+        .cta-section p { font-size: 1.2rem; opacity: 0.9; margin-bottom: 2rem; max-width: 600px; margin-left: auto; margin-right: auto; }
+        .cta-buttons { display: flex; gap: 1rem; justify-content: center; }
+        .btn-white { background: white; color: var(--color-primary-dark); }
+        .btn-outline-white { background: transparent; color: white; border: 2px solid rgba(255,255,255,0.5); }
+        .btn-outline-white:hover { background: rgba(255,255,255,0.1); border-color: white; }
+
+        /* Footer */
+        footer {
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+            padding: 3rem 0;
+        }
+        .footer-content { display: flex; justify-content: space-between; align-items: center; }
+        .footer-links { display: flex; gap: 2rem; }
+        .footer-links a { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; }
+        .footer-links a:hover { color: var(--color-primary); }
+
+        /* Animations */
+        .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease-out; }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .hero-content, .problem-grid, .demo-grid, .cross-effects-grid, .feature-grid { grid-template-columns: 1fr; }
+            .model-cards { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 2.5rem; }
+        }
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero { padding-top: 8rem; }
+            .hero-cta, .cta-buttons { flex-direction: column; }
+            .dartboard-stats { grid-template-columns: 1fr 1fr; }
+        }
+    </style> -->
+    <link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <!-- <nav>
+        <div class="container nav-content">
+            <a href="#" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="#" class="active">Home</a></li>
+                <li><a href="about.html">About</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
+                <li><a href="scientific-modeling.html">Scientific Modeling</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav> -->
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container hero-content">
+            <div class="hero-text">
+                <span class="hero-badge">🎯 Open Source</span>
+                <h1>Marketing Measurement <span>You Can Trust</span></h1>
+                <p class="hero-description">
+                    Move beyond point estimates and gut feelings. Our Bayesian framework gives you honest uncertainty ranges so you can make decisions with confidence.
+                </p>
+                <div class="hero-cta">
+                    <a href="#demo" class="btn btn-primary">Try Interactive Demo</a>
+                    <a href="technical-guide.html" class="btn btn-secondary">Technical Guide</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="hero-chart">
+                    <div id="hero-chart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="problem-section" id="problem">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>The Hidden Problem with Traditional MMM</h2>
+                <p>When you run many models and only report the "good" ones, you're painting targets around arrows.</p>
+            </div>
+            <div class="problem-grid">
+                <div class="problem-content fade-in">
+                    <h3>Specification Shopping</h3>
+                    <p>Traditional approaches often involve running dozens of model variations and selecting the one with results that "make sense." This feels rigorous but actually destroys statistical validity.</p>
+                    <p>Watch the dartboard: each throw represents a model specification. Only the bullseyes (models with "good" results) get reported. The misses? Quietly discarded.</p>
+                    <p><strong>The result:</strong> Your reported 100% accuracy is an illusion. The real accuracy is much lower, but you'll never know because you only see the "winners."</p>
+                </div>
+                <div class="dartboard-demo fade-in">
+                    <div class="dartboard-container">
+                        <svg viewBox="0 0 300 300" class="dartboard-svg">
+                            <circle cx="150" cy="150" r="140" fill="#f0f2ed" stroke="#d4ddd4" stroke-width="2"/>
+                            <circle cx="150" cy="150" r="110" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="1"/>
+                            <circle cx="150" cy="150" r="80" fill="#f0f2ed" stroke="#d4ddd4" stroke-width="1"/>
+                            <circle cx="150" cy="150" r="50" fill="#e5e8e0" stroke="#d4ddd4" stroke-width="1"/>
+                            <circle cx="150" cy="150" r="25" fill="#c97067" stroke="#b35a52" stroke-width="2"/>
+                            <circle cx="150" cy="150" r="8" fill="#8fa86a" stroke="#6d8a4a" stroke-width="2"/>
+                            <line x1="150" y1="10" x2="150" y2="290" stroke="#d4ddd4" stroke-width="1" opacity="0.5"/>
+                            <line x1="10" y1="150" x2="290" y2="150" stroke="#d4ddd4" stroke-width="1" opacity="0.5"/>
+                            <g id="darts-group"></g>
+                        </svg>
+                        <div class="dartboard-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Models Run</span>
+                                <span class="stat-value" id="models-run">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Models Reported</span>
+                                <span class="stat-value" id="models-kept">0</span>
+                            </div>
+                            <div class="stat-item hidden" id="accuracy-stat">
+                                <span class="stat-label">Reported "Accuracy"</span>
+                                <span class="stat-value accuracy" id="fake-accuracy">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dartboard-explanation">
+                        <h4>This Is Specification Shopping</h4>
+                        <p>The darts that miss are models with "unrealistic" results—quietly discarded.</p>
+                        <div id="punchline" class="hidden">
+                            <p>🎯 Real accuracy: 15% | Reported: 100%</p>
+                        </div>
+                        <button class="restart-btn" onclick="restartDartboard()">↻ Replay Animation</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Models Section -->
+    <section class="models-section" id="models">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>Three Models for Different Needs</h2>
+                <p>Choose the right level of complexity for your measurement challenge.</p>
+            </div>
+            <div class="model-cards">
+                <!-- Standard Model -->
+                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#standard'">
+                    <div class="model-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3v18h18" stroke="#8fa86a"/>
+                            <path d="M7 16l4-8 4 6 4-10" stroke="#6a8fa8"/>
+                        </svg>
+                    </div>
+                    <h3>Standard MMM</h3>
+                    <div class="use-case">Best for: Single outcome measurement</div>
+                    <p>The foundation. Measures how media drives a single outcome (sales, leads, etc.) with proper uncertainty quantification.</p>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 200 80" width="100%" height="80">
+                            <rect x="10" y="25" width="50" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
+                            <text x="35" y="44" text-anchor="middle" fill="white" font-size="10" font-weight="600">Media</text>
+                            <rect x="140" y="25" width="50" height="30" rx="6" fill="#6a8fa8" opacity="0.8"/>
+                            <text x="165" y="44" text-anchor="middle" fill="white" font-size="10" font-weight="600">Sales</text>
+                            <path d="M 65 40 L 135 40" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow1)"/>
+                            <defs><marker id="arrow1" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#5a6b5a"/></marker></defs>
+                        </svg>
+                    </div>
+                    <a href="technical-guide.html#standard" class="learn-more">Learn more →</a>
+                </div>
+
+                <!-- Nested Model -->
+                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#nested'">
+                    <div class="model-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="6" cy="12" r="3" stroke="#8fa86a"/>
+                            <circle cx="12" cy="6" r="3" stroke="#6a8fa8"/>
+                            <circle cx="18" cy="12" r="3" stroke="#d4a86a"/>
+                            <path d="M9 12h3M12 9v-3" stroke="#5a6b5a"/>
+                        </svg>
+                    </div>
+                    <h3>Nested Model</h3>
+                    <div class="use-case">Best for: Measuring indirect effects</div>
+                    <p>Captures how media works through intermediate steps like awareness or consideration before driving sales.</p>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 200 80" width="100%" height="80">
+                            <rect x="5" y="25" width="40" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
+                            <text x="25" y="44" text-anchor="middle" fill="white" font-size="8" font-weight="600">Media</text>
+                            <rect x="80" y="10" width="45" height="25" rx="6" fill="#6a8fa8" opacity="0.8"/>
+                            <text x="102" y="26" text-anchor="middle" fill="white" font-size="7" font-weight="600">Awareness</text>
+                            <rect x="155" y="25" width="40" height="30" rx="6" fill="#d4a86a" opacity="0.8"/>
+                            <text x="175" y="44" text-anchor="middle" fill="white" font-size="8" font-weight="600">Sales</text>
+                            <path d="M 48 35 Q 65 20 78 22" stroke="#5a6b5a" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+                            <path d="M 127 22 Q 140 20 153 35" stroke="#5a6b5a" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+                            <path d="M 48 45 L 153 45" stroke="#8fa86a" stroke-width="2" stroke-dasharray="4,2" fill="none" marker-end="url(#arrow2)"/>
+                            <defs><marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#5a6b5a"/></marker></defs>
+                        </svg>
+                    </div>
+                    <a href="technical-guide.html#nested" class="learn-more">Learn more →</a>
+                </div>
+
+                <!-- Multivariate Model -->
+                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#multivariate'">
+                    <div class="model-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7" rx="2" stroke="#8fa86a"/>
+                            <rect x="14" y="3" width="7" height="7" rx="2" stroke="#6a8fa8"/>
+                            <rect x="3" y="14" width="7" height="7" rx="2" stroke="#d4a86a"/>
+                            <rect x="14" y="14" width="7" height="7" rx="2" stroke="#c97067"/>
+                            <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4" stroke="#5a6b5a" stroke-dasharray="2,2"/>
+                        </svg>
+                    </div>
+                    <h3>Multivariate Model</h3>
+                    <div class="use-case">Best for: Product portfolio analysis</div>
+                    <p>Measures interactions between products—how promoting one SKU affects others (cannibalization or halo effects).</p>
+                    <div class="model-visual">
+                        <svg viewBox="0 0 200 80" width="100%" height="80">
+                            <rect x="10" y="25" width="50" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
+                            <text x="35" y="44" text-anchor="middle" fill="white" font-size="9" font-weight="600">Promo</text>
+                            <rect x="120" y="10" width="70" height="22" rx="5" fill="#6a8fa8" opacity="0.8"/>
+                            <text x="155" y="24" text-anchor="middle" fill="white" font-size="8" font-weight="600">Product A</text>
+                            <rect x="120" y="48" width="70" height="22" rx="5" fill="#d4a86a" opacity="0.8"/>
+                            <text x="155" y="62" text-anchor="middle" fill="white" font-size="8" font-weight="600">Product B</text>
+                            <path d="M 62 35 L 118 21" stroke="#6abf8a" stroke-width="2" fill="none" marker-end="url(#arrow3g)"/>
+                            <path d="M 62 45 L 118 59" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arrow3r)"/>
+                            <path d="M 155 34 L 155 46" stroke="#5a6b5a" stroke-width="1" stroke-dasharray="3,2" fill="none"/>
+                            <defs>
+                                <marker id="arrow3g" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#6abf8a"/></marker>
+                                <marker id="arrow3r" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#c97067"/></marker>
+                            </defs>
+                        </svg>
+                    </div>
+                    <a href="technical-guide.html#multivariate" class="learn-more">Learn more →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Variable Selection Feature Section (NEW) -->
+    <section class="feature-section" id="variable-selection">
+        <div class="container">
+            <div class="feature-grid">
+                <div class="feature-content fade-in">
+                    <span class="warning-badge">⚠️ Use with Caution</span>
+                    <h3>Principled Variable Selection</h3>
+                    <p>Traditional variable selection (stepwise regression, p-value hunting) is a form of specification shopping that invalidates inference. Our framework provides Bayesian alternatives that quantify uncertainty about which variables matter.</p>
+                    <p>But variable selection is not a general-purpose tool. It should <strong>only</strong> be applied to precision control variables—never to confounders, mediators, or your media variables themselves.</p>
+                    <div style="margin-top: 1.5rem;">
+                        <a href="variable-selection.html" class="btn btn-primary">Learn When & How to Use It</a>
+                    </div>
+                </div>
+                <div class="feature-visual fade-in">
+                    <div id="pip-preview-chart" style="height: 280px;"></div>
+                    <p style="text-align: center; color: var(--color-text-muted); font-size: 0.9rem; margin-top: 1rem;">
+                        Posterior inclusion probabilities quantify variable importance
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Demo Section -->
+    <section class="demo-section" id="demo">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>See Bayesian Updates in Action</h2>
+                <p>Watch how prior beliefs combine with data to produce honest uncertainty ranges.</p>
+            </div>
+            <div class="demo-grid fade-in">
+                <div class="demo-controls">
+                    <h3>Adjust Parameters</h3>
+                    <div class="control-group">
+                        <label>Prior Mean (Your Initial Belief)</label>
+                        <input type="range" id="prior-mean" min="-0.5" max="1.5" step="0.1" value="0.3">
+                        <div class="control-value">Value: <span id="prior-mean-value">0.3</span></div>
+                    </div>
+                    <div class="control-group">
+                        <label>Prior Uncertainty (How Sure You Are)</label>
+                        <input type="range" id="prior-sd" min="0.1" max="1" step="0.1" value="0.5">
+                        <div class="control-value">Value: <span id="prior-sd-value">0.5</span></div>
+                    </div>
+                    <div class="control-group">
+                        <label>Sample Size (Amount of Data)</label>
+                        <input type="range" id="sample-size" min="10" max="200" step="10" value="50">
+                        <div class="control-value">Value: <span id="sample-size-value">50</span></div>
+                    </div>
+                    <div class="control-group">
+                        <label>Data Noise</label>
+                        <input type="range" id="data-noise" min="0.1" max="2" step="0.1" value="0.5">
+                        <div class="control-value">Value: <span id="data-noise-value">0.5</span></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="runSimulation()" style="width: 100%; margin-top: 1rem;">Run Simulation</button>
+                </div>
+                <div class="demo-chart-area">
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" onclick="showChart('distribution')">Prior vs Posterior</button>
+                        <button class="chart-tab" onclick="showChart('contributions')">Contributions</button>
+                    </div>
+                    <div id="distribution-chart" class="chart-container"></div>
+                    <div id="contribution-chart" class="chart-container" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cross Effects Demo -->
+    <section class="cross-effects-section" id="cross-effects">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>Why Cross-Effects Matter</h2>
+                <p>Promoting one product affects others. Ignoring this leads to inflated ROI estimates.</p>
+            </div>
+            <div class="cross-effects-grid fade-in">
+                <div class="cross-effects-visual">
+                    <div id="cross-effect-chart" style="height: 300px;"></div>
+                </div>
+                <div class="cross-effects-insight">
+                    <div class="insight-card">
+                        <div class="insight-icon">⚠️</div>
+                        <div>
+                            <strong>Without cross-effects:</strong>
+                            Multipack promotion looks like pure incremental gain. Your ROI calculation overstates the true value.
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">✓</div>
+                        <div>
+                            <strong>With cross-effects:</strong>
+                            Net portfolio impact is lower—some "lift" was shifted from single-pack, not created. Honest measurement leads to better decisions.
+                        </div>
+                    </div>
+                    <a href="technical-guide.html#cross-effects" class="btn btn-secondary" style="margin-top: 1rem;">See the Math →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready for Honest Measurement?</h2>
+            <p>The framework is open source and ready to use. Start with our documentation or dive straight into the code.</p>
+            <div class="cta-buttons">
+                <a href="technical-guide.html" class="btn btn-white">Read Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <!-- <footer>
+        <div class="container footer-content">
+            <span class="logo">MMM Framework</span>
+            <div class="footer-links">
+                <a href="variable-selection.html">Variable Selection</a>
+                <a href="technical-guide.html">Technical Guide</a>
+                <a href="bayesian-workflow.html">Bayesian Workflow</a>
+                <a href="causal-inference.html">Causal Inference</a>
+                <a href="faq.html">FAQ</a>
+                <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
+                <a href="https://github.com/redam94/mmm-framework/issues" target="_blank">Report Issue</a>
+            </div>
+        </div>
+    </footer> -->
+    <script src="shared/components.js"></script>
+    <script>
+        const chartColors = { primary: '#8fa86a', primaryDark: '#6d8a4a', accent: '#6a8fa8', warning: '#d4a86a', danger: '#c97067', success: '#6abf8a', text: '#2d3a2d', textMuted: '#5a6b5a', grid: '#d4ddd4', bg: '#fafbf9' };
+        const chartConfig = { displayModeBar: false, responsive: true };
+        const chartLayout = { paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { family: 'Source Sans 3, sans-serif', color: chartColors.text }, margin: { t: 40, r: 20, b: 40, l: 50 }, xaxis: { gridcolor: chartColors.grid, zerolinecolor: chartColors.grid }, yaxis: { gridcolor: chartColors.grid, zerolinecolor: chartColors.grid } };
+
+        function initHeroChart() {
+            const x = [], posterior = [], prior = [];
+            for (let i = -1; i <= 2; i += 0.02) { x.push(i); posterior.push(Math.exp(-Math.pow(i - 0.7, 2) / (2 * 0.15 * 0.15))); prior.push(Math.exp(-Math.pow(i - 0.3, 2) / (2 * 0.4 * 0.4)) * 0.5); }
+            Plotly.newPlot('hero-chart', [
+                { x, y: prior, type: 'scatter', mode: 'lines', name: 'Prior Belief', line: { color: chartColors.textMuted, width: 2, dash: 'dash' }, fill: 'tozeroy', fillcolor: 'rgba(90, 107, 90, 0.1)' },
+                { x, y: posterior, type: 'scatter', mode: 'lines', name: 'After Data', line: { color: chartColors.primary, width: 3 }, fill: 'tozeroy', fillcolor: 'rgba(143, 168, 106, 0.3)' }
+            ], { ...chartLayout, showlegend: true, legend: { x: 0.7, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)' }, xaxis: { ...chartLayout.xaxis, title: 'Media Effect' }, yaxis: { ...chartLayout.yaxis, title: 'Probability', showticklabels: false }, annotations: [{ x: 0.7, y: 1.05, xref: 'x', yref: 'y', text: 'Most likely value', showarrow: true, arrowhead: 2, arrowcolor: chartColors.primary, font: { color: chartColors.primary, size: 11 } }] }, chartConfig);
+        }
+
+        function initPIPPreviewChart() {
+            const variables = ['Weather', 'Holiday', 'Sports', 'Gas Price', 'Unemployment'];
+            const pips = [0.92, 0.87, 0.64, 0.31, 0.18];
+            Plotly.newPlot('pip-preview-chart', [{ x: variables, y: pips, type: 'bar', marker: { color: pips.map(p => p >= 0.5 ? chartColors.success : chartColors.danger) }, hovertemplate: '<b>%{x}</b><br>PIP: %{y:.0%}<extra></extra>' }], { ...chartLayout, margin: { t: 20, r: 20, b: 60, l: 50 }, xaxis: { ...chartLayout.xaxis, tickangle: -30 }, yaxis: { ...chartLayout.yaxis, title: 'Inclusion Prob.', range: [0, 1], tickformat: '.0%' }, shapes: [{ type: 'line', x0: -0.5, x1: 4.5, y0: 0.5, y1: 0.5, line: { color: chartColors.textMuted, width: 2, dash: 'dash' } }] }, chartConfig);
+        }
+
+        let dartboardAnimationRunning = false, dartsThrown = 0, dartsKept = 0;
+        function startDartboardAnimation() {
+            if (dartboardAnimationRunning) return;
+            dartboardAnimationRunning = true;
+            const dartsGroup = document.getElementById('darts-group');
+            dartsGroup.innerHTML = ''; dartsThrown = 0; dartsKept = 0;
+            document.getElementById('models-run').textContent = '0';
+            document.getElementById('models-kept').textContent = '0';
+            document.getElementById('accuracy-stat').classList.add('hidden');
+            document.getElementById('punchline').classList.add('hidden');
+            let dartIndex = 0;
+            const throwInterval = setInterval(() => {
+                if (dartIndex >= 20) { clearInterval(throwInterval); dartboardAnimationRunning = false; document.getElementById('accuracy-stat').classList.remove('hidden'); document.getElementById('punchline').classList.remove('hidden'); return; }
+                throwDart(); dartIndex++;
+            }, 300);
+        }
+        function throwDart() {
+            const dartsGroup = document.getElementById('darts-group');
+            const angle = Math.random() * 2 * Math.PI, distance = Math.random() * 130;
+            const x = 150 + distance * Math.cos(angle), y = 150 + distance * Math.sin(angle);
+            const isBullseye = distance < 25;
+            const dart = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dart.setAttribute('cx', x); dart.setAttribute('cy', y); dart.setAttribute('r', '6');
+            dart.setAttribute('fill', isBullseye ? '#6abf8a' : '#c97067');
+            dart.classList.add('dart'); if (!isBullseye) dart.classList.add('dart-miss');
+            dartsGroup.appendChild(dart);
+            dartsThrown++; document.getElementById('models-run').textContent = dartsThrown;
+            if (isBullseye) { dartsKept++; document.getElementById('models-kept').textContent = dartsKept; }
+        }
+        function restartDartboard() { dartboardAnimationRunning = false; startDartboardAnimation(); }
+
+        function runSimulation() {
+            const priorMean = parseFloat(document.getElementById('prior-mean').value);
+            const priorSD = parseFloat(document.getElementById('prior-sd').value);
+            const sampleSize = parseInt(document.getElementById('sample-size').value);
+            const noise = parseFloat(document.getElementById('data-noise').value);
+            document.getElementById('prior-mean-value').textContent = priorMean.toFixed(1);
+            document.getElementById('prior-sd-value').textContent = priorSD.toFixed(1);
+            document.getElementById('sample-size-value').textContent = sampleSize;
+            document.getElementById('data-noise-value').textContent = noise.toFixed(1);
+            const trueEffect = 0.5, dataSD = noise / Math.sqrt(sampleSize), dataMean = trueEffect + (Math.random() - 0.5) * dataSD;
+            const priorPrecision = 1 / (priorSD * priorSD), dataPrecision = 1 / (dataSD * dataSD);
+            const postPrecision = priorPrecision + dataPrecision, postSD = Math.sqrt(1 / postPrecision);
+            const postMean = (priorMean * priorPrecision + dataMean * dataPrecision) / postPrecision;
+            updateDistributionChart(priorMean, priorSD, postMean, postSD);
+            updateContributionChart();
+        }
+        function updateDistributionChart(priorMean, priorSD, postMean, postSD) {
+            const x = [], prior = [], posterior = [];
+            for (let i = -1; i <= 2; i += 0.02) { x.push(i); prior.push(Math.exp(-Math.pow(i - priorMean, 2) / (2 * priorSD * priorSD))); posterior.push(Math.exp(-Math.pow(i - postMean, 2) / (2 * postSD * postSD))); }
+            const maxPrior = Math.max(...prior), maxPost = Math.max(...posterior);
+            Plotly.react('distribution-chart', [
+                { x, y: prior.map(p => p / maxPrior), type: 'scatter', mode: 'lines', name: 'Prior', line: { color: chartColors.textMuted, width: 2, dash: 'dash' }, fill: 'tozeroy', fillcolor: 'rgba(90, 107, 90, 0.1)' },
+                { x, y: posterior.map(p => p / maxPost), type: 'scatter', mode: 'lines', name: 'Posterior', line: { color: chartColors.primary, width: 3 }, fill: 'tozeroy', fillcolor: 'rgba(143, 168, 106, 0.3)' }
+            ], { ...chartLayout, showlegend: true, legend: { x: 0.7, y: 0.95 }, xaxis: { ...chartLayout.xaxis, title: 'Media Effect', range: [-0.5, 1.5] }, yaxis: { ...chartLayout.yaxis, title: 'Probability', showticklabels: false } }, chartConfig);
+        }
+        function updateContributionChart() {
+            const chartDiv = document.getElementById('contribution-chart');
+            const isVisible = chartDiv.style.display !== 'none';
+            // Only render if visible, otherwise mark as needing update
+            if (isVisible) {
+                Plotly.newPlot('contribution-chart', [{ x: ['TV', 'Digital', 'Radio', 'Print', 'OOH'], y: [35, 28, 18, 12, 7], type: 'bar', marker: { color: [chartColors.primary, chartColors.accent, chartColors.warning, chartColors.danger, chartColors.success] } }], { ...chartLayout, xaxis: { ...chartLayout.xaxis, title: 'Channel' }, yaxis: { ...chartLayout.yaxis, title: 'Contribution %', range: [0, 50] } }, chartConfig);
+            }
+            chartDiv.dataset.needsUpdate = 'true';
+        }
+        function showChart(chartType) {
+            document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('distribution-chart').style.display = chartType === 'distribution' ? 'block' : 'none';
+            document.getElementById('contribution-chart').style.display = chartType === 'contributions' ? 'block' : 'none';
+            // Render or resize the chart after showing it
+            setTimeout(() => {
+                if (chartType === 'contributions') {
+                    const chartDiv = document.getElementById('contribution-chart');
+                    if (chartDiv.dataset.needsUpdate === 'true' || !chartDiv.data) {
+                        Plotly.newPlot('contribution-chart', [{ x: ['TV', 'Digital', 'Radio', 'Print', 'OOH'], y: [35, 28, 18, 12, 7], type: 'bar', marker: { color: [chartColors.primary, chartColors.accent, chartColors.warning, chartColors.danger, chartColors.success] } }], { ...chartLayout, xaxis: { ...chartLayout.xaxis, title: 'Channel' }, yaxis: { ...chartLayout.yaxis, title: 'Contribution %', range: [0, 50] } }, chartConfig);
+                        chartDiv.dataset.needsUpdate = 'false';
+                    } else {
+                        Plotly.Plots.resize('contribution-chart');
+                    }
+                } else {
+                    Plotly.Plots.resize('distribution-chart');
+                }
+            }, 10);
+        }
+        function initCrossEffectChart() {
+            Plotly.newPlot('cross-effect-chart', [{ x: ['Multipack Lift', 'Single-Pack<br>Cannibalization', 'Net Portfolio<br>Impact'], y: [100, -35, 65], type: 'waterfall', orientation: 'v', connector: { line: { color: chartColors.grid } }, decreasing: { marker: { color: chartColors.danger } }, increasing: { marker: { color: chartColors.success } }, totals: { marker: { color: chartColors.accent } }, measure: ['relative', 'relative', 'total'], textposition: 'outside', text: ['+100', '-35', '65'], hoverinfo: 'text' }], { ...chartLayout, title: { text: 'Portfolio Impact of Multipack Promo', font: { size: 14 } }, xaxis: { ...chartLayout.xaxis, title: '' }, yaxis: { ...chartLayout.yaxis, title: 'Incremental Units', range: [-50, 120] }, showlegend: false }, chartConfig);
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) { entry.target.classList.add('visible'); if (entry.target.classList.contains('dartboard-demo')) setTimeout(startDartboardAnimation, 500); }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+        document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+        document.querySelectorAll('.control-group input[type="range"]').forEach(input => { input.addEventListener('input', () => { const valueSpan = input.parentElement.querySelector('.control-value span'); if (valueSpan) valueSpan.textContent = input.value; }); });
+        document.addEventListener('DOMContentLoaded', function() { initHeroChart(); initPIPPreviewChart(); runSimulation(); initCrossEffectChart(); });
+    </script>
+</body>
+</html>

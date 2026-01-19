@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-border: #d4ddd4;
+            --color-success: #6abf8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+            --shadow-lg: 0 16px 48px rgba(45, 58, 45, 0.12);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
+            font-size: 17px;
+        }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 0 2rem; }
+
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: rgba(250, 251, 249, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 0;
+        }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--color-primary-dark); text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; font-weight: 500; transition: var(--transition-smooth); }
+        .nav-links a:hover, .nav-links a.active { color: var(--color-primary); }
+
+        .hero {
+            padding-top: 8rem;
+            padding-bottom: 4rem;
+            background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%);
+        }
+        .hero h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.8rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+        .lead {
+            font-size: 1.25rem;
+            color: var(--color-text-muted);
+            max-width: 800px;
+        }
+
+        section { padding: 3rem 0; }
+        
+        h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            color: var(--color-text);
+            padding-top: 1rem;
+        }
+        
+        h3 {
+            font-size: 1.3rem;
+            margin: 2rem 0 1rem;
+            color: var(--color-text);
+        }
+
+        p { margin-bottom: 1.25rem; }
+        p:last-child { margin-bottom: 0; }
+
+        .highlight-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .highlight-box h4 {
+            color: var(--color-primary-dark);
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+        }
+
+        .principle-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .principle-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        .principle-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        .principle-card .icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        .principle-card h4 {
+            font-size: 1.15rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-text);
+        }
+        .principle-card p {
+            color: var(--color-text-muted);
+            font-size: 0.95rem;
+        }
+
+        .problem-section {
+            background: var(--color-bg-alt);
+            padding: 3rem 0;
+            margin: 2rem 0;
+        }
+
+        .warning-box {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .warning-box h4 {
+            color: var(--color-danger);
+            margin-bottom: 0.75rem;
+        }
+
+        .success-box {
+            background: rgba(106, 191, 138, 0.1);
+            border: 1px solid rgba(106, 191, 138, 0.3);
+            border-left: 4px solid var(--color-success);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .success-box h4 {
+            color: #3d8b5a;
+            margin-bottom: 0.75rem;
+        }
+
+        .audience-list {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+        .audience-list li {
+            padding: 0.75rem 0;
+            padding-left: 2rem;
+            position: relative;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .audience-list li:last-child {
+            border-bottom: none;
+        }
+        .audience-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--color-success);
+            font-weight: bold;
+        }
+
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-primary-dark), var(--color-accent-dark));
+            color: white;
+            padding: 4rem 0;
+            text-align: center;
+            margin-top: 3rem;
+        }
+        .cta-section h2 {
+            color: white;
+            margin-bottom: 1rem;
+        }
+        .cta-section p {
+            opacity: 0.9;
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .contact-section {
+            padding: 4rem 0;
+            background: var(--color-bg);
+        }
+        .contact-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            max-width: 650px;
+            margin: 0 auto;
+            box-shadow: var(--shadow-md);
+        }
+        .contact-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+        }
+        .contact-card h2 {
+            padding-top: 0;
+            margin-bottom: 1.25rem;
+        }
+        .contact-card p {
+            color: var(--color-text-muted);
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .contact-card .btn-primary {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+            color: white;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .contact-card .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .contact-note {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-bottom: 0;
+        }
+        .contact-note a {
+            color: var(--color-primary-dark);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .contact-note a:hover {
+            text-decoration: underline;
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            border: none;
+            text-decoration: none;
+        }
+        .btn-white {
+            background: white;
+            color: var(--color-primary-dark);
+        }
+        .btn-white:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .btn-outline-white {
+            background: transparent;
+            color: white;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+        .btn-outline-white:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: white;
+        }
+
+        footer {
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+            padding: 3rem 0;
+        }
+        .footer-content { display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+        .footer-links { display: flex; gap: 2rem; flex-wrap: wrap; }
+        .footer-links a { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; }
+        .footer-links a:hover { color: var(--color-primary); }
+
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero h1 { font-size: 2rem; }
+            .principle-grid { grid-template-columns: 1fr; }
+            .footer-content { flex-direction: column; gap: 1rem; }
+            .cta-buttons { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <!-- <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="about.html" class="active">About</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
+                <li><a href="scientific-modeling.html">Scientific Modeling</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav> -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>About This Framework</h1>
+            <p class="lead">
+                A vision for rigorous, actionable marketing measurement—built on honest uncertainty quantification, experimental validation, and the belief that better methodology leads to better decisions.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>The Vision</h2>
+            <p>
+                The marketing measurement industry is at an inflection point. Clients are asking harder questions: not just "what is the ROI of this channel" but "how confident should we be in that number?" They notice when last year's model says television was the top performer and this year's model says it's digital—with no change in strategy. They're beginning to ask about validation.
+            </p>
+            <p>
+                This framework represents a fundamental rethinking of how marketing measurement should work. It's built on the premise that honest uncertainty is more valuable than false precision, and that validated predictions matter more than impressive-looking outputs.
+            </p>
+
+            <div class="highlight-box">
+                <h4>💡 The Core Insight</h4>
+                <p>
+                    The industry is moving toward greater rigor. Organizations that lead this transition—rather than resist it—will build differentiated capabilities and client relationships grounded in demonstrated rather than asserted credibility.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <div class="problem-section">
+        <div class="container">
+            <h2>The Problem We're Solving</h2>
+            <p>
+                Traditional marketing mix modeling often involves a practice known as <strong>specification shopping</strong>: iteratively adjusting model parameters—lags, decay rates, control variables—until results achieve desired statistical properties or match prior expectations. While this can incorporate genuine domain knowledge, it introduces systematic risks.
+            </p>
+
+            <div class="warning-box">
+                <h4>⚠️ Why Specification Shopping Is Dangerous</h4>
+                <p>
+                    When you test multiple specifications and select based on results, you invalidate standard statistical inference. The reported confidence intervals don't reflect actual uncertainty. Worse, the process systematically selects for confirming rather than disconfirming evidence, creating models that look good but may be dangerously miscalibrated.
+                </p>
+            </div>
+
+            <p>
+                Common post-hoc adjustments—like zeroing out negative media effects—don't just violate statistical principles. They systematically bias results upward and make downstream optimization recommendations unreliable. When everyone uses the same biased methods, an entire industry can be confidently wrong.
+            </p>
+        </div>
+    </div>
+
+    <section>
+        <div class="container">
+            <h2>Core Principles</h2>
+            <div class="principle-grid">
+                <div class="principle-card">
+                    <div class="icon">🧪</div>
+                    <h4>Validation as Standard Practice</h4>
+                    <p>Where feasible, design holdout experiments that test model predictions against reality. This creates a feedback loop distinguishing working models from non-working ones.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">📊</div>
+                    <h4>Uncertainty as a Feature</h4>
+                    <p>Instead of point estimates implying false precision, we quantify and communicate uncertainty. When confident, we say so. When not, we recommend experiments rather than papering over it with specification choices.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">🧰</div>
+                    <h4>A Toolbox, Not a Template</h4>
+                    <p>Different business questions require different tools. Attribution, incrementality, and optimization questions aren't all best answered by the same model. We match methodology to question.</p>
+                </div>
+                <div class="principle-card">
+                    <div class="icon">📝</div>
+                    <h4>Pre-Specified Analysis</h4>
+                    <p>Define modeling decisions before seeing results. This reduces researcher degrees of freedom and ensures that findings reflect data patterns rather than analyst choices.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>What Better Looks Like</h2>
+            
+            <div class="success-box">
+                <h4>✓ Honest Communication</h4>
+                <p>
+                    "We estimate TV ROI at 1.4 (1.2–1.6, 80% CI). This estimate is validated against geo experiments and robust to specification choices."
+                </p>
+                <p style="margin-top: 0.75rem;">
+                    "Display ROI estimates are highly uncertain, ranging from 0.5 to 2.5 across specifications. We cannot confidently recommend budget changes without additional data."
+                </p>
+            </div>
+
+            <p>
+                This kind of transparency builds trust. Clients can distinguish confident recommendations from uncertain ones. They can make informed decisions about where to act immediately versus where to invest in additional validation.
+            </p>
+
+            <h3>Who This Framework Is For</h3>
+            <ul class="audience-list">
+                <li><strong>Marketing analysts</strong> with statistical backgrounds who want to move from frequentist to Bayesian approaches</li>
+                <li><strong>Data scientists</strong> building production MMM systems who need proper uncertainty quantification</li>
+                <li><strong>Measurement leaders</strong> looking to transform organizational practices around specification shopping</li>
+                <li><strong>Researchers</strong> interested in causal inference applications to marketing problems</li>
+                <li><strong>Decision-makers</strong> who want to understand what honest marketing measurement looks like</li>
+            </ul>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Technical Foundation</h2>
+            <p>
+                The framework is built on <strong>PyMC-Marketing</strong> for Bayesian modeling, with a complete technical stack including FastAPI backends, Streamlit frontends, and comprehensive testing infrastructure. It supports sophisticated modeling scenarios including nested models with mediated causal pathways, multivariate outcomes with cross-correlations, and principled variable selection that maintains causal validity.
+            </p>
+            <p>
+                Key technical innovations include proper handling of geo-level random effects (which can't identify national media effects), Bayesian variable selection that distinguishes confounders from precision controls, and extensive diagnostics following the Bayesian workflow framework from Gelman et al. (2020).
+            </p>
+            <p>
+                The framework is open source and designed for both individual use and organizational adoption. Comprehensive documentation, mathematical foundations, and educational content help teams understand not just <em>how</em> to use these methods but <em>why</em> they matter.
+            </p>
+        </div>
+    </section>
+
+    <section class="contact-section">
+        <div class="container">
+            <div class="contact-card">
+                <div class="contact-icon">✉️</div>
+                <h2>Share This Vision?</h2>
+                <p>
+                    If you're working on similar problems—fighting specification shopping in your organization, building rigorous measurement practices, or exploring Bayesian approaches to marketing analytics—I'd love to hear from you.
+                </p>
+                <p>
+                    Whether you have questions about the framework, want to discuss implementation challenges, or are interested in collaboration, don't hesitate to reach out.
+                </p>
+                <a href="mailto:matt@mattreda.pro?subject=MMM%20Framework%20Inquiry&body=Hi%2C%0A%0AI%20came%20across%20the%20MMM%20Framework%20and%20wanted%20to%20connect.%0A%0A" class="btn btn-primary">
+                    <span>Get in Touch</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                </a>
+                <p class="contact-note">
+                    Or open an issue on <a href="https://github.com/redam94/mmm-framework/issues" target="_blank">GitHub</a> for technical questions and feature requests.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Get Started?</h2>
+            <p>Explore the documentation, dive into the technical guide, or browse the code on GitHub.</p>
+            <div class="cta-buttons">
+                <a href="technical-guide.html" class="btn btn-white">Read Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- <footer>
+        <div class="footer-content">
+            <span class="logo">MMM Framework</span>
+            <div class="footer-links">
+                <a href="index.html">Home</a>
+                <a href="about.html">About</a>
+                <a href="variable-selection.html">Variable Selection</a>
+                <a href="technical-guide.html">Technical Guide</a>
+                <a href="bayesian-workflow.html">Bayesian Workflow</a>
+                <a href="causal-inference.html">Causal Inference</a>
+                <a href="faq.html">FAQ</a>
+                <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </footer> -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

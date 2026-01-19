@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Title | MMM Framework</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    
+    <!-- Page-Specific Styles (optional) -->
+    <style>
+        /* Add any page-specific styles here */
+        .hero {
+            padding-top: 8rem;
+            padding-bottom: 4rem;
+            background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%);
+        }
+        
+        .hero h1 {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation and Footer are injected by components.js -->
+    
+    <!-- Page Content -->
+    <section class="hero">
+        <div class="container">
+            <h1>Page Title</h1>
+            <p class="lead">Brief description of what this page covers.</p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Section Heading</h2>
+            <p>Your content here...</p>
+            
+            <div class="highlight-box">
+                <h4>Key Point</h4>
+                <p>Important information highlighted in a box.</p>
+            </div>
+            
+            <div class="note">
+                <h4>Note</h4>
+                <p>Additional context or tips.</p>
+            </div>
+            
+            <div class="warning">
+                <h4>Warning</h4>
+                <p>Something to watch out for.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Get Started?</h2>
+            <p>Explore the documentation, dive into the technical guide, or browse the code on GitHub.</p>
+            <div class="cta-buttons">
+                <a href="technical-guide.html" class="btn btn-white">Read Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared Components (loads nav + footer) -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

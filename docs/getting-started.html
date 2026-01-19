@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+    
+    <!-- MathJax for equations -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    
+    
+    <style>
+        /* Page-specific styles */
+        .quick-start-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .quick-start-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        
+        .quick-start-card:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        
+        .quick-start-card h4 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--color-primary-dark);
+        }
+        
+        .quick-start-card .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: var(--color-primary);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .terminal-block {
+            background: #1e1e1e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 1rem 0;
+            position: relative;
+        }
+        
+        .terminal-block .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            z-index: 10;
+        }
+        
+        .terminal-header {
+            background: #323232;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .terminal-dot.red { background: #ff5f56; }
+        .terminal-dot.yellow { background: #ffbd2e; }
+        .terminal-dot.green { background: #27c93f; }
+        
+        .terminal-content {
+            padding: 1rem 1.5rem;
+            color: #e0e0e0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        
+        .terminal-content .prompt {
+            color: #27c93f;
+        }
+        
+        .terminal-content .comment {
+            color: #6a9955;
+        }
+        
+        .workflow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 2rem 0;
+            padding: 2rem;
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+        }
+        
+        .workflow-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: white;
+            border: 2px solid var(--color-border);
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+        
+        .workflow-step.active {
+            border-color: var(--color-primary);
+            background: var(--color-surface);
+        }
+        
+        .workflow-step .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .workflow-step .label {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--color-text);
+        }
+        
+        .workflow-arrow {
+            color: var(--color-text-muted);
+            font-size: 1.5rem;
+        }
+        
+        .concept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .concept-card {
+            background: var(--color-surface);
+            border-left: 4px solid var(--color-primary);
+            padding: 1.5rem;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .concept-card h4 {
+            margin-bottom: 0.5rem;
+            color: var(--color-primary-dark);
+        }
+        
+        .concept-card code {
+            background: var(--color-bg-alt);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        
+        .prereq-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .prereq-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+        }
+        
+        .prereq-item .check {
+            color: var(--color-success);
+            font-weight: bold;
+        }
+        
+        .file-tree {
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+        }
+        
+        .file-tree .folder {
+            color: var(--color-primary-dark);
+            font-weight: 500;
+        }
+        
+        .file-tree .file {
+            color: var(--color-text-muted);
+        }
+        
+        .file-tree .indent {
+            margin-left: 1.5rem;
+        }
+        
+        .next-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        
+        .next-step-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--color-text);
+            transition: var(--transition-smooth);
+        }
+        
+        .next-step-link:hover {
+            border-color: var(--color-primary);
+            transform: translateX(4px);
+        }
+        
+        .next-step-link .arrow {
+            margin-left: auto;
+            color: var(--color-primary);
+            transition: var(--transition-smooth);
+        }
+        
+        .next-step-link:hover .arrow {
+            transform: translateX(4px);
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #aaa;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Source Sans 3', sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .copy-btn.copied {
+            background: rgba(39, 201, 63, 0.3);
+            border-color: rgba(39, 201, 63, 0.5);
+            color: #27c93f;
+        }
+        
+        .copy-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+        
+        .code-wrapper {
+            position: relative;
+        }
+        
+        .code-wrapper pre {
+            margin: 0;
+        }
+        
+        pre code.hljs {
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+        
+        /* Copy button for light background code blocks */
+        .code-wrapper .copy-btn {
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #666;
+        }
+        
+        .code-wrapper .copy-btn:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #333;
+        }
+        
+        .code-wrapper .copy-btn.copied {
+            background: rgba(39, 201, 63, 0.15);
+            border-color: rgba(39, 201, 63, 0.3);
+            color: #1a8f35;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+    
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Interactive</h3>
+            <ul class="sidebar-nav">
+                <li><a href="scientific-workflow-demo.html" style="color: var(--color-primary); font-weight: 600;">🔬 Workflow Demo</a></li>
+                <li><a href="mmm-example-report.html" style="color: var(--color-accent);">📊 Example Report</a></li>
+            </ul>
+
+            <h3>Getting Started</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#prerequisites">Prerequisites</a></li>
+                <li><a href="#installation">Installation</a></li>
+            </ul>
+
+            <h3>Quick Start</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#your-first-model">Your First Model</a></li>
+                <li><a href="#step-1-data">Step 1: Prepare Data</a></li>
+                <li><a href="#step-2-config">Step 2: Configure Model</a></li>
+                <li><a href="#step-3-fit">Step 3: Fit & Analyze</a></li>
+                <li><a href="#generating-reports">Generating Reports</a></li>
+            </ul>
+
+            <h3>Core Concepts</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#mff-format">MFF Data Format</a></li>
+                <li><a href="#builders">Builder Pattern</a></li>
+                <li><a href="#bayesian-workflow">Bayesian Workflow</a></li>
+            </ul>
+
+            <h3>Architecture</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#project-structure">Project Structure</a></li>
+                <li><a href="#api-backend">API Backend</a></li>
+                <li><a href="#streamlit-app">Streamlit App</a></li>
+            </ul>
+
+            <h3>Next Steps</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#next-steps">Where to Go Next</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Getting Started</h1>
+            <p class="lead">
+                Build your first Bayesian Marketing Mix Model in minutes. This guide walks you through 
+                installation, core concepts, and a complete working example using the mmm-framework.
+            </p>
+
+            <div class="highlight-box">
+                <h4>What You'll Build</h4>
+                <p>
+                    By the end of this guide, you'll have a working MMM that estimates media effects 
+                    with honest uncertainty quantification—the foundation for decisions you can trust.
+                </p>
+            </div>
+
+            <!-- Workflow Diagram -->
+            <div class="workflow-diagram">
+                <div class="workflow-step">
+                    <span class="icon">📊</span>
+                    <span class="label">Prepare Data</span>
+                </div>
+                <span class="workflow-arrow">→</span>
+                <div class="workflow-step">
+                    <span class="icon">⚙️</span>
+                    <span class="label">Configure Model</span>
+                </div>
+                <span class="workflow-arrow">→</span>
+                <div class="workflow-step">
+                    <span class="icon">🔬</span>
+                    <span class="label">Fit & Diagnose</span>
+                </div>
+                <span class="workflow-arrow">→</span>
+                <div class="workflow-step active">
+                    <span class="icon">📈</span>
+                    <span class="label">Analyze Results</span>
+                </div>
+            </div>
+
+            <!-- Prerequisites -->
+            <h2 id="prerequisites">Prerequisites</h2>
+            <p>Before you begin, ensure you have the following installed:</p>
+            
+            <div class="prereq-list">
+                <div class="prereq-item">
+                    <span class="check">✓</span>
+                    <span>Python 3.12+</span>
+                </div>
+                <div class="prereq-item">
+                    <span class="check">✓</span>
+                    <span>Redis Server</span>
+                </div>
+                <div class="prereq-item">
+                    <span class="check">✓</span>
+                    <span>uv (recommended) or pip</span>
+                </div>
+                <div class="prereq-item">
+                    <span class="check">✓</span>
+                    <span>Git</span>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>Why Redis?</h4>
+                <p>
+                    The framework uses Redis + ARQ for asynchronous model fitting. This allows the 
+                    Streamlit frontend to remain responsive while MCMC sampling runs in the background.
+                    For development, a local Redis instance is sufficient.
+                </p>
+            </div>
+
+            <!-- Installation -->
+            <h2 id="installation">Installation</h2>
+            
+            <h3>Clone the Repository</h3>
+            <div class="terminal-block">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <div class="terminal-content">
+                    <span class="comment"># Clone the repository</span><br>
+                    <span class="prompt">$</span> git clone https://github.com/redam94/mmm-framework.git<br>
+                    <span class="prompt">$</span> cd mmm-framework<br><br>
+                    <span class="comment"># Install with uv (recommended)</span><br>
+                    <span class="prompt">$</span> uv sync<br><br>
+                    <span class="comment"># Or with pip</span><br>
+                    <span class="prompt">$</span> pip install -e .
+                </div>
+            </div>
+
+            <h3>Install App Dependencies</h3>
+            <p>If you want to use the Streamlit frontend and API backend:</p>
+            <div class="terminal-block">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <div class="terminal-content">
+                    <span class="comment"># Install app dependencies for Streamlit frontend</span><br>
+                    <span class="prompt">$</span> uv sync --group app<br><br>
+                    <span class="comment"># For development (includes testing tools)</span><br>
+                    <span class="prompt">$</span> uv sync --group dev --group app
+                </div>
+            </div>
+
+            <h3>Verify Installation</h3>
+            <div class="code-wrapper">
+                <pre><code class="language-python">import mmm_framework
+print(f"mmm-framework version: {mmm_framework.__version__}")
+
+# Check available components
+from mmm_framework import (
+    MFFConfigBuilder,
+    ModelConfigBuilder,
+    BayesianMMM,
+    load_mff,
+)
+print("✓ All core components imported successfully")</code></pre>
+            </div>
+
+            <!-- Your First Model -->
+            <h2 id="your-first-model">Your First Model</h2>
+            <p>
+                Let's build a complete Marketing Mix Model from scratch. We'll walk through each step 
+                of the workflow, from data preparation to interpreting results.
+            </p>
+
+            <h3 id="step-1-data">Step 1: Prepare Your Data</h3>
+            <p>
+                The framework uses <strong>Master Flat File (MFF) format</strong>—a long-format structure 
+                that handles variable-dimension data elegantly. Each row represents a single observation 
+                of a single variable.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">import pandas as pd
+import numpy as np
+
+# Example: Create synthetic MFF data
+np.random.seed(42)
+n_weeks = 104  # 2 years of weekly data
+
+# Generate dates
+dates = pd.date_range("2023-01-01", periods=n_weeks, freq="W")
+
+# Build MFF records
+records = []
+
+# KPI: Sales (weekly)
+for i, date in enumerate(dates):
+    base_sales = 1000 + 50 * np.sin(2 * np.pi * i / 52)  # Seasonality
+    noise = np.random.normal(0, 50)
+    records.append({
+        "Period": date,
+        "VariableName": "Sales",
+        "VariableValue": base_sales + noise
+    })
+
+# Media: TV spend (weekly, with some weeks at zero)
+for i, date in enumerate(dates):
+    spend = np.random.exponential(500) if np.random.random() > 0.2 else 0
+    records.append({
+        "Period": date,
+        "VariableName": "TV",
+        "VariableValue": spend
+    })
+
+# Media: Digital spend (weekly)
+for i, date in enumerate(dates):
+    spend = np.random.exponential(300)
+    records.append({
+        "Period": date,
+        "VariableName": "Digital",
+        "VariableValue": spend
+    })
+
+# Control: Price Index
+for i, date in enumerate(dates):
+    price = 100 + np.random.normal(0, 5)
+    records.append({
+        "Period": date,
+        "VariableName": "Price",
+        "VariableValue": price
+    })
+
+# Create DataFrame
+mff_data = pd.DataFrame(records)
+print(f"MFF shape: {mff_data.shape}")
+print(mff_data.head(10))</code></pre>
+            </div>
+
+            <div class="definition">
+                <h4>MFF Format Benefits</h4>
+                <p>
+                    The Master Flat File format handles complex scenarios like different variables 
+                    at different granularities (e.g., national media + geo-level sales), 
+                    hierarchical structures, and missing data—all in a single, consistent structure.
+                </p>
+            </div>
+
+            <h3 id="step-2-config">Step 2: Configure the Model</h3>
+            <p>
+                The framework uses a <strong>fluent builder pattern</strong> for configuration. This 
+                provides a readable, chainable API while ensuring type safety and validation.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import (
+    MFFConfigBuilder,
+    ModelConfigBuilder,
+    TrendConfig,
+    TrendType,
+    BayesianMMM,
+    load_mff,
+)
+
+# Step 2a: Configure the data structure
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Sales")                    # Target variable
+    .add_national_media("TV", adstock_lmax=8)  # TV with 8-week carryover
+    .add_national_media("Digital", adstock_lmax=4)  # Digital with 4-week carryover
+    .add_price_control()                       # Price as control variable
+    .build()
+)
+
+print(f"Media channels: {mff_config.media_names}")
+print(f"Control variables: {mff_config.control_names}")
+
+# Step 2b: Load and validate data
+panel = load_mff(mff_data, mff_config)
+
+print(f"\nPanel dataset:")
+print(f"  Observations: {panel.n_obs}")
+print(f"  Channels: {panel.n_channels}")
+print(f"  Controls: {panel.n_controls}")
+
+# Step 2c: Configure model inference
+model_config = (
+    ModelConfigBuilder()
+    .bayesian_numpyro()       # Use JAX-based sampler (4-10x faster)
+    .with_chains(4)           # 4 parallel chains for convergence diagnostics
+    .with_draws(2000)         # 2000 posterior draws
+    .with_tune(1000)          # 1000 warmup iterations
+    .with_target_accept(0.9)  # Target acceptance rate
+    .build()
+)
+
+# Step 2d: Configure trend component
+trend_config = TrendConfig(
+    type=TrendType.LINEAR,
+    growth_prior_sigma=0.1
+)</code></pre>
+            </div>
+
+            <div class="concept-grid">
+                <div class="concept-card">
+                    <h4>Adstock (Carryover)</h4>
+                    <p>
+                        Media effects persist over time. The <code>adstock_lmax</code> parameter 
+                        sets the maximum lag window. TV typically has longer carryover (6-12 weeks) 
+                        than digital (2-6 weeks).
+                    </p>
+                </div>
+                <div class="concept-card">
+                    <h4>Saturation</h4>
+                    <p>
+                        Returns diminish at higher spend levels. The framework uses Hill or logistic 
+                        saturation functions by default, with priors that adapt to your data scale.
+                    </p>
+                </div>
+            </div>
+
+            <h3 id="step-3-fit">Step 3: Fit and Analyze</h3>
+            <p>
+                Now we build the model, check our priors, fit it to data, and analyze the results 
+                with proper uncertainty quantification.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Build the model
+mmm = BayesianMMM(panel, model_config, trend_config)
+
+# Inspect model structure
+print("Model parameters:")
+for var in mmm.model.free_RVs:
+    print(f"  {var.name}")
+
+# Prior predictive check (ALWAYS do this before fitting)
+print("\n=== Prior Predictive Check ===")
+prior = mmm.sample_prior_predictive(samples=200)
+y_prior = prior.prior_predictive["y_obs"].values.flatten()
+
+print(f"Prior predictive y range: [{y_prior.min():.1f}, {y_prior.max():.1f}]")
+print(f"Actual y range: [{panel.y.min():.1f}, {panel.y.max():.1f}]")
+
+# Fit the model
+print("\n=== Fitting Model ===")
+results = mmm.fit(random_seed=42)
+
+# Convergence diagnostics (CRITICAL - check these!)
+print("\n=== Diagnostics ===")
+print(f"Divergences: {results.diagnostics['divergences']}")
+print(f"R-hat max: {results.diagnostics['rhat_max']:.4f}")
+print(f"ESS bulk min: {results.diagnostics['ess_bulk_min']:.0f}")
+
+# Check for issues
+if results.diagnostics['divergences'] > 0:
+    print("⚠️  Divergences detected - consider reparameterization")
+if results.diagnostics['rhat_max'] > 1.01:
+    print("⚠️  R-hat > 1.01 - chains may not have converged")
+if results.diagnostics['ess_bulk_min'] < 400:
+    print("⚠️  Low ESS - consider more draws")
+
+# Posterior summary with uncertainty
+print("\n=== Posterior Summary ===")
+summary = results.summary(["beta_TV", "beta_Digital", "sigma"])
+print(summary[["mean", "sd", "hdi_3%", "hdi_97%", "r_hat"]])</code></pre>
+            </div>
+
+            <div class="warning">
+                <h4>Always Check Diagnostics</h4>
+                <p>
+                    MCMC diagnostics are not optional. Divergences, high R-hat, or low ESS indicate 
+                    that your posterior samples may be unreliable. The framework provides these 
+                    automatically—<strong>always review them before interpreting results</strong>.
+                </p>
+            </div>
+
+            <h3>Understanding Your Results</h3>
+            <p>
+                The <code>MMMResults</code> object provides everything you need for analysis:
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Channel contributions with uncertainty
+print("\n=== Channel Contributions ===")
+if results.channel_contributions is not None:
+    contrib = results.channel_contributions.sum()
+    print(f"Total TV contribution: {contrib['TV']:.0f}")
+    print(f"Total Digital contribution: {contrib['Digital']:.0f}")
+
+# Access the full InferenceData object for ArviZ plots
+import arviz as az
+
+# Posterior distributions
+az.plot_posterior(results.idata, var_names=["beta_TV", "beta_Digital"])
+
+# Trace plots for convergence
+az.plot_trace(results.idata, var_names=["beta_TV", "beta_Digital"])
+
+# Forest plot comparing channels
+az.plot_forest(results.idata, var_names=["beta_TV", "beta_Digital"])</code></pre>
+            </div>
+
+            <h3 id="generating-reports">Generating Reports</h3>
+            <p>
+                The framework includes a powerful <strong>reporting module</strong> that generates 
+                portable, single-file HTML reports with embedded Plotly charts and honest uncertainty 
+                quantification throughout.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.reporting import MMMReportGenerator, ReportConfig, ReportBuilder
+
+# Option 1: Quick report from fitted model
+report = MMMReportGenerator(
+    model=mmm,
+    panel=panel,
+    results=results,
+    config=ReportConfig(
+        title="Marketing Mix Model Analysis",
+        client="Acme Consumer Products",
+        analysis_period="Jan 2023 - Dec 2025",
+    ),
+)
+
+# Save to HTML
+report.to_html("mmm_report_q4_2025.html")
+
+# Option 2: Fluent builder pattern for customization
+report = (
+    ReportBuilder()
+    .with_model(mmm, panel=panel, results=results)
+    .with_title("Q4 Marketing Analysis")
+    .with_client("Acme Corp")
+    .with_credible_interval(0.9)  # 90% credible intervals
+    .enable_all_sections()
+    .disable_section("diagnostics")  # Hide technical details
+    .build()
+)
+
+report.to_html("executive_summary.html")</code></pre>
+            </div>
+
+            <div class="concept-grid">
+                <div class="concept-card">
+                    <h4>📊 Report Contents</h4>
+                    <p>
+                        Executive summary, model fit visualization, channel ROI forest plots with 
+                        uncertainty, revenue decomposition (waterfall + time series), saturation 
+                        curves, and methodology documentation.
+                    </p>
+                </div>
+                <div class="concept-card">
+                    <h4>🎨 Customizable</h4>
+                    <p>
+                        Multiple color palettes (Sage, Corporate, Warm), configurable sections, 
+                        adjustable credible intervals, and support for extended models (nested, 
+                        multivariate, geographic).
+                    </p>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>📄 See an Example Report</h4>
+                <p>
+                    View a complete example report generated by the framework to see all available 
+                    visualizations and sections:
+                </p>
+                <a href="mmm-example-report.html" class="btn btn-primary" style="margin-top: 0.5rem;" target="_blank">
+                    Open Example Report →
+                </a>
+            </div>
+
+            <!-- Core Concepts -->
+            <h2 id="mff-format">Core Concept: MFF Data Format</h2>
+            <p>
+                The Master Flat File format is a long-format data structure designed for marketing 
+                measurement. It elegantly handles the dimensionality challenges common in MMM:
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># MFF structure example
+"""
+Period      | Geography | VariableName | VariableValue
+2024-01-01  | National  | Sales        | 15000
+2024-01-01  | National  | TV_Spend     | 50000
+2024-01-01  | East      | Sales        | 8000
+2024-01-01  | West      | Sales        | 7000
+2024-01-08  | National  | Sales        | 16500
+...
+"""
+
+# The framework handles dimension alignment automatically
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Sales")
+    # National media disaggregated to geo by population share
+    .add_national_media("TV", adstock_lmax=8)
+    # Geo-level media stays at its native granularity  
+    .add_geo_media("Local_Radio", adstock_lmax=6)
+    .build()
+)</code></pre>
+            </div>
+
+            <h2 id="builders">Core Concept: Builder Pattern</h2>
+            <p>
+                The fluent builder pattern provides a readable, type-safe API for configuration:
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import (
+    PriorConfigBuilder,
+    AdstockConfigBuilder,
+    SaturationConfigBuilder,
+    MediaChannelConfigBuilder,
+    HierarchicalConfigBuilder,
+    SeasonalityConfigBuilder,
+)
+
+# Build custom priors
+decay_prior = (
+    PriorConfigBuilder()
+    .beta(alpha=2, beta=2)  # Centered at 0.5
+    .build()
+)
+
+# Build adstock configuration
+adstock = (
+    AdstockConfigBuilder()
+    .geometric()
+    .with_l_max(8)
+    .with_alpha_prior(decay_prior)
+    .build()
+)
+
+# Build complete media channel config
+tv_channel = (
+    MediaChannelConfigBuilder()
+    .with_name("TV")
+    .national()
+    .with_adstock(adstock)
+    .with_hill_saturation()
+    .positive_effect()  # Constrain to positive
+    .build()
+)
+
+# Build hierarchical structure for geo models
+hierarchical = (
+    HierarchicalConfigBuilder()
+    .enabled()
+    .pool_across_geo()
+    .use_non_centered()  # Better for sparse geos
+    .with_non_centered_threshold(20)
+    .build()
+)</code></pre>
+            </div>
+
+            <h2 id="bayesian-workflow">Core Concept: Bayesian Workflow</h2>
+            <p>
+                The framework implements the complete Bayesian workflow as described by 
+                <a href="https://arxiv.org/abs/2011.01808" target="_blank">Gelman et al. (2020)</a>:
+            </p>
+
+            <div class="concept-grid">
+                <div class="concept-card">
+                    <h4>1. Prior Predictive Check</h4>
+                    <p>
+                        Sample from priors to ensure they produce plausible data. 
+                        Use <code>mmm.sample_prior_predictive()</code> before fitting.
+                    </p>
+                </div>
+                <div class="concept-card">
+                    <h4>2. Fit & Diagnose</h4>
+                    <p>
+                        Run MCMC and check convergence. Look for divergences, R-hat &lt; 1.01, 
+                        and ESS &gt; 400 per parameter.
+                    </p>
+                </div>
+                <div class="concept-card">
+                    <h4>3. Posterior Predictive Check</h4>
+                    <p>
+                        Compare model predictions to observed data. 
+                        Use <code>results.posterior_predictive</code> for calibration.
+                    </p>
+                </div>
+                <div class="concept-card">
+                    <h4>4. Sensitivity Analysis</h4>
+                    <p>
+                        Test how results change with different priors. 
+                        Robust findings persist across reasonable prior choices.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Project Structure -->
+            <h2 id="project-structure">Project Structure</h2>
+            <p>
+                Understanding the repository layout helps you navigate the codebase:
+            </p>
+
+            <div class="file-tree">
+                <span class="folder">mmm-framework/</span><br>
+                <span class="indent"><span class="folder">src/mmm_framework/</span> — Core Python package</span><br>
+                <span class="indent"><span class="indent"><span class="file">__init__.py</span> — Module exports and version</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">config.py</span> — Pydantic config classes and enums</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">builders.py</span> — Fluent builder pattern implementations</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">data_loader.py</span> — MFF parsing and validation</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">model.py</span> — BayesianMMM, TrendConfig, result classes</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">jobs.py</span> — Async job management with multiprocessing</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">reporting/</span> — HTML report generation</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">__init__.py</span> — Module exports</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">generator.py</span> — MMMReportGenerator, ReportBuilder</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">config.py</span> — ReportConfig, ColorScheme, SectionConfig</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">sections.py</span> — Report section implementations</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">charts.py</span> — Plotly visualization functions</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">mmm_extensions/</span> — Extended model capabilities</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">__init__.py</span> — Lazy imports for heavy dependencies</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">config.py</span> — Mediator, Outcome, CrossEffect configs</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">builders.py</span> — Extension builders + factory functions</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">components.py</span> — PyMC/PyTensor building blocks</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">models.py</span> — NestedMMM, MultivariateMMM, CombinedMMM</span></span></span><br>
+                <span class="indent"><span class="folder">api/</span> — FastAPI backend</span><br>
+                <span class="indent"><span class="indent"><span class="file">main.py</span> — Application factory and health endpoints</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">routes/</span> — API route handlers</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">schemas.py</span> — Pydantic request/response models</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">redis_service.py</span> — Redis connection management</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">worker.py</span> — ARQ worker settings</span></span><br>
+                <span class="indent"><span class="folder">app/</span> — Streamlit frontend</span><br>
+                <span class="indent"><span class="indent"><span class="file">Home.py</span> — Main entry point and dashboard</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">api_client.py</span> — HTTP client for backend API</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">pages/</span> — Multipage app modules</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">1_Data_Management.py</span> — Upload and manage datasets</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">2_Configuration.py</span> — Build model configurations</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">3_Model_Fitting.py</span> — Submit and monitor jobs</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">4_Results.py</span> — View diagnostics and contributions</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">5_Scenarios.py</span> — What-if analysis and optimization</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">components/</span> — Reusable UI components</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">__init__.py</span> — Component exports</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">common.py</span> — Formatters, session state, CSS</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">charts.py</span> — Plotly visualization functions</span></span></span><br>
+                <span class="indent"><span class="folder">examples/</span> — Usage examples</span><br>
+                <span class="indent"><span class="indent"><span class="file">ex_builder.py</span> — Builder pattern demonstrations</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">ex_config.py</span> — Configuration examples</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">ex_models.py</span> — Model fitting workflows</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">ex_extensions.py</span> — Extended model examples</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">ex_reporter.py</span> — Report generation examples</span></span><br>
+                <span class="indent"><span class="folder">tests/</span> — Test suite</span><br>
+                <span class="indent"><span class="indent"><span class="file">conftest.py</span> — Pytest fixtures</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">mmm_extensions/</span> — Extension module tests</span></span><br>
+                <span class="indent"><span class="folder">docs/</span> — GitHub Pages documentation</span><br>
+                <span class="indent"><span class="indent"><span class="file">index.html</span> — Documentation homepage</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">getting-started.html</span> — This page</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">technical-guide.html</span> — Model specifications</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">shared/</span> — Shared CSS and components</span></span><br>
+                <span class="indent"><span class="file">pyproject.toml</span> — Project configuration (uv/pip)</span><br>
+                <span class="indent"><span class="file">README.md</span> — Project documentation</span>
+            </div>
+
+            <h2 id="api-backend">Running the API Backend</h2>
+            <p>
+                For production use or the Streamlit app, start the full stack:
+            </p>
+
+            <div class="quick-start-grid">
+                <div class="quick-start-card">
+                    <h4><span class="step-number">1</span> Start Redis</h4>
+                    <p>The job queue requires Redis running locally.</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> redis-server
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-start-card">
+                    <h4><span class="step-number">2</span> Start API Server</h4>
+                    <p>FastAPI backend with OpenAPI docs.</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> cd api<br>
+                            <span class="prompt">$</span> uvicorn main:app --reload
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-start-card">
+                    <h4><span class="step-number">3</span> Start Worker</h4>
+                    <p>ARQ worker processes model fitting jobs.</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> cd api<br>
+                            <span class="prompt">$</span> arq worker.WorkerSettings
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-start-card">
+                    <h4><span class="step-number">4</span> Launch Streamlit</h4>
+                    <p>Interactive UI for configuration and analysis.</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> cd app<br>
+                            <span class="prompt">$</span> streamlit run Home.py
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 id="streamlit-app">Streamlit Application</h2>
+            <p>
+                The Streamlit app provides an interactive interface for the complete MMM workflow:
+            </p>
+
+            <div class="concept-grid">
+                <div class="concept-card">
+                    <h4>📤 Data Upload</h4>
+                    <p>Upload MFF-format CSV files with automatic validation and preview.</p>
+                </div>
+                <div class="concept-card">
+                    <h4>⚙️ Config Builder</h4>
+                    <p>Visual interface for building model configurations without code.</p>
+                </div>
+                <div class="concept-card">
+                    <h4>🔬 Model Fitting</h4>
+                    <p>Submit jobs, monitor progress, and view real-time diagnostics.</p>
+                </div>
+                <div class="concept-card">
+                    <h4>📊 Results Analysis</h4>
+                    <p>Interactive visualizations for posteriors, contributions, and response curves.</p>
+                </div>
+            </div>
+
+            <!-- Next Steps -->
+            <h2 id="next-steps">Next Steps</h2>
+            <p>
+                You've built your first model! Here's where to go next:
+            </p>
+
+            <div class="highlight-box" style="background: linear-gradient(135deg, rgba(143, 168, 106, 0.15) 0%, rgba(106, 143, 168, 0.15) 100%); border: 2px solid var(--color-primary); margin-bottom: 2rem;">
+                <h4 style="margin-top: 0;">🔬 Interactive Workflow Demo</h4>
+                <p>
+                    Walk through the complete scientific modeling workflow step-by-step—from question 
+                    formulation through prior predictive checks, MCMC fitting, diagnostics, sensitivity 
+                    analysis, and report generation.
+                </p>
+                <a href="scientific-workflow-demo.html" class="btn btn-primary" style="margin-right: 1rem;">
+                    Launch Interactive Demo →
+                </a>
+                <a href="mmm-example-report.html" class="btn btn-secondary" target="_blank">
+                    View Example Report
+                </a>
+            </div>
+
+            <div class="next-steps">
+                <a href="technical-guide.html" class="next-step-link">
+                    <div>
+                        <strong>Technical Guide</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Deep dive into model specifications
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="bayesian-workflow.html" class="next-step-link">
+                    <div>
+                        <strong>Bayesian Workflow</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Prior selection and diagnostics
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="variable-selection.html" class="next-step-link">
+                    <div>
+                        <strong>Variable Selection</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Horseshoe, spike-and-slab methods
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="causal-inference.html" class="next-step-link">
+                    <div>
+                        <strong>Causal Inference</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            DAGs and identification
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="scientific-modeling.html" class="next-step-link">
+                    <div>
+                        <strong>Scientific Modeling</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Philosophy and principles
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="faq.html" class="next-step-link">
+                    <div>
+                        <strong>FAQ</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Common questions answered
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+            </div>
+
+            <div class="highlight-box" style="margin-top: 2rem;">
+                <h4>Questions or Issues?</h4>
+                <p>
+                    Open an issue on <a href="https://github.com/redam94/mmm-framework/issues" target="_blank">GitHub</a> 
+                    or check the <a href="faq.html">FAQ</a> for common questions.
+                </p>
+            </div>
+
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Build?</h2>
+            <p>Explore the full technical documentation or dive into the source code.</p>
+            <div class="cta-buttons">
+                <a href="technical-guide.html" class="btn btn-white">Read Technical Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared Components (loads nav + footer) -->
+    <script src="shared/components.js"></script>
+    
+    <!-- Initialize syntax highlighting and copy buttons -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize syntax highlighting
+            hljs.highlightAll();
+            
+            // Add copy buttons to all code blocks
+            const codeBlocks = document.querySelectorAll('.code-wrapper pre, .terminal-block');
+            
+            codeBlocks.forEach((block, index) => {
+                // Create copy button
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'copy-btn';
+                copyBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Copy</span>
+                `;
+                copyBtn.setAttribute('aria-label', 'Copy code to clipboard');
+                
+                // For terminal blocks, we need to handle differently
+                if (block.classList.contains('terminal-block')) {
+                    block.style.position = 'relative';
+                    block.appendChild(copyBtn);
+                } else {
+                    // For code-wrapper, the wrapper already has position: relative
+                    const wrapper = block.closest('.code-wrapper');
+                    if (wrapper) {
+                        wrapper.appendChild(copyBtn);
+                    }
+                }
+                
+                // Copy functionality
+                copyBtn.addEventListener('click', async function() {
+                    let textToCopy = '';
+                    
+                    if (block.classList.contains('terminal-block')) {
+                        // For terminal blocks, get text from terminal-content
+                        const content = block.querySelector('.terminal-content');
+                        if (content) {
+                            // Get text but remove the prompt symbols
+                            textToCopy = content.innerText
+                                .split('\n')
+                                .map(line => line.replace(/^\$\s*/, ''))
+                                .filter(line => !line.startsWith('#') || line.includes('Clone'))
+                                .join('\n')
+                                .trim();
+                        }
+                    } else {
+                        // For regular code blocks
+                        const code = block.querySelector('code');
+                        if (code) {
+                            textToCopy = code.innerText;
+                        }
+                    }
+                    
+                    try {
+                        await navigator.clipboard.writeText(textToCopy);
+                        
+                        // Show success state
+                        copyBtn.classList.add('copied');
+                        copyBtn.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>Copied!</span>
+                        `;
+                        
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            copyBtn.classList.remove('copied');
+                            copyBtn.innerHTML = `
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copy</span>
+                            `;
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                        copyBtn.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="15" y1="9" x2="9" y2="15"></line>
+                                <line x1="9" y1="9" x2="15" y2="15"></line>
+                            </svg>
+                            <span>Error</span>
+                        `;
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
