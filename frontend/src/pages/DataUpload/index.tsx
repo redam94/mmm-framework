@@ -115,8 +115,8 @@ function DatasetCard({
             {dataset.rows.toLocaleString()} rows × {dataset.columns} columns
           </Text>
         </div>
-        <Badge color={dataset.format === 'csv' ? 'blue' : 'green'}>
-          {dataset.format.toUpperCase()}
+        <Badge color={dataset.format === 'csv' ? 'blue' : dataset.format === 'parquet' ? 'green' : 'gray'}>
+          {dataset.format?.toUpperCase() || dataset.filename.split('.').pop()?.toUpperCase() || 'DATA'}
         </Badge>
       </div>
 
