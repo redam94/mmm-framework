@@ -937,22 +937,48 @@ hierarchical = (
                 <span class="indent"><span class="folder">src/mmm_framework/</span> — Core Python package</span><br>
                 <span class="indent"><span class="indent"><span class="file">__init__.py</span> — Module exports and version</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">config.py</span> — Pydantic config classes and enums</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">builders.py</span> — Fluent builder pattern implementations</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">data_loader.py</span> — MFF parsing and validation</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">model.py</span> — BayesianMMM, TrendConfig, result classes</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">jobs.py</span> — Async job management with multiprocessing</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">analysis.py</span> — Analysis utilities</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">serialization.py</span> — Save/load functionality</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">jobs.py</span> — Async job management with ARQ</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">builders/</span> — Modular builder classes</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">base.py</span> — Shared mixins and protocols</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">prior.py</span> — Prior, adstock, saturation builders</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">variable.py</span> — Media, control, KPI builders</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">model.py</span> — Model config builders</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">mff.py</span> — MFF config builders</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">model/</span> — Core model module</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">base.py</span> — BayesianMMM class</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">results.py</span> — Result containers</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="folder">components/</span> — Model components</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">trend.py</span> — Trend configurations</span></span></span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">transforms/</span> — Transformation functions</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">adstock.py</span> — Geometric adstock transforms</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">saturation.py</span> — Logistic/Hill saturation</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">seasonality.py</span> — Fourier features</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">trend.py</span> — B-spline, piecewise trends</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">utils/</span> — Utility functions</span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">standardization.py</span> — Data standardization</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">statistics.py</span> — Statistical helpers</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="folder">reporting/</span> — HTML report generation</span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">__init__.py</span> — Module exports</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">generator.py</span> — MMMReportGenerator, ReportBuilder</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">config.py</span> — ReportConfig, ColorScheme, SectionConfig</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">config.py</span> — ReportConfig, ColorScheme</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">generator.py</span> — MMMReportGenerator</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="file">sections.py</span> — Report section implementations</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">charts.py</span> — Plotly visualization functions</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">design_tokens.py</span> — Unified design tokens</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="folder">charts/</span> — Modular chart functions</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">decomposition.py, diagnostic.py, fit.py, geo.py, roi.py</span></span></span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="folder">extractors/</span> — Data extraction from models</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="folder">helpers/</span> — ROI, decomposition helpers</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="folder">mmm_extensions/</span> — Extended model capabilities</span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">__init__.py</span> — Lazy imports for heavy dependencies</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="file">config.py</span> — Mediator, Outcome, CrossEffect configs</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="file">builders.py</span> — Extension builders + factory functions</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">components.py</span> — PyMC/PyTensor building blocks</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">models.py</span> — NestedMMM, MultivariateMMM, CombinedMMM</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="file">results.py</span> — Extended model results</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="folder">models/</span> — Model class implementations</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">nested.py</span> — NestedMMM (mediation)</span></span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">multivariate.py</span> — MultivariateMMM</span></span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">combined.py</span> — CombinedMMM</span></span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="folder">components/</span> — PyMC/PyTensor blocks</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">cross_effects.py, variable_selection.py, transforms.py</span></span></span></span></span><br>
                 <span class="indent"><span class="folder">api/</span> — FastAPI backend</span><br>
                 <span class="indent"><span class="indent"><span class="file">main.py</span> — Application factory and health endpoints</span></span><br>
                 <span class="indent"><span class="indent"><span class="folder">routes/</span> — API route handlers</span></span><br>
