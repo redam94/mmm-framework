@@ -3195,10 +3195,17 @@ function nextStep() { if (currentStep < totalSteps) showStep(currentStep+1); }
 function prevStep() { if (currentStep > 1) showStep(currentStep-1); }
 function goToStep(s) { showStep(s); }
 
-// Collapsibles
-function toggleCollapsible(id) {
-    const el = document.getElementById(id);
+// Collapsibles - accepts either a header element or an ID string
+function toggleCollapsible(headerOrId) {
+    let el;
+    if (typeof headerOrId === 'string') {
+        el = document.getElementById(headerOrId);
+    } else {
+        el = headerOrId.closest('.collapsible');
+    }
+    if (!el) return;
     el.classList.toggle('open');
+    const id = el.id;
     if (el.classList.contains('open')) {
         if (id==='saturationSection') updateSaturationChart();
         if (id==='adstockSection') updateAdstockChart();
@@ -3615,21 +3622,9 @@ function initBudgetChart() {
             responsive: true
         };
 
-        // Collapsible sections
-        function toggleCollapsible(header) {
-            const collapsible = header.parentElement;
-            collapsible.classList.toggle('open');
-        }
+        // toggleCollapsible1 is an alias for toggleCollapsible (for backwards compatibility)
         function toggleCollapsible1(id) {
-            const el = document.getElementById(id);
-            el.classList.toggle('open');
-            if (el.classList.contains('open')) {
-                if (id==='saturationSection') updateSaturationChart();
-                if (id==='adstockSection') updateAdstockChart();
-                if (id==='crossSection') initCrossEffectsChart();
-                if (id==='nestedSection') initNestedCharts();
-                if (id==='priorsSection') initPriorDistChart();
-            }
+            toggleCollapsible(id);
         }
         // Confounder demo
         let includeConfounder = true;
