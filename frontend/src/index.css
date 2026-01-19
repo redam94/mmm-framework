@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+/* Custom base styles */
+@layer base {
+  :root {
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Custom component styles */
+@layer components {
+  /* Card styles for analytics dashboard */
+  .analytics-card {
+    @apply bg-white rounded-lg shadow-md border border-gray-200 p-6;
+  }
+
+  /* Status badge styles */
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .status-badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .status-badge-error {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .status-badge-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .status-badge-pending {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  /* Workflow stepper styles */
+  .workflow-step {
+    @apply flex items-center space-x-2 px-3 py-2 rounded-md transition-colors;
+  }
+
+  .workflow-step-active {
+    @apply bg-blue-100 text-blue-700;
+  }
+
+  .workflow-step-complete {
+    @apply text-green-600;
+  }
+
+  .workflow-step-pending {
+    @apply text-gray-400;
+  }
+}
+
+/* Custom utility styles */
+@layer utilities {
+  /* Smooth scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 3px;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
