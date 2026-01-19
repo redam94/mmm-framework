@@ -1955,6 +1955,69 @@ async def get_marginal_roas(
 # =============================================================================
 
 
+@router.post(
+    "/{model_id}/cancel",
+    response_model=SuccessResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        400: {"model": ErrorResponse},
+    },
+)
+async def cancel_model_job(
+    model_id: str,
+    storage: StorageService = Depends(get_storage),
+    redis: RedisService = Depends(get_redis),
+):
+    """
+    Cancel a running or queued model fitting job.
+
+    Only jobs with status 'pending', 'queued', or 'running' can be cancelled.
+    """
+    if not storage.model_exists(model_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model not found: {model_id}",
+        )
+
+    metadata = storage.get_model_metadata(model_id)
+    current_status = metadata.get("status", "unknown")
+
+    # Check if job can be cancelled
+    cancellable_statuses = [
+        JobStatus.PENDING.value,
+        JobStatus.QUEUED.value,
+        JobStatus.RUNNING.value,
+    ]
+
+    if current_status not in cancellable_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot cancel job with status '{current_status}'. Only pending, queued, or running jobs can be cancelled.",
+        )
+
+    # Update status to cancelled
+    await redis.set_job_status(
+        model_id=model_id,
+        status=JobStatus.CANCELLED,
+        progress=metadata.get("progress", 0),
+        progress_message="Job cancelled by user",
+    )
+
+    # Update storage metadata
+    storage.update_model_metadata(
+        model_id,
+        {
+            "status": JobStatus.CANCELLED.value,
+            "error_message": "Job cancelled by user",
+        },
+    )
+
+    return SuccessResponse(
+        success=True,
+        message=f"Job {model_id} has been cancelled",
+    )
+
+
 @router.delete(
     "/{model_id}",
     response_model=SuccessResponse,
