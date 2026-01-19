@@ -132,6 +132,10 @@
         .scenario-card .icon { font-size: 1.75rem; margin-bottom: 0.5rem; }
         .scenario-card h5 { font-size: 0.95rem; margin-bottom: 0.25rem; }
         .scenario-card p { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
+        .scenario-card .learn-more { display: block; font-size: 0.8rem; color: var(--color-primary); margin-top: 0.75rem; font-weight: 600; }
+        .scenario-card-link { text-decoration: none; color: inherit; display: block; }
+        .scenario-card-link:hover .scenario-card { border-color: var(--color-primary); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .scenario-card-link .scenario-card { cursor: pointer; }
 
         /* Buttons */
         .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: var(--transition-smooth); border: none; font-family: inherit; }
@@ -896,21 +900,30 @@
 
     <h3>Types of Questions</h3>
     <div class="scenario-selector">
-        <div class="scenario-card selected">
-            <div class="icon">📊</div>
-            <h5>ROI & Effectiveness</h5>
-            <p>"Which channels work and by how much?"</p>
-        </div>
-        <div class="scenario-card">
-            <div class="icon">💰</div>
-            <h5>Budget Allocation</h5>
-            <p>"How should we split our budget?"</p>
-        </div>
-        <div class="scenario-card">
-            <div class="icon">🔮</div>
-            <h5>Forecasting</h5>
-            <p>"What happens if we change spend?"</p>
-        </div>
+        <a href="workflow-channel-effectiveness.html" class="scenario-card-link">
+            <div class="scenario-card selected">
+                <div class="icon">📊</div>
+                <h5>ROI & Effectiveness</h5>
+                <p>"Which channels work and by how much?"</p>
+                <span class="learn-more">Learn more →</span>
+            </div>
+        </a>
+        <a href="workflow-budget-optimization.html" class="scenario-card-link">
+            <div class="scenario-card">
+                <div class="icon">💰</div>
+                <h5>Budget Allocation</h5>
+                <p>"How should we split our budget?"</p>
+                <span class="learn-more">Learn more →</span>
+            </div>
+        </a>
+        <a href="workflow-forecasting.html" class="scenario-card-link">
+            <div class="scenario-card">
+                <div class="icon">🔮</div>
+                <h5>Forecasting</h5>
+                <p>"What happens if we change spend?"</p>
+                <span class="learn-more">Learn more →</span>
+            </div>
+        </a>
     </div>
 
     <h3>Our Example Question</h3>

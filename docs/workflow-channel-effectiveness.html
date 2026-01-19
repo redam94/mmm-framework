@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Channel Effectiveness | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #c9a067;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf8;
+            --color-bg-alt: #f5f7f2;
+            --color-surface: #ffffff;
+            --color-border: #e0e5dc;
+            --shadow-sm: 0 1px 3px rgba(45,58,45,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(45,58,45,0.15);
+            --transition-smooth: all 0.3s ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+            font-size: 17px;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+        /* Navigation */
+        .back-nav {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        .back-nav:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .page-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+        }
+        .page-header .subtitle {
+            font-size: 1.15rem;
+            color: var(--color-text-muted);
+        }
+        .page-header .question-badge {
+            display: inline-block;
+            background: var(--color-primary);
+            color: white;
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        /* Section styling */
+        .section { margin-bottom: 3rem; }
+        .section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .section h3 {
+            font-size: 1.3rem;
+            margin: 2rem 0 1rem;
+            color: var(--color-primary-dark);
+        }
+        .section h4 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--color-text);
+        }
+        .section p { margin-bottom: 1rem; }
+
+        /* Analogy box */
+        .analogy-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.12) 0%, rgba(201,160,103,0.04) 100%);
+            border-left: 4px solid var(--color-warning);
+            padding: 1.5rem 1.75rem;
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        .analogy-box::before {
+            content: "Think of it this way";
+            position: absolute;
+            top: -10px;
+            left: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-warning);
+            background: var(--color-bg);
+            padding: 0 0.5rem;
+        }
+        .analogy-box h4 { color: var(--color-accent-dark); margin-top: 0; margin-bottom: 0.5rem; font-size: 1rem; }
+        .analogy-box p:last-child { margin-bottom: 0; }
+
+        /* Why box */
+        .why-box {
+            background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%);
+            border: 1px solid rgba(90,124,101,0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .why-box h4 {
+            color: var(--color-primary-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .why-box h4::before { content: "Key insight"; color: var(--color-primary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .why-box p:last-child { margin-bottom: 0; }
+
+        /* Warning box */
+        .warning-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.1) 0%, rgba(201,112,103,0.05) 100%);
+            border: 1px solid rgba(201,112,103,0.3);
+            border-left: 5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .warning-box h4 { color: var(--color-danger); margin-top: 0; margin-bottom: 0.5rem; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        /* Success box */
+        .success-box {
+            background: linear-gradient(135deg, rgba(103,201,154,0.1) 0%, rgba(103,201,154,0.05) 100%);
+            border: 1px solid rgba(103,201,154,0.4);
+            border-left: 5px solid var(--color-success);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .success-box h4 { color: #3d8b5a; margin-top: 0; margin-bottom: 0.5rem; }
+        .success-box p:last-child { margin-bottom: 0; }
+
+        /* Chart container */
+        .chart-container {
+            width: 100%;
+            height: 350px;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface);
+        }
+        .chart-container.tall { height: 420px; }
+        .chart-container.short { height: 280px; }
+
+        .chart-explanation {
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-top: -0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .chart-explanation strong { color: var(--color-text); }
+
+        /* Interactive demo */
+        .interactive-demo {
+            background: var(--color-surface);
+            border: 2px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .interactive-demo h4 { margin-top: 0; color: var(--color-primary-dark); }
+
+        /* Control panel */
+        .control-panel {
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin: 1rem 0;
+        }
+        .control-panel h4 { margin-top: 0; margin-bottom: 1rem; font-size: 1rem; }
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .control-row:last-child { margin-bottom: 0; }
+        .control-row label { min-width: 160px; font-weight: 500; font-size: 0.95rem; }
+        .control-row select {
+            flex: 1;
+            max-width: 250px;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 0.95rem;
+            background: var(--color-surface);
+            cursor: pointer;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--color-border);
+            appearance: none;
+            cursor: pointer;
+        }
+        .control-row input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+        }
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            background: var(--color-surface);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+        }
+
+        /* Toggle buttons */
+        .toggle-group { display: flex; gap: 0.5rem; }
+        .toggle-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-surface);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: var(--transition-smooth);
+        }
+        .toggle-btn:hover { border-color: var(--color-primary); }
+        .toggle-btn.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+
+        /* Probability gauges */
+        .probability-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .probability-gauge {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .probability-gauge .gauge-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .probability-gauge .gauge-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .probability-gauge .gauge-value.high { color: var(--color-success); }
+        .probability-gauge .gauge-value.medium { color: var(--color-warning); }
+        .probability-gauge .gauge-value.low { color: var(--color-danger); }
+        .probability-gauge .gauge-desc {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Data table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+        .data-table th, .data-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .data-table th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            color: var(--color-text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .data-table .mono { font-family: 'JetBrains Mono', monospace; }
+        .data-table .positive { color: #3d8b5a; }
+        .data-table .negative { color: var(--color-danger); }
+        .data-table .warning { color: #8a6d2d; }
+        .data-table tr:hover { background: var(--color-bg-alt); }
+
+        /* Code example */
+        .code-example {
+            background: #1e2a1e;
+            color: #a8c99a;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            line-height: 1.6;
+        }
+        .code-example .comment { color: #6a8d6a; }
+        .code-example .keyword { color: #c792ea; }
+        .code-example .string { color: #c3e88d; }
+        .code-example .function { color: #82aaff; }
+        .code-example .number { color: #f78c6c; }
+
+        /* Question navigation */
+        .question-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 3rem 0;
+            padding-top: 2rem;
+            border-top: 1px solid var(--color-border);
+        }
+        .question-nav-card {
+            display: block;
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition-smooth);
+        }
+        .question-nav-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .question-nav-card.current {
+            border-color: var(--color-primary);
+            background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, var(--color-surface) 100%);
+        }
+        .question-nav-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .question-nav-card h5 { font-size: 0.95rem; margin: 0 0 0.25rem 0; }
+        .question-nav-card p { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
+
+        /* Concept cards */
+        .concept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .concept-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+        }
+        .concept-card h4 { margin-top: 0; font-size: 1.05rem; color: var(--color-primary-dark); }
+        .concept-card p { font-size: 0.95rem; margin-bottom: 0; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .page-header h1 { font-size: 2rem; }
+            .control-row { flex-direction: column; align-items: flex-start; }
+            .control-row label { min-width: auto; }
+            .question-nav { grid-template-columns: 1fr; }
+            .probability-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="scientific-workflow-demo.html" class="back-nav"><span>&larr;</span> Back to Workflow</a>
+
+    <header class="page-header">
+        <span class="question-badge">Question Type 1</span>
+        <h1>Understanding Channel Effectiveness</h1>
+        <p class="subtitle">Separating real marketing impact from coincidence</p>
+    </header>
+
+    <!-- SECTION 1: What We're Actually Asking -->
+    <section class="section">
+        <h2>What We're Actually Asking</h2>
+
+        <p>
+            When a marketer asks "Which channels work?", they're really asking a <strong>causal question</strong>:
+            If I spend money on TV advertising, will it <em>cause</em> more sales? And if so, how much?
+        </p>
+
+        <p>
+            This is harder than it sounds. Sales might go up after a TV campaign for many reasons that have
+            nothing to do with the ads: maybe it was the holiday season, maybe competitors raised prices,
+            or maybe the economy improved. The challenge is separating the <strong>true effect of marketing</strong>
+            from everything else that happened at the same time.
+        </p>
+
+        <div class="analogy-box">
+            <h4>The Restaurant Analogy</h4>
+            <p>
+                Imagine you manage a restaurant with five servers. Some bring in more tips than others.
+                But does that mean they're better servers? Maybe one server always works Saturday nights
+                (busy, generous diners), while another works Tuesday lunches (slow, frugal customers).
+            </p>
+            <p>
+                To know who's actually good, you'd need to compare: "How would tips change if I swapped
+                their shifts?" That's <strong>counterfactual thinking</strong>&mdash;comparing what happened
+                to what <em>would have</em> happened under different circumstances.
+            </p>
+        </div>
+
+        <p>
+            Marketing Mix Models (MMMs) try to answer this counterfactual question:
+            <strong>"What would sales have been without this marketing channel?"</strong>
+            The difference is the channel's true contribution.
+        </p>
+    </section>
+
+    <!-- SECTION 2: Core Concepts -->
+    <section class="section">
+        <h2>The Core Concepts</h2>
+
+        <h3>2.1 Contribution vs. Correlation</h3>
+
+        <p>
+            Just because two things move together doesn't mean one causes the other. This is perhaps the
+            most important concept in marketing measurement.
+        </p>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Spot the Spurious Correlation</h4>
+            <p>
+                Ice cream sales and drowning deaths are strongly correlated. Does ice cream cause drowning?
+                Of course not&mdash;<strong>summer</strong> causes both. This is what happens when you
+                ignore confounders.
+            </p>
+
+            <div class="control-panel">
+                <div class="control-row">
+                    <label>Include seasonality control?</label>
+                    <div class="toggle-group">
+                        <button class="toggle-btn" onclick="setSeasonControl(false, this)">No (See spurious effect)</button>
+                        <button class="toggle-btn active" onclick="setSeasonControl(true, this)">Yes (True relationship)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container" id="correlationChart"></div>
+            <div class="chart-explanation" id="correlationExplanation">
+                <strong>With seasonality controlled:</strong> The apparent relationship between ice cream
+                and drowning disappears. The same principle applies to marketing&mdash;without proper
+                controls, media effects absorb the effects of everything that happened at the same time.
+            </div>
+        </div>
+
+        <h3>2.2 Counterfactual Analysis</h3>
+
+        <p>
+            A <strong>counterfactual</strong> is a "what if" scenario. To measure TV's effect, we ask:
+            "What would sales have been if we hadn't spent anything on TV, but everything else stayed the same?"
+        </p>
+
+        <p>
+            The difference between actual sales and this hypothetical "no TV" world is TV's
+            <strong>contribution</strong>.
+        </p>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Counterfactual Contribution</h4>
+            <p>Toggle channels on/off to see their counterfactual contribution to sales.</p>
+
+            <div class="control-panel">
+                <div class="control-row">
+                    <label>Show contribution from:</label>
+                    <div class="toggle-group">
+                        <button class="toggle-btn active" onclick="toggleChannel('tv', this)">TV</button>
+                        <button class="toggle-btn active" onclick="toggleChannel('search', this)">Search</button>
+                        <button class="toggle-btn active" onclick="toggleChannel('social', this)">Social</button>
+                        <button class="toggle-btn active" onclick="toggleChannel('display', this)">Display</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container tall" id="counterfactualChart"></div>
+            <div class="chart-explanation">
+                <strong>Reading this chart:</strong> The gray area shows baseline sales (what you'd get with
+                zero marketing). Each colored layer shows a channel's contribution. Total height = total sales.
+                Toggle channels off to see the counterfactual world without them.
+            </div>
+        </div>
+
+        <h3>2.3 Understanding Uncertainty</h3>
+
+        <p>
+            No measurement is perfect. When we say "TV has an ROI of 2.1", what we really mean is
+            "Our best estimate is 2.1, but it could plausibly be anywhere from 1.8 to 2.5."
+        </p>
+
+        <p>
+            This <strong>uncertainty range</strong> (called a <em>credible interval</em> in Bayesian statistics)
+            is not a weakness&mdash;it's a feature. It tells you how confident you can be in the estimate.
+        </p>
+
+        <div class="concept-grid">
+            <div class="concept-card">
+                <h4>Narrow Interval = High Confidence</h4>
+                <p>
+                    If ROI is estimated as 2.1 [2.0&ndash;2.2], the range is tight. You can make
+                    decisions confidently because the true value is likely close to 2.1.
+                </p>
+            </div>
+            <div class="concept-card">
+                <h4>Wide Interval = Low Confidence</h4>
+                <p>
+                    If ROI is estimated as 1.3 [0.6&ndash;2.0], the range is wide. The channel
+                    might be great or might be unprofitable&mdash;you need more data or an experiment.
+                </p>
+            </div>
+        </div>
+
+        <div class="why-box">
+            <h4>Why uncertainty is your friend</h4>
+            <p>
+                A wide credible interval doesn't mean the channel is bad&mdash;it means you don't have
+                enough information yet. This honesty prevents overconfident decisions. It's far better
+                to know you're uncertain than to falsely believe a precise but wrong number.
+            </p>
+        </div>
+    </section>
+
+    <!-- SECTION 3: Reading Your Results -->
+    <section class="section">
+        <h2>Reading Your Results</h2>
+
+        <h3>3.1 The Contribution Waterfall</h3>
+
+        <p>
+            A <strong>waterfall chart</strong> shows how different components build up to your total outcome.
+            Starting from a baseline, each bar adds (or subtracts) until you reach actual sales.
+        </p>
+
+        <div class="chart-container tall" id="waterfallChart"></div>
+        <div class="chart-explanation">
+            <strong>Reading this chart:</strong> Start from the left. Baseline is what you'd sell with no marketing
+            or seasonal effects. Trend adds long-term growth. Seasonality captures calendar patterns. Then each
+            channel adds its contribution. The final bar shows total sales.
+        </div>
+
+        <div class="control-panel">
+            <h4>Explore Component Breakdown</h4>
+            <div class="control-row">
+                <label>Show uncertainty bands:</label>
+                <div class="toggle-group">
+                    <button class="toggle-btn" onclick="toggleWaterfallUncertainty(false, this)">Off</button>
+                    <button class="toggle-btn active" onclick="toggleWaterfallUncertainty(true, this)">On</button>
+                </div>
+            </div>
+        </div>
+
+        <h3>3.2 The ROI Forest Plot</h3>
+
+        <p>
+            A <strong>forest plot</strong> shows ROI estimates for all channels on one chart, making it
+            easy to compare effectiveness and spot which channels are confidently profitable.
+        </p>
+
+        <div class="chart-container" id="forestPlot"></div>
+        <div class="chart-explanation">
+            <strong>Reading this chart:</strong> Each bar is a channel. The center point is the best estimate;
+            the error bar shows the 94% credible interval. The red dashed line at 1.0 is break-even
+            (ROI = 1 means you get back exactly what you spent). Channels entirely to the right of this line
+            are confidently profitable.
+        </div>
+
+        <h3>3.3 Probability Metrics</h3>
+
+        <p>
+            Beyond point estimates, you can ask probability questions:
+        </p>
+
+        <ul>
+            <li><strong>P(ROI &gt; 0)</strong>: What's the probability this channel has <em>any</em> positive effect?</li>
+            <li><strong>P(ROI &gt; 1)</strong>: What's the probability this channel is <em>profitable</em> (returns more than it costs)?</li>
+        </ul>
+
+        <div class="control-panel">
+            <h4>Select a Channel to Explore</h4>
+            <div class="control-row">
+                <label>Channel:</label>
+                <select id="channelSelect" onchange="updateProbabilityDisplay()">
+                    <option value="tv">TV</option>
+                    <option value="search">Paid Search</option>
+                    <option value="social">Paid Social</option>
+                    <option value="display">Display</option>
+                    <option value="radio">Radio</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="probability-grid">
+            <div class="probability-gauge">
+                <div class="gauge-label">P(ROI &gt; 0)</div>
+                <div class="gauge-value high" id="probPositive">99.8%</div>
+                <div class="gauge-desc">Probability of positive effect</div>
+            </div>
+            <div class="probability-gauge">
+                <div class="gauge-label">P(ROI &gt; 1)</div>
+                <div class="gauge-value high" id="probProfitable">97.2%</div>
+                <div class="gauge-desc">Probability of profitability</div>
+            </div>
+            <div class="probability-gauge">
+                <div class="gauge-label">P(ROI &gt; 1.5)</div>
+                <div class="gauge-value medium" id="probGreat">84.5%</div>
+                <div class="gauge-desc">Probability of strong ROI</div>
+            </div>
+        </div>
+
+        <h3>3.4 The Posterior Distribution</h3>
+
+        <p>
+            The full <strong>posterior distribution</strong> shows all plausible values for a channel's ROI,
+            weighted by how likely each value is. This is the complete picture of your uncertainty.
+        </p>
+
+        <div class="chart-container" id="posteriorChart"></div>
+        <div class="chart-explanation">
+            <strong>Reading this chart:</strong> The curve shows the probability density&mdash;higher means more
+            likely. The shaded regions show different interpretations. The peak is the most likely value,
+            but all values under the curve are plausible.
+        </div>
+    </section>
+
+    <!-- SECTION 4: Practical Guidance -->
+    <section class="section">
+        <h2>Practical Guidance</h2>
+
+        <h3>Interpreting Your Results</h3>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Scenario</th>
+                    <th>What It Means</th>
+                    <th>Recommended Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>High ROI, Narrow Interval</strong></td>
+                    <td>Confidently effective channel</td>
+                    <td class="positive">Safe to maintain or increase investment</td>
+                </tr>
+                <tr>
+                    <td><strong>High ROI, Wide Interval</strong></td>
+                    <td>Potentially effective but uncertain</td>
+                    <td class="warning">Consider a controlled experiment (geo-test)</td>
+                </tr>
+                <tr>
+                    <td><strong>Low ROI, Narrow Interval</strong></td>
+                    <td>Confidently ineffective</td>
+                    <td class="negative">Consider reducing or reallocating budget</td>
+                </tr>
+                <tr>
+                    <td><strong>Low ROI, Wide Interval</strong></td>
+                    <td>Possibly ineffective but uncertain</td>
+                    <td class="warning">Gather more data before major changes</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="warning-box">
+            <h4>Common Pitfalls</h4>
+            <ul>
+                <li><strong>Ignoring uncertainty:</strong> Don't make major budget decisions based on point estimates alone. Always consider the credible interval.</li>
+                <li><strong>Forgetting the baseline:</strong> Much of your sales would happen without marketing. Contribution is the <em>incremental</em> effect, not total sales during campaign.</li>
+                <li><strong>Confusing correlation with causation:</strong> Ensure your model controls for confounders (seasonality, promotions, economic factors).</li>
+                <li><strong>Over-reacting to noise:</strong> Short-term fluctuations in ROI estimates are normal. Look for consistent patterns over multiple model runs.</li>
+            </ul>
+        </div>
+
+        <div class="success-box">
+            <h4>Best Practices</h4>
+            <ul>
+                <li>Run <strong>sensitivity analysis</strong> to see if conclusions hold under different model specifications</li>
+                <li>For uncertain channels, consider <strong>geo-experiments</strong> to validate MMM findings</li>
+                <li>Update your model regularly (quarterly) as new data arrives</li>
+                <li>Present uncertainty honestly to stakeholders&mdash;it builds trust and leads to better decisions</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 5: Implementation -->
+    <section class="section">
+        <h2>Implementation in MMM Framework</h2>
+
+        <p>
+            Here's how to compute channel effectiveness metrics using the mmm-framework:
+        </p>
+
+        <h3>Computing Counterfactual Contributions</h3>
+
+        <div class="code-example">
+<span class="comment"># After fitting your model...</span>
+<span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
+
+analyzer = MMMAnalyzer(fitted_model)
+
+<span class="comment"># Compute counterfactual contributions per channel</span>
+contributions = analyzer.compute_counterfactual_contributions(
+    compute_uncertainty=<span class="keyword">True</span>,
+    hdi_prob=<span class="number">0.94</span>  <span class="comment"># 94% credible interval</span>
+)
+
+<span class="comment"># View the summary</span>
+<span class="function">print</span>(contributions.summary())
+
+<span class="comment"># Output:</span>
+<span class="comment"># Channel      Contribution    Pct     HDI_Low    HDI_High</span>
+<span class="comment"># TV           $2.45M         18.2%   $1.89M     $3.12M</span>
+<span class="comment"># Search       $1.82M         13.5%   $1.45M     $2.24M</span>
+<span class="comment"># Social       $0.95M          7.1%   $0.42M     $1.58M</span>
+<span class="comment"># Display      $0.34M          2.5%  -$0.21M     $0.92M</span>
+<span class="comment"># Radio        $0.78M          5.8%   $0.41M     $1.19M</span>
+        </div>
+
+        <h3>Computing ROI with Uncertainty</h3>
+
+        <div class="code-example">
+<span class="keyword">from</span> mmm_framework.reporting.helpers <span class="keyword">import</span> compute_roi_with_uncertainty
+
+<span class="comment"># Compute ROI with full uncertainty quantification</span>
+roi_df = compute_roi_with_uncertainty(
+    model=fitted_model,
+    hdi_prob=<span class="number">0.94</span>
+)
+
+<span class="comment"># Key columns in roi_df:</span>
+<span class="comment"># - channel: Channel name</span>
+<span class="comment"># - roi_mean: Point estimate of ROI</span>
+<span class="comment"># - roi_hdi_low, roi_hdi_high: 94% credible interval</span>
+<span class="comment"># - prob_positive: P(ROI > 0)</span>
+<span class="comment"># - prob_profitable: P(ROI > 1)</span>
+
+<span class="comment"># Example output:</span>
+<span class="function">print</span>(roi_df[[<span class="string">'channel'</span>, <span class="string">'roi_mean'</span>, <span class="string">'roi_hdi_low'</span>, <span class="string">'roi_hdi_high'</span>, <span class="string">'prob_profitable'</span>]])
+
+<span class="comment"># Channel     roi_mean    roi_hdi_low    roi_hdi_high    prob_profitable</span>
+<span class="comment"># TV          2.12        1.78           2.52            0.998</span>
+<span class="comment"># Search      2.41        2.08           2.81            0.999</span>
+<span class="comment"># Social      1.28        0.76           1.89            0.872</span>
+<span class="comment"># Display     0.68        0.28           1.12            0.284</span>
+<span class="comment"># Radio       1.62        1.28           2.01            0.991</span>
+        </div>
+
+        <h3>Getting Component Decomposition</h3>
+
+        <div class="code-example">
+<span class="comment"># Decompose total outcome into components</span>
+decomposition = analyzer.compute_component_decomposition()
+
+<span class="comment"># Returns breakdown of:</span>
+<span class="comment"># - intercept (baseline demand)</span>
+<span class="comment"># - trend (long-term trajectory)</span>
+<span class="comment"># - seasonality (calendar patterns)</span>
+<span class="comment"># - media (per-channel contributions)</span>
+<span class="comment"># - controls (other factors)</span>
+
+<span class="function">print</span>(decomposition.summary())
+        </div>
+    </section>
+
+    <!-- Question Navigation -->
+    <nav class="question-nav">
+        <div class="question-nav-card current">
+            <div class="icon">&#x1F4CA;</div>
+            <h5>Channel Effectiveness</h5>
+            <p>Which channels work?</p>
+        </div>
+        <a href="workflow-budget-optimization.html" class="question-nav-card">
+            <div class="icon">&#x1F4B0;</div>
+            <h5>Budget Allocation</h5>
+            <p>How to split budget?</p>
+        </a>
+        <a href="workflow-forecasting.html" class="question-nav-card">
+            <div class="icon">&#x1F52E;</div>
+            <h5>Forecasting</h5>
+            <p>What to expect?</p>
+        </a>
+    </nav>
+</div>
+
+<script>
+// Chart configuration
+const cfg = { responsive: true, displayModeBar: false };
+const colors = {
+    primary: '#5a7c65',
+    primaryLight: '#8fa86a',
+    primaryDark: '#3d5a47',
+    accent: '#6a8fa8',
+    warning: '#c9a067',
+    danger: '#c97067',
+    success: '#67c99a',
+    text: '#2d3a2d',
+    grid: 'rgba(90,124,101,0.1)'
+};
+const layout_base = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+    margin: { t: 30, r: 30, b: 50, l: 60 }
+};
+
+// State
+let includeSeasonControl = true;
+let channelsActive = { tv: true, search: true, social: true, display: true };
+let showWaterfallUncertainty = true;
+
+// Channel data
+const channelData = {
+    tv: { name: 'TV', roi: 2.12, roiLow: 1.78, roiHigh: 2.52, probPos: 99.8, probProf: 97.2, probGreat: 84.5, color: colors.primary },
+    search: { name: 'Paid Search', roi: 2.41, roiLow: 2.08, roiHigh: 2.81, probPos: 99.9, probProf: 99.1, probGreat: 92.3, color: colors.accent },
+    social: { name: 'Paid Social', roi: 1.28, roiLow: 0.76, roiHigh: 1.89, probPos: 97.2, probProf: 72.4, probGreat: 28.6, color: colors.warning },
+    display: { name: 'Display', roi: 0.68, roiLow: 0.28, roiHigh: 1.12, probPos: 78.4, probProf: 28.4, probGreat: 5.2, color: colors.danger },
+    radio: { name: 'Radio', roi: 1.62, roiLow: 1.28, roiHigh: 2.01, probPos: 99.1, probProf: 94.8, probGreat: 68.9, color: '#9b7fb8' }
+};
+
+// Initialize charts on load
+document.addEventListener('DOMContentLoaded', function() {
+    initCorrelationChart();
+    initCounterfactualChart();
+    initWaterfallChart();
+    initForestPlot();
+    initPosteriorChart();
+    updateProbabilityDisplay();
+});
+
+// Correlation chart
+function setSeasonControl(include, btn) {
+    includeSeasonControl = include;
+    document.querySelectorAll('.toggle-group')[0].querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    initCorrelationChart();
+
+    const explanation = document.getElementById('correlationExplanation');
+    if (include) {
+        explanation.innerHTML = '<strong>With seasonality controlled:</strong> The apparent relationship between ice cream and drowning disappears. The same principle applies to marketing&mdash;without proper controls, media effects absorb the effects of everything that happened at the same time.';
+    } else {
+        explanation.innerHTML = '<strong>Without controlling for season:</strong> Ice cream sales and drowning appear highly correlated (r = 0.89). A naive analysis would conclude ice cream causes drowning! This is exactly what happens in marketing when you ignore confounders.';
+    }
+}
+
+function initCorrelationChart() {
+    const n = 50;
+    const months = Array.from({length: n}, (_, i) => i);
+
+    // Generate seasonal pattern
+    const season = months.map(m => Math.sin(2 * Math.PI * m / 12));
+
+    // Ice cream: driven by season + noise
+    const iceCream = months.map((m, i) => 50 + 30 * season[i] + (Math.random() - 0.5) * 10);
+
+    // Drowning: driven by season + noise (no direct relationship to ice cream)
+    const drowning = months.map((m, i) => 20 + 15 * season[i] + (Math.random() - 0.5) * 5);
+
+    let traces;
+    if (includeSeasonControl) {
+        // Show residuals after removing seasonal effect
+        const iceCreamResid = iceCream.map((v, i) => v - 30 * season[i] - 50 + (Math.random() - 0.5) * 5);
+        const drowningResid = drowning.map((v, i) => v - 15 * season[i] - 20 + (Math.random() - 0.5) * 3);
+        traces = [{
+            x: iceCreamResid,
+            y: drowningResid,
+            mode: 'markers',
+            marker: { color: colors.primary, size: 8, opacity: 0.7 },
+            name: 'Residuals'
+        }];
+    } else {
+        traces = [{
+            x: iceCream,
+            y: drowning,
+            mode: 'markers',
+            marker: { color: colors.danger, size: 8, opacity: 0.7 },
+            name: 'Raw data'
+        }];
+    }
+
+    Plotly.newPlot('correlationChart', traces, {
+        ...layout_base,
+        xaxis: { title: includeSeasonControl ? 'Ice Cream (season-adjusted)' : 'Ice Cream Sales', gridcolor: colors.grid },
+        yaxis: { title: includeSeasonControl ? 'Drowning (season-adjusted)' : 'Drowning Deaths', gridcolor: colors.grid },
+        showlegend: false
+    }, cfg);
+}
+
+// Counterfactual chart
+function toggleChannel(channel, btn) {
+    channelsActive[channel] = !channelsActive[channel];
+    btn.classList.toggle('active');
+    initCounterfactualChart();
+}
+
+function initCounterfactualChart() {
+    const weeks = Array.from({length: 52}, (_, i) => i + 1);
+    const baseline = weeks.map(w => 10 + 0.02 * w + Math.sin(2 * Math.PI * w / 52) * 2);
+
+    // Channel contributions
+    const contributions = {
+        tv: weeks.map(w => 2.5 + Math.sin(2 * Math.PI * w / 52 + 1) * 0.8 + (Math.random() - 0.5) * 0.3),
+        search: weeks.map(w => 1.8 + Math.sin(2 * Math.PI * w / 26) * 0.5 + (Math.random() - 0.5) * 0.2),
+        social: weeks.map(w => 1.0 + Math.sin(2 * Math.PI * w / 52 + 2) * 0.4 + (Math.random() - 0.5) * 0.3),
+        display: weeks.map(w => 0.4 + (Math.random() - 0.5) * 0.2)
+    };
+
+    const traces = [{
+        x: weeks,
+        y: baseline,
+        fill: 'tozeroy',
+        fillcolor: 'rgba(150,150,150,0.3)',
+        line: { color: 'rgba(100,100,100,0.5)', width: 1 },
+        name: 'Baseline',
+        stackgroup: 'one'
+    }];
+
+    const channelColors = {
+        tv: 'rgba(90,124,101,0.6)',
+        search: 'rgba(106,143,168,0.6)',
+        social: 'rgba(201,160,103,0.6)',
+        display: 'rgba(201,112,103,0.6)'
+    };
+
+    const channelNames = { tv: 'TV', search: 'Search', social: 'Social', display: 'Display' };
+
+    Object.keys(contributions).forEach(ch => {
+        if (channelsActive[ch]) {
+            traces.push({
+                x: weeks,
+                y: contributions[ch],
+                fill: 'tonexty',
+                fillcolor: channelColors[ch],
+                line: { color: channelColors[ch].replace('0.6', '1'), width: 1 },
+                name: channelNames[ch],
+                stackgroup: 'one'
+            });
+        }
+    });
+
+    Plotly.newPlot('counterfactualChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'Week', gridcolor: colors.grid },
+        yaxis: { title: 'Sales ($M)', gridcolor: colors.grid },
+        legend: { orientation: 'h', y: 1.12 }
+    }, cfg);
+}
+
+// Waterfall chart
+function toggleWaterfallUncertainty(show, btn) {
+    showWaterfallUncertainty = show;
+    document.querySelectorAll('.control-panel')[2].querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    initWaterfallChart();
+}
+
+function initWaterfallChart() {
+    const components = ['Baseline', 'Trend', 'Seasonality', 'TV', 'Search', 'Social', 'Display', 'Radio', 'Total'];
+    const values = [10.0, 1.2, 0.8, 2.5, 1.8, 1.0, 0.3, 0.8, 18.4];
+    const errors = [0.5, 0.3, 0.2, 0.6, 0.4, 0.5, 0.3, 0.3, 1.2];
+
+    const barColors = [
+        'rgba(150,150,150,0.7)', // Baseline
+        colors.primary,          // Trend
+        colors.accent,           // Seasonality
+        colors.primary,          // TV
+        colors.accent,           // Search
+        colors.warning,          // Social
+        colors.danger,           // Display
+        '#9b7fb8',              // Radio
+        colors.primaryDark       // Total
+    ];
+
+    const trace = {
+        x: components,
+        y: values,
+        type: 'bar',
+        marker: { color: barColors },
+        error_y: showWaterfallUncertainty ? {
+            type: 'data',
+            array: errors,
+            visible: true,
+            color: colors.text
+        } : { visible: false }
+    };
+
+    Plotly.newPlot('waterfallChart', [trace], {
+        ...layout_base,
+        xaxis: { gridcolor: colors.grid },
+        yaxis: { title: 'Sales ($M)', gridcolor: colors.grid },
+        showlegend: false
+    }, cfg);
+}
+
+// Forest plot
+function initForestPlot() {
+    const channels = ['Display', 'Social', 'Radio', 'TV', 'Search'];
+    const rois = [0.68, 1.28, 1.62, 2.12, 2.41];
+    const lows = [0.28, 0.76, 1.28, 1.78, 2.08];
+    const highs = [1.12, 1.89, 2.01, 2.52, 2.81];
+
+    const barColors = rois.map((r, i) => {
+        if (lows[i] > 1) return colors.success;
+        if (highs[i] < 1) return colors.danger;
+        return colors.warning;
+    });
+
+    const traces = [
+        {
+            y: channels,
+            x: rois,
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: barColors },
+            error_x: {
+                type: 'data',
+                symmetric: false,
+                array: highs.map((h, i) => h - rois[i]),
+                arrayminus: rois.map((r, i) => r - lows[i]),
+                color: colors.text,
+                thickness: 2
+            },
+            name: 'ROI'
+        },
+        {
+            y: [channels[0], channels[channels.length - 1]],
+            x: [1, 1],
+            mode: 'lines',
+            line: { color: colors.danger, dash: 'dash', width: 2 },
+            name: 'Break-even'
+        }
+    ];
+
+    Plotly.newPlot('forestPlot', traces, {
+        ...layout_base,
+        margin: { t: 20, r: 30, b: 50, l: 100 },
+        xaxis: { title: 'ROI', gridcolor: colors.grid, range: [0, 3.5] },
+        yaxis: { gridcolor: colors.grid },
+        showlegend: false
+    }, cfg);
+}
+
+// Probability display update
+function updateProbabilityDisplay() {
+    const channel = document.getElementById('channelSelect').value;
+    const data = channelData[channel];
+
+    document.getElementById('probPositive').textContent = data.probPos.toFixed(1) + '%';
+    document.getElementById('probProfitable').textContent = data.probProf.toFixed(1) + '%';
+    document.getElementById('probGreat').textContent = data.probGreat.toFixed(1) + '%';
+
+    // Update colors based on values
+    updateGaugeColor('probPositive', data.probPos);
+    updateGaugeColor('probProfitable', data.probProf);
+    updateGaugeColor('probGreat', data.probGreat);
+
+    initPosteriorChart();
+}
+
+function updateGaugeColor(id, value) {
+    const el = document.getElementById(id);
+    el.classList.remove('high', 'medium', 'low');
+    if (value > 90) el.classList.add('high');
+    else if (value > 60) el.classList.add('medium');
+    else el.classList.add('low');
+}
+
+// Posterior chart
+function initPosteriorChart() {
+    const channel = document.getElementById('channelSelect').value;
+    const data = channelData[channel];
+
+    // Generate approximate posterior distribution
+    const mean = data.roi;
+    const sd = (data.roiHigh - data.roiLow) / 4;
+    const x = Array.from({length: 100}, (_, i) => mean - 3*sd + i * 6*sd / 99);
+    const y = x.map(v => Math.exp(-Math.pow(v - mean, 2) / (2 * sd * sd)));
+
+    // Normalize
+    const maxY = Math.max(...y);
+    const yNorm = y.map(v => v / maxY);
+
+    // Create filled regions
+    const unprofitable = x.map((v, i) => v < 1 ? yNorm[i] : 0);
+    const profitable = x.map((v, i) => v >= 1 && v < 1.5 ? yNorm[i] : 0);
+    const great = x.map((v, i) => v >= 1.5 ? yNorm[i] : 0);
+
+    const traces = [
+        { x, y: unprofitable, fill: 'tozeroy', fillcolor: 'rgba(201,112,103,0.3)', line: { width: 0 }, name: 'ROI < 1 (unprofitable)', showlegend: true },
+        { x, y: profitable, fill: 'tozeroy', fillcolor: 'rgba(201,160,103,0.3)', line: { width: 0 }, name: '1 < ROI < 1.5 (modest)', showlegend: true },
+        { x, y: great, fill: 'tozeroy', fillcolor: 'rgba(103,201,154,0.3)', line: { width: 0 }, name: 'ROI > 1.5 (strong)', showlegend: true },
+        { x, y: yNorm, mode: 'lines', line: { color: colors.primary, width: 3 }, name: 'Posterior', showlegend: false }
+    ];
+
+    Plotly.newPlot('posteriorChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'ROI', gridcolor: colors.grid },
+        yaxis: { title: 'Probability Density', gridcolor: colors.grid, showticklabels: false },
+        legend: { orientation: 'h', y: 1.15 },
+        shapes: [
+            { type: 'line', x0: 1, x1: 1, y0: 0, y1: 1, line: { color: colors.danger, dash: 'dash', width: 2 } }
+        ]
+    }, cfg);
+}
+</script>
+</body>
+</html>
