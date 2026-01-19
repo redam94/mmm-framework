@@ -122,12 +122,12 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
             f"Rate limiting enabled: {settings.rate_limit_requests}/{settings.rate_limit_period}"
         )
 
-    # Include routers with optional authentication
-    # Auth is applied at the router level - each route can opt in
-    app.include_router(data_router)
-    app.include_router(configs_router)
-    app.include_router(models_router)
-    app.include_router(extended_models_router)
+    # Include routers with API key authentication
+    # All data-modifying endpoints require authentication when enabled
+    app.include_router(data_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(configs_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(models_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(extended_models_router, dependencies=[Depends(verify_api_key)])
 
     # Health endpoints
     @app.get(
