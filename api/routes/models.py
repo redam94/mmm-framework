@@ -2239,3 +2239,198 @@ async def get_model_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Summary not found",
         )
+
+
+# =============================================================================
+# Batch Operations
+# =============================================================================
+
+
+@router.post(
+    "/batch/status",
+    responses={400: {"model": ErrorResponse}},
+)
+async def batch_model_status(
+    model_ids: list[str],
+    storage: StorageService = Depends(get_storage),
+    redis: RedisService = Depends(get_redis),
+):
+    """
+    Get status for multiple models at once.
+
+    Returns a dictionary mapping model IDs to their status and progress.
+    """
+    if not model_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="model_ids list cannot be empty",
+        )
+
+    if len(model_ids) > 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot query more than 50 models at once",
+        )
+
+    results = {}
+    for model_id in model_ids:
+        if storage.model_exists(model_id):
+            # Try Redis first for real-time status
+            redis_status = await redis.get_job_status(model_id)
+            if redis_status:
+                results[model_id] = {
+                    "status": redis_status.get("status", "unknown"),
+                    "progress": redis_status.get("progress", 0),
+                    "message": redis_status.get("message"),
+                }
+            else:
+                # Fall back to storage
+                metadata = storage.get_model_metadata(model_id)
+                results[model_id] = {
+                    "status": metadata.get("status", "unknown"),
+                    "progress": metadata.get("progress", 0),
+                    "message": metadata.get("progress_message"),
+                }
+        else:
+            results[model_id] = {"status": "not_found"}
+
+    return {"results": results}
+
+
+@router.post(
+    "/batch/delete",
+    response_model=SuccessResponse,
+    responses={400: {"model": ErrorResponse}},
+)
+async def batch_delete_models(
+    model_ids: list[str],
+    storage: StorageService = Depends(get_storage),
+    redis: RedisService = Depends(get_redis),
+):
+    """
+    Delete multiple models at once.
+
+    Returns a summary of deletion results.
+    """
+    if not model_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="model_ids list cannot be empty",
+        )
+
+    if len(model_ids) > 20:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete more than 20 models at once",
+        )
+
+    deleted = []
+    not_found = []
+
+    for model_id in model_ids:
+        if storage.model_exists(model_id):
+            storage.delete_model(model_id)
+            await redis.delete_job_status(model_id)
+            deleted.append(model_id)
+        else:
+            not_found.append(model_id)
+
+    return SuccessResponse(
+        success=True,
+        message=f"Deleted {len(deleted)} models. {len(not_found)} not found.",
+    )
+
+
+# =============================================================================
+# Model Comparison
+# =============================================================================
+
+
+@router.post(
+    "/compare",
+    responses={400: {"model": ErrorResponse}},
+)
+async def compare_models(
+    model_ids: list[str],
+    metrics: list[str] = Query(
+        default=["r2", "mape", "rmse"],
+        description="Metrics to compare",
+    ),
+    storage: StorageService = Depends(get_storage),
+):
+    """
+    Compare multiple models side by side.
+
+    Returns key metrics for each completed model.
+    """
+    if not model_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="model_ids list cannot be empty",
+        )
+
+    if len(model_ids) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot compare more than 10 models at once",
+        )
+
+    comparisons = []
+
+    for model_id in model_ids:
+        if not storage.model_exists(model_id):
+            comparisons.append({
+                "model_id": model_id,
+                "status": "not_found",
+            })
+            continue
+
+        metadata = storage.get_model_metadata(model_id)
+        if metadata.get("status") != JobStatus.COMPLETED.value:
+            comparisons.append({
+                "model_id": model_id,
+                "status": metadata.get("status", "unknown"),
+            })
+            continue
+
+        try:
+            # Get fit data for metrics
+            fit_data = storage.load_results(model_id, "fit")
+            summary_data = storage.load_results(model_id, "summary")
+
+            comparison = {
+                "model_id": model_id,
+                "name": metadata.get("name"),
+                "status": "completed",
+                "created_at": metadata.get("created_at"),
+                "completed_at": metadata.get("completed_at"),
+            }
+
+            # Add requested metrics
+            if "r2" in metrics:
+                comparison["r2"] = fit_data.get("r2")
+            if "mape" in metrics:
+                comparison["mape"] = fit_data.get("mape")
+            if "rmse" in metrics:
+                comparison["rmse"] = fit_data.get("rmse")
+
+            # Add diagnostics
+            comparison["diagnostics"] = metadata.get("diagnostics", {})
+
+            # Add model info
+            comparison["n_obs"] = summary_data.get("n_obs")
+            comparison["n_channels"] = summary_data.get("n_channels")
+            comparison["channel_names"] = summary_data.get("channel_names")
+
+            comparisons.append(comparison)
+
+        except StorageError:
+            comparisons.append({
+                "model_id": model_id,
+                "status": "results_unavailable",
+            })
+
+    # Sanitize for JSON
+    comparisons = _sanitize_for_json(comparisons)
+
+    return SafeJSONResponse(content={"models": comparisons})

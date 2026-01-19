@@ -25,6 +25,7 @@ dependencies = [
     "pytest-xdist>=3.8.0",
     "python-multipart>=0.0.20",
     "redis>=7.1.0",
+    "slowapi>=0.1.9",
     "uvicorn>=0.38.0",
 ]
 
