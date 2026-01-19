@@ -119,7 +119,8 @@ class AdstockConfigSchema(BaseModel):
     type: Literal["geometric", "weibull", "delayed", "none"] = "geometric"
     l_max: int = Field(default=8, ge=1, le=52)
     normalize: bool = True
-    alpha_prior: PriorConfigSchema | None = None
+    alpha_prior: PriorConfigSchema | None = None  # Decay rate for geometric
+    theta_prior: PriorConfigSchema | None = None  # Peak delay for weibull
 
 
 class SaturationConfigSchema(BaseModel):

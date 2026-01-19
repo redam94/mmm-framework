@@ -99,11 +99,23 @@ class ConfigInfo:
                 return kpi.get("name", "N/A")
         return "N/A"
 
+    def get_kpi_dimensions(self) -> list:
+        """Get KPI dimensions from mff_config."""
+        if self.mff_config and isinstance(self.mff_config, dict):
+            kpi = self.mff_config.get("kpi", {})
+            if isinstance(kpi, dict):
+                return kpi.get("dimensions", ["Period"])
+        return ["Period"]
+
     def get_media_channels(self) -> list:
         """Get media channels from mff_config."""
         if self.mff_config and isinstance(self.mff_config, dict):
             return self.mff_config.get("media_channels", [])
         return []
+
+    def get_media_channel_names(self) -> list[str]:
+        """Get list of media channel names."""
+        return [ch.get("name", "") for ch in self.get_media_channels()]
 
     def get_controls(self) -> list:
         """Get control variables from mff_config."""
@@ -111,11 +123,59 @@ class ConfigInfo:
             return self.mff_config.get("controls", [])
         return []
 
+    def get_control_names(self) -> list[str]:
+        """Get list of control variable names."""
+        return [c.get("name", "") for c in self.get_controls()]
+
     def get_inference_method(self) -> str:
         """Get inference method from model_settings."""
         if self.model_settings and isinstance(self.model_settings, dict):
             return self.model_settings.get("inference_method", "N/A")
         return "N/A"
+
+    def get_inference_method_display(self) -> str:
+        """Get human-readable inference method name."""
+        method = self.get_inference_method()
+        method_map = {
+            "bayesian_numpyro": "Bayesian (NumPyro/JAX)",
+            "bayesian_pymc": "Bayesian (PyMC)",
+            "frequentist_ridge": "Frequentist (Ridge)",
+            "frequentist_cvxpy": "Frequentist (CVXPY)",
+        }
+        return method_map.get(method, method)
+
+    def get_trend_type(self) -> str:
+        """Get trend type from model_settings."""
+        if self.model_settings and isinstance(self.model_settings, dict):
+            trend = self.model_settings.get("trend", {})
+            if isinstance(trend, dict):
+                return trend.get("type", "linear")
+        return "linear"
+
+    def get_mcmc_settings(self) -> dict:
+        """Get MCMC settings from model_settings."""
+        if self.model_settings and isinstance(self.model_settings, dict):
+            return {
+                "n_chains": self.model_settings.get("n_chains", 4),
+                "n_draws": self.model_settings.get("n_draws", 1000),
+                "n_tune": self.model_settings.get("n_tune", 1000),
+                "target_accept": self.model_settings.get("target_accept", 0.9),
+            }
+        return {"n_chains": 4, "n_draws": 1000, "n_tune": 1000, "target_accept": 0.9}
+
+    def get_seasonality(self) -> dict:
+        """Get seasonality settings from model_settings."""
+        if self.model_settings and isinstance(self.model_settings, dict):
+            return self.model_settings.get("seasonality", {})
+        return {}
+
+    def is_hierarchical(self) -> bool:
+        """Check if hierarchical modeling is enabled."""
+        if self.model_settings and isinstance(self.model_settings, dict):
+            hier = self.model_settings.get("hierarchical", {})
+            if isinstance(hier, dict):
+                return hier.get("enabled", False)
+        return False
 
 
 @dataclass
@@ -356,6 +416,24 @@ class MMMAPIClient:
     def delete_config(self, config_id: str) -> dict:
         """Delete a configuration."""
         response = self._client.delete(f"/configs/{config_id}")
+        return self._handle_response(response)
+
+    def update_config(self, config_id: str, config_data: dict) -> dict:
+        """Update an existing configuration."""
+        response = self._client.put(f"/configs/{config_id}", json=config_data)
+        return self._handle_response(response)
+
+    def validate_config(self, config_data: dict) -> dict:
+        """Validate a configuration without saving it."""
+        response = self._client.post("/configs/validate", json=config_data)
+        return self._handle_response(response)
+
+    def duplicate_config(self, config_id: str, new_name: str) -> dict:
+        """Create a copy of an existing configuration."""
+        response = self._client.post(
+            f"/configs/{config_id}/duplicate",
+            params={"new_name": new_name}
+        )
         return self._handle_response(response)
 
     # -------------------------------------------------------------------------
