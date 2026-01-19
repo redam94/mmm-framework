@@ -737,84 +737,86 @@
         <h3>Basic Forecasting</h3>
 
         <div class="code-example">
-<span class="keyword">import</span> numpy <span class="keyword">as</span> np
+<span class="keyword">import</span> numpy <span class="keyword">as</span> np <br>
 
-<span class="comment"># Predict with current media plan</span>
-baseline_pred = fitted_model.predict()
+<span class="comment"># Predict with current media plan</span><br>
+baseline_pred = fitted_model.predict()<br>
 
-<span class="function">print</span>(<span class="string">f"Expected sales: ${baseline_pred.y_pred_mean.sum():,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"94% CI: [${baseline_pred.y_pred_hdi_low.sum():,.0f}, "</span>
-      <span class="string">f"${baseline_pred.y_pred_hdi_high.sum():,.0f}]"</span>)
+<span class="function">print</span>(<span class="string">f"Expected sales: ${baseline_pred.y_pred_mean.sum():,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"94% CI: [${baseline_pred.y_pred_hdi_low.sum():,.0f}, "</span><br>
+      <span class="string">f"${baseline_pred.y_pred_hdi_high.sum():,.0f}]"</span>)<br>
 
-<span class="comment"># Output:</span>
-<span class="comment"># Expected sales: $11,200,000</span>
+<span class="comment"># Output:</span><br>
+<span class="comment"># Expected sales: $11,200,000</span><br>
 <span class="comment"># 94% CI: [$10,100,000, $12,400,000]</span>
         </div>
 
         <h3>Scenario-Based Forecasting</h3>
 
         <div class="code-example">
-<span class="comment"># Predict with modified media plan (20% budget increase)</span>
-X_media_increased = fitted_model.X_media_raw * <span class="number">1.2</span>
-scenario_pred = fitted_model.predict(X_media=X_media_increased)
+<span class="comment"># Predict with modified media plan (20% budget increase)</span><br>
+X_media_increased = fitted_model.X_media_raw * <span class="number">1.2</span><br>
+scenario_pred = fitted_model.predict(X_media=X_media_increased)<br>
 
-<span class="function">print</span>(<span class="string">f"With 20% budget increase:"</span>)
-<span class="function">print</span>(<span class="string">f"Expected sales: ${scenario_pred.y_pred_mean.sum():,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"94% CI: [${scenario_pred.y_pred_hdi_low.sum():,.0f}, "</span>
-      <span class="string">f"${scenario_pred.y_pred_hdi_high.sum():,.0f}]"</span>)
+<span class="function">print</span>(<span class="string">f"With 20% budget increase:"</span>)<br>
+<span class="function">print</span>(<span class="string">f"Expected sales: ${scenario_pred.y_pred_mean.sum():,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"94% CI: [${scenario_pred.y_pred_hdi_low.sum():,.0f}, "</span><br>
+      <span class="string">f"${scenario_pred.y_pred_hdi_high.sum():,.0f}]"</span>)<br>
 
-<span class="comment"># Output:</span>
-<span class="comment"># With 20% budget increase:</span>
-<span class="comment"># Expected sales: $12,800,000</span>
-<span class="comment"># 94% CI: [$11,500,000, $14,200,000]</span>
+<span class="comment"># Output:</span><br>
+<span class="comment"># With 20% budget increase:</span><br>
+<span class="comment"># Expected sales: $12,800,000</span><br>
+<span class="comment"># 94% CI: [$11,500,000, $14,200,000]</span><br>
         </div>
 
         <h3>Target Probability Calculation</h3>
 
         <div class="code-example">
-<span class="comment"># Calculate probability of exceeding a target</span>
-target = <span class="number">10_000_000</span>
+<span class="comment"># Calculate probability of exceeding a target</span><br>
+target = <span class="number">10_000_000</span><br>
 
-<span class="comment"># Sum predictions across time to get total for the period</span>
-total_samples = scenario_pred.y_pred_samples.sum(axis=<span class="number">1</span>)  <span class="comment"># Sum across time</span>
+<span class="comment"># Sum predictions across time to get total for the period</span><br>
+total_samples = scenario_pred.y_pred_samples.sum(axis=<span class="number">1</span>)  <span class="comment"># Sum across time</span><br><br>
 
-<span class="comment"># Calculate probability</span>
-prob_exceed = (total_samples > target).mean()
-<span class="function">print</span>(<span class="string">f"Probability of exceeding ${target:,.0f}: {prob_exceed:.1%}"</span>)
-
-<span class="comment"># Output:</span>
-<span class="comment"># Probability of exceeding $10,000,000: 98.2%</span>
-
-<span class="comment"># Get various percentiles for risk assessment</span>
-percentiles = np.percentile(total_samples, [<span class="number">5</span>, <span class="number">25</span>, <span class="number">50</span>, <span class="number">75</span>, <span class="number">95</span>])
-<span class="function">print</span>(<span class="string">f"5th percentile: ${percentiles[0]:,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"Median: ${percentiles[2]:,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"95th percentile: ${percentiles[4]:,.0f}"</span>)
+<span class="comment"># Calculate probability</span><br>
+prob_exceed = (total_samples > target).mean()<br>
+<span class="function">print</span>(<span class="string">f"Probability of exceeding ${target:,.0f}: {prob_exceed:.1%}"</span>)<br>
+<br>
+<span class="comment"># Output:</span><br>
+<span class="comment"># Probability of exceeding $10,000,000: 98.2%</span><br>
+<br>
+<span class="comment"># Get various percentiles for risk assessment</span><br>
+percentiles = np.percentile(total_samples, [<span class="number">5</span>, <span class="number">25</span>, <span class="number">50</span>, <span class="number">75</span>, <span class="number">95</span>])<br>
+<span class="function">print</span>(<span class="string">f"5th percentile: ${percentiles[0]:,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"Median: ${percentiles[2]:,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"95th percentile: ${percentiles[4]:,.0f}"</span>)<br>
         </div>
 
         <h3>Multi-Scenario Comparison</h3>
 
         <div class="code-example">
-<span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
+<span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer<br>
+<br>
 
-analyzer = MMMAnalyzer(fitted_model)
+analyzer = MMMAnalyzer(fitted_model)<br>
+<br>
 
-<span class="comment"># Define scenarios</span>
-scenarios = {
-    <span class="string">'Conservative'</span>: {<span class="string">'TV'</span>: <span class="number">0.8</span>, <span class="string">'Digital'</span>: <span class="number">0.8</span>},
-    <span class="string">'Baseline'</span>: {<span class="string">'TV'</span>: <span class="number">1.0</span>, <span class="string">'Digital'</span>: <span class="number">1.0</span>},
-    <span class="string">'Aggressive'</span>: {<span class="string">'TV'</span>: <span class="number">1.2</span>, <span class="string">'Digital'</span>: <span class="number">1.2</span>}
-}
-
-<span class="comment"># Run and compare</span>
-<span class="keyword">for</span> name, spend_changes <span class="keyword">in</span> scenarios.items():
-    result = analyzer.what_if_scenario(spend_changes=spend_changes)
-    <span class="function">print</span>(<span class="string">f"{name}: ${result.scenario_outcome:,.0f}"</span>)
-
-<span class="comment"># Output:</span>
-<span class="comment"># Conservative: $9,200,000</span>
-<span class="comment"># Baseline: $11,200,000</span>
-<span class="comment"># Aggressive: $12,800,000</span>
+<span class="comment"># Define scenarios</span><br>
+scenarios = {<br>
+    &emsp;<span class="string">'Conservative'</span>: {<span class="string">'TV'</span>: <span class="number">0.8</span>, <span class="string">'Digital'</span>: <span class="number">0.8</span>},<br>
+    &emsp;<span class="string">'Baseline'</span>: {<span class="string">'TV'</span>: <span class="number">1.0</span>, <span class="string">'Digital'</span>: <span class="number">1.0</span>},<br>
+    &emsp;<span class="string">'Aggressive'</span>: {<span class="string">'TV'</span>: <span class="number">1.2</span>, <span class="string">'Digital'</span>: <span class="number">1.2</span>}<br>
+}<br>
+<br>
+<span class="comment"># Run and compare</span><br>
+<span class="keyword">for</span> name, spend_changes <span class="keyword">in</span> scenarios.items():<br>
+    &emsp;result = analyzer.what_if_scenario(spend_changes=spend_changes)<br>
+    &emsp;<span class="function">print</span>(<span class="string">f"{name}: ${result.scenario_outcome:,.0f}"</span>)<br>
+<br>
+<span class="comment"># Output:</span><br>
+<span class="comment"># Conservative: $9,200,000</span><br>
+<span class="comment"># Baseline: $11,200,000</span><br>
+<span class="comment"># Aggressive: $12,800,000</span><br>
         </div>
     </section>
 
