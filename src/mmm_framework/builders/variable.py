@@ -83,6 +83,21 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._saturation = SaturationConfigBuilder().hill().build()
         return self
 
+    def with_logistic_saturation(self) -> Self:
+        """Convenience: set logistic saturation with defaults."""
+        self._saturation = SaturationConfigBuilder().logistic().build()
+        return self
+
+    def with_michaelis_menten_saturation(self) -> Self:
+        """Convenience: set Michaelis-Menten saturation with defaults."""
+        self._saturation = SaturationConfigBuilder().michaelis_menten().build()
+        return self
+
+    def with_tanh_saturation(self) -> Self:
+        """Convenience: set tanh saturation with defaults."""
+        self._saturation = SaturationConfigBuilder().tanh().build()
+        return self
+
     def with_coefficient_prior(self, prior: PriorConfig) -> Self:
         """Set coefficient prior."""
         self._coefficient_prior = prior
