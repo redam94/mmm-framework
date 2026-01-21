@@ -16,7 +16,7 @@ import pytensor.tensor as pt
 
 if TYPE_CHECKING:
     from ..trend_config import TrendConfig
-    from ..data_prep import PreparedData
+    from ...data_preparation import PreparedData
 
 
 @runtime_checkable
