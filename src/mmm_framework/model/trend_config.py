@@ -25,44 +25,23 @@ class TrendType(str, Enum):
 class TrendConfig:
     """Configuration for trend component.
 
-    Parameters
-    ----------
-    type : TrendType
-        Type of trend to use.
-
-    # Piecewise trend parameters (Prophet-style)
-    n_changepoints : int
-        Number of potential changepoints for piecewise trend.
-    changepoint_range : float
-        Proportion of time range to place changepoints (0-1).
-    changepoint_prior_scale : float
-        Prior scale for changepoint magnitudes.
-
-    # Spline trend parameters
-    n_knots : int
-        Number of knots for spline trend.
-    spline_degree : int
-        Degree of B-spline (default 3 = cubic).
-    spline_prior_sigma : float
-        Prior sigma for spline coefficients.
-
-    # Gaussian Process trend parameters
-    gp_lengthscale_prior_mu : float
-        Prior mean for GP lengthscale (in proportion of time range).
-    gp_lengthscale_prior_sigma : float
-        Prior sigma for GP lengthscale.
-    gp_amplitude_prior_sigma : float
-        Prior sigma for GP amplitude (HalfNormal).
-    gp_n_basis : int
-        Number of basis functions for HSGP approximation.
-    gp_c : float
-        Boundary factor for HSGP (typically 1.5-2.0).
-
-    # Linear trend parameters
-    growth_prior_mu : float
-        Prior mean for linear growth rate.
-    growth_prior_sigma : float
-        Prior sigma for linear growth rate.
+    Attributes:
+        type: Type of trend to use.
+        n_changepoints: Number of potential changepoints for piecewise trend
+            (Prophet-style).
+        changepoint_range: Proportion of time range to place changepoints (0-1).
+        changepoint_prior_scale: Prior scale for changepoint magnitudes.
+        n_knots: Number of knots for spline trend.
+        spline_degree: Degree of B-spline (default 3 = cubic).
+        spline_prior_sigma: Prior sigma for spline coefficients.
+        gp_lengthscale_prior_mu: Prior mean for GP lengthscale
+            (in proportion of time range).
+        gp_lengthscale_prior_sigma: Prior sigma for GP lengthscale.
+        gp_amplitude_prior_sigma: Prior sigma for GP amplitude (HalfNormal).
+        gp_n_basis: Number of basis functions for HSGP approximation.
+        gp_c: Boundary factor for HSGP (typically 1.5-2.0).
+        growth_prior_mu: Prior mean for linear growth rate.
+        growth_prior_sigma: Prior sigma for linear growth rate.
     """
 
     type: TrendType = TrendType.LINEAR

@@ -49,17 +49,12 @@ def create_extractor(model: Any, **kwargs) -> DataExtractor:
     """
     Factory function to create appropriate extractor for model type.
 
-    Parameters
-    ----------
-    model : Any
-        MMM model instance
-    **kwargs
-        Additional arguments passed to extractor
+    Args:
+        model: MMM model instance.
+        **kwargs: Additional arguments passed to extractor.
 
-    Returns
-    -------
-    DataExtractor
-        Appropriate extractor for the model type
+    Returns:
+        Appropriate extractor for the model type.
     """
     model_type = type(model).__name__
 

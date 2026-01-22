@@ -96,14 +96,10 @@ class VariableConfigBuilderMixin:
         If PERIOD is not included in the provided dimensions, it will be
         automatically inserted at the beginning.
 
-        Parameters
-        ----------
-        *dims : DimensionType
-            Variable number of dimension types.
+        Args:
+            *dims: Variable number of dimension types.
 
-        Returns
-        -------
-        Self
+        Returns:
             Builder instance for method chaining.
         """
         self._dimensions = list(dims)
