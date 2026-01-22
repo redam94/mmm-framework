@@ -1,8 +1,9 @@
 """
-Builder Patterns for MMM Extension Configurations
+Builder Patterns for MMM Extension Configurations.
 
 Fluent API for constructing complex configurations with sensible defaults.
-Each builder follows the pattern:
+Each builder follows the pattern::
+
     config = Builder().with_x(...).with_y(...).build()
 """
 
@@ -1189,10 +1190,8 @@ class VariableSelectionConfigBuilder:
         spending and sales. These must be controlled for to identify
         causal effects and should NOT be subject to variable selection.
 
-        Parameters
-        ----------
-        *variables : str
-            Variable names to exclude from selection.
+        Args:
+            *variables: Variable names to exclude from selection.
         """
         self._exclude_variables.extend(variables)
         return self
@@ -1207,10 +1206,8 @@ class VariableSelectionConfigBuilder:
 
         All other variables will use standard priors.
 
-        Parameters
-        ----------
-        *variables : str
-            Variable names to apply selection to.
+        Args:
+            *variables: Variable names to apply selection to.
         """
         self._include_only_variables = list(variables)
         return self
@@ -1309,21 +1306,16 @@ def sparse_controls(
     Convenience factory for the most common use case: expecting only
     a few control variables are truly relevant.
 
-    Parameters
-    ----------
-    expected_nonzero : int
-        Prior expectation of relevant controls.
-    *confounders : str
-        Confounder variable names to exclude from selection.
+    Args:
+        expected_nonzero: Prior expectation of relevant controls.
+        *confounders: Confounder variable names to exclude from selection.
 
-    Returns
-    -------
-    VariableSelectionConfig
+    Returns:
         Configuration for regularized horseshoe selection.
 
-    Examples
-    --------
-    >>> config = sparse_controls(3, "distribution", "price")
+    Example::
+
+        config = sparse_controls(3, "distribution", "price")
     """
     return (
         VariableSelectionConfigBuilder()
@@ -1340,16 +1332,11 @@ def selection_with_inclusion_probs(
     """
     Create selection configuration with explicit inclusion probabilities.
 
-    Parameters
-    ----------
-    prior_inclusion : float
-        Prior probability of inclusion for each variable.
-    *confounders : str
-        Confounder variable names to exclude from selection.
+    Args:
+        prior_inclusion: Prior probability of inclusion for each variable.
+        *confounders: Confounder variable names to exclude from selection.
 
-    Returns
-    -------
-    VariableSelectionConfig
+    Returns:
         Configuration for spike-slab selection.
     """
     return (
@@ -1369,16 +1356,11 @@ def dense_controls(
 
     Use when expecting many controls have small effects.
 
-    Parameters
-    ----------
-    regularization : float
-        Regularization strength.
-    *confounders : str
-        Confounder variable names to exclude from selection.
+    Args:
+        regularization: Regularization strength.
+        *confounders: Confounder variable names to exclude from selection.
 
-    Returns
-    -------
-    VariableSelectionConfig
+    Returns:
         Configuration for Bayesian LASSO selection.
     """
     return (

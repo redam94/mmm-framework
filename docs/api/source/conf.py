@@ -134,3 +134,14 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Templates path ----------------------------------------------------------
 templates_path = ["_templates"]
+
+# -- Suppress warnings from docstrings ---------------------------------------
+# Some docstrings have RST formatting issues that are not critical
+suppress_warnings = [
+    "autodoc.import_object",
+    "ref.python",
+]
+
+# Ignore duplicate object warnings (from module-level vs class-level docs)
+# These occur when documenting both the module and its contents
+nitpicky = False

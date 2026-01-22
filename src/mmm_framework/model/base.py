@@ -639,24 +639,15 @@ class BayesianMMM:
         """
         Fit the model using MCMC.
 
-        Parameters
-        ----------
-        draws : int, optional
-            Number of posterior draws per chain. Default from config.
-        tune : int, optional
-            Number of tuning samples. Default from config.
-        chains : int, optional
-            Number of MCMC chains. Default from config.
-        target_accept : float, optional
-            Target acceptance rate for NUTS. Default 0.9.
-        random_seed : int, optional
-            Random seed for reproducibility.
-        **kwargs
-            Additional arguments passed to pm.sample().
+        Args:
+            draws: Number of posterior draws per chain. Default from config.
+            tune: Number of tuning samples. Default from config.
+            chains: Number of MCMC chains. Default from config.
+            target_accept: Target acceptance rate for NUTS. Default 0.9.
+            random_seed: Random seed for reproducibility.
+            **kwargs: Additional arguments passed to pm.sample().
 
-        Returns
-        -------
-        MMMResults
+        Returns:
             Fitted model results with diagnostics.
         """
         draws = draws or self.model_config.n_draws

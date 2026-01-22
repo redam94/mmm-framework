@@ -134,10 +134,9 @@ def create_piecewise_trend_matrix(
     Returns
     -------
     tuple[NDArray[np.floating], NDArray[np.floating]]
-        (s, A) where:
-        - s: array of changepoint locations, shape (n_changepoints,)
-        - A: design matrix, shape (len(t), n_changepoints)
-          A[i, j] = 1 if t[i] >= s[j], else 0
+        A tuple (s, A) where s is the array of changepoint locations with
+        shape (n_changepoints,), and A is the design matrix with shape
+        (len(t), n_changepoints). A[i, j] = 1 if t[i] >= s[j], else 0.
 
     Examples
     --------

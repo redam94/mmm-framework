@@ -18,41 +18,37 @@ def react_flow_to_dag_spec(
     """
     Convert React Flow node/edge format to DAGSpec.
 
-    React Flow format (from frontend):
-    {
-        "nodes": [
-            {
-                "id": "node_abc123",
-                "type": "default",
-                "position": {"x": 100, "y": 200},
-                "data": {
-                    "label": "TV Spend",
-                    "type": "media",
-                    "variableName": "tv_spend",
-                    "config": {"adstockType": "geometric", ...}
+    React Flow format (from frontend)::
+
+        {
+            "nodes": [
+                {
+                    "id": "node_abc123",
+                    "type": "default",
+                    "position": {"x": 100, "y": 200},
+                    "data": {
+                        "label": "TV Spend",
+                        "type": "media",
+                        "variableName": "tv_spend",
+                        "config": {"adstockType": "geometric", ...}
+                    }
                 }
-            }
-        ],
-        "edges": [
-            {
-                "id": "e1",
-                "source": "node_abc",
-                "target": "node_xyz",
-                "data": {"edgeType": "direct"}
-            }
-        ]
-    }
+            ],
+            "edges": [
+                {
+                    "id": "e1",
+                    "source": "node_abc",
+                    "target": "node_xyz",
+                    "data": {"edgeType": "direct"}
+                }
+            ]
+        }
 
-    Parameters
-    ----------
-    nodes : list[dict]
-        List of React Flow node objects.
-    edges : list[dict]
-        List of React Flow edge objects.
+    Args:
+        nodes: List of React Flow node objects.
+        edges: List of React Flow edge objects.
 
-    Returns
-    -------
-    DAGSpec
+    Returns:
         Converted DAG specification.
     """
     dag_nodes = []

@@ -95,27 +95,17 @@ class BaseExtendedMMM:
         """
         Fit the model using MCMC.
 
-        Parameters
-        ----------
-        draws : int
-            Number of posterior draws per chain
-        tune : int
-            Number of tuning iterations
-        chains : int
-            Number of MCMC chains
-        target_accept : float
-            Target acceptance rate for NUTS
-        random_seed : int | None
-            Random seed for reproducibility
-        nuts_sampler : str
-            NUTS sampler to use ("pymc", "numpyro", "nutpie")
-        **kwargs
-            Additional arguments passed to pm.sample
+        Args:
+            draws: Number of posterior draws per chain.
+            tune: Number of tuning iterations.
+            chains: Number of MCMC chains.
+            target_accept: Target acceptance rate for NUTS.
+            random_seed: Random seed for reproducibility.
+            nuts_sampler: NUTS sampler to use ("pymc", "numpyro", "nutpie").
+            **kwargs: Additional arguments passed to pm.sample.
 
-        Returns
-        -------
-        ModelResults
-            Container with trace and model
+        Returns:
+            Container with trace and model.
         """
         with self.model:
             self._trace = pm.sample(

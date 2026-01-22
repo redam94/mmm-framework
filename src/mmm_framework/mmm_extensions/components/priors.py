@@ -19,19 +19,13 @@ def create_adstock_prior(
     """
     Create adstock decay prior.
 
-    Parameters
-    ----------
-    name : str
-        Parameter name
-    prior_type : str
-        "beta" or "uniform"
-    **kwargs
-        Additional prior parameters
+    Args:
+        name: Parameter name.
+        prior_type: Prior type, either "beta" or "uniform".
+        **kwargs: Additional prior parameters.
 
-    Returns
-    -------
-    TensorVariable
-        Prior random variable
+    Returns:
+        Prior random variable.
     """
     if prior_type == "beta":
         alpha = kwargs.get("alpha", 2)
@@ -51,19 +45,13 @@ def create_saturation_prior(
     """
     Create saturation parameter priors.
 
-    Parameters
-    ----------
-    name : str
-        Base parameter name
-    saturation_type : str
-        "logistic" or "hill"
-    **kwargs
-        Prior hyperparameters
+    Args:
+        name: Base parameter name.
+        saturation_type: Saturation type, either "logistic" or "hill".
+        **kwargs: Prior hyperparameters.
 
-    Returns
-    -------
-    dict
-        Dictionary of prior random variables
+    Returns:
+        Dictionary of prior random variables.
     """
     if saturation_type == "logistic":
         lam_alpha = kwargs.get("lam_alpha", 3)
