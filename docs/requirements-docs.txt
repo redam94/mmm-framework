@@ -1,0 +1,20 @@
+# Documentation build dependencies
+# Note: Heavy ML dependencies (PyMC, NumPyro, etc.) are mocked in conf.py
+
+# Sphinx core
+sphinx>=7.0,<8.0
+
+# Theme
+sphinx-rtd-theme>=2.0
+
+# Extensions
+sphinx-autodoc-typehints>=2.0
+sphinx-copybutton>=0.5
+myst-parser>=3.0
+
+# Required for imports during autodoc (lightweight deps only)
+pydantic>=2.0
+pandas>=2.0
+numpy>=1.26,<2.0
+loguru>=0.7
+cloudpickle>=3.0

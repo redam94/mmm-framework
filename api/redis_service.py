@@ -199,7 +199,7 @@ class RedisService:
         """Check if any workers are active."""
         r = await self.connect()
         # ARQ stores worker info in redis
-        workers = await r.keys("arq:worker:*")
+        workers = await r.keys("*arq:worker*")
         return len(workers) > 0
 
     async def get_queue_stats(self) -> dict[str, Any]:

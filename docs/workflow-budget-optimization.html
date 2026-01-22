@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Optimization | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #c9a067;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf8;
+            --color-bg-alt: #f5f7f2;
+            --color-surface: #ffffff;
+            --color-border: #e0e5dc;
+            --shadow-sm: 0 1px 3px rgba(45,58,45,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(45,58,45,0.15);
+            --transition-smooth: all 0.3s ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+            font-size: 17px;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+        /* Navigation */
+        .back-nav {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        .back-nav:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .page-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+        }
+        .page-header .subtitle {
+            font-size: 1.15rem;
+            color: var(--color-text-muted);
+        }
+        .page-header .question-badge {
+            display: inline-block;
+            background: var(--color-warning);
+            color: white;
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        /* Section styling */
+        .section { margin-bottom: 3rem; }
+        .section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+        .section h3 {
+            font-size: 1.3rem;
+            margin: 2rem 0 1rem;
+            color: var(--color-primary-dark);
+        }
+        .section h4 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--color-text);
+        }
+        .section p { margin-bottom: 1rem; }
+
+        /* Analogy box */
+        .analogy-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.12) 0%, rgba(201,160,103,0.04) 100%);
+            border-left: 4px solid var(--color-warning);
+            padding: 1.5rem 1.75rem;
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        .analogy-box::before {
+            content: "Think of it this way";
+            position: absolute;
+            top: -10px;
+            left: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-warning);
+            background: var(--color-bg);
+            padding: 0 0.5rem;
+        }
+        .analogy-box h4 { color: var(--color-accent-dark); margin-top: 0; margin-bottom: 0.5rem; font-size: 1rem; }
+        .analogy-box p:last-child { margin-bottom: 0; }
+
+        /* Why box */
+        .why-box {
+            background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%);
+            border: 1px solid rgba(90,124,101,0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .why-box h4 {
+            color: var(--color-primary-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        .why-box p:last-child { margin-bottom: 0; }
+
+        /* Warning box */
+        .warning-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.1) 0%, rgba(201,112,103,0.05) 100%);
+            border: 1px solid rgba(201,112,103,0.3);
+            border-left: 5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .warning-box h4 { color: var(--color-danger); margin-top: 0; margin-bottom: 0.5rem; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        /* Success box */
+        .success-box {
+            background: linear-gradient(135deg, rgba(103,201,154,0.1) 0%, rgba(103,201,154,0.05) 100%);
+            border: 1px solid rgba(103,201,154,0.4);
+            border-left: 5px solid var(--color-success);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .success-box h4 { color: #3d8b5a; margin-top: 0; margin-bottom: 0.5rem; }
+        .success-box p:last-child { margin-bottom: 0; }
+
+        /* Chart container */
+        .chart-container {
+            width: 100%;
+            height: 350px;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface);
+        }
+        .chart-container.tall { height: 420px; }
+        .chart-container.short { height: 280px; }
+
+        .chart-explanation {
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-top: -0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .chart-explanation strong { color: var(--color-text); }
+
+        /* Interactive demo */
+        .interactive-demo {
+            background: var(--color-surface);
+            border: 2px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .interactive-demo h4 { margin-top: 0; color: var(--color-primary-dark); }
+
+        /* Control panel */
+        .control-panel {
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin: 1rem 0;
+        }
+        .control-panel h4 { margin-top: 0; margin-bottom: 1rem; font-size: 1rem; }
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .control-row:last-child { margin-bottom: 0; }
+        .control-row label { min-width: 140px; font-weight: 500; font-size: 0.95rem; }
+        .control-row select {
+            flex: 1;
+            max-width: 250px;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 0.95rem;
+            background: var(--color-surface);
+            cursor: pointer;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--color-border);
+            appearance: none;
+            cursor: pointer;
+        }
+        .control-row input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+        }
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            background: var(--color-surface);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+        }
+
+        /* Budget slider group */
+        .budget-sliders {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .budget-slider-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+        }
+        .budget-slider-item .channel-icon { font-size: 1.25rem; }
+        .budget-slider-item label { min-width: 80px; font-weight: 500; }
+        .budget-slider-item input[type="range"] { flex: 1; }
+        .budget-slider-item .value-display { min-width: 45px; }
+
+        /* Scenario comparison */
+        .scenario-comparison {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .scenario-card {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .scenario-card:hover { border-color: var(--color-primary); }
+        .scenario-card.selected { border-color: var(--color-primary); background: linear-gradient(135deg, rgba(90,124,101,0.08) 0%, var(--color-surface) 100%); }
+        .scenario-card .scenario-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .scenario-card h5 { font-size: 1rem; margin: 0 0 0.5rem 0; }
+        .scenario-card p { font-size: 0.85rem; color: var(--color-text-muted); margin: 0; }
+        .scenario-card .scenario-outcome {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-top: 0.75rem;
+        }
+        .scenario-card .scenario-outcome.positive { color: var(--color-success); }
+        .scenario-card .scenario-outcome.negative { color: var(--color-danger); }
+
+        /* Metrics row */
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .metric-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .metric-card .metric-label {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+        .metric-card .metric-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .metric-card .metric-value.positive { color: var(--color-success); }
+        .metric-card .metric-value.negative { color: var(--color-danger); }
+        .metric-card .metric-value.neutral { color: var(--color-text); }
+
+        /* Position indicator */
+        .position-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .position-indicator.early { background: rgba(103,201,154,0.2); color: #3d8b5a; }
+        .position-indicator.mid { background: rgba(201,160,103,0.2); color: #8a6d2d; }
+        .position-indicator.saturated { background: rgba(201,112,103,0.2); color: #a85550; }
+
+        /* Data table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+        .data-table th, .data-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .data-table th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            color: var(--color-text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .data-table .mono { font-family: 'JetBrains Mono', monospace; }
+        .data-table .positive { color: #3d8b5a; }
+        .data-table .negative { color: var(--color-danger); }
+        .data-table .warning { color: #8a6d2d; }
+        .data-table tr:hover { background: var(--color-bg-alt); }
+
+        /* Code example */
+        .code-example {
+            background: #1e2a1e;
+            color: #a8c99a;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            line-height: 1.6;
+        }
+        .code-example .comment { color: #6a8d6a; }
+        .code-example .keyword { color: #c792ea; }
+        .code-example .string { color: #c3e88d; }
+        .code-example .function { color: #82aaff; }
+        .code-example .number { color: #f78c6c; }
+
+        /* Question navigation */
+        .question-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 3rem 0;
+            padding-top: 2rem;
+            border-top: 1px solid var(--color-border);
+        }
+        .question-nav-card {
+            display: block;
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition-smooth);
+        }
+        .question-nav-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .question-nav-card.current {
+            border-color: var(--color-warning);
+            background: linear-gradient(135deg, rgba(201,160,103,0.08) 0%, var(--color-surface) 100%);
+        }
+        .question-nav-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .question-nav-card h5 { font-size: 0.95rem; margin: 0 0 0.25rem 0; }
+        .question-nav-card p { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .page-header h1 { font-size: 2rem; }
+            .control-row { flex-direction: column; align-items: flex-start; }
+            .control-row label { min-width: auto; }
+            .question-nav { grid-template-columns: 1fr; }
+            .budget-sliders { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="scientific-workflow-demo.html" class="back-nav"><span>&larr;</span> Back to Workflow</a>
+
+    <header class="page-header">
+        <span class="question-badge">Question Type 2</span>
+        <h1>Smart Budget Allocation</h1>
+        <p class="subtitle">Finding where each dollar has the biggest impact</p>
+    </header>
+
+    <!-- SECTION 1: What We're Actually Asking -->
+    <section class="section">
+        <h2>What We're Actually Asking</h2>
+
+        <p>
+            Budget allocation isn't about finding the "best" channel and giving it all your money.
+            It's about finding the right <strong>balance</strong>&mdash;the mix that maximizes total
+            return given the unique characteristics of each channel.
+        </p>
+
+        <p>
+            The key insight: every channel eventually hits <strong>diminishing returns</strong>.
+            The first million dollars you spend on TV might be highly effective, but the tenth
+            million is much less so. Smart allocation means finding where each additional dollar
+            has the biggest impact.
+        </p>
+
+        <div class="analogy-box">
+            <h4>The Garden Analogy</h4>
+            <p>
+                Imagine you have a limited water supply for your garden. Some plants are already
+                well-watered&mdash;giving them more won't help much because they're <strong>saturated</strong>.
+                Other plants are thirsty and would flourish with extra water.
+            </p>
+            <p>
+                Smart gardening means identifying the thirsty plants. Budget optimization works the
+                same way: find the channels that still have room to grow.
+            </p>
+        </div>
+    </section>
+
+    <!-- SECTION 2: Core Concepts -->
+    <section class="section">
+        <h2>The Core Concepts</h2>
+
+        <h3>2.1 Diminishing Returns</h3>
+
+        <p>
+            <strong>Diminishing returns</strong> means each additional dollar of spend produces less
+            incremental outcome than the previous dollar. This is nearly universal in marketing:
+        </p>
+
+        <ul>
+            <li>The first TV ad reaches new people; the tenth reaches mostly the same people again</li>
+            <li>The first search keyword captures high-intent buyers; more keywords capture lower intent</li>
+            <li>The first impression builds awareness; repeated impressions add less</li>
+        </ul>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Watch Diminishing Returns in Action</h4>
+            <p>Drag the slider to see how effectiveness changes as spend increases.</p>
+
+            <div class="control-panel">
+                <div class="control-row">
+                    <label>Spend level:</label>
+                    <input type="range" id="spendSlider" min="0" max="100" value="50" oninput="updateDiminishingReturns()">
+                    <span class="value-display" id="spendValue">$50K</span>
+                </div>
+            </div>
+
+            <div class="chart-container" id="diminishingChart"></div>
+
+            <div class="metrics-row">
+                <div class="metric-card">
+                    <div class="metric-label">Total Response</div>
+                    <div class="metric-value neutral" id="totalResponse">$85K</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Average ROI</div>
+                    <div class="metric-value positive" id="avgRoi">1.70</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Marginal ROI</div>
+                    <div class="metric-value neutral" id="marginalRoi">0.95</div>
+                </div>
+            </div>
+        </div>
+
+        <h3>2.2 Saturation Curves</h3>
+
+        <p>
+            A <strong>saturation curve</strong> shows the relationship between spend and response
+            for a channel. The curve's shape tells you how quickly diminishing returns kick in.
+        </p>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Compare Channel Saturation Curves</h4>
+            <p>
+                Each channel has a different curve shape. Some saturate quickly (steep early, flat later);
+                others have more linear response. The vertical markers show current spend levels.
+            </p>
+
+            <div class="chart-container tall" id="saturationChart"></div>
+            <div class="chart-explanation">
+                <strong>Reading this chart:</strong> X-axis is spend, Y-axis is response (incremental sales).
+                The steeper the curve, the more effective at that spend level. Flattening = diminishing returns.
+                Vertical dashed lines show current spend for each channel.
+            </div>
+        </div>
+
+        <h3>2.3 Marginal vs. Average ROI</h3>
+
+        <p>
+            This is the most important distinction for budget decisions:
+        </p>
+
+        <div class="why-box">
+            <h4>Average ROI vs. Marginal ROI</h4>
+            <p>
+                <strong>Average ROI</strong> = Total return &divide; Total spend. "For every dollar I've
+                spent so far, I got back $X on average."
+            </p>
+            <p>
+                <strong>Marginal ROI</strong> = Return from the <em>next</em> dollar. "If I spend one more
+                dollar, how much will I get back?"
+            </p>
+            <p style="margin-bottom: 0;">
+                <strong>Key insight:</strong> A channel can have high average ROI but low marginal ROI if
+                it's already saturated. For budget decisions, marginal ROI is what matters.
+            </p>
+        </div>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Average vs. Marginal ROI</h4>
+
+            <div class="control-panel">
+                <div class="control-row">
+                    <label>Current spend:</label>
+                    <input type="range" id="roiSpendSlider" min="10" max="100" value="60" oninput="updateRoiComparison()">
+                    <span class="value-display" id="roiSpendValue">$60K</span>
+                </div>
+            </div>
+
+            <div class="chart-container" id="roiComparisonChart"></div>
+            <div class="chart-explanation" id="roiExplanation">
+                At $60K spend: Average ROI is 1.82, but Marginal ROI is only 0.75. This means the channel
+                is profitable overall, but the <em>next</em> dollar would lose money. Time to stop growing!
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: Finding Opportunities -->
+    <section class="section">
+        <h2>Finding Your Opportunities</h2>
+
+        <h3>3.1 Where Are You on Each Curve?</h3>
+
+        <p>
+            Understanding your position on each channel's saturation curve reveals opportunities.
+            Channels early on their curves have growth potential; those late are saturated.
+        </p>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>Current Spend</th>
+                    <th>Saturation Level</th>
+                    <th>Position</th>
+                    <th>Marginal ROI</th>
+                    <th>Recommendation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>TV</strong></td>
+                    <td class="mono">$2.5M</td>
+                    <td class="mono">72%</td>
+                    <td><span class="position-indicator mid">Mid-curve</span></td>
+                    <td class="mono">1.15</td>
+                    <td class="warning">Limited headroom</td>
+                </tr>
+                <tr>
+                    <td><strong>Paid Search</strong></td>
+                    <td class="mono">$1.2M</td>
+                    <td class="mono">85%</td>
+                    <td><span class="position-indicator saturated">Near saturation</span></td>
+                    <td class="mono">0.65</td>
+                    <td class="negative">Consider reducing</td>
+                </tr>
+                <tr>
+                    <td><strong>Social</strong></td>
+                    <td class="mono">$0.8M</td>
+                    <td class="mono">35%</td>
+                    <td><span class="position-indicator early">Early curve</span></td>
+                    <td class="mono">2.10</td>
+                    <td class="positive">Growth opportunity</td>
+                </tr>
+                <tr>
+                    <td><strong>Display</strong></td>
+                    <td class="mono">$0.5M</td>
+                    <td class="mono">60%</td>
+                    <td><span class="position-indicator mid">Mid-curve</span></td>
+                    <td class="mono">0.85</td>
+                    <td class="warning">Near break-even</td>
+                </tr>
+                <tr>
+                    <td><strong>Radio</strong></td>
+                    <td class="mono">$0.3M</td>
+                    <td class="mono">25%</td>
+                    <td><span class="position-indicator early">Early curve</span></td>
+                    <td class="mono">1.85</td>
+                    <td class="positive">Growth opportunity</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>3.2 Marginal ROI Comparison</h3>
+
+        <p>
+            Comparing marginal ROI across channels shows where the <em>next</em> dollar should go.
+            This is different from which channel has historically performed best!
+        </p>
+
+        <div class="chart-container" id="marginalRoiChart"></div>
+        <div class="chart-explanation">
+            <strong>Reading this chart:</strong> Each bar shows the expected return from spending one more
+            dollar on that channel. The red dashed line is break-even (ROI = 1). Channels above the line
+            are still worth investing in; those below are not.
+        </div>
+    </section>
+
+    <!-- SECTION 4: Scenario Planning -->
+    <section class="section">
+        <h2>Scenario Planning</h2>
+
+        <h3>4.1 Budget Scenario Planner</h3>
+
+        <p>
+            Use the sliders below to explore different budget allocations. The model predicts
+            outcomes for each scenario in real-time.
+        </p>
+
+        <div class="interactive-demo">
+            <h4>Build Your Scenario</h4>
+
+            <div class="budget-sliders">
+                <div class="budget-slider-item">
+                    <span class="channel-icon">&#x1F4FA;</span>
+                    <label>TV</label>
+                    <input type="range" id="tvBudget" min="50" max="150" value="100" oninput="updateBudgetScenario()">
+                    <span class="value-display" id="tvBudgetVal">100%</span>
+                </div>
+                <div class="budget-slider-item">
+                    <span class="channel-icon">&#x1F50D;</span>
+                    <label>Search</label>
+                    <input type="range" id="searchBudget" min="50" max="150" value="100" oninput="updateBudgetScenario()">
+                    <span class="value-display" id="searchBudgetVal">100%</span>
+                </div>
+                <div class="budget-slider-item">
+                    <span class="channel-icon">&#x1F4F1;</span>
+                    <label>Social</label>
+                    <input type="range" id="socialBudget" min="50" max="150" value="100" oninput="updateBudgetScenario()">
+                    <span class="value-display" id="socialBudgetVal">100%</span>
+                </div>
+                <div class="budget-slider-item">
+                    <span class="channel-icon">&#x1F5BC;</span>
+                    <label>Display</label>
+                    <input type="range" id="displayBudget" min="50" max="150" value="100" oninput="updateBudgetScenario()">
+                    <span class="value-display" id="displayBudgetVal">100%</span>
+                </div>
+                <div class="budget-slider-item">
+                    <span class="channel-icon">&#x1F4FB;</span>
+                    <label>Radio</label>
+                    <input type="range" id="radioBudget" min="50" max="150" value="100" oninput="updateBudgetScenario()">
+                    <span class="value-display" id="radioBudgetVal">100%</span>
+                </div>
+            </div>
+
+            <div class="metrics-row">
+                <div class="metric-card">
+                    <div class="metric-label">Total Spend Change</div>
+                    <div class="metric-value neutral" id="totalSpendChange">+0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Predicted Outcome Change</div>
+                    <div class="metric-value positive" id="outcomeChange">+0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Incremental ROI</div>
+                    <div class="metric-value neutral" id="incrementalRoi">-</div>
+                </div>
+            </div>
+        </div>
+
+        <h3>4.2 Pre-Built Scenarios</h3>
+
+        <p>Click a scenario to see its impact:</p>
+
+        <div class="scenario-comparison">
+            <div class="scenario-card" onclick="applyScenario('conservative')">
+                <div class="scenario-icon">&#x1F6E1;</div>
+                <h5>Conservative</h5>
+                <p>Reduce all channels by 20%</p>
+                <div class="scenario-outcome negative" id="conservativeOutcome">-18%</div>
+            </div>
+            <div class="scenario-card selected" onclick="applyScenario('baseline')">
+                <div class="scenario-icon">&#x2696;</div>
+                <h5>Baseline</h5>
+                <p>Current allocation</p>
+                <div class="scenario-outcome neutral" id="baselineOutcome">+0%</div>
+            </div>
+            <div class="scenario-card" onclick="applyScenario('optimized')">
+                <div class="scenario-icon">&#x1F4C8;</div>
+                <h5>Optimized</h5>
+                <p>Model-recommended mix</p>
+                <div class="scenario-outcome positive" id="optimizedOutcome">+12%</div>
+            </div>
+            <div class="scenario-card" onclick="applyScenario('aggressive')">
+                <div class="scenario-icon">&#x1F680;</div>
+                <h5>Aggressive</h5>
+                <p>Increase high-ROI channels</p>
+                <div class="scenario-outcome positive" id="aggressiveOutcome">+8%</div>
+            </div>
+        </div>
+
+        <div class="chart-container" id="scenarioComparisonChart"></div>
+    </section>
+
+    <!-- SECTION 5: Practical Guidance -->
+    <section class="section">
+        <h2>Practical Guidance</h2>
+
+        <div class="warning-box">
+            <h4>Common Pitfalls</h4>
+            <ul>
+                <li><strong>Optimizing point estimates:</strong> The "optimal" mix has uncertainty. Don't over-rotate on small differences.</li>
+                <li><strong>Ignoring implementation constraints:</strong> Can you actually shift budget that fast? Consider operational realities.</li>
+                <li><strong>Assuming stationarity:</strong> Saturation curves can shift over time as markets change.</li>
+                <li><strong>Forgetting long-term effects:</strong> Brand-building channels may have delayed returns not captured in short-term data.</li>
+            </ul>
+        </div>
+
+        <div class="success-box">
+            <h4>Best Practices</h4>
+            <ul>
+                <li>Make changes gradually (10-20% shifts) and measure impact before bigger moves</li>
+                <li>Use scenarios to explore the range of outcomes, not just the "optimal" point</li>
+                <li>Validate with experiments when possible, especially for large reallocation</li>
+                <li>Update saturation curves quarterly as market conditions change</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 6: Implementation -->
+    <section class="section">
+        <h2>Implementation in MMM Framework</h2>
+
+        <h3>Computing Marginal Contributions</h3>
+
+        <div class="code-example">
+<span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
+
+analyzer = MMMAnalyzer(fitted_model)
+
+<span class="comment"># Compute marginal returns for 10% spend increase</span>
+marginal_df = analyzer.compute_marginal_contributions(
+    spend_increase_pct=<span class="number">10.0</span>
+)
+
+<span class="comment"># Output shows which channel benefits most from extra spend:</span>
+<span class="comment"># Channel     Current_Spend   Increase   Marginal_Contribution   Marginal_ROAS</span>
+<span class="comment"># Social      $800K           $80K       $168K                   2.10</span>
+<span class="comment"># Radio       $300K           $30K       $55.5K                  1.85</span>
+<span class="comment"># TV          $2.5M           $250K      $287.5K                 1.15</span>
+<span class="comment"># Display     $500K           $50K       $42.5K                  0.85</span>
+<span class="comment"># Search      $1.2M           $120K      $78K                    0.65</span>
+        </div>
+
+        <h3>Running What-If Scenarios</h3>
+
+        <div class="code-example">
+<span class="comment"># Test a specific budget reallocation</span>
+scenario_result = analyzer.what_if_scenario(
+    spend_changes={
+        <span class="string">'TV'</span>: <span class="number">1.0</span>,      <span class="comment"># Keep TV same</span>
+        <span class="string">'Search'</span>: <span class="number">0.8</span>,  <span class="comment"># Reduce Search by 20%</span>
+        <span class="string">'Social'</span>: <span class="number">1.3</span>,  <span class="comment"># Increase Social by 30%</span>
+        <span class="string">'Display'</span>: <span class="number">0.9</span>, <span class="comment"># Reduce Display by 10%</span>
+        <span class="string">'Radio'</span>: <span class="number">1.2</span>    <span class="comment"># Increase Radio by 20%</span>
+    }
+)
+
+<span class="function">print</span>(<span class="string">f"Baseline outcome: ${scenario_result.baseline_outcome:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"Scenario outcome: ${scenario_result.scenario_outcome:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"Change: {scenario_result.outcome_change_pct:+.1%}"</span>)
+
+<span class="comment"># Output:</span>
+<span class="comment"># Baseline outcome: $18,400,000</span>
+<span class="comment"># Scenario outcome: $19,125,000</span>
+<span class="comment"># Change: +3.9%</span>
+        </div>
+
+        <h3>Computing Saturation Curves</h3>
+
+        <div class="code-example">
+<span class="keyword">from</span> mmm_framework.reporting.helpers <span class="keyword">import</span> compute_saturation_curves_with_uncertainty
+
+<span class="comment"># Get saturation curves for all channels</span>
+curves = compute_saturation_curves_with_uncertainty(
+    model=fitted_model,
+    n_points=<span class="number">100</span>,
+    spend_multiplier=<span class="number">1.5</span>  <span class="comment"># Explore up to 150% of current spend</span>
+)
+
+<span class="comment"># Each curve includes:</span>
+<span class="comment"># - spend_levels: Array of spend values</span>
+<span class="comment"># - response_mean: Expected response at each spend level</span>
+<span class="comment"># - response_hdi_low/high: Uncertainty bands</span>
+<span class="comment"># - saturation_level: Current % of maximum response</span>
+<span class="comment"># - marginal_response_at_current: Marginal ROI at current spend</span>
+
+<span class="keyword">for</span> channel, curve <span class="keyword">in</span> curves.items():
+    <span class="function">print</span>(<span class="string">f"{channel}: {curve.saturation_level:.0%} saturated"</span>)
+    <span class="function">print</span>(<span class="string">f"  Marginal response at current: {curve.marginal_response_at_current:.3f}"</span>)
+        </div>
+    </section>
+
+    <!-- Question Navigation -->
+    <nav class="question-nav">
+        <a href="workflow-channel-effectiveness.html" class="question-nav-card">
+            <div class="icon">&#x1F4CA;</div>
+            <h5>Channel Effectiveness</h5>
+            <p>Which channels work?</p>
+        </a>
+        <div class="question-nav-card current">
+            <div class="icon">&#x1F4B0;</div>
+            <h5>Budget Allocation</h5>
+            <p>How to split budget?</p>
+        </div>
+        <a href="workflow-forecasting.html" class="question-nav-card">
+            <div class="icon">&#x1F52E;</div>
+            <h5>Forecasting</h5>
+            <p>What to expect?</p>
+        </a>
+    </nav>
+</div>
+
+<script>
+// Chart configuration
+const cfg = { responsive: true, displayModeBar: false };
+const colors = {
+    primary: '#5a7c65',
+    primaryLight: '#8fa86a',
+    primaryDark: '#3d5a47',
+    accent: '#6a8fa8',
+    warning: '#c9a067',
+    danger: '#c97067',
+    success: '#67c99a',
+    text: '#2d3a2d',
+    grid: 'rgba(90,124,101,0.1)'
+};
+const layout_base = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+    margin: { t: 30, r: 30, b: 50, l: 60 }
+};
+
+// Channel parameters (saturation curve parameters)
+const channelParams = {
+    tv: { name: 'TV', k: 0.8, maxResponse: 5.0, currentSpend: 2.5, color: colors.primary },
+    search: { name: 'Search', k: 1.5, maxResponse: 2.5, currentSpend: 1.2, color: colors.accent },
+    social: { name: 'Social', k: 0.5, maxResponse: 2.8, currentSpend: 0.8, color: colors.warning },
+    display: { name: 'Display', k: 0.9, maxResponse: 1.2, currentSpend: 0.5, color: colors.danger },
+    radio: { name: 'Radio', k: 0.4, maxResponse: 1.5, currentSpend: 0.3, color: '#9b7fb8' }
+};
+
+// Saturation function (Michaelis-Menten style)
+function saturationResponse(spend, k, maxResponse) {
+    return maxResponse * spend / (k + spend);
+}
+
+function marginalResponse(spend, k, maxResponse) {
+    return maxResponse * k / Math.pow(k + spend, 2);
+}
+
+// Initialize charts on load
+document.addEventListener('DOMContentLoaded', function() {
+    updateDiminishingReturns();
+    initSaturationChart();
+    updateRoiComparison();
+    initMarginalRoiChart();
+    updateBudgetScenario();
+    initScenarioChart();
+});
+
+// Diminishing returns demo
+function updateDiminishingReturns() {
+    const spend = parseFloat(document.getElementById('spendSlider').value);
+    document.getElementById('spendValue').textContent = '$' + spend + 'K';
+
+    const k = 30;
+    const maxR = 150;
+    const response = saturationResponse(spend, k, maxR);
+    const marginal = marginalResponse(spend, k, maxR) * 100; // Scale for display
+    const avgRoi = response / spend;
+
+    document.getElementById('totalResponse').textContent = '$' + response.toFixed(0) + 'K';
+    document.getElementById('avgRoi').textContent = avgRoi.toFixed(2);
+    document.getElementById('marginalRoi').textContent = marginal.toFixed(2);
+
+    // Update colors
+    updateMetricColor('avgRoi', avgRoi, 1);
+    updateMetricColor('marginalRoi', marginal, 1);
+
+    // Draw chart
+    const x = Array.from({length: 101}, (_, i) => i);
+    const y = x.map(s => saturationResponse(s, k, maxR));
+
+    const traces = [
+        {
+            x: x,
+            y: y,
+            mode: 'lines',
+            line: { color: colors.primary, width: 3 },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(90,124,101,0.15)',
+            name: 'Response'
+        },
+        {
+            x: [spend],
+            y: [response],
+            mode: 'markers',
+            marker: { color: colors.danger, size: 14, symbol: 'circle' },
+            name: 'Current'
+        },
+        {
+            x: [0, spend],
+            y: [0, response],
+            mode: 'lines',
+            line: { color: colors.accent, width: 2, dash: 'dash' },
+            name: 'Average slope'
+        }
+    ];
+
+    Plotly.newPlot('diminishingChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'Spend ($K)', gridcolor: colors.grid },
+        yaxis: { title: 'Response ($K)', gridcolor: colors.grid },
+        legend: { orientation: 'h', y: 1.1 },
+        showlegend: false
+    }, cfg);
+}
+
+function updateMetricColor(id, value, threshold) {
+    const el = document.getElementById(id);
+    el.classList.remove('positive', 'negative', 'neutral');
+    if (value > threshold * 1.1) el.classList.add('positive');
+    else if (value < threshold * 0.9) el.classList.add('negative');
+    else el.classList.add('neutral');
+}
+
+// Saturation curves
+function initSaturationChart() {
+    const maxSpend = 4;
+    const x = Array.from({length: 100}, (_, i) => i * maxSpend / 99);
+    const traces = [];
+
+    Object.values(channelParams).forEach(ch => {
+        const y = x.map(s => saturationResponse(s, ch.k, ch.maxResponse));
+        traces.push({
+            x: x,
+            y: y,
+            mode: 'lines',
+            line: { color: ch.color, width: 2.5 },
+            name: ch.name
+        });
+        // Current spend marker
+        traces.push({
+            x: [ch.currentSpend, ch.currentSpend],
+            y: [0, saturationResponse(ch.currentSpend, ch.k, ch.maxResponse)],
+            mode: 'lines',
+            line: { color: ch.color, width: 1.5, dash: 'dot' },
+            showlegend: false
+        });
+    });
+
+    Plotly.newPlot('saturationChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'Spend ($M)', gridcolor: colors.grid },
+        yaxis: { title: 'Incremental Sales ($M)', gridcolor: colors.grid },
+        legend: { orientation: 'h', y: 1.12 }
+    }, cfg);
+}
+
+// ROI comparison
+function updateRoiComparison() {
+    const spend = parseFloat(document.getElementById('roiSpendSlider').value);
+    document.getElementById('roiSpendValue').textContent = '$' + spend + 'K';
+
+    const k = 30;
+    const maxR = 150;
+    const response = saturationResponse(spend, k, maxR);
+    const avgRoi = response / spend;
+    const margRoi = marginalResponse(spend, k, maxR) * 100;
+
+    // Update explanation
+    const explanation = document.getElementById('roiExplanation');
+    if (margRoi > avgRoi) {
+        explanation.innerHTML = `At $${spend}K spend: Average ROI is ${avgRoi.toFixed(2)}, and Marginal ROI is ${margRoi.toFixed(2)}. <strong>The channel is still growing!</strong> Each additional dollar is more valuable than the average.`;
+    } else if (margRoi > 1) {
+        explanation.innerHTML = `At $${spend}K spend: Average ROI is ${avgRoi.toFixed(2)}, but Marginal ROI is only ${margRoi.toFixed(2)}. The channel is profitable overall, but returns are diminishing. Still worth investing.`;
+    } else {
+        explanation.innerHTML = `At $${spend}K spend: Average ROI is ${avgRoi.toFixed(2)}, but Marginal ROI is only ${margRoi.toFixed(2)}. <strong>Stop growing!</strong> The next dollar would lose money even though the channel is profitable overall.`;
+    }
+
+    // Draw chart
+    const x = Array.from({length: 91}, (_, i) => i + 10);
+    const avgY = x.map(s => saturationResponse(s, k, maxR) / s);
+    const margY = x.map(s => marginalResponse(s, k, maxR) * 100);
+
+    const traces = [
+        {
+            x: x,
+            y: avgY,
+            mode: 'lines',
+            line: { color: colors.primary, width: 3 },
+            name: 'Average ROI'
+        },
+        {
+            x: x,
+            y: margY,
+            mode: 'lines',
+            line: { color: colors.accent, width: 3 },
+            name: 'Marginal ROI'
+        },
+        {
+            x: [10, 100],
+            y: [1, 1],
+            mode: 'lines',
+            line: { color: colors.danger, width: 2, dash: 'dash' },
+            name: 'Break-even'
+        },
+        {
+            x: [spend],
+            y: [avgRoi],
+            mode: 'markers',
+            marker: { color: colors.primary, size: 12 },
+            showlegend: false
+        },
+        {
+            x: [spend],
+            y: [margRoi],
+            mode: 'markers',
+            marker: { color: colors.accent, size: 12 },
+            showlegend: false
+        }
+    ];
+
+    Plotly.newPlot('roiComparisonChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'Spend ($K)', gridcolor: colors.grid },
+        yaxis: { title: 'ROI', gridcolor: colors.grid, range: [0, 4] },
+        legend: { orientation: 'h', y: 1.12 }
+    }, cfg);
+}
+
+// Marginal ROI chart
+function initMarginalRoiChart() {
+    const channels = Object.values(channelParams);
+    const names = channels.map(c => c.name);
+    const marginals = channels.map(c => marginalResponse(c.currentSpend, c.k, c.maxResponse));
+
+    const barColors = marginals.map(m => m > 1.5 ? colors.success : m > 1 ? colors.warning : colors.danger);
+
+    const traces = [
+        {
+            y: names,
+            x: marginals,
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: barColors },
+            name: 'Marginal ROI'
+        },
+        {
+            y: [names[0], names[names.length - 1]],
+            x: [1, 1],
+            mode: 'lines',
+            line: { color: colors.danger, width: 2, dash: 'dash' },
+            name: 'Break-even'
+        }
+    ];
+
+    Plotly.newPlot('marginalRoiChart', traces, {
+        ...layout_base,
+        margin: { t: 20, r: 30, b: 50, l: 100 },
+        xaxis: { title: 'Marginal ROI', gridcolor: colors.grid, range: [0, 3] },
+        yaxis: { gridcolor: colors.grid },
+        showlegend: false
+    }, cfg);
+}
+
+// Budget scenario planner
+function updateBudgetScenario() {
+    const budgets = {
+        tv: parseFloat(document.getElementById('tvBudget').value),
+        search: parseFloat(document.getElementById('searchBudget').value),
+        social: parseFloat(document.getElementById('socialBudget').value),
+        display: parseFloat(document.getElementById('displayBudget').value),
+        radio: parseFloat(document.getElementById('radioBudget').value)
+    };
+
+    // Update displays
+    Object.keys(budgets).forEach(ch => {
+        document.getElementById(ch + 'BudgetVal').textContent = budgets[ch] + '%';
+    });
+
+    // Calculate total spend change
+    const channels = Object.values(channelParams);
+    let baseSpend = channels.reduce((sum, c) => sum + c.currentSpend, 0);
+    let newSpend = channels.reduce((sum, c) => sum + c.currentSpend * budgets[c.name.toLowerCase().replace(' ', '')] / 100, 0);
+
+    // This is simplified - use channel keys properly
+    newSpend = channelParams.tv.currentSpend * budgets.tv / 100 +
+               channelParams.search.currentSpend * budgets.search / 100 +
+               channelParams.social.currentSpend * budgets.social / 100 +
+               channelParams.display.currentSpend * budgets.display / 100 +
+               channelParams.radio.currentSpend * budgets.radio / 100;
+
+    const spendChange = ((newSpend / baseSpend) - 1) * 100;
+
+    // Calculate outcome change (simplified model)
+    let baseOutcome = 0, newOutcome = 0;
+    Object.entries(channelParams).forEach(([key, ch]) => {
+        baseOutcome += saturationResponse(ch.currentSpend, ch.k, ch.maxResponse);
+        const newChannelSpend = ch.currentSpend * budgets[key] / 100;
+        newOutcome += saturationResponse(newChannelSpend, ch.k, ch.maxResponse);
+    });
+
+    const outcomeChange = ((newOutcome / baseOutcome) - 1) * 100;
+    const incrementalRoi = spendChange !== 0 ? outcomeChange / spendChange : 0;
+
+    // Update metrics
+    document.getElementById('totalSpendChange').textContent = (spendChange >= 0 ? '+' : '') + spendChange.toFixed(1) + '%';
+    document.getElementById('outcomeChange').textContent = (outcomeChange >= 0 ? '+' : '') + outcomeChange.toFixed(1) + '%';
+    document.getElementById('incrementalRoi').textContent = spendChange !== 0 ? incrementalRoi.toFixed(2) : '-';
+
+    updateMetricColor('totalSpendChange', 100 + spendChange, 100);
+    updateMetricColor('outcomeChange', outcomeChange, 0);
+    updateMetricColor('incrementalRoi', incrementalRoi, 1);
+}
+
+// Preset scenarios
+function applyScenario(scenario) {
+    const scenarios = {
+        conservative: { tv: 80, search: 80, social: 80, display: 80, radio: 80 },
+        baseline: { tv: 100, search: 100, social: 100, display: 100, radio: 100 },
+        optimized: { tv: 95, search: 70, social: 140, display: 80, radio: 130 },
+        aggressive: { tv: 110, search: 90, social: 150, display: 70, radio: 140 }
+    };
+
+    const values = scenarios[scenario];
+    Object.keys(values).forEach(ch => {
+        document.getElementById(ch + 'Budget').value = values[ch];
+    });
+
+    // Update selected card styling
+    document.querySelectorAll('.scenario-card').forEach(card => card.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+
+    updateBudgetScenario();
+}
+
+// Scenario comparison chart
+function initScenarioChart() {
+    const scenarios = ['Conservative', 'Baseline', 'Optimized', 'Aggressive'];
+    const spendChanges = [-20, 0, +5, +15];
+    const outcomeChanges = [-18, 0, +12, +8];
+
+    const traces = [
+        {
+            x: scenarios,
+            y: spendChanges,
+            type: 'bar',
+            name: 'Spend Change %',
+            marker: { color: colors.accent }
+        },
+        {
+            x: scenarios,
+            y: outcomeChanges,
+            type: 'bar',
+            name: 'Outcome Change %',
+            marker: { color: colors.primary }
+        }
+    ];
+
+    Plotly.newPlot('scenarioComparisonChart', traces, {
+        ...layout_base,
+        xaxis: { gridcolor: colors.grid },
+        yaxis: { title: 'Change (%)', gridcolor: colors.grid },
+        legend: { orientation: 'h', y: 1.1 },
+        barmode: 'group'
+    }, cfg);
+}
+</script>
+</body>
+</html>

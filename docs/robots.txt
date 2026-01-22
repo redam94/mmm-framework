@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://redam94.github.io/mmm-framework/sitemap.xml

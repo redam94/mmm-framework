@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation Page | MMM Framework</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- MathJax for equations (optional) -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+    
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Getting Started</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#basics">Basics</a></li>
+            </ul>
+
+            <h3>Core Concepts</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#concept-1">First Concept</a></li>
+                <li><a href="#concept-2">Second Concept</a></li>
+                <li class="sub-item"><a href="#concept-2a">Sub-topic A</a></li>
+                <li class="sub-item"><a href="#concept-2b">Sub-topic B</a></li>
+            </ul>
+
+            <h3>Advanced</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#advanced">Advanced Topics</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Documentation Page Title</h1>
+            <p class="lead">A brief introduction to what this page covers and who it's for.</p>
+
+            <h2 id="basics">Basics</h2>
+            <p>Introductory content explaining the fundamentals...</p>
+
+            <div class="definition">
+                <h4>Definition: Key Term</h4>
+                <p>A formal definition of an important concept.</p>
+            </div>
+
+            <h2 id="concept-1">First Concept</h2>
+            <p>Detailed explanation of the first major concept...</p>
+
+            <div class="math-block">
+                \[ y_t = \alpha + \sum_{m=1}^{M} \beta_m \cdot f_m(x_{m,t}) + \varepsilon_t \]
+                <span class="equation-label">(1)</span>
+            </div>
+
+            <h2 id="concept-2">Second Concept</h2>
+            <p>Another important topic...</p>
+
+            <h3 id="concept-2a">Sub-topic A</h3>
+            <p>More specific details...</p>
+
+            <pre><code># Example code
+import pymc as pm
+
+with pm.Model() as model:
+    beta = pm.Normal("beta", mu=0, sigma=1)
+    y = pm.Normal("y", mu=beta, observed=data)</code></pre>
+
+            <h3 id="concept-2b">Sub-topic B</h3>
+            <p>Additional details...</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Description</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>alpha</code></td>
+                        <td>Decay rate for adstock</td>
+                        <td>0.5</td>
+                    </tr>
+                    <tr>
+                        <td><code>L_max</code></td>
+                        <td>Maximum lag window</td>
+                        <td>8</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning">
+                <h4>⚠️ Common Pitfall</h4>
+                <p>Be careful not to make this common mistake...</p>
+            </div>
+
+            <h2 id="advanced">Advanced Topics</h2>
+            <p>For users who want to go deeper...</p>
+
+            <div class="note">
+                <h4>💡 Pro Tip</h4>
+                <p>An advanced technique for power users.</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

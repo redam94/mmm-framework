@@ -12,6 +12,7 @@ from typing import Any
 import html
 
 from .config import ReportConfig, SectionConfig, ColorScheme
+from .design_tokens import TOKENS
 from .data_extractors import (
     MMMDataBundle,
     DataExtractor,
@@ -249,7 +250,7 @@ class MMMReportGenerator:
     <title>{html.escape(self.config.title)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     {plotly_script}
     <style>
 {css}
@@ -273,7 +274,7 @@ class MMMReportGenerator:
     def _generate_css(self) -> str:
         """Generate CSS styles from configuration."""
         c = self.config.color_scheme
-        
+
         return f'''
         :root {{
             --color-primary: {c.primary};
@@ -289,18 +290,18 @@ class MMMReportGenerator:
             --color-bg-alt: {c.background_alt};
             --color-surface: {c.surface};
             --color-border: {c.border};
-            --shadow-sm: 0 1px 3px rgba(45, 58, 45, 0.08);
-            --shadow-md: 0 4px 12px rgba(45, 58, 45, 0.1);
-            --shadow-lg: 0 8px 24px rgba(45, 58, 45, 0.12);
+            --shadow-sm: {TOKENS.shadow_sm};
+            --shadow-md: {TOKENS.shadow_md};
+            --shadow-lg: {TOKENS.shadow_lg};
         }}
 
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        
-        body {{ 
-            font-family: {self.config.font_family_sans}; 
-            background: var(--color-bg); 
-            color: var(--color-text); 
-            line-height: 1.7; 
+
+        body {{
+            font-family: {self.config.font_family_sans};
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
         }}
 
         .report-container {{

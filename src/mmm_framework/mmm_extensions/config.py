@@ -2,6 +2,9 @@
 Configuration Classes for MMM Extensions
 
 Immutable configuration objects for nested and multivariate models.
+
+Note: Shared enums like SaturationType are imported from the main config module
+to avoid duplication.
 """
 
 from __future__ import annotations
@@ -9,6 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
+
+# Import shared enum from main config to avoid duplication
+from mmm_framework.config import SaturationType
 
 
 # =============================================================================
@@ -22,7 +28,7 @@ class MediatorType(str, Enum):
     FULLY_OBSERVED = "fully_observed"      # Every period has observation
     PARTIALLY_OBSERVED = "partially_observed"  # Sparse point-in-time observations
     AGGREGATED_SURVEY = "aggregated_survey"    # Temporally aggregated with known n
-    FULLY_LATENT = "fully_latent"    
+    FULLY_LATENT = "fully_latent"
 
 
 class CrossEffectType(str, Enum):
@@ -42,11 +48,8 @@ class EffectConstraint(str, Enum):
     NEGATIVE = "negative"
 
 
-class SaturationType(str, Enum):
-    """Type of saturation function."""
-
-    LOGISTIC = "logistic"
-    HILL = "hill"
+# SaturationType is imported from mmm_framework.config to ensure consistency
+# across the codebase. The main config defines: HILL, LOGISTIC, MICHAELIS_MENTEN, TANH, NONE
 
 
 # =============================================================================

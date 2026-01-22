@@ -8,15 +8,26 @@ Provides endpoints for data management, configuration, model fitting, and analys
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from loguru import logger
 
+from auth import verify_api_key
 from config import Settings, get_settings
+from middleware import RequestLoggingMiddleware
+from rate_limiter import limiter, rate_limit_exceeded_handler
 from redis_service import RedisService, get_redis
-from routes import configs_router, data_router, models_router
+from routes import configs_router, data_router, extended_models_router, models_router
 from schemas import ErrorResponse, HealthResponse
 from storage import get_storage
+
+try:
+    from slowapi.errors import RateLimitExceeded
+    SLOWAPI_AVAILABLE = True
+except ImportError:
+    SLOWAPI_AVAILABLE = False
+    logger.warning("slowapi not installed - rate limiting disabled")
 
 
 @asynccontextmanager
@@ -83,23 +94,40 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
                 "name": "Models",
                 "description": "Fit models, track progress, and analyze results",
             },
+            {
+                "name": "Extended Models",
+                "description": "Advanced models: Nested (mediation), Multivariate, and Combined MMM",
+            },
         ],
         lifespan=lifespan,
     )
 
-    # CORS middleware
+    # Request logging middleware (added first, executed last)
+    app.add_middleware(RequestLoggingMiddleware)
+
+    # CORS middleware - use configured origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_origins=settings.cors_origins,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
 
-    # Include routers
-    app.include_router(data_router)
-    app.include_router(configs_router)
-    app.include_router(models_router)
+    # Rate limiting (if slowapi is available and enabled)
+    if SLOWAPI_AVAILABLE and settings.rate_limit_enabled:
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+        logger.info(
+            f"Rate limiting enabled: {settings.rate_limit_requests}/{settings.rate_limit_period}"
+        )
+
+    # Include routers with API key authentication
+    # All data-modifying endpoints require authentication when enabled
+    app.include_router(data_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(configs_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(models_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(extended_models_router, dependencies=[Depends(verify_api_key)])
 
     # Health endpoints
     @app.get(

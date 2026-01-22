@@ -56,6 +56,26 @@ class Settings(BaseSettings):
     default_n_draws: int = 1000
     default_n_tune: int = 1000
 
+    # Authentication settings
+    api_keys_enabled: bool = False
+    valid_api_keys: list[str] = Field(default_factory=list)
+
+    # CORS settings
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:8501",  # Streamlit
+            "http://localhost:3000",  # React (create-react-app)
+            "http://localhost:5173",  # Vite dev server
+            "http://127.0.0.1:5173",  # Vite dev server (alternate)
+        ]
+    )
+    cors_allow_credentials: bool = True
+
+    # Rate limiting settings
+    rate_limit_enabled: bool = False
+    rate_limit_requests: int = 100
+    rate_limit_period: str = "minute"
+
     @property
     def redis_settings(self) -> dict:
         """Get Redis connection settings for ARQ."""

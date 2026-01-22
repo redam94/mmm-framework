@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Literal, Any
 from enum import Enum
 
+from .design_tokens import TOKENS
+
 
 class ColorPalette(Enum):
     """Pre-defined color palettes for reports."""
@@ -23,20 +25,20 @@ class ColorPalette(Enum):
 @dataclass(frozen=True)
 class ColorScheme:
     """Color scheme for report styling."""
-    
-    primary: str = "#8fa86a"
-    primary_dark: str = "#6d8a4a"
-    accent: str = "#6a8fa8"
-    accent_dark: str = "#4a6d8a"
-    warning: str = "#d4a86a"
-    danger: str = "#c97067"
-    success: str = "#6abf8a"
-    text: str = "#2d3a2d"
-    text_muted: str = "#5a6b5a"
-    background: str = "#fafbf9"
-    background_alt: str = "#f0f4ed"
-    surface: str = "#ffffff"
-    border: str = "#d4ddd4"
+
+    primary: str = TOKENS.primary
+    primary_dark: str = TOKENS.primary_dark
+    accent: str = TOKENS.accent
+    accent_dark: str = TOKENS.accent_dark
+    warning: str = TOKENS.warning
+    danger: str = TOKENS.danger
+    success: str = TOKENS.success
+    text: str = TOKENS.text
+    text_muted: str = TOKENS.text_muted
+    background: str = TOKENS.background
+    background_alt: str = TOKENS.background_alt
+    surface: str = TOKENS.surface
+    border: str = TOKENS.border
     
     @classmethod
     def from_palette(cls, palette: ColorPalette) -> ColorScheme:
@@ -169,9 +171,9 @@ class ReportConfig:
     # Styling
     color_scheme: ColorScheme = field(default_factory=ColorScheme)
     channel_colors: ChannelColors = field(default_factory=ChannelColors)
-    font_family_serif: str = "'DM Serif Display', serif"
-    font_family_sans: str = "'Inter', sans-serif"
-    font_family_mono: str = "'JetBrains Mono', monospace"
+    font_family_serif: str = TOKENS.font_serif
+    font_family_sans: str = TOKENS.font_sans
+    font_family_mono: str = TOKENS.font_mono
     
     # Global settings
     default_credible_interval: float = 0.8
@@ -296,7 +298,7 @@ class ChartConfig:
             "paper_bgcolor": "transparent",
             "plot_bgcolor": "transparent",
             "font": {
-                "family": "Inter, sans-serif",
+                "family": "Source Sans 3, sans-serif",
                 "color": color_scheme.text,
                 "size": 12,
             },

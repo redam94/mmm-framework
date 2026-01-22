@@ -5,6 +5,8 @@ Generate and download HTML reports for fitted models.
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
+
 import time
 from datetime import datetime
 
@@ -346,7 +348,16 @@ def render_report_monitor():
 
                 except Exception as e:
                     st.error(f"Failed to download: {e}")
-
+            if report_content:
+                st.markdown("---")
+                st.markdown("### 📄 Report Preview")
+                
+                # Render the HTML report in an iframe-like component
+                components.html(
+                    report_content.decode("utf-8"),
+                    height=800,
+                    scrolling=True,
+                )
             # Clear button
             if st.button("Generate Another Report", use_container_width=False):
                 st.session_state.report_id = None
@@ -397,49 +408,75 @@ def render_existing_reports():
             st.info("No reports generated yet for this model.")
             return
 
-        # Display as table
-        for report in reports:
-            with st.container():
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        # Report selector + preview layout
+        col_list, col_preview = st.columns([1, 2])
+        
+        with col_list:
+            st.markdown("#### Available Reports")
+            
+            for i, report in enumerate(reports):
+                rid = report.get("report_id")
+                filename = report.get("filename", "Unknown")
+                created_at = report.get("created_at", "")
+                size = report.get("size_bytes", 0)
+                
+                # Format datetime
+                date_str = ""
+                if created_at:
+                    try:
+                        dt = datetime.fromisoformat(created_at)
+                        date_str = format_datetime(dt)
+                    except:
+                        date_str = created_at
 
-                with col1:
-                    st.markdown(f"**{report.get('filename', 'Unknown')}**")
-
-                with col2:
-                    created_at = report.get("created_at", "")
-                    if created_at:
-                        try:
-                            dt = datetime.fromisoformat(created_at)
-                            st.caption(format_datetime(dt))
-                        except:
-                            st.caption(created_at)
-
-                with col3:
-                    size = report.get("size_bytes", 0)
-                    st.caption(format_bytes(size))
-
-                with col4:
-                    rid = report.get("report_id")
-                    if rid:
+                # Report card
+                with st.container():
+                    st.markdown(f"**{filename}**")
+                    st.caption(f"{date_str} • {format_bytes(size)}")
+                    
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button("👁️", key=f"view_{rid}", help="Preview"):
+                            st.session_state.preview_report_id = rid
+                    
+                    with btn_col2:
                         try:
                             content = api_client.download_report(model_id, rid)
                             st.download_button(
-                                label="📥",
+                                "📥",
                                 data=content,
-                                file_name=report.get("filename", f"report_{rid}.html"),
+                                file_name=filename,
                                 mime="text/html",
-                                key=f"download_{rid}",
+                                key=f"dl_{rid}",
+                                help="Download",
                             )
                         except:
-                            st.button("📥", disabled=True, key=f"download_{rid}")
+                            st.button("📥", disabled=True, key=f"dl_{rid}")
+                    
+                    st.markdown("---")
 
-                st.markdown("---")
+        with col_preview:
+            st.markdown("#### Preview")
+            
+            preview_rid = st.session_state.get("preview_report_id")
+            
+            if preview_rid:
+                try:
+                    report_content = api_client.download_report(model_id, preview_rid)
+                    components.html(
+                        report_content.decode("utf-8"),
+                        height=700,
+                        scrolling=True,
+                    )
+                except Exception as e:
+                    st.error(f"Failed to load preview: {e}")
+            else:
+                st.info("Select a report to preview")
 
     except APIError as e:
         display_api_error(e)
     except Exception as e:
         st.error(f"Error loading reports: {e}")
-
 
 # =============================================================================
 # Main

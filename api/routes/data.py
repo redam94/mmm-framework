@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from config import Settings, get_settings
 from schemas import (
@@ -18,6 +19,7 @@ from schemas import (
     SuccessResponse,
 )
 from storage import StorageError, StorageService, get_storage
+import io
 
 router = APIRouter(prefix="/data", tags=["Data"])
 
@@ -224,6 +226,73 @@ async def get_data_variables(
             "data_id": data_id,
             "variables": summary.to_dict(orient="records"),
         }
+
+    except StorageError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset not found: {data_id}",
+        )
+
+
+@router.get(
+    "/{data_id}/download",
+    responses={404: {"model": ErrorResponse}},
+)
+async def download_data(
+    data_id: str,
+    format: str = Query("csv", description="Download format: csv, parquet, or excel"),
+    storage: StorageService = Depends(get_storage),
+):
+    """
+    Download a dataset in the specified format.
+
+    Supported formats:
+    - csv (default)
+    - parquet
+    - excel
+    """
+    try:
+        # Load the data
+        df = storage.load_data(data_id)
+        metadata = storage.get_data_info(data_id)
+        filename = metadata.get("filename", f"{data_id}")
+
+        # Remove extension from filename if present
+        base_filename = filename.rsplit(".", 1)[0] if "." in filename else filename
+
+        # Generate file in requested format
+        if format.lower() == "csv":
+            buffer = io.StringIO()
+            df.to_csv(buffer, index=False)
+            content = buffer.getvalue().encode("utf-8")
+            media_type = "text/csv"
+            extension = ".csv"
+        elif format.lower() == "parquet":
+            buffer = io.BytesIO()
+            df.to_parquet(buffer, index=False)
+            content = buffer.getvalue()
+            media_type = "application/octet-stream"
+            extension = ".parquet"
+        elif format.lower() in ("excel", "xlsx"):
+            buffer = io.BytesIO()
+            df.to_excel(buffer, index=False, engine="openpyxl")
+            content = buffer.getvalue()
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            extension = ".xlsx"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported format: {format}. Supported: csv, parquet, excel",
+            )
+
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{base_filename}{extension}"',
+                "Content-Length": str(len(content)),
+            },
+        )
 
     except StorageError:
         raise HTTPException(

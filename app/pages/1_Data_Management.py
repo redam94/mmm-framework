@@ -272,11 +272,48 @@ def render_dataset_details():
                 st.switch_page("pages/2_Configuration.py")
 
         with col2:
-            if st.button("📥 Download", use_container_width=True):
-                # Create download link
-                st.info("Download functionality would go here")
+            # Download format selector
+            download_format = st.selectbox(
+                "Format",
+                options=["csv", "parquet", "excel"],
+                index=0,
+                key=f"download_format_{data_id}",
+                label_visibility="collapsed",
+            )
 
         with col3:
+            if st.button("📥 Download", use_container_width=True, key=f"download_btn_{data_id}"):
+                try:
+                    with st.spinner("Preparing download..."):
+                        content = client.download_dataset(data_id, format=download_format)
+
+                    # Determine filename and mime type
+                    base_filename = dataset.filename.rsplit(".", 1)[0] if "." in dataset.filename else dataset.filename
+                    if download_format == "csv":
+                        filename = f"{base_filename}.csv"
+                        mime_type = "text/csv"
+                    elif download_format == "parquet":
+                        filename = f"{base_filename}.parquet"
+                        mime_type = "application/octet-stream"
+                    else:  # excel
+                        filename = f"{base_filename}.xlsx"
+                        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+                    st.download_button(
+                        label="💾 Save File",
+                        data=content,
+                        file_name=filename,
+                        mime=mime_type,
+                        key=f"save_file_{data_id}",
+                    )
+                except APIError as e:
+                    display_api_error(e)
+                except Exception as e:
+                    st.error(f"Download failed: {e}")
+
+        # Move delete button to a new row for better layout
+        col_del, col_spacer = st.columns([1, 2])
+        with col_del:
             if st.button("🗑️ Delete", use_container_width=True):
                 st.session_state[f"confirm_delete_{data_id}"] = True
                 st.rerun()

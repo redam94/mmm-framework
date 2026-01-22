@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ — MMM Framework</title>
+    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/faq.html">
+    <meta property="og:title" content="FAQ | MMM Framework">
+    <meta property="og:description" content="A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models. This guide covers mathematical foundations, model specifications, and practical considerations for each model type in the framework.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/faq.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Page-specific overrides for FAQ styling */
+        .faq-item { margin-bottom: 2rem; }
+        .faq-question {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        .faq-question::before {
+            content: "Q";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            background: var(--color-primary);
+            color: white;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            flex-shrink: 0;
+            margin-top: 0.1rem;
+        }
+        .faq-answer {
+            padding-left: 2.25rem;
+            color: var(--color-text);
+        }
+        .faq-answer p:last-child { margin-bottom: 0; }
+
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--color-surface); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm); }
+        .comparison-table th, .comparison-table td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+        .comparison-table th { background: var(--color-bg-alt); font-weight: 600; }
+        .comparison-table tbody tr:last-child td { border-bottom: none; }
+        .comparison-table .check { color: var(--color-success); font-weight: bold; }
+        .comparison-table .cross { color: var(--color-danger); font-weight: bold; }
+
+        .talking-point {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1rem 0;
+        }
+        .talking-point-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-muted);
+            margin-bottom: 0.5rem;
+        }
+        .talking-point-text {
+            font-style: italic;
+            color: var(--color-text);
+            margin: 0;
+        }
+
+        .interactive-viz {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .interactive-viz h4 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+            font-size: 1.1rem;
+        }
+        .chart-container-tall { width: 100%; height: 400px; }
+        .control-row input[type="range"] { accent-color: var(--color-primary); }
+        .viz-description {
+            font-size: 0.95rem;
+            color: var(--color-text-muted);
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--color-border);
+        }
+        .scenario-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .scenario-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+        .scenario-btn:hover {
+            border-color: var(--color-primary);
+            background: var(--color-bg-alt);
+        }
+        .scenario-btn.active {
+            background: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
+        .insight-box {
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+        }
+        .insight-box strong { color: var(--color-primary-dark); }
+    </style>
+</head>
+<body>
+    <!-- <nav>
+        <div class="nav-content">
+            <a href="index.html" class="logo">MMM Framework</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="about.html">About</a></li>
+                <li><a href="variable-selection.html">Variable Selection</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
+                <li><a href="causal-inference.html">Causal Inference</a></li>
+                <li><a href="scientific-modeling.html">Scientific Modeling</a></li>
+                <li><a href="#" class="active">FAQ</a></li>
+                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav> -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>For Analysts</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#why-bayesian">Why Bayesian over Traditional?</a></li>
+                <li><a href="#specification-shopping">What is Specification Shopping?</a></li>
+                <li><a href="#defending-uncertainty">Defending Honest Uncertainty</a></li>
+                <li><a href="#negative-coefficients">Handling Negative Coefficients</a></li>
+                <li><a href="#year-over-year">Year-over-Year Changes</a></li>
+            </ul>
+
+            <h3>For Clients</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#what-statistics-does">What Statistics Actually Does</a></li>
+                <li><a href="#reading-intervals">Reading Credible Intervals</a></li>
+                <li><a href="#uncertainty-value">Why Uncertainty is Valuable</a></li>
+                <li><a href="#when-to-experiment">When to Run Experiments</a></li>
+                <li><a href="#comparing-approaches">Comparing Methodologies</a></li>
+            </ul>
+
+            <h3>Framework Features</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#how-framework-helps">How This Framework Helps</a></li>
+                <li><a href="#prior-specification">Prior Specification</a></li>
+                <li><a href="#validation-features">Validation Features</a></li>
+                <li><a href="#visualization">Uncertainty Visualization</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Frequently Asked Questions</h1>
+            <p class="lead">
+                Guidance for analysts defending rigorous methodology and for clients understanding 
+                what honest measurement looks like.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="for-analysts">For Analysts</h2>
+            <!-- ================================================================== -->
+
+            <div class="faq-item" id="why-bayesian">
+                <div class="faq-question">Why should we use Bayesian methods instead of traditional regression?</div>
+                <div class="faq-answer">
+                    <p>
+                        Bayesian methods provide <strong>genuine uncertainty quantification</strong>. Traditional 
+                        regression gives you confidence intervals that answer: "If I repeated this sampling process 
+                        infinitely, 95% of intervals would contain the true value." That's a statement about a 
+                        hypothetical procedure, not about your actual estimate.
+                    </p>
+                    <p>
+                        Bayesian credible intervals answer a more useful question: "Given our data and prior 
+                        knowledge, there's a 94% probability the true value lies in this range." This is a 
+                        direct probability statement about the parameter—exactly what decision-makers need.
+                    </p>
+
+                    <!-- Interactive: Prior to Posterior Updating -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: How Data Updates Beliefs</h4>
+                        <div class="control-row">
+                            <label>Data Strength:</label>
+                            <input type="range" id="data-strength" min="1" max="100" value="30">
+                            <span class="value" id="data-strength-value">30 observations</span>
+                        </div>
+                        <div class="control-row">
+                            <label>True Effect:</label>
+                            <input type="range" id="true-effect" min="0" max="200" value="140">
+                            <span class="value" id="true-effect-value">1.40</span>
+                        </div>
+                        <div class="chart-container" id="prior-posterior-chart"></div>
+                        <div class="viz-description">
+                            <strong>How to read this:</strong> The prior (dashed) shows beliefs before seeing data. 
+                            As data accumulates, the posterior (solid) concentrates around the true value. With 
+                            little data, the prior dominates. With lots of data, the data dominates.
+                        </div>
+                    </div>
+
+                    <p>Additional advantages:</p>
+                    <ul>
+                        <li><strong>Prior incorporation:</strong> External evidence (meta-analyses, experiments, domain expertise) can be formally included</li>
+                        <li><strong>Natural regularization:</strong> Priors prevent overfitting without ad-hoc penalty terms</li>
+                        <li><strong>Hierarchical modeling:</strong> Partial pooling across geographies improves sparse estimates</li>
+                        <li><strong>Full posterior:</strong> You get distributions, not just point estimates—enabling decision analysis under uncertainty</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="faq-item" id="specification-shopping">
+                <div class="faq-question">What exactly is specification shopping, and why is it a problem?</div>
+                <div class="faq-answer">
+                    <p>
+                        Specification shopping (also called specification searching, data dredging, or p-hacking) 
+                        occurs when analysts test multiple model specifications and selectively report the one 
+                        that produces desired results—typically significant coefficients, expected signs, or 
+                        "reasonable" ROIs.
+                    </p>
+                    
+                    <!-- Interactive: Specification Shopping Bias -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: How Selecting "Positive" Results Creates Bias</h4>
+                        <p style="margin-bottom: 1rem; color: var(--color-text-muted);">
+                            When the true effect is zero or small, coefficient estimates scatter around the truth. 
+                            If you only report specifications with positive results, you systematically overestimate.
+                        </p>
+                        <div class="control-row">
+                            <label>True Effect:</label>
+                            <input type="range" id="true-effect-bias" min="0" max="50" value="5">
+                            <span class="value" id="true-effect-bias-value">0.05</span>
+                        </div>
+                        <div class="control-row">
+                            <label>Specifications Tested:</label>
+                            <input type="range" id="num-specs" min="1" max="50" value="20">
+                            <span class="value" id="num-specs-value">20</span>
+                        </div>
+                        <div class="chart-container-tall" id="spec-shopping-chart"></div>
+                        <div class="insight-box" id="spec-shopping-insight">
+                            True effect: <strong>0.05</strong>. Testing 20 specifications and reporting only the most positive: 
+                            expected reported estimate is <strong>0.35</strong> — a <strong>7x overestimate</strong>.
+                        </div>
+                    </div>
+                    
+                    <div class="warning">
+                        <h4>Common Forms in MMM</h4>
+                        <ul style="margin-bottom: 0;">
+                            <li>Testing dozens of lag lengths until coefficients become significant</li>
+                            <li>Trying different saturation curves until ROI looks "right"</li>
+                            <li>Adding control variables based on residual patterns</li>
+                            <li>Dropping "outlier" observations until fit improves</li>
+                            <li>Adjusting adstock until negative coefficients become positive</li>
+                        </ul>
+                    </div>
+
+                    <p>
+                        The fundamental problem is that this invalidates all statistical inference. When you 
+                        test 20 specifications and report the best one, your reported confidence interval 
+                        dramatically understates true uncertainty. The "95% confidence" claim becomes meaningless.
+                    </p>
+
+                    <!-- Interactive: Many Analysts Simulation -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: Many Analysts, One Dataset</h4>
+                        <p style="margin-bottom: 1rem; color: var(--color-text-muted);">
+                            This simulates the Silberzahn et al. (2018) finding: give the same data to multiple 
+                            analysts with flexibility in specification choices, and results vary dramatically.
+                        </p>
+                        <button class="scenario-btn" id="run-analysts-btn">Run 29 Analysts</button>
+                        <div class="chart-container-tall" id="many-analysts-chart"></div>
+                        <div class="viz-description">
+                            Each bar represents one analyst's estimate. Same data, same question, different 
+                            (defensible) analytical choices. This variation comes from specification flexibility—not 
+                            from bad actors or incompetent analysts.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item" id="defending-uncertainty">
+                <div class="faq-question">Clients won't accept "we don't know." How do I present uncertainty?</div>
+                <div class="faq-answer">
+                    <p>
+                        This conflates two different things: not having an answer, and being honest about 
+                        confidence in the answer. Clients won't accept "we don't know" as a final answer—agreed. 
+                        But they should accept (and increasingly expect) honest uncertainty bounds.
+                    </p>
+
+                    <div class="talking-point">
+                        <div class="talking-point-label">Talking Point</div>
+                        <p class="talking-point-text">
+                            "Our best estimate is that TV ROI is 1.4, with an 80% probability it falls between 
+                            1.1 and 1.8. This estimate is based on pre-specified methodology and robust to 
+                            reasonable alternative specifications. We recommend a geo-holdout test to narrow 
+                            this range before major budget changes."
+                        </p>
+                    </div>
+
+                    <p>
+                        This is not "we don't know"—it's a precise, actionable statement that acknowledges 
+                        uncertainty while providing a clear recommendation. Compare this to the alternative:
+                    </p>
+
+                    <div class="talking-point">
+                        <div class="talking-point-label">The Alternative</div>
+                        <p class="talking-point-text">
+                            "TV ROI is 1.4." (Based on the third specification we tried, after the first two 
+                            gave negative coefficients. We have no idea what happens if the client acts on 
+                            this and it's wrong.)
+                        </p>
+                    </div>
+
+                    <p>
+                        The honest version is more valuable because it enables appropriate decision-making. 
+                        It also protects the relationship: if the recommendation fails, you acknowledged the 
+                        uncertainty upfront.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="negative-coefficients">
+                <div class="faq-question">We got a negative coefficient for a media channel. Should we adjust the model?</div>
+                <div class="faq-answer">
+                    <p>
+                        <strong>No.</strong> A negative coefficient is informative, not a mistake. It might indicate:
+                    </p>
+                    <ul>
+                        <li>The channel genuinely has no effect (or negative effect) in this context</li>
+                        <li>The effect is too small to detect with available data</li>
+                        <li>Measurement error is attenuating estimates toward zero</li>
+                        <li>Confounding is biasing estimates (e.g., media increases during low-demand periods)</li>
+                        <li>The model is misspecified in ways that obscure the true effect</li>
+                    </ul>
+
+                    <!-- Interactive: What Negative Coefficients Mean -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: Interpreting Coefficient Posteriors</h4>
+                        <div class="scenario-buttons" id="coef-scenario-buttons">
+                            <button class="scenario-btn active" data-scenario="strong-positive">Strong Positive</button>
+                            <button class="scenario-btn" data-scenario="weak-positive">Weak Positive</button>
+                            <button class="scenario-btn" data-scenario="uncertain">Highly Uncertain</button>
+                            <button class="scenario-btn" data-scenario="likely-null">Likely Null</button>
+                            <button class="scenario-btn" data-scenario="negative">Negative</button>
+                        </div>
+                        <div class="chart-container" id="coefficient-interpretation-chart"></div>
+                        <div class="insight-box" id="coef-insight">
+                            <strong>Strong positive effect:</strong> 95% probability effect is positive. 
+                            Act with confidence.
+                        </div>
+                    </div>
+
+                    <p>
+                        The correct response is to investigate <em>why</em> the estimate is unexpected, not to 
+                        iterate until it matches expectations. If you require the model to show advertising 
+                        works, and adjust until it does, you cannot then cite the model as evidence that 
+                        advertising works. The reasoning is circular.
+                    </p>
+
+                    <div class="note">
+                        <h4>The Bayesian Approach</h4>
+                        <p style="margin-bottom: 0;">
+                            This framework uses informative priors that encode the belief that media effects 
+                            are positive, if you have a strong prior knowledge that a media effect can not be negative
+                            it should be incorporated into the model via priors. Specification shopping to avoid
+                            negative coefficients just hides this assumption rather than addressing it directly.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item" id="year-over-year">
+                <div class="faq-question">Why do our estimates change so much year-over-year?</div>
+                <div class="faq-answer">
+                    <p>
+                        Year-over-year instability usually reflects one of two things:
+                    </p>
+                    <ol>
+                        <li><strong>Genuine changes in media effectiveness</strong> (new creative, changed competitive environment, audience saturation)</li>
+                        <li><strong>Sensitivity to specification choices</strong> that differ between modeling cycles</li>
+                    </ol>
+
+                    <!-- Interactive: Year-over-Year with Uncertainty -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: When is Year-over-Year Change Meaningful?</h4>
+                        <p style="margin-bottom: 1rem; color: var(--color-text-muted);">
+                            Changes within credible intervals are expected random variation, not real changes.
+                        </p>
+                        <div class="chart-container" id="yoy-chart"></div>
+                        <div class="viz-description">
+                            <strong>Key insight:</strong> The 2024 vs 2023 change looks dramatic when viewing only 
+                            point estimates, but both estimates are within each other's uncertainty bands. 
+                            The 2022→2023 change, however, shows intervals that barely overlap—suggesting a 
+                            potentially real shift.
+                        </div>
+                    </div>
+
+                    <p>
+                        The second is more common and more problematic. If different analysts, or the same 
+                        analyst with slightly different judgment calls, produce substantially different 
+                        results, then the "result" is an artifact of the process, not a property of reality.
+                    </p>
+
+                    <p>
+                        This framework addresses instability by:
+                    </p>
+                    <ul>
+                        <li><strong>Pre-specifying models</strong> before seeing results, reducing researcher degrees of freedom</li>
+                        <li><strong>Reporting sensitivity analyses</strong> that show how results vary across reasonable specifications</li>
+                        <li><strong>Using hierarchical priors</strong> that can pool information across time periods</li>
+                        <li><strong>Quantifying uncertainty</strong> so that changes within credible intervals aren't over-interpreted</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="for-clients">For Clients</h2>
+            <!-- ================================================================== -->
+
+            <div class="faq-item" id="what-statistics-does">
+                <div class="faq-question">What does statistics actually do? I thought it gives us the answer.</div>
+                <div class="faq-answer">
+                    <p>
+                        This is perhaps the most important misconception to address. <strong>Statistics does not 
+                        remove uncertainty—it quantifies uncertainty.</strong>
+                    </p>
+
+                    <!-- Interactive: Uncertainty Quantification Concept -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: Before vs. After Analysis</h4>
+                        <div class="scenario-buttons" id="analysis-stage-buttons">
+                            <button class="scenario-btn active" data-stage="before">Before Analysis</button>
+                            <button class="scenario-btn" data-stage="after-weak">After Analysis (Weak Data)</button>
+                            <button class="scenario-btn" data-stage="after-strong">After Analysis (Strong Data)</button>
+                        </div>
+                        <div class="chart-container" id="uncertainty-concept-chart"></div>
+                        <div class="insight-box" id="uncertainty-insight">
+                            <strong>Before analysis:</strong> We know almost nothing—ROI could plausibly be anywhere from 0 to 3+.
+                        </div>
+                    </div>
+
+                    <p>
+                        Before analysis, you don't know what TV's ROI is. After analysis, you still don't know 
+                        for certain—but you have a principled range of plausible values, given your data and 
+                        assumptions. That range might be narrow (high confidence) or wide (low confidence), 
+                        but it's always a range, never a single "true" value.
+                    </p>
+
+                    <div class="definition">
+                        <h4>The Role of Statistical Analysis</h4>
+                        <p>Statistical analysis tells you: "Given the data you have and the assumptions you've 
+                        made, here is the range of values that are consistent with that evidence, and here is 
+                        how much probability mass falls in different parts of that range."</p>
+                        <p style="margin-bottom: 0;">
+                        It does <em>not</em> tell you: "The true value is exactly X."
+                        </p>
+                    </div>
+
+                    <p>
+                        This matters for decisions. If TV ROI is "1.4 ± 0.2" (narrow range), you can confidently 
+                        increase TV spend. If it's "1.4 ± 1.2" (wide range), the same point estimate suggests 
+                        a very different action—probably running an experiment before making major changes.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="reading-intervals">
+                <div class="faq-question">How do I read the credible intervals in these reports?</div>
+                <div class="faq-answer">
+                    <p>
+                        A credible interval gives you a direct probability statement about the parameter. When 
+                        we report "TV ROI: 1.4 (1.1–1.8, 80% CI)", we're saying:
+                    </p>
+
+                    <p style="text-align: center; font-style: italic; margin: 1.5rem 0;">
+                        "Given our data and analysis, there is an 80% probability that TV's true ROI 
+                        falls between 1.1 and 1.8."
+                    </p>
+
+                    <!-- Interactive: Decision Regions -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: ROI Estimates and Decision Regions</h4>
+                        <div class="control-row">
+                            <label>Point Estimate:</label>
+                            <input type="range" id="roi-estimate" min="50" max="250" value="140">
+                            <span class="value" id="roi-estimate-value">1.40</span>
+                        </div>
+                        <div class="control-row">
+                            <label>Uncertainty (σ):</label>
+                            <input type="range" id="roi-uncertainty" min="5" max="80" value="20">
+                            <span class="value" id="roi-uncertainty-value">0.20</span>
+                        </div>
+                        <div class="chart-container" id="decision-regions-chart"></div>
+                        <div class="insight-box" id="decision-insight">
+                            <strong>Recommendation: Act with confidence.</strong> 95% probability ROI > 1.0. 
+                            The data strongly supports this channel being profitable.
+                        </div>
+                    </div>
+
+                    <p>This is useful because:</p>
+                    <ul>
+                        <li>If the interval is entirely above 1.0, we're confident the channel is profitable</li>
+                        <li>If the interval spans 1.0, we can't confidently say whether it's profitable</li>
+                        <li>The width of the interval tells you how precise the estimate is</li>
+                        <li>You can make probability statements: "There's a 90% chance ROI exceeds 1.2"</li>
+                    </ul>
+
+                    <table class="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Scenario</th>
+                                <th>Example Interval</th>
+                                <th>Interpretation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>High confidence, positive effect</td>
+                                <td>1.4 (1.2–1.6)</td>
+                                <td>Almost certainly profitable; act with confidence</td>
+                            </tr>
+                            <tr>
+                                <td>Moderate confidence</td>
+                                <td>1.4 (0.9–2.0)</td>
+                                <td>Probably profitable; monitor closely or validate</td>
+                            </tr>
+                            <tr>
+                                <td>High uncertainty</td>
+                                <td>1.4 (0.5–2.5)</td>
+                                <td>Too uncertain to act; run experiment first</td>
+                            </tr>
+                            <tr>
+                                <td>Confident null</td>
+                                <td>0.2 (0.1–0.4)</td>
+                                <td>Almost certainly unprofitable; consider cutting</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="faq-item" id="uncertainty-value">
+                <div class="faq-question">Why is uncertainty valuable? It sounds like you're just telling me you don't know.</div>
+                <div class="faq-answer">
+                    <p>
+                        Uncertainty is valuable because it enables <strong>appropriate decision-making</strong>. 
+                        Without it, you can't distinguish between situations that require different actions.
+                    </p>
+
+                    <!-- Interactive: Same Point Estimate, Different Decisions -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: Same Point Estimate, Different Decisions</h4>
+                        <p style="margin-bottom: 1rem; color: var(--color-text-muted);">
+                            Both channels show TV ROI = 1.4. But should you take the same action for both?
+                        </p>
+                        <div class="chart-container" id="same-estimate-chart"></div>
+                        <div class="viz-description">
+                            <strong>Channel A:</strong> Tight uncertainty (σ=0.15) → Only 0.4% chance unprofitable → <span style="color: var(--color-success);">Act with confidence</span><br>
+                            <strong>Channel B:</strong> Wide uncertainty (σ=0.60) → 25% chance unprofitable → <span style="color: var(--color-warning);">Validate before major changes</span>
+                        </div>
+                    </div>
+
+                    <p>Consider two scenarios, both with the same point estimate:</p>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0;">
+                        <div class="note" style="margin: 0;">
+                            <h4>Scenario A</h4>
+                            <p>TV ROI: 1.4 (1.2–1.6, 80% CI)</p>
+                            <p style="margin-bottom: 0;"><strong>Action:</strong> Increase TV spend with confidence</p>
+                        </div>
+                        <div class="warning" style="margin: 0;">
+                            <h4>Scenario B</h4>
+                            <p>TV ROI: 1.4 (0.5–2.8, 80% CI)</p>
+                            <p style="margin-bottom: 0;"><strong>Action:</strong> Run experiment before major changes</p>
+                        </div>
+                    </div>
+
+                    <p>
+                        If you only see "TV ROI: 1.4" without the interval, you'd take the same action in 
+                        both cases—but that would be a mistake. Scenario B has a 25% probability that TV is 
+                        actually unprofitable. Increasing spend based on that estimate is gambling, not optimization.
+                    </p>
+
+                    <p>
+                        Uncertainty also creates opportunities:
+                    </p>
+                    <ul>
+                        <li><strong>High-uncertainty parameters are opportunities for experiments</strong>—resolving the uncertainty through a geo-test may have high ROI itself</li>
+                        <li><strong>Low-uncertainty parameters need less validation</strong>—you can act more quickly on robust estimates</li>
+                        <li><strong>Portfolio effects matter</strong>—you can diversify across channels where you're uncertain</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="faq-item" id="when-to-experiment">
+                <div class="faq-question">When should we run an experiment instead of relying on the model?</div>
+                <div class="faq-answer">
+                    <p>
+                        Experiments (geo-holdouts, incrementality tests) should be considered when:
+                    </p>
+                    <ul>
+                        <li><strong>Uncertainty is high for a channel that matters.</strong> If credible intervals are wide and the channel represents significant spend, an experiment may have high ROI.</li>
+                        <li><strong>You're considering a major budget change.</strong> Moving 20% of budget based on an estimate with wide uncertainty is risky; an experiment de-risks the decision.</li>
+                        <li><strong>The model result is surprising.</strong> If the model says a historically strong channel is underperforming, validation provides confidence before acting.</li>
+                        <li><strong>Stakeholders need conviction.</strong> Sometimes the issue isn't statistical uncertainty but organizational buy-in; experiments create shared evidence.</li>
+                    </ul>
+
+                    <!-- Interactive: Experiment Decision Matrix -->
+                    <div class="interactive-viz">
+                        <h4>📊 Interactive: When to Experiment</h4>
+                        <div class="chart-container-tall" id="experiment-matrix-chart"></div>
+                        <div class="viz-description">
+                            The decision to experiment depends on both uncertainty and stakes. High uncertainty 
+                            + high stakes = experiment. Low uncertainty + any stakes = act on model. 
+                            Low stakes + any uncertainty = act on model (reversible decisions don't need validation).
+                        </div>
+                    </div>
+
+                    <p>Experiments are typically <em>not</em> needed when:</p>
+                    <ul>
+                        <li>Credible intervals are narrow and entirely above/below decision thresholds</li>
+                        <li>The decision is easily reversible</li>
+                        <li>The channel is small relative to total spend</li>
+                        <li>An experiment is logistically infeasible or too expensive relative to the decision value</li>
+                    </ul>
+
+                    <div class="note">
+                        <h4>Experiments and Models are Complementary</h4>
+                        <p style="margin-bottom: 0;">
+                            Experiments don't replace models—they validate and calibrate them. A model can 
+                            answer questions about channels that weren't experimented on, predict effects at 
+                            spend levels not tested, and generate hypotheses for future experiments. But 
+                            periodic experimental validation is what keeps models grounded in reality.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item" id="comparing-approaches">
+                <div class="faq-question">How does this compare to other MMM approaches?</div>
+                <div class="faq-answer">
+                    <p>
+                        Different approaches make different tradeoffs. Here's how to think about the major 
+                        distinctions:
+                    </p>
+
+                    <table class="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Approach</th>
+                                <th>Uncertainty</th>
+                                <th>Prior Knowledge</th>
+                                <th>Specification</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Traditional OLS</td>
+                                <td class="cross">Understated</td>
+                                <td class="cross">Not incorporated</td>
+                                <td class="cross">Often shopped</td>
+                            </tr>
+                            <tr>
+                                <td>Ridge/LASSO</td>
+                                <td class="cross">Bootstrap only</td>
+                                <td class="cross">Ad-hoc penalties</td>
+                                <td class="cross">Often shopped</td>
+                            </tr>
+                            <tr>
+                                <td>Bayesian (this framework)</td>
+                                <td class="check">Full posterior</td>
+                                <td class="check">Principled priors</td>
+                                <td class="check">Pre-specified</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>Key questions to ask about any MMM methodology:</p>
+                    <ol>
+                        <li><strong>Do they report credible/confidence intervals?</strong> Point estimates alone are incomplete.</li>
+                        <li><strong>How are specifications chosen?</strong> If it's "we tried several and picked the best," that's specification shopping.</li>
+                        <li><strong>Is there validation?</strong> Do model predictions ever get tested against experiments?</li>
+                        <li><strong>How is domain knowledge incorporated?</strong> Formal priors vs. ad-hoc constraints make a big difference.</li>
+                        <li><strong>What happens with negative coefficients?</strong> If they're always "fixed," ask how and why.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="framework-features">Framework Features</h2>
+            <!-- ================================================================== -->
+
+            <div class="faq-item" id="how-framework-helps">
+                <div class="faq-question">How does this framework specifically help with these issues?</div>
+                <div class="faq-answer">
+                    <p>
+                        This framework is designed from the ground up to enable honest measurement:
+                    </p>
+
+                    <ul>
+                        <li>
+                            <strong>Full Bayesian inference</strong> via PyMC provides genuine posterior 
+                            distributions, not just point estimates. Every parameter has a complete 
+                            uncertainty distribution.
+                        </li>
+                        <li>
+                            <strong>Structured prior specification</strong> through configuration objects 
+                            means priors are declared before fitting, not adjusted after seeing results.
+                        </li>
+                        <li>
+                            <strong>Comprehensive diagnostics</strong> (trace plots, R-hat, ESS, posterior 
+                            predictive checks) ensure the inference is reliable before results are interpreted.
+                        </li>
+                        <li>
+                            <strong>Contribution uncertainty</strong> propagates coefficient uncertainty 
+                            through to business metrics (ROI, contributions) rather than reporting only 
+                            point estimates.
+                        </li>
+                        <li>
+                            <strong>Variable selection methods</strong> (horseshoe, spike-and-slab) handle 
+                            uncertainty about which controls to include, rather than requiring manual 
+                            specification shopping.
+                        </li>
+                    </ul>
+
+                    <pre><code class="python"># The framework computes full posterior distributions for business metrics
+contributions = model.compute_contributions()
+
+# Get probability that TV ROI exceeds threshold
+prob_profitable = (contributions["TV"]["roi"] > 1.0).mean()
+print(f"Probability TV is profitable: {prob_profitable:.1%}")</code></pre>
+                </div>
+            </div>
+
+            <div class="faq-item" id="prior-specification">
+                <div class="faq-question">How do priors work, and don't they bias the results?</div>
+                <div class="faq-answer">
+                    <p>
+                        Priors encode what we believe before seeing the data. In marketing, we typically 
+                        have genuine prior knowledge:
+                    </p>
+                    <ul>
+                        <li>Media elasticities are usually small (0.01–0.3 based on meta-analyses)</li>
+                        <li>Effects are generally positive (advertising shouldn't decrease sales)</li>
+                        <li>Adstock decay rates are bounded (effects don't last forever)</li>
+                    </ul>
+
+                    <p>
+                        This information is valuable and should be used. The alternative—pretending we 
+                        know nothing—is just as much a choice, and often a worse one.
+                    </p>
+
+                    <div class="definition">
+                        <h4>How Priors and Data Interact</h4>
+                        <p>
+                            With enough data, the posterior is dominated by the data and priors have 
+                            minimal impact. With limited data, priors provide regularization that 
+                            prevents overfitting. This is exactly the behavior you want: trust data 
+                            when you have it, fall back on prior knowledge when you don't.
+                        </p>
+                        <p style="margin-bottom: 0;">
+                            The framework includes <strong>prior sensitivity analysis</strong> to verify 
+                            that conclusions are robust to reasonable prior alternatives.
+                        </p>
+                    </div>
+
+                    <p>
+                        The key difference from specification shopping is that priors are declared 
+                        <em>before</em> seeing results. You can't "prior shop" in the same way because 
+                        you commit to priors before fitting. The framework's configuration-based approach 
+                        enforces this discipline.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="validation-features">
+                <div class="faq-question">What validation capabilities does the framework provide?</div>
+                <div class="faq-answer">
+                    <p>
+                        The framework supports multiple forms of validation:
+                    </p>
+
+                    <ul>
+                        <li>
+                            <strong>Prior predictive checks:</strong> Before fitting, simulate data from 
+                            your priors to verify they imply reasonable data distributions.
+                        </li>
+                        <li>
+                            <strong>Posterior predictive checks:</strong> After fitting, simulate data 
+                            from the posterior and compare to actual observations. Systematic 
+                            discrepancies indicate model misspecification.
+                        </li>
+                        <li>
+                            <strong>Out-of-sample prediction:</strong> Hold out recent periods and 
+                            evaluate predictive accuracy on unseen data.
+                        </li>
+                        <li>
+                            <strong>Experimental calibration:</strong> Compare model-predicted effects 
+                            to geo-experiment results when available.
+                        </li>
+                    </ul>
+
+                    <pre><code class="python"># Generate posterior predictive samples
+ppc = model.sample_posterior_predictive(trace)
+
+# Compare to observed data
+az.plot_ppc(trace, observed=y_observed)</code></pre>
+
+                    <p>
+                        Validation doesn't prevent specification shopping, but it creates accountability: 
+                        if a specification-shopped model makes predictions that fail validation, you'll 
+                        know.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="visualization">
+                <div class="faq-question">How does the framework communicate uncertainty visually?</div>
+                <div class="faq-answer">
+                    <p>
+                        Effective uncertainty visualization is critical for stakeholder communication. 
+                        The framework provides:
+                    </p>
+
+                    <ul>
+                        <li>
+                            <strong>Response curves with uncertainty bands:</strong> Show saturation 
+                            curves with 80% and 94% credible intervals, so stakeholders see where 
+                            we're confident vs. uncertain.
+                        </li>
+                        <li>
+                            <strong>Contribution waterfall charts:</strong> Decompose sales into 
+                            components with error bars showing contribution uncertainty.
+                        </li>
+                        <li>
+                            <strong>ROI forest plots:</strong> Display channel ROIs with credible 
+                            intervals, making it easy to see which channels are confidently 
+                            above/below profitability thresholds.
+                        </li>
+                        <li>
+                            <strong>Prior vs. posterior comparisons:</strong> Show how much the 
+                            data moved beliefs from the prior, indicating data informativeness.
+                        </li>
+                    </ul>
+
+                    <!-- Interactive: ROI Forest Plot Example -->
+                    <div class="interactive-viz">
+                        <h4>📊 Example: ROI Forest Plot with Decision Regions</h4>
+                        <div class="chart-container-tall" id="forest-plot-chart"></div>
+                        <div class="viz-description">
+                            This visualization makes decisions clear at a glance: Search and TV are 
+                            confidently profitable (act), Display is uncertain (validate), and Print 
+                            is confidently unprofitable (cut or reallocate).
+                        </div>
+                    </div>
+
+                    <div class="note">
+                        <h4>Design Principle</h4>
+                        <p style="margin-bottom: 0;">
+                            Every visualization in the framework shows uncertainty by default. 
+                            Hiding uncertainty requires explicit opt-out, not opt-in. This ensures 
+                            that honest measurement is the path of least resistance.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="summary">Summary: Key Principles</h2>
+            <!-- ================================================================== -->
+
+            <div class="note">
+                <h4>For Analysts</h4>
+                <ul style="margin-bottom: 0;">
+                    <li>Pre-specify models before seeing results</li>
+                    <li>Report credible intervals, not just point estimates</li>
+                    <li>Investigate unexpected results; don't iterate until they disappear</li>
+                    <li>Recommend experiments when uncertainty is high</li>
+                    <li>Use sensitivity analysis to show robustness (or lack thereof)</li>
+                </ul>
+            </div>
+
+            <div class="definition">
+                <h4>For Clients</h4>
+                <ul style="margin-bottom: 0;">
+                    <li>Statistics quantifies uncertainty; it doesn't eliminate it</li>
+                    <li>Credible intervals tell you how confident to be in estimates</li>
+                    <li>Wide intervals mean "run an experiment before acting"</li>
+                    <li>Narrow intervals mean "act with confidence"</li>
+                    <li>Ask for uncertainty bounds on any recommendation</li>
+                </ul>
+            </div>
+
+            <div class="warning">
+                <h4>Red Flags in Any Methodology</h4>
+                <ul style="margin-bottom: 0;">
+                    <li>Point estimates without uncertainty bounds</li>
+                    <li>"We adjusted the model until the results made sense"</li>
+                    <li>Negative coefficients that were "fixed"</li>
+                    <li>No discussion of validation or out-of-sample testing</li>
+                    <li>Year-over-year changes presented as real when they're within uncertainty</li>
+                </ul>
+            </div>
+
+        </main>
+    </div>
+    <script src="shared/components.js"></script>
+    <script>
+        // Color scheme matching the site
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#d4ddd4',
+            bg: '#fafbf9',
+            surface: '#ffffff'
+        };
+
+        const plotConfig = { displayModeBar: false, responsive: true };
+        const plotLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+            margin: { t: 40, r: 30, b: 50, l: 60 },
+            xaxis: { gridcolor: colors.grid, zerolinecolor: colors.grid },
+            yaxis: { gridcolor: colors.grid, zerolinecolor: colors.grid }
+        };
+
+        // Utility: Normal PDF
+        function normalPDF(x, mean, std) {
+            const coef = 1 / (std * Math.sqrt(2 * Math.PI));
+            const exp = Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
+            return coef * exp;
+        }
+
+        // Utility: Normal CDF approximation
+        function normalCDF(x, mean, std) {
+            const z = (x - mean) / std;
+            const t = 1 / (1 + 0.2316419 * Math.abs(z));
+            const d = 0.3989422804 * Math.exp(-z * z / 2);
+            const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+            return z > 0 ? 1 - p : p;
+        }
+
+        // Utility: Generate range
+        function linspace(start, end, n) {
+            const step = (end - start) / (n - 1);
+            return Array.from({ length: n }, (_, i) => start + i * step);
+        }
+
+        // =====================================================================
+        // Chart 1: Prior to Posterior Updating
+        // =====================================================================
+        function updatePriorPosteriorChart() {
+            const dataStrength = parseInt(document.getElementById('data-strength').value);
+            const trueEffect = parseInt(document.getElementById('true-effect').value) / 100;
+            
+            document.getElementById('data-strength-value').textContent = dataStrength + ' observations';
+            document.getElementById('true-effect-value').textContent = trueEffect.toFixed(2);
+
+            const priorMean = 1.0;
+            const priorStd = 0.5;
+            const likelihoodStd = 2.0 / Math.sqrt(dataStrength);
+            
+            // Posterior parameters (conjugate update)
+            const posteriorPrecision = 1/(priorStd*priorStd) + 1/(likelihoodStd*likelihoodStd);
+            const posteriorMean = (priorMean/(priorStd*priorStd) + trueEffect/(likelihoodStd*likelihoodStd)) / posteriorPrecision;
+            const posteriorStd = Math.sqrt(1/posteriorPrecision);
+
+            const x = linspace(-0.5, 2.5, 200);
+            const prior = x.map(function(xi) { return normalPDF(xi, priorMean, priorStd); });
+            const posterior = x.map(function(xi) { return normalPDF(xi, posteriorMean, posteriorStd); });
+
+            const traces = [
+                {
+                    x: x, y: prior,
+                    type: 'scatter', mode: 'lines',
+                    name: 'Prior',
+                    line: { color: colors.textMuted, width: 2, dash: 'dash' }
+                },
+                {
+                    x: x, y: posterior,
+                    type: 'scatter', mode: 'lines',
+                    name: 'Posterior',
+                    line: { color: colors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.3)'
+                },
+                {
+                    x: [trueEffect, trueEffect],
+                    y: [0, Math.max.apply(null, posterior) * 1.1],
+                    type: 'scatter', mode: 'lines',
+                    name: 'True Value',
+                    line: { color: colors.danger, width: 2, dash: 'dot' }
+                }
+            ];
+
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: true,
+                legend: { x: 0.7, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)' },
+                xaxis: { title: 'ROI', range: [-0.5, 2.5], gridcolor: colors.grid, zerolinecolor: colors.grid },
+                yaxis: { title: 'Density', showticklabels: false, gridcolor: colors.grid, zerolinecolor: colors.grid }
+            };
+
+            Plotly.newPlot('prior-posterior-chart', traces, layout, plotConfig);
+        }
+
+        document.getElementById('data-strength').addEventListener('input', updatePriorPosteriorChart);
+        document.getElementById('true-effect').addEventListener('input', updatePriorPosteriorChart);
+
+        // =====================================================================
+        // Chart 2: Specification Shopping Bias
+        // =====================================================================
+        function updateSpecShoppingChart() {
+            var trueEffect = parseInt(document.getElementById('true-effect-bias').value) / 100;
+            var numSpecs = parseInt(document.getElementById('num-specs').value);
+            
+            document.getElementById('true-effect-bias-value').textContent = trueEffect.toFixed(2);
+            document.getElementById('num-specs-value').textContent = numSpecs;
+
+            // Simulate coefficient estimates from multiple specifications
+            // Each specification gives a noisy estimate around the true effect
+            var estimateStd = 0.15; // typical estimation uncertainty
+            
+            // Generate many simulations to show expected bias
+            var numSims = 1000;
+            var maxEstimates = [];
+            
+            // Use seeded random for consistency
+            var seed = 12345;
+            function seededRandom() {
+                seed = (seed * 9301 + 49297) % 233280;
+                return seed / 233280;
+            }
+            
+            for (var sim = 0; sim < numSims; sim++) {
+                var maxEst = -Infinity;
+                for (var spec = 0; spec < numSpecs; spec++) {
+                    // Box-Muller transform for normal random
+                    var u1 = seededRandom();
+                    var u2 = seededRandom();
+                    var z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+                    var estimate = trueEffect + z * estimateStd;
+                    if (estimate > maxEst) {
+                        maxEst = estimate;
+                    }
+                }
+                maxEstimates.push(maxEst);
+            }
+            
+            // Calculate expected max (what gets reported)
+            var expectedMax = maxEstimates.reduce(function(a, b) { return a + b; }, 0) / numSims;
+            
+            // Create histogram of max estimates
+            var histBins = 30;
+            var histMin = Math.min.apply(null, maxEstimates) - 0.05;
+            var histMax = Math.max.apply(null, maxEstimates) + 0.05;
+            var binWidth = (histMax - histMin) / histBins;
+            var binCounts = new Array(histBins).fill(0);
+            var binCenters = [];
+            
+            for (var i = 0; i < histBins; i++) {
+                binCenters.push(histMin + (i + 0.5) * binWidth);
+            }
+            
+            for (var i = 0; i < maxEstimates.length; i++) {
+                var binIdx = Math.floor((maxEstimates[i] - histMin) / binWidth);
+                if (binIdx >= 0 && binIdx < histBins) {
+                    binCounts[binIdx]++;
+                }
+            }
+            
+            // Normalize to density
+            var binDensity = binCounts.map(function(c) { return c / (numSims * binWidth); });
+            var maxDensity = Math.max.apply(null, binDensity);
+            
+            // Also show the true sampling distribution (single spec)
+            var xDist = linspace(trueEffect - 0.5, trueEffect + 0.7, 100);
+            var yDist = xDist.map(function(x) { return normalPDF(x, trueEffect, estimateStd); });
+            var maxDistY = Math.max.apply(null, yDist);
+            
+            // Scale the single-spec distribution to match histogram height
+            var scaleFactor = maxDensity / maxDistY * 0.8;
+            var yDistScaled = yDist.map(function(y) { return y * scaleFactor; });
+            
+            // Calculate bias
+            var bias = expectedMax - trueEffect;
+            var biasMultiple = trueEffect > 0.01 ? (expectedMax / trueEffect) : expectedMax / 0.01;
+            
+            // Update insight text
+            var insightText;
+            if (trueEffect < 0.01) {
+                insightText = 'True effect: <strong>≈0</strong>. Testing ' + numSpecs + ' specifications and reporting the most positive: expected reported estimate is <strong>' + expectedMax.toFixed(2) + '</strong> — pure noise presented as signal.';
+            } else {
+                insightText = 'True effect: <strong>' + trueEffect.toFixed(2) + '</strong>. Testing ' + numSpecs + ' specifications and reporting only the most positive: expected reported estimate is <strong>' + expectedMax.toFixed(2) + '</strong> — a <strong>' + biasMultiple.toFixed(1) + 'x overestimate</strong>.';
+            }
+            document.getElementById('spec-shopping-insight').innerHTML = insightText;
+
+            var traces = [
+                // True sampling distribution (single honest spec)
+                {
+                    x: xDist, 
+                    y: yDistScaled,
+                    type: 'scatter', 
+                    mode: 'lines',
+                    name: 'Single Specification<br>(honest estimate)',
+                    line: { color: colors.primary, width: 2, dash: 'dash' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.2)'
+                },
+                // Distribution of reported estimates (max of k specs)
+                {
+                    x: binCenters,
+                    y: binDensity,
+                    type: 'bar',
+                    name: 'Reported Estimate<br>(best of ' + numSpecs + ' specs)',
+                    marker: { 
+                        color: 'rgba(201, 112, 103, 0.6)',
+                        line: { color: colors.danger, width: 1 }
+                    },
+                    width: binWidth * 0.9
+                },
+                // True effect line
+                {
+                    x: [trueEffect, trueEffect],
+                    y: [0, maxDensity * 1.1],
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'True Effect',
+                    line: { color: colors.primaryDark, width: 3 }
+                },
+                // Expected reported value line  
+                {
+                    x: [expectedMax, expectedMax],
+                    y: [0, maxDensity * 1.1],
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Expected Reported',
+                    line: { color: colors.danger, width: 3 }
+                }
+            ];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: true,
+                legend: { x: 0, y: 1.15, bgcolor: 'rgba(255,255,255,0.9)', font: { size: 10 }, orientation: 'h', entrywidth: 100 },
+                barmode: 'overlay',
+                xaxis: { 
+                    title: 'Coefficient Estimate',
+                    gridcolor: colors.grid,
+                    zerolinecolor: colors.grid,
+                    range: [Math.min(trueEffect - 0.4, -0.1), Math.max(expectedMax + 0.3, 0.6)]
+                },
+                yaxis: { 
+                    title: 'Density', 
+                    showticklabels: false,
+                    gridcolor: colors.grid,
+                    zerolinecolor: colors.grid
+                },
+                annotations: [
+                    {
+                        x: trueEffect,
+                        y: maxDensity * 1.05,
+                        text: 'Truth',
+                        showarrow: false,
+                        font: { color: colors.primaryDark, size: 11 }
+                    },
+                    {
+                        x: expectedMax,
+                        y: maxDensity * 1.05,
+                        text: 'Reported',
+                        showarrow: false,
+                        font: { color: colors.danger, size: 11 }
+                    }
+                ]
+            };
+
+            Plotly.newPlot('spec-shopping-chart', traces, layout, plotConfig);
+        }
+
+        document.getElementById('true-effect-bias').addEventListener('input', updateSpecShoppingChart);
+        document.getElementById('num-specs').addEventListener('input', updateSpecShoppingChart);
+
+        // =====================================================================
+        // Chart 3: Many Analysts Simulation
+        // =====================================================================
+        function runManyAnalysts() {
+            // Simulate 29 analyst estimates with variation
+            var trueEffect = 1.2;
+            var estimates = [];
+            for (var i = 0; i < 29; i++) {
+                // Each analyst has different specification choices leading to different estimates
+                var specBias = (Math.random() - 0.5) * 1.5;
+                var noise = (Math.random() - 0.5) * 0.8;
+                estimates.push({
+                    analyst: 'Analyst ' + (i + 1),
+                    estimate: trueEffect + specBias + noise,
+                    significant: Math.random() > 0.31 // ~69% find significance
+                });
+            }
+            
+            estimates.sort(function(a, b) { return a.estimate - b.estimate; });
+
+            var barColors = estimates.map(function(e) {
+                return e.significant ? colors.primary : colors.textMuted;
+            });
+
+            var traces = [{
+                y: estimates.map(function(e) { return e.analyst; }),
+                x: estimates.map(function(e) { return e.estimate; }),
+                type: 'bar',
+                orientation: 'h',
+                marker: { color: barColors },
+                hovertemplate: '%{y}: %{x:.2f}<extra></extra>'
+            }];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 20, r: 30, b: 50, l: 80 },
+                xaxis: { 
+                    title: 'Effect Size Estimate',
+                    zeroline: true,
+                    zerolinecolor: colors.danger,
+                    zerolinewidth: 2,
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    tickfont: { size: 9 },
+                    gridcolor: colors.grid
+                },
+                shapes: [{
+                    type: 'line',
+                    x0: trueEffect, x1: trueEffect,
+                    y0: -1, y1: 29,
+                    line: { color: colors.danger, width: 2, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: trueEffect,
+                    y: 28,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'True Effect',
+                    showarrow: true,
+                    arrowhead: 2,
+                    arrowcolor: colors.danger,
+                    font: { color: colors.danger }
+                }]
+            };
+
+            Plotly.newPlot('many-analysts-chart', traces, layout, plotConfig);
+        }
+
+        document.getElementById('run-analysts-btn').addEventListener('click', runManyAnalysts);
+
+        // =====================================================================
+        // Chart 4: Coefficient Interpretation
+        // =====================================================================
+        var coefScenarios = {
+            'strong-positive': { mean: 0.15, std: 0.03, insight: '<strong>Strong positive effect:</strong> 95% probability effect is positive. Act with confidence.' },
+            'weak-positive': { mean: 0.08, std: 0.05, insight: '<strong>Weak positive effect:</strong> 85% probability effect is positive. Consider validation.' },
+            'uncertain': { mean: 0.05, std: 0.12, insight: '<strong>Highly uncertain:</strong> Wide interval spans zero. Cannot confidently claim positive or negative effect.' },
+            'likely-null': { mean: 0.01, std: 0.04, insight: '<strong>Likely null:</strong> Posterior centered near zero. Effect is probably negligible.' },
+            'negative': { mean: -0.08, std: 0.04, insight: '<strong>Negative effect:</strong> 95% probability effect is negative. Investigate cause—don\'t just adjust the model.' }
+        };
+
+        function setCoefScenario(scenario) {
+            // Update button states
+            var buttons = document.querySelectorAll('#coef-scenario-buttons .scenario-btn');
+            buttons.forEach(function(btn) {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-scenario') === scenario) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            var s = coefScenarios[scenario];
+            document.getElementById('coef-insight').innerHTML = s.insight;
+
+            var x = linspace(-0.3, 0.4, 200);
+            var y = x.map(function(xi) { return normalPDF(xi, s.mean, s.std); });
+
+            // Split into negative and positive regions
+            var negX = [], negY = [], posX = [], posY = [];
+            for (var i = 0; i < x.length; i++) {
+                if (x[i] < 0) {
+                    negX.push(x[i]);
+                    negY.push(y[i]);
+                } else {
+                    posX.push(x[i]);
+                    posY.push(y[i]);
+                }
+            }
+
+            var maxY = Math.max.apply(null, y);
+
+            var traces = [
+                {
+                    x: negX, y: negY,
+                    type: 'scatter', mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(201, 112, 103, 0.4)',
+                    line: { color: 'rgba(0,0,0,0)', width: 0 },
+                    name: 'Negative region',
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                {
+                    x: posX, y: posY,
+                    type: 'scatter', mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.4)',
+                    line: { color: 'rgba(0,0,0,0)', width: 0 },
+                    name: 'Positive region',
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                {
+                    x: x, y: y,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.text, width: 2 },
+                    name: 'Posterior',
+                    showlegend: false
+                }
+            ];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: false,
+                xaxis: { 
+                    title: 'Media Coefficient', 
+                    zeroline: true, 
+                    zerolinecolor: colors.text, 
+                    zerolinewidth: 2,
+                    range: [-0.3, 0.4],
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    title: 'Density', 
+                    showticklabels: false,
+                    gridcolor: colors.grid
+                },
+                shapes: [{
+                    type: 'line',
+                    x0: 0, x1: 0,
+                    y0: 0, y1: maxY * 1.1,
+                    line: { color: colors.text, width: 2 }
+                }],
+                annotations: [
+                    {
+                        x: -0.2, y: maxY * 0.85,
+                        text: 'Negative<br>(unexpected)',
+                        showarrow: false,
+                        font: { color: colors.danger, size: 11 }
+                    }, 
+                    {
+                        x: 0.28, y: maxY * 0.85,
+                        text: 'Positive<br>(expected)',
+                        showarrow: false,
+                        font: { color: colors.primaryDark, size: 11 }
+                    }
+                ]
+            };
+
+            Plotly.newPlot('coefficient-interpretation-chart', traces, layout, plotConfig);
+        }
+
+        // Add event listeners for coefficient scenario buttons
+        document.querySelectorAll('#coef-scenario-buttons .scenario-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                setCoefScenario(this.getAttribute('data-scenario'));
+            });
+        });
+
+        // =====================================================================
+        // Chart 5: Year-over-Year
+        // =====================================================================
+        function initYoYChart() {
+            var years = ['2022', '2023', '2024'];
+            var estimates = [1.1, 1.6, 1.35];
+            var lows = [0.7, 1.2, 0.9];
+            var highs = [1.5, 2.0, 1.8];
+
+            var traces = [{
+                x: years,
+                y: estimates,
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: [highs[0] - estimates[0], highs[1] - estimates[1], highs[2] - estimates[2]],
+                    arrayminus: [estimates[0] - lows[0], estimates[1] - lows[1], estimates[2] - lows[2]],
+                    visible: true,
+                    color: colors.primary,
+                    thickness: 3,
+                    width: 10
+                },
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: colors.primary, size: 16 },
+                name: 'TV ROI Estimate'
+            }];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: false,
+                xaxis: { 
+                    title: 'Year',
+                    type: 'category',
+                    categoryorder: 'array',
+                    categoryarray: ['2022', '2023', '2024'],
+                    gridcolor: colors.grid,
+                    range: [-0.2, 2.2],
+                    fixedrange: true
+                },
+                yaxis: { 
+                    title: 'TV ROI', 
+                    range: [0.3, 2.3],
+                    gridcolor: colors.grid
+                },
+                shapes: [{
+                    type: 'rect',
+                    xref: 'paper',
+                    x0: 0, x1: 1,
+                    y0: 0, y1: 1,
+                    fillcolor: 'rgba(201, 112, 103, 0.15)',
+                    line: { width: 0 }
+                }, {
+                    type: 'line',
+                    xref: 'paper',
+                    x0: 0, x1: 1,
+                    y0: 1, y1: 1,
+                    line: { color: colors.danger, width: 2, dash: 'dash' }
+                }],
+                annotations: [
+                    {
+                        x: .2, y: 0.8,
+                        text: 'Unprofitable Zone',
+                        showarrow: false,
+                        font: { color: colors.danger, size: 10 }
+                    },
+                    {
+                        x: .5, y: 2.1,
+                        text: '2022→2023: Potentially real<br>(intervals barely overlap)',
+                        showarrow: true,
+                        arrowhead: 2,
+                        arrowcolor: colors.primaryDark,
+                        ax: 0,
+                        ay: -30,
+                        font: { size: 10, color: colors.primaryDark },
+                        align: 'center'
+                    },
+                    {
+                        x: 1.5, y: 2.1,
+                        text: '2023→2024: Within uncertainty<br>(not a real change)',
+                        showarrow: true,
+                        arrowhead: 2,
+                        arrowcolor: colors.textMuted,
+                        ax: 0,
+                        ay: -30,
+                        font: { size: 10, color: colors.textMuted },
+                        align: 'center'
+                    }
+                ]
+            };
+
+            Plotly.newPlot('yoy-chart', traces, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // Chart 6: Uncertainty Concept (Before/After Analysis)
+        // =====================================================================
+        var analysisStages = {
+            'before': { mean: 1.5, std: 1.2, insight: '<strong>Before analysis:</strong> We know almost nothing—ROI could plausibly be anywhere from 0 to 3+.' },
+            'after-weak': { mean: 1.4, std: 0.5, insight: '<strong>After analysis (weak data):</strong> We\'ve narrowed the range, but substantial uncertainty remains. ROI likely between 0.5 and 2.3.' },
+            'after-strong': { mean: 1.4, std: 0.15, insight: '<strong>After analysis (strong data):</strong> High confidence. ROI almost certainly between 1.1 and 1.7.' }
+        };
+
+        function setAnalysisStage(stage) {
+            // Update button states
+            var buttons = document.querySelectorAll('#analysis-stage-buttons .scenario-btn');
+            buttons.forEach(function(btn) {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-stage') === stage) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            var s = analysisStages[stage];
+            document.getElementById('uncertainty-insight').innerHTML = s.insight;
+
+            var x = linspace(-0.5, 3.5, 200);
+            var y = x.map(function(xi) { return normalPDF(xi, s.mean, s.std); });
+            var maxY = Math.max.apply(null, y);
+
+            var traces = [{
+                x: x, y: y,
+                type: 'scatter', mode: 'lines',
+                fill: 'tozeroy',
+                fillcolor: 'rgba(106, 143, 168, 0.3)',
+                line: { color: colors.accent, width: 3 },
+                name: 'Belief Distribution'
+            }];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: false,
+                xaxis: { 
+                    title: 'ROI', 
+                    range: [-0.5, 3.5],
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    title: 'Probability Density', 
+                    showticklabels: false,
+                    gridcolor: colors.grid
+                },
+                shapes: [{
+                    type: 'line',
+                    x0: 1, x1: 1,
+                    y0: 0, y1: maxY * 1.15,
+                    line: { color: colors.warning, width: 2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 1, y: maxY * 1.1,
+                    text: 'Break-even',
+                    showarrow: false,
+                    font: { color: colors.warning }
+                }]
+            };
+
+            Plotly.newPlot('uncertainty-concept-chart', traces, layout, plotConfig);
+        }
+
+        // Add event listeners for analysis stage buttons
+        document.querySelectorAll('#analysis-stage-buttons .scenario-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                setAnalysisStage(this.getAttribute('data-stage'));
+            });
+        });
+
+        // =====================================================================
+        // Chart 7: Decision Regions
+        // =====================================================================
+        function updateDecisionRegionsChart() {
+            var estimate = parseInt(document.getElementById('roi-estimate').value) / 100;
+            var uncertainty = parseInt(document.getElementById('roi-uncertainty').value) / 100;
+            
+            document.getElementById('roi-estimate-value').textContent = estimate.toFixed(2);
+            document.getElementById('roi-uncertainty-value').textContent = uncertainty.toFixed(2);
+
+            var x = linspace(-0.5, 3, 200);
+            var y = x.map(function(xi) { return normalPDF(xi, estimate, uncertainty); });
+            var maxY = Math.max.apply(null, y);
+
+            // Calculate probability below 1 using CDF
+            var probBelow1 = normalCDF(1, estimate, uncertainty);
+
+            var decision, decisionColor;
+            if (probBelow1 < 0.05) {
+                decision = 'Act with confidence';
+                decisionColor = colors.success;
+            } else if (probBelow1 < 0.25) {
+                decision = 'Act with monitoring';
+                decisionColor = colors.primary;
+            } else if (probBelow1 < 0.50) {
+                decision = 'Validate before acting';
+                decisionColor = colors.warning;
+            } else {
+                decision = 'Do not invest / cut spend';
+                decisionColor = colors.danger;
+            }
+
+            document.getElementById('decision-insight').innerHTML = 
+                '<strong>Recommendation: ' + decision + '.</strong> ' + ((1-probBelow1)*100).toFixed(0) + '% probability ROI > 1.0.';
+
+            // Split into regions
+            var belowX = [], belowY = [], aboveX = [], aboveY = [];
+            for (var i = 0; i < x.length; i++) {
+                if (x[i] < 1) {
+                    belowX.push(x[i]);
+                    belowY.push(y[i]);
+                } else {
+                    aboveX.push(x[i]);
+                    aboveY.push(y[i]);
+                }
+            }
+
+            var traces = [
+                {
+                    x: belowX, y: belowY,
+                    type: 'scatter', mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(201, 112, 103, 0.4)',
+                    line: { width: 0 },
+                    name: 'Unprofitable',
+                    showlegend: true,
+                    hoverinfo: 'skip'
+                },
+                {
+                    x: aboveX, y: aboveY,
+                    type: 'scatter', mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(106, 191, 138, 0.4)',
+                    line: { width: 0 },
+                    name: 'Profitable',
+                    showlegend: true,
+                    hoverinfo: 'skip'
+                },
+                {
+                    x: x, y: y,
+                    type: 'scatter', mode: 'lines',
+                    line: { color: colors.text, width: 2 },
+                    name: 'ROI Distribution',
+                    showlegend: false
+                },
+                {
+                    x: [estimate], y: [normalPDF(estimate, estimate, uncertainty)],
+                    type: 'scatter', mode: 'markers',
+                    marker: { color: colors.text, size: 10 },
+                    name: 'Point Estimate',
+                    showlegend: false
+                }
+            ];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: true,
+                legend: { x: 0.75, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)' },
+                xaxis: { 
+                    title: 'ROI', 
+                    range: [-0.5, 3],
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    title: 'Density', 
+                    showticklabels: false,
+                    gridcolor: colors.grid
+                },
+                shapes: [{
+                    type: 'line',
+                    x0: 1, x1: 1,
+                    y0: 0, y1: maxY * 1.1,
+                    line: { color: colors.text, width: 2 }
+                }],
+                annotations: [{
+                    x: 1, y: maxY * 1.05,
+                    text: 'Break-even',
+                    showarrow: false,
+                    font: { size: 11 }
+                }]
+            };
+
+            Plotly.newPlot('decision-regions-chart', traces, layout, plotConfig);
+        }
+
+        document.getElementById('roi-estimate').addEventListener('input', updateDecisionRegionsChart);
+        document.getElementById('roi-uncertainty').addEventListener('input', updateDecisionRegionsChart);
+
+        // =====================================================================
+        // Chart 8: Same Estimate, Different Decisions
+        // =====================================================================
+        function initSameEstimateChart() {
+            var x = linspace(-0.5, 3, 200);
+            var yA = x.map(function(xi) { return normalPDF(xi, 1.4, 0.15); });
+            var yB = x.map(function(xi) { return normalPDF(xi, 1.4, 0.6); });
+            var maxY = Math.max.apply(null, yA);
+
+            var traces = [
+                {
+                    x: x, y: yA,
+                    type: 'scatter', mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.3)',
+                    line: { color: colors.primary, width: 3 },
+                    name: 'Channel A<br>(σ=0.15)'
+                },
+                {
+                    x: x, y: yB,
+                    type: 'scatter', mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(212, 168, 106, 0.3)',
+                    line: { color: colors.warning, width: 3 },
+                    name: 'Channel B<br>(σ=0.60)'
+                }
+            ];
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 50, l: 60 },
+                showlegend: true,
+                legend: { x: 0.65, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)', orientation: 'h', entrywidth: 80 },
+                xaxis: { 
+                    title: 'ROI', 
+                    range: [-0.5, 3],
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    title: 'Density', 
+                    showticklabels: false,
+                    gridcolor: colors.grid
+                },
+                shapes: [{
+                    type: 'line',
+                    x0: 1, x1: 1,
+                    y0: 0, y1: maxY * 1.1,
+                    line: { color: colors.danger, width: 2 }
+                }, {
+                    type: 'line',
+                    x0: 1.4, x1: 1.4,
+                    y0: 0, y1: maxY * 0.5,
+                    line: { color: colors.text, width: 2, dash: 'dot' }
+                }],
+                annotations: [
+                    {
+                        x: 0.5, y: maxY * 0.4,
+                        text: 'Unprofitable',
+                        showarrow: false,
+                        font: { color: colors.danger }
+                    },
+                    {
+                        x: 1.4, y: maxY * 0.55,
+                        text: 'Same point<br>estimate: 1.4',
+                        showarrow: false,
+                        font: { size: 10 }
+                    }
+                ]
+            };
+
+            Plotly.newPlot('same-estimate-chart', traces, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // Chart 9: Experiment Decision Matrix
+        // =====================================================================
+        function initExperimentMatrix() {
+            // Values: 0 = Act on model (green), 1 = Consider (yellow), 2 = Validate (red)
+            var z = [
+                [0, 0, 1, 2],  // Low stakes
+                [0, 1, 2, 2],  // Medium stakes
+                [1, 2, 2, 2],  // High stakes
+                [2, 2, 2, 2]   // Critical stakes
+            ];
+
+            var textLabels = [
+                ['Act', 'Act', 'Consider', 'Validate'],
+                ['Act', 'Consider', 'Validate', 'Validate'],
+                ['Consider', 'Validate', 'Validate', 'Must Validate'],
+                ['Validate', 'Validate', 'Must Validate', 'Must Validate']
+            ];
+
+            var traces = [{
+                z: z,
+                x: ['Low', 'Medium', 'High', 'Very High'],
+                y: ['Low', 'Medium', 'High', 'Critical'],
+                type: 'heatmap',
+                colorscale: [
+                    [0, colors.success],
+                    [0.5, colors.warning],
+                    [1, colors.danger]
+                ],
+                showscale: false,
+                hoverinfo: 'text',
+                text: textLabels
+            }];
+
+            // Add text annotations
+            var annotations = [];
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    annotations.push({
+                        x: j, y: i,
+                        text: textLabels[i][j],
+                        showarrow: false,
+                        font: { color: 'white', size: 12 }
+                    });
+                }
+            }
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 30, b: 60, l: 80 },
+                annotations: annotations,
+                xaxis: { 
+                    title: 'Uncertainty Level', 
+                    side: 'bottom',
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    title: 'Decision Stakes',
+                    gridcolor: colors.grid
+                }
+            };
+
+            Plotly.newPlot('experiment-matrix-chart', traces, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // Chart 10: ROI Forest Plot
+        // =====================================================================
+        function initForestPlot() {
+            var channels = ['Print', 'Display', 'Social', 'TV', 'Search'];
+            var estimates = [0.4, 1.1, 1.3, 1.5, 2.2];
+            var lows = [0.2, 0.5, 0.9, 1.2, 1.8];
+            var highs = [0.6, 1.8, 1.7, 1.9, 2.7];
+            
+            var markerColors = [];
+            var recommendations = [];
+            for (var i = 0; i < estimates.length; i++) {
+                if (highs[i] < 1) {
+                    markerColors.push(colors.danger);
+                    recommendations.push('✗ Cut');
+                } else if (lows[i] > 1) {
+                    markerColors.push(colors.success);
+                    recommendations.push('✓ Act');
+                } else {
+                    markerColors.push(colors.warning);
+                    recommendations.push('? Validate');
+                }
+            }
+
+            var errorArrayPlus = [];
+            var errorArrayMinus = [];
+            for (var i = 0; i < estimates.length; i++) {
+                errorArrayPlus.push(highs[i] - estimates[i]);
+                errorArrayMinus.push(estimates[i] - lows[i]);
+            }
+
+            var traces = [{
+                y: channels,
+                x: estimates,
+                error_x: {
+                    type: 'data',
+                    symmetric: false,
+                    array: errorArrayPlus,
+                    arrayminus: errorArrayMinus,
+                    visible: true,
+                    thickness: 3,
+                    width: 8,
+                    color: markerColors
+                },
+                type: 'scatter',
+                mode: 'markers',
+                marker: { color: markerColors, size: 14 },
+                hovertemplate: '%{y}: %{x:.2f}<extra></extra>'
+            }];
+
+            var annotations = [];
+            for (var i = 0; i < channels.length; i++) {
+                annotations.push({
+                    x: 2.85, 
+                    y: i,
+                    text: recommendations[i],
+                    showarrow: false,
+                    font: { 
+                        color: markerColors[i], 
+                        size: 11 
+                    },
+                    xanchor: 'left'
+                });
+            }
+            
+            annotations.push({
+                x: 0.5, y: 4.6,
+                text: 'Cut',
+                showarrow: false,
+                font: { color: colors.danger, size: 11 }
+            });
+            annotations.push({
+                x: 2, y: 4.6,
+                text: 'Invest',
+                showarrow: false,
+                font: { color: colors.success, size: 11 }
+            });
+
+            var layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Source Sans 3, sans-serif', color: colors.text, size: 12 },
+                margin: { t: 40, r: 100, b: 50, l: 80 },
+                xaxis: { 
+                    title: 'ROI (80% Credible Interval)',
+                    range: [0, 3.2],
+                    gridcolor: colors.grid
+                },
+                yaxis: { 
+                    gridcolor: colors.grid
+                },
+                shapes: [
+                    {
+                        type: 'line',
+                        x0: 1, x1: 1,
+                        y0: -0.5, y1: 4.5,
+                        line: { color: colors.text, width: 2 }
+                    }, 
+                    {
+                        type: 'rect',
+                        x0: 0, x1: 1,
+                        y0: -0.5, y1: 4.5,
+                        fillcolor: 'rgba(201, 112, 103, 0.1)',
+                        line: { width: 0 }
+                    }
+                ],
+                annotations: annotations
+            };
+
+            Plotly.newPlot('forest-plot-chart', traces, layout, plotConfig);
+        }
+
+        // =====================================================================
+        // Initialize all charts
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePriorPosteriorChart();
+            updateSpecShoppingChart();
+            runManyAnalysts();
+            setCoefScenario('strong-positive');
+            initYoYChart();
+            setAnalysisStage('before');
+            updateDecisionRegionsChart();
+            initSameEstimateChart();
+            initExperimentMatrix();
+            initForestPlot();
+        });
+
+        // Sidebar scroll highlighting
+        var sectionElements = document.querySelectorAll('.faq-item[id], h2[id]');
+        var navLinkElements = document.querySelectorAll('.sidebar-nav a');
+
+        window.addEventListener('scroll', function() {
+            var current = '';
+            sectionElements.forEach(function(section) {
+                var sectionTop = section.offsetTop;
+                if (window.scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinkElements.forEach(function(link) {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
