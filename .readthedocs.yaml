@@ -1,0 +1,29 @@
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html
+
+version: 2
+
+# Build settings
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.12"
+
+# Sphinx configuration
+sphinx:
+  builder: html
+  configuration: docs/api/source/conf.py
+  fail_on_warning: false
+
+# Python settings
+python:
+  install:
+    # Install docs dependencies first
+    - requirements: docs/requirements-docs.txt
+    # Install the package itself (minimal dependencies via mocks)
+    - method: pip
+      path: .
+      extra_requirements: []
+
+# Formats to build (HTML only for faster builds)
+formats: []

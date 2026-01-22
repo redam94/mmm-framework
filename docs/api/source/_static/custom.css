@@ -1,0 +1,26 @@
+/* Custom styling for MMM Framework documentation */
+
+/* Improve code block readability */
+.highlight {
+    background: #f8f8f8;
+    border-radius: 4px;
+}
+
+/* Better parameter formatting */
+.field-list dt {
+    font-weight: bold;
+}
+
+/* Improve table readability */
+table.docutils {
+    margin: 1em 0;
+}
+
+table.docutils td, table.docutils th {
+    padding: 8px 12px;
+}
+
+/* Better method/class signature display */
+.sig-name {
+    font-weight: bold;
+}
