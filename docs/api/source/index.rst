@@ -56,6 +56,13 @@ Quick Example
 
 .. toctree::
    :maxdepth: 2
+   :caption: Getting Started
+
+   introduction
+   scientific_modeling
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    api/index
