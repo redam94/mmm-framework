@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <title>Plotly Test</title>
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+</head>
+<body>
+    <h1>Plotly Test Chart</h1>
+    <div id="test-chart" style="height:400px; width:900px;"></div>
+    <script>
+        var trace1 = {
+            x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            y: [130, 135, 140, 138, 142, 145, 143, 148, 150, 147],
+            mode: 'lines',
+            name: 'Test Data'
+        };
+        var layout = {
+            title: 'Test Chart',
+            xaxis: {title: 'X Axis'},
+            yaxis: {title: 'Y Axis'}
+        };
+        Plotly.newPlot('test-chart', [trace1], layout);
+    </script>
+
+    <h2>Debug Info</h2>
+    <p>If you can see this chart, Plotly is working correctly.</p>
+    <p>If the chart is blank, there may be a browser security/network issue loading the Plotly CDN.</p>
+</body>
+</html>
