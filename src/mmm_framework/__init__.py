@@ -108,6 +108,12 @@ from .jobs import (
 
 from . import mmm_extensions
 from . import dag_model_builder
+from . import excel_config
+from .excel_config import (
+    TemplateGenerator,
+    TemplateParser,
+    discover_mff,
+)
 from .dag_model_builder import (
     # DAG Specification
     DAGSpec,
@@ -231,4 +237,9 @@ __all__ = [
     "resolve_model_type",
     "create_simple_dag",
     "create_mediation_dag",
+    # Excel Config
+    "excel_config",
+    "TemplateGenerator",
+    "TemplateParser",
+    "discover_mff",
 ]

@@ -46,4 +46,64 @@
         <lastmod>2026-01-05</lastmod>
         <changefreq>monthly</changefreq>
     </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/business-stakeholders.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/modeling-guide.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/interpreting-results.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/demos.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/scientific-workflow-demo.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/mmm-example-report.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/workflow-channel-effectiveness.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/workflow-budget-optimization.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/workflow-forecasting.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/scientific-workflow-simple.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
 </urlset>

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demos &amp; Reports | MMM Framework</title>
+    <meta name="description" content="Interactive workflow demonstrations, example reports, and scenario analyses for the MMM Framework.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/demos.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Hub-specific styles */
+        .demo-hub-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.75rem;
+            margin: 2rem 0;
+        }
+
+        .demo-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .demo-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(90, 124, 101, 0.15);
+        }
+
+        .demo-card-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .demo-card-icon.workflow {
+            background: rgba(143, 168, 106, 0.15);
+        }
+        .demo-card-icon.report {
+            background: rgba(106, 143, 168, 0.15);
+        }
+        .demo-card-icon.scenario {
+            background: rgba(201, 160, 103, 0.15);
+        }
+
+        .demo-card h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+        }
+
+        .demo-card p {
+            font-size: 0.95rem;
+            color: var(--color-text-muted);
+            line-height: 1.6;
+            margin-bottom: 1rem;
+            flex: 1;
+        }
+
+        .demo-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            border-top: 1px solid var(--color-border);
+            padding-top: 1rem;
+            margin-top: auto;
+        }
+
+        .demo-card-tag {
+            display: inline-flex;
+            padding: 0.2rem 0.6rem;
+            border-radius: 100px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .demo-card-tag.interactive {
+            background: rgba(143, 168, 106, 0.15);
+            color: var(--color-primary);
+        }
+
+        .demo-card-tag.report-tag {
+            background: rgba(106, 143, 168, 0.15);
+            color: var(--color-accent, #6a8fa8);
+        }
+
+        .demo-card-tag.scenario-tag {
+            background: rgba(201, 160, 103, 0.15);
+            color: #8a6d2d;
+        }
+
+        .demo-card .arrow {
+            margin-left: auto;
+            font-size: 1.1rem;
+            color: var(--color-primary);
+            opacity: 0;
+            transform: translateX(-4px);
+            transition: all 0.3s ease;
+        }
+
+        .demo-card:hover .arrow {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Section headers */
+        .section-header {
+            margin: 3rem 0 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .section-header h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            color: var(--color-text);
+        }
+
+        .section-header p {
+            color: var(--color-text-muted);
+            margin-top: 0.25rem;
+            font-size: 0.95rem;
+        }
+
+        /* Example report gallery */
+        .report-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin: 1.5rem 0;
+        }
+
+        .report-thumb {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .report-thumb:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(90, 124, 101, 0.12);
+        }
+
+        .report-thumb-preview {
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .report-thumb-preview.sage { background: linear-gradient(135deg, #f0f4ed 0%, #e8ede4 100%); }
+        .report-thumb-preview.warm { background: linear-gradient(135deg, #f4f0ed 0%, #ede4e0 100%); }
+        .report-thumb-preview.corporate { background: linear-gradient(135deg, #edf0f4 0%, #e0e4ed 100%); }
+        .report-thumb-preview.minimal { background: linear-gradient(135deg, #f4f4f2 0%, #ededeb 100%); }
+        .report-thumb-preview.executive { background: linear-gradient(135deg, #f0edf4 0%, #e4e0ed 100%); }
+        .report-thumb-preview.builder { background: linear-gradient(135deg, #edf4f0 0%, #e0ede4 100%); }
+        .report-thumb-preview.basic { background: linear-gradient(135deg, #f2f4ed 0%, #e6ede0 100%); }
+
+        .report-thumb-info {
+            padding: 1rem;
+        }
+
+        .report-thumb-info h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .report-thumb-info p {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            margin: 0;
+        }
+
+        @media (max-width: 768px) {
+            .demo-hub-grid {
+                grid-template-columns: 1fr;
+            }
+            .report-gallery {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Interactive</span>
+            <h1>Demos &amp; Reports</h1>
+            <p class="lead">
+                Explore interactive workflow demonstrations, scenario analyses, and example reports
+                that showcase the MMM Framework in action.
+            </p>
+        </div>
+    </section>
+
+    <div class="container" style="max-width: 1100px; margin: 0 auto;">
+
+        <!-- Workflow Demos Section -->
+        <div class="section-header">
+            <h2>Workflow Demonstrations</h2>
+            <p>Step-by-step interactive walkthroughs of the Bayesian modeling process</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="scientific-workflow-demo.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F52C;</div>
+                <h3>Complete 9-Step Workflow</h3>
+                <p>
+                    The full Bayesian modeling workflow from question formulation through
+                    actionable insights. Interactive controls, live charts, and story-to-math connections.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>9 steps &middot; ~20 min</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+
+            <a href="scientific-workflow-simple.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F4D6;</div>
+                <h3>Scientific Modeling Overview</h3>
+                <p>
+                    A conceptual overview of why pre-specified, transparent scientific modeling
+                    produces more trustworthy results than traditional approaches.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Conceptual guide &middot; ~10 min</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Scenario Analyses Section -->
+        <div class="section-header">
+            <h2>Scenario Analyses</h2>
+            <p>Deep-dive workflows addressing specific business questions</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="workflow-channel-effectiveness.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F4CA;</div>
+                <h3>Channel Effectiveness</h3>
+                <p>
+                    Measure the true incremental impact of each media channel with honest
+                    uncertainty. Includes ROI estimation, cross-channel comparison, and attribution analysis.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Scenario</span>
+                    <span>Attribution &middot; ROI</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+
+            <a href="workflow-budget-optimization.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F4B0;</div>
+                <h3>Budget Optimization</h3>
+                <p>
+                    Optimize your media budget allocation using saturation curves and uncertainty-aware
+                    optimization. Explore what-if scenarios and diminishing returns.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Scenario</span>
+                    <span>Optimization &middot; Planning</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+
+            <a href="workflow-forecasting.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F4C8;</div>
+                <h3>Forecasting &amp; Planning</h3>
+                <p>
+                    Use model estimates to forecast outcomes under different spending scenarios.
+                    Includes uncertainty propagation for honest projections.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Scenario</span>
+                    <span>Forecasting &middot; Scenarios</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Example Report Section -->
+        <div class="section-header">
+            <h2>Example Report</h2>
+            <p>See what a complete MMM Framework report looks like</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="mmm-example-report.html" class="demo-card">
+                <div class="demo-card-icon report">&#x1F4CB;</div>
+                <h3>Q4 2025 Marketing Mix Model Report</h3>
+                <p>
+                    A full example report with executive summary, channel performance analysis,
+                    ROI metrics, model diagnostics, and recommendations&mdash;all with interactive Plotly charts.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Report</span>
+                    <span>Full example &middot; Interactive charts</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Generated Report Templates -->
+        <div class="section-header">
+            <h2>Report Templates</h2>
+            <p>Pre-generated report examples showing different themes and formats produced by the framework</p>
+        </div>
+
+        <div class="report-gallery">
+            <a href="../examples/mmm_report_basic.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview basic">&#x1F4D1;</div>
+                <div class="report-thumb-info">
+                    <h4>Basic Report</h4>
+                    <p>Standard full analysis</p>
+                </div>
+            </a>
+            <a href="../examples/mmm_report_executive.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview executive">&#x1F451;</div>
+                <div class="report-thumb-info">
+                    <h4>Executive Summary</h4>
+                    <p>High-level insights</p>
+                </div>
+            </a>
+            <a href="../examples/mmm_report_corporate.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview corporate">&#x1F3E2;</div>
+                <div class="report-thumb-info">
+                    <h4>Corporate</h4>
+                    <p>Professional styling</p>
+                </div>
+            </a>
+            <a href="../examples/mmm_report_sage.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview sage">&#x1F33F;</div>
+                <div class="report-thumb-info">
+                    <h4>Sage Theme</h4>
+                    <p>Sage green palette</p>
+                </div>
+            </a>
+            <a href="../examples/mmm_report_warm.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview warm">&#x2600;&#xFE0F;</div>
+                <div class="report-thumb-info">
+                    <h4>Warm Theme</h4>
+                    <p>Warm color palette</p>
+                </div>
+            </a>
+            <a href="../examples/mmm_report_minimal.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview minimal">&#x25CB;</div>
+                <div class="report-thumb-info">
+                    <h4>Minimal</h4>
+                    <p>Lightweight, core metrics</p>
+                </div>
+            </a>
+            <a href="../examples/mmm_report_builder.html" class="report-thumb" target="_blank">
+                <div class="report-thumb-preview builder">&#x1F527;</div>
+                <div class="report-thumb-info">
+                    <h4>Builder Pattern</h4>
+                    <p>Customizable sections</p>
+                </div>
+            </a>
+        </div>
+
+    </div>
+
+    <!-- CTA Section -->
+    <section class="cta-section" style="margin-top: 3rem;">
+        <div class="container" style="text-align: center;">
+            <h2>Ready to Build Your Own?</h2>
+            <p>Install the framework and start creating models with honest uncertainty quantification.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="modeling-guide.html" class="btn btn-outline-white">Modeling Guide</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+</body>
+</html>

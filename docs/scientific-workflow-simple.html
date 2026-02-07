@@ -9,13 +9,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link rel="stylesheet" href="shared/styles.css">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
     <!-- Plotly for Interactive Charts -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    
+
     <!-- Mermaid for Diagrams -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    
+
     <style>
         :root {
             --color-primary: #5a7c65;
@@ -501,7 +503,8 @@
     </style>
 </head>
 <body>
-    <div class="page-layout">
+    <!-- Navigation injected by components.js -->
+    <div class="page-layout" style="padding-top: 4rem;">
         <aside class="sidebar">
             <h3>Getting Started</h3>
             <ul class="sidebar-nav">
@@ -1623,5 +1626,6 @@
 
         document.querySelectorAll('h2[id], h3[id]').forEach(section => observer.observe(section));
     </script>
+    <script src="shared/components.js"></script>
 </body>
 </html>

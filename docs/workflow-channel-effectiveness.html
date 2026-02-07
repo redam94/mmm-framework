@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         :root {
@@ -427,8 +429,8 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <a href="scientific-workflow-demo.html" class="back-nav"><span>&larr;</span> Back to Workflow</a>
+<!-- Navigation injected by components.js -->
+<div class="container" style="padding-top: 5rem;">
 
     <header class="page-header">
         <span class="question-badge">Question Type 1</span>
@@ -1166,5 +1168,6 @@ function initPosteriorChart() {
     }, cfg);
 }
 </script>
+<script src="shared/components.js"></script>
 </body>
 </html>

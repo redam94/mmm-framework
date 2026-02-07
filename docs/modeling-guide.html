@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modeling Guide | MMM Framework</title>
+    <meta name="description" content="Step-by-step guide for implementing statistically sound marketing mix models using the MMM Framework.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/modeling-guide.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .phase-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .phase-badge.plan { background: rgba(106, 143, 168, 0.15); color: var(--color-accent-dark); }
+        .phase-badge.build { background: rgba(143, 168, 106, 0.15); color: var(--color-primary-dark); }
+        .phase-badge.validate { background: rgba(212, 168, 106, 0.15); color: #b8860b; }
+        .phase-badge.report { background: rgba(201, 112, 103, 0.15); color: var(--color-danger); }
+
+        .code-wrapper {
+            position: relative;
+        }
+        .code-wrapper pre {
+            margin: 0;
+        }
+        pre code.hljs {
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+        .code-wrapper .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            color: #666;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Source Sans 3', sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .code-wrapper .copy-btn:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #333;
+        }
+        .code-wrapper .copy-btn.copied {
+            background: rgba(39, 201, 63, 0.15);
+            border-color: rgba(39, 201, 63, 0.3);
+            color: #1a8f35;
+        }
+        .copy-btn svg { width: 14px; height: 14px; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Step-by-Step Guide</span>
+            <h1>Building Statistically Sound Marketing Mix Models</h1>
+            <p class="lead">
+                A rigorous, reproducible workflow for implementing marketing mix models that produce results you can trust&mdash;from question formulation through validation.
+            </p>
+        </div>
+    </section>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#philosophy">Modeling Philosophy</a></li>
+                <li><a href="#workflow-overview">Workflow Overview</a></li>
+            </ul>
+
+            <h3>Phase 1: Plan</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#define-question">Define the Question</a></li>
+                <li><a href="#identify-variables">Identify Variables</a></li>
+                <li><a href="#preregister">Pre-Register Specification</a></li>
+            </ul>
+
+            <h3>Phase 2: Build</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#prepare-data">Prepare Data</a></li>
+                <li><a href="#configure-model">Configure the Model</a></li>
+                <li><a href="#set-priors">Set Priors</a></li>
+                <li><a href="#prior-predictive">Prior Predictive Check</a></li>
+            </ul>
+
+            <h3>Phase 3: Validate</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#fit-model">Fit the Model</a></li>
+                <li><a href="#diagnostics">Check Diagnostics</a></li>
+                <li><a href="#posterior-predictive">Posterior Predictive Check</a></li>
+                <li><a href="#sensitivity">Sensitivity Analysis</a></li>
+            </ul>
+
+            <h3>Phase 4: Report</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#extract-insights">Extract Insights</a></li>
+                <li><a href="#communicate">Communicate Results</a></li>
+                <li><a href="#iterate">When to Iterate</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="philosophy">Modeling Philosophy</h1>
+            <p class="lead">
+                A good model is not one that produces the results you want. A good model is one whose predictions you can trust&mdash;including when those predictions are uncomfortable.
+            </p>
+
+            <p>
+                This guide walks you through a complete, pre-specified modeling workflow using the MMM Framework. Each step includes both the conceptual reasoning and the code to implement it. The goal is not just to produce a model, but to produce a model you can defend.
+            </p>
+
+            <div class="takeaway-box">
+                <h4>The Core Principle</h4>
+                <p>
+                    Every modeling decision should be made before seeing results, or if made after, it should be clearly documented as post hoc and its effect on inference acknowledged. This is not a limitation&mdash;it is what separates measurement from storytelling.
+                </p>
+            </div>
+
+            <h2 id="workflow-overview">Workflow Overview</h2>
+            <p>
+                The modeling process has four phases. Each phase has specific outputs and checkpoints.
+            </p>
+
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-value" style="color: var(--color-accent);">1</div>
+                    <div class="metric-label">Plan</div>
+                    <div class="metric-context">Define questions, variables, and specification before seeing data</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: var(--color-primary);">2</div>
+                    <div class="metric-label">Build</div>
+                    <div class="metric-context">Prepare data, configure model, check priors</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #b8860b;">3</div>
+                    <div class="metric-label">Validate</div>
+                    <div class="metric-context">Fit, diagnose, test predictions, assess sensitivity</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: var(--color-danger);">4</div>
+                    <div class="metric-label">Report</div>
+                    <div class="metric-context">Extract insights and communicate with honest uncertainty</div>
+                </div>
+            </div>
+
+            <!-- PHASE 1: PLAN -->
+            <h2 id="define-question" style="border-top: 3px solid var(--color-accent);">
+                <span class="phase-badge plan">Phase 1: Plan</span><br>
+                Define the Business Question
+            </h2>
+            <p>
+                Before touching data or code, clearly articulate what you are trying to learn. Different questions require different models and different levels of rigor.
+            </p>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#127919;</div>
+                <div>
+                    <h4>Attribution Questions</h4>
+                    <p>&ldquo;How much of our sales are driven by each media channel?&rdquo; This requires the standard BayesianMMM and careful handling of confounders.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128176;</div>
+                <div>
+                    <h4>Optimization Questions</h4>
+                    <p>&ldquo;How should we reallocate our $10M budget across channels?&rdquo; This requires attribution plus saturation curve estimation and honest uncertainty propagation.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128257;</div>
+                <div>
+                    <h4>Mechanism Questions</h4>
+                    <p>&ldquo;Does TV drive sales through awareness or directly?&rdquo; This requires the NestedMMM with mediation pathways.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128218;</div>
+                <div>
+                    <h4>Portfolio Questions</h4>
+                    <p>&ldquo;Does promoting our multipack cannibalize single-pack sales?&rdquo; This requires the MultivariateMMM with cross-effects.</p>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>Write It Down</h4>
+                <p>
+                    Document your business question in a brief that specifies: (1) what outcome you are measuring, (2) what decisions the model will inform, (3) what level of uncertainty is acceptable for those decisions, and (4) what validation data is available.
+                </p>
+            </div>
+
+            <h2 id="identify-variables">Identify Variables Using Causal Reasoning</h2>
+            <p>
+                Variable selection in MMM is a causal reasoning task, not a statistical one. The question is not &ldquo;which variables improve model fit&rdquo; but &ldquo;which variables must be included for the media effect estimates to be unbiased.&rdquo;
+            </p>
+
+            <div class="process-steps">
+                <div class="process-step" data-step="1">
+                    <h4>List your treatment variables (media channels)</h4>
+                    <p>These are the variables whose effects you want to estimate. They are never optional&mdash;every channel you want to measure must be in the model.</p>
+                </div>
+                <div class="process-step" data-step="2">
+                    <h4>Identify confounders</h4>
+                    <p>Variables that affect both media spending and your outcome. Common examples: seasonality, promotions, economic indicators. Omitting confounders biases media estimates. These are <strong>never</strong> candidates for variable selection.</p>
+                </div>
+                <div class="process-step" data-step="3">
+                    <h4>Identify precision controls</h4>
+                    <p>Variables that affect only your outcome, not media spending. Weather, competitor actions (if they don&rsquo;t affect your spending), and supply disruptions. Including these reduces noise but omitting them does not bias media estimates. These <strong>can</strong> be candidates for Bayesian variable selection.</p>
+                </div>
+                <div class="process-step" data-step="4">
+                    <h4>Identify potential mediators</h4>
+                    <p>Variables on the causal pathway between media and your outcome (awareness, consideration, search volume). Never control for mediators in a standard model unless you are explicitly modeling mediation with a NestedMMM.</p>
+                </div>
+                <div class="process-step" data-step="5">
+                    <h4>Identify potential colliders</h4>
+                    <p>Variables caused by both media and your outcome (e.g., brand tracking scores that reflect both ad exposure and purchase behavior). Never include colliders&mdash;they introduce bias.</p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>The Critical Distinction</h4>
+                <p>
+                    Variable selection should only be applied to precision controls. Confounders must always be included. Mediators and colliders must never be included (in a standard model). Getting this wrong is a form of specification shopping.
+                </p>
+                <p style="margin-top: 0.75rem;">
+                    See the <a href="variable-selection.html">Variable Selection</a> and <a href="causal-inference.html">Causal Inference</a> guides for detailed treatment.
+                </p>
+            </div>
+
+            <h2 id="preregister">Pre-Register Your Specification</h2>
+            <p>
+                Before fitting the model, document the following decisions. This is your analysis plan.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># analysis_plan.py — Document this BEFORE fitting
+"""
+Analysis Plan: Q4 2025 Media Effectiveness
+==========================================
+Business Question: What is the incremental ROI of each media channel?
+Decision: Inform 2026 budget allocation
+
+Outcome Variable: Weekly national sales ($)
+Media Channels:
+  - TV (national, geometric adstock, L_max=8)
+  - Digital Display (national, geometric adstock, L_max=4)
+  - Paid Search (national, geometric adstock, L_max=2)
+
+Confounders (always included):
+  - Price index
+  - Distribution (% ACV)
+  - Holiday indicator
+  - Seasonality (Fourier, order 2)
+
+Precision Controls (Bayesian variable selection):
+  - Weather (heating degree days)
+  - Competitor A spend
+
+Trend: Linear
+Sampler: NumpyRo, 4 chains, 2000 draws, 1000 tune
+
+Validation: Compare TV ROI posterior to Q3 geo lift test
+            (TV ROI from geo test: 1.1-1.5, 90% CI)
+
+Decision Criteria:
+  - If TV 80% CI includes geo-test estimate -> validated
+  - If TV 80% CI does not overlap -> investigate discrepancy
+"""</code></pre>
+            </div>
+
+            <!-- PHASE 2: BUILD -->
+            <h2 id="prepare-data" style="border-top: 3px solid var(--color-primary);">
+                <span class="phase-badge build">Phase 2: Build</span><br>
+                Prepare Your Data
+            </h2>
+            <p>
+                Good data preparation is the foundation of a trustworthy model. The MMM Framework uses the Master Flat File (MFF) format for consistency and flexibility.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">import pandas as pd
+from mmm_framework import MFFConfigBuilder, load_mff
+
+# Configure data structure per analysis plan
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Sales")
+    .add_national_media("TV", adstock_lmax=8)
+    .add_national_media("Digital_Display", adstock_lmax=4)
+    .add_national_media("Paid_Search", adstock_lmax=2)
+    .add_control("Price_Index")
+    .add_control("Distribution")
+    .add_control("Holiday")
+    .add_price_control()
+    .build()
+)
+
+# Load and validate
+panel = load_mff(pd.read_csv("data/weekly_mff.csv"), mff_config)
+
+# Data quality checks
+print(f"Date range: {panel.dates.min()} to {panel.dates.max()}")
+print(f"Observations: {panel.n_obs}")
+print(f"Missing values: {panel.missing_summary()}")
+print(f"\nMedia channel summary:")
+print(panel.media_summary())  # Zero-spend weeks, distribution, etc.</code></pre>
+            </div>
+
+            <div class="note">
+                <h4>Data Quality Checklist</h4>
+                <ul>
+                    <li>At least 2 years of weekly data (104+ observations) for stable estimation</li>
+                    <li>No media channels with >50% zero-spend weeks (insufficient variation)</li>
+                    <li>Control variables present for the entire time series</li>
+                    <li>No obvious data errors (negative spend, impossible values)</li>
+                    <li>Time series is at consistent frequency (weekly/daily)</li>
+                </ul>
+            </div>
+
+            <h2 id="configure-model">Configure the Model</h2>
+            <p>
+                Model configuration follows directly from your analysis plan. Every choice here should trace back to a pre-specified decision.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import (
+    ModelConfigBuilder,
+    TrendConfig,
+    TrendType,
+    BayesianMMM,
+)
+
+# Model inference configuration
+model_config = (
+    ModelConfigBuilder()
+    .bayesian_numpyro()       # JAX-based sampler for speed
+    .with_chains(4)           # 4 chains for convergence diagnostics
+    .with_draws(2000)         # 2000 posterior draws per chain
+    .with_tune(1000)          # 1000 warmup iterations
+    .with_target_accept(0.9)  # Target acceptance rate
+    .build()
+)
+
+# Trend configuration (from analysis plan: linear)
+trend_config = TrendConfig(
+    type=TrendType.LINEAR,
+    growth_prior_sigma=0.1
+)
+
+# Build the model
+mmm = BayesianMMM(panel, model_config, trend_config)
+
+# Verify model structure matches analysis plan
+print("Model parameters:")
+for var in mmm.model.free_RVs:
+    print(f"  {var.name}")</code></pre>
+            </div>
+
+            <h2 id="set-priors">Set Priors Thoughtfully</h2>
+            <p>
+                Priors are the mechanism for encoding domain knowledge transparently. Unlike post hoc adjustments, priors are explicit, documented, and their effect on results can be measured.
+            </p>
+
+            <div class="scenario-grid">
+                <div class="scenario-card bad">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10005;</span>
+                        <span class="scenario-title">Bad Prior Practice</span>
+                    </div>
+                    <ul>
+                        <li>Setting priors after seeing posteriors</li>
+                        <li>Using priors to force results in a desired direction</li>
+                        <li>Extremely informative priors without empirical justification</li>
+                        <li>No documentation of prior choices</li>
+                    </ul>
+                </div>
+                <div class="scenario-card good">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10003;</span>
+                        <span class="scenario-title">Good Prior Practice</span>
+                    </div>
+                    <ul>
+                        <li>Setting priors before fitting based on domain knowledge</li>
+                        <li>Using weakly informative priors that regularize without dominating</li>
+                        <li>Documenting the source and reasoning for each prior</li>
+                        <li>Running sensitivity analysis across reasonable prior ranges</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import PriorConfigBuilder, AdstockConfigBuilder
+
+# Adstock priors: encode belief about carryover duration
+# TV: expect longer carryover (mean ~0.7, but allow data to inform)
+tv_adstock = (
+    AdstockConfigBuilder()
+    .geometric()
+    .with_l_max(8)
+    .with_alpha_prior(
+        PriorConfigBuilder().beta(alpha=3, beta=1.5).build()
+        # Beta(3, 1.5) -> mode at ~0.7, allows 0.3-0.95
+    )
+    .build()
+)
+
+# Digital: expect shorter carryover
+digital_adstock = (
+    AdstockConfigBuilder()
+    .geometric()
+    .with_l_max(4)
+    .with_alpha_prior(
+        PriorConfigBuilder().beta(alpha=2, beta=3).build()
+        # Beta(2, 3) -> mode at ~0.3, allows 0.1-0.7
+    )
+    .build()
+)
+
+# Document: "TV adstock prior based on industry meta-analysis
+# showing 4-8 week half-lives for TV. Digital based on
+# platform-reported attribution windows of 1-3 weeks."</code></pre>
+            </div>
+
+            <h2 id="prior-predictive">Prior Predictive Check</h2>
+            <p>
+                Before fitting the model to data, verify that your priors produce plausible predictions. This is the most underrated step in Bayesian modeling.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Sample from priors only (no data yet)
+prior_pred = mmm.sample_prior_predictive(samples=500)
+y_prior = prior_pred.prior_predictive["y_obs"].values.flatten()
+
+print(f"Prior predictive y range: [{y_prior.min():.0f}, {y_prior.max():.0f}]")
+print(f"Actual y range: [{panel.y.min():.0f}, {panel.y.max():.0f}]")
+print(f"Prior predictive y mean: {y_prior.mean():.0f}")
+print(f"Actual y mean: {panel.y.mean():.0f}")
+
+# Check: do priors produce data in the right ballpark?
+# They should cover the observed range with room to spare,
+# but not predict absurdities (negative sales, 10x actual)</code></pre>
+            </div>
+
+            <div class="highlight-box">
+                <h4>What to Look For</h4>
+                <p>
+                    Prior predictions should be <strong>plausible but vague</strong>. If the prior predictive range is [-1000, 1000] for sales that are always between 800-1200, your priors are too diffuse. If it is [950, 1050], your priors may be too informative. The sweet spot is a range like [200, 2000]&mdash;covering the data comfortably without allowing absurdities.
+                </p>
+            </div>
+
+            <!-- PHASE 3: VALIDATE -->
+            <h2 id="fit-model" style="border-top: 3px solid var(--color-warning);">
+                <span class="phase-badge validate">Phase 3: Validate</span><br>
+                Fit the Model
+            </h2>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Fit with a fixed random seed for reproducibility
+results = mmm.fit(random_seed=42)
+
+print(f"Sampling completed.")
+print(f"  Chains: {results.n_chains}")
+print(f"  Draws per chain: {results.n_draws}")
+print(f"  Total posterior samples: {results.n_chains * results.n_draws}")</code></pre>
+            </div>
+
+            <h2 id="diagnostics">Check Diagnostics (Non-Negotiable)</h2>
+            <p>
+                MCMC diagnostics are not optional. They tell you whether the sampler explored the posterior adequately. Interpreting results from a poorly-converged model is worse than having no model at all.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Convergence diagnostics
+print("=== MCMC Diagnostics ===")
+diag = results.diagnostics
+
+# 1. Divergences: should be 0
+print(f"Divergences: {diag['divergences']}")
+if diag['divergences'] > 0:
+    print("  ACTION: Reparameterize or increase target_accept")
+
+# 2. R-hat: should be < 1.01 for all parameters
+print(f"R-hat max: {diag['rhat_max']:.4f}")
+if diag['rhat_max'] > 1.01:
+    print("  ACTION: Run longer chains or investigate multimodality")
+
+# 3. ESS: should be > 400 for all parameters
+print(f"ESS bulk min: {diag['ess_bulk_min']:.0f}")
+print(f"ESS tail min: {diag['ess_tail_min']:.0f}")
+if diag['ess_bulk_min'] < 400:
+    print("  ACTION: Run more draws")
+
+# 4. Summary of key parameters
+summary = results.summary()
+print("\n=== Parameter Summary ===")
+print(summary[["mean", "sd", "hdi_3%", "hdi_97%", "r_hat"]].to_string())</code></pre>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Diagnostic</th>
+                        <th>Acceptable Range</th>
+                        <th>If Out of Range</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Divergences</strong></td>
+                        <td>0</td>
+                        <td>Increase <code>target_accept</code> to 0.95+, or reparameterize</td>
+                    </tr>
+                    <tr>
+                        <td><strong>R-hat</strong></td>
+                        <td>&lt; 1.01</td>
+                        <td>Run longer chains, check for multimodality</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ESS Bulk</strong></td>
+                        <td>&gt; 400</td>
+                        <td>Increase number of draws</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ESS Tail</strong></td>
+                        <td>&gt; 400</td>
+                        <td>Increase number of draws (tail ESS is harder to achieve)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tree Depth</strong></td>
+                        <td>Rarely hits max</td>
+                        <td>Increase <code>max_treedepth</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning-box">
+                <h4>Do Not Proceed with Bad Diagnostics</h4>
+                <p>
+                    If diagnostics are poor, do not interpret the results. Fix the computational issues first. Common fixes: increase target acceptance rate, use a non-centered parameterization for hierarchical models, increase warmup iterations, or simplify the model.
+                </p>
+            </div>
+
+            <h2 id="posterior-predictive">Posterior Predictive Check</h2>
+            <p>
+                After fitting, compare the model&rsquo;s predictions to observed data. This tests whether the model can reproduce the patterns in your data.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Posterior predictive check
+pp = results.posterior_predictive
+
+import numpy as np
+
+# Compare predicted vs actual
+y_pred_mean = pp["y_obs"].mean(dim=["chain", "draw"]).values
+y_actual = panel.y
+
+# Calibration: what fraction of observations fall within 90% CI?
+y_pred_low = np.percentile(pp["y_obs"].values, 5, axis=(0, 1))
+y_pred_high = np.percentile(pp["y_obs"].values, 95, axis=(0, 1))
+coverage = np.mean((y_actual >= y_pred_low) & (y_actual <= y_pred_high))
+
+print(f"90% CI coverage: {coverage:.1%}")
+print(f"  (Target: ~90%. If much lower, model is overconfident)")
+print(f"  (If much higher, model is underconfident)")
+
+# MAPE
+mape = np.mean(np.abs(y_pred_mean - y_actual) / y_actual)
+print(f"MAPE: {mape:.1%}")</code></pre>
+            </div>
+
+            <h2 id="sensitivity">Sensitivity Analysis</h2>
+            <p>
+                Test how much your conclusions change when you vary modeling assumptions. Robust findings persist across reasonable choices. Fragile findings suggest more data or experiments are needed.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Sensitivity analysis: vary key assumptions
+sensitivity_results = {}
+
+# 1. Vary TV adstock L_max
+for lmax in [4, 6, 8, 12]:
+    config = make_config(tv_lmax=lmax)  # helper function
+    model = BayesianMMM(panel, config, trend_config)
+    res = model.fit(random_seed=42)
+    sensitivity_results[f"tv_lmax_{lmax}"] = {
+        "tv_roi_mean": res.roi("TV").mean(),
+        "tv_roi_hdi": res.roi("TV").hdi(0.9),
+    }
+
+# 2. Vary prior strength
+for sigma in [0.5, 1.0, 2.0]:
+    config = make_config(beta_prior_sigma=sigma)
+    model = BayesianMMM(panel, config, trend_config)
+    res = model.fit(random_seed=42)
+    sensitivity_results[f"prior_sigma_{sigma}"] = {
+        "tv_roi_mean": res.roi("TV").mean(),
+        "tv_roi_hdi": res.roi("TV").hdi(0.9),
+    }
+
+# Report: how much do ROI estimates change?
+print("\n=== Sensitivity Analysis ===")
+for name, res in sensitivity_results.items():
+    roi_mean = res["tv_roi_mean"]
+    roi_low, roi_high = res["tv_roi_hdi"]
+    print(f"  {name}: TV ROI = {roi_mean:.2f} ({roi_low:.2f}-{roi_high:.2f})")</code></pre>
+            </div>
+
+            <div class="takeaway-box">
+                <h4>Interpreting Sensitivity</h4>
+                <p>
+                    If TV ROI ranges from 1.1 to 1.6 across all reasonable specifications, you can confidently report it is positive and above 1.0. If it ranges from 0.5 to 2.5, the estimate is sensitive to modeling choices and you should recommend validation experiments before acting on it.
+                </p>
+            </div>
+
+            <!-- PHASE 4: REPORT -->
+            <h2 id="extract-insights" style="border-top: 3px solid var(--color-danger);">
+                <span class="phase-badge report">Phase 4: Report</span><br>
+                Extract Insights
+            </h2>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python"># Channel contributions and ROI
+print("=== Channel Results ===")
+for channel in panel.channel_names:
+    roi = results.roi(channel)
+    contrib = results.contribution(channel)
+    print(f"\n{channel}:")
+    print(f"  ROI: {roi.mean():.2f} (90% CI: {roi.hdi(0.9)[0]:.2f}-{roi.hdi(0.9)[1]:.2f})")
+    print(f"  Share of effect: {contrib.share:.1%}")
+    print(f"  Saturation level: {results.saturation_level(channel):.0%}")
+
+# Generate the full report
+from mmm_framework.reporting import MMMReportGenerator, ReportConfig
+
+report = MMMReportGenerator(
+    model=mmm,
+    panel=panel,
+    results=results,
+    config=ReportConfig(
+        title="Q4 2025 Media Effectiveness Analysis",
+        client="Brand Name",
+        analysis_period="Jan 2024 - Dec 2025",
+    ),
+)
+
+report.to_html("q4_2025_mmm_report.html")</code></pre>
+            </div>
+
+            <h2 id="communicate">Communicate Results Honestly</h2>
+            <p>
+                How you communicate results matters as much as the analysis itself. Stakeholders need to understand both what the model says and how confident the model is.
+            </p>
+
+            <div class="scenario-grid">
+                <div class="scenario-card bad">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10005;</span>
+                        <span class="scenario-title">Poor Communication</span>
+                    </div>
+                    <ul>
+                        <li>&ldquo;TV ROI is 1.42&rdquo;</li>
+                        <li>&ldquo;Digital drives 28% of sales&rdquo;</li>
+                        <li>&ldquo;We should shift $2M from TV to digital&rdquo;</li>
+                        <li>No mention of uncertainty</li>
+                        <li>No mention of assumptions</li>
+                    </ul>
+                </div>
+                <div class="scenario-card good">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10003;</span>
+                        <span class="scenario-title">Honest Communication</span>
+                    </div>
+                    <ul>
+                        <li>&ldquo;TV ROI is estimated at 1.4 (90% CI: 1.1-1.8)&rdquo;</li>
+                        <li>&ldquo;Digital contributes 22-34% of sales (90% CI)&rdquo;</li>
+                        <li>&ldquo;A $2M shift would likely improve returns, but the magnitude is uncertain&rdquo;</li>
+                        <li>Sensitivity to key assumptions documented</li>
+                        <li>Comparison to experimental results where available</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>For Detailed Guidance on Presenting Results</h4>
+                <p>
+                    See the <a href="interpreting-results.html">Interpreting Results for Media Planners and CMOs</a> guide for specific recommendations on presenting uncertainty, creating executive summaries, and translating model outputs into actionable planning guidance.
+                </p>
+            </div>
+
+            <h2 id="iterate">When (and How) to Iterate</h2>
+            <p>
+                Iteration is a normal part of modeling. The key distinction is between <strong>legitimate iteration</strong> and <strong>specification shopping</strong>.
+            </p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Legitimate Iteration</th>
+                        <th>Specification Shopping</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Fixing computational issues (divergences, non-convergence)</td>
+                        <td>Adjusting until results &ldquo;look right&rdquo;</td>
+                    </tr>
+                    <tr>
+                        <td>Adding a confounder you forgot to include</td>
+                        <td>Removing a variable because it reduced media effects</td>
+                    </tr>
+                    <tr>
+                        <td>Expanding priors that are clearly too narrow (based on prior predictive check)</td>
+                        <td>Tightening priors to force results toward desired values</td>
+                    </tr>
+                    <tr>
+                        <td>Documenting changes and reporting both versions</td>
+                        <td>Only reporting the version with preferred results</td>
+                    </tr>
+                    <tr>
+                        <td>Iteration driven by failed diagnostic checks</td>
+                        <td>Iteration driven by stakeholder feedback on ROI values</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="takeaway-box">
+                <h4>The Rule of Thumb</h4>
+                <p>
+                    If you would make the same change regardless of which direction the results moved, it is legitimate. If you would only make the change because the results went in the &ldquo;wrong&rdquo; direction, it is specification shopping.
+                </p>
+            </div>
+
+            <div class="note" style="margin-top: 2rem;">
+                <h4>Next Steps</h4>
+                <p>
+                    Ready to implement? Start with the <a href="getting-started.html">Getting Started</a> guide for installation and a complete code walkthrough. For understanding the business context, see <a href="business-stakeholders.html">For Business Stakeholders</a>. For presenting results, see <a href="interpreting-results.html">Interpreting Results</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Build?</h2>
+            <p>Install the framework and build your first model with our getting started guide.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            hljs.highlightAll();
+
+            // Add copy buttons to code blocks
+            document.querySelectorAll('.code-wrapper').forEach(wrapper => {
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'copy-btn';
+                copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>';
+                wrapper.appendChild(copyBtn);
+                copyBtn.addEventListener('click', async () => {
+                    const code = wrapper.querySelector('code');
+                    if (code) {
+                        try {
+                            await navigator.clipboard.writeText(code.innerText);
+                            copyBtn.classList.add('copied');
+                            copyBtn.querySelector('span').textContent = 'Copied!';
+                            setTimeout(() => {
+                                copyBtn.classList.remove('copied');
+                                copyBtn.querySelector('span').textContent = 'Copy';
+                            }, 2000);
+                        } catch (err) { console.error('Copy failed:', err); }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
