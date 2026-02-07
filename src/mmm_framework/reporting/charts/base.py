@@ -147,32 +147,28 @@ def _build_dimension_filter_html(
         geo_options = '<option value="agg" selected>Aggregated (Total)</option>'
         for geo in geo_names:
             geo_options += f'<option value="{geo}">{geo}</option>'
-        filter_groups.append(
-            f"""
+        filter_groups.append(f"""
         <div class="filter-group">
             <label for="{div_id}_geo_select">View:</label>
             <select id="{div_id}_geo_select" onchange="updateDimensionFilter_{div_id}()">
                 {geo_options}
             </select>
         </div>
-        """
-        )
+        """)
 
     # Product dropdown
     if product_names:
         prod_options = '<option value="agg" selected>Aggregated (Total)</option>'
         for product in product_names:
             prod_options += f'<option value="{product}">{product}</option>'
-        filter_groups.append(
-            f"""
+        filter_groups.append(f"""
         <div class="filter-group">
             <label for="{div_id}_product_select">Product:</label>
             <select id="{div_id}_product_select" onchange="updateDimensionFilter_{div_id}()">
                 {prod_options}
             </select>
         </div>
-        """
-        )
+        """)
 
     return f"""
     <style>

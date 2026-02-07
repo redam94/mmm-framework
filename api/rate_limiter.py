@@ -44,7 +44,9 @@ def get_rate_limit_key(request: Request) -> str:
 limiter = Limiter(key_func=get_rate_limit_key)
 
 
-def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+def rate_limit_exceeded_handler(
+    request: Request, exc: RateLimitExceeded
+) -> JSONResponse:
     """
     Handle rate limit exceeded errors.
 

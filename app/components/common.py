@@ -8,7 +8,6 @@ import streamlit as st
 from datetime import datetime, timedelta
 from typing import Any
 
-
 # =============================================================================
 # Color Utilities
 # =============================================================================

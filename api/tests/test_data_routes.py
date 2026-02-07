@@ -12,7 +12,9 @@ class TestDataUpload:
 
     def test_upload_csv_success(self, test_client, sample_mff_csv):
         """Test successful CSV upload."""
-        files = {"file": ("test_data.csv", io.BytesIO(sample_mff_csv.encode()), "text/csv")}
+        files = {
+            "file": ("test_data.csv", io.BytesIO(sample_mff_csv.encode()), "text/csv")
+        }
         response = test_client.post("/data/upload", files=files)
 
         assert response.status_code == status.HTTP_201_CREATED
@@ -35,7 +37,10 @@ class TestDataUpload:
         response = test_client.post("/data/upload", files=files)
 
         # Should fail due to empty content
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR]
+        assert response.status_code in [
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ]
 
 
 class TestDataList:
@@ -94,7 +99,9 @@ class TestDataGet:
         upload_response = test_client.post("/data/upload", files=files)
         data_id = upload_response.json()["data_id"]
 
-        response = test_client.get(f"/data/{data_id}?include_preview=true&preview_rows=5")
+        response = test_client.get(
+            f"/data/{data_id}?include_preview=true&preview_rows=5"
+        )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

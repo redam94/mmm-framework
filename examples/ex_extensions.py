@@ -30,7 +30,6 @@ from mmm_framework.mmm_extensions import (
     CombinedMMM,
 )
 
-
 # =============================================================================
 # Example 1: Nested Model (Media → Awareness → Sales)
 # =============================================================================

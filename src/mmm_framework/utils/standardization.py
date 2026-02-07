@@ -45,8 +45,16 @@ class StandardizationParams:
             converted to lists for JSON serialization.
         """
         return {
-            "mean": float(self.mean) if np.isscalar(self.mean) or self.mean.ndim == 0 else self.mean.tolist(),
-            "std": float(self.std) if np.isscalar(self.std) or self.std.ndim == 0 else self.std.tolist(),
+            "mean": (
+                float(self.mean)
+                if np.isscalar(self.mean) or self.mean.ndim == 0
+                else self.mean.tolist()
+            ),
+            "std": (
+                float(self.std)
+                if np.isscalar(self.std) or self.std.ndim == 0
+                else self.std.tolist()
+            ),
         }
 
     @classmethod

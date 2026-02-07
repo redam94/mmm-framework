@@ -168,7 +168,9 @@ class NestedMMM(BaseExtendedMMM):
     def _build_model(self) -> pm.Model:
         """Build the nested model."""
         from ..components.priors import create_effect_prior
-        from ..components.transforms import logistic_saturation_pt as logistic_saturation
+        from ..components.transforms import (
+            logistic_saturation_pt as logistic_saturation,
+        )
 
         coords = self._build_coords()
 

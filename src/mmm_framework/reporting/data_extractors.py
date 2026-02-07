@@ -35,7 +35,6 @@ from .extractors import (
     create_extractor,
 )
 
-
 __all__ = [
     # Data bundle
     "MMMDataBundle",

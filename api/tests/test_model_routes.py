@@ -159,7 +159,9 @@ class TestModelContributions:
         # The endpoint checks model existence first, so it should return 404
         request = {"compute_uncertainty": True}
         try:
-            response = test_client.post("/models/nonexistent123/contributions", json=request)
+            response = test_client.post(
+                "/models/nonexistent123/contributions", json=request
+            )
             assert response.status_code == status.HTTP_404_NOT_FOUND
         except Exception:
             # If Redis connection fails, test is inconclusive

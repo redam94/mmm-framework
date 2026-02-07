@@ -277,7 +277,9 @@ async def download_data(
             buffer = io.BytesIO()
             df.to_excel(buffer, index=False, engine="openpyxl")
             content = buffer.getvalue()
-            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            media_type = (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
             extension = ".xlsx"
         else:
             raise HTTPException(

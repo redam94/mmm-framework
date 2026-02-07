@@ -12,7 +12,6 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from typing import Any
 
-
 # =============================================================================
 # Color Utilities
 # =============================================================================

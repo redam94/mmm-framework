@@ -13,7 +13,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -189,7 +188,7 @@ class ModelInfo:
     completed_at: datetime = None
     metrics: dict = None
     name: str = None  # Add this
-    progress: float = 0.0 
+    progress: float = 0.0
     progress_message: str | None = None
     started_at: datetime | None = None
     error_message: str | None = None
@@ -331,22 +330,21 @@ class MMMAPIClient:
         """Upload a dataset."""
         files = {"file": (filename, file_content)}
         response = httpx.post(
-        f"{self.base_url}/data/upload",
-        files=files,
-        timeout=self.timeout,
-    )
+            f"{self.base_url}/data/upload",
+            files=files,
+            timeout=self.timeout,
+        )
         d = self._handle_response(response)
         return DatasetInfo(
-        data_id=d["data_id"],
-        filename=d["filename"],
-        rows=d["rows"],
-        columns=d["columns"],
-        variables=d.get("variables", []),
-        dimensions=d.get("dimensions", {}),
-        created_at=datetime.fromisoformat(d["created_at"]),
-        size_bytes=d.get("size_bytes", 0),
-    )
-        
+            data_id=d["data_id"],
+            filename=d["filename"],
+            rows=d["rows"],
+            columns=d["columns"],
+            variables=d.get("variables", []),
+            dimensions=d.get("dimensions", {}),
+            created_at=datetime.fromisoformat(d["created_at"]),
+            size_bytes=d.get("size_bytes", 0),
+        )
 
     def delete_dataset(self, data_id: str) -> dict:
         """Delete a dataset."""
@@ -458,8 +456,7 @@ class MMMAPIClient:
     def duplicate_config(self, config_id: str, new_name: str) -> dict:
         """Create a copy of an existing configuration."""
         response = self._client.post(
-            f"/configs/{config_id}/duplicate",
-            params={"new_name": new_name}
+            f"/configs/{config_id}/duplicate", params={"new_name": new_name}
         )
         return self._handle_response(response)
 
@@ -517,9 +514,7 @@ class MMMAPIClient:
             progress=m.get("progress", 0.0),
             progress_message=m.get("progress_message"),
             started_at=(
-                datetime.fromisoformat(m["started_at"])
-                if m.get("started_at")
-                else None
+                datetime.fromisoformat(m["started_at"]) if m.get("started_at") else None
             ),
             error_message=m.get("error_message"),
             diagnostics=m.get("diagnostics"),
@@ -535,9 +530,9 @@ class MMMAPIClient:
     # -------------------------------------------------------------------------
 
     def submit_fit_job(
-        self, 
-        data_id: str, 
-        config_id: str, 
+        self,
+        data_id: str,
+        config_id: str,
         name: str = None,
         description: str = None,
         n_chains: int = None,
@@ -562,7 +557,7 @@ class MMMAPIClient:
             payload["n_tune"] = n_tune
         if random_seed:
             payload["random_seed"] = random_seed
-            
+
         response = self._client.post("/models/fit", json=payload)
         m = self._handle_response(response)
         return ModelInfo(
@@ -580,9 +575,7 @@ class MMMAPIClient:
             progress=m.get("progress", 0.0),
             progress_message=m.get("progress_message"),
             started_at=(
-                datetime.fromisoformat(m["started_at"])
-                if m.get("started_at")
-                else None
+                datetime.fromisoformat(m["started_at"]) if m.get("started_at") else None
             ),
             error_message=m.get("error_message"),
             diagnostics=m.get("diagnostics"),
@@ -639,7 +632,7 @@ class MMMAPIClient:
         params = {"hdi_prob": hdi_prob}
         response = self._client.get(f"/models/{model_id}/contributions", params=params)
         return self._handle_response(response)
-    
+
     def generate_report(
         self,
         model_id: str,
@@ -676,12 +669,10 @@ class MMMAPIClient:
         response = self._client.post(f"/models/{model_id}/report", json=payload)
         return self._handle_response(response)
 
-
     def get_report_status(self, model_id: str, report_id: str) -> dict:
         """Get report generation status."""
         response = self._client.get(f"/models/{model_id}/report/{report_id}/status")
         return self._handle_response(response)
-
 
     def download_report(self, model_id: str, report_id: str) -> bytes:
         """Download a generated report as HTML content."""
@@ -690,11 +681,11 @@ class MMMAPIClient:
             return response.content
         return self._handle_response(response)
 
-
     def list_reports(self, model_id: str) -> dict:
         """List all reports for a model."""
         response = self._client.get(f"/models/{model_id}/reports")
         return self._handle_response(response)
+
 
 # =============================================================================
 # Cached Client & Helpers
@@ -754,6 +745,7 @@ def fetch_model_results(_client: MMMAPIClient, model_id: str) -> dict:
     """Fetch model results with caching."""
     return _client.get_model_results(model_id)
 
+
 @st.cache_resource(ttl=300)
 def fetch_model_fit(_client: MMMAPIClient, model_id: str) -> dict:
     """Fetch model fit data with caching."""
@@ -793,14 +785,18 @@ def fetch_decomposition(_client: MMMAPIClient, model_id: str) -> dict:
 def fetch_marginal_roas(_client: MMMAPIClient, model_id: str) -> dict | None:
     """Fetch marginal ROAS with caching."""
     try:
-        response = _client._client.get(f"/models/{model_id}/roas")  # Changed from /marginal-roas
+        response = _client._client.get(
+            f"/models/{model_id}/roas"
+        )  # Changed from /marginal-roas
         return _client._handle_response(response)
     except Exception:
         return None
 
 
 @st.cache_resource(ttl=300)
-def fetch_contributions(_client: MMMAPIClient, model_id: str, hdi_prob: float = 0.94) -> dict:
+def fetch_contributions(
+    _client: MMMAPIClient, model_id: str, hdi_prob: float = 0.94
+) -> dict:
     """Fetch channel contributions with caching."""
     payload = {
         "compute_uncertainty": True,
@@ -816,11 +812,13 @@ def fetch_model_summary(_client: MMMAPIClient, model_id: str) -> dict:
     response = _client._client.get(f"/models/{model_id}/summary")
     return _client._handle_response(response)
 
+
 @st.cache_resource(ttl=60)
 def fetch_reports(_client: MMMAPIClient, model_id: str) -> list:
     """Fetch reports for a model with caching."""
     result = _client.list_reports(model_id)
     return result.get("reports", [])
+
 
 def clear_dataset_cache():
     """Clear dataset cache."""

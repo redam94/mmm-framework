@@ -13,6 +13,7 @@ from typing import Any, Protocol, runtime_checkable
 @runtime_checkable
 class HasTrace(Protocol):
     """Protocol for objects with ArviZ trace."""
+
     @property
     def _trace(self) -> Any: ...
 
@@ -20,6 +21,7 @@ class HasTrace(Protocol):
 @runtime_checkable
 class HasModel(Protocol):
     """Protocol for objects with PyMC model."""
+
     @property
     def model(self) -> Any: ...
     @property
@@ -29,6 +31,7 @@ class HasModel(Protocol):
 @runtime_checkable
 class HasPanel(Protocol):
     """Protocol for objects with panel data."""
+
     @property
     def panel(self) -> Any: ...
 

@@ -43,7 +43,6 @@ from storage import StorageError, StorageService, get_storage
 router = APIRouter(prefix="/models", tags=["Models"])
 
 
-
 # Custom JSON encoder that handles NaN/Inf values
 class NaNSafeEncoder(json.JSONEncoder):
     """JSON encoder that converts NaN/Inf to null."""
@@ -185,7 +184,6 @@ def _check_model_completed(storage: StorageService, model_id: str):
         )
 
     return metadata
-
 
 
 @router.post(
@@ -368,6 +366,7 @@ async def list_model_reports(
     reports.sort(key=lambda x: x["created_at"], reverse=True)
 
     return ReportListResponse(model_id=model_id, reports=reports)
+
 
 @router.post(
     "/fit",
@@ -2442,18 +2441,22 @@ async def compare_models(
 
     for model_id in model_ids:
         if not storage.model_exists(model_id):
-            comparisons.append({
-                "model_id": model_id,
-                "status": "not_found",
-            })
+            comparisons.append(
+                {
+                    "model_id": model_id,
+                    "status": "not_found",
+                }
+            )
             continue
 
         metadata = storage.get_model_metadata(model_id)
         if metadata.get("status") != JobStatus.COMPLETED.value:
-            comparisons.append({
-                "model_id": model_id,
-                "status": metadata.get("status", "unknown"),
-            })
+            comparisons.append(
+                {
+                    "model_id": model_id,
+                    "status": metadata.get("status", "unknown"),
+                }
+            )
             continue
 
         try:
@@ -2488,10 +2491,12 @@ async def compare_models(
             comparisons.append(comparison)
 
         except StorageError:
-            comparisons.append({
-                "model_id": model_id,
-                "status": "results_unavailable",
-            })
+            comparisons.append(
+                {
+                    "model_id": model_id,
+                    "status": "results_unavailable",
+                }
+            )
 
     # Sanitize for JSON
     comparisons = _sanitize_for_json(comparisons)

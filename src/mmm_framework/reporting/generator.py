@@ -41,7 +41,7 @@ from .sections import (
 class MMMReportGenerator:
     """
     Generate portable HTML reports from Bayesian MMM results.
-    
+
     Parameters
     ----------
     model : Any, optional
@@ -56,16 +56,16 @@ class MMMReportGenerator:
         Model fit results
     sensitivity : dict, optional
         Sensitivity analysis results
-    
+
     Examples
     --------
     >>> from mmm_framework import BayesianMMM
     >>> from mmm_reporting import MMMReportGenerator, ReportConfig
-    >>> 
+    >>>
     >>> # Fit model
     >>> mmm = BayesianMMM(panel, model_config, trend_config)
     >>> results = mmm.fit()
-    >>> 
+    >>>
     >>> # Generate report
     >>> report = MMMReportGenerator(
     ...     model=mmm,
@@ -77,7 +77,7 @@ class MMMReportGenerator:
     ... )
     >>> report.to_html("mmm_report.html")
     """
-    
+
     def __init__(
         self,
         model: Any | None = None,
@@ -88,7 +88,7 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
     ):
         self.config = config or ReportConfig()
-        
+
         # Extract data from model or use provided data
         if data is not None:
             self.data = data
@@ -97,19 +97,23 @@ class MMMReportGenerator:
             self.data = extractor.extract()
         else:
             self.data = MMMDataBundle()
-        
+
         # Add sensitivity results if provided
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
-        
+
         # Initialize sections
         self._sections: list[Section] = []
         self._initialize_sections()
-    
+
     def _initialize_sections(self):
         """Initialize report sections based on configuration."""
         section_configs = [
-            ("executive_summary", ExecutiveSummarySection, self.config.executive_summary),
+            (
+                "executive_summary",
+                ExecutiveSummarySection,
+                self.config.executive_summary,
+            ),
             ("model_fit", ModelFitSection, self.config.model_fit),
             ("channel_roi", ChannelROISection, self.config.channel_roi),
             ("geographic", GeographicSection, self.config.geographic),
@@ -121,7 +125,7 @@ class MMMReportGenerator:
             ("methodology", MethodologySection, self.config.methodology),
             ("diagnostics", DiagnosticsSection, self.config.diagnostics),
         ]
-        
+
         for name, section_class, section_config in section_configs:
             section = section_class(
                 data=self.data,
@@ -129,7 +133,7 @@ class MMMReportGenerator:
                 section_config=section_config,
             )
             self._sections.append(section)
-    
+
     def add_section(
         self,
         section_type: str,
@@ -138,7 +142,7 @@ class MMMReportGenerator:
     ) -> MMMReportGenerator:
         """
         Add a section to the report.
-        
+
         Parameters
         ----------
         section_type : str
@@ -147,7 +151,7 @@ class MMMReportGenerator:
             Configuration for the section
         position : int, optional
             Position to insert (None = append)
-            
+
         Returns
         -------
         MMMReportGenerator
@@ -155,30 +159,30 @@ class MMMReportGenerator:
         """
         if section_type not in SECTION_REGISTRY:
             raise ValueError(f"Unknown section type: {section_type}")
-        
+
         section_class = SECTION_REGISTRY[section_type]
         section = section_class(
             data=self.data,
             config=self.config,
             section_config=section_config or SectionConfig(),
         )
-        
+
         if position is not None:
             self._sections.insert(position, section)
         else:
             self._sections.append(section)
-        
+
         return self
-    
+
     def remove_section(self, section_id: str) -> MMMReportGenerator:
         """
         Remove a section by ID.
-        
+
         Parameters
         ----------
         section_id : str
             Section ID to remove
-            
+
         Returns
         -------
         MMMReportGenerator
@@ -186,11 +190,11 @@ class MMMReportGenerator:
         """
         self._sections = [s for s in self._sections if s.section_id != section_id]
         return self
-    
+
     def render(self) -> str:
         """
         Render complete HTML report.
-        
+
         Returns
         -------
         str
@@ -200,14 +204,14 @@ class MMMReportGenerator:
         sections_html = "\n".join(
             section.render() for section in self._sections if section.is_enabled
         )
-        
+
         # Assemble full HTML
         return self._assemble_html(sections_html)
-    
+
     def _assemble_html(self, sections_html: str) -> str:
         """Assemble complete HTML document."""
         generated_date = self.config.generated_date or datetime.now().strftime("%B %Y")
-        
+
         # Build header
         subtitle = ""
         if self.config.client:
@@ -215,34 +219,34 @@ class MMMReportGenerator:
             if self.config.subtitle:
                 subtitle += f" — {html.escape(self.config.subtitle)}"
             subtitle += "</div>"
-        
+
         period = ""
         if self.config.analysis_period:
             period = f'<div class="date">Analysis Period: {html.escape(self.config.analysis_period)} | Generated: {generated_date}</div>'
-        
-        header = f'''
+
+        header = f"""
         <header class="report-header">
             <h1>{html.escape(self.config.title)}</h1>
             {subtitle}
             {period}
         </header>
-        '''
-        
+        """
+
         # Build footer
-        footer = f'''
+        footer = f"""
         <footer class="report-footer">
             <p>Generated by MMM Framework | <a href="https://github.com/redam94/mmm-framework" style="color: var(--color-primary);">Documentation</a></p>
             <p style="margin-top: 0.5rem;">Report generated: {generated_date}</p>
         </footer>
-        '''
-        
+        """
+
         # Get CSS
         css = self._generate_css()
-        
+
         # Get Plotly script
         plotly_script = self._get_plotly_script()
-        
-        return f'''<!DOCTYPE html>
+
+        return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -263,19 +267,19 @@ class MMMReportGenerator:
         {footer}
     </div>
 </body>
-</html>'''
-    
+</html>"""
+
     def _get_plotly_script(self) -> str:
         """Get Plotly.js script tag."""
         if self.config.include_plotly_js:
             return f'<script src="https://cdn.plot.ly/plotly-{self.config.plotly_cdn_version}.min.js"></script>'
         return ""
-    
+
     def _generate_css(self) -> str:
         """Generate CSS styles from configuration."""
         c = self.config.color_scheme
 
-        return f'''
+        return f"""
         :root {{
             --color-primary: {c.primary};
             --color-primary-dark: {c.primary_dark};
@@ -611,17 +615,17 @@ class MMMReportGenerator:
                 page-break-inside: avoid;
             }}
         }}
-'''
-    
+"""
+
     def to_html(self, filepath: str | Path) -> Path:
         """
         Save report to HTML file.
-        
+
         Parameters
         ----------
         filepath : str or Path
             Output file path
-            
+
         Returns
         -------
         Path
@@ -629,22 +633,22 @@ class MMMReportGenerator:
         """
         filepath = Path(filepath)
         html_content = self.render()
-        
+
         filepath.write_text(html_content, encoding="utf-8")
-        
+
         return filepath
-    
+
     def to_string(self) -> str:
         """
         Get report as HTML string.
-        
+
         Returns
         -------
         str
             HTML document string
         """
         return self.render()
-    
+
     def _repr_html_(self) -> str:
         """Jupyter notebook display."""
         return self.render()
@@ -653,7 +657,7 @@ class MMMReportGenerator:
 class ReportBuilder:
     """
     Fluent builder for creating customized reports.
-    
+
     Examples
     --------
     >>> report = (
@@ -667,7 +671,7 @@ class ReportBuilder:
     ...     .build()
     ... )
     """
-    
+
     def __init__(self):
         self._model: Any | None = None
         self._data: MMMDataBundle | None = None
@@ -676,72 +680,74 @@ class ReportBuilder:
         self._sensitivity: dict | None = None
         self._config_kwargs: dict = {}
         self._section_configs: dict[str, SectionConfig] = {}
-    
-    def with_model(self, model: Any, panel: Any | None = None, results: Any | None = None) -> ReportBuilder:
+
+    def with_model(
+        self, model: Any, panel: Any | None = None, results: Any | None = None
+    ) -> ReportBuilder:
         """Set the MMM model."""
         self._model = model
         self._panel = panel
         self._results = results
         return self
-    
+
     def with_data(self, data: MMMDataBundle) -> ReportBuilder:
         """Set pre-extracted data bundle."""
         self._data = data
         return self
-    
+
     def with_sensitivity(self, results: dict) -> ReportBuilder:
         """Add sensitivity analysis results."""
         self._sensitivity = results
         return self
-    
+
     def with_title(self, title: str) -> ReportBuilder:
         """Set report title."""
         self._config_kwargs["title"] = title
         return self
-    
+
     def with_client(self, client: str) -> ReportBuilder:
         """Set client name."""
         self._config_kwargs["client"] = client
         return self
-    
+
     def with_subtitle(self, subtitle: str) -> ReportBuilder:
         """Set subtitle."""
         self._config_kwargs["subtitle"] = subtitle
         return self
-    
+
     def with_analysis_period(self, period: str) -> ReportBuilder:
         """Set analysis period string."""
         self._config_kwargs["analysis_period"] = period
         return self
-    
+
     def with_color_scheme(self, scheme: ColorScheme) -> ReportBuilder:
         """Set color scheme."""
         self._config_kwargs["color_scheme"] = scheme
         return self
-    
+
     def with_credible_interval(self, prob: float) -> ReportBuilder:
         """Set default credible interval (e.g., 0.8 for 80% CI)."""
         self._config_kwargs["default_credible_interval"] = prob
         return self
-    
+
     def enable_section(self, section_name: str, **kwargs) -> ReportBuilder:
         """Enable a section with optional configuration."""
         config = SectionConfig(enabled=True, **kwargs)
         self._section_configs[section_name] = config
         return self
-    
+
     def disable_section(self, section_name: str) -> ReportBuilder:
         """Disable a section."""
         self._section_configs[section_name] = SectionConfig(enabled=False)
         return self
-    
+
     def enable_all_sections(self) -> ReportBuilder:
         """Enable all sections."""
         for name in SECTION_REGISTRY.keys():
             if name not in self._section_configs:
                 self._section_configs[name] = SectionConfig(enabled=True)
         return self
-    
+
     def minimal_report(self) -> ReportBuilder:
         """Configure for minimal report (executive summary + ROI only)."""
         self._section_configs = {
@@ -755,16 +761,16 @@ class ReportBuilder:
             "diagnostics": SectionConfig(enabled=False),
         }
         return self
-    
+
     def build(self) -> MMMReportGenerator:
         """Build the report generator."""
         # Apply section configs
         for name, config in self._section_configs.items():
             self._config_kwargs[name] = config
-        
+
         # Create config
         report_config = ReportConfig(**self._config_kwargs)
-        
+
         # Create generator
         return MMMReportGenerator(
             model=self._model,

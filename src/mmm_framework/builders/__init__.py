@@ -51,7 +51,6 @@ from .mff import (
     MFFConfigBuilder,
 )
 
-
 __all__ = [
     # Base utilities
     "BuilderProtocol",

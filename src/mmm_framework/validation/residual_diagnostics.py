@@ -136,23 +136,31 @@ class ResidualDiagnostics:
         # Prefer raw (original scale) data for interpretability
         if hasattr(self.model, "y_raw"):
             data = np.asarray(self.model.y_raw).flatten()
-            logger.debug(f"Residual: Using y_raw, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+            logger.debug(
+                f"Residual: Using y_raw, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+            )
             return data
         # Fall back to panel data (original scale)
         elif hasattr(self.model, "panel"):
             panel = self.model.panel
             if hasattr(panel, "y"):
                 data = np.asarray(panel.y).flatten()
-                logger.debug(f"Residual: Using panel.y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+                logger.debug(
+                    f"Residual: Using panel.y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+                )
                 return data
         # Last resort: standardized data
         elif hasattr(self.model, "y"):
             data = np.asarray(self.model.y).flatten()
-            logger.debug(f"Residual: Using y (standardized), shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+            logger.debug(
+                f"Residual: Using y (standardized), shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+            )
             return data
         elif hasattr(self.model, "_y"):
             data = np.asarray(self.model._y).flatten()
-            logger.debug(f"Residual: Using _y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+            logger.debug(
+                f"Residual: Using _y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+            )
             return data
         raise ValueError("Could not extract observed data from model")
 
@@ -171,7 +179,9 @@ class ResidualDiagnostics:
                 pred_result = self.model.predict(return_original_scale=True)
                 if hasattr(pred_result, "y_pred_mean"):
                     data = np.asarray(pred_result.y_pred_mean).flatten()
-                    logger.debug(f"Residual predictions: Using predict(), shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+                    logger.debug(
+                        f"Residual predictions: Using predict(), shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+                    )
                     return data
             except Exception as e:
                 logger.debug(f"Residual predictions: predict() failed: {e}")
@@ -181,36 +191,49 @@ class ResidualDiagnostics:
             trace = self.model._trace
             if hasattr(trace, "posterior"):
                 posterior = trace.posterior
-                logger.debug(f"Residual predictions: posterior has vars: {list(posterior.data_vars)[:10]}...")
+                logger.debug(
+                    f"Residual predictions: posterior has vars: {list(posterior.data_vars)[:10]}..."
+                )
                 # First try scaled version (original scale) - this is the main variable in BayesianMMM
                 if "y_obs_scaled" in posterior:
                     data = posterior["y_obs_scaled"].values
                     result = data.mean(axis=(0, 1))
-                    logger.debug(f"Residual predictions: Using y_obs_scaled, shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]")
+                    logger.debug(
+                        f"Residual predictions: Using y_obs_scaled, shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]"
+                    )
                     return result
                 # Try mu (model mean) and convert to original scale
                 if "mu" in posterior:
                     data = posterior["mu"].values
                     # mu is on standardized scale, convert to original
                     result = data.mean(axis=(0, 1)) * y_std + y_mean
-                    logger.debug(f"Residual predictions: Using mu (scaled), shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]")
+                    logger.debug(
+                        f"Residual predictions: Using mu (scaled), shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]"
+                    )
                     return result
                 # Look for other prediction variables
                 for var_name in ["y_hat", "y_pred"]:
                     if var_name in posterior:
                         data = posterior[var_name].values
                         result = data.mean(axis=(0, 1)) * y_std + y_mean
-                        logger.debug(f"Residual predictions: Using {var_name}, shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]")
+                        logger.debug(
+                            f"Residual predictions: Using {var_name}, shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]"
+                        )
                         return result
 
             # Also check posterior_predictive for y_obs (standardized)
-            if hasattr(trace, "posterior_predictive") and trace.posterior_predictive is not None:
+            if (
+                hasattr(trace, "posterior_predictive")
+                and trace.posterior_predictive is not None
+            ):
                 pp = trace.posterior_predictive
                 if "y_obs" in pp:
                     data = pp["y_obs"].values
                     # y_obs is on standardized scale, convert to original
                     result = data.mean(axis=(0, 1)) * y_std + y_mean
-                    logger.debug(f"Residual predictions: Using posterior_predictive y_obs, shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]")
+                    logger.debug(
+                        f"Residual predictions: Using posterior_predictive y_obs, shape={result.shape}, range=[{result.min():.2f}, {result.max():.2f}]"
+                    )
                     return result
 
         # Fallback: try to find any suitable variable
@@ -226,7 +249,9 @@ class ResidualDiagnostics:
                     if data.ndim >= 3 and data.shape[-1] == n_obs:
                         # Assume standardized, convert
                         result = data.mean(axis=(0, 1)) * y_std + y_mean
-                        logger.debug(f"Residual predictions: Using fallback {var_name}, shape={result.shape}")
+                        logger.debug(
+                            f"Residual predictions: Using fallback {var_name}, shape={result.shape}"
+                        )
                         return result
 
         raise ValueError("Could not extract predictions from model")

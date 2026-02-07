@@ -35,7 +35,6 @@ from mmm_framework.reporting.config import (
     ColorScheme,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -610,9 +609,7 @@ class TestChartEdgeCases:
 class TestChartConfiguration:
     """Tests for chart configuration options."""
 
-    def test_custom_color_scheme(
-        self, sample_dates, sample_actual, sample_predicted
-    ):
+    def test_custom_color_scheme(self, sample_dates, sample_actual, sample_predicted):
         """Test charts with custom color scheme."""
         scheme = ColorScheme(
             primary="#FF0000",

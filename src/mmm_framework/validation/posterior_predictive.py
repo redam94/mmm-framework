@@ -367,23 +367,31 @@ class PPCValidator:
         # Prefer raw (original scale) data for interpretability
         if hasattr(self.model, "y_raw"):
             data = np.asarray(self.model.y_raw).flatten()
-            logger.debug(f"PPC: Using y_raw, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+            logger.debug(
+                f"PPC: Using y_raw, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+            )
             return data
         # Fall back to panel data (original scale)
         elif hasattr(self.model, "panel"):
             panel = self.model.panel
             if hasattr(panel, "y"):
                 data = np.asarray(panel.y).flatten()
-                logger.debug(f"PPC: Using panel.y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+                logger.debug(
+                    f"PPC: Using panel.y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+                )
                 return data
         # Last resort: standardized data (less interpretable)
         elif hasattr(self.model, "y"):
             data = np.asarray(self.model.y).flatten()
-            logger.debug(f"PPC: Using y (standardized), shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+            logger.debug(
+                f"PPC: Using y (standardized), shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+            )
             return data
         elif hasattr(self.model, "_y"):
             data = np.asarray(self.model._y).flatten()
-            logger.debug(f"PPC: Using _y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+            logger.debug(
+                f"PPC: Using _y, shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+            )
             return data
         raise ValueError("Could not extract observed data from model")
 
@@ -414,10 +422,15 @@ class PPCValidator:
             try:
                 logger.debug("PPC replicated: Trying predict() method")
                 pred_result = self.model.predict(return_original_scale=True)
-                if hasattr(pred_result, "y_pred_samples") and pred_result.y_pred_samples is not None:
+                if (
+                    hasattr(pred_result, "y_pred_samples")
+                    and pred_result.y_pred_samples is not None
+                ):
                     samples = np.asarray(pred_result.y_pred_samples)
                     if samples.size > 0:
-                        logger.debug(f"PPC replicated: predict() returned shape={samples.shape}, range=[{samples.min():.2f}, {samples.max():.2f}]")
+                        logger.debug(
+                            f"PPC replicated: predict() returned shape={samples.shape}, range=[{samples.min():.2f}, {samples.max():.2f}]"
+                        )
                         return samples
             except Exception as e:
                 logger.debug(f"PPC replicated: predict() failed: {e}")
@@ -425,20 +438,29 @@ class PPCValidator:
         # Check if posterior_predictive already exists in trace (from a previous PPC call)
         if hasattr(self.model, "_trace"):
             trace = self.model._trace
-            if hasattr(trace, "posterior_predictive") and trace.posterior_predictive is not None:
+            if (
+                hasattr(trace, "posterior_predictive")
+                and trace.posterior_predictive is not None
+            ):
                 pp = trace.posterior_predictive
-                logger.debug(f"PPC replicated: posterior_predictive has vars: {list(pp.data_vars)}")
+                logger.debug(
+                    f"PPC replicated: posterior_predictive has vars: {list(pp.data_vars)}"
+                )
                 # Look for y_obs (standardized replicated samples)
                 for var_name in ["y_obs", "y", "obs", "likelihood"]:
                     if var_name in pp:
                         data = pp[var_name].values
-                        logger.debug(f"PPC replicated: Found {var_name} with shape={data.shape}")
+                        logger.debug(
+                            f"PPC replicated: Found {var_name} with shape={data.shape}"
+                        )
                         # Flatten chains and draws
                         if data.ndim > 2:
                             data = data.reshape(-1, data.shape[-1])
                         # Convert to original scale
                         data = data * y_std + y_mean
-                        logger.debug(f"PPC replicated: Using {var_name}, final shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+                        logger.debug(
+                            f"PPC replicated: Using {var_name}, final shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+                        )
                         return data
 
         # Fallback: explicitly sample from posterior predictive
@@ -459,7 +481,9 @@ class PPCValidator:
                         data = data.reshape(-1, data.shape[-1])
                     # Convert to original scale
                     data = data * y_std + y_mean
-                    logger.debug(f"PPC replicated: Sampled shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]")
+                    logger.debug(
+                        f"PPC replicated: Sampled shape={data.shape}, range=[{data.min():.2f}, {data.max():.2f}]"
+                    )
                     return data
 
         raise ValueError("Could not generate replicated data from model")

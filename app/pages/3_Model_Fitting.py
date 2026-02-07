@@ -29,7 +29,6 @@ from components import (
     job_progress_display,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -398,9 +397,7 @@ def render_job_list():
                     st.caption(format_datetime(model.created_at))
 
                 with col3:
-                    st.markdown(
-                        f"{status_icon(model.status)} {model.status}"
-                    )
+                    st.markdown(f"{status_icon(model.status)} {model.status}")
 
                 with col4:
                     if model.progress == "running":

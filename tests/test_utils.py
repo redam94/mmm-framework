@@ -162,7 +162,7 @@ class TestDataStandardizer:
         assert standardized.shape == data.shape
 
         # Params should have mean/std per column
-        assert len(params.mean) == 2 if hasattr(params.mean, '__len__') else True
+        assert len(params.mean) == 2 if hasattr(params.mean, "__len__") else True
 
     def test_epsilon_prevents_division_by_zero(self):
         """Test that epsilon prevents division by zero for constant data."""
@@ -236,7 +236,9 @@ class TestTimeMaskHelper:
         time_mask = (time_idx >= start_idx) & (time_idx <= end_idx)
 
         # Should mask indices 2, 3, 4, 5
-        expected = np.array([False, False, True, True, True, True, False, False, False, False])
+        expected = np.array(
+            [False, False, True, True, True, True, False, False, False, False]
+        )
         np.testing.assert_array_equal(time_mask, expected)
 
     def test_time_mask_without_period(self):

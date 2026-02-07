@@ -11,9 +11,7 @@ class TestDataStorage:
 
     def test_save_and_load_data(self, storage_service, sample_mff_csv):
         """Test saving and loading data."""
-        metadata = storage_service.save_data(
-            sample_mff_csv.encode(), "test_data.csv"
-        )
+        metadata = storage_service.save_data(sample_mff_csv.encode(), "test_data.csv")
 
         assert "data_id" in metadata
         assert metadata["filename"] == "test_data.csv"
@@ -25,18 +23,14 @@ class TestDataStorage:
 
     def test_data_exists(self, storage_service, sample_mff_csv):
         """Test data existence check."""
-        metadata = storage_service.save_data(
-            sample_mff_csv.encode(), "test.csv"
-        )
+        metadata = storage_service.save_data(sample_mff_csv.encode(), "test.csv")
 
         assert storage_service.data_exists(metadata["data_id"]) is True
         assert storage_service.data_exists("nonexistent") is False
 
     def test_delete_data(self, storage_service, sample_mff_csv):
         """Test data deletion."""
-        metadata = storage_service.save_data(
-            sample_mff_csv.encode(), "test.csv"
-        )
+        metadata = storage_service.save_data(sample_mff_csv.encode(), "test.csv")
         data_id = metadata["data_id"]
 
         assert storage_service.data_exists(data_id) is True
@@ -85,9 +79,7 @@ class TestConfigStorage:
         saved = storage_service.save_config(sample_config)
         config_id = saved["config_id"]
 
-        updated = storage_service.update_config(
-            config_id, {"name": "Updated Name"}
-        )
+        updated = storage_service.update_config(config_id, {"name": "Updated Name"})
 
         assert updated["name"] == "Updated Name"
 

@@ -137,6 +137,7 @@ class BaseExtendedMMM:
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
         import arviz as az
+
         self._check_fitted()
         return az.summary(self._trace, var_names=var_names)
 

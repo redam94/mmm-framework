@@ -104,7 +104,9 @@ class CombinedMMM(BaseExtendedMMM):
             build_partial_observation_model,
             build_multivariate_likelihood,
         )
-        from ..components.transforms import logistic_saturation_pt as logistic_saturation
+        from ..components.transforms import (
+            logistic_saturation_pt as logistic_saturation,
+        )
 
         coords = self._build_coords()
 

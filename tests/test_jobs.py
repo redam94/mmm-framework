@@ -36,7 +36,6 @@ from mmm_framework.jobs import (
     DEFAULT_JOBS_DIR,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -898,9 +897,7 @@ class TestJobManager:
         assert (job_dir / "status.json").exists()
         assert (job_dir / "progress.json").exists()
 
-    def test_create_job_saves_config(
-        self, job_manager, mock_panel, sample_job_config
-    ):
+    def test_create_job_saves_config(self, job_manager, mock_panel, sample_job_config):
         """Test create_job saves correct config."""
         job = job_manager.create_job(mock_panel, sample_job_config)
 
@@ -1229,9 +1226,7 @@ class TestJobManager:
         _update_status(job_dir, JobStatus.COMPLETED)
         with open(job_dir / "status.json") as f:
             status = json.load(f)
-        status["completed_at"] = (
-            datetime.now() - timedelta(days=60)
-        ).isoformat()
+        status["completed_at"] = (datetime.now() - timedelta(days=60)).isoformat()
         with open(job_dir / "status.json", "w") as f:
             json.dump(status, f)
 

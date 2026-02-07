@@ -16,7 +16,8 @@ Note: Bypasses PyTensor compilation issues with special config.
 """
 
 import pytensor
-pytensor.config.exception_verbosity = 'high'
+
+pytensor.config.exception_verbosity = "high"
 pytensor.config.cxx = ""
 
 import numpy as np
@@ -56,7 +57,6 @@ from mmm_framework.mmm_extensions.builders import (
     selection_with_inclusion_probs,
     dense_controls,
 )
-
 
 # =============================================================================
 # AdstockConfigBuilder Tests
@@ -483,46 +483,28 @@ class TestMediatorConfigBuilderExtended:
     def test_without_direct_effect(self):
         """Test disabling direct effect."""
         config = (
-            MediatorConfigBuilderExtended("awareness")
-            .without_direct_effect()
-            .build()
+            MediatorConfigBuilderExtended("awareness").without_direct_effect().build()
         )
         assert config.allow_direct_effect is False
 
     def test_with_adstock(self):
         """Test enabling adstock."""
-        config = (
-            MediatorConfigBuilderExtended("awareness")
-            .with_adstock()
-            .build()
-        )
+        config = MediatorConfigBuilderExtended("awareness").with_adstock().build()
         assert config.apply_adstock is True
 
     def test_without_adstock(self):
         """Test disabling adstock."""
-        config = (
-            MediatorConfigBuilderExtended("awareness")
-            .without_adstock()
-            .build()
-        )
+        config = MediatorConfigBuilderExtended("awareness").without_adstock().build()
         assert config.apply_adstock is False
 
     def test_with_saturation(self):
         """Test enabling saturation."""
-        config = (
-            MediatorConfigBuilderExtended("awareness")
-            .with_saturation()
-            .build()
-        )
+        config = MediatorConfigBuilderExtended("awareness").with_saturation().build()
         assert config.apply_saturation is True
 
     def test_without_saturation(self):
         """Test disabling saturation."""
-        config = (
-            MediatorConfigBuilderExtended("awareness")
-            .without_saturation()
-            .build()
-        )
+        config = MediatorConfigBuilderExtended("awareness").without_saturation().build()
         assert config.apply_saturation is False
 
 
@@ -628,9 +610,7 @@ class TestCombinedModelConfigBuilder:
     def test_with_traffic_mediator(self):
         """Test with_traffic_mediator convenience."""
         config = (
-            CombinedModelConfigBuilder()
-            .with_traffic_mediator("store_visits")
-            .build()
+            CombinedModelConfigBuilder().with_traffic_mediator("store_visits").build()
         )
         assert len(config.nested.mediators) == 1
         assert config.nested.mediators[0].name == "store_visits"
@@ -644,9 +624,7 @@ class TestCombinedModelConfigBuilder:
     def test_with_outcomes(self):
         """Test with_outcomes convenience."""
         config = (
-            CombinedModelConfigBuilder()
-            .with_outcomes("product_a", "product_b")
-            .build()
+            CombinedModelConfigBuilder().with_outcomes("product_a", "product_b").build()
         )
         assert len(config.multivariate.outcomes) == 2
 
@@ -682,7 +660,10 @@ class TestCombinedModelConfigBuilder:
             .build()
         )
         assert len(config.multivariate.cross_effects) == 1
-        assert config.multivariate.cross_effects[0].effect_type == CrossEffectType.CANNIBALIZATION
+        assert (
+            config.multivariate.cross_effects[0].effect_type
+            == CrossEffectType.CANNIBALIZATION
+        )
 
     def test_with_halo_effect(self):
         """Test adding halo effect."""
@@ -841,9 +822,7 @@ class TestSurveyAwarenessMediatorFactory:
             n_model_periods=52,
             sample_sizes=500,
         )
-        assert all(
-            n == 500 for n in config.aggregated_survey_config.sample_sizes
-        )
+        assert all(n == 500 for n in config.aggregated_survey_config.sample_sizes)
 
     def test_with_design_effect(self):
         """Test with custom design effect."""

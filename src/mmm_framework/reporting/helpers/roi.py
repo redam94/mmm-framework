@@ -246,7 +246,9 @@ def _get_contribution_samples(
             return arr * y_std
 
         except Exception as e:
-            logger.warning(f"Failed to extract channel_contributions for {channel}: {e}")
+            logger.warning(
+                f"Failed to extract channel_contributions for {channel}: {e}"
+            )
 
     # Fall back to beta * media
     for beta_name in [f"beta_{channel}", f"beta_media_{channel}"]:
@@ -323,7 +325,9 @@ def compute_marginal_roi(
     # Get saturation parameters
     sat_params = _get_saturation_params(model, posterior, channel)
     if sat_params is None:
-        logger.warning(f"Cannot compute marginal ROI for {channel} - no saturation params")
+        logger.warning(
+            f"Cannot compute marginal ROI for {channel} - no saturation params"
+        )
         return {"marginal_roi_mean": np.nan}
 
     # Get beta samples

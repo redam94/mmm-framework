@@ -24,6 +24,7 @@ from storage import get_storage
 
 try:
     from slowapi.errors import RateLimitExceeded
+
     SLOWAPI_AVAILABLE = True
 except ImportError:
     SLOWAPI_AVAILABLE = False

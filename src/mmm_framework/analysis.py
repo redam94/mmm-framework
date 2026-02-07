@@ -296,8 +296,12 @@ class MMMAnalyzer:
 
             # Add HDI if available
             if contributions.contribution_hdi_low is not None:
-                result["Contribution HDI Low"] = contributions.contribution_hdi_low[channel]
-                result["Contribution HDI High"] = contributions.contribution_hdi_high[channel]
+                result["Contribution HDI Low"] = contributions.contribution_hdi_low[
+                    channel
+                ]
+                result["Contribution HDI High"] = contributions.contribution_hdi_high[
+                    channel
+                ]
 
             results.append(result)
 
@@ -358,13 +362,19 @@ class MMMAnalyzer:
             scenario_total = scenario_pred.y_pred_mean.sum()
 
             # Contribution at this spend level
-            contribution = scenario_total - baseline_total + self._model.X_media_raw[:, ch_idx].sum() * 0  # Placeholder
+            contribution = (
+                scenario_total
+                - baseline_total
+                + self._model.X_media_raw[:, ch_idx].sum() * 0
+            )  # Placeholder
 
-            results.append({
-                "Spend Level": spend_level,
-                "Total Outcome": scenario_total,
-                "Relative to Baseline": scenario_total - baseline_total,
-            })
+            results.append(
+                {
+                    "Spend Level": spend_level,
+                    "Total Outcome": scenario_total,
+                    "Relative to Baseline": scenario_total - baseline_total,
+                }
+            )
 
         return pd.DataFrame(results)
 
@@ -416,17 +426,20 @@ def compute_period_contributions(
     results = []
     for name, (start, end) in zip(period_names, periods):
         # Filter to this period
-        mask = (contributions.channel_contributions.index.get_level_values(0) >= start) & \
-               (contributions.channel_contributions.index.get_level_values(0) <= end)
+        mask = (
+            contributions.channel_contributions.index.get_level_values(0) >= start
+        ) & (contributions.channel_contributions.index.get_level_values(0) <= end)
 
         period_totals = contributions.channel_contributions[mask].sum()
 
         for channel, total in period_totals.items():
-            results.append({
-                "Period": name,
-                "Channel": channel,
-                "Contribution": total,
-            })
+            results.append(
+                {
+                    "Period": name,
+                    "Channel": channel,
+                    "Contribution": total,
+                }
+            )
 
     df = pd.DataFrame(results)
     return df.pivot(index="Channel", columns="Period", values="Contribution")

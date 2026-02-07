@@ -89,9 +89,7 @@ def create_roi_forest_plot(
                 "%{y}<br>ROI: %{x:.2f}<br>"
                 "CI: [%{customdata[0]:.2f}, %{customdata[1]:.2f}]<extra></extra>"
             ),
-            "customdata": [
-                [l, u] for l, u in zip(roi_lower_sorted, roi_upper_sorted)
-            ],
+            "customdata": [[l, u] for l, u in zip(roi_lower_sorted, roi_upper_sorted)],
         },
     ]
 

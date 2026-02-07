@@ -78,6 +78,10 @@ class CrossValidationConfig:
     tune_per_fold: int = 250
     chains_per_fold: int = 2
 
+    # Frozen predictor options
+    use_frozen_predictor: bool = True  # Use frozen predictor for predictions
+    frozen_predictor_seed: int | None = 42  # Seed for reproducibility
+
 
 @dataclass(frozen=True)
 class ModelComparisonConfig:

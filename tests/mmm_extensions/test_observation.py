@@ -13,7 +13,8 @@ Note: Bypasses PyTensor compilation issues with special config.
 """
 
 import pytensor
-pytensor.config.exception_verbosity = 'high'
+
+pytensor.config.exception_verbosity = "high"
 pytensor.config.cxx = ""
 
 import numpy as np
@@ -36,7 +37,6 @@ from mmm_framework.mmm_extensions.config import (
     MediatorObservationType,
     MediatorConfigExtended,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -88,9 +88,7 @@ def sample_survey_proportions():
 def sample_survey_config():
     """Sample aggregated survey configuration."""
     # 48 weeks -> 12 monthly surveys
-    aggregation_map = {
-        i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-    }
+    aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
     return AggregatedSurveyConfig(
         aggregation_map=aggregation_map,
         sample_sizes=tuple([500] * 12),
@@ -288,9 +286,7 @@ class TestBuildAggregatedSurveyObservation:
 
     def test_normal_likelihood(self, sample_survey_proportions):
         """Test normal approximation likelihood."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
         config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500] * 12),
@@ -312,9 +308,7 @@ class TestBuildAggregatedSurveyObservation:
 
     def test_beta_binomial_likelihood(self, sample_survey_proportions):
         """Test beta-binomial likelihood for overdispersed data."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
         config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500] * 12),
@@ -353,9 +347,7 @@ class TestBuildAggregatedSurveyObservation:
 
     def test_last_aggregation(self, sample_survey_proportions):
         """Test last aggregation function."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
         config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500] * 12),
@@ -376,9 +368,7 @@ class TestBuildAggregatedSurveyObservation:
 
     def test_sum_aggregation(self, sample_survey_proportions):
         """Test sum aggregation function."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
         config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500] * 12),
@@ -399,9 +389,7 @@ class TestBuildAggregatedSurveyObservation:
 
     def test_with_design_effect(self, sample_survey_proportions):
         """Test with design effect applied."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
         config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500] * 12),
@@ -423,9 +411,7 @@ class TestBuildAggregatedSurveyObservation:
 
     def test_with_counts_not_proportions(self):
         """Test with count data instead of proportions."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(3)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(3)}
         config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500, 500, 500]),
@@ -581,9 +567,7 @@ class TestBuildMediatorObservationDispatch:
             )
 
             # Should have no observed RVs for the mediator
-            mediator_obs = [
-                v.name for v in model.observed_RVs if "awareness" in v.name
-            ]
+            mediator_obs = [v.name for v in model.observed_RVs if "awareness" in v.name]
             assert len(mediator_obs) == 0
 
     def test_fully_observed_mediator(self):
@@ -660,9 +644,7 @@ class TestBuildMediatorObservationDispatch:
 
     def test_aggregated_survey_mediator(self):
         """Test aggregated survey mediator."""
-        aggregation_map = {
-            i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)
-        }
+        aggregation_map = {i: tuple(range(i * 4, (i + 1) * 4)) for i in range(12)}
         survey_config = AggregatedSurveyConfig(
             aggregation_map=aggregation_map,
             sample_sizes=tuple([500] * 12),
@@ -707,9 +689,7 @@ class TestBuildMediatorObservationDispatch:
             )
 
             # Should have no observed RVs for the mediator
-            mediator_obs = [
-                v.name for v in model.observed_RVs if "awareness" in v.name
-            ]
+            mediator_obs = [v.name for v in model.observed_RVs if "awareness" in v.name]
             assert len(mediator_obs) == 0
 
     def test_aggregated_survey_without_config_raises(self):
@@ -717,7 +697,9 @@ class TestBuildMediatorObservationDispatch:
         # Create config bypassing validation
         config = MediatorConfigExtended.__new__(MediatorConfigExtended)
         object.__setattr__(config, "name", "awareness")
-        object.__setattr__(config, "observation_type", MediatorObservationType.AGGREGATED_SURVEY)
+        object.__setattr__(
+            config, "observation_type", MediatorObservationType.AGGREGATED_SURVEY
+        )
         object.__setattr__(config, "aggregated_survey_config", None)
         object.__setattr__(config, "observation_noise_sigma", 0.1)
 

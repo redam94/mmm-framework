@@ -11,7 +11,8 @@ Note: Bypasses PyTensor compilation issues with special config.
 """
 
 import pytensor
-pytensor.config.exception_verbosity = 'high'
+
+pytensor.config.exception_verbosity = "high"
 pytensor.config.cxx = ""
 
 import numpy as np
@@ -25,7 +26,6 @@ from mmm_framework.mmm_extensions.results import (
     ModelResults,
     EffectDecomposition,
 )
-
 
 # =============================================================================
 # MediationEffects Tests
@@ -303,7 +303,9 @@ class TestModelResults:
         with patch("arviz.summary") as mock_summary:
             mock_summary.return_value = pd.DataFrame({"mean": [0.5], "sd": [0.1]})
             summary = results.summary(var_names=["alpha", "beta"])
-            mock_summary.assert_called_once_with(mock_trace, var_names=["alpha", "beta"])
+            mock_summary.assert_called_once_with(
+                mock_trace, var_names=["alpha", "beta"]
+            )
 
     def test_summary_without_var_names(self):
         """Test summary without specifying var_names."""
@@ -376,9 +378,7 @@ class TestModelResults:
 
         with patch("arviz.plot_posterior") as mock_plot:
             _ = results.plot_posterior(var_names=["beta"], ref_val=0)
-            mock_plot.assert_called_once_with(
-                mock_trace, var_names=["beta"], ref_val=0
-            )
+            mock_plot.assert_called_once_with(mock_trace, var_names=["beta"], ref_val=0)
 
 
 # =============================================================================

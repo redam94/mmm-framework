@@ -73,7 +73,6 @@ from .extended import (
 # Also import ChartConfig for convenience
 from ..config import ChartConfig
 
-
 __all__ = [
     # Base utilities
     "NumpyEncoder",

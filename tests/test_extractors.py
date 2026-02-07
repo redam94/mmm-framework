@@ -291,7 +291,11 @@ class TestMMMDataBundle:
 
         bundle = MMMDataBundle(
             geo_names=["CA", "TX", "NY"],
-            actual_by_geo={"CA": np.array([100]), "TX": np.array([200]), "NY": np.array([300])},
+            actual_by_geo={
+                "CA": np.array([100]),
+                "TX": np.array([200]),
+                "NY": np.array([300]),
+            },
         )
         assert bundle.has_geo_data
 
@@ -304,7 +308,10 @@ class TestMMMDataBundle:
 
         bundle = MMMDataBundle(
             product_names=["Product A", "Product B"],
-            actual_by_product={"Product A": np.array([100]), "Product B": np.array([200])},
+            actual_by_product={
+                "Product A": np.array([100]),
+                "Product B": np.array([200]),
+            },
         )
         assert bundle.has_product_data
 

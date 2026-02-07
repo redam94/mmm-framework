@@ -315,9 +315,7 @@ class GeoExtractionMixin:
                         period_to_idx = {
                             str(p): i for i, p in enumerate(unique_periods)
                         }
-                        return np.array(
-                            [period_to_idx.get(str(p), 0) for p in idx]
-                        )
+                        return np.array([period_to_idx.get(str(p), 0) for p in idx])
 
         # Fallback: construct from panel coords
         if self.panel is not None and hasattr(self.panel, "coords"):
@@ -350,7 +348,10 @@ class GeoExtractionMixin:
             return None, None, None
 
         try:
-            if hasattr(trace, "posterior_predictive") and "y" in trace.posterior_predictive:
+            if (
+                hasattr(trace, "posterior_predictive")
+                and "y" in trace.posterior_predictive
+            ):
                 y_samples = trace.posterior_predictive["y"].values
                 y_samples = y_samples.reshape(-1, y_samples.shape[-1])
             elif hasattr(trace, "posterior") and "mu" in trace.posterior:

@@ -94,8 +94,8 @@ class BayesianMMMExtractor(
             )
             bundle.marketing_attributed_revenue = self._compute_marketing_attribution()
             bundle.blended_roi = self._compute_blended_roi()
-            bundle.marketing_contribution_pct = self._compute_marketing_contribution_pct(
-                bundle.total_revenue
+            bundle.marketing_contribution_pct = (
+                self._compute_marketing_contribution_pct(bundle.total_revenue)
             )
 
             # Saturation and adstock
@@ -709,8 +709,8 @@ class BayesianMMMExtractor(
 
                     if pred_geo is not None:
                         bundle.predicted_by_geo[geo] = pred_geo
-                        bundle.fit_statistics_by_geo[geo] = self._compute_fit_statistics(
-                            y_obs_geo, pred_geo
+                        bundle.fit_statistics_by_geo[geo] = (
+                            self._compute_fit_statistics(y_obs_geo, pred_geo)
                         )
 
         except Exception as e:
@@ -835,7 +835,9 @@ class BayesianMMMExtractor(
 
                     comp_geo = agg.values
                     bundle.component_time_series_by_geo[geo][comp_name] = comp_geo
-                    bundle.component_totals_by_geo[geo][comp_name] = float(comp_geo.sum())
+                    bundle.component_totals_by_geo[geo][comp_name] = float(
+                        comp_geo.sum()
+                    )
 
         except Exception as e:
             import logging
@@ -889,12 +891,16 @@ class BayesianMMMExtractor(
                 return bundle
 
             # Get predictions
-            y_pred_mean, y_pred_lower, y_pred_upper = self._get_predictions_original_scale()
+            y_pred_mean, y_pred_lower, y_pred_upper = (
+                self._get_predictions_original_scale()
+            )
             if y_pred_mean is None:
                 return bundle
 
             # Get period info
-            n_periods = mmm.n_periods if hasattr(mmm, "n_periods") else len(bundle.dates)
+            n_periods = (
+                mmm.n_periods if hasattr(mmm, "n_periods") else len(bundle.dates)
+            )
 
             # Initialize product-level storage
             bundle.actual_by_product = {}
@@ -928,13 +934,15 @@ class BayesianMMMExtractor(
                 }
 
                 # Compute fit statistics for this product
-                bundle.fit_statistics_by_product[product] = self._compute_fit_statistics(
-                    y_obs_prod,
-                    {
-                        "mean": y_pred_mean_prod,
-                        "lower": y_pred_lower_prod,
-                        "upper": y_pred_upper_prod,
-                    },
+                bundle.fit_statistics_by_product[product] = (
+                    self._compute_fit_statistics(
+                        y_obs_prod,
+                        {
+                            "mean": y_pred_mean_prod,
+                            "lower": y_pred_lower_prod,
+                            "upper": y_pred_upper_prod,
+                        },
+                    )
                 )
 
         except Exception as e:
@@ -967,7 +975,9 @@ class BayesianMMMExtractor(
             if product_idx is None or time_idx is None:
                 return bundle
 
-            n_periods = mmm.n_periods if hasattr(mmm, "n_periods") else len(bundle.dates)
+            n_periods = (
+                mmm.n_periods if hasattr(mmm, "n_periods") else len(bundle.dates)
+            )
 
             # Get decomposition components at observation level
             components = self._get_decomposition_components_obs_level()
@@ -1026,7 +1036,10 @@ class BayesianMMMExtractor(
             return None, None, None
 
         try:
-            if hasattr(trace, "posterior_predictive") and "y" in trace.posterior_predictive:
+            if (
+                hasattr(trace, "posterior_predictive")
+                and "y" in trace.posterior_predictive
+            ):
                 y_samples = trace.posterior_predictive["y"].values
                 y_samples = y_samples.reshape(-1, y_samples.shape[-1])
             elif hasattr(trace, "posterior") and "mu" in trace.posterior:
@@ -1156,9 +1169,7 @@ class BayesianMMMExtractor(
                         period_to_idx = {
                             str(p): i for i, p in enumerate(unique_periods)
                         }
-                        return np.array(
-                            [period_to_idx.get(str(p), 0) for p in idx]
-                        )
+                        return np.array([period_to_idx.get(str(p), 0) for p in idx])
 
         # Fallback: construct from panel coords
         if self.panel is not None and hasattr(self.panel, "coords"):
@@ -1280,9 +1291,9 @@ class BayesianMMMExtractor(
                         # Shape is (obs, channels)
                         for i, ch in enumerate(channel_names):
                             components[ch] = contrib_mean[:, i] * y_std
-                    elif contrib_mean.shape[1] == n_obs and contrib_mean.shape[0] == len(
-                        channel_names
-                    ):
+                    elif contrib_mean.shape[1] == n_obs and contrib_mean.shape[
+                        0
+                    ] == len(channel_names):
                         # Shape is (channels, obs)
                         for i, ch in enumerate(channel_names):
                             components[ch] = contrib_mean[i, :] * y_std
@@ -1374,7 +1385,9 @@ class BayesianMMMExtractor(
                         elif flat.ndim == 3:  # (samples, time, channels)
                             contrib_samples = flat[:, :, ch_idx].sum(axis=-1) * y_std
                     except Exception as e:
-                        logger.debug(f"Could not extract from channel_contributions: {e}")
+                        logger.debug(
+                            f"Could not extract from channel_contributions: {e}"
+                        )
 
                 # Method 3: Estimate from beta
                 if contrib_samples is None:
@@ -1469,7 +1482,9 @@ class BayesianMMMExtractor(
                             # Try to get media sum
                             if current_spend and ch in current_spend:
                                 # Rough estimate
-                                totals[ch] = beta_val * y_std * n_obs * 0.5  # Approximate
+                                totals[ch] = (
+                                    beta_val * y_std * n_obs * 0.5
+                                )  # Approximate
                             else:
                                 totals[ch] = beta_val * y_std * n_obs
                             break
@@ -1927,7 +1942,9 @@ class BayesianMMMExtractor(
                             samples = trace.posterior[var_name].values.flatten()
                             # Subsample if too many
                             if len(samples) > 2000:
-                                idx = np.random.choice(len(samples), 2000, replace=False)
+                                idx = np.random.choice(
+                                    len(samples), 2000, replace=False
+                                )
                                 samples = samples[idx]
                             posterior_samples[var_name] = samples
                         except Exception as e:
@@ -1946,7 +1963,9 @@ class BayesianMMMExtractor(
                         try:
                             samples = trace.prior[var_name].values.flatten()
                             if len(samples) > 2000:
-                                idx = np.random.choice(len(samples), 2000, replace=False)
+                                idx = np.random.choice(
+                                    len(samples), 2000, replace=False
+                                )
                                 samples = samples[idx]
                             prior_samples[var_name] = samples
                         except Exception as e:
@@ -1985,14 +2004,18 @@ class BayesianMMMExtractor(
         prior_samples = {}
 
         try:
-            model = getattr(self.mmm, "model", None) or getattr(self.mmm, "_model", None)
+            model = getattr(self.mmm, "model", None) or getattr(
+                self.mmm, "_model", None
+            )
             if model is None:
                 logger.debug("No PyMC model found for prior sampling")
                 return {}
 
             # Sample from prior
             with model:
-                prior_trace = pm.sample_prior_predictive(samples=n_samples, random_seed=42)
+                prior_trace = pm.sample_prior_predictive(
+                    samples=n_samples, random_seed=42
+                )
 
             if hasattr(prior_trace, "prior"):
                 prior_data = prior_trace.prior
@@ -2001,7 +2024,9 @@ class BayesianMMMExtractor(
                         try:
                             samples = prior_data[param].values.flatten()
                             if len(samples) > n_samples:
-                                idx = np.random.choice(len(samples), n_samples, replace=False)
+                                idx = np.random.choice(
+                                    len(samples), n_samples, replace=False
+                                )
                                 samples = samples[idx]
                             prior_samples[param] = samples
                         except Exception:
@@ -2076,9 +2101,9 @@ class BayesianMMMExtractor(
             # Get trend type
             if hasattr(self.mmm, "trend_config"):
                 trend = self.mmm.trend_config
-                spec[
-                    "baseline"
-                ] = f"{getattr(trend, 'type', 'Linear').value} trend + Fourier seasonality"
+                spec["baseline"] = (
+                    f"{getattr(trend, 'type', 'Linear').value} trend + Fourier seasonality"
+                )
 
             spec["likelihood"] = "Normal with estimated scale"
             spec["media_effects"] = "Hill saturation × Geometric adstock"

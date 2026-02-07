@@ -11,10 +11,12 @@ Tests cover:
 Note: Tests requiring MCMC sampling are marked with @pytest.mark.slow
 and can be skipped with: pytest -m "not slow"
 """
+
 import pytensor
-pytensor.config.exception_verbosity = 'high'
-pytensor.config.mode == 'NUMBA'
-pytensor.config.cxx = "" 
+
+pytensor.config.exception_verbosity = "high"
+pytensor.config.mode == "NUMBA"
+pytensor.config.cxx = ""
 
 import numpy as np
 import pandas as pd
@@ -59,7 +61,6 @@ from mmm_framework.data_loader import (
     PanelCoordinates,
     PanelDataset,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -1116,7 +1117,9 @@ class TestModelIntegration:
 class TestBayesianMMMTimeMask:
     """Tests for BayesianMMM _get_time_mask method."""
 
-    def test_time_mask_none_returns_all_true(self, simple_panel, model_config, trend_config):
+    def test_time_mask_none_returns_all_true(
+        self, simple_panel, model_config, trend_config
+    ):
         """Test that time_period=None returns all True mask."""
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
 
@@ -1348,7 +1351,9 @@ class TestBayesianMMMDataPreparation:
 class TestBayesianMMMSeasonality:
     """Tests for BayesianMMM seasonality preparation."""
 
-    def test_seasonality_features_yearly(self, simple_panel, model_config, trend_config):
+    def test_seasonality_features_yearly(
+        self, simple_panel, model_config, trend_config
+    ):
         """Test yearly seasonality features."""
         # Enable yearly seasonality
         model_config.seasonality = SeasonalityConfig(yearly=4)
@@ -1365,9 +1370,10 @@ class TestBayesianMMMSeasonality:
         mmm = BayesianMMM(simple_panel, model_config, trend_config)
 
         # Should have empty or no yearly features
-        assert "yearly" not in mmm.seasonality_features or mmm.seasonality_features[
-            "yearly"
-        ].shape[1] == 0
+        assert (
+            "yearly" not in mmm.seasonality_features
+            or mmm.seasonality_features["yearly"].shape[1] == 0
+        )
 
 
 # =============================================================================

@@ -78,9 +78,7 @@ def create_mediator_pathway_chart(
             sources.append(i)
             targets.append(n_channels + n_mediators)  # Sales node
             values.append(direct_val)
-            link_colors.append(
-                f"rgba({_hex_to_rgb(channel_colors.get(ch))}, 0.4)"
-            )
+            link_colors.append(f"rgba({_hex_to_rgb(channel_colors.get(ch))}, 0.4)")
 
         # Indirect effects: channel -> mediator -> Sales
         for j, med in enumerate(mediator_names):
@@ -95,9 +93,7 @@ def create_mediator_pathway_chart(
                 sources.append(i)
                 targets.append(n_channels + j)
                 values.append(effect_val)
-                link_colors.append(
-                    f"rgba({_hex_to_rgb(channel_colors.get(ch))}, 0.3)"
-                )
+                link_colors.append(f"rgba({_hex_to_rgb(channel_colors.get(ch))}, 0.3)")
 
     # Mediator -> Sales (aggregate)
     for j, med in enumerate(mediator_names):

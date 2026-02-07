@@ -34,7 +34,6 @@ from mmm_framework.config import (
     create_national_media_config,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -843,7 +842,9 @@ class TestValidateVariableDimensions:
             dimensions=[DimensionType.PERIOD],
         )
 
-        is_valid, msg = validate_variable_dimensions(df, missing_var_config, national_config)
+        is_valid, msg = validate_variable_dimensions(
+            df, missing_var_config, national_config
+        )
 
         assert is_valid is False
         assert "No data found" in msg
@@ -915,11 +916,7 @@ class TestMFFLoaderAdvanced:
 
     def test_method_chaining(self, national_mff_data, national_config):
         """Test method chaining on loader."""
-        panel = (
-            MFFLoader(national_config)
-            .load(national_mff_data)
-            .build_panel()
-        )
+        panel = MFFLoader(national_config).load(national_mff_data).build_panel()
 
         assert isinstance(panel, PanelDataset)
 
@@ -942,10 +939,12 @@ class TestPanelDatasetSummary:
 
         panel = PanelDataset(
             y=pd.Series(np.random.randn(52) * 100 + 1000),
-            X_media=pd.DataFrame({
-                "TV": np.ones(52) * 100,
-                "Digital": np.ones(52) * 50,
-            }),
+            X_media=pd.DataFrame(
+                {
+                    "TV": np.ones(52) * 100,
+                    "Digital": np.ones(52) * 50,
+                }
+            ),
             X_controls=pd.DataFrame({"Price": np.random.randn(52)}),
             coords=coords,
             index=sample_periods,
@@ -1150,16 +1149,18 @@ class TestExtractWithNaNTracking:
 
         cols = MFFColumnConfig()
 
-        df = pd.DataFrame({
-            cols.variable_name: ["Sales"] * 10,
-            cols.variable_value: [100 + i for i in range(10)],
-            cols.period: sample_periods[:10],
-            cols.geography: [None] * 10,
-            cols.product: [None] * 10,
-            cols.campaign: [None] * 10,
-            cols.outlet: [None] * 10,
-            cols.creative: [None] * 10,
-        })
+        df = pd.DataFrame(
+            {
+                cols.variable_name: ["Sales"] * 10,
+                cols.variable_value: [100 + i for i in range(10)],
+                cols.period: sample_periods[:10],
+                cols.geography: [None] * 10,
+                cols.product: [None] * 10,
+                cols.campaign: [None] * 10,
+                cols.outlet: [None] * 10,
+                cols.creative: [None] * 10,
+            }
+        )
 
         target_index = pd.DatetimeIndex(sample_periods[:10], name=cols.period)
 
@@ -1177,16 +1178,18 @@ class TestExtractWithNaNTracking:
 
         cols = MFFColumnConfig()
 
-        df = pd.DataFrame({
-            cols.variable_name: ["Sales"] * 5,
-            cols.variable_value: [100] * 5,
-            cols.period: sample_periods[:5],
-            cols.geography: [None] * 5,
-            cols.product: [None] * 5,
-            cols.campaign: [None] * 5,
-            cols.outlet: [None] * 5,
-            cols.creative: [None] * 5,
-        })
+        df = pd.DataFrame(
+            {
+                cols.variable_name: ["Sales"] * 5,
+                cols.variable_value: [100] * 5,
+                cols.period: sample_periods[:5],
+                cols.geography: [None] * 5,
+                cols.product: [None] * 5,
+                cols.campaign: [None] * 5,
+                cols.outlet: [None] * 5,
+                cols.creative: [None] * 5,
+            }
+        )
 
         target_index = pd.DatetimeIndex(sample_periods[:10], name=cols.period)
 
@@ -1291,16 +1294,18 @@ class TestDateFormats:
             date_format="%d/%m/%Y",  # Format that doesn't match data
         )
 
-        df = pd.DataFrame({
-            "VariableName": ["Sales"] * 10,
-            "VariableValue": [100] * 10,
-            "Period": ["2020-01-06"] * 10,  # ISO format, not matching config
-            "Geography": [None] * 10,
-            "Product": [None] * 10,
-            "Campaign": [None] * 10,
-            "Outlet": [None] * 10,
-            "Creative": [None] * 10,
-        })
+        df = pd.DataFrame(
+            {
+                "VariableName": ["Sales"] * 10,
+                "VariableValue": [100] * 10,
+                "Period": ["2020-01-06"] * 10,  # ISO format, not matching config
+                "Geography": [None] * 10,
+                "Product": [None] * 10,
+                "Campaign": [None] * 10,
+                "Outlet": [None] * 10,
+                "Creative": [None] * 10,
+            }
+        )
 
         with pytest.raises(MFFValidationError, match="parse"):
             validate_mff_structure(df, config)

@@ -183,25 +183,19 @@ class TestGenericLookupHelper:
 
     def test_helper_finds_first_match(self, sample_config: MFFConfig):
         """Test helper finds first matching config."""
-        result = sample_config._get_config_by_name(
-            sample_config.media_channels, "a"
-        )
+        result = sample_config._get_config_by_name(sample_config.media_channels, "a")
         assert result is not None
         assert result.name == "a"
 
     def test_helper_finds_middle_match(self, sample_config: MFFConfig):
         """Test helper finds config in middle of list."""
-        result = sample_config._get_config_by_name(
-            sample_config.media_channels, "b"
-        )
+        result = sample_config._get_config_by_name(sample_config.media_channels, "b")
         assert result is not None
         assert result.name == "b"
 
     def test_helper_finds_last_match(self, sample_config: MFFConfig):
         """Test helper finds config at end of list."""
-        result = sample_config._get_config_by_name(
-            sample_config.media_channels, "c"
-        )
+        result = sample_config._get_config_by_name(sample_config.media_channels, "c")
         assert result is not None
         assert result.name == "c"
 

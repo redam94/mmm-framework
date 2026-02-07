@@ -8,7 +8,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # =============================================================================
 # Enums
 # =============================================================================
@@ -393,6 +392,7 @@ class PredictionResponse(BaseModel):
     y_pred_hdi_high: list[float]
     y_pred_samples: list[list[float]] | None = None
 
+
 # ============================================================================
 # Report Models
 # ============================================================================
@@ -450,6 +450,7 @@ class ReportListResponse(BaseModel):
 
     model_id: str
     reports: list[dict]
+
 
 # =============================================================================
 # Generic Response Models
@@ -540,7 +541,10 @@ class MediatorSchema(BaseModel):
     display_name: str | None = None
     type: MediatorType = MediatorType.PARTIALLY_OBSERVED
     observation_noise: float = Field(
-        default=0.1, ge=0, le=1, description="Observation noise for partially observed mediators"
+        default=0.1,
+        ge=0,
+        le=1,
+        description="Observation noise for partially observed mediators",
     )
 
     # Effect priors
@@ -796,7 +800,9 @@ class MultivariateResultsResponse(BaseModel):
     model_id: str
     outcome_names: list[str]
     channel_names: list[str]
-    outcome_correlations: dict[str, dict[str, float]]  # outcome -> outcome -> correlation
+    outcome_correlations: dict[
+        str, dict[str, float]
+    ]  # outcome -> outcome -> correlation
     cross_effects: list[CrossEffectResultSchema]
     per_outcome_metrics: dict[str, dict[str, float]]  # outcome -> metric -> value
 

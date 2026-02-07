@@ -452,7 +452,9 @@ class MFFConfig(BaseModel):
         """
         if self.kpi.name == name:
             return self.kpi
-        return self._get_config_by_name(self.media_channels, name) or self._get_config_by_name(self.controls, name)
+        return self._get_config_by_name(
+            self.media_channels, name
+        ) or self._get_config_by_name(self.controls, name)
 
     @model_validator(mode="after")
     def validate_dimensions(self) -> MFFConfig:

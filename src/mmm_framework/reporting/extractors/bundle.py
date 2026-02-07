@@ -145,21 +145,31 @@ class MMMDataBundle:
 
     # Summary metrics
     total_revenue: float | None = None
-    marketing_attributed_revenue: dict[str, float] | None = None  # {"mean", "lower", "upper"}
+    marketing_attributed_revenue: dict[str, float] | None = (
+        None  # {"mean", "lower", "upper"}
+    )
     blended_roi: dict[str, float] | None = None  # {"mean", "lower", "upper"}
-    marketing_contribution_pct: dict[str, float] | None = None  # {"mean", "lower", "upper"}
+    marketing_contribution_pct: dict[str, float] | None = (
+        None  # {"mean", "lower", "upper"}
+    )
 
     # Channel-level ROI
-    channel_roi: dict[str, dict[str, float]] | None = None  # {channel: {"mean", "lower", "upper"}}
+    channel_roi: dict[str, dict[str, float]] | None = (
+        None  # {channel: {"mean", "lower", "upper"}}
+    )
     channel_spend: dict[str, float] | None = None
     channel_contribution: dict[str, dict[str, float]] | None = None
 
     # Decomposition
     component_totals: dict[str, float] | None = None  # {component: total_contribution}
-    component_time_series: dict[str, np.ndarray] | None = None  # {component: time_series}
+    component_time_series: dict[str, np.ndarray] | None = (
+        None  # {component: time_series}
+    )
 
     # Saturation and adstock
-    saturation_curves: dict[str, dict[str, np.ndarray]] | None = None  # {channel: {"spend", "response"}}
+    saturation_curves: dict[str, dict[str, np.ndarray]] | None = (
+        None  # {channel: {"spend", "response"}}
+    )
     adstock_curves: dict[str, np.ndarray] | None = None  # {channel: lag_weights}
     current_spend: dict[str, float] | None = None
 
@@ -170,7 +180,9 @@ class MMMDataBundle:
     model_specification: dict[str, Any] | None = None
 
     # MCMC diagnostics
-    diagnostics: dict[str, Any] | None = None  # {"divergences", "rhat_max", "ess_bulk_min"}
+    diagnostics: dict[str, Any] | None = (
+        None  # {"divergences", "rhat_max", "ess_bulk_min"}
+    )
     trace_data: dict[str, np.ndarray] | None = None
     trace_parameters: list[str] | None = None
 
@@ -188,19 +200,29 @@ class MMMDataBundle:
 
     # Geographic data
     geo_performance: dict[str, dict[str, Any]] | None = None  # {geo: {metric: value}}
-    geo_roi: dict[str, dict[str, dict[str, float]]] | None = None  # {geo: {channel: {"mean", "lower", "upper"}}}
-    geo_contribution: dict[str, dict[str, float]] | None = None  # {geo: {component: contribution}}
+    geo_roi: dict[str, dict[str, dict[str, float]]] | None = (
+        None  # {geo: {channel: {"mean", "lower", "upper"}}}
+    )
+    geo_contribution: dict[str, dict[str, float]] | None = (
+        None  # {geo: {component: contribution}}
+    )
 
     # Mediator pathway data (nested models)
     mediator_names: list[str] | None = None
-    mediator_pathways: dict[str, dict[str, Any]] | None = None  # {channel: {mediator: {"direct", "indirect", "total"}}}
+    mediator_pathways: dict[str, dict[str, Any]] | None = (
+        None  # {channel: {mediator: {"direct", "indirect", "total"}}}
+    )
     mediator_time_series: dict[str, np.ndarray] | None = None  # {mediator: values}
     total_indirect_effect: dict[str, float] | None = None  # {"mean", "lower", "upper"}
 
     # Cannibalization / cross-product effects
     product_names: list[str] | None = None
-    cannibalization_matrix: dict[str, dict[str, dict[str, float]]] | None = None  # {source: {target: {"mean", "lower", "upper"}}}
-    net_product_effects: dict[str, dict[str, float]] | None = None  # {product: {"direct", "cannibalization", "net"}}
+    cannibalization_matrix: dict[str, dict[str, dict[str, float]]] | None = (
+        None  # {source: {target: {"mean", "lower", "upper"}}}
+    )
+    net_product_effects: dict[str, dict[str, float]] | None = (
+        None  # {product: {"direct", "cannibalization", "net"}}
+    )
     component_time_series_by_geo: dict[str, dict[str, np.ndarray]] | None = None
 
     # Geo-level component totals: {geo_name: {component_name: float}}

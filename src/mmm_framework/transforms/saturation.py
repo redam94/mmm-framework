@@ -15,9 +15,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-def logistic_saturation(
-    x: NDArray[np.floating], lam: float
-) -> NDArray[np.floating]:
+def logistic_saturation(x: NDArray[np.floating], lam: float) -> NDArray[np.floating]:
     """
     Apply logistic saturation transformation.
 

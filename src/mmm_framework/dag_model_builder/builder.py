@@ -426,7 +426,9 @@ class DAGModelBuilder:
         if self._model_config is None:
             self._model_config = ModelConfig()
 
-        self._model_config = self._model_config.model_copy(update={"n_chains": n_chains})
+        self._model_config = self._model_config.model_copy(
+            update={"n_chains": n_chains}
+        )
         return self
 
     # =========================================================================
@@ -474,9 +476,11 @@ class DAGModelBuilder:
             overrides["adstock_lmax"] = adstock_lmax
         if adstock_type is not None:
             from mmm_framework.config import AdstockType
+
             overrides["adstock_type"] = AdstockType(adstock_type)
         if saturation_type is not None:
             from mmm_framework.config import SaturationType
+
             overrides["saturation_type"] = SaturationType(saturation_type)
         if coefficient_prior_sigma is not None:
             overrides["coefficient_prior_sigma"] = coefficient_prior_sigma
@@ -660,7 +664,10 @@ class DAGModelBuilder:
         for node in self._dag.nodes:
             if node.variable_name in self._node_config_overrides:
                 # Merge overrides into node config
-                new_config = {**node.config, **self._node_config_overrides[node.variable_name]}
+                new_config = {
+                    **node.config,
+                    **self._node_config_overrides[node.variable_name],
+                }
                 new_node = node.model_copy(update={"config": new_config})
                 new_nodes.append(new_node)
             else:
@@ -699,7 +706,8 @@ class DAGModelBuilder:
         validation = validate_dag(dag)
         if not validation.valid:
             raise DAGBuildError(
-                "DAG validation failed:\n" + "\n".join(f"  - {e}" for e in validation.errors)
+                "DAG validation failed:\n"
+                + "\n".join(f"  - {e}" for e in validation.errors)
             )
 
         # Ensure panel data is available

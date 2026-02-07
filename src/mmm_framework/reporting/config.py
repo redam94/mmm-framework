@@ -15,10 +15,10 @@ from .design_tokens import TOKENS
 
 class ColorPalette(Enum):
     """Pre-defined color palettes for reports."""
-    
-    SAGE = "sage"           # Default: sage green with blue accents
-    CORPORATE = "corporate" # Blue/gray professional
-    WARM = "warm"           # Warm earth tones
+
+    SAGE = "sage"  # Default: sage green with blue accents
+    CORPORATE = "corporate"  # Blue/gray professional
+    WARM = "warm"  # Warm earth tones
     MONOCHROME = "monochrome"  # Grayscale
 
 
@@ -39,7 +39,7 @@ class ColorScheme:
     background_alt: str = TOKENS.background_alt
     surface: str = TOKENS.surface
     border: str = TOKENS.border
-    
+
     @classmethod
     def from_palette(cls, palette: ColorPalette) -> ColorScheme:
         """Create color scheme from a named palette."""
@@ -97,20 +97,22 @@ class ColorScheme:
 @dataclass(frozen=True)
 class ChannelColors:
     """Color mapping for media channels."""
-    
-    colors: dict[str, str] = field(default_factory=lambda: {
-        "TV": "#6a8fa8",
-        "Paid_Search": "#8fa86a",
-        "Paid_Social": "#a88f6a",
-        "Display": "#8f6aa8",
-        "Radio": "#d4a86a",
-        "Print": "#c97067",
-        "OOH": "#6abf8a",
-        "Video": "#bf6a8f",
-        "Email": "#6abfbf",
-        "Baseline": "#5a6b5a",
-    })
-    
+
+    colors: dict[str, str] = field(
+        default_factory=lambda: {
+            "TV": "#6a8fa8",
+            "Paid_Search": "#8fa86a",
+            "Paid_Social": "#a88f6a",
+            "Display": "#8f6aa8",
+            "Radio": "#d4a86a",
+            "Print": "#c97067",
+            "OOH": "#6abf8a",
+            "Video": "#bf6a8f",
+            "Email": "#6abfbf",
+            "Baseline": "#5a6b5a",
+        }
+    )
+
     def get(self, channel: str) -> str:
         """Get color for channel, with fallback to hash-based color."""
         if channel in self.colors:
@@ -118,7 +120,7 @@ class ChannelColors:
         # Generate consistent color from channel name hash
         h = hash(channel) % 360
         return f"hsl({h}, 55%, 55%)"
-    
+
     def with_channel(self, channel: str, color: str) -> ChannelColors:
         """Return new ChannelColors with added/updated channel color."""
         new_colors = dict(self.colors)
@@ -129,7 +131,7 @@ class ChannelColors:
 @dataclass(frozen=True)
 class SectionConfig:
     """Configuration for individual report sections."""
-    
+
     enabled: bool = True
     title: str | None = None  # Override default title
     subtitle: str | None = None
@@ -138,7 +140,7 @@ class SectionConfig:
     chart_height: int = 400
     chart_width: int | None = None  # None = responsive
     custom_notes: str | None = None
-    
+
     def with_updates(self, **kwargs) -> SectionConfig:
         """Return new config with updates."""
         return SectionConfig(
@@ -156,25 +158,25 @@ class SectionConfig:
 @dataclass(frozen=True)
 class ReportConfig:
     """Complete configuration for report generation."""
-    
+
     # Metadata
     title: str = "Marketing Mix Model Report"
     subtitle: str | None = None
     client: str | None = None
     analysis_period: str | None = None
     generated_date: str | None = None  # Auto-populated if None
-    
+
     # Model info
     model_version: str | None = None
     framework_version: str | None = None
-    
+
     # Styling
     color_scheme: ColorScheme = field(default_factory=ColorScheme)
     channel_colors: ChannelColors = field(default_factory=ChannelColors)
     font_family_serif: str = TOKENS.font_serif
     font_family_sans: str = TOKENS.font_sans
     font_family_mono: str = TOKENS.font_mono
-    
+
     # Global settings
     default_credible_interval: float = 0.8
     currency_symbol: str = "$"
@@ -182,7 +184,7 @@ class ReportConfig:
     percentage_format: str = ".1%"
     decimal_format: str = ".2f"
     large_number_format: Literal["short", "full", "scientific"] = "short"
-    
+
     # Section configurations
     executive_summary: SectionConfig = field(default_factory=SectionConfig)
     model_fit: SectionConfig = field(default_factory=SectionConfig)
@@ -196,19 +198,21 @@ class ReportConfig:
     geographic: SectionConfig = field(default_factory=SectionConfig)
     mediators: SectionConfig = field(default_factory=SectionConfig)
     cannibalization: SectionConfig = field(default_factory=SectionConfig)
-    
+
     # Output settings
     include_plotly_js: bool = True  # Embed Plotly.js (larger file, fully portable)
     plotly_cdn_version: str = "2.27.0"  # Used if not embedding
     include_print_styles: bool = True
     minify_html: bool = False
-    
+
     # Uncertainty messaging
     uncertainty_callout: bool = True
     methodology_note: bool = True
-    
+
     @classmethod
-    def minimal(cls, title: str = "MMM Report", client: str | None = None) -> ReportConfig:
+    def minimal(
+        cls, title: str = "MMM Report", client: str | None = None
+    ) -> ReportConfig:
         """Create minimal report with only essential sections."""
         return cls(
             title=title,
@@ -218,14 +222,18 @@ class ReportConfig:
             sensitivity=SectionConfig(enabled=False),
             diagnostics=SectionConfig(enabled=False),
         )
-    
+
     @classmethod
-    def full(cls, title: str = "Marketing Mix Model Report", client: str | None = None) -> ReportConfig:
+    def full(
+        cls, title: str = "Marketing Mix Model Report", client: str | None = None
+    ) -> ReportConfig:
         """Create comprehensive report with all sections."""
         return cls(title=title, client=client)
-    
+
     @classmethod
-    def presentation(cls, title: str = "MMM Results", client: str | None = None) -> ReportConfig:
+    def presentation(
+        cls, title: str = "MMM Results", client: str | None = None
+    ) -> ReportConfig:
         """Create presentation-focused report optimized for stakeholders."""
         return cls(
             title=title,
@@ -234,21 +242,21 @@ class ReportConfig:
             diagnostics=SectionConfig(enabled=False),
             methodology=SectionConfig(
                 enabled=True,
-                custom_notes="Contact data science team for technical details."
+                custom_notes="Contact data science team for technical details.",
             ),
         )
-    
+
     def format_currency(self, value: float) -> str:
         """Format value as currency."""
         if self.large_number_format == "short":
             return self._format_short_currency(value)
         return f"{self.currency_symbol}{value:{self.currency_format}}"
-    
+
     def _format_short_currency(self, value: float) -> str:
         """Format large currency values with K/M/B suffixes."""
         abs_value = abs(value)
         sign = "" if value >= 0 else "-"
-        
+
         if abs_value >= 1e9:
             return f"{sign}{self.currency_symbol}{abs_value/1e9:.1f}B"
         elif abs_value >= 1e6:
@@ -257,11 +265,11 @@ class ReportConfig:
             return f"{sign}{self.currency_symbol}{abs_value/1e3:.1f}K"
         else:
             return f"{sign}{self.currency_symbol}{abs_value:.0f}"
-    
+
     def format_percentage(self, value: float) -> str:
         """Format value as percentage."""
         return f"{value:{self.percentage_format}}"
-    
+
     def format_decimal(self, value: float) -> str:
         """Format decimal value."""
         return f"{value:{self.decimal_format}}"
@@ -270,28 +278,28 @@ class ReportConfig:
 @dataclass(frozen=True)
 class ChartConfig:
     """Configuration for individual charts."""
-    
+
     height: int = 400
     width: int | None = None
-    margin: dict[str, int] = field(default_factory=lambda: {
-        "t": 40, "r": 40, "b": 70, "l": 60
-    })
+    margin: dict[str, int] = field(
+        default_factory=lambda: {"t": 40, "r": 40, "b": 70, "l": 60}
+    )
     show_legend: bool = True
     legend_position: Literal["top", "bottom", "right", "left"] = "top"
     animation: bool = True
     responsive: bool = True
-    
+
     # Uncertainty visualization
     show_credible_intervals: bool = True
     ci_alpha: float = 0.2  # Transparency for CI bands
     ci_level: float = 0.8  # 80% HDI
-    
+
     # Axis settings
     x_title: str | None = None
     y_title: str | None = None
     x_tickformat: str | None = None
     y_tickformat: str | None = None
-    
+
     def to_plotly_layout(self, color_scheme: ColorScheme) -> dict[str, Any]:
         """Convert to Plotly layout dict."""
         layout = {
@@ -306,12 +314,12 @@ class ChartConfig:
             "showlegend": self.show_legend,
             "hovermode": "x unified",
         }
-        
+
         if self.height:
             layout["height"] = self.height
         if self.width:
             layout["width"] = self.width
-            
+
         # Configure axes
         layout["xaxis"] = {
             "gridcolor": color_scheme.border,
@@ -321,7 +329,7 @@ class ChartConfig:
             "gridcolor": color_scheme.border,
             "zerolinecolor": color_scheme.border,
         }
-        
+
         if self.x_title:
             layout["xaxis"]["title"] = self.x_title
         if self.y_title:
@@ -330,15 +338,27 @@ class ChartConfig:
             layout["xaxis"]["tickformat"] = self.x_tickformat
         if self.y_tickformat:
             layout["yaxis"]["tickformat"] = self.y_tickformat
-            
+
         # Legend position
         if self.show_legend:
             positions = {
-                "top": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
-                "bottom": {"orientation": "h", "yanchor": "top", "y": -0.15, "xanchor": "left", "x": 0},
+                "top": {
+                    "orientation": "h",
+                    "yanchor": "bottom",
+                    "y": 1.02,
+                    "xanchor": "left",
+                    "x": 0,
+                },
+                "bottom": {
+                    "orientation": "h",
+                    "yanchor": "top",
+                    "y": -0.15,
+                    "xanchor": "left",
+                    "x": 0,
+                },
                 "right": {"yanchor": "top", "y": 1, "xanchor": "left", "x": 1.02},
                 "left": {"yanchor": "top", "y": 1, "xanchor": "right", "x": -0.02},
             }
             layout["legend"] = positions.get(self.legend_position, positions["top"])
-        
+
         return layout

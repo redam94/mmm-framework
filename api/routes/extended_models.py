@@ -413,7 +413,10 @@ async def get_extended_model_status(
     response_model=MediationResultsResponse,
     responses={
         404: {"model": ErrorResponse},
-        400: {"model": ErrorResponse, "description": "Model not completed or wrong type"},
+        400: {
+            "model": ErrorResponse,
+            "description": "Model not completed or wrong type",
+        },
     },
 )
 async def get_mediation_effects(
@@ -455,12 +458,10 @@ async def get_mediation_effects(
                 direct_effect=float(row.get("direct_effect", 0)),
                 direct_effect_sd=float(row.get("direct_effect_sd", 0)),
                 indirect_effects={
-                    k: float(v)
-                    for k, v in row.get("indirect_effects", {}).items()
+                    k: float(v) for k, v in row.get("indirect_effects", {}).items()
                 },
                 indirect_effects_sd={
-                    k: float(v)
-                    for k, v in row.get("indirect_effects_sd", {}).items()
+                    k: float(v) for k, v in row.get("indirect_effects_sd", {}).items()
                 },
                 total_indirect=float(row.get("total_indirect", 0)),
                 total_effect=float(row.get("total_effect", 0)),
@@ -496,7 +497,10 @@ async def get_mediation_effects(
     response_model=MultivariateResultsResponse,
     responses={
         404: {"model": ErrorResponse},
-        400: {"model": ErrorResponse, "description": "Model not completed or wrong type"},
+        400: {
+            "model": ErrorResponse,
+            "description": "Model not completed or wrong type",
+        },
     },
 )
 async def get_multivariate_results(
@@ -532,7 +536,9 @@ async def get_multivariate_results(
         correlations = {}
 
         if "outcome_corr" in trace.posterior:
-            corr_samples = trace.posterior["outcome_corr"].mean(dim=["chain", "draw"]).values
+            corr_samples = (
+                trace.posterior["outcome_corr"].mean(dim=["chain", "draw"]).values
+            )
             outcome_names = mmm.outcome_names
 
             for i, out1 in enumerate(outcome_names):
@@ -553,7 +559,9 @@ async def get_multivariate_results(
                     CrossEffectResultSchema(
                         source=ce_config["source_outcome"],
                         target=ce_config["target_outcome"],
-                        effect_type=CrossEffectType(ce_config.get("effect_type", "cannibalization")),
+                        effect_type=CrossEffectType(
+                            ce_config.get("effect_type", "cannibalization")
+                        ),
                         mean=float(np.mean(samples)),
                         sd=float(np.std(samples)),
                         hdi_low=float(np.percentile(samples, 3)),

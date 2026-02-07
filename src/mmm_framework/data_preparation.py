@@ -72,14 +72,10 @@ class ScalingParameters:
             y_std=data["y_std"],
             media_max=data["media_max"],
             control_mean=(
-                np.array(data["control_mean"])
-                if "control_mean" in data
-                else None
+                np.array(data["control_mean"]) if "control_mean" in data else None
             ),
             control_std=(
-                np.array(data["control_std"])
-                if "control_std" in data
-                else None
+                np.array(data["control_std"]) if "control_std" in data else None
             ),
         )
 
@@ -296,8 +292,16 @@ class DataPreparator:
         product_names = list(self.panel.coords.products) if has_product else None
 
         # Indices
-        geo_idx = self._get_group_indices("geography", geo_names) if has_geo else np.zeros(n_obs, dtype=np.int32)
-        product_idx = self._get_group_indices("product", product_names) if has_product else np.zeros(n_obs, dtype=np.int32)
+        geo_idx = (
+            self._get_group_indices("geography", geo_names)
+            if has_geo
+            else np.zeros(n_obs, dtype=np.int32)
+        )
+        product_idx = (
+            self._get_group_indices("product", product_names)
+            if has_product
+            else np.zeros(n_obs, dtype=np.int32)
+        )
         time_idx = self._get_time_index()
 
         # Time info
@@ -406,7 +410,10 @@ class DataPreparator:
         t = np.arange(n_periods)
 
         if self.seasonality_config is not None:
-            if hasattr(self.seasonality_config, 'yearly') and self.seasonality_config.yearly:
+            if (
+                hasattr(self.seasonality_config, "yearly")
+                and self.seasonality_config.yearly
+            ):
                 if self.seasonality_config.yearly > 0:
                     period = 52  # Weekly data
                     order = self.seasonality_config.yearly

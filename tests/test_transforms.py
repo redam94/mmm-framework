@@ -84,11 +84,13 @@ class TestGeometricAdstock2D:
         """Test 2D adstock applies to each column."""
         from mmm_framework.transforms import geometric_adstock_2d
 
-        X = np.array([
-            [100.0, 200.0],
-            [0.0, 0.0],
-            [0.0, 0.0],
-        ])
+        X = np.array(
+            [
+                [100.0, 200.0],
+                [0.0, 0.0],
+                [0.0, 0.0],
+            ]
+        )
         alpha = 0.5
 
         result = geometric_adstock_2d(X, alpha)
@@ -422,20 +424,15 @@ class TestBackwardCompatibility:
         x = np.random.rand(50) * 100
 
         # Adstock
-        np.testing.assert_array_equal(
-            model_adstock(x, 0.7),
-            transform_adstock(x, 0.7)
-        )
+        np.testing.assert_array_equal(model_adstock(x, 0.7), transform_adstock(x, 0.7))
 
         # Saturation
         np.testing.assert_array_equal(
-            model_saturation(x, 0.5),
-            transform_saturation(x, 0.5)
+            model_saturation(x, 0.5), transform_saturation(x, 0.5)
         )
 
         # Fourier
         t = np.arange(52)
         np.testing.assert_array_equal(
-            model_fourier(t, 52.0, 3),
-            transform_fourier(t, 52.0, 3)
+            model_fourier(t, 52.0, 3), transform_fourier(t, 52.0, 3)
         )

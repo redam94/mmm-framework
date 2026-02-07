@@ -210,7 +210,10 @@ class TestStandardizeFunctions:
 
     def test_unstandardize_array(self):
         """Test unstandardization."""
-        from mmm_framework.data_preparation import standardize_array, unstandardize_array
+        from mmm_framework.data_preparation import (
+            standardize_array,
+            unstandardize_array,
+        )
 
         data = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
         standardized, mean, std = standardize_array(data)
@@ -220,7 +223,10 @@ class TestStandardizeFunctions:
 
     def test_roundtrip(self):
         """Test standardize/unstandardize roundtrip."""
-        from mmm_framework.data_preparation import standardize_array, unstandardize_array
+        from mmm_framework.data_preparation import (
+            standardize_array,
+            unstandardize_array,
+        )
 
         np.random.seed(42)
         data = np.random.randn(100) * 50 + 200
@@ -296,10 +302,7 @@ class TestDataPreparatorMethods:
             coords = MockCoords()
             index = pd.RangeIndex(10)
             y = pd.Series(np.random.randn(10) * 100 + 500)
-            X_media = pd.DataFrame(
-                np.random.rand(10, 2) * 100,
-                columns=["TV", "Radio"]
-            )
+            X_media = pd.DataFrame(np.random.rand(10, 2) * 100, columns=["TV", "Radio"])
             X_controls = None
 
         panel = MockPanel()
@@ -334,6 +337,7 @@ class TestDataPreparatorPrepare:
     @pytest.fixture
     def mock_panel_simple(self):
         """Create a simple mock panel for testing."""
+
         class MockCoords:
             channels = ["TV", "Radio"]
             controls = ["Price"]
@@ -359,14 +363,8 @@ class TestDataPreparatorPrepare:
             coords = MockCoords()
             index = pd.RangeIndex(20)
             y = pd.Series(np.random.randn(20) * 100 + 500)
-            X_media = pd.DataFrame(
-                np.random.rand(20, 2) * 100,
-                columns=["TV", "Radio"]
-            )
-            X_controls = pd.DataFrame(
-                np.random.rand(20, 1) * 50,
-                columns=["Price"]
-            )
+            X_media = pd.DataFrame(np.random.rand(20, 2) * 100, columns=["TV", "Radio"])
+            X_controls = pd.DataFrame(np.random.rand(20, 1) * 50, columns=["Price"])
 
         return MockPanel()
 
@@ -502,6 +500,7 @@ class TestDataPreparatorWithGeo:
     @pytest.fixture
     def mock_panel_with_geo(self):
         """Create mock panel with geography."""
+
         class MockCoords:
             channels = ["TV", "Radio"]
             controls = []
@@ -525,7 +524,9 @@ class TestDataPreparatorWithGeo:
         # Create MultiIndex
         periods = ["2024-01", "2024-02", "2024-03", "2024-04"] * 2
         geos = ["East"] * 4 + ["West"] * 4
-        multi_idx = pd.MultiIndex.from_arrays([periods, geos], names=["period", "geography"])
+        multi_idx = pd.MultiIndex.from_arrays(
+            [periods, geos], names=["period", "geography"]
+        )
 
         class MockPanel:
             config = MockConfig()
@@ -535,9 +536,7 @@ class TestDataPreparatorWithGeo:
         panel.index = multi_idx
         panel.y = pd.Series(np.random.randn(8) * 100 + 500, index=multi_idx)
         panel.X_media = pd.DataFrame(
-            np.random.rand(8, 2) * 100,
-            columns=["TV", "Radio"],
-            index=multi_idx
+            np.random.rand(8, 2) * 100, columns=["TV", "Radio"], index=multi_idx
         )
         panel.X_controls = None
 
@@ -581,6 +580,7 @@ class TestDataPreparatorWithProduct:
     @pytest.fixture
     def mock_panel_with_product(self):
         """Create mock panel with product dimension."""
+
         class MockCoords:
             channels = ["TV"]
             controls = []
@@ -604,7 +604,9 @@ class TestDataPreparatorWithProduct:
         # Create MultiIndex
         periods = ["2024-01", "2024-02"] * 3
         products = ["ProductA"] * 2 + ["ProductB"] * 2 + ["ProductC"] * 2
-        multi_idx = pd.MultiIndex.from_arrays([periods, products], names=["period", "product"])
+        multi_idx = pd.MultiIndex.from_arrays(
+            [periods, products], names=["period", "product"]
+        )
 
         class MockPanel:
             config = MockConfig()
@@ -614,9 +616,7 @@ class TestDataPreparatorWithProduct:
         panel.index = multi_idx
         panel.y = pd.Series(np.random.randn(6) * 100 + 500, index=multi_idx)
         panel.X_media = pd.DataFrame(
-            np.random.rand(6, 1) * 100,
-            columns=["TV"],
-            index=multi_idx
+            np.random.rand(6, 1) * 100, columns=["TV"], index=multi_idx
         )
         panel.X_controls = None
 
@@ -644,6 +644,7 @@ class TestDataPreparatorSeasonality:
     @pytest.fixture
     def mock_panel_for_seasonality(self):
         """Create mock panel for seasonality tests."""
+
         class MockCoords:
             channels = ["TV"]
             controls = []
@@ -732,6 +733,7 @@ class TestDataPreparatorTrend:
     @pytest.fixture
     def mock_panel_for_trend(self):
         """Create mock panel for trend tests."""
+
         class MockCoords:
             channels = ["TV"]
             controls = []
@@ -917,7 +919,9 @@ class TestDataPreparatorTimeIndex:
 
         periods = ["2024-01", "2024-02"] * 2
         geos = ["East", "East", "West", "West"]
-        multi_idx = pd.MultiIndex.from_arrays([periods, geos], names=["period", "geography"])
+        multi_idx = pd.MultiIndex.from_arrays(
+            [periods, geos], names=["period", "geography"]
+        )
 
         class MockPanel:
             config = MockConfig()
@@ -926,7 +930,9 @@ class TestDataPreparatorTimeIndex:
         panel = MockPanel()
         panel.index = multi_idx
         panel.y = pd.Series(np.random.randn(4) * 100 + 500, index=multi_idx)
-        panel.X_media = pd.DataFrame(np.random.rand(4, 1) * 100, columns=["TV"], index=multi_idx)
+        panel.X_media = pd.DataFrame(
+            np.random.rand(4, 1) * 100, columns=["TV"], index=multi_idx
+        )
         panel.X_controls = None
 
         preparator = DataPreparator(
@@ -1020,8 +1026,7 @@ class TestDataPreparatorEdgeCases:
             index = pd.RangeIndex(20)
             y = pd.Series(np.random.randn(20) * 100 + 500)
             X_media = pd.DataFrame(
-                np.random.rand(20, n_channels) * 100,
-                columns=channel_names
+                np.random.rand(20, n_channels) * 100, columns=channel_names
             )
             X_controls = None
 

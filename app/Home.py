@@ -20,7 +20,6 @@ from components.common import (
     status_icon,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -155,8 +154,7 @@ def main():
         st.error(
             "⚠️ Cannot connect to the API server. Please ensure the backend is running."
         )
-        st.markdown(
-            """
+        st.markdown("""
         ### Getting Started
         
         1. Start the FastAPI backend:
@@ -173,8 +171,7 @@ def main():
            ```bash
            redis-server
            ```
-        """
-        )
+        """)
         return
 
     # Dashboard overview
@@ -220,8 +217,7 @@ def main():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown(
-            """
+        st.markdown("""
         ### Workflow
         
         1. **📁 Data Management** - Upload your MFF data
@@ -229,12 +225,10 @@ def main():
         3. **🔬 Model Fitting** - Start Bayesian model fitting
         4. **📈 Results** - View model diagnostics and contributions
         5. **🔮 Scenarios** - Run what-if scenarios
-        """
-        )
+        """)
 
     with col2:
-        st.markdown(
-            """
+        st.markdown("""
         ### Features
         
         - **Async Model Fitting** - Non-blocking background jobs
@@ -242,8 +236,7 @@ def main():
         - **Counterfactual Analysis** - Channel contribution decomposition
         - **Scenario Planning** - Budget optimization
         - **Export Results** - Download models and reports
-        """
-        )
+        """)
 
     st.markdown("---")
 
@@ -293,8 +286,7 @@ def main():
 
     # Help section
     with st.expander("ℹ️ Help & Documentation"):
-        st.markdown(
-            """
+        st.markdown("""
         ### Data Format
         
         The framework expects data in **Master Flat File (MFF)** format with columns:
@@ -319,8 +311,7 @@ def main():
         For programmatic access, see the API documentation at:
         - Swagger UI: http://localhost:8000/docs
         - ReDoc: http://localhost:8000/redoc
-        """
-        )
+        """)
 
 
 if __name__ == "__main__":

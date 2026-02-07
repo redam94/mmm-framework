@@ -26,7 +26,6 @@ from mmm_framework.reporting.data_extractors import (
     create_extractor,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -89,8 +88,13 @@ def mock_bayesian_mmm_fitted():
     # Mock trace
     trace = MagicMock()
     trace.posterior = MagicMock()
-    trace.posterior.__contains__ = lambda self, key: key in ["intercept", "channel_contributions"]
-    trace.posterior.__getitem__ = MagicMock(return_value=MagicMock(values=np.random.randn(4, 500, 52)))
+    trace.posterior.__contains__ = lambda self, key: key in [
+        "intercept",
+        "channel_contributions",
+    ]
+    trace.posterior.__getitem__ = MagicMock(
+        return_value=MagicMock(values=np.random.randn(4, 500, 52))
+    )
     mmm._trace = trace
     mmm._results = MagicMock()
 
@@ -102,11 +106,13 @@ def mock_panel():
     """Create a mock panel dataset."""
     panel = MagicMock()
     panel.y = pd.Series(np.random.randn(52) * 100 + 1000)
-    panel.X_media = pd.DataFrame({
-        "TV": np.random.rand(52) * 100,
-        "Digital": np.random.rand(52) * 50,
-        "Social": np.random.rand(52) * 30,
-    })
+    panel.X_media = pd.DataFrame(
+        {
+            "TV": np.random.rand(52) * 100,
+            "Digital": np.random.rand(52) * 50,
+            "Social": np.random.rand(52) * 30,
+        }
+    )
 
     # Mock coords
     coords = MagicMock()
@@ -205,6 +211,7 @@ class TestDataExtractor:
 
     def test_ci_prob_default(self):
         """Test default ci_prob value."""
+
         # Create a concrete implementation
         class TestExtractor(DataExtractor):
             def extract(self):
@@ -215,6 +222,7 @@ class TestDataExtractor:
 
     def test_ci_prob_override(self):
         """Test ci_prob can be overridden."""
+
         class TestExtractor(DataExtractor):
             def __init__(self, ci_prob):
                 self._ci_prob = ci_prob
@@ -227,6 +235,7 @@ class TestDataExtractor:
 
     def test_compute_hdi_with_samples(self):
         """Test HDI computation with sample data."""
+
         class TestExtractor(DataExtractor):
             def extract(self):
                 return MMMDataBundle()
@@ -242,6 +251,7 @@ class TestDataExtractor:
 
     def test_compute_percentile_bounds(self):
         """Test percentile bounds computation."""
+
         class TestExtractor(DataExtractor):
             def extract(self):
                 return MMMDataBundle()
@@ -257,6 +267,7 @@ class TestDataExtractor:
 
     def test_compute_fit_statistics_with_data(self):
         """Test fit statistics computation."""
+
         class TestExtractor(DataExtractor):
             def extract(self):
                 return MMMDataBundle()
@@ -277,6 +288,7 @@ class TestDataExtractor:
 
     def test_compute_fit_statistics_with_none(self):
         """Test fit statistics returns None with missing data."""
+
         class TestExtractor(DataExtractor):
             def extract(self):
                 return MMMDataBundle()
@@ -288,6 +300,7 @@ class TestDataExtractor:
 
     def test_extract_diagnostics_no_trace(self):
         """Test diagnostics extraction with no trace."""
+
         class TestExtractor(DataExtractor):
             def extract(self):
                 return MMMDataBundle()
@@ -308,6 +321,7 @@ class TestAggregationMixin:
 
     def test_aggregate_by_period_simple(self):
         """Test simple period aggregation."""
+
         class TestAggregator(AggregationMixin):
             pass
 
@@ -325,6 +339,7 @@ class TestAggregationMixin:
 
     def test_aggregate_samples_by_period(self):
         """Test sample aggregation by period with uncertainty."""
+
         class TestAggregator(AggregationMixin):
             pass
 
@@ -334,7 +349,9 @@ class TestAggregationMixin:
         periods = ["2024-01", "2024-01", "2024-02", "2024-02", "2024-03", "2024-03"]
         unique_periods = ["2024-01", "2024-02", "2024-03"]
 
-        result = aggregator._aggregate_samples_by_period(samples, periods, unique_periods)
+        result = aggregator._aggregate_samples_by_period(
+            samples, periods, unique_periods
+        )
 
         assert result is not None
         assert "mean" in result
@@ -344,6 +361,7 @@ class TestAggregationMixin:
 
     def test_aggregate_samples_by_period_with_none(self):
         """Test sample aggregation returns None with invalid input."""
+
         class TestAggregator(AggregationMixin):
             pass
 
@@ -354,6 +372,7 @@ class TestAggregationMixin:
 
     def test_aggregate_by_group(self):
         """Test aggregation by group index."""
+
         class TestAggregator(AggregationMixin):
             pass
 
@@ -428,7 +447,9 @@ class TestBayesianMMMExtractor:
         bundle = extractor.extract()
 
         # Model specification should be populated
-        assert bundle.model_specification is not None or bundle.model_specification is None  # Either is valid
+        assert (
+            bundle.model_specification is not None or bundle.model_specification is None
+        )  # Either is valid
 
 
 # =============================================================================

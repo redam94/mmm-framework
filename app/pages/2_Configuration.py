@@ -25,7 +25,6 @@ from components import (
     init_session_state,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -84,8 +83,22 @@ init_session_state(
 
 ADSTOCK_TYPES = ["Geometric", "Weibull", "Delayed", "None"]
 SATURATION_TYPES = ["Hill", "Logistic", "Michaelis-Menten", "Tanh", "None"]
-PRIOR_DISTRIBUTIONS = ["HalfNormal", "Normal", "LogNormal", "Gamma", "Beta", "TruncatedNormal", "HalfStudentT"]
-TREND_TYPES = ["None", "Linear", "Piecewise (Prophet-style)", "Spline", "Gaussian Process"]
+PRIOR_DISTRIBUTIONS = [
+    "HalfNormal",
+    "Normal",
+    "LogNormal",
+    "Gamma",
+    "Beta",
+    "TruncatedNormal",
+    "HalfStudentT",
+]
+TREND_TYPES = [
+    "None",
+    "Linear",
+    "Piecewise (Prophet-style)",
+    "Spline",
+    "Gaussian Process",
+]
 CONTROL_SELECTION_METHODS = ["None", "Horseshoe", "Spike-Slab", "LASSO"]
 
 
@@ -115,8 +128,13 @@ def get_dataset_dimensions(client, data_id: str) -> dict:
         return {"geographies": [], "products": []}
 
 
-def render_prior_config(prefix: str, label: str, default_dist: str = "HalfNormal",
-                        default_params: dict = None, help_text: str = None) -> dict:
+def render_prior_config(
+    prefix: str,
+    label: str,
+    default_dist: str = "HalfNormal",
+    default_params: dict = None,
+    help_text: str = None,
+) -> dict:
     """Render a configurable prior distribution UI and return the config dict."""
     default_params = default_params or {}
 
@@ -126,7 +144,11 @@ def render_prior_config(prefix: str, label: str, default_dist: str = "HalfNormal
         dist = st.selectbox(
             f"{label} Distribution",
             options=PRIOR_DISTRIBUTIONS,
-            index=PRIOR_DISTRIBUTIONS.index(default_dist) if default_dist in PRIOR_DISTRIBUTIONS else 0,
+            index=(
+                PRIOR_DISTRIBUTIONS.index(default_dist)
+                if default_dist in PRIOR_DISTRIBUTIONS
+                else 0
+            ),
             key=f"{prefix}_dist",
             help=help_text,
         )
@@ -135,88 +157,128 @@ def render_prior_config(prefix: str, label: str, default_dist: str = "HalfNormal
         params = {}
         if dist == "HalfNormal":
             params["sigma"] = st.number_input(
-                "Sigma", value=default_params.get("sigma", 1.0),
-                min_value=0.01, step=0.1, key=f"{prefix}_sigma"
+                "Sigma",
+                value=default_params.get("sigma", 1.0),
+                min_value=0.01,
+                step=0.1,
+                key=f"{prefix}_sigma",
             )
         elif dist == "Normal":
             c1, c2 = st.columns(2)
             with c1:
                 params["mu"] = st.number_input(
-                    "Mu", value=default_params.get("mu", 0.0),
-                    step=0.1, key=f"{prefix}_mu"
+                    "Mu",
+                    value=default_params.get("mu", 0.0),
+                    step=0.1,
+                    key=f"{prefix}_mu",
                 )
             with c2:
                 params["sigma"] = st.number_input(
-                    "Sigma", value=default_params.get("sigma", 1.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_sigma"
+                    "Sigma",
+                    value=default_params.get("sigma", 1.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_sigma",
                 )
         elif dist == "LogNormal":
             c1, c2 = st.columns(2)
             with c1:
                 params["mu"] = st.number_input(
-                    "Mu", value=default_params.get("mu", 0.0),
-                    step=0.1, key=f"{prefix}_mu"
+                    "Mu",
+                    value=default_params.get("mu", 0.0),
+                    step=0.1,
+                    key=f"{prefix}_mu",
                 )
             with c2:
                 params["sigma"] = st.number_input(
-                    "Sigma", value=default_params.get("sigma", 1.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_sigma"
+                    "Sigma",
+                    value=default_params.get("sigma", 1.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_sigma",
                 )
         elif dist == "Gamma":
             c1, c2 = st.columns(2)
             with c1:
                 params["alpha"] = st.number_input(
-                    "Alpha", value=default_params.get("alpha", 2.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_alpha"
+                    "Alpha",
+                    value=default_params.get("alpha", 2.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_alpha",
                 )
             with c2:
                 params["beta"] = st.number_input(
-                    "Beta", value=default_params.get("beta", 1.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_beta"
+                    "Beta",
+                    value=default_params.get("beta", 1.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_beta",
                 )
         elif dist == "Beta":
             c1, c2 = st.columns(2)
             with c1:
                 params["alpha"] = st.number_input(
-                    "Alpha", value=default_params.get("alpha", 2.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_alpha"
+                    "Alpha",
+                    value=default_params.get("alpha", 2.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_alpha",
                 )
             with c2:
                 params["beta"] = st.number_input(
-                    "Beta", value=default_params.get("beta", 2.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_beta"
+                    "Beta",
+                    value=default_params.get("beta", 2.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_beta",
                 )
         elif dist == "TruncatedNormal":
             c1, c2 = st.columns(2)
             with c1:
                 params["mu"] = st.number_input(
-                    "Mu", value=default_params.get("mu", 0.0),
-                    step=0.1, key=f"{prefix}_mu"
+                    "Mu",
+                    value=default_params.get("mu", 0.0),
+                    step=0.1,
+                    key=f"{prefix}_mu",
                 )
                 params["lower"] = st.number_input(
-                    "Lower", value=default_params.get("lower", 0.0),
-                    step=0.1, key=f"{prefix}_lower"
+                    "Lower",
+                    value=default_params.get("lower", 0.0),
+                    step=0.1,
+                    key=f"{prefix}_lower",
                 )
             with c2:
                 params["sigma"] = st.number_input(
-                    "Sigma", value=default_params.get("sigma", 1.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_sigma"
+                    "Sigma",
+                    value=default_params.get("sigma", 1.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_sigma",
                 )
                 params["upper"] = st.number_input(
-                    "Upper (optional)", value=default_params.get("upper", 10.0),
-                    step=0.1, key=f"{prefix}_upper"
+                    "Upper (optional)",
+                    value=default_params.get("upper", 10.0),
+                    step=0.1,
+                    key=f"{prefix}_upper",
                 )
         elif dist == "HalfStudentT":
             c1, c2 = st.columns(2)
             with c1:
                 params["nu"] = st.number_input(
-                    "Nu (df)", value=default_params.get("nu", 3.0),
-                    min_value=1.0, step=0.5, key=f"{prefix}_nu"
+                    "Nu (df)",
+                    value=default_params.get("nu", 3.0),
+                    min_value=1.0,
+                    step=0.5,
+                    key=f"{prefix}_nu",
                 )
             with c2:
                 params["sigma"] = st.number_input(
-                    "Sigma", value=default_params.get("sigma", 1.0),
-                    min_value=0.01, step=0.1, key=f"{prefix}_sigma"
+                    "Sigma",
+                    value=default_params.get("sigma", 1.0),
+                    min_value=0.01,
+                    step=0.1,
+                    key=f"{prefix}_sigma",
                 )
 
     return {"distribution": dist, "params": params}
@@ -257,7 +319,9 @@ def render_adstock_config(channel: str) -> dict:
         # Show relevant prior based on adstock type
         if adstock_type == "Geometric":
             with st.expander("Alpha Prior (Decay Rate)", expanded=False):
-                st.caption("Controls how quickly the effect decays. Higher alpha = slower decay.")
+                st.caption(
+                    "Controls how quickly the effect decays. Higher alpha = slower decay."
+                )
                 config["alpha_prior"] = render_prior_config(
                     f"adstock_alpha_{channel}",
                     "Alpha",
@@ -544,7 +608,9 @@ def render_config_form():
 
                 # Coefficient prior
                 st.markdown("**Coefficient Prior**")
-                st.caption("Prior for the media effect coefficient (constrained positive).")
+                st.caption(
+                    "Prior for the media effect coefficient (constrained positive)."
+                )
                 coef_prior = render_prior_config(
                     f"coef_{channel}",
                     "Coefficient",
@@ -557,7 +623,9 @@ def render_config_form():
                     {
                         "name": channel,
                         "level": channel_level,
-                        "parent_channel": None if parent_channel == "None" else parent_channel,
+                        "parent_channel": (
+                            None if parent_channel == "None" else parent_channel
+                        ),
                         "adstock": adstock_config,
                         "saturation": saturation_config,
                         "coefficient_prior": coef_prior,
@@ -696,7 +764,12 @@ def render_config_form():
     with inf_col1:
         inference_method = st.selectbox(
             "Inference Method",
-            options=["Bayesian (NumPyro/JAX)", "Bayesian (PyMC)", "Frequentist (Ridge)", "Frequentist (CVXPY)"],
+            options=[
+                "Bayesian (NumPyro/JAX)",
+                "Bayesian (PyMC)",
+                "Frequentist (Ridge)",
+                "Frequentist (CVXPY)",
+            ],
             index=0,
             help="Sampling/fitting method",
         )
@@ -947,8 +1020,7 @@ def render_config_form():
     if yearly_order > 0:
         with st.expander("Seasonality Details", expanded=False):
             total_terms = (yearly_order + monthly_order + weekly_order) * 2
-            st.markdown(
-                f"""
+            st.markdown(f"""
             **Total Fourier Terms:** {total_terms}
 
             This will create {total_terms} seasonality features
@@ -957,8 +1029,7 @@ def render_config_form():
             - Order 1: Annual/Monthly/Weekly cycle
             - Order 2: Semi-annual/bi-weekly patterns
             - Order 3+: Finer seasonal variations
-            """
-            )
+            """)
 
     st.markdown("---")
 
@@ -1026,7 +1097,9 @@ def render_config_form():
                 )
                 st.session_state.hier_sigma_prior = hier_sigma_prior
     else:
-        st.info("Hierarchical pooling is only available for multi-geography/product models")
+        st.info(
+            "Hierarchical pooling is only available for multi-geography/product models"
+        )
         st.session_state.pool_geo = False
         st.session_state.pool_product = False
 
@@ -1044,7 +1117,9 @@ def render_config_form():
             index=0,
             help="Method for automatic control variable selection",
         )
-        st.session_state.control_selection_method = ctrl_sel_method.lower().replace("-", "_")
+        st.session_state.control_selection_method = ctrl_sel_method.lower().replace(
+            "-", "_"
+        )
 
         if ctrl_sel_method != "None":
             with st.expander("Selection Settings", expanded=False):
@@ -1077,7 +1152,11 @@ def render_config_form():
     st.subheader("Configuration Summary")
 
     n_params = len(media_channels) * 3 + len(control_vars) + 5
-    est_time = (st.session_state.n_chains * (st.session_state.n_draws + st.session_state.n_tune) * n_params) / 5000
+    est_time = (
+        st.session_state.n_chains
+        * (st.session_state.n_draws + st.session_state.n_tune)
+        * n_params
+    ) / 5000
 
     summary_cols = st.columns(4)
     with summary_cols[0]:
@@ -1110,7 +1189,9 @@ def render_config_form():
         save_configuration(client, data_id, config_name, config_description)
 
 
-def save_configuration(client, data_id: str, config_name: str, config_description: str = ""):
+def save_configuration(
+    client, data_id: str, config_name: str, config_description: str = ""
+):
     """Save the configuration to the backend."""
     try:
         # Convert KPI dimensions string to list format
@@ -1141,7 +1222,7 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
         }
         inference_method = inference_method_map.get(
             st.session_state.get("inference_method", "Bayesian (NumPyro/JAX)"),
-            "bayesian_numpyro"
+            "bayesian_numpyro",
         )
 
         def level_to_dimensions(level: str) -> list[str]:
@@ -1165,9 +1246,13 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
                 "normalize": adstock_config.get("normalize", True),
             }
             if "alpha_prior" in adstock_config and adstock_config["alpha_prior"]:
-                schema["alpha_prior"] = build_prior_schema(adstock_config["alpha_prior"])
+                schema["alpha_prior"] = build_prior_schema(
+                    adstock_config["alpha_prior"]
+                )
             if "theta_prior" in adstock_config and adstock_config["theta_prior"]:
-                schema["theta_prior"] = build_prior_schema(adstock_config["theta_prior"])
+                schema["theta_prior"] = build_prior_schema(
+                    adstock_config["theta_prior"]
+                )
             return schema
 
         def build_saturation_schema(sat_config: dict) -> dict:
@@ -1176,7 +1261,9 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
                 "type": sat_config["type"],
             }
             if "kappa_bounds_percentiles" in sat_config:
-                schema["kappa_bounds_percentiles"] = list(sat_config["kappa_bounds_percentiles"])
+                schema["kappa_bounds_percentiles"] = list(
+                    sat_config["kappa_bounds_percentiles"]
+                )
             if "kappa_prior" in sat_config and sat_config["kappa_prior"]:
                 schema["kappa_prior"] = build_prior_schema(sat_config["kappa_prior"])
             if "slope_prior" in sat_config and sat_config["slope_prior"]:
@@ -1191,11 +1278,17 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
             channel_schema = {
                 "name": ch["name"],
                 "dimensions": level_to_dimensions(ch.get("level", "National")),
-                "adstock": build_adstock_schema(ch.get("adstock", {"type": "geometric", "l_max": 8})),
-                "saturation": build_saturation_schema(ch.get("saturation", {"type": "hill"})),
+                "adstock": build_adstock_schema(
+                    ch.get("adstock", {"type": "geometric", "l_max": 8})
+                ),
+                "saturation": build_saturation_schema(
+                    ch.get("saturation", {"type": "hill"})
+                ),
             }
             if ch.get("coefficient_prior"):
-                channel_schema["coefficient_prior"] = build_prior_schema(ch["coefficient_prior"])
+                channel_schema["coefficient_prior"] = build_prior_schema(
+                    ch["coefficient_prior"]
+                )
             if ch.get("parent_channel"):
                 channel_schema["parent_channel"] = ch["parent_channel"]
             media_channel_schemas.append(channel_schema)
@@ -1210,7 +1303,9 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
                 "use_shrinkage": ctrl.get("use_shrinkage", False),
             }
             if ctrl.get("coefficient_prior"):
-                ctrl_schema["coefficient_prior"] = build_prior_schema(ctrl["coefficient_prior"])
+                ctrl_schema["coefficient_prior"] = build_prior_schema(
+                    ctrl["coefficient_prior"]
+                )
             control_schemas.append(ctrl_schema)
 
         # Build mff_config structure
@@ -1224,7 +1319,9 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
             "controls": control_schemas,
             "alignment": {
                 "geo_allocation": st.session_state.get("geo_allocation", "equal"),
-                "product_allocation": st.session_state.get("product_allocation", "sales"),
+                "product_allocation": st.session_state.get(
+                    "product_allocation", "sales"
+                ),
             },
         }
 
@@ -1234,17 +1331,27 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
             "type": trend_type,
         }
         # Add trend-specific settings
-        for key in ["n_changepoints", "changepoint_range", "changepoint_prior_scale",
-                    "n_knots", "spline_degree", "spline_prior_sigma",
-                    "gp_lengthscale_prior_mu", "gp_lengthscale_prior_sigma",
-                    "gp_amplitude_prior_sigma", "gp_n_basis",
-                    "growth_prior_mu", "growth_prior_sigma"]:
+        for key in [
+            "n_changepoints",
+            "changepoint_range",
+            "changepoint_prior_scale",
+            "n_knots",
+            "spline_degree",
+            "spline_prior_sigma",
+            "gp_lengthscale_prior_mu",
+            "gp_lengthscale_prior_sigma",
+            "gp_amplitude_prior_sigma",
+            "gp_n_basis",
+            "growth_prior_mu",
+            "growth_prior_sigma",
+        ]:
             if key in trend_settings:
                 trend_config[key] = trend_settings[key]
 
         # Build hierarchical config
         hierarchical_config = {
-            "enabled": st.session_state.get("pool_geo", False) or st.session_state.get("pool_product", False),
+            "enabled": st.session_state.get("pool_geo", False)
+            or st.session_state.get("pool_product", False),
             "pool_across_geo": st.session_state.get("pool_geo", False),
             "pool_across_product": st.session_state.get("pool_product", False),
             "use_non_centered": st.session_state.get("use_non_centered", True),
@@ -1252,9 +1359,21 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
 
         # Build seasonality config
         seasonality_config = {
-            "yearly": st.session_state.get("yearly_order", 2) if st.session_state.get("yearly_order", 2) > 0 else None,
-            "monthly": st.session_state.get("monthly_order", 0) if st.session_state.get("monthly_order", 0) > 0 else None,
-            "weekly": st.session_state.get("weekly_order", 0) if st.session_state.get("weekly_order", 0) > 0 else None,
+            "yearly": (
+                st.session_state.get("yearly_order", 2)
+                if st.session_state.get("yearly_order", 2) > 0
+                else None
+            ),
+            "monthly": (
+                st.session_state.get("monthly_order", 0)
+                if st.session_state.get("monthly_order", 0) > 0
+                else None
+            ),
+            "weekly": (
+                st.session_state.get("weekly_order", 0)
+                if st.session_state.get("weekly_order", 0) > 0
+                else None
+            ),
         }
 
         # Build model_settings structure
@@ -1295,6 +1414,7 @@ def save_configuration(client, data_id: str, config_name: str, config_descriptio
     except Exception as e:
         st.error(f"Error saving configuration: {e}")
         import traceback
+
         st.code(traceback.format_exc())
 
 
@@ -1339,7 +1459,9 @@ def render_config_list():
 
                 # Show more details if available
                 if config.mff_config:
-                    media_names = [ch.get("name", "?") for ch in config.get_media_channels()]
+                    media_names = [
+                        ch.get("name", "?") for ch in config.get_media_channels()
+                    ]
                     if media_names:
                         st.markdown(f"**Channels:** {', '.join(media_names)}")
 

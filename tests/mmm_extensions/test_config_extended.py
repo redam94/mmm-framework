@@ -17,7 +17,8 @@ Note: Bypasses PyTensor compilation issues with special config.
 """
 
 import pytensor
-pytensor.config.exception_verbosity = 'high'
+
+pytensor.config.exception_verbosity = "high"
 pytensor.config.cxx = ""
 
 import numpy as np
@@ -52,7 +53,6 @@ from mmm_framework.mmm_extensions.config import (
     inclusion_prob_selection_config,
 )
 from mmm_framework.config import SaturationType
-
 
 # =============================================================================
 # Enum Tests
@@ -284,7 +284,9 @@ class TestAggregatedSurveyConfig:
         )
         assert config.likelihood == AggregatedSurveyLikelihood.NORMAL
 
-    def test_with_beta_binomial_likelihood(self, valid_aggregation_map, valid_sample_sizes):
+    def test_with_beta_binomial_likelihood(
+        self, valid_aggregation_map, valid_sample_sizes
+    ):
         """Test with beta-binomial likelihood."""
         config = AggregatedSurveyConfig(
             aggregation_map=valid_aggregation_map,
@@ -295,7 +297,9 @@ class TestAggregatedSurveyConfig:
         assert config.likelihood == AggregatedSurveyLikelihood.BETA_BINOMIAL
         assert config.overdispersion_prior_sigma == 0.2
 
-    def test_aggregation_function_options(self, valid_aggregation_map, valid_sample_sizes):
+    def test_aggregation_function_options(
+        self, valid_aggregation_map, valid_sample_sizes
+    ):
         """Test different aggregation functions."""
         for func in ["mean", "sum", "last"]:
             config = AggregatedSurveyConfig(
@@ -313,7 +317,9 @@ class TestAggregatedSurveyConfig:
                 sample_sizes=(500, 450),  # Only 2, but aggregation_map has 3
             )
 
-    def test_negative_design_effect_raises(self, valid_aggregation_map, valid_sample_sizes):
+    def test_negative_design_effect_raises(
+        self, valid_aggregation_map, valid_sample_sizes
+    ):
         """Test that negative design effect raises error."""
         with pytest.raises(ValueError, match="design_effect must be positive"):
             AggregatedSurveyConfig(

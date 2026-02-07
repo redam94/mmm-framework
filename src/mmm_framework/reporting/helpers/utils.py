@@ -62,7 +62,9 @@ def safe_get_samples(posterior, var_name, channel_idx=None):
     else:
         arr = data
 
-    logger.debug(f"  After .values: type={type(arr)}, shape={arr.shape}, ndim={arr.ndim}")
+    logger.debug(
+        f"  After .values: type={type(arr)}, shape={arr.shape}, ndim={arr.ndim}"
+    )
 
     # Now do any indexing on the numpy array
     if channel_idx is not None and arr.ndim > 2:

@@ -137,9 +137,7 @@ def react_flow_to_dag_spec(
     # Preserve frontend metadata (positions, etc.)
     metadata = {
         "frontend_positions": {
-            n.get("id"): n.get("position", {})
-            for n in nodes
-            if "position" in n
+            n.get("id"): n.get("position", {}) for n in nodes if "position" in n
         }
     }
 

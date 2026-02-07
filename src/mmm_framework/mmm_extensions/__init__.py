@@ -206,10 +206,12 @@ def __getattr__(name: str):
 
     if name in components_exports:
         from . import components
+
         return getattr(components, name)
 
     if name in models_exports:
         from . import models
+
         return getattr(models, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

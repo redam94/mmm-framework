@@ -60,7 +60,7 @@ def create_saturation_curves(
 
     html_parts = [
         f'<div class="chart-grid" style="display: grid; '
-        f"grid-template-columns: repeat({n_cols}, 1fr); gap: 1.5rem;\">"
+        f'grid-template-columns: repeat({n_cols}, 1fr); gap: 1.5rem;">'
     ]
 
     for i, channel in enumerate(channels):
@@ -114,7 +114,11 @@ def create_saturation_curves(
                     "y": [current_response],
                     "mode": "markers",
                     "name": "Current",
-                    "marker": {"color": colors.warning, "size": 10, "symbol": "diamond"},
+                    "marker": {
+                        "color": colors.warning,
+                        "size": 10,
+                        "symbol": "diamond",
+                    },
                     "hovertemplate": (
                         f"Current Spend: {config.currency_symbol}%{{x:,.0f}}<br>"
                         f"Response: %{{y:,.0f}}<extra></extra>"
@@ -250,7 +254,7 @@ def create_prior_posterior_chart(
 
     html_parts = [
         f'<div class="chart-grid" style="display: grid; '
-        f"grid-template-columns: repeat({n_cols}, 1fr); gap: 1.5rem;\">"
+        f'grid-template-columns: repeat({n_cols}, 1fr); gap: 1.5rem;">'
     ]
 
     for i, param in enumerate(parameter_names):

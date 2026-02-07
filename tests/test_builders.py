@@ -38,7 +38,11 @@ class TestMediaChannelConfigBuilder:
 
     def test_with_display_name(self):
         """Test display name setting."""
-        config = MediaChannelConfigBuilder("tv_spend").with_display_name("TV Advertising").build()
+        config = (
+            MediaChannelConfigBuilder("tv_spend")
+            .with_display_name("TV Advertising")
+            .build()
+        )
 
         assert config.name == "tv_spend"
         assert config.display_name == "TV Advertising"
@@ -103,7 +107,9 @@ class TestMediaChannelConfigBuilder:
 
     def test_with_geometric_adstock(self):
         """Test geometric adstock convenience method."""
-        config = MediaChannelConfigBuilder("TV").with_geometric_adstock(l_max=12).build()
+        config = (
+            MediaChannelConfigBuilder("TV").with_geometric_adstock(l_max=12).build()
+        )
 
         assert config.adstock.type == AdstockType.GEOMETRIC
         assert config.adstock.l_max == 12
@@ -494,7 +500,9 @@ class TestPriorConfigBuilder:
 
     def test_with_dims_list(self):
         """Test dimension setting with list."""
-        config = PriorConfigBuilder().half_normal().with_dims(["channel", "geo"]).build()
+        config = (
+            PriorConfigBuilder().half_normal().with_dims(["channel", "geo"]).build()
+        )
 
         assert config.dims == ["channel", "geo"]
 
@@ -661,7 +669,9 @@ class TestDimensionAlignmentConfigBuilder:
         from mmm_framework.builders import DimensionAlignmentConfigBuilder
         from mmm_framework.config import AllocationMethod
 
-        config = DimensionAlignmentConfigBuilder().product_by_custom("ProductWeight").build()
+        config = (
+            DimensionAlignmentConfigBuilder().product_by_custom("ProductWeight").build()
+        )
 
         assert config.product_allocation == AllocationMethod.CUSTOM
         assert config.product_weight_variable == "ProductWeight"
@@ -984,7 +994,9 @@ class TestControlSelectionConfigBuilder:
         """Test setting expected nonzero."""
         from mmm_framework.builders import ControlSelectionConfigBuilder
 
-        config = ControlSelectionConfigBuilder().horseshoe().with_expected_nonzero(7).build()
+        config = (
+            ControlSelectionConfigBuilder().horseshoe().with_expected_nonzero(7).build()
+        )
 
         assert config.expected_nonzero == 7
 
@@ -992,7 +1004,9 @@ class TestControlSelectionConfigBuilder:
         """Test setting regularization."""
         from mmm_framework.builders import ControlSelectionConfigBuilder
 
-        config = ControlSelectionConfigBuilder().lasso().with_regularization(0.8).build()
+        config = (
+            ControlSelectionConfigBuilder().lasso().with_regularization(0.8).build()
+        )
 
         assert config.regularization == 0.8
 
@@ -1147,7 +1161,10 @@ class TestModelConfigBuilder:
 
     def test_with_control_selection(self):
         """Test setting control selection config."""
-        from mmm_framework.builders import ModelConfigBuilder, ControlSelectionConfigBuilder
+        from mmm_framework.builders import (
+            ModelConfigBuilder,
+            ControlSelectionConfigBuilder,
+        )
 
         selection = ControlSelectionConfigBuilder().horseshoe().build()
         config = ModelConfigBuilder().with_control_selection(selection).build()
@@ -1156,7 +1173,10 @@ class TestModelConfigBuilder:
 
     def test_with_control_selection_builder(self):
         """Test setting control selection from builder."""
-        from mmm_framework.builders import ModelConfigBuilder, ControlSelectionConfigBuilder
+        from mmm_framework.builders import (
+            ModelConfigBuilder,
+            ControlSelectionConfigBuilder,
+        )
 
         config = (
             ModelConfigBuilder()
@@ -1298,7 +1318,9 @@ class TestTrendConfigBuilder:
         """Test setting changepoint prior scale."""
         from mmm_framework.builders import TrendConfigBuilder
 
-        config = TrendConfigBuilder().piecewise().with_changepoint_prior_scale(0.1).build()
+        config = (
+            TrendConfigBuilder().piecewise().with_changepoint_prior_scale(0.1).build()
+        )
 
         assert config.changepoint_prior_scale == 0.1
 
@@ -1344,7 +1366,9 @@ class TestTrendConfigBuilder:
         """Test setting GP lengthscale."""
         from mmm_framework.builders import TrendConfigBuilder
 
-        config = TrendConfigBuilder().gp().with_gp_lengthscale(mu=0.4, sigma=0.15).build()
+        config = (
+            TrendConfigBuilder().gp().with_gp_lengthscale(mu=0.4, sigma=0.15).build()
+        )
 
         assert config.gp_lengthscale_prior_mu == 0.4
         assert config.gp_lengthscale_prior_sigma == 0.15
@@ -1384,7 +1408,9 @@ class TestTrendConfigBuilder:
         """Test setting growth prior."""
         from mmm_framework.builders import TrendConfigBuilder
 
-        config = TrendConfigBuilder().linear().with_growth_prior(mu=0.1, sigma=0.05).build()
+        config = (
+            TrendConfigBuilder().linear().with_growth_prior(mu=0.1, sigma=0.05).build()
+        )
 
         assert config.growth_prior_mu == 0.1
         assert config.growth_prior_sigma == 0.05
@@ -1435,21 +1461,14 @@ class TestMFFConfigBuilder:
         from mmm_framework.builders import MFFConfigBuilder
 
         with pytest.raises(ValueError, match="At least one media channel is required"):
-            (
-                MFFConfigBuilder()
-                .with_kpi_name("Sales")
-                .build()
-            )
+            (MFFConfigBuilder().with_kpi_name("Sales").build())
 
     def test_basic_build(self):
         """Test basic builder creates valid config."""
         from mmm_framework.builders import MFFConfigBuilder
 
         config = (
-            MFFConfigBuilder()
-            .with_kpi_name("Sales")
-            .add_national_media("TV")
-            .build()
+            MFFConfigBuilder().with_kpi_name("Sales").add_national_media("TV").build()
         )
 
         assert config.kpi.name == "Sales"
@@ -1461,12 +1480,7 @@ class TestMFFConfigBuilder:
         from mmm_framework.builders import MFFConfigBuilder
 
         kpi = KPIConfigBuilder("Revenue").by_geo().build()
-        config = (
-            MFFConfigBuilder()
-            .with_kpi(kpi)
-            .add_national_media("TV")
-            .build()
-        )
+        config = MFFConfigBuilder().with_kpi(kpi).add_national_media("TV").build()
 
         assert config.kpi.name == "Revenue"
         assert DimensionType.GEOGRAPHY in config.kpi.dimensions
@@ -1490,12 +1504,7 @@ class TestMFFConfigBuilder:
         from mmm_framework.builders import MFFConfigBuilder
 
         media = MediaChannelConfigBuilder("TV").with_geometric_adstock(12).build()
-        config = (
-            MFFConfigBuilder()
-            .with_kpi_name("Sales")
-            .add_media(media)
-            .build()
-        )
+        config = MFFConfigBuilder().with_kpi_name("Sales").add_media(media).build()
 
         assert config.media_channels[0].adstock.l_max == 12
 
@@ -1655,7 +1664,9 @@ class TestMFFConfigBuilder:
             MFFConfigBuilder()
             .with_kpi_name("Sales")
             .add_national_media("TV")
-            .with_columns_builder(MFFColumnConfigBuilder().with_geography_column("Region"))
+            .with_columns_builder(
+                MFFColumnConfigBuilder().with_geography_column("Region")
+            )
             .build()
         )
 
@@ -1663,7 +1674,10 @@ class TestMFFConfigBuilder:
 
     def test_with_alignment(self):
         """Test setting alignment config."""
-        from mmm_framework.builders import MFFConfigBuilder, DimensionAlignmentConfigBuilder
+        from mmm_framework.builders import (
+            MFFConfigBuilder,
+            DimensionAlignmentConfigBuilder,
+        )
         from mmm_framework.config import AllocationMethod
 
         alignment = DimensionAlignmentConfigBuilder().geo_by_sales().build()
@@ -1679,7 +1693,10 @@ class TestMFFConfigBuilder:
 
     def test_with_alignment_builder(self):
         """Test setting alignment from builder."""
-        from mmm_framework.builders import MFFConfigBuilder, DimensionAlignmentConfigBuilder
+        from mmm_framework.builders import (
+            MFFConfigBuilder,
+            DimensionAlignmentConfigBuilder,
+        )
         from mmm_framework.config import AllocationMethod
 
         config = (

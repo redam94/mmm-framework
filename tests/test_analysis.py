@@ -161,10 +161,12 @@ class TestContributionSummary:
         # Create mock contribution results
         class MockContributionResults:
             def summary(self):
-                return pd.DataFrame({
-                    "Channel": ["TV", "Radio"],
-                    "Contribution": [100, 50],
-                })
+                return pd.DataFrame(
+                    {
+                        "Channel": ["TV", "Radio"],
+                        "Contribution": [100, 50],
+                    }
+                )
 
         results = MockContributionResults()
         summary = compute_contribution_summary(results)
@@ -217,7 +219,7 @@ class TestMarginalAnalysisResultMethods:
             channel="New Channel",
             current_spend=0.0,
             spend_increase=1000.0,
-            spend_increase_pct=float('inf'),
+            spend_increase_pct=float("inf"),
             marginal_contribution=500.0,
             marginal_roas=0.5,
         )
@@ -333,7 +335,9 @@ class TestPeriodContributions:
         class MockContributionResults:
             channel_contributions = pd.DataFrame(
                 {"TV": [10, 20, 30, 40], "Digital": [5, 10, 15, 20]},
-                index=pd.MultiIndex.from_tuples([(0, "2024-01"), (1, "2024-02"), (2, "2024-03"), (3, "2024-04")]),
+                index=pd.MultiIndex.from_tuples(
+                    [(0, "2024-01"), (1, "2024-02"), (2, "2024-03"), (3, "2024-04")]
+                ),
             )
 
         results = MockContributionResults()
@@ -352,7 +356,9 @@ class TestPeriodContributions:
         class MockContributionResults:
             channel_contributions = pd.DataFrame(
                 {"TV": [10, 20, 30, 40]},
-                index=pd.MultiIndex.from_tuples([(0, "2024-01"), (1, "2024-02"), (2, "2024-03"), (3, "2024-04")]),
+                index=pd.MultiIndex.from_tuples(
+                    [(0, "2024-01"), (1, "2024-02"), (2, "2024-03"), (3, "2024-04")]
+                ),
             )
 
         results = MockContributionResults()
@@ -418,7 +424,9 @@ class TestMMMAnalyzerWhatIfScenario:
         class MockModel:
             _trace = "mock_trace"
 
-            def what_if_scenario(self, spend_changes, time_period=None, random_seed=None):
+            def what_if_scenario(
+                self, spend_changes, time_period=None, random_seed=None
+            ):
                 return expected_result
 
         analyzer = MMMAnalyzer(MockModel())
@@ -444,11 +452,13 @@ class TestMMMAnalyzerComputeChannelROI:
         class MockModel:
             _trace = "mock_trace"
             channel_names = ["TV", "Digital"]
-            X_media_raw = np.array([
-                [100, 50],
-                [150, 60],
-                [120, 40],
-            ])
+            X_media_raw = np.array(
+                [
+                    [100, 50],
+                    [150, 60],
+                    [120, 40],
+                ]
+            )
 
             def _get_time_mask(self, time_period):
                 return np.ones(3, dtype=bool)
@@ -456,7 +466,9 @@ class TestMMMAnalyzerComputeChannelROI:
         analyzer = MMMAnalyzer(MockModel())
 
         # Mock the compute_counterfactual_contributions
-        analyzer.compute_counterfactual_contributions = lambda **kwargs: MockContributionResults()
+        analyzer.compute_counterfactual_contributions = (
+            lambda **kwargs: MockContributionResults()
+        )
 
         result = analyzer.compute_channel_roi()
 
@@ -480,23 +492,27 @@ class TestMMMAnalyzerComputeChannelROI:
         class MockModel:
             _trace = "mock_trace"
             channel_names = ["TV"]
-            X_media_raw = np.array([
-                [100],
-                [150],
-                [120],
-                [180],
-            ])
+            X_media_raw = np.array(
+                [
+                    [100],
+                    [150],
+                    [120],
+                    [180],
+                ]
+            )
 
             def _get_time_mask(self, time_period):
                 if time_period is None:
                     return np.ones(4, dtype=bool)
                 start, end = time_period
                 mask = np.zeros(4, dtype=bool)
-                mask[start:end+1] = True
+                mask[start : end + 1] = True
                 return mask
 
         analyzer = MMMAnalyzer(MockModel())
-        analyzer.compute_counterfactual_contributions = lambda **kwargs: MockContributionResults()
+        analyzer.compute_counterfactual_contributions = (
+            lambda **kwargs: MockContributionResults()
+        )
 
         result = analyzer.compute_channel_roi(time_period=(0, 1))
 
@@ -523,7 +539,9 @@ class TestMMMAnalyzerComputeChannelROI:
                 return np.ones(3, dtype=bool)
 
         analyzer = MMMAnalyzer(MockModel())
-        analyzer.compute_counterfactual_contributions = lambda **kwargs: MockContributionResults()
+        analyzer.compute_counterfactual_contributions = (
+            lambda **kwargs: MockContributionResults()
+        )
 
         result = analyzer.compute_channel_roi()
 
@@ -580,9 +598,7 @@ class TestMMMAnalyzerComputeSaturationCurves:
         analyzer = MMMAnalyzer(MockModel())
 
         result = analyzer.compute_saturation_curves(
-            "TV",
-            spend_range=(0.0, 200.0),
-            n_points=10
+            "TV", spend_range=(0.0, 200.0), n_points=10
         )
 
         assert result["Spend Level"].min() == 0.0
@@ -611,10 +627,12 @@ class TestContributionResultsSummaryEdgeCases:
         from mmm_framework.model import ContributionResults
 
         results = ContributionResults(
-            channel_contributions=pd.DataFrame({
-                "TV": [100, 200, 300],
-                "Digital": [50, 100, 150],
-            }),
+            channel_contributions=pd.DataFrame(
+                {
+                    "TV": [100, 200, 300],
+                    "Digital": [50, 100, 150],
+                }
+            ),
             total_contributions=pd.Series({"TV": 600, "Digital": 300}),
             contribution_pct=pd.Series({"TV": 66.7, "Digital": 33.3}),
             baseline_prediction=np.ones(3) * 1000,
@@ -633,9 +651,11 @@ class TestContributionResultsSummaryEdgeCases:
         from mmm_framework.model import ContributionResults
 
         results = ContributionResults(
-            channel_contributions=pd.DataFrame({
-                "TV": [100, 200],
-            }),
+            channel_contributions=pd.DataFrame(
+                {
+                    "TV": [100, 200],
+                }
+            ),
             total_contributions=pd.Series({"TV": 300}),
             contribution_pct=pd.Series({"TV": 100.0}),
             baseline_prediction=np.ones(2) * 500,
@@ -752,10 +772,12 @@ class TestMediaSummaryEdgeCases:
             trend=np.zeros(5),
             seasonality=np.zeros(5),
             media_total=np.zeros(5),
-            media_by_channel=pd.DataFrame({
-                "TV": np.zeros(5),
-                "Digital": np.zeros(5),
-            }),
+            media_by_channel=pd.DataFrame(
+                {
+                    "TV": np.zeros(5),
+                    "Digital": np.zeros(5),
+                }
+            ),
             controls_total=np.zeros(5),
             controls_by_var=None,
             geo_effects=None,
@@ -787,7 +809,9 @@ class TestComputePeriodContributionsEdgeCases:
         class MockContributionResults:
             channel_contributions = pd.DataFrame(
                 {"TV": [10, 20, 30]},
-                index=pd.MultiIndex.from_tuples([(0, "2024-01"), (1, "2024-02"), (2, "2024-03")]),
+                index=pd.MultiIndex.from_tuples(
+                    [(0, "2024-01"), (1, "2024-02"), (2, "2024-03")]
+                ),
             )
 
         results = MockContributionResults()
@@ -834,10 +858,10 @@ class TestMarginalAnalysisResultEdgeCases:
             channel="New Channel",
             current_spend=0.0,
             spend_increase=500.0,
-            spend_increase_pct=float('inf'),
+            spend_increase_pct=float("inf"),
             marginal_contribution=250.0,
             marginal_roas=0.5,
         )
 
-        assert result.spend_increase_pct == float('inf')
+        assert result.spend_increase_pct == float("inf")
         assert result.marginal_roas == 0.5

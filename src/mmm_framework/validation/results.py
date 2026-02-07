@@ -454,9 +454,16 @@ class CVFoldResult:
     r2: float
     coverage: float  # % of observations within credible interval
 
+    # Optional prediction data for visualization
+    test_indices: np.ndarray | None = None  # Time indices of test observations
+    y_true: np.ndarray | None = None  # Actual test values
+    y_pred_mean: np.ndarray | None = None  # Predicted mean
+    y_pred_ci_low: np.ndarray | None = None  # Lower CI bound (e.g., 3%)
+    y_pred_ci_high: np.ndarray | None = None  # Upper CI bound (e.g., 97%)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result = {
             "fold_idx": self.fold_idx,
             "train_size": self.train_size,
             "test_size": self.test_size,
@@ -466,6 +473,18 @@ class CVFoldResult:
             "r2": self.r2,
             "coverage": self.coverage,
         }
+        # Include prediction data if available
+        if self.test_indices is not None:
+            result["test_indices"] = self.test_indices.tolist()
+        if self.y_true is not None:
+            result["y_true"] = self.y_true.tolist()
+        if self.y_pred_mean is not None:
+            result["y_pred_mean"] = self.y_pred_mean.tolist()
+        if self.y_pred_ci_low is not None:
+            result["y_pred_ci_low"] = self.y_pred_ci_low.tolist()
+        if self.y_pred_ci_high is not None:
+            result["y_pred_ci_high"] = self.y_pred_ci_high.tolist()
+        return result
 
 
 @dataclass
@@ -831,6 +850,9 @@ class ValidationSummary:
     warnings: list[str] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
 
+    # Full y_actual for CV time-series visualization (private)
+    _full_y_actual: np.ndarray | None = None
+
     def summary(self) -> pd.DataFrame:
         """Get high-level summary DataFrame."""
         rows = [
@@ -912,6 +934,10 @@ class ValidationSummary:
             try:
                 from .charts import (
                     create_acf_chart,
+                    create_cv_actual_vs_predicted_chart,
+                    create_cv_coverage_chart,
+                    create_cv_fold_metrics_chart,
+                    create_pit_histogram,
                     create_ppc_density_plot,
                     create_ppc_statistics_plot,
                     create_ppc_time_series_plot,
@@ -927,62 +953,330 @@ class ValidationSummary:
         else:
             charts_available = False
 
-        # Basic HTML template with Plotly support
+        # CSS styling matching the main MMM reports
+        css = """
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #6abf8a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+            --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+        }
+
+        .report-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .report-header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-dark) 100%);
+            color: white;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+        }
+
+        .report-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .report-header .date {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .quality-badge {
+            display: inline-block;
+            padding: 0.5rem 1.5rem;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 1rem;
+        }
+
+        .quality-badge.excellent { background: rgba(106, 191, 138, 0.3); }
+        .quality-badge.good { background: rgba(106, 191, 138, 0.2); }
+        .quality-badge.acceptable { background: rgba(212, 168, 106, 0.3); }
+        .quality-badge.poor { background: rgba(201, 112, 103, 0.3); }
+
+        .section {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--color-border);
+        }
+
+        .section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            color: var(--color-text);
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--color-primary);
+        }
+
+        .section h3 {
+            font-size: 1.2rem;
+            color: var(--color-text);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .section p {
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .metric-card {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .metric-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--color-primary-dark);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .metric-card .label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .metric-card.highlight { border-left: 4px solid var(--color-primary); }
+        .metric-card.warning { border-left: 4px solid var(--color-warning); }
+        .metric-card.danger { border-left: 4px solid var(--color-danger); }
+        .metric-card.success { border-left: 4px solid var(--color-success); }
+
+        .chart-container {
+            width: 100%;
+            min-height: 300px;
+            margin: 1.5rem 0;
+        }
+
+        .callout {
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .callout h4 {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .callout p, .callout ul {
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        .callout ul { margin-left: 1.5rem; }
+        .callout li { margin-bottom: 0.25rem; }
+
+        .callout.insight {
+            background: rgba(106, 143, 168, 0.1);
+            border: 1px solid rgba(106, 143, 168, 0.3);
+            border-left: 4px solid var(--color-accent);
+        }
+        .callout.insight h4 { color: var(--color-accent-dark); }
+
+        .callout.warning {
+            background: rgba(212, 168, 106, 0.1);
+            border: 1px solid rgba(212, 168, 106, 0.3);
+            border-left: 4px solid var(--color-warning);
+        }
+        .callout.warning h4 { color: #b8860b; }
+
+        .callout.success {
+            background: rgba(106, 191, 138, 0.1);
+            border: 1px solid rgba(106, 191, 138, 0.3);
+            border-left: 4px solid var(--color-success);
+        }
+        .callout.success h4 { color: #3d8b5a; }
+
+        .callout.danger {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+        }
+        .callout.danger h4 { color: var(--color-danger); }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .data-table th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .data-table tr:hover { background: var(--color-bg-alt); }
+
+        .data-table .mono { font-family: 'JetBrains Mono', monospace; }
+        .data-table .positive, .pass { color: var(--color-success); font-weight: 600; }
+        .data-table .negative, .fail { color: var(--color-danger); font-weight: 600; }
+        .data-table .uncertain, .warning-text { color: var(--color-warning); font-weight: 600; }
+
+        .report-footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .report-container { padding: 1rem; }
+            .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .report-header h1 { font-size: 1.8rem; }
+        }
+
+        @media print {
+            body { background: white; }
+            .section { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+            .chart-container { page-break-inside: avoid; }
+        }
+        """
+
+        # Build HTML with professional layout
         html_parts = [
             "<!DOCTYPE html>",
             "<html><head>",
             "<meta charset='utf-8'>",
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>",
             "<title>Model Validation Report</title>",
+            "<link href='https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono&display=swap' rel='stylesheet'>",
             "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>",
-            "<style>",
-            "body { font-family: Arial, sans-serif; margin: 20px; max-width: 1200px; margin: 0 auto; padding: 20px; }",
-            "h1 { color: #333; }",
-            "h2 { color: #666; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 30px; }",
-            "h3 { color: #888; margin-top: 20px; }",
-            "table { border-collapse: collapse; margin: 10px 0; width: 100%; }",
-            "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }",
-            "th { background-color: #f4f4f4; }",
-            ".pass { color: green; font-weight: bold; }",
-            ".fail { color: red; font-weight: bold; }",
-            ".warning { color: orange; font-weight: bold; }",
-            ".chart-container { margin: 20px 0; }",
-            ".summary-box { background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 10px 0; }",
-            ".good { background-color: #d4edda; }",
-            ".acceptable { background-color: #fff3cd; }",
-            ".poor { background-color: #f8d7da; }",
-            ".excellent { background-color: #cce5ff; }",
-            "</style>",
+            f"<style>{css}</style>",
             "</head><body>",
-            f"<h1>Model Validation Report: {self.model_name}</h1>",
-            f"<p>Generated: {self.validation_date}</p>",
-            f"<div class='summary-box {self.overall_quality}'>",
-            f"<strong>Overall Quality:</strong> {self.overall_quality.upper()}",
-            "</div>",
+            "<div class='report-container'>",
+            # Header
+            "<header class='report-header'>",
+            f"<h1>Model Validation Report</h1>",
+            f"<div class='subtitle'>{self.model_name}</div>",
+            f"<div class='date'>Generated: {self.validation_date}</div>",
+            f"<span class='quality-badge {self.overall_quality}'>{self.overall_quality}</span>",
+            "</header>",
         ]
 
         # Critical issues
         if self.critical_issues:
-            html_parts.append("<h2>Critical Issues</h2><ul>")
+            html_parts.append("<div class='callout danger'>")
+            html_parts.append("<h4>Critical Issues</h4>")
+            html_parts.append("<ul>")
             for issue in self.critical_issues:
-                html_parts.append(f"<li class='fail'>{issue}</li>")
-            html_parts.append("</ul>")
+                html_parts.append(f"<li>{issue}</li>")
+            html_parts.append("</ul></div>")
 
         # Warnings
         if self.warnings:
-            html_parts.append("<h2>Warnings</h2><ul>")
+            html_parts.append("<div class='callout warning'>")
+            html_parts.append("<h4>Warnings</h4>")
+            html_parts.append("<ul>")
             for warning in self.warnings:
-                html_parts.append(f"<li class='warning'>{warning}</li>")
-            html_parts.append("</ul>")
+                html_parts.append(f"<li>{warning}</li>")
+            html_parts.append("</ul></div>")
 
         # Convergence
         if self.convergence:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Convergence Diagnostics</h2>")
-            html_parts.append(self.convergence.summary().to_html(index=False))
+            # Metrics grid for key convergence stats
+            conv = self.convergence
+            conv_class = "success" if conv.converged else "danger"
+            html_parts.append("<div class='metrics-grid'>")
+            html_parts.append(
+                f"<div class='metric-card {conv_class}'><div class='value'>{conv.divergences}</div><div class='label'>Divergences</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{conv.rhat_max:.4f}</div><div class='label'>Max R-hat</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{conv.ess_bulk_min:.0f}</div><div class='label'>Min ESS (bulk)</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{conv.ess_tail_min:.0f}</div><div class='label'>Min ESS (tail)</div></div>"
+            )
+            html_parts.append("</div>")
+            html_parts.append("<h3>Detailed Summary</h3>")
+            html_parts.append(
+                self.convergence.summary().to_html(index=False, classes="data-table")
+            )
+            html_parts.append("</section>")
 
         # PPC with charts
         if self.ppc:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Posterior Predictive Checks</h2>")
-            html_parts.append(self.ppc.summary().to_html(index=False))
+            ppc_class = "success" if self.ppc.overall_pass else "warning"
+            html_parts.append(f"<div class='callout {ppc_class}'>")
+            html_parts.append(
+                f"<h4>{'All checks passed' if self.ppc.overall_pass else 'Some checks require attention'}</h4>"
+            )
+            if self.ppc.problematic_checks:
+                html_parts.append(
+                    f"<p>Problematic checks: {', '.join(self.ppc.problematic_checks)}</p>"
+                )
+            html_parts.append("</div>")
+            html_parts.append(
+                self.ppc.summary().to_html(index=False, classes="data-table")
+            )
 
             # Check if we have valid data for charts
             def _has_data(arr):
@@ -1006,9 +1300,13 @@ class ValidationSummary:
                 html_parts.append("<div class='chart-container'>")
                 try:
                     fig = create_ppc_time_series_plot(self.ppc.y_obs, self.ppc.y_rep)
-                    html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
                 except Exception as e:
-                    html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
                 html_parts.append("</div>")
 
                 # PPC Density Plot
@@ -1016,9 +1314,13 @@ class ValidationSummary:
                 html_parts.append("<div class='chart-container'>")
                 try:
                     fig = create_ppc_density_plot(self.ppc.y_obs, self.ppc.y_rep)
-                    html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
                 except Exception as e:
-                    html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
                 html_parts.append("</div>")
 
             # PPC Statistics Plot (always try if we have checks)
@@ -1027,15 +1329,41 @@ class ValidationSummary:
                 html_parts.append("<div class='chart-container'>")
                 try:
                     fig = create_ppc_statistics_plot(self.ppc.checks)
-                    html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
                 except Exception as e:
-                    html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
                 html_parts.append("</div>")
+
+            # PIT Histogram (Probability Integral Transform for calibration)
+            if has_ppc_data:
+                html_parts.append(
+                    "<h3>Probability Integral Transform (Calibration)</h3>"
+                )
+                html_parts.append("<div class='chart-container'>")
+                try:
+                    fig = create_pit_histogram(self.ppc.y_obs, self.ppc.y_rep)
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
+                except Exception as e:
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
+                html_parts.append("</div>")
+
+            html_parts.append("</section>")  # Close PPC section
 
         # Residuals with charts
         if self.residuals:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Residual Diagnostics</h2>")
-            html_parts.append(self.residuals.summary().to_html(index=False))
+            html_parts.append(
+                self.residuals.summary().to_html(index=False, classes="data-table")
+            )
 
             # Check if we have valid residual data
             def _has_data(arr):
@@ -1055,13 +1383,20 @@ class ValidationSummary:
                 html_parts.append("<div class='chart-container'>")
                 try:
                     fig = create_residual_time_series_plot(self.residuals.residuals)
-                    html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
                 except Exception as e:
-                    html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
                 html_parts.append("</div>")
 
                 # Residuals vs Fitted
-                has_fitted = self.residuals.fitted_values is not None and len(self.residuals.fitted_values) > 0
+                has_fitted = (
+                    self.residuals.fitted_values is not None
+                    and len(self.residuals.fitted_values) > 0
+                )
                 if has_fitted:
                     html_parts.append("<h3>Residuals vs Fitted Values</h3>")
                     html_parts.append("<div class='chart-container'>")
@@ -1069,9 +1404,13 @@ class ValidationSummary:
                         fig = create_residual_vs_fitted(
                             self.residuals.residuals, self.residuals.fitted_values
                         )
-                        html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                        html_parts.append(
+                            fig.to_html(full_html=False, include_plotlyjs=False)
+                        )
                     except Exception as e:
-                        html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                        html_parts.append(
+                            f"<p><em>Chart could not be generated: {e}</em></p>"
+                        )
                     html_parts.append("</div>")
 
                 # Q-Q Plot
@@ -1079,62 +1418,335 @@ class ValidationSummary:
                 html_parts.append("<div class='chart-container'>")
                 try:
                     fig = create_qq_plot(self.residuals.residuals)
-                    html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
                 except Exception as e:
-                    html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
                 html_parts.append("</div>")
 
                 # ACF Plot
-                has_acf = self.residuals.acf_values is not None and len(self.residuals.acf_values) > 0
+                has_acf = (
+                    self.residuals.acf_values is not None
+                    and len(self.residuals.acf_values) > 0
+                )
                 if has_acf:
                     html_parts.append("<h3>Autocorrelation Function (ACF)</h3>")
                     html_parts.append("<div class='chart-container'>")
                     try:
-                        pacf = self.residuals.pacf_values if hasattr(self.residuals, "pacf_values") else None
+                        pacf = (
+                            self.residuals.pacf_values
+                            if hasattr(self.residuals, "pacf_values")
+                            else None
+                        )
                         n_obs = len(self.residuals.residuals)
-                        fig = create_acf_chart(self.residuals.acf_values, pacf, n_obs=n_obs)
-                        html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                        fig = create_acf_chart(
+                            self.residuals.acf_values, pacf, n_obs=n_obs
+                        )
+                        html_parts.append(
+                            fig.to_html(full_html=False, include_plotlyjs=False)
+                        )
                     except Exception as e:
-                        html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                        html_parts.append(
+                            f"<p><em>Chart could not be generated: {e}</em></p>"
+                        )
                     html_parts.append("</div>")
+
+            html_parts.append("</section>")  # Close Residuals section
 
         # Channel diagnostics with charts
         if self.channel_diagnostics:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Channel Diagnostics</h2>")
-            html_parts.append(self.channel_diagnostics.summary().to_html(index=False))
+            html_parts.append(
+                self.channel_diagnostics.summary().to_html(
+                    index=False, classes="data-table"
+                )
+            )
 
             if charts_available and self.channel_diagnostics.vif_scores:
                 html_parts.append("<h3>Variance Inflation Factors (VIF)</h3>")
                 html_parts.append("<div class='chart-container'>")
                 try:
                     fig = create_vif_chart(self.channel_diagnostics)
-                    html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
                 except Exception as e:
-                    html_parts.append(f"<p><em>Chart could not be generated: {e}</em></p>")
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
                 html_parts.append("</div>")
+
+            html_parts.append("</section>")  # Close Channel Diagnostics section
 
         # Model comparison
         if self.model_comparison and self.model_comparison.models:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Model Comparison</h2>")
-            html_parts.append(self.model_comparison.summary().to_html(index=False))
+            html_parts.append(
+                self.model_comparison.summary().to_html(
+                    index=False, classes="data-table"
+                )
+            )
+            html_parts.append("</section>")
 
         # Cross-validation
         if self.cross_validation:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Cross-Validation Results</h2>")
-            html_parts.append(self.cross_validation.summary().to_html(index=False))
+            cv = self.cross_validation
+            # Metrics grid for CV summary
+            html_parts.append("<div class='metrics-grid'>")
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{cv.strategy}</div><div class='label'>Strategy</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{cv.n_folds}</div><div class='label'>Folds</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{cv.mean_r2:.4f}</div><div class='label'>Mean R²</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{cv.mean_coverage:.1%}</div><div class='label'>Mean Coverage</div></div>"
+            )
+            html_parts.append("</div>")
+            html_parts.append("<h3>Per-Fold Metrics</h3>")
+            html_parts.append(
+                cv.fold_summary().to_html(index=False, classes="data-table")
+            )
+            html_parts.append("<h3>Aggregate Performance</h3>")
+            html_parts.append("<table class='data-table'>")
+            html_parts.append("<tr><th>Metric</th><th>Value</th></tr>")
+            html_parts.append(
+                f"<tr><td>Mean RMSE</td><td class='mono'>{cv.mean_rmse:.4f}</td></tr>"
+            )
+            html_parts.append(
+                f"<tr><td>Mean MAE</td><td class='mono'>{cv.mean_mae:.4f}</td></tr>"
+            )
+            html_parts.append(
+                f"<tr><td>Mean MAPE</td><td class='mono'>{cv.mean_mape:.2f}%</td></tr>"
+            )
+            html_parts.append(
+                f"<tr><td>Mean R²</td><td class='mono'>{cv.mean_r2:.4f}</td></tr>"
+            )
+            html_parts.append(
+                f"<tr><td>Mean Coverage</td><td class='mono'>{cv.mean_coverage:.1%}</td></tr>"
+            )
+            html_parts.append("</table>")
+
+            # CV Charts
+            if charts_available and cv.fold_results:
+                # CV Fold Metrics Chart
+                html_parts.append("<h3>Performance by Fold</h3>")
+                html_parts.append("<div class='chart-container'>")
+                try:
+                    fig = create_cv_fold_metrics_chart(
+                        cv.fold_results, cv.mean_rmse, cv.mean_mae, cv.mean_r2
+                    )
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
+                except Exception as e:
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
+                html_parts.append("</div>")
+
+                # CV Coverage Chart
+                html_parts.append("<h3>Credible Interval Coverage by Fold</h3>")
+                html_parts.append("<div class='chart-container'>")
+                try:
+                    fig = create_cv_coverage_chart(cv.fold_results, cv.mean_coverage)
+                    html_parts.append(
+                        fig.to_html(full_html=False, include_plotlyjs=False)
+                    )
+                except Exception as e:
+                    html_parts.append(
+                        f"<p><em>Chart could not be generated: {e}</em></p>"
+                    )
+                html_parts.append("</div>")
+
+                # CV Actual vs Predicted Time Series
+                # Check if prediction data is available (first fold has y_pred_mean)
+                if (
+                    cv.fold_results[0].y_pred_mean is not None
+                    and self._full_y_actual is not None
+                ):
+                    html_parts.append("<h3>Actual vs Predicted by Fold</h3>")
+                    html_parts.append("<div class='chart-container'>")
+                    try:
+                        fig = create_cv_actual_vs_predicted_chart(
+                            cv.fold_results,
+                            self._full_y_actual,
+                            title="Cross-Validation: Actual vs Predicted (Out-of-Sample)",
+                        )
+                        html_parts.append(
+                            fig.to_html(full_html=False, include_plotlyjs=False)
+                        )
+                    except Exception as e:
+                        html_parts.append(
+                            f"<p><em>Chart could not be generated: {e}</em></p>"
+                        )
+                    html_parts.append("</div>")
+
+            html_parts.append("</section>")  # Close CV section
+
+        # Sensitivity Analysis
+        if self.sensitivity:
+            html_parts.append("<section class='section'>")
+            html_parts.append("<h2>Sensitivity Analysis</h2>")
+            sens = self.sensitivity
+            n_robust = len(sens.robust_parameters)
+            n_sensitive = len(sens.sensitive_parameters)
+            status_class = (
+                "success"
+                if n_sensitive == 0
+                else "warning" if n_sensitive < 3 else "danger"
+            )
+            html_parts.append(
+                f"<div class='callout {status_class}'>"
+                f"<h4>{'All parameters are robust' if n_sensitive == 0 else 'Some parameters show sensitivity'}</h4>"
+                f"<p><strong>Robust Parameters:</strong> {n_robust} | "
+                f"<strong>Sensitive Parameters:</strong> {n_sensitive}</p>"
+                f"</div>"
+            )
+            html_parts.append("<h3>Base Estimates</h3>")
+            html_parts.append("<table class='data-table'>")
+            html_parts.append(
+                "<tr><th>Parameter</th><th>Estimate</th><th>Sensitivity Index</th><th>Status</th></tr>"
+            )
+            for param, value in sens.base_estimates.items():
+                sens_idx = sens.sensitivity_indices.get(param, 0)
+                is_robust = param in sens.robust_parameters
+                status = (
+                    "<span class='positive'>Robust</span>"
+                    if is_robust
+                    else "<span class='negative'>Sensitive</span>"
+                )
+                html_parts.append(
+                    f"<tr><td>{param}</td><td class='mono'>{value:.4f}</td><td class='mono'>{sens_idx:.3f}</td><td>{status}</td></tr>"
+                )
+            html_parts.append("</table>")
+            if sens.sensitive_parameters:
+                html_parts.append("<h3>Sensitive Parameters (Require Attention)</h3>")
+                html_parts.append("<ul>")
+                for p in sens.sensitive_parameters:
+                    html_parts.append(f"<li class='warning-text'>{p}</li>")
+                html_parts.append("</ul>")
+            html_parts.append("</section>")
+
+        # Stability Analysis
+        if self.stability:
+            html_parts.append("<section class='section'>")
+            html_parts.append("<h2>Stability Analysis</h2>")
+            stab = self.stability
+            score = stab.stability_score
+            score_class = (
+                "success" if score >= 0.8 else "warning" if score >= 0.6 else "danger"
+            )
+            n_influential = len(stab.influential_observations)
+            html_parts.append("<div class='metrics-grid'>")
+            html_parts.append(
+                f"<div class='metric-card {score_class}'><div class='value'>{score:.2f}</div><div class='label'>Stability Score</div></div>"
+            )
+            html_parts.append(
+                f"<div class='metric-card'><div class='value'>{n_influential}</div><div class='label'>Influential Observations</div></div>"
+            )
+            html_parts.append("</div>")
+            if stab.influence_results:
+                inf = stab.influence_results
+                html_parts.append("<h3>Influence Diagnostics (LOO Pareto-k)</h3>")
+                html_parts.append("<table class='data-table'>")
+                html_parts.append("<tr><th>Metric</th><th>Value</th></tr>")
+                html_parts.append(
+                    f"<tr><td>Threshold</td><td class='mono'>{inf.influence_threshold}</td></tr>"
+                )
+                html_parts.append(
+                    f"<tr><td>Max Pareto-k</td><td class='mono'>{inf.observation_influence.max():.3f}</td></tr>"
+                )
+                html_parts.append(
+                    f"<tr><td>Mean Pareto-k</td><td class='mono'>{inf.observation_influence.mean():.3f}</td></tr>"
+                )
+                html_parts.append(
+                    f"<tr><td>Observations > Threshold</td><td class='mono'>{n_influential}</td></tr>"
+                )
+                html_parts.append("</table>")
+            if stab.bootstrap_results:
+                boot = stab.bootstrap_results
+                html_parts.append("<h3>Bootstrap Results</h3>")
+                html_parts.append(
+                    f"<p><strong>Bootstrap Iterations:</strong> {boot.n_bootstrap}</p>"
+                )
+                html_parts.append("<table class='data-table'>")
+                html_parts.append(
+                    "<tr><th>Parameter</th><th>Mean</th><th>Std</th><th>95% CI</th></tr>"
+                )
+                for param in boot.parameter_means:
+                    mean = boot.parameter_means[param]
+                    std = boot.parameter_stds[param]
+                    ci_low = boot.parameter_ci_low[param]
+                    ci_high = boot.parameter_ci_high[param]
+                    html_parts.append(
+                        f"<tr><td>{param}</td><td class='mono'>{mean:.4f}</td><td class='mono'>{std:.4f}</td>"
+                        f"<td class='mono'>[{ci_low:.4f}, {ci_high:.4f}]</td></tr>"
+                    )
+                html_parts.append("</table>")
+            html_parts.append("</section>")
 
         # Calibration
         if self.calibration:
+            html_parts.append("<section class='section'>")
             html_parts.append("<h2>Calibration Results</h2>")
-            html_parts.append(self.calibration.summary().to_html(index=False))
+            calib = self.calibration
+            status_class = "success" if calib.calibrated else "danger"
+            status_text = "CALIBRATED" if calib.calibrated else "NOT CALIBRATED"
+            html_parts.append(
+                f"<div class='callout {status_class}'>"
+                f"<h4>{status_text}</h4>"
+                f"<p><strong>Coverage Rate:</strong> {calib.coverage_rate:.1%} | "
+                f"<strong>Mean Abs. Error:</strong> {calib.mean_absolute_calibration_error:.1%}</p>"
+                f"</div>"
+            )
+            html_parts.append("<h3>Lift Test Comparisons</h3>")
+            html_parts.append("<table class='data-table'>")
+            html_parts.append(
+                "<tr><th>Channel</th><th>Model Estimate</th><th>Model 94% CI</th>"
+                "<th>Experimental</th><th>Within CI</th><th>Relative Error</th></tr>"
+            )
+            for comp in calib.lift_test_comparisons:
+                within_class = "positive" if comp.within_ci else "negative"
+                within_text = "Yes" if comp.within_ci else "No"
+                html_parts.append(
+                    f"<tr><td>{comp.channel}</td>"
+                    f"<td class='mono'>{comp.model_estimate:,.0f}</td>"
+                    f"<td class='mono'>[{comp.model_ci_low:,.0f}, {comp.model_ci_high:,.0f}]</td>"
+                    f"<td class='mono'>{comp.experimental_estimate:,.0f} ± {comp.experimental_se:,.0f}</td>"
+                    f"<td class='{within_class}'>{within_text}</td>"
+                    f"<td class='mono'>{comp.relative_error:+.1%}</td></tr>"
+                )
+            html_parts.append("</table>")
+            html_parts.append("</section>")
 
         # Recommendations
         if self.recommendations:
-            html_parts.append("<h2>Recommendations</h2><ul>")
+            html_parts.append("<section class='section'>")
+            html_parts.append("<h2>Recommendations</h2>")
+            html_parts.append("<div class='callout insight'>")
+            html_parts.append("<h4>Suggested Actions</h4>")
+            html_parts.append("<ul>")
             for rec in self.recommendations:
                 html_parts.append(f"<li>{rec}</li>")
-            html_parts.append("</ul>")
+            html_parts.append("</ul></div>")
+            html_parts.append("</section>")
 
+        # Footer
+        html_parts.append("<footer class='report-footer'>")
+        html_parts.append("<p>Generated by MMM Framework Validation Module</p>")
+        html_parts.append("</footer>")
+        html_parts.append("</div>")  # Close report-container
         html_parts.append("</body></html>")
         return "\n".join(html_parts)
 

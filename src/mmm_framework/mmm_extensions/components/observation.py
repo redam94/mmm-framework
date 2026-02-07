@@ -191,7 +191,9 @@ def build_aggregated_survey_observation(
         elif config.aggregation_function == "last":
             agg_value = latent[constituent_indices[-1]]
         else:
-            raise ValueError(f"Unknown aggregation function: {config.aggregation_function}")
+            raise ValueError(
+                f"Unknown aggregation function: {config.aggregation_function}"
+            )
 
         aggregated_latent.append(agg_value)
 
@@ -213,8 +215,7 @@ def build_aggregated_survey_observation(
 
     elif config.likelihood == AggregatedSurveyLikelihood.BETA_BINOMIAL:
         _build_beta_binomial_observation(
-            name, mu, observed_data, n,
-            is_proportion, config.overdispersion_prior_sigma
+            name, mu, observed_data, n, is_proportion, config.overdispersion_prior_sigma
         )
 
     else:
@@ -286,7 +287,7 @@ def _build_beta_binomial_observation(
     p = pt.clip(mu, 1e-6, 1 - 1e-6)
 
     # Overdispersion parameter (concentration)
-    kappa = pm.HalfNormal(f"{name}_kappa", sigma=1/overdispersion_prior_sigma)
+    kappa = pm.HalfNormal(f"{name}_kappa", sigma=1 / overdispersion_prior_sigma)
 
     # Reparameterize: alpha = p * kappa, beta = (1-p) * kappa
     alpha = p * kappa
@@ -329,6 +330,7 @@ def compute_survey_observation_indices(
     if start_date is not None:
         # Calendar-based aggregation
         import pandas as pd
+
         dates = pd.date_range(
             start=start_date, periods=n_periods, freq=model_frequency[0].upper()
         )
@@ -433,9 +435,7 @@ def build_mediator_observation_dispatch(
     elif obs_type == MediatorObservationType.AGGREGATED_SURVEY:
         # Aggregated survey with sample-size-dependent noise
         if med_config.aggregated_survey_config is None:
-            raise ValueError(
-                f"aggregated_survey_config required for {med_name}"
-            )
+            raise ValueError(f"aggregated_survey_config required for {med_name}")
         build_aggregated_survey_observation(
             name=med_name,
             latent=mediator_latent,

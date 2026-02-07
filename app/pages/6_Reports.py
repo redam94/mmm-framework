@@ -26,7 +26,6 @@ from components import (
     status_icon,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -344,14 +343,16 @@ def render_report_monitor():
                         use_container_width=True,
                     )
 
-                    st.caption(f"File: {filename} ({format_bytes(len(report_content))})")
+                    st.caption(
+                        f"File: {filename} ({format_bytes(len(report_content))})"
+                    )
 
                 except Exception as e:
                     st.error(f"Failed to download: {e}")
             if report_content:
                 st.markdown("---")
                 st.markdown("### 📄 Report Preview")
-                
+
                 # Render the HTML report in an iframe-like component
                 components.html(
                     report_content.decode("utf-8"),
@@ -410,16 +411,16 @@ def render_existing_reports():
 
         # Report selector + preview layout
         col_list, col_preview = st.columns([1, 2])
-        
+
         with col_list:
             st.markdown("#### Available Reports")
-            
+
             for i, report in enumerate(reports):
                 rid = report.get("report_id")
                 filename = report.get("filename", "Unknown")
                 created_at = report.get("created_at", "")
                 size = report.get("size_bytes", 0)
-                
+
                 # Format datetime
                 date_str = ""
                 if created_at:
@@ -433,12 +434,12 @@ def render_existing_reports():
                 with st.container():
                     st.markdown(f"**{filename}**")
                     st.caption(f"{date_str} • {format_bytes(size)}")
-                    
+
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
                         if st.button("👁️", key=f"view_{rid}", help="Preview"):
                             st.session_state.preview_report_id = rid
-                    
+
                     with btn_col2:
                         try:
                             content = api_client.download_report(model_id, rid)
@@ -452,14 +453,14 @@ def render_existing_reports():
                             )
                         except:
                             st.button("📥", disabled=True, key=f"dl_{rid}")
-                    
+
                     st.markdown("---")
 
         with col_preview:
             st.markdown("#### Preview")
-            
+
             preview_rid = st.session_state.get("preview_report_id")
-            
+
             if preview_rid:
                 try:
                     report_content = api_client.download_report(model_id, preview_rid)
@@ -477,6 +478,7 @@ def render_existing_reports():
         display_api_error(e)
     except Exception as e:
         st.error(f"Error loading reports: {e}")
+
 
 # =============================================================================
 # Main

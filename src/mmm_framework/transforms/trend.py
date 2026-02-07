@@ -87,11 +87,13 @@ def create_bspline_basis(
     interior_knots = np.linspace(0, 1, n_interior + 2)[1:-1]
 
     # Add boundary knots (repeated for clamping)
-    knots = np.concatenate([
-        np.zeros(degree + 1),
-        interior_knots,
-        np.ones(degree + 1),
-    ])
+    knots = np.concatenate(
+        [
+            np.zeros(degree + 1),
+            interior_knots,
+            np.ones(degree + 1),
+        ]
+    )
 
     # Number of basis functions
     n_basis = len(knots) - degree - 1

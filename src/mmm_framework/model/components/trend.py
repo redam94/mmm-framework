@@ -173,10 +173,12 @@ class SplineTrendStrategy(BaseTrendStrategy):
             )
 
             # Cumulative sum to get coefficients
-            coefs = pt.concatenate([
-                pt.atleast_1d(coef_init),
-                coef_init + pt.cumsum(coef_diffs),
-            ])
+            coefs = pt.concatenate(
+                [
+                    pt.atleast_1d(coef_init),
+                    coef_init + pt.cumsum(coef_diffs),
+                ]
+            )
 
             # Spline trend
             trend = pt.dot(basis, coefs)

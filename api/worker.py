@@ -142,9 +142,9 @@ async def fit_model_task(
         )
         import pytensor
 
-        pytensor.config.exception_verbosity = 'high'
-        pytensor.config.mode == 'NUMBA'
-        pytensor.config.cxx = "" 
+        pytensor.config.exception_verbosity = "high"
+        pytensor.config.mode == "NUMBA"
+        pytensor.config.cxx = ""
         # Build MFF config from dict
         mff_builder = MFFConfigBuilder()
 
@@ -467,6 +467,7 @@ async def fit_model_task(
         }
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
 
         error_msg = str(e)
@@ -592,6 +593,7 @@ async def run_scenario_task(
             "error": str(e),
         }
 
+
 async def fit_extended_model_task(
     ctx: dict,
     model_id: str,
@@ -677,7 +679,9 @@ async def fit_extended_model_task(
                     model_settings[key] = overrides[key]
 
         # Import extended models
-        await update_status(JobStatus.RUNNING, 15.0, "Building extended model configuration...")
+        await update_status(
+            JobStatus.RUNNING, 15.0, "Building extended model configuration..."
+        )
 
         from mmm_framework.mmm_extensions import (
             NestedMMM,
@@ -714,7 +718,9 @@ async def fit_extended_model_task(
             kpi = config.get("kpi", {})
             y = df[kpi.get("name", "Sales")].values
         else:
-            outcome_names = [o["name"] if isinstance(o, dict) else o for o in outcome_columns]
+            outcome_names = [
+                o["name"] if isinstance(o, dict) else o for o in outcome_columns
+            ]
 
         # Build model based on type
         await update_status(JobStatus.RUNNING, 25.0, f"Building {model_type} model...")
@@ -735,7 +741,9 @@ async def fit_extended_model_task(
                 elif med_type == "fully_observed":
                     med_builder.fully_observed(med_dict.get("observation_noise", 0.05))
                 else:
-                    med_builder.partially_observed(med_dict.get("observation_noise", 0.1))
+                    med_builder.partially_observed(
+                        med_dict.get("observation_noise", 0.1)
+                    )
 
                 # Set effects
                 if med_dict.get("positive_media_effect", True):
@@ -747,7 +755,9 @@ async def fit_extended_model_task(
                 builder.add_mediator(med_builder.build())
 
             # Add channel-mediator mappings
-            for med_name, channels in nested_config_dict.get("media_to_mediator_map", {}).items():
+            for med_name, channels in nested_config_dict.get(
+                "media_to_mediator_map", {}
+            ).items():
                 builder.map_channels_to_mediator(med_name, channels)
 
             nested_config = builder.build()
@@ -781,7 +791,9 @@ async def fit_extended_model_task(
 
             # Add outcomes
             for out_dict in outcomes_list:
-                out_builder = OutcomeConfigBuilder(out_dict["name"], out_dict.get("column"))
+                out_builder = OutcomeConfigBuilder(
+                    out_dict["name"], out_dict.get("column")
+                )
                 if out_dict.get("positive_media_effects", False):
                     out_builder.with_positive_media_effects()
                 builder.add_outcome(out_builder.build())
@@ -854,7 +866,9 @@ async def fit_extended_model_task(
                 elif med_type == "fully_observed":
                     med_builder.fully_observed(med_dict.get("observation_noise", 0.05))
                 else:
-                    med_builder.partially_observed(med_dict.get("observation_noise", 0.1))
+                    med_builder.partially_observed(
+                        med_dict.get("observation_noise", 0.1)
+                    )
 
                 if med_dict.get("positive_media_effect", True):
                     med_builder.with_positive_media_effect()
@@ -863,13 +877,17 @@ async def fit_extended_model_task(
 
             # Add outcomes
             for out_dict in mv_part.get("outcomes", []):
-                out_builder = OutcomeConfigBuilder(out_dict["name"], out_dict.get("column"))
+                out_builder = OutcomeConfigBuilder(
+                    out_dict["name"], out_dict.get("column")
+                )
                 builder.add_outcome(out_builder.build())
 
             # Add cross-effects
             for ce_dict in mv_part.get("cross_effects", []):
                 if ce_dict.get("effect_type") == "halo":
-                    builder.with_halo_effect(ce_dict["source_outcome"], ce_dict["target_outcome"])
+                    builder.with_halo_effect(
+                        ce_dict["source_outcome"], ce_dict["target_outcome"]
+                    )
                 else:
                     builder.with_cannibalization(
                         ce_dict["source_outcome"],
@@ -878,7 +896,9 @@ async def fit_extended_model_task(
                     )
 
             # Map mediators to outcomes
-            for med_name, outcomes in combined_config_dict.get("mediator_to_outcome_map", {}).items():
+            for med_name, outcomes in combined_config_dict.get(
+                "mediator_to_outcome_map", {}
+            ).items():
                 builder.map_mediator_to_outcomes(med_name, outcomes)
 
             combined_config = builder.build()
@@ -921,7 +941,9 @@ async def fit_extended_model_task(
 
         # Fit model
         await update_status(
-            JobStatus.RUNNING, 35.0, f"Fitting {model_type} model (this may take several minutes)..."
+            JobStatus.RUNNING,
+            35.0,
+            f"Fitting {model_type} model (this may take several minutes)...",
         )
 
         n_draws = model_settings.get("n_draws", 1000)
@@ -945,11 +967,22 @@ async def fit_extended_model_task(
         # Extract diagnostics
         try:
             import arviz as az
+
             summary = az.summary(results.trace)
             diagnostics = {
-                "divergences": int(results.trace.sample_stats.get("diverging", []).sum() if hasattr(results.trace, "sample_stats") else 0),
-                "rhat_max": float(summary["r_hat"].max()) if "r_hat" in summary.columns else 1.0,
-                "ess_bulk_min": float(summary["ess_bulk"].min()) if "ess_bulk" in summary.columns else 0,
+                "divergences": int(
+                    results.trace.sample_stats.get("diverging", []).sum()
+                    if hasattr(results.trace, "sample_stats")
+                    else 0
+                ),
+                "rhat_max": (
+                    float(summary["r_hat"].max()) if "r_hat" in summary.columns else 1.0
+                ),
+                "ess_bulk_min": (
+                    float(summary["ess_bulk"].min())
+                    if "ess_bulk" in summary.columns
+                    else 0
+                ),
             }
         except Exception as e:
             logger.warning(f"Could not extract diagnostics: {e}")
@@ -977,7 +1010,9 @@ async def fit_extended_model_task(
             # Get mediation effects
             try:
                 mediation_df = model.get_mediation_effects()
-                results_summary["mediation_effects"] = mediation_df.to_dict(orient="records")
+                results_summary["mediation_effects"] = mediation_df.to_dict(
+                    orient="records"
+                )
             except Exception as e:
                 logger.warning(f"Could not extract mediation effects: {e}")
 
@@ -987,7 +1022,9 @@ async def fit_extended_model_task(
             # Get cross-effects
             try:
                 cross_effects_df = model.get_cross_effects_summary()
-                results_summary["cross_effects"] = cross_effects_df.to_dict(orient="records")
+                results_summary["cross_effects"] = cross_effects_df.to_dict(
+                    orient="records"
+                )
             except Exception as e:
                 logger.warning(f"Could not extract cross effects: {e}")
             # Get correlation matrix
@@ -1005,7 +1042,9 @@ async def fit_extended_model_task(
             # Get effect decomposition
             try:
                 decomp_df = model.get_effect_decomposition()
-                results_summary["effect_decomposition"] = decomp_df.to_dict(orient="records")
+                results_summary["effect_decomposition"] = decomp_df.to_dict(
+                    orient="records"
+                )
             except Exception as e:
                 logger.warning(f"Could not extract effect decomposition: {e}")
 
@@ -1220,6 +1259,7 @@ async def generate_report_task(
             "error": str(e),
         }
 
+
 # =============================================================================
 # Cron Jobs
 # =============================================================================
@@ -1250,7 +1290,6 @@ async def cleanup_old_jobs(ctx: dict):
                 continue
 
     return {"cleaned_jobs": cleaned}
-
 
 
 # =============================================================================

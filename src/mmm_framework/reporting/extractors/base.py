@@ -24,8 +24,7 @@ class HasTrace(Protocol):
     """Protocol for objects with ArviZ InferenceData trace."""
 
     @property
-    def trace(self) -> Any:
-        ...
+    def trace(self) -> Any: ...
 
 
 @runtime_checkable
@@ -33,8 +32,7 @@ class HasModel(Protocol):
     """Protocol for objects with PyMC model."""
 
     @property
-    def model(self) -> Any:
-        ...
+    def model(self) -> Any: ...
 
 
 class DataExtractor(ABC):

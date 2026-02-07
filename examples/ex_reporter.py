@@ -31,30 +31,30 @@ from mmm_framework.reporting.data_extractors import MMMDataBundle
 def create_synthetic_data_bundle() -> MMMDataBundle:
     """
     Create a synthetic data bundle for demonstration.
-    
+
     In real usage, this would be extracted automatically from your fitted model.
     """
     np.random.seed(42)
     n_weeks = 156  # 3 years
-    
+
     # Generate dates
     dates = pd.date_range("2023-01-01", periods=n_weeks, freq="W-MON")
-    
+
     # Generate actual revenue with trend, seasonality, and noise
     trend = np.linspace(14, 18, n_weeks)
     seasonality = 2 * np.sin(2 * np.pi * np.arange(n_weeks) / 52)
     noise = np.random.normal(0, 0.5, n_weeks)
     actual = trend + seasonality + noise
-    
+
     # Generate predictions with uncertainty
     pred_mean = actual + np.random.normal(0, 0.2, n_weeks)
     pred_std = 0.5 + 0.2 * np.random.random(n_weeks)
     pred_lower = pred_mean - 1.28 * pred_std
     pred_upper = pred_mean + 1.28 * pred_std
-    
+
     # Channel data
     channels = ["TV", "Paid_Search", "Paid_Social", "Display", "Radio"]
-    
+
     # ROI with uncertainty (TV highest, Radio lowest)
     channel_roi = {
         "TV": {"mean": 1.45, "lower": 1.10, "upper": 1.82},
@@ -63,7 +63,7 @@ def create_synthetic_data_bundle() -> MMMDataBundle:
         "Display": {"mean": 1.15, "lower": 0.65, "upper": 1.68},
         "Radio": {"mean": 0.82, "lower": 0.45, "upper": 1.22},
     }
-    
+
     # Component totals for waterfall
     component_totals = {
         "Baseline": 680.0,
@@ -73,7 +73,7 @@ def create_synthetic_data_bundle() -> MMMDataBundle:
         "Display": 12.8,
         "Radio": 5.4,
     }
-    
+
     # Component time series for stacked area
     component_ts = {}
     for comp, total in component_totals.items():
@@ -81,27 +81,29 @@ def create_synthetic_data_bundle() -> MMMDataBundle:
             component_ts[comp] = trend + np.random.normal(0, 0.1, n_weeks)
         else:
             base = total / n_weeks
-            component_ts[comp] = base + base * 0.3 * np.sin(2 * np.pi * np.arange(n_weeks) / 52 + np.random.random() * np.pi)
+            component_ts[comp] = base + base * 0.3 * np.sin(
+                2 * np.pi * np.arange(n_weeks) / 52 + np.random.random() * np.pi
+            )
             component_ts[comp] = np.maximum(component_ts[comp], 0)
-    
+
     # Saturation curves
     saturation_curves = {}
     for ch in channels:
         spend_range = np.linspace(0, 100000, 100)
         k = np.random.uniform(30000, 60000)  # Half-saturation point
         s = np.random.uniform(1.2, 2.5)  # Slope
-        response = spend_range ** s / (k ** s + spend_range ** s)
+        response = spend_range**s / (k**s + spend_range**s)
         saturation_curves[ch] = {"spend": spend_range, "response": response * 10000}
-    
+
     # Adstock curves
     adstock_curves = {}
     for ch in channels:
         alpha = np.random.uniform(0.3, 0.8)
         l_max = np.random.randint(4, 10)
         lags = np.arange(l_max)
-        weights = alpha ** lags
+        weights = alpha**lags
         adstock_curves[ch] = weights / weights.sum()
-    
+
     # Current spend levels
     current_spend = {
         "TV": 45000,
@@ -110,7 +112,7 @@ def create_synthetic_data_bundle() -> MMMDataBundle:
         "Display": 15000,
         "Radio": 8000,
     }
-    
+
     # Fit statistics
     fit_statistics = {
         "r2": 0.92,
@@ -118,7 +120,7 @@ def create_synthetic_data_bundle() -> MMMDataBundle:
         "mae": 0.35,
         "mape": 0.023,
     }
-    
+
     # Diagnostics
     diagnostics = {
         "divergences": 0,
@@ -126,11 +128,13 @@ def create_synthetic_data_bundle() -> MMMDataBundle:
         "ess_bulk_min": 1250,
         "ess_tail_min": 980,
     }
-    
+
     # Summary metrics
     total_revenue = float(actual.sum() * 1e6)  # Scale to millions
-    marketing_contribution = sum(v for k, v in component_totals.items() if k != "Baseline")
-    
+    marketing_contribution = sum(
+        v for k, v in component_totals.items() if k != "Baseline"
+    )
+
     return MMMDataBundle(
         dates=dates,
         actual=actual * 1e6,
@@ -183,10 +187,10 @@ def example_basic_report():
     print("=" * 60)
     print("Example 1: Basic Report")
     print("=" * 60)
-    
+
     # Create synthetic data
     data = create_synthetic_data_bundle()
-    
+
     # Create report generator
     report = MMMReportGenerator(
         data=data,
@@ -197,12 +201,12 @@ def example_basic_report():
             analysis_period="Jan 2023 – Dec 2025",
         ),
     )
-    
+
     # Save report
     output_path = Path("mmm_report_basic.html")
     report.to_html(output_path)
     print(f"Report saved to: {output_path}")
-    
+
     return output_path
 
 
@@ -211,9 +215,9 @@ def example_custom_sections():
     print("\n" + "=" * 60)
     print("Example 2: Custom Section Configuration")
     print("=" * 60)
-    
+
     data = create_synthetic_data_bundle()
-    
+
     # Create config with custom sections
     config = ReportConfig(
         title="Executive MMM Summary",
@@ -237,13 +241,13 @@ def example_custom_sections():
             custom_notes="Contact the data science team for technical documentation.",
         ),
     )
-    
+
     report = MMMReportGenerator(data=data, config=config)
-    
+
     output_path = Path("mmm_report_executive.html")
     report.to_html(output_path)
     print(f"Report saved to: {output_path}")
-    
+
     return output_path
 
 
@@ -252,9 +256,9 @@ def example_builder_pattern():
     print("\n" + "=" * 60)
     print("Example 3: Fluent Builder Pattern")
     print("=" * 60)
-    
+
     data = create_synthetic_data_bundle()
-    
+
     # Use builder for fluent API
     report = (
         ReportBuilder()
@@ -267,11 +271,11 @@ def example_builder_pattern():
         .disable_section("diagnostics")
         .build()
     )
-    
+
     output_path = Path("mmm_report_builder.html")
     report.to_html(output_path)
     print(f"Report saved to: {output_path}")
-    
+
     return output_path
 
 
@@ -280,9 +284,9 @@ def example_color_schemes():
     print("\n" + "=" * 60)
     print("Example 4: Color Scheme Customization")
     print("=" * 60)
-    
+
     data = create_synthetic_data_bundle()
-    
+
     for palette in [ColorPalette.SAGE, ColorPalette.CORPORATE, ColorPalette.WARM]:
         config = ReportConfig(
             title=f"MMM Report ({palette.value.title()} Theme)",
@@ -294,7 +298,7 @@ def example_color_schemes():
             sensitivity=SectionConfig(enabled=False),
             diagnostics=SectionConfig(enabled=False),
         )
-        
+
         report = MMMReportGenerator(data=data, config=config)
         output_path = Path(f"mmm_report_{palette.value}.html")
         report.to_html(output_path)
@@ -306,9 +310,9 @@ def example_minimal_report():
     print("\n" + "=" * 60)
     print("Example 5: Minimal Stakeholder Report")
     print("=" * 60)
-    
+
     data = create_synthetic_data_bundle()
-    
+
     report = (
         ReportBuilder()
         .with_data(data)
@@ -317,25 +321,25 @@ def example_minimal_report():
         .minimal_report()  # Only executive summary, ROI, methodology
         .build()
     )
-    
+
     output_path = Path("mmm_report_minimal.html")
     report.to_html(output_path)
     print(f"Report saved to: {output_path}")
-    
+
     return output_path
 
 
 def example_with_model():
     """
     Example showing integration with BayesianMMM model.
-    
+
     Note: This requires a fitted BayesianMMM instance.
     Uncomment and adapt for your actual model.
     """
     print("\n" + "=" * 60)
     print("Example 6: Integration with BayesianMMM (Template)")
     print("=" * 60)
-    
+
     print("""
     # Template for integrating with your fitted model:
     
@@ -370,7 +374,7 @@ if __name__ == "__main__":
     example_color_schemes()
     example_minimal_report()
     example_with_model()
-    
+
     print("\n" + "=" * 60)
     print("All examples completed!")
     print("=" * 60)

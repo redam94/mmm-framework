@@ -589,9 +589,7 @@ def create_model_fit_chart_with_dimension_filter(
     )
 
     product_colors = (
-        _generate_dimension_colors(
-            product_names, colors, offset=len(geo_names or [])
-        )
+        _generate_dimension_colors(product_names, colors, offset=len(geo_names or []))
         if has_product
         else {}
     )
@@ -780,9 +778,7 @@ def create_fit_statistics_with_geo_selector(
     colors = config.color_scheme if config else ColorScheme()
 
     has_geo = (
-        geo_names is not None
-        and len(geo_names) > 1
-        and fit_stats_by_geo is not None
+        geo_names is not None and len(geo_names) > 1 and fit_stats_by_geo is not None
     )
 
     # Build options for dropdown

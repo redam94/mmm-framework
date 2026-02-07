@@ -27,7 +27,6 @@ from components import (
     confirm_dialog,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -162,7 +161,9 @@ def render_dataset_list():
 
                 # Confirm delete dialog
                 if st.session_state.get(f"confirm_delete_{dataset.data_id}", False):
-                    st.warning(f"⚠️ Delete '{dataset.filename}'? This cannot be undone.")
+                    st.warning(
+                        f"⚠️ Delete '{dataset.filename}'? This cannot be undone."
+                    )
                     col_yes, col_no = st.columns(2)
                     with col_yes:
                         if st.button(
@@ -282,13 +283,21 @@ def render_dataset_details():
             )
 
         with col3:
-            if st.button("📥 Download", use_container_width=True, key=f"download_btn_{data_id}"):
+            if st.button(
+                "📥 Download", use_container_width=True, key=f"download_btn_{data_id}"
+            ):
                 try:
                     with st.spinner("Preparing download..."):
-                        content = client.download_dataset(data_id, format=download_format)
+                        content = client.download_dataset(
+                            data_id, format=download_format
+                        )
 
                     # Determine filename and mime type
-                    base_filename = dataset.filename.rsplit(".", 1)[0] if "." in dataset.filename else dataset.filename
+                    base_filename = (
+                        dataset.filename.rsplit(".", 1)[0]
+                        if "." in dataset.filename
+                        else dataset.filename
+                    )
                     if download_format == "csv":
                         filename = f"{base_filename}.csv"
                         mime_type = "text/csv"

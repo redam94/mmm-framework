@@ -263,9 +263,7 @@ class BayesianMMM:
                 "c": self.trend_config.gp_c,
             }
 
-    def _get_time_mask(
-        self, time_period: tuple[int, int] | None
-    ) -> NDArray[np.bool_]:
+    def _get_time_mask(self, time_period: tuple[int, int] | None) -> NDArray[np.bool_]:
         """Create boolean mask for time period filtering."""
         if time_period is not None:
             start_idx, end_idx = time_period
@@ -604,7 +602,9 @@ class BayesianMMM:
 
             sigma = pm.HalfNormal("sigma", sigma=0.5)
             y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
-            pm.Deterministic("y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs")
+            pm.Deterministic(
+                "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
+            )
 
         return model
 
@@ -732,10 +732,12 @@ class BayesianMMM:
         X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(X_media)
 
         with self.model:
-            pm.set_data({
-                "X_media_low": X_adstock_low,
-                "X_media_high": X_adstock_high,
-            })
+            pm.set_data(
+                {
+                    "X_media_low": X_adstock_low,
+                    "X_media_high": X_adstock_high,
+                }
+            )
 
             if X_controls is not None and self.n_controls > 0:
                 X_controls_std = (X_controls - self.control_mean) / self.control_std
@@ -823,7 +825,9 @@ class BayesianMMM:
             controls_by_var = None
 
         geo_effects = geo_scaled * self.y_std if geo_scaled is not None else None
-        product_effects = product_scaled * self.y_std if product_scaled is not None else None
+        product_effects = (
+            product_scaled * self.y_std if product_scaled is not None else None
+        )
 
         total_intercept = float(intercept.sum())
         total_trend = float(trend.sum())
@@ -831,7 +835,9 @@ class BayesianMMM:
         total_media = float(media_total.sum())
         total_controls = float(controls_total.sum())
         total_geo = float(geo_effects.sum()) if geo_effects is not None else None
-        total_product = float(product_effects.sum()) if product_effects is not None else None
+        total_product = (
+            float(product_effects.sum()) if product_effects is not None else None
+        )
 
         return ComponentDecomposition(
             intercept=intercept,
@@ -1025,13 +1031,15 @@ class BayesianMMM:
                 marginal_contrib / spend_increase if spend_increase > 0 else 0
             )
 
-            results.append({
-                "Channel": channel,
-                "Current Spend": current_spend,
-                f"Spend Increase ({spend_increase_pct}%)": spend_increase,
-                "Marginal Contribution": marginal_contrib,
-                "Marginal ROAS": marginal_roas,
-            })
+            results.append(
+                {
+                    "Channel": channel,
+                    "Current Spend": current_spend,
+                    f"Spend Increase ({spend_increase_pct}%)": spend_increase,
+                    "Marginal Contribution": marginal_contrib,
+                    "Marginal ROAS": marginal_roas,
+                }
+            )
 
         return pd.DataFrame(results)
 

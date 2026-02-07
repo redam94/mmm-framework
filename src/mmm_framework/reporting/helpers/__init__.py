@@ -110,7 +110,6 @@ from .summary import (
     generate_model_summary,
 )
 
-
 __all__ = [
     # Protocols
     "HasTrace",

@@ -28,7 +28,6 @@ from mmm_framework.reporting.config import (
 )
 from mmm_framework.reporting.data_extractors import MMMDataBundle
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -44,9 +43,7 @@ def sample_data_bundle():
     bundle = MMMDataBundle()
     bundle.periods = pd.date_range("2024-01-01", periods=n_obs, freq="W")
     bundle.channel_names = channels
-    bundle.y_actual = pd.Series(
-        1000 + np.random.randn(n_obs) * 100, name="Sales"
-    )
+    bundle.y_actual = pd.Series(1000 + np.random.randn(n_obs) * 100, name="Sales")
     bundle.y_predicted_mean = bundle.y_actual + np.random.randn(n_obs) * 20
     bundle.y_predicted_lower = bundle.y_predicted_mean - 50
     bundle.y_predicted_upper = bundle.y_predicted_mean + 50
@@ -144,9 +141,7 @@ class TestMMMReportGeneratorInit:
         """Test initialization with sensitivity results."""
         sensitivity = {"spec_a": {"r_squared": 0.85}, "spec_b": {"r_squared": 0.82}}
 
-        generator = MMMReportGenerator(
-            data=sample_data_bundle, sensitivity=sensitivity
-        )
+        generator = MMMReportGenerator(data=sample_data_bundle, sensitivity=sensitivity)
 
         assert generator.data.sensitivity_results == sensitivity
 
@@ -607,10 +602,7 @@ class TestReportBuilder:
     def test_build_creates_generator(self, sample_data_bundle):
         """Test build creates MMMReportGenerator."""
         generator = (
-            ReportBuilder()
-            .with_data(sample_data_bundle)
-            .with_title("Test")
-            .build()
+            ReportBuilder().with_data(sample_data_bundle).with_title("Test").build()
         )
 
         assert isinstance(generator, MMMReportGenerator)

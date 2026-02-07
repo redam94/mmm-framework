@@ -120,9 +120,7 @@ class TestExtendedModelConfigCreate:
                         ],
                         "cross_effects": [],
                     },
-                    "mediator_to_outcome_map": {
-                        "awareness": ["Sales"]
-                    },
+                    "mediator_to_outcome_map": {"awareness": ["Sales"]},
                 },
             },
         }
@@ -166,7 +164,9 @@ class TestExtendedModelConfigGet:
                 "kpi": {"name": "Sales", "dimensions": ["Period"]},
                 "media_channels": [{"name": "TV_Spend", "dimensions": ["Period"]}],
                 "nested_config": {
-                    "mediators": [{"name": "awareness", "mediator_type": "fully_latent"}],
+                    "mediators": [
+                        {"name": "awareness", "mediator_type": "fully_latent"}
+                    ],
                 },
             },
         }
@@ -205,7 +205,9 @@ class TestExtendedModelFit:
                 "kpi": {"name": "Sales", "dimensions": ["Period"]},
                 "media_channels": [{"name": "TV_Spend", "dimensions": ["Period"]}],
                 "nested_config": {
-                    "mediators": [{"name": "awareness", "mediator_type": "fully_latent"}],
+                    "mediators": [
+                        {"name": "awareness", "mediator_type": "fully_latent"}
+                    ],
                 },
             },
         }

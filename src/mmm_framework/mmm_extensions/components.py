@@ -28,7 +28,7 @@ from .config import (
     AggregatedSurveyConfig,
     AggregatedSurveyLikelihood,
     MediatorConfigExtended,
-    MediatorObservationType
+    MediatorObservationType,
 )
 
 # =============================================================================
@@ -1586,6 +1586,7 @@ def summarize_variable_selection(
 
     return df
 
+
 def build_aggregated_survey_observation(
     name: str,
     latent: pt.TensorVariable,
@@ -1595,12 +1596,12 @@ def build_aggregated_survey_observation(
 ) -> None:
     """
     Build observation model for temporally aggregated survey data.
-    
+
     This handles the case where:
     1. Surveys are fielded continuously over a period (e.g., month)
     2. Results are aggregated across that period
     3. Sample size varies by wave (heteroskedastic observation noise)
-    
+
     Parameters
     ----------
     name : str
@@ -1620,7 +1621,7 @@ def build_aggregated_survey_observation(
     aggregated_latent = []
     for obs_idx in sorted(config.aggregation_map.keys()):
         constituent_indices = list(config.aggregation_map[obs_idx])
-        
+
         if config.aggregation_function == "mean":
             agg_value = latent[constituent_indices].mean()
         elif config.aggregation_function == "sum":
@@ -1628,32 +1629,33 @@ def build_aggregated_survey_observation(
         elif config.aggregation_function == "last":
             agg_value = latent[constituent_indices[-1]]
         else:
-            raise ValueError(f"Unknown aggregation function: {config.aggregation_function}")
-        
+            raise ValueError(
+                f"Unknown aggregation function: {config.aggregation_function}"
+            )
+
         aggregated_latent.append(agg_value)
-    
+
     # Stack into tensor
     mu = pt.stack(aggregated_latent)
-    
+
     # Sample sizes as array
     n = np.array(config.sample_sizes)
-    
+
     # Effective sample size (accounting for design effect)
     n_eff = n / config.design_effect
-    
+
     # Build likelihood based on config
     if config.likelihood == AggregatedSurveyLikelihood.BINOMIAL:
         _build_binomial_observation(name, mu, observed_data, n, is_proportion)
-    
+
     elif config.likelihood == AggregatedSurveyLikelihood.NORMAL:
         _build_normal_observation(name, mu, observed_data, n_eff, is_proportion)
-    
+
     elif config.likelihood == AggregatedSurveyLikelihood.BETA_BINOMIAL:
         _build_beta_binomial_observation(
-            name, mu, observed_data, n, 
-            is_proportion, config.overdispersion_prior_sigma
+            name, mu, observed_data, n, is_proportion, config.overdispersion_prior_sigma
         )
-    
+
     else:
         raise ValueError(f"Unknown likelihood: {config.likelihood}")
 
@@ -1671,10 +1673,10 @@ def _build_binomial_observation(
         observed_counts = np.round(observed_data * sample_sizes).astype(int)
     else:
         observed_counts = observed_data.astype(int)
-    
+
     # Clamp latent probability to valid range
     p = pt.clip(mu, 1e-6, 1 - 1e-6)
-    
+
     pm.Binomial(
         f"{name}_obs",
         n=sample_sizes,
@@ -1692,19 +1694,19 @@ def _build_normal_observation(
 ) -> None:
     """
     Normal approximation with sample-size-dependent standard errors.
-    
+
     Uses observed proportions as plug-in estimate for SE calculation.
     More appropriate when sample sizes are large (>100) and proportions
     are not near 0 or 1.
     """
     if not is_proportion:
         raise ValueError("Normal likelihood requires proportion data")
-    
+
     # Standard error from binomial sampling: SE = sqrt(p*(1-p)/n)
     # Use observed proportions as plug-in
     p_obs = np.clip(observed_data, 0.01, 0.99)  # Avoid edge cases
     sampling_se = np.sqrt(p_obs * (1 - p_obs) / n_eff)
-    
+
     pm.Normal(
         f"{name}_obs",
         mu=mu,
@@ -1723,7 +1725,7 @@ def _build_beta_binomial_observation(
 ) -> None:
     """
     Beta-binomial likelihood for overdispersed survey data.
-    
+
     Useful when there's extra-binomial variation due to:
     - Response clustering
     - Interviewer effects
@@ -1733,18 +1735,18 @@ def _build_beta_binomial_observation(
         observed_counts = np.round(observed_data * sample_sizes).astype(int)
     else:
         observed_counts = observed_data.astype(int)
-    
+
     # Clamp mean probability
     p = pt.clip(mu, 1e-6, 1 - 1e-6)
-    
+
     # Overdispersion parameter (concentration)
     # Higher kappa = less overdispersion (approaches binomial)
-    kappa = pm.HalfNormal(f"{name}_kappa", sigma=1/overdispersion_prior_sigma)
-    
+    kappa = pm.HalfNormal(f"{name}_kappa", sigma=1 / overdispersion_prior_sigma)
+
     # Reparameterize: alpha = p * kappa, beta = (1-p) * kappa
     alpha = p * kappa
     beta = (1 - p) * kappa
-    
+
     pm.BetaBinomial(
         f"{name}_obs",
         n=sample_sizes,
@@ -1762,9 +1764,9 @@ def compute_survey_observation_indices(
 ) -> dict[int, tuple[int, ...]]:
     """
     Compute aggregation map from model and survey frequencies.
-    
+
     Convenience function to generate aggregation_map for common cases.
-    
+
     Parameters
     ----------
     model_frequency : str
@@ -1776,12 +1778,12 @@ def compute_survey_observation_indices(
     start_date : str, optional
         Start date for calendar-based aggregation (ISO format).
         If None, uses simple numeric grouping.
-    
+
     Returns
     -------
     dict[int, tuple[int, ...]]
         Aggregation map suitable for AggregatedSurveyConfig.
-    
+
     Examples
     --------
     >>> # Weekly model with monthly surveys (4 weeks per month)
@@ -1791,8 +1793,11 @@ def compute_survey_observation_indices(
     if start_date is not None:
         # Calendar-based aggregation
         import pandas as pd
-        dates = pd.date_range(start=start_date, periods=n_periods, freq=model_frequency[0].upper())
-        
+
+        dates = pd.date_range(
+            start=start_date, periods=n_periods, freq=model_frequency[0].upper()
+        )
+
         if survey_frequency == "monthly":
             groups = dates.to_period("M")
         elif survey_frequency == "quarterly":
@@ -1801,15 +1806,15 @@ def compute_survey_observation_indices(
             groups = dates.to_period("W")
         else:
             raise ValueError(f"Unknown survey frequency: {survey_frequency}")
-        
+
         aggregation_map = {}
         for survey_idx, period in enumerate(groups.unique()):
             mask = groups == period
             indices = tuple(np.where(mask)[0])
             aggregation_map[survey_idx] = indices
-        
+
         return aggregation_map
-    
+
     else:
         # Simple numeric grouping
         if model_frequency == "weekly" and survey_frequency == "monthly":
@@ -1824,16 +1829,17 @@ def compute_survey_observation_indices(
             raise ValueError(
                 f"Unsupported frequency combination: {model_frequency} -> {survey_frequency}"
             )
-        
+
         n_surveys = n_periods // periods_per_survey
         aggregation_map = {}
-        
+
         for survey_idx in range(n_surveys):
             start = survey_idx * periods_per_survey
             end = start + periods_per_survey
             aggregation_map[survey_idx] = tuple(range(start, min(end, n_periods)))
-        
+
         return aggregation_map
+
 
 def build_mediator_observation_dispatch(
     med_config: MediatorConfigExtended,
@@ -1843,10 +1849,10 @@ def build_mediator_observation_dispatch(
 ) -> None:
     """
     Dispatch to appropriate observation model based on mediator type.
-    
+
     This function should be called from _build_mediator_model in NestedMMM
     to replace the existing observation model logic.
-    
+
     Parameters
     ----------
     med_config : MediatorConfigExtended
@@ -1860,17 +1866,17 @@ def build_mediator_observation_dispatch(
     """
     med_name = med_config.name
     obs_type = med_config.observation_type
-    
+
     if obs_type == MediatorObservationType.FULLY_LATENT:
         # No observation model
         return
-    
+
     if med_name not in mediator_data:
         # No data provided
         return
-    
+
     obs_data = mediator_data[med_name]
-    
+
     if obs_type == MediatorObservationType.FULLY_OBSERVED:
         # Every period observed with constant noise
         pm.Normal(
@@ -1879,7 +1885,7 @@ def build_mediator_observation_dispatch(
             sigma=med_config.observation_noise_sigma,
             observed=obs_data,
         )
-    
+
     elif obs_type == MediatorObservationType.PARTIALLY_OBSERVED:
         # Sparse point-in-time observations
         mask = mediator_masks.get(med_name, ~np.isnan(obs_data))
@@ -1889,13 +1895,11 @@ def build_mediator_observation_dispatch(
             sigma=med_config.observation_noise_sigma,
             observed=obs_data[mask],
         )
-    
+
     elif obs_type == MediatorObservationType.AGGREGATED_SURVEY:
         # Aggregated survey with sample-size-dependent noise
         if med_config.aggregated_survey_config is None:
-            raise ValueError(
-                f"aggregated_survey_config required for {med_name}"
-            )
+            raise ValueError(f"aggregated_survey_config required for {med_name}")
         build_aggregated_survey_observation(
             name=med_name,
             latent=mediator_latent,
@@ -1903,6 +1907,6 @@ def build_mediator_observation_dispatch(
             config=med_config.aggregated_survey_config,
             is_proportion=True,  # Assume proportions for awareness
         )
-    
+
     else:
         raise ValueError(f"Unknown observation type: {obs_type}")

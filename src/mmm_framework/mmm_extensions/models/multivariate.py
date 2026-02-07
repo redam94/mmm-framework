@@ -116,7 +116,9 @@ class MultivariateMMM(BaseExtendedMMM):
             compute_cross_effect_contribution,
         )
         from ..components.observation import build_multivariate_likelihood
-        from ..components.transforms import logistic_saturation_pt as logistic_saturation
+        from ..components.transforms import (
+            logistic_saturation_pt as logistic_saturation,
+        )
 
         coords = self._build_coords()
 

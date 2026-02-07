@@ -59,6 +59,14 @@ from .config import (
     ValidationConfig,
     ValidationLevel,
 )
+from .frozen_predictor import (
+    FrozenPredictor,
+    FrozenPredictorConfig,
+    FrozenPredictorError,
+    FrozenPredictorOutput,
+    create_frozen_predictor,
+    create_frozen_predictor_from_model,
+)
 from .posterior_predictive import PPCValidator
 from .protocols import (
     HasControlData,
@@ -101,6 +109,13 @@ __all__ = [
     "PPCValidator",
     "ResidualDiagnostics",
     "ChannelDiagnostics",
+    # Frozen Predictor
+    "FrozenPredictor",
+    "FrozenPredictorConfig",
+    "FrozenPredictorError",
+    "FrozenPredictorOutput",
+    "create_frozen_predictor",
+    "create_frozen_predictor_from_model",
     # Config
     "ValidationConfig",
     "ValidationLevel",

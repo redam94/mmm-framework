@@ -35,16 +35,19 @@ class MMMResults:
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
         import arviz as az
+
         return az.summary(self.trace, var_names=var_names)
 
     def plot_trace(self, var_names: list[str] | None = None, **kwargs):
         """Plot trace diagnostics."""
         import arviz as az
+
         return az.plot_trace(self.trace, var_names=var_names, **kwargs)
 
     def plot_posterior(self, var_names: list[str] | None = None, **kwargs):
         """Plot posterior distributions."""
         import arviz as az
+
         return az.plot_posterior(self.trace, var_names=var_names, **kwargs)
 
 

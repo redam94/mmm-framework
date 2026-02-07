@@ -64,16 +64,10 @@ def compute_mediated_effects(
         try:
             df = model.get_mediation_effects()
             # Verify it's actually a DataFrame with expected columns
-            if (
-                isinstance(df, pd.DataFrame)
-                and len(df) > 0
-                and "channel" in df.columns
-            ):
+            if isinstance(df, pd.DataFrame) and len(df) > 0 and "channel" in df.columns:
                 return _convert_mediation_df(df, hdi_prob)
         except Exception as e:
-            logger.debug(
-                f"Model mediation method failed or returned invalid data: {e}"
-            )
+            logger.debug(f"Model mediation method failed or returned invalid data: {e}")
 
     # Manual computation from trace
     return _compute_mediation_from_trace(model, hdi_prob)
@@ -176,9 +170,7 @@ def _compute_mediation_from_trace(
                 total_mean = float(np.mean(total_samples))
                 total_lower, total_upper = _compute_hdi(total_samples, hdi_prob)
 
-                prop_mediated = (
-                    indirect_mean / total_mean if total_mean != 0 else 0.0
-                )
+                prop_mediated = indirect_mean / total_mean if total_mean != 0 else 0.0
 
                 results.append(
                     MediatedEffectResult(

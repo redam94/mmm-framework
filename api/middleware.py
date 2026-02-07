@@ -37,8 +37,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         # Log incoming request
         logger.info(
-            f"[{request_id}] {request.method} {request.url.path} "
-            f"from {client_ip}"
+            f"[{request_id}] {request.method} {request.url.path} " f"from {client_ip}"
         )
 
         # Process request and measure time

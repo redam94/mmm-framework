@@ -70,7 +70,9 @@ def _build_media_config(
 ) -> MediaChannelConfig:
     """Build MediaChannelConfig from DAG node."""
     # Parse node config
-    media_config = MediaNodeConfig(**{k: v for k, v in config.items() if k in MediaNodeConfig.model_fields})
+    media_config = MediaNodeConfig(
+        **{k: v for k, v in config.items() if k in MediaNodeConfig.model_fields}
+    )
 
     # Build adstock config
     adstock = AdstockConfig(
@@ -90,12 +92,18 @@ def _build_media_config(
             alpha=media_config.saturation_kappa_prior_alpha,
             beta=media_config.saturation_kappa_prior_beta,
         ),
-        slope_prior=PriorConfig.half_normal(sigma=media_config.saturation_slope_prior_sigma),
-        beta_prior=PriorConfig.half_normal(sigma=media_config.saturation_beta_prior_sigma),
+        slope_prior=PriorConfig.half_normal(
+            sigma=media_config.saturation_slope_prior_sigma
+        ),
+        beta_prior=PriorConfig.half_normal(
+            sigma=media_config.saturation_beta_prior_sigma
+        ),
     )
 
     # Build coefficient prior
-    coefficient_prior = PriorConfig.half_normal(sigma=media_config.coefficient_prior_sigma)
+    coefficient_prior = PriorConfig.half_normal(
+        sigma=media_config.coefficient_prior_sigma
+    )
 
     return MediaChannelConfig(
         name=variable_name,
@@ -117,7 +125,9 @@ def _build_control_config(
 ) -> ControlVariableConfig:
     """Build ControlVariableConfig from DAG node."""
     # Parse node config
-    control_config = ControlNodeConfig(**{k: v for k, v in config.items() if k in ControlNodeConfig.model_fields})
+    control_config = ControlNodeConfig(
+        **{k: v for k, v in config.items() if k in ControlNodeConfig.model_fields}
+    )
 
     # Build coefficient prior
     if control_config.allow_negative:
@@ -152,7 +162,9 @@ def _build_kpi_config(
 ) -> KPIConfig:
     """Build KPIConfig from DAG node."""
     # Parse node config
-    kpi_config = KPINodeConfig(**{k: v for k, v in config.items() if k in KPINodeConfig.model_fields})
+    kpi_config = KPINodeConfig(
+        **{k: v for k, v in config.items() if k in KPINodeConfig.model_fields}
+    )
 
     return KPIConfig(
         name=variable_name,
@@ -269,7 +281,9 @@ def dag_to_nested_config(dag: DAGSpec):
     for mediator_node in dag.mediator_nodes:
         # Parse mediator config
         config = mediator_node.config
-        med_config = MediatorNodeConfig(**{k: v for k, v in config.items() if k in MediatorNodeConfig.model_fields})
+        med_config = MediatorNodeConfig(
+            **{k: v for k, v in config.items() if k in MediatorNodeConfig.model_fields}
+        )
 
         # Map mediator type string to enum
         mediator_type_map = {
@@ -366,7 +380,9 @@ def dag_to_multivariate_config(dag: DAGSpec):
     # Process all outcome nodes (KPI + OUTCOME)
     for outcome_node in dag.outcome_nodes:
         config = outcome_node.config
-        out_config = OutcomeNodeConfig(**{k: v for k, v in config.items() if k in OutcomeNodeConfig.model_fields})
+        out_config = OutcomeNodeConfig(
+            **{k: v for k, v in config.items() if k in OutcomeNodeConfig.model_fields}
+        )
 
         outcome_config = OutcomeConfig(
             name=outcome_node.variable_name,

@@ -200,9 +200,7 @@ def validate_dag(dag: DAGSpec) -> ValidationResult:
     for media_node in media:
         has_path_to_outcome = _has_path_to_outcome(dag, media_node.id)
         if not has_path_to_outcome:
-            warnings.append(
-                f"MEDIA node '{media_node.id}' has no path to any outcome"
-            )
+            warnings.append(f"MEDIA node '{media_node.id}' has no path to any outcome")
 
     for control_node in dag.control_nodes:
         has_path_to_outcome = _has_path_to_outcome(dag, control_node.id)

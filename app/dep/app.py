@@ -425,13 +425,11 @@ def render_data_tab():
 
     with col2:
         st.markdown("**Expected MFF Format:**")
-        st.code(
-            """
+        st.code("""
 Period,Geography,Product,...,VariableName,VariableValue
 2022-01-03,,,,...,Sales,1234.56
 2022-01-03,,,,...,TV,50000.00
-        """
-        )
+        """)
 
     # Data preview
     if st.session_state.data is not None:
@@ -1311,12 +1309,10 @@ def render_model_fit(results, mmm):
     """Render posterior predictive model fit."""
     st.subheader("🎯 Model Fit")
 
-    st.markdown(
-        """
+    st.markdown("""
     This plot shows the observed data against the model's posterior predictions.
     The shaded band represents the prediction uncertainty (HDI).
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     dim_info = get_dimension_info(mmm, panel)
@@ -1480,12 +1476,10 @@ def render_prior_vs_posterior(results, mmm):
     """Render prior vs posterior comparison plots."""
     st.subheader("🔄 Prior vs Posterior")
 
-    st.markdown(
-        """
+    st.markdown("""
     Compare how the data updated our prior beliefs. 
     Significant differences indicate the data is informative about the parameter.
-    """
-    )
+    """)
 
     posterior = results.trace.posterior
     channel_names = mmm.channel_names
@@ -1626,14 +1620,12 @@ def render_prior_vs_posterior(results, mmm):
 
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-    st.info(
-        """
+    st.info("""
     💡 **Interpretation:**
     - **Std Reduction %**: Higher values indicate the data is more informative for that parameter.
     - If prior and posterior are similar, the data provides little information about that parameter.
     - Large shifts from prior to posterior mean indicate strong evidence from the data.
-    """
-    )
+    """)
 
 
 @st.fragment
@@ -1766,12 +1758,10 @@ def render_response_curves(results, mmm):
     """Render response curves with HDI bands."""
     st.subheader("📈 Response Curves")
 
-    st.markdown(
-        """
+    st.markdown("""
     Response curves show how media spend translates to sales effect after accounting for 
     saturation (diminishing returns). The shaded bands represent the HDI (Highest Density Interval).
-    """
-    )
+    """)
 
     channel_names = mmm.channel_names
     posterior = results.trace.posterior
@@ -1952,12 +1942,10 @@ def render_component_breakdown(results, mmm):
     """Render full component decomposition of the model."""
     st.subheader("🧩 Component Breakdown")
 
-    st.markdown(
-        """
+    st.markdown("""
     This analysis breaks down the model's predictions into individual components:
     base (intercept), trend, seasonality, media effects, and control variables.
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     dim_info = get_dimension_info(mmm, panel)
@@ -2273,13 +2261,11 @@ def render_trend_tab(results, mmm, decomp, dim_info, posterior):
             )
             st.plotly_chart(fig_slope, use_container_width=True)
 
-            st.markdown(
-                f"""
+            st.markdown(f"""
             **Interpretation:**
             - Mean slope: {slope_samples.mean() * mmm.y_std:+.2f} per week
             - {(slope_samples > 0).mean() * 100:.1f}% probability of positive trend
-            """
-            )
+            """)
 
     elif trend_type == "Piecewise (Prophet-style)":
         if "trend_delta" in posterior:
@@ -2350,13 +2336,11 @@ def render_trend_tab(results, mmm, decomp, dim_info, posterior):
                     )
                     st.plotly_chart(fig_amp, use_container_width=True)
 
-            st.markdown(
-                f"""
+            st.markdown(f"""
             **GP Interpretation:**
             - Mean lengthscale: {ls_samples.mean():.3f} (≈ {ls_samples.mean() * mmm.n_periods:.1f} weeks)
             - Longer lengthscale = smoother trend
-            """
-            )
+            """)
 
 
 @st.fragment
@@ -2577,14 +2561,12 @@ def render_contributions(results, mmm):
     """Render channel contributions using counterfactual analysis."""
     st.subheader("💰 Channel Contributions (Counterfactual)")
 
-    st.markdown(
-        """
+    st.markdown("""
     **Counterfactual Contribution Analysis**: For each channel, we compare the baseline 
     prediction (with all channels) to a counterfactual scenario (with that channel zeroed out).
     The difference represents the channel's true contribution, properly accounting for 
     saturation and adstock effects.
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     dim_info = get_dimension_info(mmm, panel)
@@ -2837,12 +2819,10 @@ def render_scenario_planning(results, mmm):
     """Render scenario planning and what-if analysis."""
     st.subheader("🔮 Scenario Planning")
 
-    st.markdown(
-        """
+    st.markdown("""
     Simulate how changes in media spend would affect outcomes. This uses the fitted model
     to predict outcomes under different budget scenarios.
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     channel_names = mmm.channel_names

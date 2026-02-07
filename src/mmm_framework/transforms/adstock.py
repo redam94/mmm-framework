@@ -66,9 +66,7 @@ def geometric_adstock(x: NDArray[np.floating], alpha: float) -> NDArray[np.float
     return result
 
 
-def geometric_adstock_2d(
-    X: NDArray[np.floating], alpha: float
-) -> NDArray[np.floating]:
+def geometric_adstock_2d(X: NDArray[np.floating], alpha: float) -> NDArray[np.floating]:
     """
     Apply geometric adstock to a 2D array (multiple channels).
 

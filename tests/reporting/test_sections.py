@@ -33,7 +33,6 @@ from mmm_framework.reporting.config import (
 )
 from mmm_framework.reporting.data_extractors import MMMDataBundle
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -174,9 +173,7 @@ class TestSectionBase:
 
         assert section.title == "Custom Title"
 
-    def test_section_title_default_fallback(
-        self, sample_data_bundle, sample_config
-    ):
+    def test_section_title_default_fallback(self, sample_data_bundle, sample_config):
         """Test section uses default title when not specified."""
         section_config = SectionConfig(enabled=True)
         section = ExecutiveSummarySection(
@@ -209,9 +206,7 @@ class TestSectionBase:
         )
         assert section.is_enabled is False
 
-    def test_render_section_wrapper_structure(
-        self, sample_data_bundle, sample_config
-    ):
+    def test_render_section_wrapper_structure(self, sample_data_bundle, sample_config):
         """Test section wrapper HTML structure."""
         section_config = SectionConfig(enabled=True)
         section = ExecutiveSummarySection(
@@ -242,13 +237,9 @@ class TestSectionBase:
         assert "Custom Subtitle" in html
         assert 'class="section-subtitle"' in html
 
-    def test_render_section_wrapper_with_notes(
-        self, sample_data_bundle, sample_config
-    ):
+    def test_render_section_wrapper_with_notes(self, sample_data_bundle, sample_config):
         """Test section wrapper includes custom notes."""
-        section_config = SectionConfig(
-            enabled=True, custom_notes="Important note here"
-        )
+        section_config = SectionConfig(enabled=True, custom_notes="Important note here")
         section = ExecutiveSummarySection(
             data=sample_data_bundle,
             config=sample_config,
@@ -344,9 +335,7 @@ class TestModelFitSection:
 
         assert isinstance(html, str)
 
-    def test_render_missing_data_returns_empty(
-        self, empty_data_bundle, sample_config
-    ):
+    def test_render_missing_data_returns_empty(self, empty_data_bundle, sample_config):
         """Test render with missing data."""
         section_config = SectionConfig(enabled=True)
         section = ModelFitSection(
@@ -394,9 +383,7 @@ class TestChannelROISection:
 
         assert isinstance(html, str)
 
-    def test_render_missing_roi_returns_empty(
-        self, empty_data_bundle, sample_config
-    ):
+    def test_render_missing_roi_returns_empty(self, empty_data_bundle, sample_config):
         """Test render with missing ROI data."""
         section_config = SectionConfig(enabled=True)
         section = ChannelROISection(
@@ -606,9 +593,7 @@ class TestGeographicSection:
 
         assert section.render() == ""
 
-    def test_render_missing_geo_returns_empty(
-        self, sample_data_bundle, sample_config
-    ):
+    def test_render_missing_geo_returns_empty(self, sample_data_bundle, sample_config):
         """Test render without geo data."""
         section_config = SectionConfig(enabled=True)
         section = GeographicSection(
@@ -680,9 +665,7 @@ class TestCannibalizationSection:
 
         assert section.render() == ""
 
-    def test_render_missing_data_returns_empty(
-        self, sample_data_bundle, sample_config
-    ):
+    def test_render_missing_data_returns_empty(self, sample_data_bundle, sample_config):
         """Test render without cannibalization data."""
         section_config = SectionConfig(enabled=True)
         section = CannibalizationSection(
@@ -729,9 +712,7 @@ class TestSectionRegistry:
         for name, section_class in SECTION_REGISTRY.items():
             assert issubclass(section_class, Section), f"{name} is not a Section"
 
-    def test_registry_section_instantiation(
-        self, sample_data_bundle, sample_config
-    ):
+    def test_registry_section_instantiation(self, sample_data_bundle, sample_config):
         """Test all registry sections can be instantiated."""
         section_config = SectionConfig(enabled=True)
 
