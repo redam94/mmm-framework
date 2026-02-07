@@ -11,13 +11,13 @@
     // =========================================================================
     const NAV_LINKS = [
         { href: 'index.html', label: 'Home' },
-        { href: 'getting-started.html', label: 'Getting Started' },  // Add this line
+        { href: 'getting-started.html', label: 'Getting Started' },
         { href: 'about.html', label: 'About' },
-        { href: 'variable-selection.html', label: 'Variable Selection' },
+        { href: 'business-stakeholders.html', label: 'For Business' },
+        { href: 'modeling-guide.html', label: 'Modeling Guide' },
+        { href: 'interpreting-results.html', label: 'Interpreting Results' },
+        { href: 'demos.html', label: 'Demos & Reports' },
         { href: 'technical-guide.html', label: 'Technical Guide' },
-        { href: 'bayesian-workflow.html', label: 'Bayesian Workflow' },
-        { href: 'causal-inference.html', label: 'Causal Inference' },
-        { href: 'scientific-modeling.html', label: 'Scientific Modeling' },
         { href: 'faq.html', label: 'FAQ' },
         { href: 'https://github.com/redam94/mmm-framework', label: 'GitHub', external: true }
     ];
@@ -38,10 +38,25 @@
     /**
      * Check if a link is active (current page)
      */
+    // Pages that should highlight "Demos & Reports" in the nav
+    const DEMO_PAGES = [
+        'demos.html',
+        'scientific-workflow-demo.html',
+        'scientific-workflow-simple.html',
+        'workflow-budget-optimization.html',
+        'workflow-channel-effectiveness.html',
+        'workflow-forecasting.html',
+        'mmm-example-report.html'
+    ];
+
     function isActive(href) {
         const currentPage = getCurrentPage();
         // Handle both exact match and index.html for root
         if (href === 'index.html' && (currentPage === '' || currentPage === 'index.html')) {
+            return true;
+        }
+        // Highlight "Demos & Reports" for all demo sub-pages
+        if (href === 'demos.html' && DEMO_PAGES.includes(currentPage)) {
             return true;
         }
         return currentPage === href;
@@ -53,7 +68,8 @@
     
     function createNavigation() {
         const nav = document.createElement('nav');
-        
+        nav.className = 'site-nav';
+
         const linksHtml = NAV_LINKS.map(link => {
             const activeClass = isActive(link.href) ? ' class="active"' : '';
             const target = link.external ? ' target="_blank"' : '';
@@ -61,7 +77,7 @@
         }).join('\n                ');
 
         nav.innerHTML = `
-        <div class="container nav-content">
+        <div class="nav-content">
             <a href="index.html" class="logo">MMM Framework</a>
             <button class="mobile-menu-btn" aria-label="Toggle menu">
                 <span></span>
@@ -107,7 +123,7 @@
         }).join('\n                ');
 
         footer.innerHTML = `
-        <div class="container footer-content">
+        <div class="footer-content">
             <span class="logo">MMM Framework</span>
             <div class="footer-links">
                 ${linksHtml}
@@ -175,9 +191,68 @@
     }
 
     // =========================================================================
+    // Collapsible Sidebar (narrow screens)
+    // =========================================================================
+
+    function initCollapsibleSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+
+        // Wrap existing sidebar-nav content in a wrapper div
+        const navElements = sidebar.querySelectorAll('.sidebar-nav, h3');
+        if (navElements.length === 0) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'sidebar-nav-wrapper';
+        navElements.forEach(el => wrapper.appendChild(el));
+
+        // Create toggle button
+        const toggle = document.createElement('button');
+        toggle.className = 'sidebar-toggle';
+        toggle.textContent = 'Table of Contents';
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.setAttribute('aria-label', 'Toggle table of contents');
+
+        // Insert toggle and wrapper into sidebar
+        sidebar.appendChild(toggle);
+        sidebar.appendChild(wrapper);
+
+        // Start collapsed on narrow screens
+        function checkWidth() {
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('collapsed');
+                toggle.setAttribute('aria-expanded', 'false');
+            } else {
+                sidebar.classList.remove('collapsed');
+                toggle.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        checkWidth();
+        window.addEventListener('resize', checkWidth);
+
+        // Toggle on click
+        toggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            const expanded = !sidebar.classList.contains('collapsed');
+            toggle.setAttribute('aria-expanded', String(expanded));
+        });
+
+        // Collapse after clicking a link on narrow screens
+        wrapper.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 1024) {
+                    sidebar.classList.add('collapsed');
+                    toggle.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+    }
+
+    // =========================================================================
     // Initialize
     // =========================================================================
-    
+
     function init() {
         // Insert navigation at the start of body
         const nav = createNavigation();
@@ -190,6 +265,7 @@
         // Initialize features
         initScrollAnimations();
         initSidebarActiveState();
+        initCollapsibleSidebar();
     }
 
     // Run when DOM is ready

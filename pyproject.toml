@@ -28,6 +28,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "statsmodels>=0.14.0",
     "uvicorn>=0.38.0",
+    "openpyxl>=3.1.0",
 ]
 
 [dependency-groups]

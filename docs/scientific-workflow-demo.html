@@ -7,8 +7,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
+        /* Override nav area for this page */
+        body > .container:first-of-type { padding-top: 5rem; }
         :root {
             --color-primary: #5a7c65;
             --color-primary-light: #8fa86a;
@@ -1194,9 +1198,9 @@
     </style>
 </head>
 <body>
+<!-- Navigation injected by components.js -->
 <div class="container">
-<a href="scientific-modeling.html" class="back-nav"><span>←</span> Back to Scientific Modeling</a>
-<header class="header">
+<header class="header" style="margin-top: 5rem;">
     <h1>The Complete Bayesian Workflow</h1>
     <p class="subtitle">9 steps from question to actionable insights</p>
 </header>
@@ -4152,5 +4156,6 @@ function initBudgetChart() {
             updateProgress();
         });
     </script>
+    <script src="shared/components.js"></script>
 </body>
 </html>

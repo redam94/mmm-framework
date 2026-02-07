@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         :root {
@@ -435,13 +436,8 @@
     </style>
 </head>
 <body>
-    <div class="report-container">
-        <!-- Back Navigation -->
-        <nav style="margin-bottom: 1rem;">
-            <a href="scientific-modeling.html" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; transition: all 0.2s;">
-                <span>←</span> Back to Scientific Modeling
-            </a>
-        </nav>
+    <!-- Navigation injected by components.js -->
+    <div class="report-container" style="padding-top: 5rem;">
 
         <!-- Header -->
         <header class="report-header">
@@ -1864,5 +1860,6 @@
             });
         });
     </script>
+    <script src="shared/components.js"></script>
 </body>
 </html>

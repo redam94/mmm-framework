@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interpreting Results | MMM Framework</title>
+    <meta name="description" content="A guide for media planners and CMOs on interpreting marketing mix model results, understanding uncertainty, and making confident budget decisions.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/interpreting-results.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .audience-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--color-border);
+        }
+        .audience-tab {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            border: none;
+            background: none;
+            font-family: inherit;
+            font-size: 1rem;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: var(--transition-smooth);
+        }
+        .audience-tab:hover {
+            color: var(--color-primary);
+        }
+        .audience-tab.active {
+            color: var(--color-primary-dark);
+            border-bottom-color: var(--color-primary);
+        }
+        .audience-content {
+            display: none;
+        }
+        .audience-content.active {
+            display: block;
+        }
+        .result-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin: 1.5rem 0;
+        }
+        .result-card h4 {
+            margin-bottom: 1rem;
+        }
+        .result-example {
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1rem 0;
+            font-family: 'Source Sans 3', sans-serif;
+        }
+        .result-example .label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-muted);
+            margin-bottom: 0.5rem;
+        }
+        .result-example .value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            line-height: 1.2;
+        }
+        .result-example .range {
+            font-size: 0.95rem;
+            color: var(--color-text-muted);
+            margin-top: 0.25rem;
+        }
+        .traffic-light {
+            display: flex;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .traffic-item {
+            flex: 1;
+            padding: 1.25rem;
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+        .traffic-item.green {
+            background: rgba(106, 191, 138, 0.1);
+            border: 1px solid rgba(106, 191, 138, 0.3);
+        }
+        .traffic-item.yellow {
+            background: rgba(212, 168, 106, 0.1);
+            border: 1px solid rgba(212, 168, 106, 0.3);
+        }
+        .traffic-item.red {
+            background: rgba(201, 112, 103, 0.1);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+        }
+        .traffic-item .traffic-label {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .traffic-item.green .traffic-label { color: #3d8b5a; }
+        .traffic-item.yellow .traffic-label { color: #b8860b; }
+        .traffic-item.red .traffic-label { color: var(--color-danger); }
+        .traffic-item p {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin: 0;
+        }
+        .glossary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .glossary-item {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+        }
+        .glossary-item dt {
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.25rem;
+        }
+        .glossary-item dd {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0;
+        }
+        @media (max-width: 768px) {
+            .traffic-light { flex-direction: column; }
+            .audience-tabs { overflow-x: auto; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-accent" style="margin-bottom: 1rem; display: inline-block;">For Decision Makers</span>
+            <h1>Interpreting Model Results</h1>
+            <p class="lead">
+                A practical guide for media planners and CMOs on reading model outputs, understanding uncertainty ranges, and translating statistical results into confident budget decisions.
+            </p>
+        </div>
+    </section>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Getting Oriented</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#reading-results">Reading Model Results</a></li>
+                <li><a href="#glossary">Key Terms</a></li>
+            </ul>
+
+            <h3>Understanding Outputs</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#roi">Channel ROI</a></li>
+                <li><a href="#contributions">Revenue Decomposition</a></li>
+                <li><a href="#saturation">Saturation Curves</a></li>
+                <li><a href="#uncertainty">Understanding Uncertainty</a></li>
+            </ul>
+
+            <h3>For Media Planners</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#planner-budget">Budget Allocation</a></li>
+                <li><a href="#planner-optimization">Optimization Guidance</a></li>
+                <li><a href="#planner-flighting">Flighting Decisions</a></li>
+            </ul>
+
+            <h3>For CMOs</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#cmo-executive">Executive Summary</a></li>
+                <li><a href="#cmo-confidence">Confidence Levels</a></li>
+                <li><a href="#cmo-action">When to Act vs. Test</a></li>
+            </ul>
+
+            <h3>Common Questions</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#faq-results">Results FAQ</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="reading-results">Reading Model Results</h1>
+            <p class="lead">
+                A Bayesian marketing mix model produces probability distributions, not single numbers. This is a feature: it tells you not just what the model thinks, but how confident it is.
+            </p>
+
+            <div class="takeaway-box">
+                <h4>The Key Shift in Thinking</h4>
+                <p>
+                    Traditional models give you &ldquo;TV ROI = 1.42.&rdquo; A Bayesian model gives you &ldquo;TV ROI is most likely between 1.1 and 1.8, with a best estimate of 1.4.&rdquo; The second statement is more honest and more useful for decision-making.
+                </p>
+            </div>
+
+            <!-- Glossary -->
+            <h2 id="glossary">Key Terms You Need to Know</h2>
+            <p>
+                Before diving into results, familiarize yourself with these concepts. You do not need statistical training to use them.
+            </p>
+
+            <div class="glossary-grid">
+                <div class="glossary-item">
+                    <dt>ROI (Return on Investment)</dt>
+                    <dd>For every $1 spent on a channel, how many dollars of incremental revenue does it generate? ROI of 1.5 means $1.50 back for each $1 spent.</dd>
+                </div>
+                <div class="glossary-item">
+                    <dt>Credible Interval (CI)</dt>
+                    <dd>The range where the true value most likely falls. A 90% CI of [1.1, 1.8] means there is a 90% probability the true ROI is between 1.1 and 1.8.</dd>
+                </div>
+                <div class="glossary-item">
+                    <dt>Posterior Distribution</dt>
+                    <dd>The model&rsquo;s complete belief about a parameter after seeing data. It shows not just the most likely value, but the full range of plausible values.</dd>
+                </div>
+                <div class="glossary-item">
+                    <dt>Contribution</dt>
+                    <dd>The portion of your total outcome (revenue, sales) that is attributed to each channel or factor. Contributions sum to 100% of the modeled outcome.</dd>
+                </div>
+                <div class="glossary-item">
+                    <dt>Saturation</dt>
+                    <dd>The point of diminishing returns. A channel at 80% saturation has used most of its potential&mdash;additional spend yields rapidly diminishing incremental returns.</dd>
+                </div>
+                <div class="glossary-item">
+                    <dt>Adstock (Carryover)</dt>
+                    <dd>How long media effects persist. TV might have 6-8 weeks of carryover; a digital display ad might have 1-2 weeks. This affects how you evaluate timing.</dd>
+                </div>
+            </div>
+
+            <!-- Channel ROI -->
+            <h2 id="roi">Channel ROI</h2>
+            <p>
+                ROI is the most important output for budget decisions. The model provides it as a distribution, not a single number.
+            </p>
+
+            <div class="result-card">
+                <h4>How to Read an ROI Result</h4>
+                <div class="result-example">
+                    <div class="label">TV Advertising</div>
+                    <div class="value gradient-text">ROI: 1.4</div>
+                    <div class="range">90% Credible Interval: 1.1 &ndash; 1.8</div>
+                </div>
+                <p>
+                    <strong>What this means:</strong> For every $1 spent on TV, the model estimates you earned $1.40 in incremental revenue. The true value is very likely between $1.10 and $1.80. We are confident TV is profitable (the entire range is above 1.0).
+                </p>
+            </div>
+
+            <div class="result-card">
+                <h4>Contrast: An Uncertain Result</h4>
+                <div class="result-example">
+                    <div class="label">Display Advertising</div>
+                    <div class="value gradient-text-warm">ROI: 1.1</div>
+                    <div class="range">90% Credible Interval: 0.4 &ndash; 2.3</div>
+                </div>
+                <p>
+                    <strong>What this means:</strong> The best estimate is $1.10 for every $1 spent, but this could be as low as $0.40 (unprofitable) or as high as $2.30. The model cannot confidently determine whether display is profitable. Budget decisions should be made cautiously, and experimental validation is recommended.
+                </p>
+            </div>
+
+            <div class="traffic-light">
+                <div class="traffic-item green">
+                    <div class="traffic-label">Confident &amp; Positive</div>
+                    <p>Entire CI above 1.0. Safe to invest confidently.</p>
+                </div>
+                <div class="traffic-item yellow">
+                    <div class="traffic-label">Uncertain</div>
+                    <p>CI spans 1.0. Needs validation before big changes.</p>
+                </div>
+                <div class="traffic-item red">
+                    <div class="traffic-label">Likely Unprofitable</div>
+                    <p>Entire CI below 1.0. Consider reducing or testing.</p>
+                </div>
+            </div>
+
+            <!-- Contributions -->
+            <h2 id="contributions">Revenue Decomposition</h2>
+            <p>
+                The decomposition chart shows what drives your revenue. It breaks total sales into contributions from each media channel, base demand, and other factors.
+            </p>
+
+            <div id="decomposition-chart" style="height: 350px; margin: 1.5rem 0;"></div>
+
+            <div class="highlight-box">
+                <h4>Reading the Decomposition</h4>
+                <p>
+                    <strong>Base</strong> is what you would sell with zero marketing. <strong>Seasonality</strong> captures predictable peaks and valleys. <strong>Media channels</strong> show incremental contribution above base. The uncertainty band around each shows the range of plausible values.
+                </p>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#9888;&#65039;</div>
+                <div>
+                    <h4>Common Misinterpretation</h4>
+                    <p>A channel contributing 5% of revenue does not mean it is unimportant. If it costs 3% of your budget and returns 5% of revenue, its ROI is strong. Always evaluate contribution relative to spend, not in isolation.</p>
+                </div>
+            </div>
+
+            <!-- Saturation -->
+            <h2 id="saturation">Saturation Curves</h2>
+            <p>
+                Saturation curves show the relationship between spend and incremental response. They tell you where you are on the curve of diminishing returns.
+            </p>
+
+            <div id="saturation-chart" style="height: 350px; margin: 1.5rem 0;"></div>
+
+            <div class="scenario-grid">
+                <div class="scenario-card good">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#128200;</span>
+                        <span class="scenario-title">Under-Saturated Channel</span>
+                    </div>
+                    <ul>
+                        <li>Operating on the steep part of the curve</li>
+                        <li>Additional spend yields meaningful incremental returns</li>
+                        <li>Room to grow&mdash;consider increasing investment</li>
+                        <li>Example: Paid search at 40% saturation</li>
+                    </ul>
+                </div>
+                <div class="scenario-card bad">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#128201;</span>
+                        <span class="scenario-title">Over-Saturated Channel</span>
+                    </div>
+                    <ul>
+                        <li>Operating on the flat part of the curve</li>
+                        <li>Additional spend yields minimal incremental returns</li>
+                        <li>Consider reallocating to under-saturated channels</li>
+                        <li>Example: TV at 85% saturation</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Understanding Uncertainty -->
+            <h2 id="uncertainty">Understanding Uncertainty</h2>
+            <p>
+                Uncertainty is the most valuable output of a Bayesian model. It tells you where you can act confidently and where you need more information.
+            </p>
+
+            <h3>Why Uncertainty Matters for Decisions</h3>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128161;</div>
+                <div>
+                    <h4>Narrow Intervals = High Confidence</h4>
+                    <p>When the model says TV ROI is 1.4 (1.2&ndash;1.6), the range is tight. You can make budget decisions with confidence. The data strongly supports this estimate.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128300;</div>
+                <div>
+                    <h4>Wide Intervals = Low Confidence</h4>
+                    <p>When the model says display ROI is 1.1 (0.4&ndash;2.3), the range is wide. The data does not strongly constrain this estimate. Major budget changes based on this estimate carry risk. This is where experiments add the most value.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#9878;&#65039;</div>
+                <div>
+                    <h4>Intervals Spanning 1.0 = Uncertain Profitability</h4>
+                    <p>When the 90% credible interval includes values both above and below 1.0, the model cannot confidently determine whether the channel is profitable. This is an honest answer that should drive experimentation, not frustration.</p>
+                </div>
+            </div>
+
+            <div class="takeaway-box">
+                <h4>The Decision Framework</h4>
+                <p>
+                    Use uncertainty to categorize channels: (1) <strong>confident and positive</strong>&mdash;invest; (2) <strong>confident and negative</strong>&mdash;reduce; (3) <strong>uncertain</strong>&mdash;test with experiments before making large changes. This framework prevents the two biggest mistakes: over-investing based on false precision, and under-investing because a single estimate looked low.
+                </p>
+            </div>
+
+            <!-- FOR MEDIA PLANNERS -->
+            <h2 id="planner-budget" style="border-top: 3px solid var(--color-primary); padding-top: 2rem;">
+                <span class="tag tag-primary" style="margin-bottom: 0.5rem; display: inline-block;">For Media Planners</span><br>
+                Budget Allocation
+            </h2>
+            <p>
+                The model provides the information you need for budget allocation, but with honest uncertainty about the precision of each estimate.
+            </p>
+
+            <h3>Step 1: Rank Channels by ROI Confidence</h3>
+            <p>
+                Start by categorizing channels using the traffic-light framework above. Channels where the entire 90% CI is above 1.0 are your foundation. Channels where the CI spans 1.0 need caution.
+            </p>
+
+            <h3>Step 2: Check Saturation Levels</h3>
+            <p>
+                A channel with high ROI but high saturation has less room to grow than a channel with moderate ROI and low saturation. The marginal ROI at your current spend level is more relevant than the average ROI.
+            </p>
+
+            <div class="result-card">
+                <h4>Example: Budget Allocation Decision</h4>
+                <table style="font-size: 0.95rem;">
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>ROI (90% CI)</th>
+                            <th>Saturation</th>
+                            <th>Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>TV</td>
+                            <td>1.4 (1.1&ndash;1.8)</td>
+                            <td>75%</td>
+                            <td>Maintain or small increase</td>
+                        </tr>
+                        <tr>
+                            <td>Paid Search</td>
+                            <td>2.1 (1.6&ndash;2.8)</td>
+                            <td>45%</td>
+                            <td><strong>Increase investment</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Display</td>
+                            <td>1.1 (0.4&ndash;2.3)</td>
+                            <td>60%</td>
+                            <td>Hold and test</td>
+                        </tr>
+                        <tr>
+                            <td>Radio</td>
+                            <td>0.7 (0.3&ndash;1.1)</td>
+                            <td>80%</td>
+                            <td>Consider reducing</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h2 id="planner-optimization">Optimization with Uncertainty</h2>
+            <p>
+                The framework can optimize budget allocation across channels, but the optimization accounts for uncertainty. Rather than a single &ldquo;optimal&rdquo; allocation, you get a range of good allocations.
+            </p>
+
+            <div class="warning-box">
+                <h4>Beware of Point-Estimate Optimization</h4>
+                <p>
+                    An optimizer using only point estimates will concentrate budget in whichever channel has the highest estimated marginal ROI. But if that estimate is uncertain, the &ldquo;optimal&rdquo; allocation could be far from optimal. The MMM Framework&rsquo;s optimization propagates uncertainty through the optimization, producing robust recommendations.
+                </p>
+            </div>
+
+            <h2 id="planner-flighting">Flighting Decisions</h2>
+            <p>
+                Adstock (carryover) estimates inform media timing. Channels with longer carryover benefit from sustained presence; channels with short carryover benefit from concentrated bursts.
+            </p>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128250;</div>
+                <div>
+                    <h4>TV: Long Carryover (6&ndash;8 weeks typical)</h4>
+                    <p>Effects persist for weeks after airing. Sustained flight patterns maintain steady awareness. Gaps in TV advertising take weeks to recover from.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128187;</div>
+                <div>
+                    <h4>Digital: Short Carryover (1&ndash;3 weeks typical)</h4>
+                    <p>Effects are more immediate but fade quickly. Concentrated bursts around key periods (promotions, holidays) can be effective. Always-on at lower levels maintains baseline presence.</p>
+                </div>
+            </div>
+
+            <!-- FOR CMOs -->
+            <h2 id="cmo-executive" style="border-top: 3px solid var(--color-accent); padding-top: 2rem;">
+                <span class="tag tag-accent" style="margin-bottom: 0.5rem; display: inline-block;">For CMOs</span><br>
+                The Executive Summary
+            </h2>
+            <p>
+                As a CMO, you need three things from a model: (1) which channels are working, (2) how confident we are, and (3) what to do about it.
+            </p>
+
+            <div class="result-card">
+                <h4>What a Good Executive Summary Looks Like</h4>
+                <div style="padding: 1rem; background: var(--color-bg-alt); border-radius: var(--radius-md); margin: 1rem 0;">
+                    <p style="font-weight: 600; margin-bottom: 1rem;">Media Effectiveness Summary &mdash; Q4 2025</p>
+                    <p><strong>High confidence findings:</strong></p>
+                    <ul>
+                        <li>TV is profitable with ROI of 1.4 (90% CI: 1.1&ndash;1.8). This is consistent with our Q3 geo lift test (1.1&ndash;1.5).</li>
+                        <li>Paid Search has the highest ROI at 2.1 (90% CI: 1.6&ndash;2.8) and is under-saturated at 45%.</li>
+                    </ul>
+                    <p style="margin-top: 1rem;"><strong>Areas of uncertainty:</strong></p>
+                    <ul>
+                        <li>Display ROI is uncertain (0.4&ndash;2.3). We recommend a geo test in Q1 to resolve this.</li>
+                        <li>Radio appears marginally effective (0.3&ndash;1.1). Given high saturation, consider reducing by 20% and measuring impact.</li>
+                    </ul>
+                    <p style="margin-top: 1rem;"><strong>Recommendation:</strong> Shift 15% of Radio budget to Paid Search. Hold Display pending Q1 test results. Maintain TV at current levels.</p>
+                </div>
+            </div>
+
+            <h2 id="cmo-confidence">Confidence Levels and What They Mean</h2>
+            <p>
+                Not all model outputs deserve equal trust. Use this framework to weigh recommendations appropriately.
+            </p>
+
+            <div class="process-steps">
+                <div class="process-step" data-step="A">
+                    <h4>Validated Estimates (Highest Confidence)</h4>
+                    <p>The model estimate is consistent with experimental results (geo lift tests, RCTs). Act on these with confidence. Example: TV ROI model estimate (1.1&ndash;1.8) overlaps with geo test (1.1&ndash;1.5).</p>
+                </div>
+                <div class="process-step" data-step="B">
+                    <h4>Narrow, Unvalidated Estimates (Moderate Confidence)</h4>
+                    <p>The model is precise (narrow CI) but has not been validated experimentally. These are reasonable for moderate budget changes. Design validation tests for these channels.</p>
+                </div>
+                <div class="process-step" data-step="C">
+                    <h4>Wide, Unvalidated Estimates (Low Confidence)</h4>
+                    <p>The model is uncertain (wide CI) and unvalidated. Avoid major budget changes based on these. Prioritize experiments here&mdash;this is where testing has the highest information value.</p>
+                </div>
+            </div>
+
+            <h2 id="cmo-action">When to Act vs. When to Test</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Situation</th>
+                        <th>Action</th>
+                        <th>Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>ROI confidently above 1.0, channel under-saturated</td>
+                        <td><strong>Increase investment</strong></td>
+                        <td>Strong evidence of profitability with room to grow</td>
+                    </tr>
+                    <tr>
+                        <td>ROI confidently below 1.0</td>
+                        <td><strong>Reduce investment</strong></td>
+                        <td>Strong evidence of unprofitability</td>
+                    </tr>
+                    <tr>
+                        <td>ROI uncertain (CI spans 1.0), large spend</td>
+                        <td><strong>Design experiment</strong></td>
+                        <td>High information value from resolving uncertainty on a large budget line</td>
+                    </tr>
+                    <tr>
+                        <td>ROI uncertain (CI spans 1.0), small spend</td>
+                        <td><strong>Maintain current levels</strong></td>
+                        <td>Low risk from maintaining; experimentation may not be cost-effective</td>
+                    </tr>
+                    <tr>
+                        <td>Year-over-year ROI changed dramatically</td>
+                        <td><strong>Investigate before acting</strong></td>
+                        <td>Could be genuine market shift, data issue, or modeling artifact</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="takeaway-box">
+                <h4>The CMO&rsquo;s Competitive Advantage</h4>
+                <p>
+                    Organizations that combine model-based estimates with experimental validation build a compounding knowledge advantage. Each experiment improves model calibration. Better-calibrated models produce more confident estimates. More confident estimates enable bolder, higher-ROI budget decisions. This virtuous cycle is the genuine competitive advantage of rigorous measurement.
+                </p>
+            </div>
+
+            <!-- FAQ -->
+            <h2 id="faq-results">Common Questions About Results</h2>
+
+            <div class="accordion-item">
+                <button class="accordion-header">Why are the uncertainty intervals so wide?</button>
+                <div class="accordion-body">
+                    <p>Wide intervals mean the data does not strongly constrain the estimate. This happens when: (1) the channel has limited spend variation, (2) the channel is correlated with another driver, or (3) the sample size is small. The intervals are wide because the truth is genuinely uncertain&mdash;narrower intervals from other methods are often falsely precise.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">The model shows a negative ROI for a channel. Is that possible?</button>
+                <div class="accordion-body">
+                    <p>Yes, in certain situations. Over-saturated channels can have negative marginal returns. Poorly targeted or poorly timed campaigns can create backlash. However, a negative ROI estimate could also indicate confounding that the model has not fully accounted for. Before acting, check whether the negative estimate is robust across model specifications.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">The results are different from last year. Why?</button>
+                <div class="accordion-body">
+                    <p>Several legitimate reasons: (1) actual market changes (new competitors, economic shifts), (2) changes in media strategy or creative quality, (3) additional data improving estimation. However, if nothing changed strategically and results shift dramatically, this may indicate sensitivity to modeling choices. Ask for a sensitivity analysis comparing the two years under consistent specifications.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">How should I reconcile model results with platform-reported metrics?</button>
+                <div class="accordion-body">
+                    <p>Platform metrics (Google Analytics, Meta) measure different things than an MMM. Platforms report attributed conversions (users who saw an ad and converted). MMM estimates incremental impact (conversions that would not have happened without the ad). These can differ significantly&mdash;platform metrics often overcount because they include conversions that would have happened anyway. Neither is &ldquo;right&rdquo;; they answer different questions.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">Can I use these results to predict next quarter&rsquo;s sales?</button>
+                <div class="accordion-body">
+                    <p>MMMs are designed primarily for attribution and optimization, not forecasting. While the model can make forward predictions, those predictions carry additional uncertainty from unknown future conditions (economic changes, competitive actions). Use the posterior predictive distribution for forecasting, and treat the uncertainty intervals as minimums&mdash;real-world uncertainty is typically larger.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">What if stakeholders disagree with the results?</button>
+                <div class="accordion-body">
+                    <p>This is healthy and expected. Present the evidence clearly: show the data, the prior assumptions, the sensitivity analysis, and any experimental validation. If there is genuine domain knowledge that contradicts the model, it should be encoded as a prior in the next model run&mdash;not used to reject results post hoc. If disagreement persists, design an experiment to resolve it empirically.</p>
+                </div>
+            </div>
+
+            <div class="note" style="margin-top: 2rem;">
+                <h4>More Resources</h4>
+                <p>
+                    For the technical modeling workflow, see the <a href="modeling-guide.html">Step-by-Step Modeling Guide</a>. For understanding the risks of specification shopping, see <a href="business-stakeholders.html">For Business Stakeholders</a>. For a deep dive into the mathematics, see the <a href="technical-guide.html">Technical Guide</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready for Honest Measurement?</h2>
+            <p>The framework is open source. Start building models that produce results you can trust.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="business-stakeholders.html" class="btn btn-outline-white">For Business Leaders</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+    <script>
+        const chartColors = {
+            primary: '#8fa86a', primaryDark: '#6d8a4a',
+            accent: '#6a8fa8', warning: '#d4a86a',
+            danger: '#c97067', success: '#6abf8a',
+            text: '#2d3a2d', textMuted: '#5a6b5a', grid: '#d4ddd4'
+        };
+        const chartConfig = { displayModeBar: false, responsive: true };
+        const chartLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: chartColors.text },
+            margin: { t: 40, r: 20, b: 40, l: 50 },
+            xaxis: { gridcolor: chartColors.grid, zerolinecolor: chartColors.grid },
+            yaxis: { gridcolor: chartColors.grid, zerolinecolor: chartColors.grid }
+        };
+
+        function initDecompositionChart() {
+            const weeks = Array.from({length: 52}, (_, i) => `W${i + 1}`);
+            const base = weeks.map(() => 600 + Math.random() * 50);
+            const seasonality = weeks.map((_, i) => 80 * Math.sin(2 * Math.PI * i / 52) + 20 * Math.sin(4 * Math.PI * i / 52));
+            const tv = weeks.map((_, i) => 120 + 40 * Math.sin(2 * Math.PI * (i - 5) / 52) + Math.random() * 30);
+            const digital = weeks.map(() => 80 + Math.random() * 40);
+            const search = weeks.map(() => 50 + Math.random() * 25);
+
+            Plotly.newPlot('decomposition-chart', [
+                { x: weeks, y: base, name: 'Base Demand', type: 'scatter', stackgroup: 'one', fillcolor: 'rgba(90, 107, 90, 0.3)', line: { width: 0 } },
+                { x: weeks, y: seasonality.map(s => Math.max(0, s)), name: 'Seasonality', type: 'scatter', stackgroup: 'one', fillcolor: 'rgba(106, 143, 168, 0.4)', line: { width: 0 } },
+                { x: weeks, y: tv, name: 'TV', type: 'scatter', stackgroup: 'one', fillcolor: 'rgba(143, 168, 106, 0.5)', line: { width: 0 } },
+                { x: weeks, y: digital, name: 'Digital', type: 'scatter', stackgroup: 'one', fillcolor: 'rgba(212, 168, 106, 0.5)', line: { width: 0 } },
+                { x: weeks, y: search, name: 'Search', type: 'scatter', stackgroup: 'one', fillcolor: 'rgba(106, 191, 138, 0.5)', line: { width: 0 } }
+            ], {
+                ...chartLayout,
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.15 },
+                xaxis: { ...chartLayout.xaxis, title: 'Week', dtick: 4 },
+                yaxis: { ...chartLayout.yaxis, title: 'Revenue ($K)' },
+                margin: { t: 20, r: 20, b: 70, l: 60 }
+            }, chartConfig);
+        }
+
+        function initSaturationChart() {
+            const spend = Array.from({length: 100}, (_, i) => i * 10);
+            // Hill saturation curves
+            const hill = (x, K, S) => x / (x + Math.pow(S, 2) / x || 1);
+            const tvResponse = spend.map(x => 200 * Math.pow(x, 0.4) / (Math.pow(x, 0.4) + Math.pow(400, 0.4)));
+            const searchResponse = spend.map(x => 250 * Math.pow(x, 0.6) / (Math.pow(x, 0.6) + Math.pow(600, 0.6)));
+
+            // Current spend markers
+            const tvCurrentSpend = 650;
+            const searchCurrentSpend = 350;
+            const tvCurrentResponse = 200 * Math.pow(tvCurrentSpend, 0.4) / (Math.pow(tvCurrentSpend, 0.4) + Math.pow(400, 0.4));
+            const searchCurrentResponse = 250 * Math.pow(searchCurrentSpend, 0.6) / (Math.pow(searchCurrentSpend, 0.6) + Math.pow(600, 0.6));
+
+            Plotly.newPlot('saturation-chart', [
+                { x: spend, y: tvResponse, name: 'TV', type: 'scatter', mode: 'lines', line: { color: chartColors.primary, width: 3 } },
+                { x: spend, y: searchResponse, name: 'Paid Search', type: 'scatter', mode: 'lines', line: { color: chartColors.accent, width: 3 } },
+                { x: [tvCurrentSpend], y: [tvCurrentResponse], name: 'TV Current', type: 'scatter', mode: 'markers', marker: { color: chartColors.primary, size: 12, symbol: 'circle' }, showlegend: false },
+                { x: [searchCurrentSpend], y: [searchCurrentResponse], name: 'Search Current', type: 'scatter', mode: 'markers', marker: { color: chartColors.accent, size: 12, symbol: 'circle' }, showlegend: false }
+            ], {
+                ...chartLayout,
+                showlegend: true,
+                legend: { x: 0.7, y: 0.3 },
+                xaxis: { ...chartLayout.xaxis, title: 'Weekly Spend ($K)' },
+                yaxis: { ...chartLayout.yaxis, title: 'Incremental Response ($K)' },
+                annotations: [
+                    { x: tvCurrentSpend, y: tvCurrentResponse + 10, text: 'TV: 75% saturated', showarrow: true, arrowhead: 2, font: { size: 11, color: chartColors.primary } },
+                    { x: searchCurrentSpend, y: searchCurrentResponse + 10, text: 'Search: 45% saturated', showarrow: true, arrowhead: 2, font: { size: 11, color: chartColors.accent } }
+                ],
+                margin: { t: 20, r: 20, b: 50, l: 60 }
+            }, chartConfig);
+        }
+
+        // Accordion functionality
+        document.querySelectorAll('.accordion-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const item = header.parentElement;
+                const isOpen = item.classList.contains('open');
+                document.querySelectorAll('.accordion-item').forEach(i => i.classList.remove('open'));
+                if (!isOpen) item.classList.add('open');
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initDecompositionChart();
+            initSaturationChart();
+        });
+    </script>
+</body>
+</html>

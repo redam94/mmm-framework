@@ -18,7 +18,7 @@ from config import Settings, get_settings
 from middleware import RequestLoggingMiddleware
 from rate_limiter import limiter, rate_limit_exceeded_handler
 from redis_service import RedisService, get_redis
-from routes import configs_router, data_router, extended_models_router, models_router
+from routes import configs_router, data_router, extended_models_router, models_router, templates_router
 from schemas import ErrorResponse, HealthResponse
 from storage import get_storage
 
@@ -128,6 +128,7 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
     app.include_router(configs_router, dependencies=[Depends(verify_api_key)])
     app.include_router(models_router, dependencies=[Depends(verify_api_key)])
     app.include_router(extended_models_router, dependencies=[Depends(verify_api_key)])
+    app.include_router(templates_router, dependencies=[Depends(verify_api_key)])
 
     # Health endpoints
     @app.get(
