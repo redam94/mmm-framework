@@ -751,9 +751,11 @@ class ModelValidator:
         # Media parameters
         beta_samples = {}
         sat_lam_samples = {}
+        adstock_mix_samples = {}
         for ch in trained_model.channel_names:
             beta_samples[ch] = get_samples(f"beta_{ch}")
             sat_lam_samples[ch] = get_samples(f"sat_lam_{ch}")
+            adstock_mix_samples[ch] = get_samples(f"adstock_{ch}")
 
         beta_controls_samples = get_samples("beta_controls")
 
@@ -789,9 +791,9 @@ class ModelValidator:
         X_adstock_high = X_adstock_full_high[test_indices]
 
         for c, ch_name in enumerate(trained_model.channel_names):
-            # Use FULL model's _media_max since adstock is computed on full data
-            # This ensures normalized values stay in [0, 1] range as model expects
-            max_val = self.model._media_max[ch_name] + 1e-8
+            # Use TRAINED model's _media_max since beta was learned against this normalization
+            # Values may exceed 1.0 for test data (extrapolation), which is fine
+            max_val = trained_model._media_max[ch_name] + 1e-8
             X_adstock_low[:, c] /= max_val
             X_adstock_high[:, c] /= max_val
 
@@ -807,41 +809,20 @@ class ModelValidator:
         y_pred_samples = np.zeros((n_samples, n_test))
         rng = np.random.default_rng(42)
 
-        # DEBUG: Track component contributions for first sample
-        debug_components = {
-            "intercept": 0.0,
-            "trend": 0.0,
-            "seasonality": 0.0,
-            "geo": 0.0,
-            "product": 0.0,
-            "media": 0.0,
-            "controls": 0.0,
-        }
-
         for s in range(n_samples):
             y_pred = intercept_samples[s] if intercept_samples is not None else 0.0
-            if s == 0:
-                debug_components["intercept"] = float(y_pred) if np.isscalar(y_pred) else float(np.mean(y_pred))
 
             # TREND: Apply trend slope to extrapolated t_scaled values
             # The slope was learned on t_scaled in [0,1] for training period
             # For test, t_scaled may be > 1 (extrapolation)
             if trend_slope_samples is not None:
-                trend_contribution = trend_slope_samples[s] * t_scaled_test
-                y_pred = y_pred + trend_contribution
-                if s == 0:
-                    debug_components["trend"] = float(np.mean(trend_contribution))
+                y_pred = y_pred + trend_slope_samples[s] * t_scaled_test
 
             # SEASONALITY: Apply learned coefficients to test period features
             for name, features in test_seasonality_features.items():
                 if name in seasonality_samples:
                     season_coef = seasonality_samples[name][s]
-                    # features is (n_test, n_fourier_terms)
-                    # season_coef is (n_fourier_terms,)
-                    seasonality_contribution = features @ season_coef
-                    y_pred = y_pred + seasonality_contribution
-                    if s == 0:
-                        debug_components["seasonality"] += float(np.mean(seasonality_contribution))
+                    y_pred = y_pred + features @ season_coef
 
             # GEO EFFECTS
             if (
@@ -851,8 +832,6 @@ class ModelValidator:
             ):
                 geo_effect = geo_sigma_samples[s] * geo_offset_samples[s]
                 y_pred = y_pred + geo_effect[geo_idx_test]
-                if s == 0:
-                    debug_components["geo"] = float(np.mean(geo_effect[geo_idx_test]))
 
             # PRODUCT EFFECTS
             if (
@@ -862,16 +841,12 @@ class ModelValidator:
             ):
                 product_effect = product_sigma_samples[s] * product_offset_samples[s]
                 y_pred = y_pred + product_effect[product_idx_test]
-                if s == 0:
-                    debug_components["product"] = float(np.mean(product_effect[product_idx_test]))
 
             # MEDIA CONTRIBUTIONS
-            media_total = 0.0
             for ch_idx, ch in enumerate(trained_model.channel_names):
-                # Use midpoint of adstock range (simplified)
-                x_adstocked = 0.5 * (
-                    X_adstock_low[:, ch_idx] + X_adstock_high[:, ch_idx]
-                )
+                # Use learned adstock mixing from posterior samples
+                mix = adstock_mix_samples[ch][s] if adstock_mix_samples[ch] is not None else 0.5
+                x_adstocked = (1 - mix) * X_adstock_low[:, ch_idx] + mix * X_adstock_high[:, ch_idx]
 
                 # Apply saturation
                 lam = sat_lam_samples[ch][s] if sat_lam_samples[ch] is not None else 1.0
@@ -879,20 +854,12 @@ class ModelValidator:
 
                 # Apply beta
                 beta = beta_samples[ch][s] if beta_samples[ch] is not None else 0.0
-                channel_contrib = beta * x_saturated
-                y_pred = y_pred + channel_contrib
-                if s == 0:
-                    media_total += float(np.mean(channel_contrib))
-            if s == 0:
-                debug_components["media"] = media_total
+                y_pred = y_pred + beta * x_saturated
 
             # CONTROL CONTRIBUTIONS
             if X_controls_std is not None and beta_controls_samples is not None:
                 for ctrl_idx in range(X_controls_std.shape[1]):
-                    ctrl_contrib = beta_controls_samples[s, ctrl_idx] * X_controls_std[:, ctrl_idx]
-                    y_pred = y_pred + ctrl_contrib
-                    if s == 0:
-                        debug_components["controls"] += float(np.mean(ctrl_contrib))
+                    y_pred = y_pred + beta_controls_samples[s, ctrl_idx] * X_controls_std[:, ctrl_idx]
 
             # OBSERVATION NOISE
             if sigma_samples is not None:
@@ -901,31 +868,16 @@ class ModelValidator:
 
             y_pred_samples[s] = y_pred
 
-        # Log component contributions (in standardized scale, before unstandardization)
-        logger.info("DEBUG Component contributions (standardized scale, sample 0):")
-        total_std = 0.0
-        for comp, val in debug_components.items():
-            logger.info(f"  {comp}: {val:.4f} (raw scale: {val * trained_model.y_std:.2f})")
-            total_std += val
-        logger.info(f"  TOTAL (std): {total_std:.4f}")
-        logger.info(f"  TOTAL (raw): {total_std * trained_model.y_std + trained_model.y_mean:.2f}")
-
         # Convert to original scale
         y_pred_samples = y_pred_samples * trained_model.y_std + trained_model.y_mean
         y_pred_mean = y_pred_samples.mean(axis=0)
 
-        # DEBUG: Print diagnostic values
         y_test_actual = self.model.y_raw[test_indices]
-        logger.info(f"DEBUG CV Prediction:")
-        logger.info(f"  trained_model.y_mean = {trained_model.y_mean:.2f}")
-        logger.info(f"  trained_model.y_std = {trained_model.y_std:.2f}")
-        logger.info(f"  self.model.y_mean = {self.model.y_mean:.2f}")
-        logger.info(f"  self.model.y_std = {self.model.y_std:.2f}")
-        logger.info(f"  y_pred_mean (first 5) = {y_pred_mean[:5]}")
-        logger.info(f"  y_test_actual (first 5) = {y_test_actual[:5]}")
-        logger.info(f"  Mean of y_pred = {y_pred_mean.mean():.2f}")
-        logger.info(f"  Mean of y_actual = {y_test_actual.mean():.2f}")
-        logger.info(f"  Offset (pred - actual) = {y_pred_mean.mean() - y_test_actual.mean():.2f}")
+        logger.debug(
+            f"CV Prediction: pred_mean={y_pred_mean.mean():.2f}, "
+            f"actual_mean={y_test_actual.mean():.2f}, "
+            f"offset={y_pred_mean.mean() - y_test_actual.mean():.2f}"
+        )
 
         return y_pred_mean, y_pred_samples
 

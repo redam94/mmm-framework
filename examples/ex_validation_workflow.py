@@ -1065,8 +1065,8 @@ def run_calibration(model, results, data) -> ValidationSummary:
                 str(dates[mid_point].date()),
                 str(dates[mid_point + 12].date()),
             ),
-            measured_lift=500.0,  # Synthetic lift value
-            lift_se=100.0,  # Standard error
+            measured_lift=30.0,  # Synthetic lift value
+            lift_se=10.0,  # Standard error
             confidence_level=0.95,
         ),
         LiftTestResult(
@@ -1075,8 +1075,8 @@ def run_calibration(model, results, data) -> ValidationSummary:
                 str(dates[mid_point + 15].date()),
                 str(dates[mid_point + 25].date()),
             ),
-            measured_lift=350.0,
-            lift_se=80.0,
+            measured_lift=35.0,
+            lift_se=13.0,
             confidence_level=0.95,
         ),
     ]
