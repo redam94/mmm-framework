@@ -29,10 +29,10 @@ from mmm_framework.reporting.helpers import (
     _compute_hdi,
 )
 
-
 # =============================================================================
 # Step 1: Generate Synthetic Marketing Data
 # =============================================================================
+
 
 def generate_marketing_data(
     n_weeks: int = 104,
@@ -40,38 +40,64 @@ def generate_marketing_data(
 ) -> dict:
     """
     Generate realistic synthetic marketing data for MMM.
-    
+
     Returns a dictionary with all the data needed for reporting.
     """
     np.random.seed(seed)
-    
+
     # Time index
     start_date = datetime(2023, 1, 2)  # First Monday of 2023
-    dates = pd.date_range(start_date, periods=n_weeks, freq='W-MON')
-    
+    dates = pd.date_range(start_date, periods=n_weeks, freq="W-MON")
+
     # Channel configuration
     channels = {
-        'TV': {'spend_mean': 50000, 'spend_std': 15000, 'roi_true': 1.8, 'adstock_alpha': 0.6, 'sat_lam': 1.2},
-        'Paid_Search': {'spend_mean': 30000, 'spend_std': 8000, 'roi_true': 2.5, 'adstock_alpha': 0.25, 'sat_lam': 2.0},
-        'Paid_Social': {'spend_mean': 25000, 'spend_std': 7000, 'roi_true': 1.6, 'adstock_alpha': 0.4, 'sat_lam': 1.5},
-        'Display': {'spend_mean': 15000, 'spend_std': 5000, 'roi_true': 1.1, 'adstock_alpha': 0.35, 'sat_lam': 1.8},
-        'Radio': {'spend_mean': 10000, 'spend_std': 4000, 'roi_true': 0.9, 'adstock_alpha': 0.5, 'sat_lam': 1.3},
+        "TV": {
+            "spend_mean": 50000,
+            "spend_std": 15000,
+            "roi_true": 1.8,
+            "adstock_alpha": 0.6,
+            "sat_lam": 1.2,
+        },
+        "Paid_Search": {
+            "spend_mean": 30000,
+            "spend_std": 8000,
+            "roi_true": 2.5,
+            "adstock_alpha": 0.25,
+            "sat_lam": 2.0,
+        },
+        "Paid_Social": {
+            "spend_mean": 25000,
+            "spend_std": 7000,
+            "roi_true": 1.6,
+            "adstock_alpha": 0.4,
+            "sat_lam": 1.5,
+        },
+        "Display": {
+            "spend_mean": 15000,
+            "spend_std": 5000,
+            "roi_true": 1.1,
+            "adstock_alpha": 0.35,
+            "sat_lam": 1.8,
+        },
+        "Radio": {
+            "spend_mean": 10000,
+            "spend_std": 4000,
+            "roi_true": 0.9,
+            "adstock_alpha": 0.5,
+            "sat_lam": 1.3,
+        },
     }
-    
+
     # Generate spend data
     spend_data = {}
     for channel, config in channels.items():
-        base_spend = np.random.lognormal(
-            np.log(config['spend_mean']), 
-            0.3, 
-            n_weeks
-        )
+        base_spend = np.random.lognormal(np.log(config["spend_mean"]), 0.3, n_weeks)
         # Add some weeks with zero spend for some channels
-        if channel in ['Radio', 'Display']:
+        if channel in ["Radio", "Display"]:
             zero_mask = np.random.random(n_weeks) < 0.15
             base_spend[zero_mask] = 0
         spend_data[channel] = base_spend
-    
+
     # Generate baseline sales with trend and seasonality
     trend = np.linspace(1.0, 1.15, n_weeks)  # 15% growth over 2 years
     seasonality = 1 + 0.15 * np.sin(2 * np.pi * np.arange(n_weeks) / 52)  # Annual cycle
@@ -82,48 +108,48 @@ def generate_marketing_data(
         end_week = min(year * 52 + 52, n_weeks)
         if start_week < n_weeks:
             holiday_boost[start_week:end_week] = 0.2
-    
+
     baseline = 800000 * trend * seasonality * (1 + holiday_boost)
-    
+
     # Compute media contributions (simplified saturation + adstock)
     contributions = {}
     for channel, config in channels.items():
         spend = spend_data[channel]
-        
+
         # Apply geometric adstock
-        alpha = config['adstock_alpha']
+        alpha = config["adstock_alpha"]
         adstocked = np.zeros(n_weeks)
         for t in range(n_weeks):
             for lag in range(min(t + 1, 8)):
-                adstocked[t] += spend[t - lag] * (alpha ** lag)
-        
+                adstocked[t] += spend[t - lag] * (alpha**lag)
+
         # Apply saturation (exponential)
-        lam = config['sat_lam']
+        lam = config["sat_lam"]
         max_spend = np.max(adstocked) + 1
         saturated = 1 - np.exp(-lam * adstocked / max_spend)
-        
+
         # Scale to contribution
         total_spend = spend.sum()
-        total_contribution = total_spend * config['roi_true']
+        total_contribution = total_spend * config["roi_true"]
         contributions[channel] = saturated / saturated.sum() * total_contribution
-    
+
     # Total sales
     total_contributions = sum(contributions.values())
     noise = np.random.normal(0, 20000, n_weeks)
     sales = baseline + total_contributions + noise
-    
+
     # Predicted values (with some noise for realism)
     predicted = sales + np.random.normal(0, 15000, n_weeks)
-    
+
     return {
-        'dates': dates,
-        'sales': sales,
-        'predicted': predicted,
-        'baseline': baseline,
-        'spend': spend_data,
-        'contributions': contributions,
-        'channels': channels,
-        'n_weeks': n_weeks,
+        "dates": dates,
+        "sales": sales,
+        "predicted": predicted,
+        "baseline": baseline,
+        "spend": spend_data,
+        "contributions": contributions,
+        "channels": channels,
+        "n_weeks": n_weeks,
     }
 
 
@@ -131,45 +157,46 @@ def generate_marketing_data(
 # Step 2: Simulate Posterior Samples (for demonstration)
 # =============================================================================
 
+
 def simulate_posterior_samples(data: dict, n_samples: int = 2000) -> dict:
     """
     Simulate posterior samples for demonstration.
-    
+
     In real usage, these would come from the fitted BayesianMMM model's trace.
     """
     np.random.seed(123)
-    
-    channels = data['channels']
+
+    channels = data["channels"]
     samples = {}
-    
+
     for channel, config in channels.items():
         # Beta (effect size) - centered on true ROI with uncertainty
-        true_beta = config['roi_true'] * 0.1  # Scaled coefficient
-        samples[f'beta_{channel}'] = np.random.normal(true_beta, true_beta * 0.15, n_samples)
-        
+        true_beta = config["roi_true"] * 0.1  # Scaled coefficient
+        samples[f"beta_{channel}"] = np.random.normal(
+            true_beta, true_beta * 0.15, n_samples
+        )
+
         # Adstock alpha
-        true_alpha = config['adstock_alpha']
-        samples[f'adstock_{channel}'] = np.random.beta(
+        true_alpha = config["adstock_alpha"]
+        samples[f"adstock_{channel}"] = np.random.beta(
             true_alpha * 10, (1 - true_alpha) * 10, n_samples
         )
-        
+
         # Saturation lambda
-        true_lam = config['sat_lam']
-        samples[f'sat_lam_{channel}'] = np.random.gamma(
-            true_lam * 5, 0.2, n_samples
-        )
-        
+        true_lam = config["sat_lam"]
+        samples[f"sat_lam_{channel}"] = np.random.gamma(true_lam * 5, 0.2, n_samples)
+
         # Contribution samples
-        true_contrib = data['contributions'][channel].sum()
-        samples[f'contribution_{channel}'] = np.random.normal(
+        true_contrib = data["contributions"][channel].sum()
+        samples[f"contribution_{channel}"] = np.random.normal(
             true_contrib, true_contrib * 0.1, n_samples
         )
-    
+
     # Global parameters
-    samples['intercept'] = np.random.normal(800000, 50000, n_samples)
-    samples['sigma'] = np.abs(np.random.normal(20000, 5000, n_samples))
-    samples['trend_slope'] = np.random.normal(0.0015, 0.0003, n_samples)
-    
+    samples["intercept"] = np.random.normal(800000, 50000, n_samples)
+    samples["sigma"] = np.abs(np.random.normal(20000, 5000, n_samples))
+    samples["trend_slope"] = np.random.normal(0.0015, 0.0003, n_samples)
+
     return samples
 
 
@@ -177,64 +204,69 @@ def simulate_posterior_samples(data: dict, n_samples: int = 2000) -> dict:
 # Step 3: Compute Reporting Metrics
 # =============================================================================
 
+
 def compute_all_metrics(data: dict, samples: dict) -> dict:
     """
     Compute all reporting metrics with uncertainty.
     """
-    channels = list(data['channels'].keys())
-    n_weeks = data['n_weeks']
-    
+    channels = list(data["channels"].keys())
+    n_weeks = data["n_weeks"]
+
     # 1. ROI Results
     roi_results = []
     for channel in channels:
-        spend = data['spend'][channel].sum()
-        contrib_samples = samples[f'contribution_{channel}']
-        roi_samples = contrib_samples / spend if spend > 0 else np.zeros_like(contrib_samples)
-        
+        spend = data["spend"][channel].sum()
+        contrib_samples = samples[f"contribution_{channel}"]
+        roi_samples = (
+            contrib_samples / spend if spend > 0 else np.zeros_like(contrib_samples)
+        )
+
         roi_mean = float(np.mean(roi_samples))
         roi_lower, roi_upper = _compute_hdi(roi_samples, 0.94)
-        
-        roi_results.append(ROIResult(
-            channel=channel,
-            spend=spend,
-            contribution_mean=float(np.mean(contrib_samples)),
-            contribution_lower=float(np.percentile(contrib_samples, 3)),
-            contribution_upper=float(np.percentile(contrib_samples, 97)),
-            roi_mean=roi_mean,
-            roi_lower=roi_lower,
-            roi_upper=roi_upper,
-            prob_positive=float(np.mean(roi_samples > 0)),
-            prob_profitable=float(np.mean(roi_samples > 1)),
-        ))
-    
+
+        roi_results.append(
+            ROIResult(
+                channel=channel,
+                spend=spend,
+                contribution_mean=float(np.mean(contrib_samples)),
+                contribution_lower=float(np.percentile(contrib_samples, 3)),
+                contribution_upper=float(np.percentile(contrib_samples, 97)),
+                roi_mean=roi_mean,
+                roi_lower=roi_lower,
+                roi_upper=roi_upper,
+                prob_positive=float(np.mean(roi_samples > 0)),
+                prob_profitable=float(np.mean(roi_samples > 1)),
+            )
+        )
+
     # 2. Saturation Curves
     saturation_results = {}
     for channel in channels:
-        config = data['channels'][channel]
-        spend_max = data['spend'][channel].max()
-        current_spend = data['spend'][channel].mean()
-        
+        config = data["channels"][channel]
+        spend_max = data["spend"][channel].max()
+        current_spend = data["spend"][channel].mean()
+
         # Generate curve
         spend_grid = np.linspace(0, spend_max * 1.5, 100)
-        
+
         # Sample curves
-        lam_samples = samples[f'sat_lam_{channel}'][:500]
-        beta_samples = samples[f'beta_{channel}'][:500]
-        
+        lam_samples = samples[f"sat_lam_{channel}"][:500]
+        beta_samples = samples[f"beta_{channel}"][:500]
+
         response_samples = np.zeros((len(lam_samples), len(spend_grid)))
         for i, (lam, beta) in enumerate(zip(lam_samples, beta_samples)):
             saturated = 1 - np.exp(-lam * spend_grid / (spend_max + 1))
             response_samples[i] = beta * saturated * spend_max
-        
+
         response_mean = response_samples.mean(axis=0)
         response_lower = np.percentile(response_samples, 3, axis=0)
         response_upper = np.percentile(response_samples, 97, axis=0)
-        
+
         # Current position
         current_idx = np.argmin(np.abs(spend_grid - current_spend))
         current_response = response_mean[current_idx]
         max_response = response_mean[-1]
-        
+
         saturation_results[channel] = SaturationCurveResult(
             channel=channel,
             spend_grid=spend_grid,
@@ -244,22 +276,24 @@ def compute_all_metrics(data: dict, samples: dict) -> dict:
             current_spend=current_spend,
             current_response=current_response,
             saturation_level=current_response / max_response if max_response > 0 else 0,
-            marginal_response_at_current=float(np.gradient(response_mean, spend_grid)[current_idx]),
+            marginal_response_at_current=float(
+                np.gradient(response_mean, spend_grid)[current_idx]
+            ),
         )
-    
+
     # 3. Adstock Curves
     adstock_results = {}
     for channel in channels:
-        alpha_samples = samples[f'adstock_{channel}']
+        alpha_samples = samples[f"adstock_{channel}"]
         alpha_mean = float(np.mean(alpha_samples))
         alpha_lower, alpha_upper = _compute_hdi(alpha_samples, 0.94)
-        
+
         l_max = 8
         decay_weights = alpha_mean ** np.arange(l_max)
         decay_weights = decay_weights / decay_weights.sum()
-        
+
         half_life = np.log(0.5) / np.log(alpha_mean) if 0 < alpha_mean < 1 else 0
-        
+
         adstock_results[channel] = AdstockResult(
             channel=channel,
             decay_weights=decay_weights,
@@ -270,57 +304,63 @@ def compute_all_metrics(data: dict, samples: dict) -> dict:
             total_carryover=float(decay_weights[1:].sum()),
             l_max=l_max,
         )
-    
+
     # 4. Decomposition
     decomp_results = []
-    total_sales = data['sales'].sum()
-    
+    total_sales = data["sales"].sum()
+
     # Baseline
-    baseline_total = data['baseline'].sum()
-    decomp_results.append(DecompositionResult(
-        component='Baseline',
-        total_contribution=baseline_total,
-        contribution_lower=baseline_total * 0.95,
-        contribution_upper=baseline_total * 1.05,
-        pct_of_total=baseline_total / total_sales,
-        time_series=data['baseline'],
-    ))
-    
+    baseline_total = data["baseline"].sum()
+    decomp_results.append(
+        DecompositionResult(
+            component="Baseline",
+            total_contribution=baseline_total,
+            contribution_lower=baseline_total * 0.95,
+            contribution_upper=baseline_total * 1.05,
+            pct_of_total=baseline_total / total_sales,
+            time_series=data["baseline"],
+        )
+    )
+
     # Media channels
     for channel in channels:
-        contrib = data['contributions'][channel].sum()
-        decomp_results.append(DecompositionResult(
-            component=channel,
-            total_contribution=contrib,
-            contribution_lower=contrib * 0.85,
-            contribution_upper=contrib * 1.15,
-            pct_of_total=contrib / total_sales,
-            time_series=data['contributions'][channel],
-        ))
-    
+        contrib = data["contributions"][channel].sum()
+        decomp_results.append(
+            DecompositionResult(
+                component=channel,
+                total_contribution=contrib,
+                contribution_lower=contrib * 0.85,
+                contribution_upper=contrib * 1.15,
+                pct_of_total=contrib / total_sales,
+                time_series=data["contributions"][channel],
+            )
+        )
+
     # 5. Prior vs Posterior comparison
     prior_post_results = []
     for channel in channels:
-        beta_samples = samples[f'beta_{channel}']
-        prior_post_results.append(PriorPosteriorComparison(
-            parameter=f'beta_{channel}',
-            prior_mean=0.0,
-            prior_sd=0.5,
-            posterior_mean=float(np.mean(beta_samples)),
-            posterior_sd=float(np.std(beta_samples)),
-            posterior_hdi_low=float(np.percentile(beta_samples, 3)),
-            posterior_hdi_high=float(np.percentile(beta_samples, 97)),
-            shrinkage=1 - float(np.std(beta_samples)) / 0.5,
-            prior_samples=np.random.normal(0, 0.5, 1000),
-            posterior_samples=beta_samples,
-        ))
-    
+        beta_samples = samples[f"beta_{channel}"]
+        prior_post_results.append(
+            PriorPosteriorComparison(
+                parameter=f"beta_{channel}",
+                prior_mean=0.0,
+                prior_sd=0.5,
+                posterior_mean=float(np.mean(beta_samples)),
+                posterior_sd=float(np.std(beta_samples)),
+                posterior_hdi_low=float(np.percentile(beta_samples, 3)),
+                posterior_hdi_high=float(np.percentile(beta_samples, 97)),
+                shrinkage=1 - float(np.std(beta_samples)) / 0.5,
+                prior_samples=np.random.normal(0, 0.5, 1000),
+                posterior_samples=beta_samples,
+            )
+        )
+
     return {
-        'roi': roi_results,
-        'saturation': saturation_results,
-        'adstock': adstock_results,
-        'decomposition': decomp_results,
-        'prior_posterior': prior_post_results,
+        "roi": roi_results,
+        "saturation": saturation_results,
+        "adstock": adstock_results,
+        "decomposition": decomp_results,
+        "prior_posterior": prior_post_results,
     }
 
 
@@ -328,32 +368,35 @@ def compute_all_metrics(data: dict, samples: dict) -> dict:
 # Step 4: Generate HTML Report
 # =============================================================================
 
-def generate_html_report(data: dict, metrics: dict, output_path: str = 'mmm_report.html'):
+
+def generate_html_report(
+    data: dict, metrics: dict, output_path: str = "mmm_report.html"
+):
     """
     Generate a comprehensive HTML report from the computed metrics.
     """
-    
+
     # Prepare data for charts - serialize to JSON strings
-    roi_json = json.dumps([r.to_dict() for r in metrics['roi']])
-    decomp_df = compute_decomposition_waterfall(metrics['decomposition'])
-    decomp_json = json.dumps([d.to_dict() for d in metrics['decomposition']])
-    
+    roi_json = json.dumps([r.to_dict() for r in metrics["roi"]])
+    decomp_df = compute_decomposition_waterfall(metrics["decomposition"])
+    decomp_json = json.dumps([d.to_dict() for d in metrics["decomposition"]])
+
     # Serialize saturation and adstock data
-    sat_dict = {ch: curve.to_dict() for ch, curve in metrics['saturation'].items()}
+    sat_dict = {ch: curve.to_dict() for ch, curve in metrics["saturation"].items()}
     sat_json = json.dumps(sat_dict)
-    
-    adstock_dict = {ch: result.to_dict() for ch, result in metrics['adstock'].items()}
+
+    adstock_dict = {ch: result.to_dict() for ch, result in metrics["adstock"].items()}
     adstock_json = json.dumps(adstock_dict)
-    
+
     # Serialize time series data
-    dates_json = json.dumps([str(d.date()) for d in data['dates']])
-    baseline_json = json.dumps((data['baseline']/1e6).tolist())
-    
+    dates_json = json.dumps([str(d.date()) for d in data["dates"]])
+    baseline_json = json.dumps((data["baseline"] / 1e6).tolist())
+
     contributions_json = {}
-    for ch in data['channels'].keys():
-        contributions_json[ch] = (data['contributions'][ch]/1e6).tolist()
+    for ch in data["channels"].keys():
+        contributions_json[ch] = (data["contributions"][ch] / 1e6).tolist()
     contributions_json_str = json.dumps(contributions_json)
-    
+
     # Generate HTML
     html_content = f'''<!DOCTYPE html>
 <html lang="en">
@@ -871,20 +914,22 @@ def generate_html_report(data: dict, metrics: dict, output_path: str = 'mmm_repo
 </body>
 </html>
 '''
-    
+
     # Replace placeholders with actual JSON data
-    html_content = html_content.replace('ROI_DATA_PLACEHOLDER', roi_json)
-    html_content = html_content.replace('DECOMP_DATA_PLACEHOLDER', decomp_json)
-    html_content = html_content.replace('SATURATION_DATA_PLACEHOLDER', sat_json)
-    html_content = html_content.replace('ADSTOCK_DATA_PLACEHOLDER', adstock_json)
-    html_content = html_content.replace('DATES_PLACEHOLDER', dates_json)
-    html_content = html_content.replace('BASELINE_PLACEHOLDER', baseline_json)
-    html_content = html_content.replace('CONTRIBUTIONS_PLACEHOLDER', contributions_json_str)
-    
+    html_content = html_content.replace("ROI_DATA_PLACEHOLDER", roi_json)
+    html_content = html_content.replace("DECOMP_DATA_PLACEHOLDER", decomp_json)
+    html_content = html_content.replace("SATURATION_DATA_PLACEHOLDER", sat_json)
+    html_content = html_content.replace("ADSTOCK_DATA_PLACEHOLDER", adstock_json)
+    html_content = html_content.replace("DATES_PLACEHOLDER", dates_json)
+    html_content = html_content.replace("BASELINE_PLACEHOLDER", baseline_json)
+    html_content = html_content.replace(
+        "CONTRIBUTIONS_PLACEHOLDER", contributions_json_str
+    )
+
     # Save report
     output_path = Path(output_path)
-    output_path.write_text(html_content, encoding='utf-8')
-    
+    output_path.write_text(html_content, encoding="utf-8")
+
     return output_path
 
 
@@ -892,41 +937,45 @@ def generate_html_report(data: dict, metrics: dict, output_path: str = 'mmm_repo
 # Main Execution
 # =============================================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("=" * 70)
     print("MMM WORKFLOW: FIT MODEL AND GENERATE REPORT")
     print("=" * 70)
-    
+
     # Step 1: Generate data
     print("\n[1/4] Generating synthetic marketing data...")
     d = generate_marketing_data(n_weeks=104)
     print(f"      Generated {d['n_weeks']} weeks of data")
     print(f"      Channels: {list(d['channels'].keys())}")
     print(f"      Total sales: ${d['sales'].sum()/1e6:.1f}M")
-    
+
     # Step 2: Simulate posterior (in real usage, this comes from model fitting)
     print("\n[2/4] Simulating posterior samples...")
     samples = simulate_posterior_samples(d, n_samples=2000)
     print(f"      Generated {len(samples)} parameter posteriors")
-    
+
     # Step 3: Compute metrics
     print("\n[3/4] Computing reporting metrics with uncertainty...")
     metrics = compute_all_metrics(d, samples)
     print(f"      ROI computed for {len(metrics['roi'])} channels")
     print(f"      Saturation curves for {len(metrics['saturation'])} channels")
     print(f"      Adstock curves for {len(metrics['adstock'])} channels")
-    
+
     # Print ROI summary
     print("\n      ROI Summary:")
-    for r in sorted(metrics['roi'], key=lambda x: -x.roi_mean):
-        status = "✓" if r.prob_profitable > 0.9 else "?" if r.prob_profitable > 0.5 else "✗"
-        print(f"        {status} {r.channel:12s}: {r.roi_mean:.2f}x [{r.roi_lower:.2f} - {r.roi_upper:.2f}]  P(>1)={r.prob_profitable:.0%}")
-    
+    for r in sorted(metrics["roi"], key=lambda x: -x.roi_mean):
+        status = (
+            "✓" if r.prob_profitable > 0.9 else "?" if r.prob_profitable > 0.5 else "✗"
+        )
+        print(
+            f"        {status} {r.channel:12s}: {r.roi_mean:.2f}x [{r.roi_lower:.2f} - {r.roi_upper:.2f}]  P(>1)={r.prob_profitable:.0%}"
+        )
+
     # Step 4: Generate report
     print("\n[4/4] Generating HTML report...")
-    output_path = generate_html_report(d, metrics, 'mmm_report.html')
+    output_path = generate_html_report(d, metrics, "mmm_report.html")
     print(f"      Report saved to: {output_path}")
-    
+
     print("\n" + "=" * 70)
     print("WORKFLOW COMPLETE!")
     print("=" * 70)

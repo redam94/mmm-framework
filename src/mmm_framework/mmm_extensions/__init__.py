@@ -92,26 +92,44 @@ from .builders import (
     dense_controls,
 )
 
+# Result containers
+from .results import (
+    MediationEffects,
+    CrossEffectSummary,
+    ModelResults,
+    EffectDecomposition,
+)
+
 # Lazy imports for heavy dependencies (PyMC, PyTensor)
 if TYPE_CHECKING:
     from .components import (
-        # Existing
+        # Transforms
         geometric_adstock,
+        geometric_adstock_np,
+        geometric_adstock_pt,
+        geometric_adstock_convolution,
+        geometric_adstock_matrix,
         logistic_saturation,
         hill_saturation,
         apply_transformation_pipeline,
+        # Priors
         create_adstock_prior,
         create_saturation_prior,
         create_effect_prior,
+        # Builders
         build_media_transforms,
         build_linear_effect,
+        MediaTransformResult,
+        EffectResult,
+        # Observation
         build_gaussian_likelihood,
         build_partial_observation_model,
         build_multivariate_likelihood,
+        build_aggregated_survey_observation,
+        compute_survey_observation_indices,
+        # Cross effects
         build_cross_effect_matrix,
         compute_cross_effect_contribution,
-        MediaTransformResult,
-        EffectResult,
         CrossEffectSpec,
         # Variable Selection
         VariableSelectionResult,
@@ -124,25 +142,20 @@ if TYPE_CHECKING:
         build_control_effects_with_selection,
         compute_inclusion_probabilities,
         summarize_variable_selection,
-        build_aggregated_survey_observation,
-        compute_survey_observation_indices,
     )
     from .models import (
         BaseExtendedMMM,
         NestedMMM,
         MultivariateMMM,
         CombinedMMM,
-        MediationEffects,
-        CrossEffectSummary,
-        ModelResults,
     )
 
 
 def __getattr__(name: str):
     """Lazy import for heavy dependencies."""
-    # Components module
+    # Components module exports
     components_exports = {
-        # Existing
+        # Transforms
         "geometric_adstock",
         "geometric_adstock_np",
         "geometric_adstock_pt",
@@ -151,18 +164,24 @@ def __getattr__(name: str):
         "logistic_saturation",
         "hill_saturation",
         "apply_transformation_pipeline",
+        # Priors
         "create_adstock_prior",
         "create_saturation_prior",
         "create_effect_prior",
+        # Builders
         "build_media_transforms",
         "build_linear_effect",
+        "MediaTransformResult",
+        "EffectResult",
+        # Observation
         "build_gaussian_likelihood",
         "build_partial_observation_model",
         "build_multivariate_likelihood",
+        "build_aggregated_survey_observation",
+        "compute_survey_observation_indices",
+        # Cross effects
         "build_cross_effect_matrix",
         "compute_cross_effect_contribution",
-        "MediaTransformResult",
-        "EffectResult",
         "CrossEffectSpec",
         # Variable Selection
         "VariableSelectionResult",
@@ -177,15 +196,12 @@ def __getattr__(name: str):
         "summarize_variable_selection",
     }
 
-    # Models module
+    # Models module exports
     models_exports = {
         "BaseExtendedMMM",
         "NestedMMM",
         "MultivariateMMM",
         "CombinedMMM",
-        "MediationEffects",
-        "CrossEffectSummary",
-        "ModelResults",
     }
 
     if name in components_exports:
@@ -210,6 +226,8 @@ __all__ = [
     "EffectConstraint",
     "SaturationType",
     "VariableSelectionMethod",
+    "MediatorObservationType",
+    "AggregatedSurveyLikelihood",
     # Config classes
     "AdstockConfig",
     "SaturationConfig",
@@ -224,6 +242,7 @@ __all__ = [
     "SpikeSlabConfig",
     "LassoConfig",
     "VariableSelectionConfig",
+    "AggregatedSurveyConfig",
     # Builders
     "AdstockConfigBuilder",
     "SaturationConfigBuilder",
@@ -238,8 +257,10 @@ __all__ = [
     "SpikeSlabConfigBuilder",
     "LassoConfigBuilder",
     "VariableSelectionConfigBuilder",
+    "AggregatedSurveyConfigBuilder",
     # Factory functions
     "awareness_mediator",
+    "survey_awareness_mediator",
     "foot_traffic_mediator",
     "cannibalization_effect",
     "halo_effect",
@@ -249,8 +270,17 @@ __all__ = [
     "sparse_selection_config",
     "dense_selection_config",
     "inclusion_prob_selection_config",
-    # Components
+    # Result containers
+    "MediationEffects",
+    "CrossEffectSummary",
+    "ModelResults",
+    "EffectDecomposition",
+    # Components (lazy loaded)
     "geometric_adstock",
+    "geometric_adstock_np",
+    "geometric_adstock_pt",
+    "geometric_adstock_convolution",
+    "geometric_adstock_matrix",
     "logistic_saturation",
     "hill_saturation",
     "apply_transformation_pipeline",
@@ -259,13 +289,15 @@ __all__ = [
     "create_effect_prior",
     "build_media_transforms",
     "build_linear_effect",
+    "MediaTransformResult",
+    "EffectResult",
     "build_gaussian_likelihood",
     "build_partial_observation_model",
     "build_multivariate_likelihood",
+    "build_aggregated_survey_observation",
+    "compute_survey_observation_indices",
     "build_cross_effect_matrix",
     "compute_cross_effect_contribution",
-    "MediaTransformResult",
-    "EffectResult",
     "CrossEffectSpec",
     "VariableSelectionResult",
     "ControlEffectResult",
@@ -277,12 +309,9 @@ __all__ = [
     "build_control_effects_with_selection",
     "compute_inclusion_probabilities",
     "summarize_variable_selection",
-    # Models
+    # Models (lazy loaded)
     "BaseExtendedMMM",
     "NestedMMM",
     "MultivariateMMM",
     "CombinedMMM",
-    "MediationEffects",
-    "CrossEffectSummary",
-    "ModelResults",
 ]

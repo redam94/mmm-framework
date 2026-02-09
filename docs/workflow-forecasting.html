@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forecasting | MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #c9a067;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf8;
+            --color-bg-alt: #f5f7f2;
+            --color-surface: #ffffff;
+            --color-border: #e0e5dc;
+            --shadow-sm: 0 1px 3px rgba(45,58,45,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(45,58,45,0.15);
+            --transition-smooth: all 0.3s ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
+            font-size: 17px;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+        /* Navigation */
+        .back-nav {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        .back-nav:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .page-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+        }
+        .page-header .subtitle {
+            font-size: 1.15rem;
+            color: var(--color-text-muted);
+        }
+        .page-header .question-badge {
+            display: inline-block;
+            background: var(--color-accent);
+            color: white;
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        /* Section styling */
+        .section { margin-bottom: 3rem; }
+        .section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+        .section h3 {
+            font-size: 1.3rem;
+            margin: 2rem 0 1rem;
+            color: var(--color-primary-dark);
+        }
+        .section h4 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--color-text);
+        }
+        .section p { margin-bottom: 1rem; }
+
+        /* Analogy box */
+        .analogy-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.12) 0%, rgba(201,160,103,0.04) 100%);
+            border-left: 4px solid var(--color-warning);
+            padding: 1.5rem 1.75rem;
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        .analogy-box::before {
+            content: "Think of it this way";
+            position: absolute;
+            top: -10px;
+            left: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-warning);
+            background: var(--color-bg);
+            padding: 0 0.5rem;
+        }
+        .analogy-box h4 { color: var(--color-accent-dark); margin-top: 0; margin-bottom: 0.5rem; font-size: 1rem; }
+        .analogy-box p:last-child { margin-bottom: 0; }
+
+        /* Why box */
+        .why-box {
+            background: linear-gradient(135deg, rgba(143,168,106,0.1) 0%, rgba(90,124,101,0.05) 100%);
+            border: 1px solid rgba(90,124,101,0.3);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .why-box h4 {
+            color: var(--color-primary-dark);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        .why-box p:last-child { margin-bottom: 0; }
+
+        /* Warning box */
+        .warning-box {
+            background: linear-gradient(135deg, rgba(201,160,103,0.1) 0%, rgba(201,112,103,0.05) 100%);
+            border: 1px solid rgba(201,112,103,0.3);
+            border-left: 5px solid var(--color-danger);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .warning-box h4 { color: var(--color-danger); margin-top: 0; margin-bottom: 0.5rem; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        /* Success box */
+        .success-box {
+            background: linear-gradient(135deg, rgba(103,201,154,0.1) 0%, rgba(103,201,154,0.05) 100%);
+            border: 1px solid rgba(103,201,154,0.4);
+            border-left: 5px solid var(--color-success);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .success-box h4 { color: #3d8b5a; margin-top: 0; margin-bottom: 0.5rem; }
+        .success-box p:last-child { margin-bottom: 0; }
+
+        /* Chart container */
+        .chart-container {
+            width: 100%;
+            height: 350px;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface);
+        }
+        .chart-container.tall { height: 420px; }
+        .chart-container.short { height: 280px; }
+
+        .chart-explanation {
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-top: -0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .chart-explanation strong { color: var(--color-text); }
+
+        /* Interactive demo */
+        .interactive-demo {
+            background: var(--color-surface);
+            border: 2px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .interactive-demo h4 { margin-top: 0; color: var(--color-primary-dark); }
+
+        /* Control panel */
+        .control-panel {
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin: 1rem 0;
+        }
+        .control-panel h4 { margin-top: 0; margin-bottom: 1rem; font-size: 1rem; }
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .control-row:last-child { margin-bottom: 0; }
+        .control-row label { min-width: 160px; font-weight: 500; font-size: 0.95rem; }
+        .control-row select {
+            flex: 1;
+            max-width: 250px;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 0.95rem;
+            background: var(--color-surface);
+            cursor: pointer;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--color-border);
+            appearance: none;
+            cursor: pointer;
+        }
+        .control-row input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+        }
+        .control-row input[type="number"] {
+            width: 120px;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+        }
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            background: var(--color-surface);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+        }
+
+        /* Target calculator */
+        .target-calculator {
+            background: var(--color-surface);
+            border: 2px solid var(--color-accent);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+        .target-calculator h4 { margin-top: 0; color: var(--color-accent-dark); }
+        .target-input-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin: 1.5rem 0;
+            flex-wrap: wrap;
+        }
+        .target-input-group label { font-weight: 600; font-size: 1.1rem; }
+        .target-input-group input {
+            width: 150px;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.25rem;
+            text-align: center;
+        }
+        .target-input-group input:focus { border-color: var(--color-accent); outline: none; }
+        .target-result {
+            padding: 1.5rem;
+            background: var(--color-bg-alt);
+            border-radius: var(--radius-md);
+            margin-top: 1rem;
+        }
+        .target-result .probability {
+            font-size: 3rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .target-result .probability.high { color: var(--color-success); }
+        .target-result .probability.medium { color: var(--color-warning); }
+        .target-result .probability.low { color: var(--color-danger); }
+        .target-result .description { color: var(--color-text-muted); margin-top: 0.5rem; }
+
+        /* Scenario comparison */
+        .scenario-comparison {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .scenario-card {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+            transition: var(--transition-smooth);
+        }
+        .scenario-card.conservative { border-color: var(--color-accent); }
+        .scenario-card.baseline { border-color: var(--color-primary); }
+        .scenario-card.aggressive { border-color: var(--color-warning); }
+        .scenario-card h5 { font-size: 1rem; margin: 0 0 0.75rem 0; }
+        .scenario-card .scenario-budget {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-bottom: 1rem;
+        }
+        .scenario-card .scenario-metric {
+            margin: 0.75rem 0;
+        }
+        .scenario-card .scenario-metric .label {
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .scenario-card .scenario-metric .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .scenario-card .scenario-metric .range {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+        }
+
+        /* Risk assessment */
+        .risk-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .risk-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .risk-card .risk-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .risk-card .risk-label {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+        .risk-card .risk-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .risk-card .risk-desc {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Code example */
+        .code-example {
+            background: #1e2a1e;
+            color: #a8c99a;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            line-height: 1.6;
+        }
+        .code-example .comment { color: #6a8d6a; }
+        .code-example .keyword { color: #c792ea; }
+        .code-example .string { color: #c3e88d; }
+        .code-example .function { color: #82aaff; }
+        .code-example .number { color: #f78c6c; }
+
+        /* Question navigation */
+        .question-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 3rem 0;
+            padding-top: 2rem;
+            border-top: 1px solid var(--color-border);
+        }
+        .question-nav-card {
+            display: block;
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition-smooth);
+        }
+        .question-nav-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .question-nav-card.current {
+            border-color: var(--color-accent);
+            background: linear-gradient(135deg, rgba(106,143,168,0.08) 0%, var(--color-surface) 100%);
+        }
+        .question-nav-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .question-nav-card h5 { font-size: 0.95rem; margin: 0 0 0.25rem 0; }
+        .question-nav-card p { font-size: 0.8rem; color: var(--color-text-muted); margin: 0; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .page-header h1 { font-size: 2rem; }
+            .control-row { flex-direction: column; align-items: flex-start; }
+            .control-row label { min-width: auto; }
+            .question-nav { grid-template-columns: 1fr; }
+            .scenario-comparison { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<!-- Navigation injected by components.js -->
+<div class="container" style="padding-top: 5rem;">
+
+    <header class="page-header">
+        <span class="question-badge">Question Type 3</span>
+        <h1>Forecasting with Confidence</h1>
+        <p class="subtitle">Planning with honest uncertainty</p>
+    </header>
+
+    <!-- SECTION 1: What We're Actually Asking -->
+    <section class="section">
+        <h2>What We're Actually Asking</h2>
+
+        <p>
+            Forecasting isn't about predicting a single number&mdash;it's about understanding the
+            <strong>range of likely outcomes</strong> given what we know. A forecast that says
+            "We'll sell $10-12M next quarter" is more useful than "$11M" because it helps you
+            plan for both optimistic and pessimistic scenarios.
+        </p>
+
+        <p>
+            The key questions forecasting can answer:
+        </p>
+        <ul>
+            <li><strong>What's our expected outcome</strong> if we maintain current marketing levels?</li>
+            <li><strong>How would outcomes change</strong> if we increase or decrease budget?</li>
+            <li><strong>What's the probability</strong> of hitting a specific sales target?</li>
+            <li><strong>What's the downside risk</strong> we should plan for?</li>
+        </ul>
+
+        <div class="analogy-box">
+            <h4>The Weather Forecast Analogy</h4>
+            <p>
+                When a meteorologist says "70% chance of rain tomorrow," they're not saying it will
+                definitely rain&mdash;they're telling you their confidence level. Good weather forecasts
+                communicate uncertainty honestly, so you can decide whether to bring an umbrella.
+            </p>
+            <p>
+                Marketing forecasts work the same way. "We have a 75% probability of hitting our target"
+                is more useful than a point estimate because it helps you decide how much risk buffer to plan.
+            </p>
+        </div>
+    </section>
+
+    <!-- SECTION 2: Core Concepts -->
+    <section class="section">
+        <h2>The Core Concepts</h2>
+
+        <h3>2.1 Point Estimates vs. Prediction Intervals</h3>
+
+        <p>
+            A <strong>point estimate</strong> is a single number: "We predict $11M in sales."
+            A <strong>prediction interval</strong> gives a range: "We're 94% confident sales will be between $9.5M and $12.5M."
+        </p>
+
+        <div class="why-box">
+            <h4>Why intervals matter more than points</h4>
+            <p>
+                Point estimates give false confidence. If someone tells you "sales will be $11M," you might
+                plan your operations, hiring, and inventory around exactly that number. When reality comes
+                in at $9.8M or $12.2M, you're caught off guard.
+            </p>
+            <p style="margin-bottom: 0;">
+                Intervals let you plan for scenarios: "If we hit the low end, we can handle it. If we hit
+                the high end, we're ready to scale." That's operational resilience.
+            </p>
+        </div>
+
+        <h3>2.2 The Fan Chart</h3>
+
+        <p>
+            A <strong>fan chart</strong> shows how uncertainty grows over time. Near-term forecasts are
+            more certain (narrow band); far-term forecasts are less certain (wide band).
+        </p>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Forecast Fan Chart</h4>
+            <p>Adjust the budget multiplier to see how different spending levels affect the forecast.</p>
+
+            <div class="control-panel">
+                <div class="control-row">
+                    <label>Budget scenario:</label>
+                    <input type="range" id="budgetMultiplier" min="70" max="130" value="100" oninput="updateFanChart()">
+                    <span class="value-display" id="budgetMultiplierVal">100%</span>
+                </div>
+                <div class="control-row">
+                    <label>Forecast horizon:</label>
+                    <select id="forecastHorizon" onchange="updateFanChart()">
+                        <option value="13">1 Quarter (13 weeks)</option>
+                        <option value="26" selected>2 Quarters (26 weeks)</option>
+                        <option value="52">1 Year (52 weeks)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chart-container tall" id="fanChart"></div>
+            <div class="chart-explanation">
+                <strong>Reading this chart:</strong> The solid line is actual sales (historical) and expected
+                forecast (future). The shaded bands show uncertainty: darker = more likely, lighter = less likely.
+                Notice how the band widens further into the future&mdash;that's growing uncertainty.
+            </div>
+        </div>
+
+        <h3>2.3 Scenario-Based Forecasting</h3>
+
+        <p>
+            Rather than a single forecast, you can generate multiple scenarios based on different
+            budget assumptions. This helps stakeholders understand the trade-offs.
+        </p>
+
+        <div class="scenario-comparison">
+            <div class="scenario-card conservative">
+                <h5>&#x1F6E1; Conservative</h5>
+                <div class="scenario-budget">Budget: -20% from baseline</div>
+                <div class="scenario-metric">
+                    <div class="label">Expected Outcome</div>
+                    <div class="value">$9.2M</div>
+                    <div class="range">[$8.4M - $10.1M]</div>
+                </div>
+                <div class="scenario-metric">
+                    <div class="label">P(Hit $10M Target)</div>
+                    <div class="value" style="color: var(--color-danger);">32%</div>
+                </div>
+            </div>
+            <div class="scenario-card baseline">
+                <h5>&#x2696; Baseline</h5>
+                <div class="scenario-budget">Budget: Current levels</div>
+                <div class="scenario-metric">
+                    <div class="label">Expected Outcome</div>
+                    <div class="value">$11.2M</div>
+                    <div class="range">[$10.1M - $12.4M]</div>
+                </div>
+                <div class="scenario-metric">
+                    <div class="label">P(Hit $10M Target)</div>
+                    <div class="value" style="color: var(--color-success);">89%</div>
+                </div>
+            </div>
+            <div class="scenario-card aggressive">
+                <h5>&#x1F680; Aggressive</h5>
+                <div class="scenario-budget">Budget: +20% from baseline</div>
+                <div class="scenario-metric">
+                    <div class="label">Expected Outcome</div>
+                    <div class="value">$12.8M</div>
+                    <div class="range">[$11.5M - $14.2M]</div>
+                </div>
+                <div class="scenario-metric">
+                    <div class="label">P(Hit $10M Target)</div>
+                    <div class="value" style="color: var(--color-success);">98%</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: Target Achievement -->
+    <section class="section">
+        <h2>Target Achievement Calculator</h2>
+
+        <p>
+            Often the most useful question isn't "What's the expected value?" but rather
+            "What's the probability we hit our target?" This calculator answers that directly.
+        </p>
+
+        <div class="target-calculator">
+            <h4>What's the probability of hitting your target?</h4>
+
+            <div class="target-input-group">
+                <label>Sales Target:</label>
+                <span style="font-size: 1.25rem;">$</span>
+                <input type="number" id="targetInput" value="10" step="0.5" min="0" max="20" oninput="updateTargetCalculation()">
+                <span style="font-size: 1.25rem;">M</span>
+            </div>
+
+            <div class="chart-container short" id="targetDistributionChart"></div>
+
+            <div class="target-result">
+                <div class="probability high" id="targetProbability">89%</div>
+                <div class="description" id="targetDescription">
+                    Based on your current marketing plan, there's an 89% probability of
+                    exceeding $10M in sales next quarter.
+                </div>
+            </div>
+        </div>
+
+        <div class="why-box">
+            <h4>Using target probabilities for decisions</h4>
+            <p>
+                Different targets warrant different confidence thresholds:
+            </p>
+            <ul style="margin-bottom: 0;">
+                <li><strong>Break-even target:</strong> You need high confidence (>90%) to ensure survival</li>
+                <li><strong>Budget target:</strong> Moderate confidence (70-80%) is often acceptable for planning</li>
+                <li><strong>Stretch goal:</strong> Lower confidence (40-60%) is fine&mdash;it's aspirational</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 4: Risk Assessment -->
+    <section class="section">
+        <h2>Downside Risk Assessment</h2>
+
+        <p>
+            Good planning considers not just the expected outcome but the <strong>downside risk</strong>.
+            What happens if things go worse than expected?
+        </p>
+
+        <div class="risk-grid">
+            <div class="risk-card">
+                <div class="risk-icon">&#x1F4C9;</div>
+                <div class="risk-label">5th Percentile</div>
+                <div class="risk-value">$8.8M</div>
+                <div class="risk-desc">"Worst case" (5% chance of being lower)</div>
+            </div>
+            <div class="risk-card">
+                <div class="risk-icon">&#x1F4CA;</div>
+                <div class="risk-label">25th Percentile</div>
+                <div class="risk-value">$10.2M</div>
+                <div class="risk-desc">Conservative planning floor</div>
+            </div>
+            <div class="risk-card">
+                <div class="risk-icon">&#x1F3AF;</div>
+                <div class="risk-label">50th Percentile</div>
+                <div class="risk-value">$11.2M</div>
+                <div class="risk-desc">Median expectation</div>
+            </div>
+            <div class="risk-card">
+                <div class="risk-icon">&#x1F4C8;</div>
+                <div class="risk-label">95th Percentile</div>
+                <div class="risk-value">$13.6M</div>
+                <div class="risk-desc">"Best case" (5% chance of being higher)</div>
+            </div>
+        </div>
+
+        <div class="interactive-demo">
+            <h4>Interactive: Budget Sensitivity Analysis</h4>
+            <p>
+                How does the expected outcome and risk profile change as you adjust total marketing spend?
+            </p>
+
+            <div class="chart-container tall" id="sensitivityChart"></div>
+            <div class="chart-explanation">
+                <strong>Reading this chart:</strong> The solid line shows expected outcome at different budget
+                levels. The shaded band shows the 94% prediction interval. The vertical line marks your current
+                budget. Drag the slider above to explore.
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 5: Practical Guidance -->
+    <section class="section">
+        <h2>Practical Guidance</h2>
+
+        <div class="warning-box">
+            <h4>Common Pitfalls</h4>
+            <ul>
+                <li><strong>Point forecast tunnel vision:</strong> Don't plan around a single number. The range matters more than the midpoint.</li>
+                <li><strong>Extrapolating too far:</strong> Forecasts become unreliable with longer horizons. Be cautious beyond 2 quarters.</li>
+                <li><strong>Ignoring external factors:</strong> The model doesn't know about competitor launches, economic shifts, or regulatory changes.</li>
+                <li><strong>False precision:</strong> "$10,247,382" is not more accurate than "about $10M." Don't let spurious precision mislead stakeholders.</li>
+            </ul>
+        </div>
+
+        <div class="success-box">
+            <h4>Best Practices</h4>
+            <ul>
+                <li>Present forecasts as ranges, not point estimates</li>
+                <li>Update forecasts regularly (monthly or quarterly) as new data arrives</li>
+                <li>Use scenario planning to explore sensitivities to key assumptions</li>
+                <li>Build buffer into plans based on the prediction interval, not just the mean</li>
+                <li>Track forecast accuracy over time to calibrate confidence</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 6: Implementation -->
+    <section class="section">
+        <h2>Implementation in MMM Framework</h2>
+
+        <h3>Basic Forecasting</h3>
+
+        <div class="code-example">
+<span class="keyword">import</span> numpy <span class="keyword">as</span> np <br>
+
+<span class="comment"># Predict with current media plan</span><br>
+baseline_pred = fitted_model.predict()<br>
+
+<span class="function">print</span>(<span class="string">f"Expected sales: ${baseline_pred.y_pred_mean.sum():,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"94% CI: [${baseline_pred.y_pred_hdi_low.sum():,.0f}, "</span><br>
+      <span class="string">f"${baseline_pred.y_pred_hdi_high.sum():,.0f}]"</span>)<br>
+
+<span class="comment"># Output:</span><br>
+<span class="comment"># Expected sales: $11,200,000</span><br>
+<span class="comment"># 94% CI: [$10,100,000, $12,400,000]</span>
+        </div>
+
+        <h3>Scenario-Based Forecasting</h3>
+
+        <div class="code-example">
+<span class="comment"># Predict with modified media plan (20% budget increase)</span><br>
+X_media_increased = fitted_model.X_media_raw * <span class="number">1.2</span><br>
+scenario_pred = fitted_model.predict(X_media=X_media_increased)<br>
+
+<span class="function">print</span>(<span class="string">f"With 20% budget increase:"</span>)<br>
+<span class="function">print</span>(<span class="string">f"Expected sales: ${scenario_pred.y_pred_mean.sum():,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"94% CI: [${scenario_pred.y_pred_hdi_low.sum():,.0f}, "</span><br>
+      <span class="string">f"${scenario_pred.y_pred_hdi_high.sum():,.0f}]"</span>)<br>
+
+<span class="comment"># Output:</span><br>
+<span class="comment"># With 20% budget increase:</span><br>
+<span class="comment"># Expected sales: $12,800,000</span><br>
+<span class="comment"># 94% CI: [$11,500,000, $14,200,000]</span><br>
+        </div>
+
+        <h3>Target Probability Calculation</h3>
+
+        <div class="code-example">
+<span class="comment"># Calculate probability of exceeding a target</span><br>
+target = <span class="number">10_000_000</span><br>
+
+<span class="comment"># Sum predictions across time to get total for the period</span><br>
+total_samples = scenario_pred.y_pred_samples.sum(axis=<span class="number">1</span>)  <span class="comment"># Sum across time</span><br><br>
+
+<span class="comment"># Calculate probability</span><br>
+prob_exceed = (total_samples > target).mean()<br>
+<span class="function">print</span>(<span class="string">f"Probability of exceeding ${target:,.0f}: {prob_exceed:.1%}"</span>)<br>
+<br>
+<span class="comment"># Output:</span><br>
+<span class="comment"># Probability of exceeding $10,000,000: 98.2%</span><br>
+<br>
+<span class="comment"># Get various percentiles for risk assessment</span><br>
+percentiles = np.percentile(total_samples, [<span class="number">5</span>, <span class="number">25</span>, <span class="number">50</span>, <span class="number">75</span>, <span class="number">95</span>])<br>
+<span class="function">print</span>(<span class="string">f"5th percentile: ${percentiles[0]:,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"Median: ${percentiles[2]:,.0f}"</span>)<br>
+<span class="function">print</span>(<span class="string">f"95th percentile: ${percentiles[4]:,.0f}"</span>)<br>
+        </div>
+
+        <h3>Multi-Scenario Comparison</h3>
+
+        <div class="code-example">
+<span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer<br>
+<br>
+
+analyzer = MMMAnalyzer(fitted_model)<br>
+<br>
+
+<span class="comment"># Define scenarios</span><br>
+scenarios = {<br>
+    &emsp;<span class="string">'Conservative'</span>: {<span class="string">'TV'</span>: <span class="number">0.8</span>, <span class="string">'Digital'</span>: <span class="number">0.8</span>},<br>
+    &emsp;<span class="string">'Baseline'</span>: {<span class="string">'TV'</span>: <span class="number">1.0</span>, <span class="string">'Digital'</span>: <span class="number">1.0</span>},<br>
+    &emsp;<span class="string">'Aggressive'</span>: {<span class="string">'TV'</span>: <span class="number">1.2</span>, <span class="string">'Digital'</span>: <span class="number">1.2</span>}<br>
+}<br>
+<br>
+<span class="comment"># Run and compare</span><br>
+<span class="keyword">for</span> name, spend_changes <span class="keyword">in</span> scenarios.items():<br>
+    &emsp;result = analyzer.what_if_scenario(spend_changes=spend_changes)<br>
+    &emsp;<span class="function">print</span>(<span class="string">f"{name}: ${result.scenario_outcome:,.0f}"</span>)<br>
+<br>
+<span class="comment"># Output:</span><br>
+<span class="comment"># Conservative: $9,200,000</span><br>
+<span class="comment"># Baseline: $11,200,000</span><br>
+<span class="comment"># Aggressive: $12,800,000</span><br>
+        </div>
+    </section>
+
+    <!-- Question Navigation -->
+    <nav class="question-nav">
+        <a href="workflow-channel-effectiveness.html" class="question-nav-card">
+            <div class="icon">&#x1F4CA;</div>
+            <h5>Channel Effectiveness</h5>
+            <p>Which channels work?</p>
+        </a>
+        <a href="workflow-budget-optimization.html" class="question-nav-card">
+            <div class="icon">&#x1F4B0;</div>
+            <h5>Budget Allocation</h5>
+            <p>How to split budget?</p>
+        </a>
+        <div class="question-nav-card current">
+            <div class="icon">&#x1F52E;</div>
+            <h5>Forecasting</h5>
+            <p>What to expect?</p>
+        </div>
+    </nav>
+</div>
+
+<script>
+// Chart configuration
+const cfg = { responsive: true, displayModeBar: false };
+const colors = {
+    primary: '#5a7c65',
+    primaryLight: '#8fa86a',
+    primaryDark: '#3d5a47',
+    accent: '#6a8fa8',
+    warning: '#c9a067',
+    danger: '#c97067',
+    success: '#67c99a',
+    text: '#2d3a2d',
+    grid: 'rgba(90,124,101,0.1)'
+};
+const layout_base = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'Source Sans 3, sans-serif', color: colors.text },
+    margin: { t: 30, r: 30, b: 50, l: 60 }
+};
+
+// Generate simulated historical and forecast data
+function generateTimeSeriesData(weeks, budgetMultiplier = 1.0) {
+    const data = [];
+    const historical = 52; // Historical weeks
+    const forecastWeeks = weeks;
+
+    // Historical data (actual)
+    for (let w = 0; w < historical; w++) {
+        const trend = 10 + 0.02 * w;
+        const seasonality = 1.5 * Math.sin(2 * Math.PI * w / 52);
+        const media = 2.5 + 0.5 * Math.sin(2 * Math.PI * w / 26);
+        const noise = (Math.random() - 0.5) * 1.0;
+        data.push({
+            week: w + 1,
+            type: 'historical',
+            value: trend + seasonality + media + noise
+        });
+    }
+
+    // Forecast data
+    const baseUncertainty = 0.8;
+    for (let w = 0; w < forecastWeeks; w++) {
+        const totalW = historical + w;
+        const trend = 10 + 0.02 * totalW;
+        const seasonality = 1.5 * Math.sin(2 * Math.PI * totalW / 52);
+        const media = (2.5 + 0.5 * Math.sin(2 * Math.PI * totalW / 26)) * budgetMultiplier;
+
+        // Uncertainty grows with horizon
+        const uncertainty = baseUncertainty * (1 + w * 0.05);
+
+        data.push({
+            week: totalW + 1,
+            type: 'forecast',
+            value: trend + seasonality + media,
+            uncertainty: uncertainty
+        });
+    }
+
+    return data;
+}
+
+// Initialize charts on load
+document.addEventListener('DOMContentLoaded', function() {
+    updateFanChart();
+    updateTargetCalculation();
+    initSensitivityChart();
+});
+
+// Fan chart
+function updateFanChart() {
+    const budgetMult = parseFloat(document.getElementById('budgetMultiplier').value) / 100;
+    const horizon = parseInt(document.getElementById('forecastHorizon').value);
+    document.getElementById('budgetMultiplierVal').textContent = Math.round(budgetMult * 100) + '%';
+
+    const data = generateTimeSeriesData(horizon, budgetMult);
+    const historical = data.filter(d => d.type === 'historical');
+    const forecast = data.filter(d => d.type === 'forecast');
+
+    // Prepare traces
+    const historicalWeeks = historical.map(d => d.week);
+    const historicalValues = historical.map(d => d.value);
+
+    const forecastWeeks = forecast.map(d => d.week);
+    const forecastValues = forecast.map(d => d.value);
+
+    // Create uncertainty bands (94%, 80%, 50%)
+    const bands = [
+        { prob: 0.94, alpha: 0.15 },
+        { prob: 0.80, alpha: 0.25 },
+        { prob: 0.50, alpha: 0.35 }
+    ];
+
+    const traces = [];
+
+    // Add uncertainty bands (in reverse order for proper layering)
+    bands.forEach(band => {
+        const upper = forecast.map(d => d.value + d.uncertainty * (2 - band.prob) * 1.5);
+        const lower = forecast.map(d => d.value - d.uncertainty * (2 - band.prob) * 1.5);
+
+        traces.push({
+            x: [...forecastWeeks, ...forecastWeeks.slice().reverse()],
+            y: [...upper, ...lower.slice().reverse()],
+            fill: 'toself',
+            fillcolor: `rgba(106,143,168,${band.alpha})`,
+            line: { width: 0 },
+            showlegend: band.prob === 0.94,
+            name: '94% CI',
+            hoverinfo: 'skip'
+        });
+    });
+
+    // Historical line
+    traces.push({
+        x: historicalWeeks,
+        y: historicalValues,
+        mode: 'lines',
+        line: { color: colors.text, width: 2.5 },
+        name: 'Actual'
+    });
+
+    // Forecast line
+    traces.push({
+        x: forecastWeeks,
+        y: forecastValues,
+        mode: 'lines',
+        line: { color: colors.accent, width: 2.5, dash: 'solid' },
+        name: 'Forecast'
+    });
+
+    // Dividing line
+    traces.push({
+        x: [52, 52],
+        y: [8, 18],
+        mode: 'lines',
+        line: { color: colors.text, width: 1, dash: 'dot' },
+        showlegend: false
+    });
+
+    Plotly.newPlot('fanChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'Week', gridcolor: colors.grid },
+        yaxis: { title: 'Sales ($M)', gridcolor: colors.grid, range: [6, 20] },
+        legend: { orientation: 'h', y: 1.12 },
+        annotations: [{
+            x: 52,
+            y: 17,
+            text: 'Forecast starts',
+            showarrow: false,
+            font: { size: 11, color: colors.text }
+        }]
+    }, cfg);
+}
+
+// Target calculation
+function updateTargetCalculation() {
+    const target = parseFloat(document.getElementById('targetInput').value);
+
+    // Simulate a distribution around expected value
+    const expectedMean = 11.2;
+    const expectedSD = 1.1;
+
+    // Calculate probability (normal CDF approximation)
+    const z = (target - expectedMean) / expectedSD;
+    const probability = 1 - normalCDF(z);
+
+    document.getElementById('targetProbability').textContent = Math.round(probability * 100) + '%';
+
+    // Update styling
+    const probEl = document.getElementById('targetProbability');
+    probEl.classList.remove('high', 'medium', 'low');
+    if (probability > 0.8) probEl.classList.add('high');
+    else if (probability > 0.5) probEl.classList.add('medium');
+    else probEl.classList.add('low');
+
+    // Update description
+    const desc = document.getElementById('targetDescription');
+    if (probability > 0.8) {
+        desc.textContent = `Based on your current marketing plan, there's a ${Math.round(probability * 100)}% probability of exceeding $${target}M in sales next quarter. This is a highly achievable target.`;
+    } else if (probability > 0.5) {
+        desc.textContent = `Based on your current marketing plan, there's a ${Math.round(probability * 100)}% probability of exceeding $${target}M in sales next quarter. This is achievable but requires things to go well.`;
+    } else {
+        desc.textContent = `Based on your current marketing plan, there's only a ${Math.round(probability * 100)}% probability of exceeding $${target}M in sales next quarter. Consider increasing marketing or adjusting the target.`;
+    }
+
+    // Draw distribution chart
+    drawTargetDistribution(target, expectedMean, expectedSD);
+}
+
+function normalCDF(x) {
+    const a1 =  0.254829592;
+    const a2 = -0.284496736;
+    const a3 =  1.421413741;
+    const a4 = -1.453152027;
+    const a5 =  1.061405429;
+    const p  =  0.3275911;
+
+    const sign = x < 0 ? -1 : 1;
+    x = Math.abs(x) / Math.sqrt(2);
+
+    const t = 1.0 / (1.0 + p * x);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+
+    return 0.5 * (1.0 + sign * y);
+}
+
+function drawTargetDistribution(target, mean, sd) {
+    const x = Array.from({length: 100}, (_, i) => mean - 4*sd + i * 8*sd / 99);
+    const y = x.map(v => Math.exp(-Math.pow(v - mean, 2) / (2 * sd * sd)));
+    const maxY = Math.max(...y);
+    const yNorm = y.map(v => v / maxY);
+
+    // Split into below and above target
+    const xBelow = x.filter(v => v <= target);
+    const yBelow = xBelow.map(v => Math.exp(-Math.pow(v - mean, 2) / (2 * sd * sd)) / maxY);
+
+    const xAbove = x.filter(v => v >= target);
+    const yAbove = xAbove.map(v => Math.exp(-Math.pow(v - mean, 2) / (2 * sd * sd)) / maxY);
+
+    const traces = [
+        {
+            x: xBelow,
+            y: yBelow,
+            fill: 'tozeroy',
+            fillcolor: 'rgba(201,112,103,0.3)',
+            line: { width: 0 },
+            name: 'Below target',
+            showlegend: false
+        },
+        {
+            x: xAbove,
+            y: yAbove,
+            fill: 'tozeroy',
+            fillcolor: 'rgba(103,201,154,0.3)',
+            line: { width: 0 },
+            name: 'Above target',
+            showlegend: false
+        },
+        {
+            x: x,
+            y: yNorm,
+            mode: 'lines',
+            line: { color: colors.accent, width: 3 },
+            name: 'Distribution',
+            showlegend: false
+        },
+        {
+            x: [target, target],
+            y: [0, 1.1],
+            mode: 'lines',
+            line: { color: colors.danger, width: 2, dash: 'dash' },
+            name: 'Target',
+            showlegend: false
+        }
+    ];
+
+    Plotly.newPlot('targetDistributionChart', traces, {
+        ...layout_base,
+        margin: { t: 20, r: 30, b: 40, l: 50 },
+        xaxis: { title: 'Sales ($M)', gridcolor: colors.grid },
+        yaxis: { showticklabels: false, gridcolor: colors.grid },
+        annotations: [{
+            x: target,
+            y: 1.05,
+            text: `Target: $${target}M`,
+            showarrow: false,
+            font: { size: 11, color: colors.danger }
+        }]
+    }, cfg);
+}
+
+// Sensitivity chart
+function initSensitivityChart() {
+    const budgetLevels = Array.from({length: 13}, (_, i) => 70 + i * 5);
+    const expectedOutcomes = budgetLevels.map(b => {
+        const mult = b / 100;
+        return 9.5 + 2.5 * Math.log(mult + 0.3) + 1.5; // Diminishing returns
+    });
+
+    const lowerBound = expectedOutcomes.map((v, i) => v - 1.1 - i * 0.02);
+    const upperBound = expectedOutcomes.map((v, i) => v + 1.1 + i * 0.02);
+
+    const traces = [
+        {
+            x: [...budgetLevels, ...budgetLevels.slice().reverse()],
+            y: [...upperBound, ...lowerBound.slice().reverse()],
+            fill: 'toself',
+            fillcolor: 'rgba(90,124,101,0.2)',
+            line: { width: 0 },
+            name: '94% CI',
+            showlegend: true
+        },
+        {
+            x: budgetLevels,
+            y: expectedOutcomes,
+            mode: 'lines',
+            line: { color: colors.primary, width: 3 },
+            name: 'Expected'
+        },
+        {
+            x: [100, 100],
+            y: [8, 14],
+            mode: 'lines',
+            line: { color: colors.text, width: 1.5, dash: 'dot' },
+            name: 'Current',
+            showlegend: true
+        }
+    ];
+
+    Plotly.newPlot('sensitivityChart', traces, {
+        ...layout_base,
+        xaxis: { title: 'Budget Level (%)', gridcolor: colors.grid, range: [65, 135] },
+        yaxis: { title: 'Predicted Sales ($M)', gridcolor: colors.grid, range: [8, 15] },
+        legend: { orientation: 'h', y: 1.12 }
+    }, cfg);
+}
+</script>
+<script src="shared/components.js"></script>
+</body>
+</html>

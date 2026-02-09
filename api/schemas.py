@@ -8,7 +8,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # =============================================================================
 # Enums
 # =============================================================================
@@ -119,7 +118,8 @@ class AdstockConfigSchema(BaseModel):
     type: Literal["geometric", "weibull", "delayed", "none"] = "geometric"
     l_max: int = Field(default=8, ge=1, le=52)
     normalize: bool = True
-    alpha_prior: PriorConfigSchema | None = None
+    alpha_prior: PriorConfigSchema | None = None  # Decay rate for geometric
+    theta_prior: PriorConfigSchema | None = None  # Peak delay for weibull
 
 
 class SaturationConfigSchema(BaseModel):
@@ -213,7 +213,7 @@ class AlignmentConfigSchema(BaseModel):
 class MFFConfigSchema(BaseModel):
     """Complete MFF model configuration."""
 
-    kpi: KPIConfigSchema
+    kpi: KPIConfigSchema | None = None
     media_channels: list[MediaChannelSchema]
     controls: list[ControlVariableSchema] = Field(default_factory=list)
     alignment: AlignmentConfigSchema = Field(default_factory=AlignmentConfigSchema)
@@ -321,6 +321,8 @@ class ModelListResponse(BaseModel):
 
     models: list[ModelInfo]
     total: int
+    skip: int = 0
+    limit: int = 20
 
 
 class ModelResultsResponse(BaseModel):
@@ -390,6 +392,7 @@ class PredictionResponse(BaseModel):
     y_pred_hdi_high: list[float]
     y_pred_samples: list[list[float]] | None = None
 
+
 # ============================================================================
 # Report Models
 # ============================================================================
@@ -448,6 +451,7 @@ class ReportListResponse(BaseModel):
     model_id: str
     reports: list[dict]
 
+
 # =============================================================================
 # Generic Response Models
 # =============================================================================
@@ -475,3 +479,352 @@ class HealthResponse(BaseModel):
     version: str
     redis_connected: bool
     worker_active: bool
+
+
+# =============================================================================
+# Extended Model Schemas (NestedMMM, MultivariateMMM, CombinedMMM)
+# =============================================================================
+
+
+class ModelType(str, Enum):
+    """Types of MMM models."""
+
+    STANDARD = "standard"
+    NESTED = "nested"
+    MULTIVARIATE = "multivariate"
+    COMBINED = "combined"
+
+
+class MediatorType(str, Enum):
+    """Types of mediators for nested models."""
+
+    FULLY_OBSERVED = "fully_observed"
+    PARTIALLY_OBSERVED = "partially_observed"
+    AGGREGATED_SURVEY = "aggregated_survey"
+    FULLY_LATENT = "fully_latent"
+
+
+class CrossEffectType(str, Enum):
+    """Types of cross-effects between outcomes."""
+
+    CANNIBALIZATION = "cannibalization"
+    HALO = "halo"
+    SYMMETRIC = "symmetric"
+    ASYMMETRIC = "asymmetric"
+
+
+class EffectConstraint(str, Enum):
+    """Constraint on effect direction."""
+
+    NONE = "none"
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+
+
+# -----------------------------------------------------------------------------
+# Mediator Configuration (for NestedMMM)
+# -----------------------------------------------------------------------------
+
+
+class EffectPriorSchema(BaseModel):
+    """Prior configuration for effects."""
+
+    constraint: EffectConstraint = EffectConstraint.NONE
+    mean: float = 0.0
+    sigma: float = 1.0
+
+
+class MediatorSchema(BaseModel):
+    """Configuration for a mediator variable in nested models."""
+
+    name: str = Field(..., description="Mediator name (e.g., 'brand_awareness')")
+    display_name: str | None = None
+    type: MediatorType = MediatorType.PARTIALLY_OBSERVED
+    observation_noise: float = Field(
+        default=0.1,
+        ge=0,
+        le=1,
+        description="Observation noise for partially observed mediators",
+    )
+
+    # Effect priors
+    media_effect_prior: EffectPriorSchema = Field(
+        default_factory=lambda: EffectPriorSchema(constraint=EffectConstraint.POSITIVE)
+    )
+    outcome_effect_prior: EffectPriorSchema = Field(
+        default_factory=lambda: EffectPriorSchema(constraint=EffectConstraint.POSITIVE)
+    )
+
+    # Transformations
+    adstock: AdstockConfigSchema = Field(default_factory=AdstockConfigSchema)
+    saturation: SaturationConfigSchema = Field(default_factory=SaturationConfigSchema)
+
+    # Whether media also has direct effect on outcome (bypassing mediator)
+    allow_direct_effect: bool = True
+    direct_effect_prior: EffectPriorSchema | None = None
+
+    # Data column (for observed mediators)
+    data_column: str | None = None
+
+
+class MediatorChannelMappingSchema(BaseModel):
+    """Maps media channels to a mediator."""
+
+    mediator_name: str
+    channel_names: list[str]
+    share_adstock: bool = False
+    share_saturation: bool = False
+
+
+class NestedModelConfigSchema(BaseModel):
+    """Configuration for NestedMMM (mediation model)."""
+
+    mediators: list[MediatorSchema] = Field(
+        default_factory=list, description="List of mediator configurations"
+    )
+    channel_mappings: list[MediatorChannelMappingSchema] = Field(
+        default_factory=list, description="Mappings from channels to mediators"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Outcome Configuration (for MultivariateMMM)
+# -----------------------------------------------------------------------------
+
+
+class OutcomeSchema(BaseModel):
+    """Configuration for an outcome variable in multivariate models."""
+
+    name: str = Field(..., description="Outcome name (e.g., 'sales_product_a')")
+    display_name: str | None = None
+    data_column: str = Field(..., description="Column name in data")
+    log_transform: bool = False
+
+    # Priors
+    intercept_prior_sigma: float = Field(default=1.0, gt=0)
+    media_effect_constraint: EffectConstraint = EffectConstraint.POSITIVE
+
+
+class CrossEffectSchema(BaseModel):
+    """Configuration for cross-effects between outcomes."""
+
+    source_outcome: str = Field(..., description="Source outcome name")
+    target_outcome: str = Field(..., description="Target outcome name")
+    effect_type: CrossEffectType = CrossEffectType.CANNIBALIZATION
+    effect_prior: EffectPriorSchema = Field(default_factory=EffectPriorSchema)
+
+    # Optional modulation
+    promotion_column: str | None = Field(
+        default=None, description="Column for promotion-modulated effect"
+    )
+    lagged: bool = False
+    lag_periods: int = Field(default=1, ge=1, le=12)
+
+
+class MultivariateModelConfigSchema(BaseModel):
+    """Configuration for MultivariateMMM (multiple outcomes)."""
+
+    outcomes: list[OutcomeSchema] = Field(
+        default_factory=list, description="List of outcome configurations"
+    )
+    cross_effects: list[CrossEffectSchema] = Field(
+        default_factory=list, description="Cross-effects between outcomes"
+    )
+
+    # Correlation structure
+    lkj_eta: float = Field(
+        default=2.0, gt=0, description="LKJ prior eta for outcome correlations"
+    )
+    share_media_adstock: bool = Field(
+        default=True, description="Share adstock parameters across outcomes"
+    )
+    share_media_saturation: bool = Field(
+        default=True, description="Share saturation parameters across outcomes"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Combined Model Configuration
+# -----------------------------------------------------------------------------
+
+
+class CombinedModelConfigSchema(BaseModel):
+    """Configuration for CombinedMMM (nested + multivariate)."""
+
+    # Nested (mediation) configuration
+    nested_config: NestedModelConfigSchema = Field(
+        default_factory=NestedModelConfigSchema
+    )
+
+    # Multivariate configuration
+    multivariate_config: MultivariateModelConfigSchema = Field(
+        default_factory=MultivariateModelConfigSchema
+    )
+
+    # Mappings from mediators to outcomes
+    mediator_outcome_mappings: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Maps mediator names to outcome names they affect",
+    )
+
+
+# -----------------------------------------------------------------------------
+# Extended Model Configuration Wrapper
+# -----------------------------------------------------------------------------
+
+
+class ExtendedMFFConfigSchema(BaseModel):
+    """Extended MFF configuration that supports all model types."""
+
+    # Base configuration (same as MFFConfigSchema)
+    kpi: KPIConfigSchema | None = Field(
+        default=None, description="Primary KPI (for standard/nested models)"
+    )
+    media_channels: list[MediaChannelSchema] = Field(default_factory=list)
+    controls: list[ControlVariableSchema] = Field(default_factory=list)
+    alignment: AlignmentConfigSchema = Field(default_factory=AlignmentConfigSchema)
+    date_format: str = "%Y-%m-%d"
+    frequency: Literal["W", "D", "M"] = "W"
+    fill_missing_media: float = 0.0
+    fill_missing_controls: float | None = None
+
+    # Extended model configurations
+    model_type: ModelType = ModelType.STANDARD
+    nested_config: NestedModelConfigSchema | None = None
+    multivariate_config: MultivariateModelConfigSchema | None = None
+    combined_config: CombinedModelConfigSchema | None = None
+
+
+class ExtendedConfigCreateRequest(BaseModel):
+    """Request to create an extended model configuration."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str | None = None
+    mff_config: ExtendedMFFConfigSchema
+    model_settings: ModelConfigSchema = Field(default_factory=ModelConfigSchema)
+
+
+class ExtendedConfigResponse(BaseModel):
+    """Extended configuration response."""
+
+    config_id: str
+    name: str
+    description: str | None
+    model_type: ModelType
+    mff_config: ExtendedMFFConfigSchema
+    model_settings: ModelConfigSchema
+    created_at: datetime
+    updated_at: datetime
+
+
+# -----------------------------------------------------------------------------
+# Extended Model Fit Request
+# -----------------------------------------------------------------------------
+
+
+class ExtendedModelFitRequest(BaseModel):
+    """Request to start extended model fitting."""
+
+    data_id: str
+    config_id: str
+    name: str | None = None
+    description: str | None = None
+
+    # Mediator data (for nested/combined models with observed mediators)
+    mediator_data_id: str | None = Field(
+        default=None,
+        description="Data ID containing mediator observations",
+    )
+
+    # Additional outcome data (for multivariate/combined models)
+    outcome_data_columns: dict[str, str] | None = Field(
+        default=None,
+        description="Maps outcome names to column names in data",
+    )
+
+    # Promotion data (for cross-effects)
+    promotion_columns: list[str] | None = Field(
+        default=None,
+        description="Column names for promotion variables",
+    )
+
+    # Optional overrides
+    n_chains: int | None = None
+    n_draws: int | None = None
+    n_tune: int | None = None
+    random_seed: int | None = None
+
+
+# -----------------------------------------------------------------------------
+# Extended Model Results
+# -----------------------------------------------------------------------------
+
+
+class MediationEffectSchema(BaseModel):
+    """Mediation effect for a single channel."""
+
+    channel: str
+    direct_effect: float
+    direct_effect_sd: float
+    indirect_effects: dict[str, float]  # mediator_name -> effect
+    indirect_effects_sd: dict[str, float]
+    total_indirect: float
+    total_effect: float
+    proportion_mediated: float
+
+
+class MediationResultsResponse(BaseModel):
+    """Response containing mediation analysis results."""
+
+    model_id: str
+    mediator_names: list[str]
+    channel_names: list[str]
+    effects: list[MediationEffectSchema]
+
+
+class CrossEffectResultSchema(BaseModel):
+    """Cross-effect result between two outcomes."""
+
+    source: str
+    target: str
+    effect_type: CrossEffectType
+    mean: float
+    sd: float
+    hdi_low: float
+    hdi_high: float
+
+
+class MultivariateResultsResponse(BaseModel):
+    """Response containing multivariate model results."""
+
+    model_id: str
+    outcome_names: list[str]
+    channel_names: list[str]
+    outcome_correlations: dict[
+        str, dict[str, float]
+    ]  # outcome -> outcome -> correlation
+    cross_effects: list[CrossEffectResultSchema]
+    per_outcome_metrics: dict[str, dict[str, float]]  # outcome -> metric -> value
+
+
+class ExtendedModelInfo(BaseModel):
+    """Extended model information."""
+
+    model_id: str
+    name: str | None
+    description: str | None
+    model_type: ModelType
+    data_id: str
+    config_id: str
+    status: JobStatus
+    progress: float = 0.0
+    progress_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    diagnostics: dict[str, Any] | None = None
+
+    # Extended model specifics
+    mediator_names: list[str] | None = None
+    outcome_names: list[str] | None = None

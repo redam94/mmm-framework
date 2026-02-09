@@ -8,7 +8,6 @@ import streamlit as st
 from datetime import datetime
 from typing import Any
 
-
 # =============================================================================
 # Custom CSS
 # =============================================================================
@@ -274,7 +273,6 @@ from .charts import (
     plot_scenario_comparison,
     plot_budget_optimization,
 )
-
 
 __all__ = [
     # Common

@@ -47,7 +47,6 @@ from components import (
     plot_component_decomposition,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -297,12 +296,10 @@ def render_model_fit_tab(model_id: str):
 
     st.markdown("### Model Fit")
 
-    st.markdown(
-        """
+    st.markdown("""
     The model fit shows observed data against posterior predictions. The **shaded band** represents 
     the prediction uncertainty (±1 std), capturing both parameter uncertainty and residual variance.
-    """
-    )
+    """)
 
     try:
         client = get_api_client()
@@ -679,13 +676,11 @@ def render_prior_posterior_tab(model_id: str):
 
     st.markdown("### Prior vs Posterior Analysis")
 
-    st.markdown(
-        """
+    st.markdown("""
     Compare how the data updated our prior beliefs. **Shrinkage** measures how much the posterior 
     standard deviation has reduced compared to the prior—higher shrinkage indicates the data is 
     more informative about that parameter.
-    """
-    )
+    """)
 
     try:
         client = get_api_client()
@@ -974,16 +969,14 @@ def render_prior_posterior_tab(model_id: str):
 
         # Key insights
         st.markdown("---")
-        st.info(
-            """
+        st.info("""
         💡 **Interpretation Guide:**
         - **Shrinkage** = (1 - Posterior Std / Prior Std) × 100%
         - Higher shrinkage means the data is more informative about that parameter
         - If prior and posterior are similar (low shrinkage), the data provides little information
         - Large shifts from prior to posterior mean indicate strong evidence from the data
         - Parameters with low shrinkage may benefit from more informative priors or additional data
-        """
-        )
+        """)
 
     except APIError as e:
         display_api_error(e)
@@ -1006,13 +999,11 @@ def render_response_curves_tab(model_id: str):
 
     st.markdown("### Response Curves")
 
-    st.markdown(
-        """
+    st.markdown("""
     Response curves show how media spend translates to sales effect after accounting for 
     saturation (diminishing returns). The **shaded bands** represent the 94% HDI (Highest Density Interval),
     capturing the uncertainty in the relationship.
-    """
-    )
+    """)
 
     try:
         client = get_api_client()
@@ -1169,15 +1160,13 @@ def render_response_curves_tab(model_id: str):
                 pd.DataFrame(saturation_data), use_container_width=True, hide_index=True
             )
 
-            st.info(
-                """
+            st.info("""
             💡 **Interpretation:**
             - **Saturation @ Current**: How much of the channel's potential is being utilized at average spend
             - **Saturation @ Max**: Saturation level at maximum observed spend
             - **Room to Grow**: Remaining potential before full saturation
             - Channels with low saturation and high ROAS are good candidates for budget increases
-            """
-            )
+            """)
 
         # ROAS analysis
         st.markdown("---")
@@ -1400,13 +1389,11 @@ def render_trend_seasonality_tab(model_id: str):
 
     st.markdown("### Trend & Seasonality Analysis")
 
-    st.markdown(
-        """
+    st.markdown("""
     Analyze the **time-varying components** of your model: underlying **trend** (long-term growth/decline) 
     and **seasonality** (cyclical patterns). These components capture systematic time effects independent 
     of marketing activities.
-    """
-    )
+    """)
 
     try:
         client = get_api_client()
@@ -1547,41 +1534,33 @@ def render_trend_seasonality_tab(model_id: str):
                 # Interpretation
                 with st.expander("📖 Trend Interpretation", expanded=False):
                     if trend_type == "linear":
-                        st.markdown(
-                            """
+                        st.markdown("""
                         **Linear Trend**: A simple straight-line trend capturing overall growth or decline.
                         - Positive slope = steady growth over time
                         - Negative slope = steady decline over time
                         - The slope coefficient indicates the average change per period
-                        """
-                        )
+                        """)
                     elif trend_type == "piecewise":
-                        st.markdown(
-                            """
+                        st.markdown("""
                         **Piecewise Linear Trend** (Prophet-style): Allows the trend to change at 
                         multiple "changepoints" throughout the time series.
                         - Changepoints indicate where the growth rate shifted
                         - Useful for capturing market changes, product launches, etc.
-                        """
-                        )
+                        """)
                     elif trend_type == "spline":
-                        st.markdown(
-                            """
+                        st.markdown("""
                         **B-Spline Trend**: A smooth, flexible trend using spline basis functions.
                         - Can capture complex non-linear patterns
                         - Smoother than piecewise trends
                         - Number of knots controls flexibility
-                        """
-                        )
+                        """)
                     elif trend_type == "gaussian_process":
-                        st.markdown(
-                            """
+                        st.markdown("""
                         **Gaussian Process Trend**: A fully flexible, probabilistic trend component.
                         - Captures any smooth underlying pattern
                         - Includes uncertainty in the trend estimate
                         - Lengthscale controls how quickly the trend can change
-                        """
-                        )
+                        """)
 
         # =================================================================
         # Tab 2: Seasonality Analysis
@@ -1686,8 +1665,7 @@ def render_trend_seasonality_tab(model_id: str):
 
                 # Interpretation
                 with st.expander("📖 Seasonality Interpretation", expanded=False):
-                    st.markdown(
-                        """
+                    st.markdown("""
                     **Fourier Seasonality**: Cyclical patterns captured using sine and cosine basis functions.
                     
                     - **Positive values**: Time periods where sales are above the baseline trend
@@ -1700,8 +1678,7 @@ def render_trend_seasonality_tab(model_id: str):
                     - Summer/winter patterns
                     - Back-to-school periods
                     - Industry-specific cycles
-                    """
-                    )
+                    """)
 
         # =================================================================
         # Tab 3: Geographic View
@@ -1952,13 +1929,11 @@ def render_decomposition_tab(model_id: str):
 
     st.markdown("### Component Decomposition")
 
-    st.markdown(
-        """
+    st.markdown("""
     Break down the model's predictions into individual components: **baseline** (intercept), 
     **trend**, **seasonality**, **media effects**, and **control variables**. This shows how 
     each factor contributes to the overall outcome.
-    """
-    )
+    """)
 
     try:
         client = get_api_client()
@@ -2693,16 +2668,14 @@ def render_decomposition_tab(model_id: str):
             st.markdown("#### Year-over-Year Change Analysis")
 
             if period_dates is None:
-                st.info(
-                    """
+                st.info("""
                 📅 **Date-formatted periods required**
                 
                 Year-over-year analysis requires periods that can be parsed as dates 
                 (e.g., '2023-01-01', '2023-W01', etc.).
                 
                 Your data has numeric or non-date period identifiers.
-                """
-                )
+                """)
             else:
                 # Create DataFrame with all data
                 df = pd.DataFrame(
@@ -3041,14 +3014,12 @@ def render_decomposition_tab(model_id: str):
                 fig_relative, use_container_width=True, key="decomp_relative"
             )
 
-            st.info(
-                """
+            st.info("""
             💡 **Interpretation:**
             - This chart shows how the relative importance of each component changes over time
             - A growing media share indicates increasing marketing effectiveness
             - Seasonal patterns will show periodic fluctuations in the seasonality component
-            """
-            )
+            """)
 
     except APIError as e:
         display_api_error(e)

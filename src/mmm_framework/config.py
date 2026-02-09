@@ -8,9 +8,12 @@ Uses Pydantic for validation and type safety.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+# TypeVar for generic config lookup
+T = TypeVar("T", bound="VariableConfig")
 
 
 # =============================================================================
@@ -406,19 +409,52 @@ class MFFConfig(BaseModel):
         """Dimensions of the target KPI."""
         return self.kpi.dimensions
 
+    def _get_config_by_name(self, configs: list[T], name: str) -> T | None:
+        """Generic config lookup by name.
+
+        Parameters
+        ----------
+        configs : list[T]
+            List of config objects to search.
+        name : str
+            Name to search for.
+
+        Returns
+        -------
+        T | None
+            The config with matching name, or None if not found.
+        """
+        for config in configs:
+            if config.name == name:
+                return config
+        return None
+
     def get_media_config(self, name: str) -> MediaChannelConfig | None:
         """Get media channel config by name."""
-        for m in self.media_channels:
-            if m.name == name:
-                return m
-        return None
+        return self._get_config_by_name(self.media_channels, name)
 
     def get_control_config(self, name: str) -> ControlVariableConfig | None:
         """Get control config by name."""
-        for c in self.controls:
-            if c.name == name:
-                return c
-        return None
+        return self._get_config_by_name(self.controls, name)
+
+    def get_variable_config(self, name: str) -> VariableConfig | None:
+        """Get any variable config by name (media, control, or KPI).
+
+        Parameters
+        ----------
+        name : str
+            Variable name to search for.
+
+        Returns
+        -------
+        VariableConfig | None
+            The config with matching name, or None if not found.
+        """
+        if self.kpi.name == name:
+            return self.kpi
+        return self._get_config_by_name(
+            self.media_channels, name
+        ) or self._get_config_by_name(self.controls, name)
 
     @model_validator(mode="after")
     def validate_dimensions(self) -> MFFConfig:

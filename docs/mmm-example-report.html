@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing Mix Model Report | Q4 2025</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #6abf8a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f4ed;
+            --color-surface: #ffffff;
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 1px 3px rgba(45, 58, 45, 0.08);
+            --shadow-md: 0 4px 12px rgba(45, 58, 45, 0.1);
+            --shadow-lg: 0 8px 24px rgba(45, 58, 45, 0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--color-bg); 
+            color: var(--color-text); 
+            line-height: 1.7; 
+        }
+
+        .report-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        .report-header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-dark) 100%);
+            color: white;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+        }
+
+        .report-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .report-header .date {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        /* Section styling */
+        .section {
+            background: var(--color-surface);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--color-border);
+        }
+
+        .section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            color: var(--color-text);
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--color-primary);
+        }
+
+        .section h3 {
+            font-size: 1.2rem;
+            color: var(--color-text);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .section p {
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        /* Key metrics grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .metric-card {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .metric-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--color-primary-dark);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .metric-card .label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .metric-card .ci {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .metric-card.highlight {
+            border-left: 4px solid var(--color-primary);
+        }
+
+        .metric-card.warning {
+            border-left: 4px solid var(--color-warning);
+        }
+
+        .metric-card.danger {
+            border-left: 4px solid var(--color-danger);
+        }
+
+        /* Charts */
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin: 1.5rem 0;
+        }
+
+        .chart-container-sm {
+            height: 300px;
+        }
+
+        .chart-container-lg {
+            height: 500px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .chart-box {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--color-border);
+        }
+
+        .chart-box h4 {
+            font-size: 1rem;
+            color: var(--color-text);
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        /* Interactive controls */
+        .control-panel {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+        }
+
+        .control-panel h4 {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .control-row label {
+            font-weight: 500;
+            min-width: 150px;
+            font-size: 0.95rem;
+        }
+
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--color-border);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .control-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+        }
+
+        .control-row .value {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--color-surface);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            min-width: 80px;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        /* Callout boxes */
+        .callout {
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .callout h4 {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        .callout.insight {
+            background: rgba(106, 143, 168, 0.1);
+            border: 1px solid rgba(106, 143, 168, 0.3);
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .callout.insight h4 { color: var(--color-accent-dark); }
+
+        .callout.warning {
+            background: rgba(212, 168, 106, 0.1);
+            border: 1px solid rgba(212, 168, 106, 0.3);
+            border-left: 4px solid var(--color-warning);
+        }
+
+        .callout.warning h4 { color: #b8860b; }
+
+        .callout.success {
+            background: rgba(106, 191, 138, 0.1);
+            border: 1px solid rgba(106, 191, 138, 0.3);
+            border-left: 4px solid var(--color-success);
+        }
+
+        .callout.success h4 { color: #3d8b5a; }
+
+        .callout.danger {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+        }
+
+        .callout.danger h4 { color: var(--color-danger); }
+
+        /* Channel pills */
+        .channel-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin: 1rem 0;
+            justify-content: center;
+        }
+
+        .channel-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .channel-pill .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .data-table th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .data-table tr:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .data-table .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .data-table .positive { color: var(--color-success); }
+        .data-table .negative { color: var(--color-danger); }
+        .data-table .uncertain { color: var(--color-warning); }
+
+        /* Methodology note */
+        .methodology-note {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+        }
+
+        .methodology-note h4 {
+            color: var(--color-text);
+            margin-bottom: 0.75rem;
+        }
+
+        /* Footer */
+        .report-footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Tabs */
+        .tab-container {
+            margin: 1.5rem 0;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--color-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-btn {
+            padding: 0.5rem 1.25rem;
+            border: none;
+            background: transparent;
+            color: var(--color-text-muted);
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-radius: 6px 6px 0 0;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--color-primary);
+            background: var(--color-bg-alt);
+        }
+
+        .tab-btn.active {
+            color: var(--color-primary-dark);
+            background: var(--color-bg-alt);
+            border-bottom: 2px solid var(--color-primary);
+            margin-bottom: -2px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .report-container { padding: 1rem; }
+            .chart-grid { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .report-header h1 { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+    <div class="report-container" style="padding-top: 5rem;">
+
+        <!-- Header -->
+        <header class="report-header">
+            <h1>Marketing Mix Model Report</h1>
+            <div class="subtitle">Acme Consumer Products — North America</div>
+            <div class="date">Analysis Period: Jan 2023 – Dec 2025 | Generated: January 2026</div>
+        </header>
+
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2>Executive Summary</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-card highlight">
+                    <div class="value">$847M</div>
+                    <div class="label">Total Revenue (2025)</div>
+                </div>
+                <div class="metric-card highlight">
+                    <div class="value">$116M</div>
+                    <div class="label">Marketing-Attributed Revenue</div>
+                    <div class="ci">80% CI: [$90M – $143M]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">1.26</div>
+                    <div class="label">Blended Marketing ROI</div>
+                    <div class="ci">80% CI: [0.96 – 1.58]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">13.7%</div>
+                    <div class="label">Marketing Contribution</div>
+                    <div class="ci">80% CI: [10.6% – 16.9%]</div>
+                </div>
+            </div>
+
+            <div class="callout insight">
+                <h4>📊 Key Finding</h4>
+                <p>
+                    Digital channels (Paid Search, Paid Social) show the highest ROI with relatively narrow uncertainty bands, 
+                    suggesting strong evidence of effectiveness. TV shows positive returns but with wider uncertainty—
+                    additional experimentation could sharpen this estimate.
+                </p>
+            </div>
+
+            <div class="callout warning">
+                <h4>⚠️ Uncertainty Matters</h4>
+                <p>
+                    All estimates include 80% credible intervals reflecting genuine uncertainty from limited data. 
+                    Point estimates alone can be misleading—decisions should account for the full range of plausible values.
+                </p>
+            </div>
+        </section>
+
+        <!-- Model Fit -->
+        <section class="section">
+            <h2>Model Fit</h2>
+            <p>
+                The model captures 94% of weekly revenue variance. The chart below shows actual vs. predicted revenue 
+                with the 80% prediction interval. The model performs well across seasons and promotional periods.
+            </p>
+            
+            <div class="chart-container chart-container-lg" id="modelFitChart"></div>
+
+            <div class="callout success">
+                <h4>✓ Posterior Predictive Check Passed</h4>
+                <p>
+                    Replicated data from the posterior distribution matches key statistics of observed data: 
+                    mean (within 2%), variance (within 5%), and autocorrelation structure. 
+                    No systematic patterns remain in residuals.
+                </p>
+            </div>
+        </section>
+
+        <!-- Channel ROI -->
+        <section class="section">
+            <h2>Channel ROI Estimates</h2>
+            <p>
+                ROI estimates with 80% credible intervals. The vertical line at ROI = 1.0 represents break-even. 
+                Channels with intervals crossing this line have uncertain profitability.
+            </p>
+
+            <div class="chart-container" id="roiForestPlot"></div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Spend (2025)</th>
+                        <th>ROI (Median)</th>
+                        <th>80% Credible Interval</th>
+                        <th>Recommendation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Paid Search</td>
+                        <td class="mono">$18.2M</td>
+                        <td class="mono positive">2.41</td>
+                        <td class="mono">[1.89 – 3.02]</td>
+                        <td class="positive">Strong — Consider increasing</td>
+                    </tr>
+                    <tr>
+                        <td>Paid Social</td>
+                        <td class="mono">$12.5M</td>
+                        <td class="mono positive">1.87</td>
+                        <td class="mono">[1.42 – 2.38]</td>
+                        <td class="positive">Positive — Maintain or increase</td>
+                    </tr>
+                    <tr>
+                        <td>TV (National)</td>
+                        <td class="mono">$42.0M</td>
+                        <td class="mono">1.24</td>
+                        <td class="mono">[0.78 – 1.74]</td>
+                        <td class="uncertain">Uncertain — Recommend geo-test</td>
+                    </tr>
+                    <tr>
+                        <td>Display</td>
+                        <td class="mono">$8.3M</td>
+                        <td class="mono">1.15</td>
+                        <td class="mono">[0.71 – 1.62]</td>
+                        <td class="uncertain">Uncertain — Wide interval</td>
+                    </tr>
+                    <tr>
+                        <td>Radio</td>
+                        <td class="mono">$6.8M</td>
+                        <td class="mono negative">0.82</td>
+                        <td class="mono">[0.41 – 1.28]</td>
+                        <td class="negative">Likely unprofitable — Review</td>
+                    </tr>
+                    <tr>
+                        <td>Print</td>
+                        <td class="mono">$4.2M</td>
+                        <td class="mono negative">0.54</td>
+                        <td class="mono">[0.22 – 0.91]</td>
+                        <td class="negative">Reduce or eliminate</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Revenue Contribution -->
+        <section class="section">
+            <h2>Revenue Decomposition</h2>
+            
+            <div class="tab-container">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" onclick="showTab('waterfall')">Waterfall</button>
+                    <button class="tab-btn" onclick="showTab('timeseries')">Time Series</button>
+                    <button class="tab-btn" onclick="showTab('stacked')">Stacked Area</button>
+                </div>
+                
+                <div id="waterfall" class="tab-content active">
+                    <div class="chart-container" id="waterfallChart"></div>
+                </div>
+                
+                <div id="timeseries" class="tab-content">
+                    <div class="chart-container chart-container-lg" id="decompositionChart"></div>
+                </div>
+                
+                <div id="stacked" class="tab-content">
+                    <div class="chart-container chart-container-lg" id="stackedAreaChart"></div>
+                </div>
+            </div>
+
+            <div class="channel-legend" id="channelLegend"></div>
+        </section>
+
+        <!-- Saturation Analysis -->
+        <section class="section">
+            <h2>Saturation & Diminishing Returns</h2>
+            <p>
+                Marketing channels exhibit diminishing returns at higher spend levels. 
+                The curves below show the relationship between spend and incremental revenue for each channel.
+                Use the controls to explore how marginal ROI changes with spend level.
+            </p>
+
+            <div class="control-panel">
+                <h4>Channel Selection</h4>
+                <div class="control-row">
+                    <label>Select Channel:</label>
+                    <select id="saturationChannel" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: 200px;">
+                        <option value="search">Paid Search</option>
+                        <option value="social">Paid Social</option>
+                        <option value="tv">TV (National)</option>
+                        <option value="display">Display</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-box">
+                    <h4>Response Curve</h4>
+                    <div class="chart-container chart-container-sm" id="saturationCurve"></div>
+                </div>
+                <div class="chart-box">
+                    <h4>Marginal ROI by Spend Level</h4>
+                    <div class="chart-container chart-container-sm" id="marginalROI"></div>
+                </div>
+            </div>
+
+            <div class="callout insight">
+                <h4>💡 Optimal Allocation Insight</h4>
+                <p>
+                    Paid Search and Paid Social operate below saturation—additional spend would yield positive marginal returns. 
+                    TV is approaching saturation at current spend levels, suggesting reallocation opportunities.
+                </p>
+            </div>
+        </section>
+
+        <!-- Adstock / Carryover -->
+        <section class="section">
+            <h2>Carryover Effects (Adstock)</h2>
+            <p>
+                Marketing investments create effects that persist beyond the week of spend. 
+                The visualization below shows how $1 of spend decays over time for each channel.
+            </p>
+
+            <div class="chart-container" id="adstockChart"></div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Half-Life (weeks)</th>
+                        <th>80% CI</th>
+                        <th>Peak Effect</th>
+                        <th>Interpretation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>TV (National)</td>
+                        <td class="mono">3.2</td>
+                        <td class="mono">[2.1 – 4.8]</td>
+                        <td>Same week</td>
+                        <td>Long-lasting brand effect</td>
+                    </tr>
+                    <tr>
+                        <td>Paid Search</td>
+                        <td class="mono">0.4</td>
+                        <td class="mono">[0.2 – 0.7]</td>
+                        <td>Same week</td>
+                        <td>Immediate, short-lived</td>
+                    </tr>
+                    <tr>
+                        <td>Paid Social</td>
+                        <td class="mono">1.1</td>
+                        <td class="mono">[0.6 – 1.8]</td>
+                        <td>Same week</td>
+                        <td>Moderate carryover</td>
+                    </tr>
+                    <tr>
+                        <td>Display</td>
+                        <td class="mono">0.8</td>
+                        <td class="mono">[0.3 – 1.4]</td>
+                        <td>Same week</td>
+                        <td>Short carryover</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Prior vs Posterior -->
+        <section class="section">
+            <h2>Prior vs. Posterior: What We Learned</h2>
+            <p>
+                Comparing prior beliefs to posterior distributions shows how much the data informed our estimates. 
+                Narrow posteriors (relative to priors) indicate strong learning from data.
+            </p>
+
+            <div class="control-panel">
+                <h4>Select Parameter</h4>
+                <div class="control-row">
+                    <label>Parameter:</label>
+                    <select id="priorPosteriorParam" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: 200px;">
+                        <option value="tv_beta">TV Effect (β)</option>
+                        <option value="search_beta">Paid Search Effect (β)</option>
+                        <option value="social_beta">Paid Social Effect (β)</option>
+                        <option value="tv_decay">TV Adstock Decay</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chart-container" id="priorPosteriorChart"></div>
+
+            <div class="callout insight">
+                <h4>📈 Data Informativeness</h4>
+                <p>
+                    Digital channels show substantial posterior concentration, indicating the data strongly informs these estimates. 
+                    TV effects have wider posteriors relative to priors—the data provides moderate but not decisive information.
+                </p>
+            </div>
+        </section>
+
+        <!-- Budget Optimization Simulator -->
+        <section class="section">
+            <h2>Budget Reallocation Simulator</h2>
+            <p>
+                Explore how different budget allocations affect expected revenue. 
+                The uncertainty bands show the range of outcomes across the posterior distribution.
+            </p>
+
+            <div class="callout warning">
+                <h4>⚠️ Optimization Under Uncertainty</h4>
+                <p>
+                    "Optimal" allocations are sensitive to model uncertainty. The ranges shown reflect this uncertainty—
+                    treat point estimates as guides, not gospel. Consider experimentation before major reallocations.
+                </p>
+            </div>
+
+            <div class="control-panel">
+                <h4>Adjust Budget Allocation</h4>
+                <div class="control-row">
+                    <label>Total Budget:</label>
+                    <input type="range" id="totalBudget" min="70" max="120" value="92" step="1">
+                    <span class="value" id="totalBudgetVal">$92M</span>
+                </div>
+                <div class="control-row">
+                    <label>TV Share:</label>
+                    <input type="range" id="tvShare" min="20" max="60" value="46" step="1">
+                    <span class="value" id="tvShareVal">46%</span>
+                </div>
+                <div class="control-row">
+                    <label>Digital Share:</label>
+                    <input type="range" id="digitalShare" min="20" max="60" value="42" step="1">
+                    <span class="value" id="digitalShareVal">42%</span>
+                </div>
+                <div class="control-row">
+                    <label>Traditional Share:</label>
+                    <span class="value" id="tradShareVal">12%</span>
+                    <span style="color: var(--color-text-muted); font-size: 0.85rem;">(remainder)</span>
+                </div>
+            </div>
+
+            <div class="chart-container" id="optimizationChart"></div>
+
+            <div class="metrics-grid" style="margin-top: 1.5rem;">
+                <div class="metric-card">
+                    <div class="value" id="simRevenue">$127M</div>
+                    <div class="label">Expected Marketing Revenue</div>
+                    <div class="ci" id="simRevenueCi">80% CI: [$98M – $156M]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value" id="simRoi">1.38</div>
+                    <div class="label">Expected Blended ROI</div>
+                    <div class="ci" id="simRoiCi">80% CI: [1.05 – 1.72]</div>
+                </div>
+                <div class="metric-card" id="deltaCard">
+                    <div class="value" id="simDelta">+$0M</div>
+                    <div class="label">vs. Current Allocation</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sensitivity Analysis -->
+        <section class="section">
+            <h2>Sensitivity Analysis</h2>
+            <p>
+                How robust are our conclusions to different modeling assumptions? 
+                The chart below shows how key estimates vary across alternative specifications.
+            </p>
+
+            <div class="chart-container" id="sensitivityChart"></div>
+
+            <div class="callout success">
+                <h4>✓ Robust Findings</h4>
+                <p>
+                    <strong>Paid Search ROI > 1.5</strong> holds across all reasonable specifications. 
+                    <strong>Print underperformance</strong> (ROI < 1.0) is consistent across sensitivity checks.
+                </p>
+            </div>
+
+            <div class="callout warning">
+                <h4>⚠️ Sensitive Findings</h4>
+                <p>
+                    <strong>TV ROI</strong> varies from 0.9 to 1.6 depending on adstock assumptions—
+                    experimental validation is particularly valuable for this channel.
+                </p>
+            </div>
+        </section>
+
+        <!-- Recommendations -->
+        <section class="section">
+            <h2>Recommendations</h2>
+
+            <div class="callout success">
+                <h4>✓ High Confidence Actions</h4>
+                <p>
+                    <strong>1. Increase Paid Search investment</strong> — Strong ROI evidence with narrow uncertainty. 
+                    Consider 15-25% budget increase.<br>
+                    <strong>2. Reduce Print spend</strong> — Consistently below break-even across model variations. 
+                    Reallocate to digital channels.<br>
+                    <strong>3. Maintain Paid Social</strong> — Solid ROI with moderate uncertainty. Current allocation appears efficient.
+                </p>
+            </div>
+
+            <div class="callout warning">
+                <h4>⚠️ Actions Requiring Validation</h4>
+                <p>
+                    <strong>1. TV optimization</strong> — Before major reallocation, recommend geo-holdout test 
+                    to validate model-based ROI estimate.<br>
+                    <strong>2. Radio reduction</strong> — Model suggests underperformance, but consider qualitative 
+                    factors (reach, frequency) before elimination.
+                </p>
+            </div>
+
+            <div class="callout insight">
+                <h4>📊 Proposed Experiments</h4>
+                <p>
+                    <strong>Q1 2026:</strong> TV geo-holdout in 3 test markets (10% of footprint) to validate MMM estimate.<br>
+                    <strong>Q2 2026:</strong> Incrementality test for Display to sharpen uncertain ROI estimate.
+                </p>
+            </div>
+        </section>
+
+        <!-- Methodology -->
+        <section class="section">
+            <h2>Methodology</h2>
+            
+            <div class="methodology-note">
+                <h4>Model Specification</h4>
+                <p>
+                    This analysis uses a Bayesian Marketing Mix Model with the following components:
+                </p>
+                <ul style="margin: 1rem 0 1rem 1.5rem;">
+                    <li><strong>Likelihood:</strong> Normal with estimated scale parameter</li>
+                    <li><strong>Baseline:</strong> Linear trend + Fourier seasonality (order 3)</li>
+                    <li><strong>Media effects:</strong> Hill saturation × Geometric adstock</li>
+                    <li><strong>Controls:</strong> Holidays, weather, promotional indicators</li>
+                    <li><strong>Priors:</strong> Weakly informative, documented in technical appendix</li>
+                </ul>
+                <p>
+                    Inference via MCMC (4 chains, 2000 samples each, 1000 warmup). 
+                    All R-hat < 1.01, bulk ESS > 400 for all parameters.
+                </p>
+            </div>
+
+            <div class="methodology-note">
+                <h4>Honest Uncertainty Principles</h4>
+                <p>
+                    This report follows principles of honest uncertainty quantification:
+                </p>
+                <ul style="margin: 1rem 0 0 1.5rem;">
+                    <li>All estimates include credible intervals, not just point estimates</li>
+                    <li>Model was pre-specified before examining results</li>
+                    <li>Sensitivity analysis explores reasonable alternative specifications</li>
+                    <li>Recommendations explicitly acknowledge uncertainty levels</li>
+                    <li>Experimental validation proposed for high-stakes, uncertain estimates</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="report-footer">
+            <p>Generated by MMM Framework | <a href="https://github.com/redam94/mmm-framework" style="color: var(--color-primary);">Documentation</a></p>
+            <p style="margin-top: 0.5rem;">Model version 2.1.0 | Report template 1.0</p>
+        </footer>
+    </div>
+
+    <script>
+        // =====================================================================
+        // Configuration
+        // =====================================================================
+        const colors = {
+            primary: '#8fa86a',
+            primaryDark: '#6d8a4a',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#d4a86a',
+            danger: '#c97067',
+            success: '#6abf8a',
+            text: '#2d3a2d',
+            textMuted: '#5a6b5a',
+            grid: '#e8ece8',
+            bg: '#fafbf9'
+        };
+
+        const channelColors = {
+            'TV': '#6a8fa8',
+            'Paid Search': '#8fa86a',
+            'Paid Social': '#a88f6a',
+            'Display': '#8f6aa8',
+            'Radio': '#d4a86a',
+            'Print': '#c97067',
+            'Baseline': '#5a6b5a'
+        };
+
+        const chartConfig = { displayModeBar: false, responsive: true };
+
+        const baseLayout = {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'Inter, sans-serif', color: colors.text, size: 12 },
+            margin: { t: 40, r: 40, b: 70, l: 60 }
+        };
+
+        // =====================================================================
+        // Utility Functions
+        // =====================================================================
+        function normalRandom(mean = 0, std = 1) {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random();
+            while (v === 0) v = Math.random();
+            return mean + std * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        function generateWeeklyData(weeks = 156) {
+            const data = { week: [], actual: [], predicted: [], lower: [], upper: [] };
+            let baseline = 14;
+            
+            for (let w = 0; w < weeks; w++) {
+                const date = new Date(2023, 0, 1);
+                date.setDate(date.getDate() + w * 7);
+                data.week.push(date.toISOString().split('T')[0]);
+                
+                // Trend + seasonality
+                const trend = baseline + w * 0.015;
+                const seasonality = 2 * Math.sin(2 * Math.PI * w / 52) + 1 * Math.cos(4 * Math.PI * w / 52);
+                const promo = (w % 13 === 0) ? 3 : 0;
+                
+                const predicted = trend + seasonality + promo + normalRandom(0, 0.3);
+                const actual = predicted + normalRandom(0, 0.8);
+                
+                data.actual.push(Math.max(8, actual));
+                data.predicted.push(predicted);
+                data.lower.push(predicted - 1.5);
+                data.upper.push(predicted + 1.5);
+            }
+            return data;
+        }
+
+        // =====================================================================
+        // Model Fit Chart
+        // =====================================================================
+        function initModelFitChart() {
+            const data = generateWeeklyData(156);
+            
+            const traces = [
+                {
+                    x: data.week,
+                    y: data.upper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                {
+                    x: data.week,
+                    y: data.lower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(143, 168, 106, 0.2)',
+                    line: { width: 0 },
+                    name: '80% Prediction Interval'
+                },
+                {
+                    x: data.week,
+                    y: data.predicted,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Model Prediction',
+                    line: { color: colors.primary, width: 2 }
+                },
+                {
+                    x: data.week,
+                    y: data.actual,
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: 'Actual Revenue',
+                    marker: { color: colors.accent, size: 4 }
+                }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: '', gridcolor: colors.grid, tickformat: '%b %Y' },
+                yaxis: { title: 'Weekly Revenue ($M)', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot('modelFitChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // ROI Forest Plot
+        // =====================================================================
+        function initROIForestPlot() {
+            const channels = ['Print', 'Radio', 'Display', 'TV (National)', 'Paid Social', 'Paid Search'];
+            const rois = [0.54, 0.82, 1.15, 1.24, 1.87, 2.41];
+            const lowerCI = [0.22, 0.41, 0.71, 0.78, 1.42, 1.89];
+            const upperCI = [0.91, 1.28, 1.62, 1.74, 2.38, 3.02];
+
+            const pointColors = rois.map(r => r >= 1 ? colors.success : colors.danger);
+
+            const traces = [
+                // Error bars
+                {
+                    x: rois,
+                    y: channels,
+                    error_x: {
+                        type: 'data',
+                        symmetric: false,
+                        array: upperCI.map((u, i) => u - rois[i]),
+                        arrayminus: rois.map((r, i) => r - lowerCI[i]),
+                        color: colors.textMuted,
+                        thickness: 2,
+                        width: 6
+                    },
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: { color: pointColors, size: 14 },
+                    showlegend: false
+                }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { 
+                    title: 'ROI (Revenue / Spend)',
+                    gridcolor: colors.grid,
+                    range: [0, 3.5],
+                    zeroline: false
+                },
+                yaxis: { 
+                    gridcolor: colors.grid,
+                    automargin: true
+                },
+                shapes: [
+                    {
+                        type: 'line',
+                        x0: 1, x1: 1,
+                        y0: -0.5, y1: 5.5,
+                        line: { color: colors.text, width: 2, dash: 'dash' }
+                    },
+                    {
+                        type: 'rect',
+                        x0: 0, x1: 1,
+                        y0: -0.5, y1: 5.5,
+                        fillcolor: 'rgba(201, 112, 103, 0.08)',
+                        line: { width: 0 }
+                    }
+                ],
+                annotations: [
+                    { x: 0.5, y: 5.8, text: 'Below Break-even', showarrow: false, font: { color: colors.danger, size: 11 } },
+                    { x: 2.25, y: 5.8, text: 'Profitable', showarrow: false, font: { color: colors.success, size: 11 } }
+                ]
+            };
+
+            Plotly.newPlot('roiForestPlot', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Waterfall Chart
+        // =====================================================================
+        function initWaterfallChart() {
+            // Contributions with uncertainty
+            const categories = ['Baseline', 'TV', 'Paid Search', 'Paid Social', 'Display', 'Radio', 'Print'];
+            const values = [720, 52, 44, 23, 10, 6, 2];
+            const lowerCI = [695, 33, 34, 17, 6, 3, 1];  // Lower 80% CI
+            const upperCI = [745, 72, 54, 30, 14, 10, 4]; // Upper 80% CI
+            
+            // Calculate cumulative positions for waterfall
+            let cumulative = 0;
+            const bases = [];
+            const heights = [];
+            const errorMinus = [];
+            const errorPlus = [];
+            
+            for (let i = 0; i < values.length; i++) {
+                bases.push(cumulative);
+                heights.push(values[i]);
+                errorMinus.push(values[i] - lowerCI[i]);
+                errorPlus.push(upperCI[i] - values[i]);
+                cumulative += values[i];
+            }
+            
+            // Add total
+            categories.push('Total Revenue');
+            bases.push(0);
+            heights.push(cumulative);
+            errorMinus.push(cumulative - 804);  // Total lower CI
+            errorPlus.push(890 - cumulative);   // Total upper CI
+
+            const barColors = [
+                colors.textMuted, // Baseline
+                channelColors['TV'],
+                channelColors['Paid Search'],
+                channelColors['Paid Social'],
+                channelColors['Display'],
+                channelColors['Radio'],
+                channelColors['Print'],
+                colors.primary  // Total
+            ];
+
+            const trace = {
+                type: 'bar',
+                x: categories,
+                y: heights,
+                base: bases,
+                marker: { color: barColors },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: errorPlus,
+                    arrayminus: errorMinus,
+                    color: colors.text,
+                    thickness: 1.5,
+                    width: 4
+                },
+                text: heights.map((v, i) => {
+                    if (i === heights.length - 1) return `$${v}M<br>[${804}, ${890}]`;
+                    return `$${v}M<br>[${lowerCI[i]}, ${upperCI[i]}]`;
+                }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>Contribution: $%{y}M<br>80% CI: [%{customdata[0]}, %{customdata[1]}]<extra></extra>',
+                customdata: categories.map((_, i) => {
+                    if (i === categories.length - 1) return [804, 890];
+                    return [lowerCI[i], upperCI[i]];
+                })
+            };
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: '' },
+                yaxis: { title: 'Revenue ($M)', gridcolor: colors.grid, range: [0, 1150] },
+                showlegend: false,
+                annotations: [{
+                    x: 'Total Revenue',
+                    y: cumulative + 180,
+                    text: '80% CI: [$804M, $890M]',
+                    showarrow: false,
+                    font: { size: 10, color: colors.textMuted }
+                }]
+            };
+
+            Plotly.newPlot('waterfallChart', [trace], layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Decomposition Time Series
+        // =====================================================================
+        function initDecompositionChart() {
+            const weeks = 104;
+            const weekLabels = [];
+            const baseline = [], tv = [], search = [], social = [], display = [];
+            
+            for (let w = 0; w < weeks; w++) {
+                const date = new Date(2024, 0, 1);
+                date.setDate(date.getDate() + w * 7);
+                weekLabels.push(date.toISOString().split('T')[0]);
+                
+                const b = 14 + 0.02 * w + 2 * Math.sin(2 * Math.PI * w / 52);
+                baseline.push(b);
+                tv.push(0.8 + 0.3 * Math.sin(2 * Math.PI * w / 26) + normalRandom(0, 0.1));
+                search.push(0.7 + 0.2 * Math.cos(2 * Math.PI * w / 13) + normalRandom(0, 0.05));
+                social.push(0.4 + 0.15 * Math.sin(2 * Math.PI * w / 17) + normalRandom(0, 0.05));
+                display.push(0.2 + 0.1 * Math.random());
+            }
+
+            const traces = [
+                { x: weekLabels, y: baseline, name: 'Baseline', line: { color: channelColors['Baseline'] }, stackgroup: 'one' },
+                { x: weekLabels, y: tv, name: 'TV', line: { color: channelColors['TV'] }, stackgroup: 'one' },
+                { x: weekLabels, y: search, name: 'Paid Search', line: { color: channelColors['Paid Search'] }, stackgroup: 'one' },
+                { x: weekLabels, y: social, name: 'Paid Social', line: { color: channelColors['Paid Social'] }, stackgroup: 'one' },
+                { x: weekLabels, y: display, name: 'Display', line: { color: channelColors['Display'] }, stackgroup: 'one' }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: '', gridcolor: colors.grid, tickformat: '%b %Y' },
+                yaxis: { title: 'Weekly Revenue ($M)', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' },
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot('decompositionChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Stacked Area Chart
+        // =====================================================================
+        function initStackedAreaChart() {
+            // Same data as decomposition, different visualization
+            initDecompositionChart();
+            // Clone to stacked area
+            const weeks = 104;
+            const weekLabels = [];
+            const channels = { baseline: [], tv: [], search: [], social: [], display: [], radio: [], print: [] };
+            
+            for (let w = 0; w < weeks; w++) {
+                const date = new Date(2024, 0, 1);
+                date.setDate(date.getDate() + w * 7);
+                weekLabels.push(date.toISOString().split('T')[0]);
+                
+                channels.baseline.push(14 + 0.02 * w + 2 * Math.sin(2 * Math.PI * w / 52));
+                channels.tv.push(0.8 + 0.3 * Math.sin(2 * Math.PI * w / 26));
+                channels.search.push(0.7 + 0.2 * Math.cos(2 * Math.PI * w / 13));
+                channels.social.push(0.4 + 0.15 * Math.sin(2 * Math.PI * w / 17));
+                channels.display.push(0.2);
+                channels.radio.push(0.1);
+                channels.print.push(0.05);
+            }
+
+            const traces = [
+                { x: weekLabels, y: channels.baseline, name: 'Baseline', fill: 'tozeroy', line: { color: channelColors['Baseline'], width: 0 }, fillcolor: channelColors['Baseline'] + '80' },
+                { x: weekLabels, y: channels.tv, name: 'TV', fill: 'tonexty', stackgroup: 'one', line: { width: 0 }, fillcolor: channelColors['TV'] + 'aa' },
+                { x: weekLabels, y: channels.search, name: 'Paid Search', fill: 'tonexty', stackgroup: 'one', line: { width: 0 }, fillcolor: channelColors['Paid Search'] + 'aa' },
+                { x: weekLabels, y: channels.social, name: 'Paid Social', fill: 'tonexty', stackgroup: 'one', line: { width: 0 }, fillcolor: channelColors['Paid Social'] + 'aa' }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: '', gridcolor: colors.grid, tickformat: '%b %Y' },
+                yaxis: { title: 'Weekly Revenue ($M)', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            };
+
+            Plotly.newPlot('stackedAreaChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Saturation Curves
+        // =====================================================================
+        const saturationParams = {
+            search: { K: 24, K_sd: 4, S: 2, S_sd: 0.1, currentSpend: 11.2, maxResponse: 70 },
+            social: { K: 30, K_sd: 5, S: 3, S_sd: 0.12, currentSpend: 20.5, maxResponse: 70 },
+            tv: { K: 30, K_sd: 8, S: 1.4, S_sd: 0.08, currentSpend: 42, maxResponse: 130 },
+            display: { K: 3, K_sd: .4, S: 2, S_sd: 0.15, currentSpend: 3.3, maxResponse: 10 }
+        };
+
+        function hillFunction(x, K, S, maxResponse = 70) {
+            return maxResponse * Math.pow(x, S) / (Math.pow(K, S) + Math.pow(x, S));
+        }
+
+        function initSaturationCharts() {
+            updateSaturationCharts();
+            document.getElementById('saturationChannel').addEventListener('change', updateSaturationCharts);
+        }
+
+        function updateSaturationCharts() {
+            const channel = document.getElementById('saturationChannel').value;
+            const params = saturationParams[channel];
+            
+            const spend = [], response = [], responseLower = [], responseUpper = [];
+            const marginalROI = [], marginalLower = [], marginalUpper = [];
+            const maxSpend = params.currentSpend * 2.2;
+            
+            // Use approximate 80% credible interval (±1.28 SD)
+            const K_low = params.K - 1.28 * params.K_sd;
+            const K_high = params.K + 1.28 * params.K_sd;
+            const S_low = Math.max(1, params.S - 1.28 * params.S_sd);
+            const S_high = params.S + 1.28 * params.S_sd;
+            const M_low = params.maxResponse - 1.28 * (params.maxResponse * 0.1); // Assume 10% SD
+            const M_high = params.maxResponse + 1.28 * (params.maxResponse * 0.1);
+            
+            for (let x = 0; x <= maxSpend; x += maxSpend / 50) {
+                spend.push(x);
+                
+                // Response with uncertainty - compute all 4 combinations and take min/max
+                const y = hillFunction(x, params.K, params.S, params.maxResponse);
+                
+                const responseScenarios = [
+                    hillFunction(x, K_low, S_low, M_low),
+                    hillFunction(x, K_low, S_high, M_low),
+                    hillFunction(x, K_high, S_low, M_low),
+                    hillFunction(x, K_high, S_high, M_low),
+                    hillFunction(x, K_low, S_low, M_high),
+                    hillFunction(x, K_low, S_high, M_high),
+                    hillFunction(x, K_high, S_low, M_high),
+                    hillFunction(x, K_high, S_high, M_high),
+                    y  // Include median to ensure band contains it
+                ];
+                
+                response.push(y);
+                responseLower.push(Math.min(...responseScenarios));
+                responseUpper.push(Math.max(...responseScenarios));
+                
+                // Marginal ROI with uncertainty - compute all 4 combinations and take min/max
+                const dx = 0.001;
+                const dy_median = hillFunction(x + dx, params.K, params.S, params.maxResponse) - y;
+                
+                // Compute derivative for all 4 corner cases of parameter space
+                const scenarios = [
+                    hillFunction(x + dx, K_low, S_low, M_low) - hillFunction(x, K_low, S_low, M_low),
+                    hillFunction(x + dx, K_low, S_high, M_low) - hillFunction(x, K_low, S_high, M_low),
+                    hillFunction(x + dx, K_high, S_low, M_low) - hillFunction(x, K_high, S_low, M_low),
+                    hillFunction(x + dx, K_high, S_high, M_low) - hillFunction(x, K_high, S_high, M_low),
+                    hillFunction(x + dx, K_low, S_low, M_high) - hillFunction(x, K_low, S_low, M_high),
+                    hillFunction(x + dx, K_low, S_high, M_high) - hillFunction(x, K_low, S_high, M_high),
+                    hillFunction(x + dx, K_high, S_low, M_high) - hillFunction(x, K_high, S_low, M_high),
+                    hillFunction(x + dx, K_high, S_high, M_high) - hillFunction(x, K_high, S_high, M_high),
+                ];
+                
+                const allMarginals = scenarios.map(dy => dy / dx);
+                allMarginals.push(dy_median / dx); // Include median to ensure band contains it
+                
+                marginalROI.push(dy_median / dx);
+                marginalLower.push(Math.min(...allMarginals));
+                marginalUpper.push(Math.max(...allMarginals));
+            }
+
+            // Response curve with uncertainty band
+            const responseTrace = [
+                // Upper bound (invisible line for fill)
+                {
+                    x: spend,
+                    y: responseUpper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                // Lower bound with fill to upper
+                {
+                    x: spend,
+                    y: responseLower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(143, 168, 106, 0.25)',
+                    line: { width: 0 },
+                    name: '80% CI',
+                    hoverinfo: 'skip'
+                },
+                // Median line
+                {
+                    x: spend,
+                    y: response,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: colors.primary, width: 3 },
+                    name: 'Median Response'
+                },
+                // Current spend marker
+                {
+                    x: [params.currentSpend],
+                    y: [hillFunction(params.currentSpend, params.K, params.S, params.maxResponse)],
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: { color: colors.danger, size: 12, symbol: 'diamond' },
+                    name: 'Current Spend',
+                    error_y: {
+                        type: 'data',
+                        symmetric: false,
+                        array: [(() => {
+                            const yMed = hillFunction(params.currentSpend, params.K, params.S, params.maxResponse);
+                            const scenarios = [
+                                hillFunction(params.currentSpend, K_low, S_low, M_low),
+                                hillFunction(params.currentSpend, K_low, S_high, M_low),
+                                hillFunction(params.currentSpend, K_high, S_low, M_low),
+                                hillFunction(params.currentSpend, K_high, S_high, M_low),
+                                hillFunction(params.currentSpend, K_low, S_low, M_high),
+                                hillFunction(params.currentSpend, K_low, S_high, M_high),
+                                hillFunction(params.currentSpend, K_high, S_low, M_high),
+                                hillFunction(params.currentSpend, K_high, S_high, M_high)
+                            ];
+                            return Math.max(...scenarios) - yMed;
+                        })()],
+                        arrayminus: [(() => {
+                            const yMed = hillFunction(params.currentSpend, params.K, params.S, params.maxResponse);
+                            const scenarios = [
+                                hillFunction(params.currentSpend, K_low, S_low, M_low),
+                                hillFunction(params.currentSpend, K_low, S_high, M_low),
+                                hillFunction(params.currentSpend, K_high, S_low, M_low),
+                                hillFunction(params.currentSpend, K_high, S_high, M_low),
+                                hillFunction(params.currentSpend, K_low, S_low, M_high),
+                                hillFunction(params.currentSpend, K_low, S_high, M_high),
+                                hillFunction(params.currentSpend, K_high, S_low, M_high),
+                                hillFunction(params.currentSpend, K_high, S_high, M_high)
+                            ];
+                            return yMed - Math.min(...scenarios);
+                        })()],
+                        color: colors.danger,
+                        thickness: 2,
+                        width: 6
+                    }
+                }
+            ];
+
+            const responseLayout = {
+                ...baseLayout,
+                margin: { t: 20, r: 20, b: 40, l: 50 },
+                xaxis: { title: 'Spend ($M)', gridcolor: colors.grid },
+                yaxis: { title: 'Revenue ($M)', gridcolor: colors.grid },
+                showlegend: false,
+                shapes: [{
+                    type: 'line',
+                    x0: params.currentSpend, x1: params.currentSpend,
+                    y0: 0, y1: hillFunction(params.currentSpend, params.K, params.S, params.maxResponse),
+                    line: { color: colors.danger, width: 1, dash: 'dot' }
+                }]
+            };
+
+            Plotly.newPlot('saturationCurve', responseTrace, responseLayout, chartConfig);
+
+            // Marginal ROI curve with uncertainty
+            const currentIdx = Math.floor(spend.length * params.currentSpend / maxSpend);
+            const marginalTrace = [
+                // Upper bound
+                {
+                    x: spend,
+                    y: marginalUpper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                // Lower bound with fill
+                {
+                    x: spend,
+                    y: marginalLower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(106, 143, 168, 0.25)',
+                    line: { width: 0 },
+                    name: '80% CI',
+                    hoverinfo: 'skip'
+                },
+                // Median
+                {
+                    x: spend,
+                    y: marginalROI,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: colors.accent, width: 3 },
+                    name: 'Median Marginal ROI'
+                },
+                // Current spend marker
+                {
+                    x: [params.currentSpend],
+                    y: [marginalROI[currentIdx] || marginalROI[Math.floor(marginalROI.length / 2)]],
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: { color: colors.danger, size: 12, symbol: 'diamond' },
+                    error_y: {
+                        type: 'data',
+                        symmetric: false,
+                        array: [(marginalUpper[currentIdx] || 0) - (marginalROI[currentIdx] || 0)],
+                        arrayminus: [(marginalROI[currentIdx] || 0) - (marginalLower[currentIdx] || 0)],
+                        color: colors.danger,
+                        thickness: 2,
+                        width: 6
+                    }
+                }
+            ];
+
+            const marginalLayout = {
+                ...baseLayout,
+                margin: { t: 20, r: 20, b: 40, l: 50 },
+                xaxis: { title: 'Spend ($M)', gridcolor: colors.grid },
+                yaxis: { title: 'Marginal ROI', gridcolor: colors.grid },
+                showlegend: false,
+                shapes: [
+                    {
+                        type: 'line',
+                        x0: 0, x1: maxSpend,
+                        y0: 1, y1: 1,
+                        line: { color: colors.text, width: 1, dash: 'dash' }
+                    },
+                    {
+                        type: 'line',
+                        x0: params.currentSpend, x1: params.currentSpend,
+                        y0: 0, y1: 5,
+                        line: { color: colors.danger, width: 1, dash: 'dot' }
+                    }
+                ],
+                annotations: [{
+                    x: maxSpend * 0.8,
+                    y: 1.2,
+                    text: 'Break-even',
+                    showarrow: false,
+                    font: { size: 10, color: colors.textMuted }
+                }]
+            };
+
+            Plotly.newPlot('marginalROI', marginalTrace, marginalLayout, chartConfig);
+        }
+
+        // =====================================================================
+        // Adstock Chart
+        // =====================================================================
+        function initAdstockChart() {
+            const weeks = Array.from({ length: 12 }, (_, i) => i);
+            
+            // Adstock parameters with uncertainty (decay, decay_sd)
+            const adstockParams = {
+                'TV': { decay: 0.80, sd: 0.06, color: channelColors['TV'] },
+                'Paid Social': { decay: 0.55, sd: 0.08, color: channelColors['Paid Social'] },
+                'Display': { decay: 0.45, sd: 0.10, color: channelColors['Display'] },
+                'Paid Search': { decay: 0.20, sd: 0.08, color: channelColors['Paid Search'] }
+            };
+            
+            function adstock(decay, week) {
+                return Math.pow(decay, week);
+            }
+
+            const traces = [];
+            
+            // Add uncertainty bands and median lines for each channel
+            Object.entries(adstockParams).forEach(([name, params]) => {
+                const decayLow = Math.max(0.01, params.decay - 1.28 * params.sd);
+                const decayHigh = Math.min(0.99, params.decay + 1.28 * params.sd);
+                
+                const yMedian = weeks.map(w => adstock(params.decay, w));
+                const yLower = weeks.map(w => adstock(decayLow, w));
+                const yUpper = weeks.map(w => adstock(decayHigh, w));
+                
+                // Upper bound (invisible)
+                traces.push({
+                    x: weeks,
+                    y: yUpper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                });
+                
+                // Lower bound with fill
+                traces.push({
+                    x: weeks,
+                    y: yLower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tonexty',
+                    fillcolor: params.color + '30',  // 30 = ~19% opacity in hex
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                });
+                
+                // Median line
+                traces.push({
+                    x: weeks,
+                    y: yMedian,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `${name} (α=${params.decay.toFixed(2)} [${decayLow.toFixed(2)}, ${decayHigh.toFixed(2)}])`,
+                    line: { color: params.color, width: 2.5 },
+                    hovertemplate: `${name}<br>Week %{x}<br>Remaining: %{y:.0%}<extra></extra>`
+                });
+            });
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: 'Weeks After Spend', gridcolor: colors.grid, dtick: 1 },
+                yaxis: { title: 'Remaining Effect (%)', gridcolor: colors.grid, tickformat: '.0%', range: [0, 1.05] },
+                legend: { orientation: 'h', y: 1.2, x: 0.5, xanchor: 'center', font: { size: 10 } },
+                annotations: [{
+                    x: 6,
+                    y: 0.85,
+                    text: 'Shaded regions = 80% CI',
+                    showarrow: false,
+                    font: { size: 10, color: colors.textMuted }
+                }]
+            };
+
+            Plotly.newPlot('adstockChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Prior vs Posterior Chart
+        // =====================================================================
+        const priorPosteriorData = {
+            tv_beta: { priorMean: 0.15, priorSD: 0.1, postMean: 0.12, postSD: 0.06, label: 'TV Effect (β)' },
+            search_beta: { priorMean: 0.2, priorSD: 0.12, postMean: 0.28, postSD: 0.03, label: 'Paid Search Effect (β)' },
+            social_beta: { priorMean: 0.15, priorSD: 0.1, postMean: 0.18, postSD: 0.035, label: 'Paid Social Effect (β)' },
+            tv_decay: { priorMean: 0.7, priorSD: 0.15, postMean: 0.80, postSD: 0.06, label: 'TV Adstock Decay' }
+        };
+
+        function initPriorPosteriorChart() {
+            updatePriorPosteriorChart();
+            document.getElementById('priorPosteriorParam').addEventListener('change', updatePriorPosteriorChart);
+        }
+
+        function updatePriorPosteriorChart() {
+            const param = document.getElementById('priorPosteriorParam').value;
+            const data = priorPosteriorData[param];
+            
+            const x = [];
+            const prior = [];
+            const posterior = [];
+            
+            const range = Math.max(data.priorSD, data.postSD) * 5;
+            const center = (data.priorMean + data.postMean) / 2;
+            
+            for (let xi = center - range; xi <= center + range; xi += range / 50) {
+                x.push(xi);
+                prior.push(Math.exp(-Math.pow(xi - data.priorMean, 2) / (2 * data.priorSD * data.priorSD)));
+                posterior.push(Math.exp(-Math.pow(xi - data.postMean, 2) / (2 * data.postSD * data.postSD)));
+            }
+
+            const traces = [
+                {
+                    x: x,
+                    y: prior,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Prior',
+                    line: { color: colors.textMuted, width: 2, dash: 'dash' },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(90, 107, 90, 0.1)'
+                },
+                {
+                    x: x,
+                    y: posterior,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Posterior',
+                    line: { color: colors.primary, width: 3 },
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(143, 168, 106, 0.3)'
+                }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: data.label, gridcolor: colors.grid },
+                yaxis: { title: 'Density', gridcolor: colors.grid, showticklabels: false },
+                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
+                annotations: [
+                    {
+                        x: data.postMean,
+                        y: 1.05,
+                        text: `Posterior: ${data.postMean.toFixed(2)} ± ${data.postSD.toFixed(2)}`,
+                        showarrow: true,
+                        arrowhead: 2,
+                        arrowcolor: colors.primary,
+                        font: { color: colors.primary, size: 11 }
+                    }
+                ]
+            };
+
+            Plotly.newPlot('priorPosteriorChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Budget Optimization Simulator
+        // =====================================================================
+        function initOptimizationChart() {
+            updateOptimization();
+            
+            ['totalBudget', 'tvShare', 'digitalShare'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateOptimization);
+            });
+        }
+
+        function updateOptimization() {
+            
+            const totalBudget = parseFloat(document.getElementById('totalBudget').value);
+            const tvShare = parseFloat(document.getElementById('tvShare').value);
+            const digitalShare = parseFloat(document.getElementById('digitalShare').value);
+            const tradShare = 100 - tvShare - digitalShare;
+
+            document.getElementById('totalBudgetVal').textContent = '$' + totalBudget + 'M';
+            document.getElementById('tvShareVal').textContent = tvShare + '%';
+            document.getElementById('digitalShareVal').textContent = digitalShare + '%';
+            document.getElementById('tradShareVal').textContent = tradShare + '%';
+
+            // Calculate expected revenue
+            const tvSpend = totalBudget * tvShare / 100;
+            const digitalSpend = totalBudget * digitalShare / 100;
+            const tradSpend = totalBudget * tradShare / 100;
+
+            // Simple ROI model
+            const tvRev = tvSpend * (2.24*tvSpend/40/(1+Math.pow(tvSpend/40, 2)));
+            const digitalRev = digitalSpend * (3.0*Math.pow(digitalSpend/30,.3)/(1+Math.pow(digitalSpend/30, 1.3)));
+            const tradRev = tradSpend * (3.65*Math.pow(tradSpend/18,1.2)/(1+Math.pow(tradSpend/18, 2.2)));
+            
+            const expectedRev = tvRev + digitalRev + tradRev;
+            const roi = expectedRev / totalBudget;
+            const delta = expectedRev - 116;
+
+            document.getElementById('simRevenue').textContent = '$' + Math.round(expectedRev) + 'M';
+            document.getElementById('simRevenueCi').textContent = `80% CI: [$${Math.round(expectedRev * 0.77)}M – $${Math.round(expectedRev * 1.23)}M]`;
+            document.getElementById('simRoi').textContent = roi.toFixed(2);
+            document.getElementById('simRoiCi').textContent = `80% CI: [${(roi * 0.76).toFixed(2)} – ${(roi * 1.25).toFixed(2)}]`;
+            
+            const deltaText = delta >= 0 ? '+$' + Math.round(delta) + 'M' : '-$' + Math.abs(Math.round(delta)) + 'M';
+            document.getElementById('simDelta').textContent = deltaText;
+            
+            const deltaCard = document.getElementById('deltaCard');
+            deltaCard.className = 'metric-card ' + (delta >= 0 ? 'highlight' : 'warning');
+
+            // Update chart
+            const channels = ['TV', 'Digital', 'Traditional'];
+            const currentAlloc = [46, 42, 12];
+            const newAlloc = [tvShare, digitalShare, tradShare];
+
+            const traces = [
+                {
+                    x: channels,
+                    y: currentAlloc,
+                    type: 'bar',
+                    name: 'Current',
+                    marker: { color: colors.textMuted }
+                },
+                {
+                    x: channels,
+                    y: newAlloc,
+                    type: 'bar',
+                    name: 'Simulated',
+                    marker: { color: colors.primary }
+                }
+            ];
+
+            const layout = {
+                ...baseLayout,
+                barmode: 'group',
+                xaxis: { title: '' },
+                yaxis: { title: 'Budget Share (%)', gridcolor: colors.grid, range: [0, 70] },
+                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' }
+            };
+
+            Plotly.newPlot('optimizationChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Sensitivity Analysis Chart
+        // =====================================================================
+        function initSensitivityChart() {
+            const specifications = [
+                'Base Model',
+                'Alt. Adstock<br>(shorter)',
+                'Alt. Adstock<br>(longer)',
+                'Alt. Saturation',
+                'Drop<br>Q4 2024',
+                'Add<br>Weather Control',
+                'Different Priors'
+            ];
+
+            const channels = ['TV', 'Paid Search', 'Print'];
+            const estimates = {
+                'TV': [1.24, 1.45, 0.98, 1.31, 1.18, 1.22, 1.35],
+                'Paid Search': [2.41, 2.35, 2.52, 2.28, 2.44, 2.39, 2.55],
+                'Print': [0.54, 0.61, 0.48, 0.52, 0.58, 0.51, 0.49]
+            };
+
+            const traces = channels.map(ch => ({
+                x: specifications,
+                y: estimates[ch],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: ch,
+                line: { width: 2 },
+                marker: { size: 8 }
+            }));
+
+            // Add break-even line
+            traces.push({
+                x: specifications,
+                y: Array(7).fill(1),
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Break-even',
+                line: { color: colors.text, width: 1, dash: 'dash' },
+                showlegend: false
+            });
+
+            const layout = {
+                ...baseLayout,
+                xaxis: { title: '', tickangle: -30 },
+                yaxis: { title: 'ROI Estimate', gridcolor: colors.grid },
+                legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center' },
+                shapes: [{
+                    type: 'rect',
+                    x0: -0.5, x1: 6.5,
+                    y0: 0, y1: 1,
+                    fillcolor: 'rgba(201, 112, 103, 0.08)',
+                    line: { width: 0 }
+                }]
+            };
+
+            Plotly.newPlot('sensitivityChart', traces, layout, chartConfig);
+        }
+
+        // =====================================================================
+        // Tab Navigation
+        // =====================================================================
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+
+            // Resize charts in case they were hidden
+            setTimeout(() => {
+                Plotly.Plots.resize(document.getElementById(tabId).querySelector('.chart-container'));
+            }, 10);
+        }
+
+        // =====================================================================
+        // Initialize All Charts
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            initModelFitChart();
+            initROIForestPlot();
+            initWaterfallChart();
+            initDecompositionChart();
+            initStackedAreaChart();
+            initSaturationCharts();
+            initAdstockChart();
+            initPriorPosteriorChart();
+            initOptimizationChart();
+            initSensitivityChart();
+
+            // Build channel legend
+            const legend = document.getElementById('channelLegend');
+            Object.entries(channelColors).forEach(([name, color]) => {
+                const pill = document.createElement('div');
+                pill.className = 'channel-pill';
+                pill.innerHTML = `<span class="dot" style="background: ${color}"></span>${name}`;
+                legend.appendChild(pill);
+            });
+        });
+    </script>
+    <script src="shared/components.js"></script>
+</body>
+</html>

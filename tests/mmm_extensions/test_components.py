@@ -35,7 +35,6 @@ from mmm_framework.mmm_extensions.components import (
 import pymc as pm
 import pytensor.tensor as pt
 
-
 # Check if scan-based functions are available
 try:
     from mmm_framework.mmm_extensions.components import (

@@ -424,13 +424,11 @@ def render_data_tab():
 
     with col2:
         st.markdown("**Expected MFF Format:**")
-        st.code(
-            """
+        st.code("""
 Period,Geography,Product,...,VariableName,VariableValue
 2022-01-03,,,,...,Sales,1234.56
 2022-01-03,,,,...,TV,50000.00
-        """
-        )
+        """)
 
     # Data preview
     if st.session_state.data is not None:

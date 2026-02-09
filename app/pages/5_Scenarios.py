@@ -30,7 +30,6 @@ from components import (
     plot_budget_optimization,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -262,7 +261,9 @@ def render_scenario_form():
         # Check if percentages sum to 100
         total_pct = sum(new_pcts.values())
         if abs(total_pct - 100) > 0.1:
-            st.warning(f"⚠️ Allocations sum to {total_pct:.1f}%. Please adjust to 100%.")
+            st.warning(
+                f"⚠️ Allocations sum to {total_pct:.1f}%. Please adjust to 100%."
+            )
 
         # Calculate spend changes
         for channel in channels:
@@ -469,14 +470,12 @@ def render_optimization():
 
     st.info("🚧 Budget optimization is a premium feature. Contact us for access.")
 
-    st.markdown(
-        """
+    st.markdown("""
     Budget optimization would include:
     - **Objective Function**: Maximize KPI, maximize ROAS, or target specific outcome
     - **Constraints**: Total budget, min/max per channel, change limits
     - **Algorithm**: Sequential Least Squares Programming (SLSQP) or Bayesian optimization
-    """
-    )
+    """)
 
     # Placeholder UI
     with st.expander("⚙️ Optimization Settings (Preview)", expanded=False):

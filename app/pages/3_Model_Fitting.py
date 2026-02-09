@@ -29,7 +29,6 @@ from components import (
     job_progress_display,
 )
 
-
 # =============================================================================
 # Page Configuration
 # =============================================================================
@@ -275,7 +274,27 @@ def render_job_monitor():
         with col2:
             if model.progress in {"pending", "queued", "running"}:
                 if st.button("⏹️ Cancel", use_container_width=True):
-                    st.info("Cancel functionality would go here")
+                    st.session_state[f"confirm_cancel_{model.model_id}"] = True
+                    st.rerun()
+
+        # Cancel confirmation
+        if st.session_state.get(f"confirm_cancel_{model.model_id}", False):
+            st.warning("⚠️ Cancel this job?")
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button("Yes, Cancel", key="confirm_cancel_yes", type="primary"):
+                    try:
+                        client.cancel_job(model.model_id)
+                        st.success("Job cancelled!")
+                        clear_model_cache()
+                        del st.session_state[f"confirm_cancel_{model.model_id}"]
+                        st.rerun()
+                    except APIError as e:
+                        display_api_error(e)
+            with col_no:
+                if st.button("No, Keep Running", key="confirm_cancel_no"):
+                    del st.session_state[f"confirm_cancel_{model.model_id}"]
+                    st.rerun()
 
         with col3:
             if st.button("🗑️ Delete", use_container_width=True):
@@ -378,9 +397,7 @@ def render_job_list():
                     st.caption(format_datetime(model.created_at))
 
                 with col3:
-                    st.markdown(
-                        f"{status_icon(model.status)} {model.status}"
-                    )
+                    st.markdown(f"{status_icon(model.status)} {model.status}")
 
                 with col4:
                     if model.progress == "running":

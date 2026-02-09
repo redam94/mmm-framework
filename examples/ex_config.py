@@ -38,7 +38,6 @@ from mmm_framework import (
     mff_from_wide_format,
 )
 
-
 # =============================================================================
 # Helper: Generate synthetic MFF data for testing
 # =============================================================================

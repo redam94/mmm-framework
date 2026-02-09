@@ -50,7 +50,6 @@ from .components import (
     CrossEffectSpec,
 )
 
-
 # =============================================================================
 # Result Containers
 # =============================================================================
@@ -276,7 +275,7 @@ class NestedMMM(BaseExtendedMMM):
         # Observation model
         if med_config.mediator_type == MediatorType.FULLY_LATENT:
             pass  # No observation
-        
+
         elif med_config.mediator_type == MediatorType.AGGREGATED_SURVEY:
             # NEW: Aggregated survey observation
             build_aggregated_survey_observation(
@@ -286,12 +285,11 @@ class NestedMMM(BaseExtendedMMM):
                 config=med_config.aggregated_survey_config,
                 is_proportion=True,
             )
-        
+
         elif med_name in self.mediator_data:
             # Existing: point observation model
             obs_data = self.mediator_data[med_name]
             mask = self.mediator_masks.get(med_name, ~np.isnan(obs_data))
-        
 
             build_partial_observation_model(
                 med_name,

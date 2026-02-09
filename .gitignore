@@ -15,3 +15,6 @@ wheels/
 .DS_Store
 storage/
 node_modules/
+
+!package.json
+!package-lock.json

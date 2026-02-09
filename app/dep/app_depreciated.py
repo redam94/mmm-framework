@@ -420,13 +420,11 @@ def render_data_tab():
 
     with col2:
         st.markdown("**Expected MFF Format:**")
-        st.code(
-            """
+        st.code("""
 Period,Geography,Product,...,VariableName,VariableValue
 2022-01-03,,,,...,Sales,1234.56
 2022-01-03,,,,...,TV,50000.00
-        """
-        )
+        """)
 
     # Data preview
     if st.session_state.data is not None:
@@ -1275,12 +1273,10 @@ def render_model_fit(results, mmm):
     """Render posterior predictive model fit."""
     st.subheader("🎯 Model Fit")
 
-    st.markdown(
-        """
+    st.markdown("""
     This plot shows the observed data against the model's posterior predictions.
     The shaded band represents the prediction uncertainty (HDI).
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     dim_info = get_dimension_info(mmm, panel)
@@ -1626,12 +1622,10 @@ def render_response_curves(results, mmm):
     """Render response curves with HDI bands."""
     st.subheader("📈 Response Curves")
 
-    st.markdown(
-        """
+    st.markdown("""
     Response curves show how media spend translates to sales effect after accounting for 
     saturation (diminishing returns). The shaded bands represent the HDI (Highest Density Interval).
-    """
-    )
+    """)
 
     channel_names = mmm.channel_names
     posterior = results.trace.posterior
@@ -1765,14 +1759,12 @@ def render_contributions(results, mmm):
     """Render channel contributions using counterfactual analysis."""
     st.subheader("💰 Channel Contributions (Counterfactual)")
 
-    st.markdown(
-        """
+    st.markdown("""
     **Counterfactual Contribution Analysis**: For each channel, we compare the baseline 
     prediction (with all channels) to a counterfactual scenario (with that channel zeroed out).
     The difference represents the channel's true contribution, properly accounting for 
     saturation and adstock effects.
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     dim_info = get_dimension_info(mmm, panel)
@@ -2028,8 +2020,7 @@ def render_contributions(results, mmm):
 
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        st.info(
-            """
+        st.info("""
         💡 **Understanding Counterfactual ROAS:**
         
         Unlike simple coefficient-based ROAS, counterfactual ROAS accounts for:
@@ -2038,20 +2029,17 @@ def render_contributions(results, mmm):
         - **Interaction effects**: How channels interact with the overall model
         
         This provides a more accurate picture of each channel's true return.
-        """
-        )
+        """)
 
 
 def render_scenario_planning(results, mmm):
     """Render scenario planning and what-if analysis."""
     st.subheader("🔮 Scenario Planning")
 
-    st.markdown(
-        """
+    st.markdown("""
     Simulate how changes in media spend would affect outcomes. This uses the fitted model
     to predict outcomes under different budget scenarios.
-    """
-    )
+    """)
 
     panel = st.session_state.panel
     channel_names = mmm.channel_names
@@ -2076,12 +2064,10 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
     """Render marginal contribution analysis."""
     st.markdown("### Marginal Analysis")
 
-    st.markdown(
-        """
+    st.markdown("""
     See how additional spend in each channel would translate to incremental outcomes,
     accounting for saturation effects.
-    """
-    )
+    """)
 
     # Settings
     col1, col2 = st.columns([1, 2])
@@ -2169,30 +2155,24 @@ def render_marginal_analysis(mmm, channel_names, dim_info):
         best_roas = marginal_df["Marginal ROAS"].max()
 
         if best_roas > 1:
-            st.success(
-                f"""
+            st.success(f"""
             💡 **Recommendation**: {best_channel} has the highest marginal ROAS ({best_roas:.2f}). 
             Additional investment here would yield the best incremental return.
-            """
-            )
+            """)
         else:
-            st.warning(
-                """
+            st.warning("""
             ⚠️ All channels have marginal ROAS below 1.0, indicating high saturation. 
             Consider reducing overall spend or reallocating to emerging channels.
-            """
-            )
+            """)
 
 
 def render_what_if_scenario(mmm, channel_names, dim_info):
     """Render what-if scenario analysis."""
     st.markdown("### What-If Scenario")
 
-    st.markdown(
-        """
+    st.markdown("""
     Create custom budget scenarios to see how changes would affect outcomes.
-    """
-    )
+    """)
 
     # Build scenario inputs
     st.markdown("**Set spend multipliers for each channel:**")
@@ -2327,12 +2307,10 @@ def render_budget_optimization(mmm, channel_names, dim_info):
     """Render budget optimization analysis."""
     st.markdown("### Budget Optimization")
 
-    st.markdown(
-        """
+    st.markdown("""
     Find the optimal budget allocation across channels to maximize outcomes.
     This analysis uses marginal returns to suggest budget reallocation.
-    """
-    )
+    """)
 
     # Current spend
     X_media_raw = mmm.X_media_raw
@@ -2457,15 +2435,13 @@ def render_budget_optimization(mmm, channel_names, dim_info):
 
         st.plotly_chart(fig, use_container_width=True)
 
-        st.info(
-            """
+        st.info("""
         💡 **Note**: This optimization is based on marginal ROAS at current spend levels.
         For more sophisticated optimization, consider:
         - Multi-period optimization with carryover effects
         - Budget constraints and minimum allocations
         - Non-linear optimization with saturation curves
-        """
-        )
+        """)
 
 
 def render_summary(results, mmm):

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>For Business Stakeholders | MMM Framework</title>
+    <meta name="description" content="Understanding the risks of specification shopping in marketing mix modeling for ad agencies, model shops, and brands.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/business-stakeholders.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-warning" style="margin-bottom: 1rem; display: inline-block;">For Business Leaders</span>
+            <h1>The Hidden Risk in Your Marketing Models</h1>
+            <p class="lead">
+                How specification shopping undermines marketing measurement at ad agencies, model shops, and brands&mdash;and what you can do about it.
+            </p>
+        </div>
+    </section>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#what-is-specification-shopping">What Is Specification Shopping?</a></li>
+                <li><a href="#who-is-affected">Who Is Affected</a></li>
+            </ul>
+
+            <h3>By Role</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#ad-agencies">Ad Agencies</a></li>
+                <li><a href="#model-shops">Model Shops</a></li>
+                <li><a href="#brands">Brands &amp; Advertisers</a></li>
+            </ul>
+
+            <h3>The Risks</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#financial-risk">Financial Consequences</a></li>
+                <li><a href="#credibility-risk">Credibility Risk</a></li>
+                <li><a href="#how-to-detect">How to Detect It</a></li>
+            </ul>
+
+            <h3>The Solution</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#better-approach">A Better Approach</a></li>
+                <li><a href="#questions-to-ask">Questions to Ask</a></li>
+                <li><a href="#getting-started">Getting Started</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="what-is-specification-shopping">What Is Specification Shopping?</h1>
+            <p class="lead">
+                Specification shopping is the practice of running many model variations and only reporting the ones that produce results stakeholders expect to see. It is the single biggest threat to the integrity of marketing measurement.
+            </p>
+
+            <div class="scenario-grid" style="margin-top: 2rem;">
+                <div class="scenario-card bad">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#9888;&#65039;</span>
+                        <span class="scenario-title">How It Happens</span>
+                    </div>
+                    <ul>
+                        <li>Analyst runs 30 model variations</li>
+                        <li>Only 3 show TV ROI above 1.0</li>
+                        <li>Those 3 are presented as &ldquo;the model&rdquo;</li>
+                        <li>Results look precise but are selection artifacts</li>
+                        <li>Budget decisions made on false confidence</li>
+                    </ul>
+                </div>
+                <div class="scenario-card good">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10003;</span>
+                        <span class="scenario-title">What Should Happen</span>
+                    </div>
+                    <ul>
+                        <li>Model specification defined before seeing results</li>
+                        <li>Uncertainty honestly reported as probability ranges</li>
+                        <li>All reasonable models considered, not just &ldquo;good&rdquo; ones</li>
+                        <li>Sensitivity to modeling choices tested and reported</li>
+                        <li>Budget decisions account for genuine uncertainty</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>Why This Matters</h4>
+                <p>
+                    When you test many specifications and select based on results, standard statistical inference is invalidated. The confidence intervals no longer mean what they claim to mean. The process systematically selects for confirming rather than disconfirming evidence.
+                </p>
+            </div>
+
+            <!-- Who Is Affected -->
+            <h2 id="who-is-affected">Who Is Affected</h2>
+            <p>
+                Specification shopping is pervasive across the marketing measurement ecosystem. Each role faces distinct pressures that encourage the practice and distinct consequences when it fails.
+            </p>
+
+            <div class="role-grid">
+                <div class="role-card fade-in">
+                    <div class="role-icon">&#127970;</div>
+                    <h3>Ad Agencies</h3>
+                    <div class="role-subtitle">Proving campaign value</div>
+                    <p>Under pressure to demonstrate ROI for the media they placed. Models that show poor performance threaten client relationships and revenue.</p>
+                </div>
+                <div class="role-card fade-in stagger-1">
+                    <div class="role-icon">&#128202;</div>
+                    <h3>Model Shops</h3>
+                    <div class="role-subtitle">Delivering expected results</div>
+                    <p>Hired to build models that &ldquo;make sense.&rdquo; When results contradict expectations, there is pressure to adjust until they align with priors.</p>
+                </div>
+                <div class="role-card fade-in stagger-2">
+                    <div class="role-icon">&#127981;</div>
+                    <h3>Brands &amp; Advertisers</h3>
+                    <div class="role-subtitle">Making budget decisions</div>
+                    <p>Rely on model outputs to allocate millions in media spend. False precision from specification shopping leads to misallocated budgets.</p>
+                </div>
+            </div>
+
+            <!-- Ad Agencies Section -->
+            <h2 id="ad-agencies">For Ad Agencies</h2>
+            <p>
+                Agencies face a structural conflict of interest: they are often asked to measure the effectiveness of media they themselves placed. This creates subtle but powerful incentives to find positive results.
+            </p>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128176;</div>
+                <div>
+                    <h4>The Incentive Problem</h4>
+                    <p>When your revenue depends on clients continuing to spend on channels you manage, models that show low ROI for those channels threaten your business. This creates unconscious bias in modeling decisions even among well-intentioned analysts.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128269;</div>
+                <div>
+                    <h4>How It Manifests</h4>
+                    <p>Adjusting adstock decay rates until a channel &ldquo;looks right.&rdquo; Removing control variables that reduce media coefficients. Zeroing out negative effects and calling them &ldquo;non-significant.&rdquo; Choosing between model variants based on which gives the &ldquo;most reasonable&rdquo; ROIs.</p>
+                </div>
+            </div>
+
+            <div class="takeaway-box">
+                <h4>The Opportunity for Agencies</h4>
+                <p>
+                    Agencies that adopt transparent, pre-specified modeling methodologies differentiate themselves from competitors. When your models are validated against holdout experiments, you can demonstrate genuine value rather than asserted value. This builds deeper, more durable client relationships.
+                </p>
+            </div>
+
+            <!-- Model Shops Section -->
+            <h2 id="model-shops">For Model Shops</h2>
+            <p>
+                Dedicated analytics firms face the &ldquo;client satisfaction versus scientific rigor&rdquo; tension daily. The commercial pressure to deliver results that &ldquo;make sense&rdquo; is real, but it comes at a cost.
+            </p>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#9878;&#65039;</div>
+                <div>
+                    <h4>The Credibility Trap</h4>
+                    <p>If clients hire you expecting certain results and you deliver models that confirm expectations, no one complains. But when two different model shops produce contradictory results for the same brand using the same data, the industry&rsquo;s credibility erodes.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128200;</div>
+                <div>
+                    <h4>The Validation Gap</h4>
+                    <p>Most model shops cannot point to systematic validation of their predictions. How often are model-implied ROIs tested against controlled experiments? Without this feedback loop, there is no mechanism to distinguish good models from specification-shopped ones.</p>
+                </div>
+            </div>
+
+            <div class="quote-block">
+                When everyone uses the same biased methods, an entire industry can be confidently wrong. The first firms to break this cycle will have a significant competitive advantage.
+                <div class="quote-attribution">&mdash; The case for rigorous measurement</div>
+            </div>
+
+            <h3>Common Specification Shopping Practices</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Practice</th>
+                        <th>Why It&rsquo;s Done</th>
+                        <th>Why It&rsquo;s Harmful</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Zeroing out negative media effects</strong></td>
+                        <td>&ldquo;Media can&rsquo;t have negative ROI&rdquo;</td>
+                        <td>Systematically biases all estimates upward; makes uncertainty invisible</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tuning adstock until results look right</strong></td>
+                        <td>&ldquo;Domain knowledge about decay rates&rdquo;</td>
+                        <td>When done after seeing results, it&rsquo;s a form of p-hacking; invalidates inference</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Dropping control variables that reduce media effects</strong></td>
+                        <td>&ldquo;Multicollinearity issues&rdquo;</td>
+                        <td>Omitting confounders inflates causal estimates; leads to incorrect attribution</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Selecting &ldquo;best&rdquo; model from many candidates</strong></td>
+                        <td>&ldquo;Model selection is standard practice&rdquo;</td>
+                        <td>Winner&rsquo;s curse: the selected model overestimates effect sizes; reported uncertainty is too narrow</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Adjusting priors to match expected ROIs</strong></td>
+                        <td>&ldquo;Incorporating domain knowledge&rdquo;</td>
+                        <td>When done iteratively after seeing posteriors, this is Bayesian specification shopping; the posterior no longer reflects an honest belief update</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Brands Section -->
+            <h2 id="brands">For Brands &amp; Advertisers</h2>
+            <p>
+                As the end consumers of marketing measurement, brands are both the primary victims and the primary beneficiaries of improved methodology. Understanding what questions to ask is the first step toward better outcomes.
+            </p>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128184;</div>
+                <div>
+                    <h4>The Budget Impact</h4>
+                    <p>If your model overstates TV ROI by 40% due to specification shopping, you are systematically over-investing in television at the expense of other channels. Over a year, this can mean millions of dollars in misallocated spend.</p>
+                </div>
+            </div>
+
+            <div class="icon-box">
+                <div class="icon-circle">&#128203;</div>
+                <div>
+                    <h4>The Year-over-Year Problem</h4>
+                    <p>Have you noticed that model results change dramatically year over year even when strategy is stable? This instability is often a sign of specification shopping&mdash;different analysts making different ad hoc choices rather than a systematic change in market dynamics.</p>
+                </div>
+            </div>
+
+            <!-- Financial Risk -->
+            <h2 id="financial-risk">Financial Consequences</h2>
+
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-value gradient-text">30-50%</div>
+                    <div class="metric-label">ROI Overestimation</div>
+                    <div class="metric-context">Typical upward bias from zeroing out negative effects</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value gradient-text-warm">5-15%</div>
+                    <div class="metric-label">Budget Misallocation</div>
+                    <div class="metric-context">Share of budget directed to wrong channels</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value gradient-text">100%</div>
+                    <div class="metric-label">Reported Accuracy</div>
+                    <div class="metric-context">From models selected to show high fit</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value gradient-text-warm">&lt;50%</div>
+                    <div class="metric-label">Actual Reliability</div>
+                    <div class="metric-context">When validated against holdout experiments</div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>The Compounding Effect</h4>
+                <p>
+                    Specification shopping doesn&rsquo;t just produce a single bad estimate. It produces a systematically biased view of your entire media portfolio. The channels that appear most effective are often the ones where the model had the most room to be optimistic&mdash;typically those with the least experimental validation.
+                </p>
+            </div>
+
+            <!-- Credibility Risk -->
+            <h2 id="credibility-risk">Credibility Risk</h2>
+            <p>
+                The marketing measurement industry faces a growing credibility crisis. As data science matures in other domains and clients become more sophisticated, the gap between standard practice and scientific rigor becomes harder to ignore.
+            </p>
+
+            <div class="risk-meter">
+                <span style="font-weight: 600; min-width: 180px;">Client trust erosion</span>
+                <div class="risk-bar">
+                    <div class="risk-bar-fill high" style="width: 85%;"></div>
+                </div>
+                <span class="risk-label high">High</span>
+            </div>
+
+            <div class="risk-meter">
+                <span style="font-weight: 600; min-width: 180px;">Regulatory scrutiny</span>
+                <div class="risk-bar">
+                    <div class="risk-bar-fill medium" style="width: 55%;"></div>
+                </div>
+                <span class="risk-label medium">Growing</span>
+            </div>
+
+            <div class="risk-meter">
+                <span style="font-weight: 600; min-width: 180px;">Competitive displacement</span>
+                <div class="risk-bar">
+                    <div class="risk-bar-fill high" style="width: 70%;"></div>
+                </div>
+                <span class="risk-label high">High</span>
+            </div>
+
+            <!-- How to Detect It -->
+            <h2 id="how-to-detect">How to Detect Specification Shopping</h2>
+            <p>
+                Whether you are commissioning a model or reviewing one, these indicators suggest specification shopping may have occurred.
+            </p>
+
+            <div class="process-steps">
+                <div class="process-step" data-step="1">
+                    <h4>No negative media effects anywhere</h4>
+                    <p>If every channel shows positive ROI, ask: was this constrained or did the data show it? In reality, some channels in some time periods may show negligible or negative incremental effects, especially when over-saturated.</p>
+                </div>
+                <div class="process-step" data-step="2">
+                    <h4>Extremely narrow confidence intervals</h4>
+                    <p>If the model says TV ROI is 1.42 (1.38&ndash;1.46), ask how this precision was achieved. With typical MMM data, genuine uncertainty is much wider. Artificially narrow intervals are a hallmark of selecting among specifications.</p>
+                </div>
+                <div class="process-step" data-step="3">
+                    <h4>Results perfectly match prior expectations</h4>
+                    <p>If every result aligns with what the client expected, ask what would have been reported if results contradicted expectations. A model that always confirms priors is a mirror, not a measurement tool.</p>
+                </div>
+                <div class="process-step" data-step="4">
+                    <h4>Dramatic year-over-year changes with no clear driver</h4>
+                    <p>If last year&rsquo;s model showed TV was strongest and this year shows digital is strongest&mdash;with no change in strategy&mdash;the modeling process itself is likely the source of variation.</p>
+                </div>
+                <div class="process-step" data-step="5">
+                    <h4>No holdout validation or experimental calibration</h4>
+                    <p>If model predictions have never been tested against controlled experiments, there is no empirical basis for trusting the results. In-sample fit measures like R-squared do not validate causal claims.</p>
+                </div>
+            </div>
+
+            <!-- A Better Approach -->
+            <h2 id="better-approach">A Better Approach</h2>
+            <p>
+                The MMM Framework is built from the ground up to eliminate specification shopping while producing genuinely useful business insights.
+            </p>
+
+            <div class="scenario-grid">
+                <div class="scenario-card bad">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10005;</span>
+                        <span class="scenario-title">Traditional Approach</span>
+                    </div>
+                    <ul>
+                        <li>Run many models, report &ldquo;the best one&rdquo;</li>
+                        <li>Point estimates with false precision</li>
+                        <li>Post hoc adjustments to &ldquo;fix&rdquo; results</li>
+                        <li>No experimental validation</li>
+                        <li>Different analysts, different results</li>
+                        <li>Confidence comes from presentation, not evidence</li>
+                    </ul>
+                </div>
+                <div class="scenario-card good">
+                    <div class="scenario-header">
+                        <span class="scenario-icon">&#10003;</span>
+                        <span class="scenario-title">MMM Framework Approach</span>
+                    </div>
+                    <ul>
+                        <li>Pre-specify model before seeing results</li>
+                        <li>Full posterior distributions with honest uncertainty</li>
+                        <li>Bayesian priors encode domain knowledge transparently</li>
+                        <li>Built-in experimental calibration support</li>
+                        <li>Reproducible: same data, same results</li>
+                        <li>Confidence comes from validated predictions</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>The Business Case for Rigor</h4>
+                <p>
+                    Organizations that adopt rigorous measurement practices don&rsquo;t just get better models&mdash;they get better decisions. When you know which estimates are confident and which are uncertain, you can invest in experiments where they matter most, allocate budget based on validated effects, and build a compounding knowledge advantage over competitors who rely on specification-shopped results.
+                </p>
+            </div>
+
+            <!-- Questions to Ask -->
+            <h2 id="questions-to-ask">Questions to Ask Your Modeling Partner</h2>
+            <p>
+                Whether you are evaluating a new vendor or auditing existing work, these questions help distinguish rigorous measurement from specification shopping.
+            </p>
+
+            <div class="accordion-item">
+                <button class="accordion-header">1. Were modeling decisions made before or after seeing results?</button>
+                <div class="accordion-body">
+                    <p>The gold standard is a pre-registered analysis plan that specifies model structure, priors, and decision criteria before the model is fit to data. Ask for the analysis plan and compare it to the final delivered model.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">2. How many model specifications were tested?</button>
+                <div class="accordion-body">
+                    <p>There is nothing wrong with testing multiple specifications, but all should be reported. If 30 models were run and only 1 is presented, the uncertainty is vastly understated. Ask for a sensitivity analysis showing how results change across reasonable specifications.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">3. Have model predictions been validated against experiments?</button>
+                <div class="accordion-body">
+                    <p>The most powerful validation is comparing model-implied predictions against holdout experiments (geo lift tests, randomized controlled trials). If the modeling partner cannot point to any experimental validation, the model&rsquo;s causal claims are untested.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">4. What happens when a channel shows negative ROI?</button>
+                <div class="accordion-body">
+                    <p>If the answer is &ldquo;we constrain it to be positive&rdquo; or &ldquo;we adjust the model,&rdquo; this is specification shopping. Negative effects are valid findings that indicate over-saturation, poor creative, or confounding. Honest measurement sometimes delivers unwelcome news.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">5. How wide are the uncertainty intervals, and what do they mean?</button>
+                <div class="accordion-body">
+                    <p>If the answer is &ldquo;we report point estimates,&rdquo; push for credible intervals. If intervals seem implausibly narrow, ask what assumptions produce that precision. Genuine Bayesian credible intervals for MMM are typically wide enough to affect optimization decisions.</p>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <button class="accordion-header">6. Can I reproduce these results with the same data and code?</button>
+                <div class="accordion-body">
+                    <p>Reproducibility is the minimum bar for scientific claims. If the modeling partner cannot provide code that reproduces their results, the work cannot be independently verified. The MMM Framework is fully open source and reproducible by design.</p>
+                </div>
+            </div>
+
+            <!-- Getting Started -->
+            <h2 id="getting-started">Getting Started with Rigorous Measurement</h2>
+            <p>
+                Whether you are an agency, model shop, or brand, the transition to rigorous measurement follows a common path.
+            </p>
+
+            <div class="process-steps">
+                <div class="process-step" data-step="1">
+                    <h4>Assess your current practices</h4>
+                    <p>Review your existing modeling workflow against the detection criteria above. Identify where post hoc adjustments are made and where specification choices are data-driven rather than pre-specified.</p>
+                </div>
+                <div class="process-step" data-step="2">
+                    <h4>Start with one project</h4>
+                    <p>Pick a single client or brand and run the full rigorous workflow alongside your existing approach. Compare the results and understand the differences.</p>
+                    <div class="step-details">
+                        <a href="modeling-guide.html" class="btn btn-outline" style="margin-top: 0.5rem;">Step-by-Step Modeling Guide &rarr;</a>
+                    </div>
+                </div>
+                <div class="process-step" data-step="3">
+                    <h4>Design validation experiments</h4>
+                    <p>Use model predictions to design geo lift tests or holdout experiments. This creates the feedback loop needed to distinguish working models from non-working ones.</p>
+                </div>
+                <div class="process-step" data-step="4">
+                    <h4>Communicate uncertainty as a feature</h4>
+                    <p>Train stakeholders to see honest uncertainty ranges as more valuable than false precision. When you say &ldquo;we are confident TV ROI is between 1.1 and 1.8&rdquo; it enables better decisions than &ldquo;TV ROI is 1.42.&rdquo;</p>
+                    <div class="step-details">
+                        <a href="interpreting-results.html" class="btn btn-outline" style="margin-top: 0.5rem;">Interpreting Results for Stakeholders &rarr;</a>
+                    </div>
+                </div>
+                <div class="process-step" data-step="5">
+                    <h4>Build organizational capability</h4>
+                    <p>Invest in training your team on Bayesian methods, causal inference, and the MMM Framework. This is a long-term competitive advantage, not just a tool change.</p>
+                </div>
+            </div>
+
+            <div class="takeaway-box">
+                <h4>Key Takeaway</h4>
+                <p>
+                    The marketing measurement industry is moving toward greater rigor. Organizations that lead this transition will build differentiated capabilities and client relationships grounded in demonstrated rather than asserted credibility. The MMM Framework provides the tools&mdash;the rest is organizational commitment to honesty.
+                </p>
+            </div>
+
+            <div class="highlight-box" style="margin-top: 2rem;">
+                <h4>Ready to Learn More?</h4>
+                <p>
+                    Explore the <a href="modeling-guide.html">step-by-step modeling guide</a> for implementing statistically sound models, or read <a href="interpreting-results.html">interpreting results</a> for guidance on communicating findings to media planners and CMOs.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready for Honest Measurement?</h2>
+            <p>The framework is open source. Start with the documentation or dive into the code.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started Guide</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+    <script>
+        // Accordion functionality
+        document.querySelectorAll('.accordion-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const item = header.parentElement;
+                const isOpen = item.classList.contains('open');
+                // Close all
+                document.querySelectorAll('.accordion-item').forEach(i => i.classList.remove('open'));
+                // Toggle clicked
+                if (!isOpen) item.classList.add('open');
+            });
+        });
+
+        // Scroll animations for new elements
+        const animObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+        document.querySelectorAll('.fade-in, .fade-in-up, .slide-in-left, .slide-in-right, .scale-in').forEach(el => {
+            animObserver.observe(el);
+        });
+
+        // Animate risk bars on scroll
+        const riskObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const fill = entry.target.querySelector('.risk-bar-fill');
+                    if (fill) {
+                        const width = fill.style.width;
+                        fill.style.width = '0%';
+                        setTimeout(() => { fill.style.width = width; }, 100);
+                    }
+                }
+            });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll('.risk-meter').forEach(el => riskObserver.observe(el));
+    </script>
+</body>
+</html>

@@ -142,9 +142,9 @@ async def fit_model_task(
         )
         import pytensor
 
-        pytensor.config.exception_verbosity = 'high'
-        pytensor.config.mode == 'NUMBA'
-        pytensor.config.cxx = "" 
+        pytensor.config.exception_verbosity = "high"
+        pytensor.config.mode == "NUMBA"
+        pytensor.config.cxx = ""
         # Build MFF config from dict
         mff_builder = MFFConfigBuilder()
 
@@ -170,16 +170,51 @@ async def fit_model_task(
         for media_dict in mff_config_dict.get("media_channels", []):
             media_builder = MediaChannelConfigBuilder(media_dict["name"])
 
-            if media_dict.get("dimensions") == ["Period"]:
+            # Handle dimensions
+            media_dims = media_dict.get("dimensions", ["Period"])
+            if media_dims == ["Period"]:
                 media_builder.national()
-            elif "Geography" in media_dict.get("dimensions", []):
+            elif "Geography" in media_dims and "Product" in media_dims:
+                media_builder.by_geo_and_product()
+            elif "Geography" in media_dims:
                 media_builder.by_geo()
+            elif "Product" in media_dims:
+                media_builder.by_product()
 
+            # Handle adstock type
             adstock_config = media_dict.get("adstock", {})
             l_max = adstock_config.get("l_max", 8)
-            media_builder.with_geometric_adstock(l_max)
-            media_builder.with_hill_saturation()
+            adstock_type = adstock_config.get("type", "geometric")
 
+            if adstock_type == "geometric":
+                media_builder.with_geometric_adstock(l_max)
+            elif adstock_type == "weibull":
+                media_builder.with_weibull_adstock(l_max)
+            elif adstock_type == "delayed":
+                media_builder.with_delayed_adstock(l_max)
+            elif adstock_type == "none":
+                pass  # No adstock
+
+            # Handle saturation type
+            sat_config = media_dict.get("saturation", {})
+            sat_type = sat_config.get("type", "hill")
+
+            if sat_type == "hill":
+                media_builder.with_hill_saturation()
+            elif sat_type == "logistic":
+                media_builder.with_logistic_saturation()
+            elif sat_type == "michaelis_menten":
+                media_builder.with_michaelis_menten_saturation()
+            elif sat_type == "tanh":
+                media_builder.with_tanh_saturation()
+            elif sat_type == "none":
+                pass  # No saturation
+
+            # Handle display name
+            if media_dict.get("display_name"):
+                media_builder.with_display_name(media_dict["display_name"])
+
+            # Handle parent channel for hierarchical
             if media_dict.get("parent_channel"):
                 media_builder.with_parent_channel(media_dict["parent_channel"])
 
@@ -187,13 +222,33 @@ async def fit_model_task(
 
         # Controls
         for control_dict in mff_config_dict.get("controls", []):
-            control_builder = ControlVariableConfigBuilder(
-                control_dict["name"]
-            ).national()
+            control_builder = ControlVariableConfigBuilder(control_dict["name"])
+
+            # Handle dimensions
+            control_dims = control_dict.get("dimensions", ["Period"])
+            if control_dims == ["Period"]:
+                control_builder.national()
+            elif "Geography" in control_dims and "Product" in control_dims:
+                control_builder.by_geo_and_product()
+            elif "Geography" in control_dims:
+                control_builder.by_geo()
+            elif "Product" in control_dims:
+                control_builder.by_product()
+
+            # Handle sign constraint
             if control_dict.get("allow_negative", True):
                 control_builder.allow_negative()
             else:
                 control_builder.positive_only()
+
+            # Handle display name
+            if control_dict.get("display_name"):
+                control_builder.with_display_name(control_dict["display_name"])
+
+            # Handle shrinkage
+            if control_dict.get("use_shrinkage", False):
+                control_builder.with_shrinkage()
+
             mff_builder.add_control_builder(control_builder)
 
         # Alignment
@@ -411,8 +466,43 @@ async def fit_model_task(
             "diagnostics": diagnostics,
         }
     except Exception as e:
-        print(f"DEBUG: Failed saving results_summary: {e}")
-        raise
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        error_msg = str(e)
+        traceback_str = traceback.format_exc()
+        logger.error(f"Model fitting failed for {model_id}: {error_msg}")
+        logger.error(traceback_str)
+
+        # Update Redis status to FAILED
+        try:
+            await update_status(
+                JobStatus.FAILED,
+                progress=0.0,
+                message=f"Model fitting failed: {error_msg}",
+            )
+        except Exception as redis_err:
+            logger.error(f"Failed to update Redis status: {redis_err}")
+
+        # Update model metadata
+        try:
+            storage.update_model_metadata(
+                model_id,
+                {
+                    "status": JobStatus.FAILED.value,
+                    "error_message": error_msg,
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception as storage_err:
+            logger.error(f"Failed to update model metadata: {storage_err}")
+
+        return {
+            "model_id": model_id,
+            "status": "failed",
+            "error": error_msg,
+        }
 
 
 async def compute_contributions_task(
@@ -502,6 +592,521 @@ async def run_scenario_task(
             "model_id": model_id,
             "error": str(e),
         }
+
+
+async def fit_extended_model_task(
+    ctx: dict,
+    model_id: str,
+    data_id: str,
+    config_id: str,
+    model_type: str,  # "nested", "multivariate", or "combined"
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Async task to fit an extended MMM model (Nested, Multivariate, or Combined).
+
+    Parameters
+    ----------
+    ctx : dict
+        ARQ context with Redis connection.
+    model_id : str
+        Model ID for tracking.
+    data_id : str
+        ID of the dataset to use.
+    config_id : str
+        ID of the extended configuration to use.
+    model_type : str
+        Type of extended model: "nested", "multivariate", or "combined".
+    overrides : dict, optional
+        Parameter overrides (n_chains, n_draws, etc.).
+
+    Returns
+    -------
+    dict
+        Results summary.
+    """
+    import redis.asyncio as aioredis
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    storage = get_storage()
+    redis_client: aioredis.Redis = ctx["redis"]
+
+    async def update_status(
+        status: JobStatus, progress: float = 0.0, message: str | None = None, **extra
+    ):
+        """Update job status in Redis."""
+        job_key = f"mmm:job:{model_id}"
+        await redis_client.hset(
+            job_key,
+            mapping={
+                "status": status.value,
+                "progress": str(progress),
+                "progress_message": message or "",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                **{k: str(v) if v is not None else "" for k, v in extra.items()},
+            },
+        )
+
+    try:
+        # Update status to running
+        await update_status(JobStatus.RUNNING, 0.0, "Initializing extended model...")
+
+        # Update model metadata
+        storage.update_model_metadata(
+            model_id,
+            {
+                "status": JobStatus.RUNNING.value,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "model_type": model_type,
+            },
+        )
+
+        # Load data
+        await update_status(JobStatus.RUNNING, 5.0, "Loading data...")
+        df = storage.load_data(data_id)
+
+        # Load extended config
+        await update_status(JobStatus.RUNNING, 10.0, "Loading configuration...")
+        config = storage.load_config(config_id)
+
+        # Extract model settings
+        model_settings = config.get("model_settings", {})
+        if overrides:
+            for key in ["n_chains", "n_draws", "n_tune", "random_seed"]:
+                if key in overrides and overrides[key] is not None:
+                    model_settings[key] = overrides[key]
+
+        # Import extended models
+        await update_status(
+            JobStatus.RUNNING, 15.0, "Building extended model configuration..."
+        )
+
+        from mmm_framework.mmm_extensions import (
+            NestedMMM,
+            MultivariateMMM,
+            CombinedMMM,
+            NestedModelConfigBuilder,
+            MultivariateModelConfigBuilder,
+            CombinedModelConfigBuilder,
+            MediatorConfigBuilder,
+            OutcomeConfigBuilder,
+            CrossEffectConfigBuilder,
+        )
+        from mmm_framework.mmm_extensions.config import (
+            MediatorType,
+            CrossEffectType,
+            EffectConstraint,
+        )
+
+        # Prepare data arrays from DataFrame
+        await update_status(JobStatus.RUNNING, 20.0, "Preparing data arrays...")
+
+        # Get media channel columns
+        media_columns = config.get("media_channels", [])
+        if not media_columns:
+            raise ValueError("No media channels specified in config")
+
+        channel_names = [c["name"] if isinstance(c, dict) else c for c in media_columns]
+        X_media = df[channel_names].values
+
+        # Get outcome column(s)
+        outcome_columns = config.get("outcomes", [])
+        if not outcome_columns:
+            # Fallback to KPI for nested models
+            kpi = config.get("kpi", {})
+            y = df[kpi.get("name", "Sales")].values
+        else:
+            outcome_names = [
+                o["name"] if isinstance(o, dict) else o for o in outcome_columns
+            ]
+
+        # Build model based on type
+        await update_status(JobStatus.RUNNING, 25.0, f"Building {model_type} model...")
+
+        if model_type == "nested":
+            # Build nested model config
+            nested_config_dict = config.get("nested_config", {})
+            mediators_list = nested_config_dict.get("mediators", [])
+
+            builder = NestedModelConfigBuilder()
+            for med_dict in mediators_list:
+                med_builder = MediatorConfigBuilder(med_dict["name"])
+
+                # Set mediator type
+                med_type = med_dict.get("type", "partially_observed")
+                if med_type == "fully_latent":
+                    med_builder.fully_latent()
+                elif med_type == "fully_observed":
+                    med_builder.fully_observed(med_dict.get("observation_noise", 0.05))
+                else:
+                    med_builder.partially_observed(
+                        med_dict.get("observation_noise", 0.1)
+                    )
+
+                # Set effects
+                if med_dict.get("positive_media_effect", True):
+                    med_builder.with_positive_media_effect()
+
+                if not med_dict.get("allow_direct_effect", True):
+                    med_builder.without_direct_effect()
+
+                builder.add_mediator(med_builder.build())
+
+            # Add channel-mediator mappings
+            for med_name, channels in nested_config_dict.get(
+                "media_to_mediator_map", {}
+            ).items():
+                builder.map_channels_to_mediator(med_name, channels)
+
+            nested_config = builder.build()
+
+            # Get mediator data
+            mediator_data = {}
+            mediator_masks = {}
+            for med_dict in mediators_list:
+                med_name = med_dict["name"]
+                if med_name in df.columns:
+                    mediator_data[med_name] = df[med_name].values
+                    mediator_masks[med_name] = ~df[med_name].isna().values
+
+            # Create model
+            model = NestedMMM(
+                X_media=X_media,
+                y=y,
+                channel_names=channel_names,
+                config=nested_config,
+                mediator_data=mediator_data,
+                mediator_masks=mediator_masks,
+                index=df.index,
+            )
+
+        elif model_type == "multivariate":
+            # Build multivariate model config
+            mv_config_dict = config.get("multivariate_config", {})
+            outcomes_list = mv_config_dict.get("outcomes", [])
+
+            builder = MultivariateModelConfigBuilder()
+
+            # Add outcomes
+            for out_dict in outcomes_list:
+                out_builder = OutcomeConfigBuilder(
+                    out_dict["name"], out_dict.get("column")
+                )
+                if out_dict.get("positive_media_effects", False):
+                    out_builder.with_positive_media_effects()
+                builder.add_outcome(out_builder.build())
+
+            # Add cross-effects
+            for ce_dict in mv_config_dict.get("cross_effects", []):
+                ce_builder = CrossEffectConfigBuilder(
+                    ce_dict["source_outcome"],
+                    ce_dict["target_outcome"],
+                )
+
+                effect_type = ce_dict.get("effect_type", "cannibalization")
+                if effect_type == "halo":
+                    ce_builder.halo()
+                elif effect_type == "symmetric":
+                    ce_builder.symmetric()
+                else:
+                    ce_builder.cannibalization()
+
+                if ce_dict.get("prior_sigma"):
+                    ce_builder.with_prior_sigma(ce_dict["prior_sigma"])
+
+                builder.add_cross_effect(ce_builder.build())
+
+            # Set LKJ eta
+            if mv_config_dict.get("lkj_eta"):
+                builder.with_lkj_eta(mv_config_dict["lkj_eta"])
+
+            mv_config = builder.build()
+
+            # Get outcome data
+            outcome_data = {}
+            for out_dict in outcomes_list:
+                name = out_dict["name"]
+                col = out_dict.get("column", name)
+                outcome_data[name] = df[col].values
+
+            # Get promotion data if specified
+            promotion_data = {}
+            for ce_dict in mv_config_dict.get("cross_effects", []):
+                if ce_dict.get("promotion_column"):
+                    col = ce_dict["promotion_column"]
+                    if col in df.columns:
+                        promotion_data[col] = df[col].values
+
+            # Create model
+            model = MultivariateMMM(
+                X_media=X_media,
+                outcome_data=outcome_data,
+                channel_names=channel_names,
+                config=mv_config,
+                promotion_data=promotion_data,
+                index=df.index,
+            )
+
+        elif model_type == "combined":
+            # Build combined model config (nested + multivariate)
+            combined_config_dict = config.get("combined_config", {})
+            nested_part = combined_config_dict.get("nested", {})
+            mv_part = combined_config_dict.get("multivariate", {})
+
+            builder = CombinedModelConfigBuilder()
+
+            # Add mediators
+            for med_dict in nested_part.get("mediators", []):
+                med_builder = MediatorConfigBuilder(med_dict["name"])
+                med_type = med_dict.get("type", "partially_observed")
+                if med_type == "fully_latent":
+                    med_builder.fully_latent()
+                elif med_type == "fully_observed":
+                    med_builder.fully_observed(med_dict.get("observation_noise", 0.05))
+                else:
+                    med_builder.partially_observed(
+                        med_dict.get("observation_noise", 0.1)
+                    )
+
+                if med_dict.get("positive_media_effect", True):
+                    med_builder.with_positive_media_effect()
+
+                builder.add_mediator(med_builder.build())
+
+            # Add outcomes
+            for out_dict in mv_part.get("outcomes", []):
+                out_builder = OutcomeConfigBuilder(
+                    out_dict["name"], out_dict.get("column")
+                )
+                builder.add_outcome(out_builder.build())
+
+            # Add cross-effects
+            for ce_dict in mv_part.get("cross_effects", []):
+                if ce_dict.get("effect_type") == "halo":
+                    builder.with_halo_effect(
+                        ce_dict["source_outcome"], ce_dict["target_outcome"]
+                    )
+                else:
+                    builder.with_cannibalization(
+                        ce_dict["source_outcome"],
+                        ce_dict["target_outcome"],
+                        ce_dict.get("promotion_column"),
+                    )
+
+            # Map mediators to outcomes
+            for med_name, outcomes in combined_config_dict.get(
+                "mediator_to_outcome_map", {}
+            ).items():
+                builder.map_mediator_to_outcomes(med_name, outcomes)
+
+            combined_config = builder.build()
+
+            # Get data
+            mediator_data = {}
+            mediator_masks = {}
+            for med_dict in nested_part.get("mediators", []):
+                med_name = med_dict["name"]
+                if med_name in df.columns:
+                    mediator_data[med_name] = df[med_name].values
+                    mediator_masks[med_name] = ~df[med_name].isna().values
+
+            outcome_data = {}
+            for out_dict in mv_part.get("outcomes", []):
+                name = out_dict["name"]
+                col = out_dict.get("column", name)
+                outcome_data[name] = df[col].values
+
+            promotion_data = {}
+            for ce_dict in mv_part.get("cross_effects", []):
+                if ce_dict.get("promotion_column"):
+                    col = ce_dict["promotion_column"]
+                    if col in df.columns:
+                        promotion_data[col] = df[col].values
+
+            # Create model
+            model = CombinedMMM(
+                X_media=X_media,
+                outcome_data=outcome_data,
+                channel_names=channel_names,
+                config=combined_config,
+                mediator_data=mediator_data,
+                mediator_masks=mediator_masks,
+                promotion_data=promotion_data,
+                index=df.index,
+            )
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+
+        # Fit model
+        await update_status(
+            JobStatus.RUNNING,
+            35.0,
+            f"Fitting {model_type} model (this may take several minutes)...",
+        )
+
+        n_draws = model_settings.get("n_draws", 1000)
+        n_tune = model_settings.get("n_tune", 1000)
+        n_chains = model_settings.get("n_chains", 4)
+        target_accept = model_settings.get("target_accept", 0.9)
+        random_seed = model_settings.get("random_seed", 42)
+
+        results = model.fit(
+            draws=n_draws,
+            tune=n_tune,
+            chains=n_chains,
+            target_accept=target_accept,
+            random_seed=random_seed,
+        )
+
+        logger.info(f"Extended model {model_id} fitted successfully")
+
+        await update_status(JobStatus.RUNNING, 85.0, "Processing results...")
+
+        # Extract diagnostics
+        try:
+            import arviz as az
+
+            summary = az.summary(results.trace)
+            diagnostics = {
+                "divergences": int(
+                    results.trace.sample_stats.get("diverging", []).sum()
+                    if hasattr(results.trace, "sample_stats")
+                    else 0
+                ),
+                "rhat_max": (
+                    float(summary["r_hat"].max()) if "r_hat" in summary.columns else 1.0
+                ),
+                "ess_bulk_min": (
+                    float(summary["ess_bulk"].min())
+                    if "ess_bulk" in summary.columns
+                    else 0
+                ),
+            }
+        except Exception as e:
+            logger.warning(f"Could not extract diagnostics: {e}")
+            diagnostics = {"divergences": 0, "rhat_max": 1.0, "ess_bulk_min": 0}
+
+        # Save artifacts
+        await update_status(JobStatus.RUNNING, 90.0, "Saving model artifacts...")
+
+        storage.save_model_artifact(model_id, "model", model)
+        storage.save_model_artifact(model_id, "results", results)
+
+        # Extract and save specific results based on model type
+        results_summary = {
+            "model_id": model_id,
+            "model_type": model_type,
+            "diagnostics": diagnostics,
+            "n_obs": model.n_obs,
+            "n_channels": model.n_channels,
+            "channel_names": model.channel_names,
+        }
+
+        if model_type == "nested":
+            results_summary["n_mediators"] = model.n_mediators
+            results_summary["mediator_names"] = model.mediator_names
+            # Get mediation effects
+            try:
+                mediation_df = model.get_mediation_effects()
+                results_summary["mediation_effects"] = mediation_df.to_dict(
+                    orient="records"
+                )
+            except Exception as e:
+                logger.warning(f"Could not extract mediation effects: {e}")
+
+        elif model_type == "multivariate":
+            results_summary["n_outcomes"] = model.n_outcomes
+            results_summary["outcome_names"] = model.outcome_names
+            # Get cross-effects
+            try:
+                cross_effects_df = model.get_cross_effects_summary()
+                results_summary["cross_effects"] = cross_effects_df.to_dict(
+                    orient="records"
+                )
+            except Exception as e:
+                logger.warning(f"Could not extract cross effects: {e}")
+            # Get correlation matrix
+            try:
+                corr_df = model.get_correlation_matrix()
+                results_summary["correlation_matrix"] = corr_df.to_dict()
+            except Exception as e:
+                logger.warning(f"Could not extract correlation matrix: {e}")
+
+        elif model_type == "combined":
+            results_summary["n_mediators"] = model.n_mediators
+            results_summary["n_outcomes"] = model.n_outcomes
+            results_summary["mediator_names"] = model.mediator_names
+            results_summary["outcome_names"] = model.outcome_names
+            # Get effect decomposition
+            try:
+                decomp_df = model.get_effect_decomposition()
+                results_summary["effect_decomposition"] = decomp_df.to_dict(
+                    orient="records"
+                )
+            except Exception as e:
+                logger.warning(f"Could not extract effect decomposition: {e}")
+
+        storage.save_results(model_id, "summary", results_summary)
+
+        # Update final status
+        await update_status(
+            JobStatus.COMPLETED,
+            100.0,
+            f"{model_type.capitalize()} model fitting completed successfully",
+        )
+
+        storage.update_model_metadata(
+            model_id,
+            {
+                "status": JobStatus.COMPLETED.value,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "diagnostics": diagnostics,
+            },
+        )
+
+        return {
+            "model_id": model_id,
+            "model_type": model_type,
+            "status": "completed",
+            "diagnostics": diagnostics,
+        }
+
+    except Exception as e:
+        error_msg = str(e)
+        traceback_str = traceback.format_exc()
+        logger.error(f"Extended model fitting failed for {model_id}: {error_msg}")
+        logger.error(traceback_str)
+
+        try:
+            await update_status(
+                JobStatus.FAILED,
+                progress=0.0,
+                message=f"Extended model fitting failed: {error_msg}",
+            )
+        except Exception as redis_err:
+            logger.error(f"Failed to update Redis status: {redis_err}")
+
+        try:
+            storage.update_model_metadata(
+                model_id,
+                {
+                    "status": JobStatus.FAILED.value,
+                    "error_message": error_msg,
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception as storage_err:
+            logger.error(f"Failed to update model metadata: {storage_err}")
+
+        return {
+            "model_id": model_id,
+            "model_type": model_type,
+            "status": "failed",
+            "error": error_msg,
+        }
+
 
 async def generate_report_task(
     ctx: dict,
@@ -654,6 +1259,7 @@ async def generate_report_task(
             "error": str(e),
         }
 
+
 # =============================================================================
 # Cron Jobs
 # =============================================================================
@@ -686,7 +1292,6 @@ async def cleanup_old_jobs(ctx: dict):
     return {"cleaned_jobs": cleaned}
 
 
-
 # =============================================================================
 # Worker Setup
 # =============================================================================
@@ -705,28 +1310,20 @@ async def shutdown(ctx: dict):
 class WorkerSettings:
     """ARQ worker settings."""
 
-    redis_settings = RedisSettings(
-        host="localhost",
-        port=6379,
-    )
-
-    # redis_settings = RedisSettings(
-    #     host=settings.redis_url.replace("redis://", "").split(":")[0].split("/")[0],
-    #     port=int(settings.redis_url.split(":")[-1].split("/")[0]) if ":" in settings.redis_url else 6379,
-    #     database=settings.redis_db,
-    #     password=settings.redis_password,
-    # )
+    # Use settings from environment variables
+    redis_settings = get_settings().redis_settings
 
     functions = [
         fit_model_task,
+        fit_extended_model_task,
         compute_contributions_task,
         run_scenario_task,
-        generate_report_task
+        generate_report_task,
     ]
 
-    # cron_jobs = [
-    #     cron(cleanup_old_jobs, hour=3, minute=0),  # Run at 3 AM daily
-    # ]
+    cron_jobs = [
+        cron(cleanup_old_jobs, hour=3, minute=0),  # Run at 3 AM daily
+    ]
 
     on_startup = startup
     on_shutdown = shutdown

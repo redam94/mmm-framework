@@ -107,6 +107,34 @@ from .jobs import (
 )
 
 from . import mmm_extensions
+from . import dag_model_builder
+from . import excel_config
+from .excel_config import (
+    TemplateGenerator,
+    TemplateParser,
+    discover_mff,
+)
+from .dag_model_builder import (
+    # DAG Specification
+    DAGSpec,
+    DAGNode,
+    DAGEdge,
+    NodeType,
+    EdgeType,
+    # Builder
+    DAGModelBuilder,
+    DAGBuildError,
+    # Validation
+    ValidationResult,
+    DAGValidationError,
+    validate_dag,
+    # Model Type
+    ModelType,
+    resolve_model_type,
+    # Convenience functions
+    create_simple_dag,
+    create_mediation_dag,
+)
 
 __version__ = "0.1.0"
 
@@ -193,4 +221,25 @@ __all__ = [
     "submit_model_job",
     # Extensions
     "mmm_extensions",
+    # DAG Model Builder
+    "dag_model_builder",
+    "DAGSpec",
+    "DAGNode",
+    "DAGEdge",
+    "NodeType",
+    "EdgeType",
+    "DAGModelBuilder",
+    "DAGBuildError",
+    "ValidationResult",
+    "DAGValidationError",
+    "validate_dag",
+    "ModelType",
+    "resolve_model_type",
+    "create_simple_dag",
+    "create_mediation_dag",
+    # Excel Config
+    "excel_config",
+    "TemplateGenerator",
+    "TemplateParser",
+    "discover_mff",
 ]

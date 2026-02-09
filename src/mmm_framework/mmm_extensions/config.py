@@ -2,6 +2,9 @@
 Configuration Classes for MMM Extensions
 
 Immutable configuration objects for nested and multivariate models.
+
+Note: Shared enums like SaturationType are imported from the main config module
+to avoid duplication.
 """
 
 from __future__ import annotations
@@ -10,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
 
+# Import shared enum from main config to avoid duplication
+from mmm_framework.config import SaturationType
 
 # =============================================================================
 # Enums
@@ -19,10 +24,10 @@ from typing import Any, Literal
 class MediatorType(str, Enum):
     """Type of mediating variable based on observability."""
 
-    FULLY_OBSERVED = "fully_observed"      # Every period has observation
+    FULLY_OBSERVED = "fully_observed"  # Every period has observation
     PARTIALLY_OBSERVED = "partially_observed"  # Sparse point-in-time observations
-    AGGREGATED_SURVEY = "aggregated_survey"    # Temporally aggregated with known n
-    FULLY_LATENT = "fully_latent"    
+    AGGREGATED_SURVEY = "aggregated_survey"  # Temporally aggregated with known n
+    FULLY_LATENT = "fully_latent"
 
 
 class CrossEffectType(str, Enum):
@@ -42,11 +47,8 @@ class EffectConstraint(str, Enum):
     NEGATIVE = "negative"
 
 
-class SaturationType(str, Enum):
-    """Type of saturation function."""
-
-    LOGISTIC = "logistic"
-    HILL = "hill"
+# SaturationType is imported from mmm_framework.config to ensure consistency
+# across the codebase. The main config defines: HILL, LOGISTIC, MICHAELIS_MENTEN, TANH, NONE
 
 
 # =============================================================================
@@ -493,22 +495,25 @@ def inclusion_prob_selection_config(
         exclude_variables=confounders,
     )
 
+
 class MediatorObservationType(str, Enum):
     """
     How the mediator is observed.
-    
+
     Extends the original MediatorType to add aggregated survey support.
     """
-    FULLY_OBSERVED = "fully_observed"      # Every period has observation
+
+    FULLY_OBSERVED = "fully_observed"  # Every period has observation
     PARTIALLY_OBSERVED = "partially_observed"  # Sparse point-in-time observations
-    AGGREGATED_SURVEY = "aggregated_survey"    # Temporally aggregated with known n
-    FULLY_LATENT = "fully_latent"          # Never observed
+    AGGREGATED_SURVEY = "aggregated_survey"  # Temporally aggregated with known n
+    FULLY_LATENT = "fully_latent"  # Never observed
 
 
 class AggregatedSurveyLikelihood(str, Enum):
     """Likelihood for aggregated survey observations."""
-    BINOMIAL = "binomial"      # Exact binomial (preferred)
-    NORMAL = "normal"          # Normal approximation with derived SE
+
+    BINOMIAL = "binomial"  # Exact binomial (preferred)
+    NORMAL = "normal"  # Normal approximation with derived SE
     BETA_BINOMIAL = "beta_binomial"  # Overdispersed binomial
 
 
@@ -516,10 +521,10 @@ class AggregatedSurveyLikelihood(str, Enum):
 class AggregatedSurveyConfig:
     """
     Configuration for temporally aggregated survey observations.
-    
+
     Used when surveys are fielded continuously over a period (e.g., monthly)
     and results are aggregated, rather than point-in-time snapshots.
-    
+
     Attributes
     ----------
     aggregation_map : dict[int, tuple[int, ...]]
@@ -538,13 +543,14 @@ class AggregatedSurveyConfig:
     overdispersion_prior_sigma : float
         Prior sigma for overdispersion parameter (beta-binomial only).
     """
+
     aggregation_map: dict[int, tuple[int, ...]]
     sample_sizes: tuple[int, ...]
     likelihood: AggregatedSurveyLikelihood = AggregatedSurveyLikelihood.BINOMIAL
     design_effect: float = 1.0
     aggregation_function: Literal["mean", "sum", "last"] = "mean"
     overdispersion_prior_sigma: float = 0.1
-    
+
     def __post_init__(self):
         if len(self.sample_sizes) != len(self.aggregation_map):
             raise ValueError(
@@ -559,38 +565,43 @@ class AggregatedSurveyConfig:
 class MediatorConfigExtended:
     """
     Extended MediatorConfig with aggregated survey support.
-    
+
     This replaces the original MediatorConfig when aggregated surveys are needed.
     All original fields are preserved for backward compatibility.
     """
+
     name: str
-    observation_type: MediatorObservationType = MediatorObservationType.PARTIALLY_OBSERVED
-    
+    observation_type: MediatorObservationType = (
+        MediatorObservationType.PARTIALLY_OBSERVED
+    )
+
     # --- Original fields (from MediatorConfig) ---
     # Media → Mediator effect prior
     media_effect_constraint: str = "positive"  # "none", "positive", "negative"
     media_effect_sigma: float = 1.0
-    
+
     # Mediator → Outcome effect prior
     outcome_effect_sigma: float = 1.0
-    
+
     # Simple observation noise (for FULLY_OBSERVED and PARTIALLY_OBSERVED)
     observation_noise_sigma: float = 0.1
-    
+
     # Direct effect settings
     allow_direct_effect: bool = True
     direct_effect_sigma: float = 0.5
-    
+
     # Transformations
     apply_adstock: bool = True
     apply_saturation: bool = True
-    
+
     # --- New field for aggregated surveys ---
     aggregated_survey_config: AggregatedSurveyConfig | None = None
-    
+
     def __post_init__(self):
-        if (self.observation_type == MediatorObservationType.AGGREGATED_SURVEY 
-            and self.aggregated_survey_config is None):
+        if (
+            self.observation_type == MediatorObservationType.AGGREGATED_SURVEY
+            and self.aggregated_survey_config is None
+        ):
             raise ValueError(
                 "aggregated_survey_config is required when "
                 "observation_type is AGGREGATED_SURVEY"
