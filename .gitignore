@@ -14,3 +14,4 @@ wheels/
 *.csv
 .DS_Store
 storage/
+node_modules/
