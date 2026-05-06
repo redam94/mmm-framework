@@ -22,8 +22,12 @@ make slow_tests         # Slow tests only (parallel)
 # Format code
 make format             # Black formatting (src, tests, examples, api, app)
 
-# Build documentation
-uv run sphinx-build -b html docs/ docs/_build/html
+# Build API reference (Sphinx)
+uv run sphinx-build -b html docs/api/source docs/api/build/html
+
+# Static documentation site (hand-authored HTML in docs/*.html)
+# Edit pages directly; preview locally with `python3 -m http.server` from docs/.
+# Navigation/footer are injected by docs/shared/components.js — update NAV_LINKS there.
 
 # Start the application
 

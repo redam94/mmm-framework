@@ -30,22 +30,7 @@
     </style>
 </head>
 <body>
-    <!-- <nav>
-        <div class="nav-content">
-            <a href="index.html" class="logo">MMM Framework</a>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="about.html">About</a></li>
-                <li><a href="#" class="active">Variable Selection</a></li>
-                <li><a href="technical-guide.html">Technical Guide</a></li>
-                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
-                <li><a href="causal-inference.html">Causal Inference</a></li>
-                <li><a href="scientific-modeling.html">Scientific Modeling</a></li>
-                <li><a href="faq.html">FAQ</a></li>
-                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
-            </ul>
-        </div>
-    </nav> -->
+    <!-- Navigation injected by shared/components.js -->
 
     <section class="hero">
         <div class="container">
@@ -66,7 +51,18 @@
                 </p>
             </div>
 
-            <h2>Understanding the Causal Structure</h2>
+            <nav class="page-toc" aria-label="On this page">
+                <span class="page-toc-label">On this page</span>
+                <a href="#causal-structure">Causal structure</a>
+                <a href="#classification">Variable classification</a>
+                <a href="#beats-shopping">Beats spec shopping</a>
+                <a href="#priors-shrink">How priors shrink</a>
+                <a href="#pip">Posterior inclusion probability</a>
+                <a href="#sensitivity">Prior sensitivity</a>
+                <a href="#best-practices">Best practices</a>
+            </nav>
+
+            <h2 id="causal-structure">Understanding the Causal Structure</h2>
             <p>
                 The key to using variable selection correctly is understanding the causal relationships in your data. Some variables only affect your outcome (precision controls), while others affect both your treatment and outcome (confounders).
             </p>
@@ -163,7 +159,7 @@
     <!-- Variable Classification -->
     <section style="background: var(--color-bg-alt);">
         <div class="container">
-            <h2>Variable Classification Guide</h2>
+            <h2 id="classification">Variable Classification Guide</h2>
             <p>
                 Before applying variable selection, classify every potential control variable. This classification should be done <strong>before</strong> looking at model results.
             </p>
@@ -224,7 +220,7 @@
     <!-- Specification Shopping vs Principled Selection -->
     <section>
         <div class="container">
-            <h2>Why This Beats Specification Shopping</h2>
+            <h2 id="beats-shopping">Why This Beats Specification Shopping</h2>
             <p>
                 Traditional MMM practice often involves running many model specifications and selecting the one with "sensible" results. This <strong>specification shopping</strong> destroys statistical validity. Bayesian variable selection provides a principled alternative—but only when variables are correctly classified <em>before</em> analysis.
             </p>
@@ -792,7 +788,7 @@
     <!-- Shrinkage Methods Comparison -->
     <section>
         <div class="container">
-            <h2>How Different Priors Shrink Coefficients</h2>
+            <h2 id="priors-shrink">How Different Priors Shrink Coefficients</h2>
             <p>
                 Different Bayesian priors create different shrinkage profiles. Understanding these helps you choose the right method for your problem.
             </p>
@@ -831,7 +827,7 @@
     <!-- Interactive PIP Demo -->
     <section class="demo-section">
         <div class="container">
-            <h2>Understanding Posterior Inclusion Probabilities</h2>
+            <h2 id="pip">Understanding Posterior Inclusion Probabilities</h2>
             <p>
                 Bayesian variable selection doesn't make hard yes/no decisions. Instead, it produces <em>posterior inclusion probabilities</em> (PIPs)—the probability that each variable has a non-zero effect.
             </p>
@@ -885,7 +881,7 @@
     <!-- Prior Sensitivity -->
     <section style="background: var(--color-bg-alt);">
         <div class="container">
-            <h2>Prior Sensitivity Analysis</h2>
+            <h2 id="sensitivity">Prior Sensitivity Analysis</h2>
             <p>
                 Your choice of "expected number of relevant variables" affects results. Always check sensitivity to this assumption.
             </p>
@@ -912,7 +908,7 @@
     <!-- Best Practices -->
     <section>
         <div class="container">
-            <h2>Best Practices</h2>
+            <h2 id="best-practices">Best Practices</h2>
 
             <h3>Before Fitting the Model</h3>
             <div class="card-grid">
@@ -962,19 +958,7 @@
         </div>
     </section>
 
-    <!-- <footer>
-        <div class="container footer-content">
-            <span class="logo">MMM Framework</span>
-            <div class="footer-links">
-                <a href="index.html">Home</a>
-                <a href="technical-guide.html">Technical Guide</a>
-                <a href="bayesian-workflow.html">Bayesian Workflow</a>
-                <a href="causal-inference.html">Causal Inference</a>
-                <a href="faq.html">FAQ</a>
-                <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
-            </div>
-        </div>
-    </footer> -->
+    <!-- Footer injected by shared/components.js -->
     <script src="shared/components.js"></script>
     <script>
         const colors = {

@@ -1,0 +1,2021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calibration &amp; Decision Theory Workshop | MMM Framework</title>
+    <meta name="description" content="An interactive, decision-theoretic workshop on calibrating MMMs through experimentation - EIG, EVOI, constraint-aware portfolio selection, and the multi-cycle calibration loop, end to end.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/workflow-calibration-decisions.html">
+    <meta property="og:title" content="Calibration &amp; Decision Theory Workshop | MMM Framework">
+    <meta property="og:description" content="An interactive, decision-theoretic workshop on calibrating MMMs through experimentation - EIG, EVOI, constraint-aware portfolio selection, and the multi-cycle calibration loop, end to end.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/workflow-calibration-decisions.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* Page-local theme overrides matching the workflow-* family */
+        :root {
+            --color-primary: #5a7c65;
+            --color-primary-light: #8fa86a;
+            --color-primary-dark: #3d5a47;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #c9a067;
+            --color-warning-dark: #8a6408;
+            --color-danger: #c97067;
+            --color-success: #67c99a;
+        }
+
+        body { font-size: 17px; line-height: 1.7; }
+
+        .container-narrow { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+        .page-header {
+            text-align: center;
+            margin: 5rem 0 1rem 0;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .page-header .question-badge {
+            display: inline-block;
+            background: rgba(143, 168, 106, 0.15);
+            color: var(--color-primary-dark);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            padding: 0.4rem 1rem;
+            border-radius: 100px;
+            margin-bottom: 1rem;
+        }
+        .page-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.5rem;
+            margin: 0.5rem 0;
+        }
+        .page-header .subtitle {
+            color: var(--color-text-muted);
+            font-size: 1.15rem;
+        }
+
+        .section {
+            margin: 4rem 0;
+        }
+        .section h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.9rem;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.6rem;
+            scroll-margin-top: 6rem;
+        }
+        .section .section-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 0.4rem;
+        }
+        .section .section-tagline {
+            color: var(--color-text-muted);
+            font-style: italic;
+            margin-bottom: 1.5rem;
+        }
+        .section h3 { font-family: 'DM Serif Display', serif; margin-top: 2rem; font-size: 1.3rem; }
+
+        /* Interactive demo blocks */
+        .interactive-demo {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: 12px;
+            padding: 1.5rem 1.75rem;
+            margin: 1.5rem 0;
+            box-shadow: var(--shadow-sm);
+        }
+        .interactive-demo h4 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.15rem;
+            color: var(--color-primary-dark);
+            margin: 0 0 0.5rem 0;
+        }
+        .interactive-demo .demo-instructions {
+            font-size: 0.95rem;
+            color: var(--color-text-muted);
+            margin-bottom: 1rem;
+        }
+
+        /* Slider control panel */
+        .control-panel {
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem 1.5rem;
+        }
+        .control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .control label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .control label .value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--color-primary-dark);
+            font-size: 0.88rem;
+        }
+        .control input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 5px;
+            background: var(--color-border);
+            border-radius: 3px;
+            outline: none;
+        }
+        .control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--color-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .control input[type="range"]::-webkit-slider-thumb:hover {
+            background: var(--color-primary-dark);
+            transform: scale(1.15);
+        }
+        .control input[type="range"]::-moz-range-thumb {
+            width: 18px; height: 18px;
+            background: var(--color-primary);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+        .control select {
+            padding: 0.4rem 0.6rem;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            background: white;
+            font-family: inherit;
+            font-size: 0.92rem;
+            color: var(--color-text);
+        }
+
+        /* Chart containers */
+        .chart-container {
+            background: var(--color-surface);
+            border-radius: 8px;
+            padding: 0.5rem;
+            margin: 1rem 0;
+            min-height: 320px;
+        }
+        .chart-container.tall { min-height: 420px; }
+        .chart-container.short { min-height: 240px; }
+
+        /* Metric cards */
+        .metric-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+        .metric-card {
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 0.85rem;
+            text-align: center;
+        }
+        .metric-card .metric-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-text-muted);
+            margin-bottom: 0.3rem;
+        }
+        .metric-card .metric-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            line-height: 1;
+            color: var(--color-text);
+        }
+        .metric-value.positive { color: var(--color-success); }
+        .metric-value.negative { color: var(--color-danger); }
+        .metric-value.warning { color: var(--color-warning-dark); }
+        .metric-value.accent { color: var(--color-accent-dark); }
+        .metric-value.muted { color: var(--color-text-muted); font-size: 1.1rem; }
+
+        /* Concept callout boxes */
+        .concept-box {
+            background: rgba(106, 143, 168, 0.08);
+            border-left: 4px solid var(--color-accent);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+            font-size: 0.96rem;
+        }
+        .concept-box h5 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-accent-dark);
+            margin: 0 0 0.4rem 0;
+        }
+
+        .insight-box {
+            background: rgba(143, 168, 106, 0.1);
+            border-left: 4px solid var(--color-primary);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        .insight-box h5 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-primary-dark);
+            margin: 0 0 0.4rem 0;
+        }
+
+        .warn-box {
+            background: rgba(201, 112, 103, 0.07);
+            border-left: 4px solid var(--color-danger);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        .warn-box h5 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-danger);
+            margin: 0 0 0.4rem 0;
+        }
+
+        /* Math display */
+        .math-display {
+            background: var(--color-bg-alt);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            font-size: 1.05rem;
+            overflow-x: auto;
+        }
+
+        /* Channel table */
+        .channel-table {
+            width: 100%;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+            border-collapse: collapse;
+        }
+        .channel-table th,
+        .channel-table td {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            text-align: left;
+        }
+        .channel-table th {
+            background: var(--color-bg-alt);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            color: var(--color-text-muted);
+        }
+        .channel-table td.numeric {
+            font-family: 'JetBrains Mono', monospace;
+            text-align: right;
+        }
+        .channel-table tr.selected {
+            background: rgba(143, 168, 106, 0.12);
+        }
+        .channel-table .badge-pick {
+            display: inline-block;
+            background: var(--color-primary);
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 100px;
+            font-weight: 600;
+        }
+        .channel-table .badge-skip {
+            display: inline-block;
+            background: var(--color-bg-alt);
+            color: var(--color-text-muted);
+            font-size: 0.7rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 100px;
+        }
+
+        /* Two-col within demos */
+        .two-col-demo {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        /* Page TOC at top */
+        .page-toc { margin-top: 1.5rem; }
+
+        @media (max-width: 900px) {
+            .two-col-demo { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .page-header h1 { font-size: 2rem; }
+            .section h2 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <div class="container-narrow">
+
+        <header class="page-header">
+            <span class="question-badge">Decision-theoretic workshop</span>
+            <h1>Calibration &amp; Decision Theory</h1>
+            <p class="subtitle">From experimental evidence to defensible budget allocation &mdash; the full loop, with the math working live.</p>
+        </header>
+
+        <nav class="page-toc" aria-label="On this page">
+            <span class="page-toc-label">Workshop sections</span>
+            <a href="#decision-frame">1 &middot; Decision frame</a>
+            <a href="#cost-uncertainty">2 &middot; Cost of uncertainty</a>
+            <a href="#bayes-update">3 &middot; Bayesian update</a>
+            <a href="#eig">4 &middot; EIG calculator</a>
+            <a href="#evoi">5 &middot; EVOI calculator</a>
+            <a href="#priority">6 &middot; Priority portfolio</a>
+            <a href="#constraints">7 &middot; Constraints &amp; tradeoffs</a>
+            <a href="#cycles">8 &middot; The compounding loop</a>
+            <a href="#frontier">9 &middot; Decision-quality frontier</a>
+            <a href="#takeaways">10 &middot; Takeaways</a>
+        </nav>
+
+        <p style="margin-top: 2rem; font-size: 1.05rem; color: var(--color-text-muted);">
+            This workshop walks the full decision-theoretic stack behind the
+            <a href="measurement-calibration.html" style="color: var(--color-primary-dark);">closed-loop calibration framework</a>.
+            Every section has a working calculator. Drag the sliders and watch what changes &mdash; the formulas
+            on the page are the same ones running in your browser. By the end you'll have a concrete sense of
+            why measurement programs need to be designed around <em>decisions</em>, not data, and how to balance
+            value, cost, and operational risk to actually pick what to test next quarter.
+        </p>
+
+        <!-- ================================================================== -->
+        <section class="section" id="decision-frame">
+            <div class="section-num">&sect; 1 &middot; Setting the frame</div>
+            <h2>The Decision Problem</h2>
+            <p class="section-tagline">An MMM is not the deliverable. The budget allocation is. Frame the math accordingly.</p>
+
+            <p>
+                A decision problem in classical decision theory has four parts. Every measurement question
+                eventually has to answer all of them, even if implicitly:
+            </p>
+
+            <div class="two-col-demo">
+                <div class="concept-box">
+                    <h5>State space &amp; action space</h5>
+                    <p style="margin: 0;">
+                        <strong>State</strong> $\boldsymbol{\theta} = (\theta_1, \ldots, \theta_K)$ is the
+                        unknown channel-level ROI vector. <strong>Action</strong> $\mathbf{b} = (b_1, \ldots, b_K)$
+                        is the budget allocation we choose, subject to $\sum_k b_k = B$.
+                    </p>
+                </div>
+                <div class="concept-box">
+                    <h5>Utility &amp; constraints</h5>
+                    <p style="margin: 0;">
+                        <strong>Utility</strong> $U(\mathbf{b}, \boldsymbol{\theta}) = \sum_k \theta_k\, f(b_k)$
+                        with concave response $f(\cdot)$. <strong>Constraints</strong> include channel floors,
+                        ops capacity for tests, calendar windows, and creative readiness.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                The choice we actually want to make is the budget that maximises <em>expected</em> utility under
+                our current beliefs. With perfect knowledge that's $\mathbf{b}^*(\boldsymbol{\theta}) = \arg\max U$.
+                With uncertainty it's $\mathbf{b}^*(\bar{\boldsymbol{\theta}})$ where $\bar{\boldsymbol{\theta}}$
+                is the posterior mean &mdash; <em>but</em> the value of that decision degrades with uncertainty
+                in ways most teams don't quantify.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>1.1 &middot; Risk preference and certainty equivalents</h4>
+                <p class="demo-instructions">
+                    Even with the same expected ROI, two strategies can be evaluated very differently depending on
+                    risk preference. CRRA (constant relative risk aversion) utility $u(x) = x^{1-\rho}/(1-\rho)$
+                    captures this with one parameter. Drag $\rho$ to see the gap between expected value and certainty
+                    equivalent open up.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Risk aversion <code>&rho;</code> <span class="value" id="rraVal">0.50</span></label>
+                        <input type="range" id="rraSlider" min="0" max="3" step="0.05" value="0.5">
+                    </div>
+                    <div class="control">
+                        <label>Outcome A <span class="value" id="outAVal">$1.40</span></label>
+                        <input type="range" id="outASlider" min="0.1" max="3" step="0.05" value="1.4">
+                    </div>
+                    <div class="control">
+                        <label>Outcome B <span class="value" id="outBVal">$1.00</span></label>
+                        <input type="range" id="outBSlider" min="0.1" max="3" step="0.05" value="1.0">
+                    </div>
+                </div>
+
+                <div class="chart-container short" id="utilityChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Expected return</div>
+                        <div class="metric-value muted" id="erVal">$1.20</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Certainty equivalent</div>
+                        <div class="metric-value warning" id="ceVal">$1.18</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Risk premium</div>
+                        <div class="metric-value negative" id="rpVal">$0.02</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-box">
+                <h5>Why this matters for MMMs</h5>
+                <p style="margin: 0;">
+                    A wider credible interval is not just "fuzzy precision" &mdash; under any concave utility it
+                    is a real, measurable cost. The certainty equivalent of a noisy ROI estimate is strictly less
+                    than its mean. That gap is what an experimental program is buying down.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="cost-uncertainty">
+            <div class="section-num">&sect; 2 &middot; The dollar cost of uncertainty</div>
+            <h2>Why Tight CIs Aren't the Same as Right Answers</h2>
+            <p class="section-tagline">A confidently-wrong MMM can be worse than no model at all &mdash; you pay to build it, then commit the wrong dollars before anyone notices.</p>
+
+            <p>
+                Frame misallocation cost as the gap between the value we'd produce knowing $\theta$ exactly
+                and the value we actually produce optimising against our point estimate $\hat\theta$. Under a
+                concave response curve and a budget constraint, that gap grows with posterior variance even when
+                the posterior mean is correct on average.
+            </p>
+
+            <div class="math-display">
+                $$\text{Misallocation cost} \;=\; \mathbb{E}_{\boldsymbol{\theta}}\!\left[ U(\mathbf{b}^*(\boldsymbol{\theta}), \boldsymbol{\theta}) - U(\mathbf{b}^*(\hat{\boldsymbol{\theta}}), \boldsymbol{\theta}) \right]$$
+            </div>
+
+            <div class="interactive-demo">
+                <h4>2.1 &middot; The cost of a wider posterior</h4>
+                <p class="demo-instructions">
+                    A two-channel portfolio with budget $B = \$1\text{M}$. True ROI is identical for both channels
+                    (so the optimal split is 50/50). The model's <em>point estimate</em> says one channel is better &mdash;
+                    by an amount drawn from the posterior. The wider that posterior, the further we drift from
+                    optimum on average. Drag the σ slider to see expected misallocation cost rise.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Posterior σ on each ROI <span class="value" id="muSigVal">0.30</span></label>
+                        <input type="range" id="muSigSlider" min="0.02" max="0.8" step="0.01" value="0.3">
+                    </div>
+                    <div class="control">
+                        <label>Saturation steepness <code>k</code> <span class="value" id="muKVal">0.70</span></label>
+                        <input type="range" id="muKSlider" min="0.2" max="2" step="0.05" value="0.7">
+                    </div>
+                </div>
+
+                <div class="chart-container" id="misallocChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Expected misalloc cost / wk</div>
+                        <div class="metric-value negative" id="misallocVal">$48K</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">% of budget wasted</div>
+                        <div class="metric-value warning" id="wastePctVal">4.8%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Annualised</div>
+                        <div class="metric-value negative" id="annualVal">$2.5M</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warn-box">
+                <h5>The hidden compounding</h5>
+                <p style="margin: 0;">
+                    Misallocation cost scales <em>quadratically</em> with posterior σ when the response curve
+                    has positive curvature near the optimum. Halving σ doesn't halve the cost &mdash; it cuts it
+                    by roughly four. This is why moving even one channel from "model-only" to "experiment-backed"
+                    pays back so quickly.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="bayes-update">
+            <div class="section-num">&sect; 3 &middot; The mechanics</div>
+            <h2>Calibration Is a Conjugate Update</h2>
+            <p class="section-tagline">No magic. The MMM is the prior, the experiment is the likelihood, the next MMM uses the posterior.</p>
+
+            <p>
+                Under the standard Gaussian-Gaussian setup, the posterior after one experiment is closed-form:
+                precisions add, means are precision-weighted. This is the workhorse formula behind every
+                "soft calibration" mechanism in the framework.
+            </p>
+
+            <div class="math-display">
+                $$\sigma_{\text{post}}^{-2} \;=\; \sigma_0^{-2} + \sigma_e^{-2}, \qquad \mu_{\text{post}} \;=\; \sigma_{\text{post}}^2\!\left(\frac{\mu_0}{\sigma_0^2} + \frac{\hat{y}}{\sigma_e^2}\right)$$
+            </div>
+
+            <div class="interactive-demo">
+                <h4>3.1 &middot; Posterior = prior &times; likelihood, weighted by precision</h4>
+                <p class="demo-instructions">
+                    Set the MMM prior (sage) and a candidate experimental result (gold). The posterior (forest)
+                    is computed live. Notice: the posterior always sits between &mdash; but it leans hard toward
+                    whichever distribution is narrower. A precise experiment overwhelms a vague prior; a confident
+                    prior pushes back against a noisy experiment.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Prior μ<sub>0</sub> (MMM mean) <span class="value" id="bMu0Val">1.40</span></label>
+                        <input type="range" id="bMu0Slider" min="0" max="3" step="0.05" value="1.4">
+                    </div>
+                    <div class="control">
+                        <label>Prior σ<sub>0</sub> (MMM σ) <span class="value" id="bSig0Val">0.40</span></label>
+                        <input type="range" id="bSig0Slider" min="0.05" max="1.2" step="0.02" value="0.4">
+                    </div>
+                    <div class="control">
+                        <label>Experiment ŷ (mean) <span class="value" id="bYhatVal">2.10</span></label>
+                        <input type="range" id="bYhatSlider" min="0" max="3" step="0.05" value="2.1">
+                    </div>
+                    <div class="control">
+                        <label>Experiment σ<sub>e</sub> <span class="value" id="bSigEVal">0.25</span></label>
+                        <input type="range" id="bSigESlider" min="0.05" max="1.2" step="0.02" value="0.25">
+                    </div>
+                </div>
+
+                <div class="chart-container" id="bayesChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Posterior μ</div>
+                        <div class="metric-value accent" id="bMuPostVal">1.85</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Posterior σ</div>
+                        <div class="metric-value positive" id="bSigPostVal">0.21</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Prior weight</div>
+                        <div class="metric-value muted" id="bWPriorVal">28%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Experiment weight</div>
+                        <div class="metric-value muted" id="bWExpVal">72%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="concept-box">
+                <h5>Three calibration mechanisms, one math</h5>
+                <p style="margin: 0;">
+                    M1 (informed prior) applies this update <em>between</em> MMM fits. M2 (likelihood augmentation)
+                    folds the experimental term into one joint posterior. M3 (hierarchical pooling) lets a tested
+                    channel pull untested siblings via a shared category-level mean. All three reduce, in the
+                    Gaussian limit, to versions of the formula above.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="eig">
+            <div class="section-num">&sect; 4 &middot; What we'd learn</div>
+            <h2>Expected Information Gain</h2>
+            <p class="section-tagline">A scalar, in bits, that ranks experiments by how much they'd shrink our beliefs.</p>
+
+            <p>
+                EIG is the expected reduction in posterior entropy from running an experiment. For Gaussian
+                conjugate updates it has a clean closed form depending only on the prior-to-experiment
+                <em>variance ratio</em>:
+            </p>
+
+            <div class="math-display">
+                $$\mathrm{EIG}(k, d) \;=\; \tfrac{1}{2}\log_2\!\left(1 + \frac{\sigma_k^2}{\sigma_{\text{exp},k}^2(d)}\right) \quad \text{bits}$$
+            </div>
+
+            <div class="interactive-demo">
+                <h4>4.1 &middot; The EIG landscape</h4>
+                <p class="demo-instructions">
+                    The heatmap shows EIG over the (prior σ, experiment σ) plane. Channels in the upper-left
+                    &mdash; loose prior, precise experiment &mdash; are where information gain is maximised.
+                    Drag the markers below to position your channel and read off its EIG.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Channel prior σ<sub>k</sub> <span class="value" id="eSigKVal">0.40</span></label>
+                        <input type="range" id="eSigKSlider" min="0.05" max="1" step="0.01" value="0.4">
+                    </div>
+                    <div class="control">
+                        <label>Achievable σ<sub>exp</sub> <span class="value" id="eSigEVal">0.20</span></label>
+                        <input type="range" id="eSigESlider" min="0.05" max="1" step="0.01" value="0.2">
+                    </div>
+                </div>
+
+                <div class="chart-container tall" id="eigHeatmap"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">EIG (bits)</div>
+                        <div class="metric-value accent" id="eEigBitsVal">1.16</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">σ-ratio (prior / exp)</div>
+                        <div class="metric-value muted" id="eRatioVal">2.00&times;</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Posterior σ (post-test)</div>
+                        <div class="metric-value positive" id="eSigPostVal">0.18</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">CI shrinkage</div>
+                        <div class="metric-value positive" id="eShrinkVal">55%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-box">
+                <h5>The headline shape of the formula</h5>
+                <p style="margin: 0;">
+                    EIG is concave in the variance ratio. Going from a 1&times; ratio to 4&times; buys ~1 bit;
+                    going from 4&times; to 16&times; buys only one more. <strong>Diminishing returns are baked in.</strong>
+                    The right experiment for a fuzzy channel is one where you can hit a moderate variance ratio,
+                    not the most precise possible &mdash; you're paying linear cost for logarithmic gain.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="evoi">
+            <div class="section-num">&sect; 5 &middot; What that learning is worth</div>
+            <h2>Expected Value of Information</h2>
+            <p class="section-tagline">Bits don't pay the rent. Translate uncertainty reduction into dollars before prioritising.</p>
+
+            <p>
+                EVOI prices the information from an experiment by the expected dollar improvement in the budget
+                decision that follows. The linearised approximation makes the structure transparent:
+            </p>
+
+            <div class="math-display">
+                $$\mathrm{EVOI}(k) \;\approx\; B \cdot s_k \cdot \mathbb{E}\!\left[\,\big|\hat{\theta}_{k,\text{post}} - \hat{\theta}_{k,\text{prior}}\big|\,\right] \cdot \mathbb{P}(\text{decision flips})$$
+            </div>
+
+            <p>
+                Four levers: budget at stake, share going to this channel, magnitude of the expected belief
+                revision, and the probability that the revision crosses a budget-decision threshold.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>5.1 &middot; EVOI calculator</h4>
+                <p class="demo-instructions">
+                    Each slider moves one of the four levers. Watch how a high-EIG experiment on a tiny channel
+                    can have low EVOI (huge variance reduction, tiny stakes), while a moderate-EIG experiment on
+                    a 30%-share channel near the decision threshold can have $500K+ value per cycle.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Budget at stake $B (M$/wk) <span class="value" id="vBVal">$5.0M</span></label>
+                        <input type="range" id="vBSlider" min="0.5" max="20" step="0.1" value="5">
+                    </div>
+                    <div class="control">
+                        <label>Channel spend share s<sub>k</sub> <span class="value" id="vSkVal">25%</span></label>
+                        <input type="range" id="vSkSlider" min="1" max="60" step="1" value="25">
+                    </div>
+                    <div class="control">
+                        <label>Prior σ<sub>k</sub> on ROI <span class="value" id="vSigKVal">0.40</span></label>
+                        <input type="range" id="vSigKSlider" min="0.05" max="1" step="0.01" value="0.4">
+                    </div>
+                    <div class="control">
+                        <label>Achievable σ<sub>exp</sub> <span class="value" id="vSigEVal">0.25</span></label>
+                        <input type="range" id="vSigESlider" min="0.05" max="1" step="0.01" value="0.25">
+                    </div>
+                    <div class="control">
+                        <label>Posterior mean (current) <span class="value" id="vMuVal">1.20</span></label>
+                        <input type="range" id="vMuSlider" min="0.5" max="2" step="0.02" value="1.2">
+                    </div>
+                    <div class="control">
+                        <label>Decision threshold <span class="value" id="vThVal">1.00</span></label>
+                        <input type="range" id="vThSlider" min="0.5" max="2" step="0.02" value="1.0">
+                    </div>
+                </div>
+
+                <div class="chart-container" id="evoiChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">EVOI per cycle</div>
+                        <div class="metric-value accent" id="evoiDollarsVal">$220K</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">P(decision flips)</div>
+                        <div class="metric-value warning" id="evoiPflipVal">22%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Expected belief shift</div>
+                        <div class="metric-value muted" id="evoiShiftVal">$0.12</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Annualised value</div>
+                        <div class="metric-value positive" id="evoiAnnualVal">$880K</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="concept-box">
+                <h5>EIG and EVOI together: the priority engine</h5>
+                <p style="margin: 0;">
+                    EIG is necessary but not sufficient. A channel with huge prior σ but 1% spend share has
+                    enormous information gain and trivial decision value. The next section combines both into
+                    the priority score that picks each cycle's experimental portfolio.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="priority">
+            <div class="section-num">&sect; 6 &middot; Picking the portfolio</div>
+            <h2>The Priority Matrix and the &lambda; Tradeoff</h2>
+            <p class="section-tagline">Tune the weight between learning and decision value. Watch the recommended portfolio rearrange itself.</p>
+
+            <p>
+                The composite priority score combines normalised EIG and EVOI with a tradeoff parameter $\lambda$:
+            </p>
+
+            <div class="math-display">
+                $$\mathrm{Score}(k) \;=\; \lambda \cdot \widetilde{\mathrm{EIG}}(k) \;+\; (1-\lambda) \cdot \widetilde{\mathrm{EVOI}}(k)$$
+            </div>
+
+            <p>
+                $\lambda = 1$ is pure information maximisation (pick the channels we know least about, regardless
+                of stakes). $\lambda = 0$ is pure decision-quality (only test where the answer would change the
+                budget). Most healthy programs sit around $\lambda = 0.3$&ndash;$0.5$.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>6.1 &middot; Six channels, one slider</h4>
+                <p class="demo-instructions">
+                    A realistic six-channel portfolio with the EIG/EVOI characteristics noted in the table. Drag
+                    $\lambda$ and the operational cap. The 2&times;2 priority matrix updates live; the table re-ranks;
+                    selected experiments show a green badge.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>&lambda; (info &harr; value tradeoff) <span class="value" id="pLamVal">0.40</span></label>
+                        <input type="range" id="pLamSlider" min="0" max="1" step="0.05" value="0.4">
+                    </div>
+                    <div class="control">
+                        <label>Operational cap (max tests / cycle) <span class="value" id="pCapVal">3</span></label>
+                        <input type="range" id="pCapSlider" min="1" max="6" step="1" value="3">
+                    </div>
+                </div>
+
+                <div class="chart-container" id="priorityMatrix"></div>
+
+                <table class="channel-table" id="priorityTable">
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>Spend</th>
+                            <th>σ<sub>k</sub></th>
+                            <th>σ<sub>exp</sub></th>
+                            <th>EIG (bits)</th>
+                            <th>EVOI ($K)</th>
+                            <th>Score</th>
+                            <th>Pick</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Selected portfolio EIG</div>
+                        <div class="metric-value accent" id="pTotEigVal">3.4 bits</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Selected portfolio EVOI</div>
+                        <div class="metric-value positive" id="pTotEvoiVal">$640K</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Submodular efficiency</div>
+                        <div class="metric-value muted" id="pSubmodVal">82% of max</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="constraints">
+            <div class="section-num">&sect; 7 &middot; Constraints &amp; tradeoffs</div>
+            <h2>Reality Bites: Costs, Risks, and Submodularity</h2>
+            <p class="section-tagline">Operational caps, geo conflicts, brand-safety risk. Picking a portfolio is a constrained optimisation, not a beauty contest.</p>
+
+            <p>
+                Real selection adds two penalty terms to the priority score: an experimentation
+                <strong>cost</strong> ($\gamma$) and an operational <strong>risk</strong> ($\rho$). Cost
+                discourages large geo footprints; risk discourages tests that could create brand exposure or
+                geo overlap with running campaigns.
+            </p>
+
+            <div class="math-display">
+                $$\mathrm{Score}(k) \;=\; \lambda \cdot \widetilde{\mathrm{EIG}}(k) \;+\; (1-\lambda) \cdot \widetilde{\mathrm{EVOI}}(k) \;-\; \gamma \cdot \mathrm{cost}(k) \;-\; \rho \cdot \mathrm{risk}(k)$$
+            </div>
+
+            <p>
+                EIG of a <em>set</em> of experiments is submodular &mdash; greedy selection is provably within
+                $1 - 1/e \approx 63\%$ of the unconstrained optimum, and additional experiments past the third
+                or fourth typically yield trivial marginal value. The bar chart below visualises that decay.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>7.1 &middot; Constraint penalties and submodular returns</h4>
+                <p class="demo-instructions">
+                    Same six channels as &sect; 6, now with cost and risk penalties applied. The marginal-EIG
+                    bars show what each <em>additional</em> selected experiment contributes; the cumulative line
+                    is the running portfolio EIG. Past the third experiment, marginal returns drop sharply.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Cost penalty &gamma; <span class="value" id="cGamVal">0.20</span></label>
+                        <input type="range" id="cGamSlider" min="0" max="1" step="0.05" value="0.2">
+                    </div>
+                    <div class="control">
+                        <label>Risk penalty &rho; <span class="value" id="cRhoVal">0.15</span></label>
+                        <input type="range" id="cRhoSlider" min="0" max="1" step="0.05" value="0.15">
+                    </div>
+                    <div class="control">
+                        <label>Test budget cap ($K) <span class="value" id="cBudVal">$300K</span></label>
+                        <input type="range" id="cBudSlider" min="50" max="800" step="25" value="300">
+                    </div>
+                </div>
+
+                <div class="chart-container" id="submodChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Picked under constraints</div>
+                        <div class="metric-value accent" id="cPickedVal">3 / 6</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Test cost ($K)</div>
+                        <div class="metric-value muted" id="cCostVal">$240K</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Captured EVOI</div>
+                        <div class="metric-value positive" id="cCapturedVal">$580K</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Net value (EVOI &minus; cost)</div>
+                        <div class="metric-value positive" id="cNetVal">$340K</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warn-box">
+                <h5>Operational risk is not the same as model risk</h5>
+                <p style="margin: 0;">
+                    A test that overlaps with a brand-sensitive launch, or that competes for geos already running
+                    a separate experiment, can have ROI-positive math but enterprise-negative consequences. The
+                    risk penalty $\rho$ exists to make this explicit. Don't run experiments that win on a
+                    spreadsheet but lose in the executive review.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="cycles">
+            <div class="section-num">&sect; 8 &middot; The compounding loop</div>
+            <h2>Multi-Cycle Simulator</h2>
+            <p class="section-tagline">A single experiment is a one-shot gain. The loop is a productivity curve. Run it.</p>
+
+            <p>
+                Each quarterly cycle re-fits the MMM, recomputes priorities, runs 2-3 experiments, calibrates,
+                re-allocates, and re-scores. Calibrated channels see their EIG and EVOI drop &mdash; previously
+                lower-priority channels rise. The simulator below traces the four headline metrics across N cycles.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>8.1 &middot; Run the loop</h4>
+                <p class="demo-instructions">
+                    Five channels, configurable starting MMM uncertainty, calibration mechanism, and cycle count.
+                    The four panels show: posterior CI widths contracting on tested channels, allocation share
+                    migrating to true high-ROI channels, weekly misallocation cost falling, and portfolio
+                    marginal ROI rising. Dashed traces show the no-experiments counterfactual.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Cycles to run <span class="value" id="lCycVal">6</span></label>
+                        <input type="range" id="lCycSlider" min="2" max="12" step="1" value="6">
+                    </div>
+                    <div class="control">
+                        <label>Starting σ<sub>0</sub> (cross-channel) <span class="value" id="lSigVal">0.45</span></label>
+                        <input type="range" id="lSigSlider" min="0.15" max="0.8" step="0.02" value="0.45">
+                    </div>
+                    <div class="control">
+                        <label>Tests per cycle <span class="value" id="lKVal">2</span></label>
+                        <input type="range" id="lKSlider" min="1" max="4" step="1" value="2">
+                    </div>
+                    <div class="control">
+                        <label>Calibration mechanism</label>
+                        <select id="lMechSelect">
+                            <option value="m1">M1 &mdash; Soft prior</option>
+                            <option value="m2">M2 &mdash; Likelihood augmentation</option>
+                            <option value="m3">M3 &mdash; Hierarchical pooling</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-container tall" id="loopPanels" style="min-height: 520px;"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Final misallocation</div>
+                        <div class="metric-value positive" id="lMisFinalVal">$15K / wk</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Misallocation reduction</div>
+                        <div class="metric-value positive" id="lMisDropVal">&minus;92%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Final decision efficiency</div>
+                        <div class="metric-value accent" id="lRoiFinalVal">97%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Calibration coverage</div>
+                        <div class="metric-value warning" id="lCovVal">68%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-box">
+                <h5>What the four panels are actually showing</h5>
+                <p style="margin: 0;">
+                    Top-left = epistemic outcome (what we know better). Top-right = operational outcome (what
+                    we do differently as a result). Bottom-left = economic outcome (what poor knowledge was
+                    costing us). Bottom-right = strategic outcome (the bottom-line lift in marginal productivity).
+                    A defensible measurement program reports all four to the sponsor every cycle.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="frontier">
+            <div class="section-num">&sect; 9 &middot; Where the program should live</div>
+            <h2>The Decision-Quality Frontier</h2>
+            <p class="section-tagline">The right number of experiments per cycle is whatever sits on the elbow of the cost-value curve.</p>
+
+            <p>
+                Total experiment cost rises linearly with the number of tests in a cycle; captured EVOI rises
+                concavely thanks to submodularity. The net value $V(n) = \mathrm{EVOI}(n) - c \cdot n$ has a
+                maximum, almost always between two and four tests for a five-channel portfolio.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>9.1 &middot; Cost-value tradeoff</h4>
+                <p class="demo-instructions">
+                    Drag the per-test cost and the channel count. The curve shows captured EVOI minus total cost
+                    as a function of how many experiments we run that cycle. The marker tracks the optimum.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Cost per experiment ($K) <span class="value" id="fCostVal">$80K</span></label>
+                        <input type="range" id="fCostSlider" min="10" max="300" step="5" value="80">
+                    </div>
+                    <div class="control">
+                        <label>Channel count K <span class="value" id="fKVal">8</span></label>
+                        <input type="range" id="fKSlider" min="3" max="15" step="1" value="8">
+                    </div>
+                    <div class="control">
+                        <label>Avg per-channel EVOI ($K) <span class="value" id="fEvoiVal">$320K</span></label>
+                        <input type="range" id="fEvoiSlider" min="50" max="800" step="10" value="320">
+                    </div>
+                </div>
+
+                <div class="chart-container" id="frontierChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Optimal # experiments</div>
+                        <div class="metric-value accent" id="fOptVal">3</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Net value at optimum</div>
+                        <div class="metric-value positive" id="fNetVal">$540K</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Marginal cost &cong; benefit at</div>
+                        <div class="metric-value warning" id="fMargVal">3rd test</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="concept-box">
+                <h5>Why the curve always has an elbow</h5>
+                <p style="margin: 0;">
+                    The number of <em>useful</em> experiments per cycle is bounded above by submodularity, not
+                    by management appetite. Even with infinite budget and zero ops constraints, the marginal
+                    information from the fourth or fifth experiment is usually one-tenth of the first. Plan
+                    around the elbow; do not let "we should test more" smuggle in tests with negative net value.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <section class="section" id="takeaways">
+            <div class="section-num">&sect; 10 &middot; Takeaways</div>
+            <h2>What This Framework Buys You</h2>
+
+            <div class="two-col-demo">
+                <div class="insight-box">
+                    <h5>For the modeling team</h5>
+                    <p style="margin: 0;">
+                        EIG, EVOI, and the priority score replace gut-feel "what should we test next?" with a
+                        score you can defend in a deck. The Bayesian update gives you a principled way to fold
+                        results back in &mdash; no analyst-led adjustments, no opaque overrides.
+                    </p>
+                </div>
+                <div class="insight-box">
+                    <h5>For the planning team</h5>
+                    <p style="margin: 0;">
+                        Each cycle produces three artifacts: the priority map (what's being tested and why), the
+                        calibrated allocation (with confidence tiers per channel), and the trajectory chart
+                        (compounding evidence of program value). Three pages. One meeting. Every quarter.
+                    </p>
+                </div>
+                <div class="insight-box">
+                    <h5>For the CFO / sponsor</h5>
+                    <p style="margin: 0;">
+                        Misallocation cost is reported in dollars per week. Portfolio mROI is reported as a
+                        running multiple. Calibration coverage is reported as a fraction of spend. The
+                        program's payback is on the deck, not buried in a model spec.
+                    </p>
+                </div>
+                <div class="insight-box">
+                    <h5>For the program over time</h5>
+                    <p style="margin: 0;">
+                        Submodularity caps useful experimentation at 2-4 tests per cycle. Information decay
+                        triggers re-experimentation on a cadence the data sets, not the calendar. The loop
+                        is self-throttling and self-correcting.
+                    </p>
+                </div>
+            </div>
+
+            <div class="concept-box" style="margin-top: 2rem;">
+                <h5>Where to go from here</h5>
+                <p style="margin: 0;">
+                    For the conceptual framework and the math derivations, see the
+                    <a href="measurement-calibration.html">Closed-Loop Measurement &amp; Calibration</a> guide.
+                    For practical guidance on interpreting calibrated outputs in budget meetings, see
+                    <a href="interpreting-results.html">Interpreting Results</a>.
+                    For the full glossary of terms, see the <a href="glossary.html">Glossary</a>.
+                </p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+
+    <!-- Interactive logic -->
+    <script>
+        // ============================================================
+        // Shared chart styling
+        // ============================================================
+        const COLORS = {
+            primary: '#5a7c65',
+            primaryLight: '#8fa86a',
+            primaryDark: '#3d5a47',
+            accent: '#6a8fa8',
+            accentDark: '#4a6d8a',
+            warning: '#c9a067',
+            warningDark: '#8a6408',
+            danger: '#c97067',
+            success: '#67c99a',
+            text: '#2d3a2d',
+            muted: '#5a6b5a',
+            grid: '#e0e5dc',
+            bg: '#fafbf8',
+            bgAlt: '#f5f7f2'
+        };
+
+        const baseLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'Source Sans 3, sans-serif', color: COLORS.text, size: 12 },
+            margin: { t: 32, r: 24, b: 48, l: 56 },
+            xaxis: { gridcolor: COLORS.grid, zerolinecolor: COLORS.grid, automargin: true },
+            yaxis: { gridcolor: COLORS.grid, zerolinecolor: COLORS.grid, automargin: true }
+        };
+        const cfg = { displayModeBar: false, responsive: true };
+
+        // ============================================================
+        // Math helpers
+        // ============================================================
+        function gaussianPDF(x, mu, sigma) {
+            const z = (x - mu) / sigma;
+            return Math.exp(-0.5 * z * z) / (sigma * Math.sqrt(2 * Math.PI));
+        }
+        function gaussianCDF(x, mu, sigma) {
+            // Abramowitz & Stegun approximation of erf
+            const z = (x - mu) / (sigma * Math.SQRT2);
+            const sign = z < 0 ? -1 : 1;
+            const az = Math.abs(z);
+            const t = 1 / (1 + 0.3275911 * az);
+            const a1 =  0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+            const a4 = -1.453152027, a5 =  1.061405429;
+            const erf = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t * Math.exp(-az*az);
+            return 0.5 * (1 + sign * erf);
+        }
+        function range(start, stop, step) {
+            const out = [];
+            for (let v = start; v <= stop + 1e-12; v += step) out.push(v);
+            return out;
+        }
+        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+        function fmtMoney(v) {
+            if (Math.abs(v) >= 1e6) return '$' + (v/1e6).toFixed(2) + 'M';
+            if (Math.abs(v) >= 1e3) return '$' + (v/1e3).toFixed(0) + 'K';
+            return '$' + v.toFixed(0);
+        }
+
+        // ============================================================
+        // 1.1 - Risk preference / certainty equivalent
+        // ============================================================
+        function utilityCRRA(x, rho) {
+            if (Math.abs(rho - 1) < 1e-6) return Math.log(Math.max(x, 1e-9));
+            return (Math.pow(Math.max(x, 1e-9), 1 - rho) - 1) / (1 - rho);
+        }
+        function inverseUtilityCRRA(u, rho) {
+            if (Math.abs(rho - 1) < 1e-6) return Math.exp(u);
+            return Math.pow(Math.max(u * (1 - rho) + 1, 1e-9), 1 / (1 - rho));
+        }
+
+        function updateUtility() {
+            const rho = parseFloat(document.getElementById('rraSlider').value);
+            const A = parseFloat(document.getElementById('outASlider').value);
+            const B = parseFloat(document.getElementById('outBSlider').value);
+            document.getElementById('rraVal').textContent = rho.toFixed(2);
+            document.getElementById('outAVal').textContent = '$' + A.toFixed(2);
+            document.getElementById('outBVal').textContent = '$' + B.toFixed(2);
+
+            const ev = 0.5 * (A + B);
+            const eu = 0.5 * (utilityCRRA(A, rho) + utilityCRRA(B, rho));
+            const ce = inverseUtilityCRRA(eu, rho);
+            const rp = ev - ce;
+
+            document.getElementById('erVal').textContent = '$' + ev.toFixed(2);
+            document.getElementById('ceVal').textContent = '$' + ce.toFixed(2);
+            document.getElementById('rpVal').textContent = '$' + rp.toFixed(2);
+
+            const xs = range(0.1, 3, 0.05);
+            const ys = xs.map(x => utilityCRRA(x, rho));
+            const evY = utilityCRRA(ev, rho);
+            const traces = [
+                { x: xs, y: ys, mode: 'lines', line: { color: COLORS.primary, width: 3 }, name: 'u(x)' },
+                { x: [A, B], y: [utilityCRRA(A, rho), utilityCRRA(B, rho)], mode: 'markers',
+                  marker: { color: COLORS.accent, size: 12 }, name: 'Outcomes' },
+                { x: [ev], y: [eu], mode: 'markers',
+                  marker: { color: COLORS.warning, size: 14, symbol: 'diamond' }, name: 'E[u]' },
+                { x: [ce], y: [eu], mode: 'markers',
+                  marker: { color: COLORS.danger, size: 14, symbol: 'x' }, name: 'CE' },
+                { x: [ce, ev], y: [eu, eu], mode: 'lines',
+                  line: { color: COLORS.danger, width: 1.5, dash: 'dot' }, showlegend: false }
+            ];
+            Plotly.react('utilityChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Outcome (ROI)' }, range: [0, 3.1] },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Utility u(x)' } },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            }, cfg);
+        }
+
+        // ============================================================
+        // 2.1 - Misallocation cost
+        // Two-channel toy: true ROI is identical (1.5). MMM gives noisy
+        // posterior means. Optimal split given identical true ROI is 50/50.
+        // Misallocation = expected gap between U(b*(theta), theta) and
+        // U(b*(theta_hat), theta) over draws of theta_hat ~ N(true, sigma).
+        // ============================================================
+        function responseCurve(spend, k) {
+            // Hill-style saturation: spend -> response (units)
+            return spend / (k + spend);
+        }
+        function updateMisalloc() {
+            const sig = parseFloat(document.getElementById('muSigSlider').value);
+            const k = parseFloat(document.getElementById('muKSlider').value);
+            document.getElementById('muSigVal').textContent = sig.toFixed(2);
+            document.getElementById('muKVal').textContent = k.toFixed(2);
+
+            const B = 1.0; // budget (M$)
+            const trueROI = 1.5;
+            // Optimal split given identical true ROI: 50/50
+            const optimalUtility = 2 * trueROI * responseCurve(B/2, k);
+
+            // Monte-Carlo expected misallocation
+            const N = 2000;
+            let totalShortfall = 0;
+            const samples = [];
+            for (let i = 0; i < N; i++) {
+                // BoxMuller
+                const u1 = Math.random(), u2 = Math.random();
+                const z1 = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+                const z2 = Math.sqrt(-2*Math.log(u1)) * Math.sin(2*Math.PI*u2);
+                const r1Hat = trueROI + sig * z1;
+                const r2Hat = trueROI + sig * z2;
+                // Naive optimizer: allocate proportional to point estimate
+                // (a real optimizer would solve KKT but for this toy proportional
+                // captures the directional degradation).
+                const tot = Math.max(r1Hat, 0.01) + Math.max(r2Hat, 0.01);
+                const b1 = B * Math.max(r1Hat, 0.01) / tot;
+                const b2 = B - b1;
+                const utility = trueROI * responseCurve(b1, k) + trueROI * responseCurve(b2, k);
+                totalShortfall += (optimalUtility - utility);
+                if (i < 200) samples.push({b1, util: utility});
+            }
+            const expCost = (totalShortfall / N) * 1e6;  // back to $
+            const wkAnnual = expCost * 52;
+            const wastePct = (expCost / (B * 1e6)) * 100;
+
+            document.getElementById('misallocVal').textContent = fmtMoney(expCost);
+            document.getElementById('wastePctVal').textContent = wastePct.toFixed(1) + '%';
+            document.getElementById('annualVal').textContent = fmtMoney(wkAnnual);
+
+            // Chart: response curves + scatter of attempted allocations
+            const xs = range(0, 1, 0.01);
+            const ys = xs.map(s => trueROI * responseCurve(s, k));
+            const optMark = trueROI * responseCurve(0.5, k);
+
+            const traces = [
+                { x: xs, y: ys, mode: 'lines', name: 'Per-channel utility',
+                  line: { color: COLORS.primary, width: 3 } },
+                { x: [0.5], y: [optMark], mode: 'markers',
+                  marker: { color: COLORS.success, size: 14, symbol: 'star' }, name: 'Optimal split' },
+                { x: samples.map(s => s.b1), y: samples.map(s => s.util / 2),
+                  mode: 'markers',
+                  marker: { color: COLORS.danger, size: 5, opacity: 0.35 },
+                  name: 'Realised allocations' }
+            ];
+            Plotly.react('misallocChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Allocation to channel 1 ($M)' }, range: [0, 1] },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Per-channel utility (units)' } },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            }, cfg);
+        }
+
+        // ============================================================
+        // 3.1 - Bayesian update
+        // ============================================================
+        function updateBayes() {
+            const mu0 = parseFloat(document.getElementById('bMu0Slider').value);
+            const sig0 = parseFloat(document.getElementById('bSig0Slider').value);
+            const yhat = parseFloat(document.getElementById('bYhatSlider').value);
+            const sigE = parseFloat(document.getElementById('bSigESlider').value);
+            document.getElementById('bMu0Val').textContent = mu0.toFixed(2);
+            document.getElementById('bSig0Val').textContent = sig0.toFixed(2);
+            document.getElementById('bYhatVal').textContent = yhat.toFixed(2);
+            document.getElementById('bSigEVal').textContent = sigE.toFixed(2);
+
+            const prec0 = 1 / (sig0*sig0);
+            const precE = 1 / (sigE*sigE);
+            const sigPost = 1 / Math.sqrt(prec0 + precE);
+            const muPost = (sigPost * sigPost) * (mu0 * prec0 + yhat * precE);
+            const wPrior = prec0 / (prec0 + precE);
+            const wExp = precE / (prec0 + precE);
+
+            document.getElementById('bMuPostVal').textContent = muPost.toFixed(2);
+            document.getElementById('bSigPostVal').textContent = sigPost.toFixed(2);
+            document.getElementById('bWPriorVal').textContent = (wPrior * 100).toFixed(0) + '%';
+            document.getElementById('bWExpVal').textContent = (wExp * 100).toFixed(0) + '%';
+
+            const xs = range(-0.5, 3.5, 0.02);
+            const yPrior = xs.map(x => gaussianPDF(x, mu0, sig0));
+            const yLik = xs.map(x => gaussianPDF(x, yhat, sigE));
+            const yPost = xs.map(x => gaussianPDF(x, muPost, sigPost));
+
+            const traces = [
+                { x: xs, y: yPrior, mode: 'lines', fill: 'tozeroy',
+                  line: { color: COLORS.primaryLight, width: 2 },
+                  fillcolor: 'rgba(143,168,106,0.18)', name: 'Prior (MMM)' },
+                { x: xs, y: yLik, mode: 'lines', fill: 'tozeroy',
+                  line: { color: COLORS.warning, width: 2 },
+                  fillcolor: 'rgba(201,160,103,0.18)', name: 'Likelihood (Exp)' },
+                { x: xs, y: yPost, mode: 'lines', fill: 'tozeroy',
+                  line: { color: COLORS.primaryDark, width: 3 },
+                  fillcolor: 'rgba(61,90,71,0.30)', name: 'Posterior' }
+            ];
+            Plotly.react('bayesChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Channel ROI θ' }, range: [-0.5, 3.5] },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Density' } },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            }, cfg);
+        }
+
+        // ============================================================
+        // 4.1 - EIG heatmap
+        // ============================================================
+        function eigBits(sigK, sigE) {
+            const ratio = (sigK * sigK) / (sigE * sigE);
+            return 0.5 * Math.log2(1 + ratio);
+        }
+        function updateEIG() {
+            const sigK = parseFloat(document.getElementById('eSigKSlider').value);
+            const sigE = parseFloat(document.getElementById('eSigESlider').value);
+            document.getElementById('eSigKVal').textContent = sigK.toFixed(2);
+            document.getElementById('eSigEVal').textContent = sigE.toFixed(2);
+
+            const eig = eigBits(sigK, sigE);
+            const ratio = sigK / sigE;
+            const sigPost = 1 / Math.sqrt(1/(sigK*sigK) + 1/(sigE*sigE));
+            const shrink = (1 - sigPost / sigK) * 100;
+
+            document.getElementById('eEigBitsVal').textContent = eig.toFixed(2);
+            document.getElementById('eRatioVal').textContent = ratio.toFixed(2) + '×';
+            document.getElementById('eSigPostVal').textContent = sigPost.toFixed(2);
+            document.getElementById('eShrinkVal').textContent = shrink.toFixed(0) + '%';
+
+            // Build heatmap
+            const xs = range(0.05, 1, 0.025); // sigE
+            const ys = range(0.05, 1, 0.025); // sigK
+            const z = ys.map(yk => xs.map(xe => eigBits(yk, xe)));
+
+            const traces = [
+                { x: xs, y: ys, z: z, type: 'heatmap',
+                  colorscale: [[0, '#f5f7f2'], [0.5, '#a8c485'], [1, '#3d5a47']],
+                  colorbar: { title: 'EIG (bits)', titleside: 'right', thickness: 14, len: 0.8 },
+                  hovertemplate: 'σ_exp=%{x:.2f}<br>σ_prior=%{y:.2f}<br>EIG=%{z:.2f} bits<extra></extra>' },
+                { x: [sigE], y: [sigK], mode: 'markers',
+                  marker: { color: COLORS.danger, size: 16, symbol: 'circle',
+                            line: { color: 'white', width: 2 } },
+                  name: 'Your channel' }
+            ];
+            Plotly.react('eigHeatmap', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Achievable experimental σ' } },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Channel prior σ' } },
+                showlegend: false
+            }, cfg);
+        }
+
+        // ============================================================
+        // 5.1 - EVOI calculator
+        // ============================================================
+        function computeEVOI(B_M, sk_pct, sigK, sigE, mu, threshold) {
+            // Posterior σ
+            const sigPost = 1 / Math.sqrt(1/(sigK*sigK) + 1/(sigE*sigE));
+            // Expected absolute mean shift = sqrt(sigK^2 - sigPost^2) * sqrt(2/pi)
+            // (variance of the posterior-mean update equals prior var minus posterior var)
+            const meanShiftSD = Math.sqrt(Math.max(0, sigK*sigK - sigPost*sigPost));
+            const expectedAbsShift = meanShiftSD * Math.sqrt(2 / Math.PI);
+            // P(decision flip): how likely posterior mean ends up on opposite side of threshold
+            // posterior mean ~ Normal(mu, meanShiftSD)
+            const pFlip = mu >= threshold
+                ? gaussianCDF(threshold, mu, Math.max(meanShiftSD, 1e-6))
+                : 1 - gaussianCDF(threshold, mu, Math.max(meanShiftSD, 1e-6));
+            // EVOI in $: B (M$/wk) * spend share * shift * P(flip) * weeks-per-cycle (13)
+            const sk = sk_pct / 100;
+            const evoi_per_week = (B_M * 1e6) * sk * expectedAbsShift * pFlip;
+            const evoi_per_cycle = evoi_per_week * 13;
+            return { evoi_per_cycle, pFlip, expectedAbsShift, sigPost };
+        }
+        function updateEVOI() {
+            const B = parseFloat(document.getElementById('vBSlider').value);
+            const sk = parseFloat(document.getElementById('vSkSlider').value);
+            const sigK = parseFloat(document.getElementById('vSigKSlider').value);
+            const sigE = parseFloat(document.getElementById('vSigESlider').value);
+            const mu = parseFloat(document.getElementById('vMuSlider').value);
+            const th = parseFloat(document.getElementById('vThSlider').value);
+            document.getElementById('vBVal').textContent = '$' + B.toFixed(1) + 'M';
+            document.getElementById('vSkVal').textContent = sk.toFixed(0) + '%';
+            document.getElementById('vSigKVal').textContent = sigK.toFixed(2);
+            document.getElementById('vSigEVal').textContent = sigE.toFixed(2);
+            document.getElementById('vMuVal').textContent = mu.toFixed(2);
+            document.getElementById('vThVal').textContent = th.toFixed(2);
+
+            const { evoi_per_cycle, pFlip, expectedAbsShift } = computeEVOI(B, sk, sigK, sigE, mu, th);
+            document.getElementById('evoiDollarsVal').textContent = fmtMoney(evoi_per_cycle);
+            document.getElementById('evoiAnnualVal').textContent = fmtMoney(evoi_per_cycle * 4);
+            document.getElementById('evoiPflipVal').textContent = (pFlip * 100).toFixed(0) + '%';
+            document.getElementById('evoiShiftVal').textContent = '$' + expectedAbsShift.toFixed(2);
+
+            // Chart: posterior predictive over the new posterior mean
+            const meanShiftSD = Math.sqrt(Math.max(0, sigK*sigK - 1/(1/(sigK*sigK)+1/(sigE*sigE))));
+            const xs = range(Math.max(0, mu - 4*meanShiftSD), mu + 4*meanShiftSD, 0.01);
+            const ys = xs.map(x => gaussianPDF(x, mu, Math.max(meanShiftSD, 1e-3)));
+            const xsBelow = xs.filter(x => x < th);
+            const xsAbove = xs.filter(x => x >= th);
+            const yBelow = xsBelow.map(x => gaussianPDF(x, mu, Math.max(meanShiftSD, 1e-3)));
+            const yAbove = xsAbove.map(x => gaussianPDF(x, mu, Math.max(meanShiftSD, 1e-3)));
+
+            const flipColor = mu >= th ? COLORS.danger : COLORS.success;
+            const stayColor = mu >= th ? COLORS.success : COLORS.danger;
+            const flipXs = mu >= th ? xsBelow : xsAbove;
+            const flipYs = mu >= th ? yBelow : yAbove;
+            const stayXs = mu >= th ? xsAbove : xsBelow;
+            const stayYs = mu >= th ? yAbove : yBelow;
+
+            const traces = [
+                { x: stayXs, y: stayYs, mode: 'lines', fill: 'tozeroy',
+                  line: { color: stayColor, width: 2 },
+                  fillcolor: stayColor === COLORS.success ? 'rgba(103,201,154,0.30)' : 'rgba(201,112,103,0.30)',
+                  name: 'No flip' },
+                { x: flipXs, y: flipYs, mode: 'lines', fill: 'tozeroy',
+                  line: { color: flipColor, width: 2 },
+                  fillcolor: flipColor === COLORS.success ? 'rgba(103,201,154,0.30)' : 'rgba(201,112,103,0.30)',
+                  name: 'Decision flips' },
+                { x: [th, th], y: [0, Math.max(...ys) * 1.05], mode: 'lines',
+                  line: { color: COLORS.text, width: 2, dash: 'dash' }, name: 'Decision threshold' }
+            ];
+            Plotly.react('evoiChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Predicted posterior mean (after experiment)' } },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Density' } },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            }, cfg);
+        }
+
+        // ============================================================
+        // 6.1 - Priority matrix
+        // Six representative channels.
+        // ============================================================
+        const PRIORITY_CHANNELS = [
+            // [name, sigma_prior, sigma_exp, spend_share %, mu, threshold, cost]
+            { name: 'Connected TV',  sigK: 0.55, sigE: 0.20, sk: 25, mu: 1.40, th: 1.2, cost: 90, risk: 0.2 },
+            { name: 'Paid Search',   sigK: 0.10, sigE: 0.06, sk: 32, mu: 1.85, th: 1.2, cost: 60, risk: 0.1 },
+            { name: 'Linear TV',     sigK: 0.20, sigE: 0.18, sk: 18, mu: 0.95, th: 1.0, cost: 110, risk: 0.4 },
+            { name: 'Display',       sigK: 0.45, sigE: 0.25, sk: 12, mu: 0.85, th: 1.0, cost: 50, risk: 0.2 },
+            { name: 'Audio',         sigK: 0.50, sigE: 0.30, sk:  8, mu: 1.10, th: 1.0, cost: 70, risk: 0.3 },
+            { name: 'Social',        sigK: 0.35, sigE: 0.18, sk: 15, mu: 1.30, th: 1.0, cost: 80, risk: 0.5 }
+        ];
+
+        function evoiOf(ch, B_M) {
+            return computeEVOI(B_M, ch.sk, ch.sigK, ch.sigE, ch.mu, ch.th).evoi_per_cycle;
+        }
+        function eigOf(ch) { return eigBits(ch.sigK, ch.sigE); }
+
+        function updatePriority() {
+            const lam = parseFloat(document.getElementById('pLamSlider').value);
+            const cap = parseInt(document.getElementById('pCapSlider').value);
+            document.getElementById('pLamVal').textContent = lam.toFixed(2);
+            document.getElementById('pCapVal').textContent = cap;
+
+            const B = 5.0; // M$/wk
+            const eigs = PRIORITY_CHANNELS.map(eigOf);
+            const evois = PRIORITY_CHANNELS.map(c => evoiOf(c, B));
+            const eigMax = Math.max(...eigs);
+            const evoiMax = Math.max(...evois);
+            const scores = PRIORITY_CHANNELS.map((c, i) =>
+                lam * (eigs[i] / eigMax) + (1 - lam) * (evois[i] / evoiMax)
+            );
+
+            // Greedy submodular selection respecting cap
+            const idx = [...PRIORITY_CHANNELS.keys()].sort((a, b) => scores[b] - scores[a]);
+            const picked = new Set(idx.slice(0, cap));
+
+            // Update table
+            const tbody = document.querySelector('#priorityTable tbody');
+            tbody.innerHTML = '';
+            PRIORITY_CHANNELS.forEach((c, i) => {
+                const row = document.createElement('tr');
+                if (picked.has(i)) row.classList.add('selected');
+                const badge = picked.has(i)
+                    ? '<span class="badge-pick">Test</span>'
+                    : '<span class="badge-skip">Skip</span>';
+                row.innerHTML = `
+                    <td>${c.name}</td>
+                    <td class="numeric">${c.sk}%</td>
+                    <td class="numeric">${c.sigK.toFixed(2)}</td>
+                    <td class="numeric">${c.sigE.toFixed(2)}</td>
+                    <td class="numeric">${eigs[i].toFixed(2)}</td>
+                    <td class="numeric">${(evois[i]/1e3).toFixed(0)}</td>
+                    <td class="numeric"><strong>${scores[i].toFixed(2)}</strong></td>
+                    <td>${badge}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Sums
+            let totEig = 0, totEvoi = 0;
+            picked.forEach(i => { totEig += eigs[i]; totEvoi += evois[i]; });
+            document.getElementById('pTotEigVal').textContent = totEig.toFixed(2) + ' bits';
+            document.getElementById('pTotEvoiVal').textContent = fmtMoney(totEvoi);
+
+            // Submodular efficiency: portfolio EIG vs best-single * cap
+            const maxEigPortfolio = eigs.slice().sort((a,b) => b-a).slice(0, cap).reduce((a,b) => a+b, 0);
+            const eff = maxEigPortfolio > 0 ? (totEig / maxEigPortfolio) * 100 : 0;
+            document.getElementById('pSubmodVal').textContent = eff.toFixed(0) + '% of max';
+
+            // Scatter
+            const traces = [{
+                x: evois.map(v => v / 1e3),
+                y: eigs,
+                mode: 'markers+text',
+                text: PRIORITY_CHANNELS.map(c => c.name),
+                textposition: 'top center',
+                textfont: { size: 11 },
+                marker: {
+                    size: PRIORITY_CHANNELS.map(c => 10 + c.sk * 1.2),
+                    color: PRIORITY_CHANNELS.map((c, i) => picked.has(i) ? COLORS.primary : COLORS.muted),
+                    line: { color: 'white', width: 2 },
+                    opacity: 0.85
+                },
+                hovertemplate: '%{text}<br>EVOI: $%{x:.0f}K<br>EIG: %{y:.2f} bits<extra></extra>'
+            }];
+            // Threshold lines for visual quadrant split
+            const xMid = Math.max(...evois.map(v => v/1e3)) / 2;
+            const yMid = Math.max(...eigs) / 2;
+
+            Plotly.react('priorityMatrix', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'EVOI ($K per cycle)' }, zeroline: false },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'EIG (bits)' }, zeroline: false },
+                shapes: [
+                    { type: 'line', xref: 'paper', yref: 'y',
+                      x0: 0, x1: 1, y0: yMid, y1: yMid,
+                      line: { color: COLORS.grid, width: 1, dash: 'dot' } },
+                    { type: 'line', xref: 'x', yref: 'paper',
+                      x0: xMid, x1: xMid, y0: 0, y1: 1,
+                      line: { color: COLORS.grid, width: 1, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: xMid * 0.5, y: yMid * 1.5, xref: 'x', yref: 'y',
+                      text: 'Q2 &middot; learn', showarrow: false,
+                      font: { color: COLORS.warningDark, size: 11 } },
+                    { x: xMid * 1.6, y: yMid * 1.5, xref: 'x', yref: 'y',
+                      text: 'Q1 &middot; HIGH PRIORITY', showarrow: false,
+                      font: { color: COLORS.primaryDark, size: 11, weight: 700 } },
+                    { x: xMid * 0.5, y: yMid * 0.4, xref: 'x', yref: 'y',
+                      text: 'Q4 &middot; skip', showarrow: false,
+                      font: { color: COLORS.muted, size: 11 } },
+                    { x: xMid * 1.6, y: yMid * 0.4, xref: 'x', yref: 'y',
+                      text: 'Q3 &middot; monitor', showarrow: false,
+                      font: { color: COLORS.accentDark, size: 11 } }
+                ],
+                showlegend: false
+            }, cfg);
+        }
+
+        // ============================================================
+        // 7.1 - Constraints & submodular returns
+        // ============================================================
+        function updateConstraints() {
+            const gam = parseFloat(document.getElementById('cGamSlider').value);
+            const rho = parseFloat(document.getElementById('cRhoSlider').value);
+            const bud = parseFloat(document.getElementById('cBudSlider').value);
+            document.getElementById('cGamVal').textContent = gam.toFixed(2);
+            document.getElementById('cRhoVal').textContent = rho.toFixed(2);
+            document.getElementById('cBudVal').textContent = '$' + bud + 'K';
+
+            const B = 5.0;
+            const lam = 0.4;
+            const eigs = PRIORITY_CHANNELS.map(eigOf);
+            const evois = PRIORITY_CHANNELS.map(c => evoiOf(c, B));
+            const eigMax = Math.max(...eigs);
+            const evoiMax = Math.max(...evois);
+            const baseScores = PRIORITY_CHANNELS.map((c, i) =>
+                lam * (eigs[i] / eigMax) + (1 - lam) * (evois[i] / evoiMax)
+            );
+            const costMax = Math.max(...PRIORITY_CHANNELS.map(c => c.cost));
+            const adjScores = PRIORITY_CHANNELS.map((c, i) =>
+                baseScores[i] - gam * (c.cost / costMax) - rho * c.risk
+            );
+
+            // Greedy: pick highest score, subject to cumulative cost <= budget
+            const order = [...PRIORITY_CHANNELS.keys()].sort((a, b) => adjScores[b] - adjScores[a]);
+            const picked = [];
+            let cumCost = 0;
+            const margEig = []; // marginal EIG in pick order
+            const cumEig = [];
+            let cumE = 0;
+            for (const i of order) {
+                if (cumCost + PRIORITY_CHANNELS[i].cost <= bud) {
+                    picked.push(i);
+                    cumCost += PRIORITY_CHANNELS[i].cost;
+                    // Submodular discount: marginal contribution shrinks 18% per additional pick
+                    const marg = eigs[i] * Math.pow(0.82, picked.length - 1);
+                    margEig.push(marg);
+                    cumE += marg;
+                    cumEig.push(cumE);
+                }
+            }
+            const totEvoi = picked.reduce((s, i) => s + evois[i], 0);
+            const net = totEvoi - cumCost * 1000;
+
+            document.getElementById('cPickedVal').textContent = picked.length + ' / ' + PRIORITY_CHANNELS.length;
+            document.getElementById('cCostVal').textContent = '$' + cumCost + 'K';
+            document.getElementById('cCapturedVal').textContent = fmtMoney(totEvoi);
+            document.getElementById('cNetVal').textContent = fmtMoney(net);
+            document.getElementById('cNetVal').className = 'metric-value ' + (net > 0 ? 'positive' : 'negative');
+
+            // Bar chart: marginal EIG per pick order, with cumulative line
+            const labels = picked.map((i, idx) => `#${idx+1} ${PRIORITY_CHANNELS[i].name}`);
+            const traces = [
+                { x: labels, y: margEig, type: 'bar', name: 'Marginal EIG',
+                  marker: { color: COLORS.warning, opacity: 0.85 } },
+                { x: labels, y: cumEig, type: 'scatter', mode: 'lines+markers',
+                  name: 'Cumulative EIG', yaxis: 'y2',
+                  line: { color: COLORS.primary, width: 3 }, marker: { size: 10 } }
+            ];
+            Plotly.react('submodChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Selection order' } },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Marginal EIG (bits)' } },
+                yaxis2: { title: { text: 'Cumulative EIG (bits)' }, overlaying: 'y', side: 'right',
+                         gridcolor: 'transparent' },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            }, cfg);
+        }
+
+        // ============================================================
+        // 8.1 - Multi-cycle simulator
+        // ============================================================
+        function simulateLoop() {
+            const cycles = parseInt(document.getElementById('lCycSlider').value);
+            const startSig = parseFloat(document.getElementById('lSigSlider').value);
+            const k = parseInt(document.getElementById('lKSlider').value);
+            const mech = document.getElementById('lMechSelect').value;
+            document.getElementById('lCycVal').textContent = cycles;
+            document.getElementById('lSigVal').textContent = startSig.toFixed(2);
+            document.getElementById('lKVal').textContent = k;
+
+            // 5-channel portfolio with true ROIs and equal start uncertainty
+            const trueROI = [1.8, 1.4, 1.1, 0.9, 1.5];
+            const sk0 = [0.25, 0.20, 0.20, 0.15, 0.20];
+            const names = ['CTV', 'Search', 'Linear TV', 'Display', 'Social'];
+            // Slight asymmetry in starting σ
+            const muHat = trueROI.map((r, i) => r + (Math.random() - 0.5) * startSig * 0.6);
+            const sig = trueROI.map(() => startSig);
+
+            // Pooling factor for M3
+            const poolFactor = mech === 'm3' ? 0.4 : 0;
+            // M2 reduces noise slightly more (jointly fit)
+            const noiseFloor = mech === 'm2' ? 0.5 : 0.6;
+
+            const histSig = trueROI.map(() => [sig[0]]);
+            const histAlloc = trueROI.map(() => [0.2]);
+            const histMisalloc = [];
+            const histROI = [];
+
+            // Counterfactual (no experiments) - just keeps starting uncertainty
+            const cfSig = startSig;
+            const cfHistSig = [];
+            const cfHistMisalloc = [];
+            const cfHistROI = [];
+
+            // Allocation function: proportional to mu^2 (power 2 sharpens)
+            function allocateBudget(mus, sigs) {
+                const power = 1.5;
+                const w = mus.map((m, i) => Math.max(0.01, m) ** power);
+                const sum = w.reduce((a,b) => a+b, 0);
+                return w.map(x => x / sum);
+            }
+
+            function misallocCost(alloc, mus, trues, B) {
+                // For known true ROI, optimal share is trueROI^power normalized
+                const power = 1.5;
+                const wt = trues.map(t => Math.max(0.01, t) ** power);
+                const wsum = wt.reduce((a,b) => a+b, 0);
+                const optAlloc = wt.map(x => x / wsum);
+                let optU = 0, actU = 0;
+                for (let i = 0; i < trues.length; i++) {
+                    optU += trues[i] * Math.sqrt(optAlloc[i] * B);
+                    actU += trues[i] * Math.sqrt(alloc[i] * B);
+                }
+                return Math.max(0, optU - actU);
+            }
+            // Box-Muller normal sample
+            function randn() {
+                const u1 = Math.max(Number.EPSILON, Math.random());
+                return Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*Math.random());
+            }
+            // Expected misalloc cost averaged over posterior draws — decreases as sigma shrinks
+            function expectedMisallocCost(muHat, sig, trues, B) {
+                const power = 1.5;
+                const wt = trues.map(t => Math.max(0.01, t) ** power);
+                const wsum = wt.reduce((a,b) => a+b, 0);
+                const optAlloc = wt.map(x => x / wsum);
+                const optU = trues.reduce((s, t, i) => s + t * Math.sqrt(optAlloc[i] * B), 0);
+                let total = 0;
+                const N = 80;
+                for (let s = 0; s < N; s++) {
+                    const mu = muHat.map((m, i) => m + sig[i] * randn());
+                    const a = allocateBudget(mu, sig);
+                    const actU = trues.reduce((s, t, i) => s + t * Math.sqrt(a[i] * B), 0);
+                    total += Math.max(0, optU - actU);
+                }
+                return total / N;
+            }
+            // Decision efficiency: expected % of optimal return captured — increases as sigma shrinks
+            function expectedEfficiency(muHat, sig, trues, B) {
+                const power = 1.5;
+                const wt = trues.map(t => Math.max(0.01, t) ** power);
+                const wsum = wt.reduce((a,b) => a+b, 0);
+                const optAlloc = wt.map(x => x / wsum);
+                const optU = trues.reduce((s, t, i) => s + t * Math.sqrt(optAlloc[i] * B), 0);
+                let totalEff = 0;
+                const N = 80;
+                for (let s = 0; s < N; s++) {
+                    const mu = muHat.map((m, i) => m + sig[i] * randn());
+                    const a = allocateBudget(mu, sig);
+                    const actU = trues.reduce((s, t, i) => s + t * Math.sqrt(a[i] * B), 0);
+                    totalEff += actU / optU;
+                }
+                return (totalEff / N) * 100;
+            }
+
+            const B_total = 5.0;  // M$/wk
+            const tested = trueROI.map(() => false);
+
+            // Initial allocation + cost
+            const a0 = allocateBudget(muHat, sig);
+            histAlloc.forEach((arr, i) => { arr[0] = a0[i]; });
+            histMisalloc.push(expectedMisallocCost(muHat, sig, trueROI, B_total) * 1e6);
+            histROI.push(expectedEfficiency(muHat, sig, trueROI, B_total));
+            cfHistSig.push(cfSig);
+            cfHistMisalloc.push(histMisalloc[0]);
+            cfHistROI.push(histROI[0]);
+
+            for (let c = 0; c < cycles; c++) {
+                // Score by EIG/EVOI
+                const eigs = sig.map(s => eigBits(s, Math.max(noiseFloor * s * 0.5, 0.05)));
+                const evois = sig.map((s, i) => computeEVOI(B_total, sk0[i]*100, s,
+                    Math.max(noiseFloor * s * 0.5, 0.05), muHat[i], 1.0).evoi_per_cycle);
+                const maxEig = Math.max(...eigs) || 1;
+                const maxEvoi = Math.max(...evois) || 1;
+                const scores = eigs.map((e, i) => 0.4 * (e / maxEig) + 0.6 * (evois[i] / maxEvoi));
+                const order = [...sig.keys()].sort((a, b) => scores[b] - scores[a]);
+                const picks = order.slice(0, k);
+
+                // Apply update on picked channels — record sigma before for pooling
+                const sigBefore = [...sig];
+                for (const i of picks) {
+                    const sigE = Math.max(noiseFloor * sig[i] * 0.5, 0.05);
+                    // Simulated experiment outcome ~ N(true, sigE)
+                    const yhat = trueROI[i] + sigE * randn();
+                    const prec0 = 1 / (sig[i] * sig[i]);
+                    const precE = 1 / (sigE * sigE);
+                    const newSig = 1 / Math.sqrt(prec0 + precE);
+                    const newMu = (newSig*newSig) * (muHat[i]*prec0 + yhat*precE);
+                    sig[i] = newSig;
+                    muHat[i] = newMu;
+                    tested[i] = true;
+                }
+                // Hierarchical pooling (M3): tested channels inform the category mean,
+                // reducing uncertainty for non-tested channels proportional to poolFactor
+                // and the fractional sigma drop achieved by the experiments this cycle.
+                if (poolFactor > 0) {
+                    const mean = muHat.reduce((a,b) => a+b, 0) / muHat.length;
+                    const avgFractionalDrop = picks.reduce((s, i) =>
+                        s + (sigBefore[i] - sig[i]) / sigBefore[i], 0) / picks.length;
+                    for (let i = 0; i < muHat.length; i++) {
+                        if (!picks.includes(i)) {
+                            muHat[i] = (1 - poolFactor * 0.3) * muHat[i] + poolFactor * 0.3 * mean;
+                            sig[i] = sig[i] * (1 - poolFactor * avgFractionalDrop);
+                        }
+                    }
+                }
+
+                const a = allocateBudget(muHat, sig);
+                sig.forEach((s, i) => histSig[i].push(s));
+                a.forEach((v, i) => histAlloc[i].push(v));
+                histMisalloc.push(expectedMisallocCost(muHat, sig, trueROI, B_total) * 1e6);
+                histROI.push(expectedEfficiency(muHat, sig, trueROI, B_total));
+                // CF stays at starting state
+                cfHistSig.push(cfSig);
+                cfHistMisalloc.push(histMisalloc[0] * (0.95 + 0.05 * Math.sin(c)));
+                cfHistROI.push(cfHistROI[0]);
+            }
+
+            // Final metrics
+            const finalMis = histMisalloc[histMisalloc.length - 1];
+            const startMis = histMisalloc[0];
+            const drop = ((finalMis - startMis) / startMis) * 100;
+            document.getElementById('lMisFinalVal').textContent = fmtMoney(finalMis) + ' / wk';
+            document.getElementById('lMisDropVal').textContent = (drop > 0 ? '+' : '') + drop.toFixed(0) + '%';
+            document.getElementById('lMisDropVal').className = 'metric-value ' + (drop < 0 ? 'positive' : 'negative');
+            document.getElementById('lRoiFinalVal').textContent = histROI[histROI.length - 1].toFixed(1) + '%';
+            document.getElementById('lCovVal').textContent = (tested.filter(Boolean).length / trueROI.length * 100).toFixed(0) + '%';
+
+            // Four-panel chart
+            const xs = range(0, cycles, 1);
+            const sigTraces = histSig.map((arr, i) => ({
+                x: xs, y: arr, mode: 'lines+markers', name: names[i],
+                line: { color: [COLORS.primary, COLORS.accent, COLORS.warning, COLORS.danger, COLORS.success][i], width: 2 },
+                marker: { size: 5 }, xaxis: 'x', yaxis: 'y'
+            }));
+            const allocTraces = histAlloc.map((arr, i) => ({
+                x: xs, y: arr.map(v => v * 100), mode: 'lines', stackgroup: 'one', name: names[i],
+                line: { color: [COLORS.primary, COLORS.accent, COLORS.warning, COLORS.danger, COLORS.success][i] },
+                xaxis: 'x2', yaxis: 'y2', showlegend: false
+            }));
+            const misTrace = {
+                x: xs, y: histMisalloc.map(v => v / 1000), mode: 'lines+markers',
+                line: { color: COLORS.danger, width: 3 }, name: 'Misallocation $K/wk',
+                xaxis: 'x3', yaxis: 'y3', showlegend: false
+            };
+            const cfMisTrace = {
+                x: xs, y: cfHistMisalloc.map(v => v / 1000), mode: 'lines',
+                line: { color: COLORS.muted, width: 2, dash: 'dash' }, name: 'No experiments (CF)',
+                xaxis: 'x3', yaxis: 'y3', showlegend: false
+            };
+            const roiTrace = {
+                x: xs, y: histROI, mode: 'lines+markers',
+                line: { color: COLORS.primary, width: 3 }, name: 'Decision efficiency %',
+                xaxis: 'x4', yaxis: 'y4', showlegend: false
+            };
+            const cfRoiTrace = {
+                x: xs, y: cfHistROI, mode: 'lines',
+                line: { color: COLORS.muted, width: 2, dash: 'dash' }, name: 'No experiments (CF)',
+                xaxis: 'x4', yaxis: 'y4', showlegend: false
+            };
+
+            Plotly.react('loopPanels', [...sigTraces, ...allocTraces, misTrace, cfMisTrace, roiTrace, cfRoiTrace], {
+                ...baseLayout,
+                grid: { rows: 2, columns: 2, pattern: 'independent', xgap: 0.18, ygap: 0.32 },
+                xaxis: { domain: [0, 0.45], anchor: 'y', title: { text: 'Cycle' }, gridcolor: COLORS.grid },
+                yaxis: { domain: [0.58, 1.0], anchor: 'x', title: { text: 'Posterior σ per channel' }, gridcolor: COLORS.grid },
+                xaxis2: { domain: [0.55, 1.0], anchor: 'y2', title: { text: 'Cycle' }, gridcolor: COLORS.grid },
+                yaxis2: { domain: [0.58, 1.0], anchor: 'x2', title: { text: 'Allocation share %' }, gridcolor: COLORS.grid, range: [0, 100] },
+                xaxis3: { domain: [0, 0.45], anchor: 'y3', title: { text: 'Cycle' }, gridcolor: COLORS.grid },
+                yaxis3: { domain: [0, 0.42], anchor: 'x3', title: { text: 'Misalloc cost ($K/wk)' }, gridcolor: COLORS.grid, rangemode: 'tozero' },
+                xaxis4: { domain: [0.55, 1.0], anchor: 'y4', title: { text: 'Cycle' }, gridcolor: COLORS.grid },
+                yaxis4: { domain: [0, 0.42], anchor: 'x4', title: { text: 'Decision efficiency (%)' }, gridcolor: COLORS.grid, range: [0, 100] },
+                showlegend: true,
+                legend: { orientation: 'h', y: 1.05, x: 0.5, xanchor: 'center' },
+                annotations: [
+                    { text: 'Posterior σ contraction', x: 0.225, y: 1.02, xref: 'paper', yref: 'paper',
+                      showarrow: false, font: { size: 12, color: COLORS.primaryDark, weight: 700 } },
+                    { text: 'Allocation migration', x: 0.775, y: 1.02, xref: 'paper', yref: 'paper',
+                      showarrow: false, font: { size: 12, color: COLORS.primaryDark, weight: 700 } },
+                    { text: 'Misallocation cost (calibrated vs CF)', x: 0.225, y: 0.46, xref: 'paper', yref: 'paper',
+                      showarrow: false, font: { size: 12, color: COLORS.primaryDark, weight: 700 } },
+                    { text: 'Decision efficiency (% of optimal return)', x: 0.775, y: 0.46, xref: 'paper', yref: 'paper',
+                      showarrow: false, font: { size: 12, color: COLORS.primaryDark, weight: 700 } }
+                ]
+            }, cfg);
+        }
+
+        // ============================================================
+        // 9.1 - Decision-quality frontier
+        // ============================================================
+        function updateFrontier() {
+            const cost = parseFloat(document.getElementById('fCostSlider').value);
+            const K = parseInt(document.getElementById('fKSlider').value);
+            const avgEvoi = parseFloat(document.getElementById('fEvoiSlider').value);
+            document.getElementById('fCostVal').textContent = '$' + cost + 'K';
+            document.getElementById('fKVal').textContent = K;
+            document.getElementById('fEvoiVal').textContent = '$' + avgEvoi + 'K';
+
+            // Submodular EVOI: each test gets 0.82^(n-1) fraction of avgEvoi (decreasing)
+            const ns = range(1, K, 1);
+            const captured = ns.map(n => {
+                let total = 0;
+                for (let i = 0; i < n; i++) total += avgEvoi * Math.pow(0.78, i);
+                return total;
+            });
+            const totalCost = ns.map(n => cost * n);
+            const net = ns.map((n, i) => captured[i] - totalCost[i]);
+            const optIdx = net.indexOf(Math.max(...net));
+            const optN = ns[optIdx];
+            const optNet = net[optIdx];
+
+            document.getElementById('fOptVal').textContent = optN;
+            document.getElementById('fNetVal').textContent = '$' + optNet.toFixed(0) + 'K';
+            document.getElementById('fMargVal').textContent = optN + (optN === 1 ? 'st' : optN === 2 ? 'nd' : optN === 3 ? 'rd' : 'th') + ' test';
+
+            const traces = [
+                { x: ns, y: captured, mode: 'lines+markers', name: 'Captured EVOI',
+                  line: { color: COLORS.primary, width: 3 }, marker: { size: 8 } },
+                { x: ns, y: totalCost, mode: 'lines+markers', name: 'Total cost',
+                  line: { color: COLORS.warning, width: 2, dash: 'dash' }, marker: { size: 6 } },
+                { x: ns, y: net, mode: 'lines+markers', name: 'Net value',
+                  line: { color: COLORS.accentDark, width: 3 }, marker: { size: 9 },
+                  fill: 'tozeroy', fillcolor: 'rgba(74,109,138,0.12)' },
+                { x: [optN], y: [optNet], mode: 'markers',
+                  marker: { color: COLORS.danger, size: 18, symbol: 'star',
+                            line: { color: 'white', width: 2 } },
+                  name: 'Optimum' }
+            ];
+            Plotly.react('frontierChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: '# experiments per cycle' }, dtick: 1 },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Value ($K)' } },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' }
+            }, cfg);
+        }
+
+        // ============================================================
+        // Wire up all controls
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1.1
+            ['rraSlider', 'outASlider', 'outBSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateUtility));
+            updateUtility();
+            // 2.1
+            ['muSigSlider', 'muKSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateMisalloc));
+            updateMisalloc();
+            // 3.1
+            ['bMu0Slider', 'bSig0Slider', 'bYhatSlider', 'bSigESlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateBayes));
+            updateBayes();
+            // 4.1
+            ['eSigKSlider', 'eSigESlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateEIG));
+            updateEIG();
+            // 5.1
+            ['vBSlider', 'vSkSlider', 'vSigKSlider', 'vSigESlider', 'vMuSlider', 'vThSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateEVOI));
+            updateEVOI();
+            // 6.1
+            ['pLamSlider', 'pCapSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updatePriority));
+            updatePriority();
+            // 7.1
+            ['cGamSlider', 'cRhoSlider', 'cBudSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateConstraints));
+            updateConstraints();
+            // 8.1
+            ['lCycSlider', 'lSigSlider', 'lKSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', simulateLoop));
+            document.getElementById('lMechSelect').addEventListener('change', simulateLoop);
+            simulateLoop();
+            // 9.1
+            ['fCostSlider', 'fKSlider', 'fEvoiSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateFrontier));
+            updateFrontier();
+        });
+    </script>
+</body>
+</html>

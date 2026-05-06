@@ -19,6 +19,7 @@
         { href: 'interpreting-results.html', label: 'Interpreting Results' },
         { href: 'demos.html', label: 'Demos & Reports' },
         { href: 'technical-guide.html', label: 'Technical Guide' },
+        { href: 'glossary.html', label: 'Glossary' },
         { href: 'faq.html', label: 'FAQ' },
         { href: 'https://github.com/redam94/mmm-framework', label: 'GitHub', external: true }
     ];
@@ -47,6 +48,7 @@
         'workflow-budget-optimization.html',
         'workflow-channel-effectiveness.html',
         'workflow-forecasting.html',
+        'workflow-calibration-decisions.html',
         'mmm-example-report.html'
     ];
 
@@ -254,10 +256,34 @@
     // Initialize
     // =========================================================================
 
+    function ensureMainTarget() {
+        // Pick the most sensible main-content anchor on this page so the
+        // skip link has somewhere to land. Prefer an explicit id, then
+        // <main>, then .main-content, then the first <section>.
+        if (document.getElementById('main-content')) return;
+        const candidate = document.querySelector('main, .main-content, section');
+        if (candidate) candidate.id = 'main-content';
+    }
+
+    function createSkipLink() {
+        const a = document.createElement('a');
+        a.className = 'skip-link';
+        a.href = '#main-content';
+        a.textContent = 'Skip to main content';
+        return a;
+    }
+
     function init() {
-        // Insert navigation at the start of body
+        // Make sure there's a target for the skip link
+        ensureMainTarget();
+
+        // Insert skip link first so it's the first focusable element
+        const skip = createSkipLink();
+        document.body.insertBefore(skip, document.body.firstChild);
+
+        // Insert navigation after the skip link
         const nav = createNavigation();
-        document.body.insertBefore(nav, document.body.firstChild);
+        document.body.insertBefore(nav, skip.nextSibling);
 
         // Insert footer at the end of body
         const footer = createFooter();

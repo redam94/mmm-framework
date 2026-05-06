@@ -112,4 +112,28 @@
         <lastmod>2026-02-07</lastmod>
         <changefreq>monthly</changefreq>
     </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/scientific-modeling.html</loc>
+        <lastmod>2026-02-07</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/changelog.html</loc>
+        <lastmod>2026-05-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/glossary.html</loc>
+        <lastmod>2026-05-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/workflow-calibration-decisions.html</loc>
+        <lastmod>2026-05-05</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
 </urlset>

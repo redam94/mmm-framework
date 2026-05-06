@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Versioning &amp; Changelog | MMM Framework</title>
+    <meta name="description" content="Current version, API stability status, and release history for the MMM Framework.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/changelog.html">
+    <meta property="og:title" content="Versioning &amp; Changelog | MMM Framework">
+    <meta property="og:description" content="Current version, API stability status, and release history for the MMM Framework.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/changelog.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        .lead { font-size: 1.2rem; color: var(--color-text-muted); margin-bottom: 2rem; line-height: 1.6; }
+
+        .stability-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stability-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .stability-card.stable { border-top: 4px solid var(--color-success); }
+        .stability-card.beta   { border-top: 4px solid var(--color-warning); }
+        .stability-card.exp    { border-top: 4px solid var(--color-danger); }
+        .stability-card .tier {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }
+        .stability-card.stable .tier { color: #3d8b5a; }
+        .stability-card.beta .tier   { color: #b8860b; }
+        .stability-card.exp .tier    { color: var(--color-danger); }
+        .stability-card h3 { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+        .stability-card ul { margin: 0; padding-left: 1.1rem; font-size: 0.92rem; color: var(--color-text-muted); }
+        .stability-card li { margin: 0.2rem 0; }
+
+        .release {
+            border-left: 4px solid var(--color-primary);
+            padding: 1rem 1.5rem;
+            margin: 2rem 0;
+            background: var(--color-bg-alt);
+            border-radius: 0 8px 8px 0;
+        }
+        .release-header {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .release-version {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            color: var(--color-primary-dark);
+        }
+        .release-date {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+        .release-tag {
+            display: inline-block;
+            background: var(--color-warning);
+            color: white;
+            font-size: 0.72rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 0.15rem 0.55rem;
+            border-radius: 100px;
+        }
+
+        @media (max-width: 1024px) {
+            .stability-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#status">Current Status</a></li>
+                <li><a href="#stability">API Stability</a></li>
+                <li><a href="#policy">Versioning Policy</a></li>
+                <li><a href="#releases">Release Notes</a></li>
+                <li><a href="#contributing">Contributing</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="status">Versioning &amp; Changelog</h1>
+            <p class="lead">
+                The MMM Framework is at <strong>version 0.1.0</strong> &mdash; a pre-1.0 release.
+                The mathematical foundations and core API are intentionally stable, but the surface
+                area is still evolving. This page tracks where we are and what to expect.
+            </p>
+
+            <div class="warning">
+                <h4>Pre-1.0: read before depending</h4>
+                <p style="margin-bottom: 0;">
+                    Public API may have backwards-incompatible changes between minor versions until 1.0.
+                    Pin a specific version (<code>mmm-framework==0.1.0</code>) for production use, and
+                    review the release notes before upgrading. Once 1.0 ships, the framework will follow
+                    semantic versioning strictly.
+                </p>
+            </div>
+
+            <h2 id="stability">API Stability by Module</h2>
+
+            <p>Different parts of the framework have matured at different rates. Use this as a guide for what to depend on:</p>
+
+            <div class="stability-grid">
+                <div class="stability-card stable">
+                    <div class="tier">Stable</div>
+                    <h3>Core modeling</h3>
+                    <ul>
+                        <li><code>BayesianMMM</code></li>
+                        <li><code>MMMResults</code> / <code>PredictionResults</code></li>
+                        <li>Builders (<code>ModelConfigBuilder</code>, etc.)</li>
+                        <li><code>config</code> (Pydantic dataclasses)</li>
+                        <li>Adstock, saturation, seasonality, trend transforms</li>
+                        <li><code>MFFLoader</code> / data loading</li>
+                    </ul>
+                </div>
+                <div class="stability-card beta">
+                    <div class="tier">Beta</div>
+                    <h3>Active surface</h3>
+                    <ul>
+                        <li><code>reporting</code> (charts, extractors, generator)</li>
+                        <li><code>analysis</code> (counterfactual, marginal)</li>
+                        <li><code>serialization</code> (<code>MMMSerializer</code>)</li>
+                        <li>FastAPI endpoints (<code>api/</code>)</li>
+                        <li>React frontend (<code>frontend/</code>)</li>
+                    </ul>
+                </div>
+                <div class="stability-card exp">
+                    <div class="tier">Experimental</div>
+                    <h3>Subject to change</h3>
+                    <ul>
+                        <li><code>mmm_extensions</code> (NestedMMM, MultivariateMMM, CombinedMMM)</li>
+                        <li><code>dag_model_builder</code></li>
+                        <li>Excel config workflow</li>
+                        <li>Streamlit UI (legacy)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h2 id="policy">Versioning Policy</h2>
+
+            <p>Until 1.0:</p>
+
+            <ul>
+                <li><strong>Patch (<code>0.1.x</code>)</strong> &mdash; bug fixes, doc updates, internal refactors. Safe to upgrade.</li>
+                <li><strong>Minor (<code>0.x.0</code>)</strong> &mdash; new features. May contain breaking changes to <em>experimental</em> modules. Stable APIs preserved on a best-effort basis with deprecation warnings where possible.</li>
+                <li><strong>Major (<code>x.0.0</code>)</strong> &mdash; reserved for the 1.0 release, which will lock in the public API contract.</li>
+            </ul>
+
+            <p>After 1.0, the project will follow <a href="https://semver.org" target="_blank" rel="noopener">SemVer</a> strictly: patches are bug fixes only, minors add backward-compatible features, and majors are reserved for breaking changes.</p>
+
+            <h2 id="releases">Release Notes</h2>
+
+            <p>For ongoing release tracking, see the <a href="https://github.com/redam94/mmm-framework/releases" target="_blank" rel="noopener">GitHub Releases page</a>. The history below summarises the current version.</p>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">0.1.0</span>
+                    <span class="release-date">initial release</span>
+                    <span class="release-tag">Current</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">First public release of the MMM Framework. Includes:</p>
+                <ul>
+                    <li>Bayesian MMM core (<code>BayesianMMM</code>) extending PyMC-Marketing with hierarchical specs, configurable adstock/saturation, and reproducible model serialization</li>
+                    <li>Fluent builders for model, channel, and variable configuration</li>
+                    <li>MFF (Master Flat File) data loader with validation</li>
+                    <li>Counterfactual and marginal analysis utilities</li>
+                    <li>HTML report generator with Plotly charts and design-token theming</li>
+                    <li>Extension models (NestedMMM, MultivariateMMM, CombinedMMM) &mdash; experimental</li>
+                    <li>FastAPI service + ARQ worker for async job execution</li>
+                    <li>React (TypeScript) frontend; legacy Streamlit UI retained</li>
+                    <li>Sphinx-generated API reference + this static documentation site</li>
+                </ul>
+            </div>
+
+            <h2 id="contributing">Contributing</h2>
+
+            <p>
+                Bug reports, feature requests, and pull requests are welcome on
+                <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">GitHub</a>.
+                Please open an issue before submitting a substantial PR so we can discuss scope.
+            </p>
+
+            <p>
+                For questions about the methodology, the <a href="faq.html">FAQ</a> is a good starting point;
+                for the underlying math, the <a href="bayesian-workflow.html">Bayesian Workflow</a> and
+                <a href="causal-inference.html">Causal Inference</a> guides cover most of the foundations.
+            </p>
+        </main>
+    </div>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

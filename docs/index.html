@@ -462,25 +462,61 @@
         }
     </style> -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Documentation grid on the home page */
+        .docs-section { padding: 6rem 0; background: var(--color-bg); }
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+        .doc-card {
+            display: block;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition-smooth);
+            box-shadow: var(--shadow-sm);
+        }
+        .doc-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--color-primary-light);
+            box-shadow: var(--shadow-md);
+        }
+        .doc-card .doc-eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            color: var(--color-primary-dark);
+            text-transform: uppercase;
+            margin-bottom: 0.6rem;
+        }
+        .doc-card h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.25rem;
+            margin: 0 0 0.6rem 0;
+            color: var(--color-text);
+        }
+        .doc-card p {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            line-height: 1.55;
+            margin: 0;
+        }
+        @media (max-width: 1024px) {
+            .docs-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 640px) {
+            .docs-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <!-- <nav>
-        <div class="container nav-content">
-            <a href="#" class="logo">MMM Framework</a>
-            <ul class="nav-links">
-                <li><a href="#" class="active">Home</a></li>
-                <li><a href="about.html">About</a></li>
-                <li><a href="variable-selection.html">Variable Selection</a></li>
-                <li><a href="technical-guide.html">Technical Guide</a></li>
-                <li><a href="bayesian-workflow.html">Bayesian Workflow</a></li>
-                <li><a href="causal-inference.html">Causal Inference</a></li>
-                <li><a href="scientific-modeling.html">Scientific Modeling</a></li>
-                <li><a href="faq.html">FAQ</a></li>
-                <li><a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a></li>
-            </ul>
-        </div>
-    </nav> -->
+    <!-- Navigation injected by shared/components.js -->
 
     <!-- Hero Section -->
     <section class="hero">
@@ -757,33 +793,107 @@
         </div>
     </section>
 
+    <!-- Documentation Section -->
+    <section class="docs-section" id="documentation">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>Explore the Documentation</h2>
+                <p>Everything you need to go from your first model fit to a quarterly closed-loop measurement program.</p>
+            </div>
+            <div class="docs-grid">
+                <a class="doc-card" href="getting-started.html">
+                    <div class="doc-eyebrow">Start here</div>
+                    <h3>Getting Started</h3>
+                    <p>Install the framework, fit your first Bayesian MMM, and walk through a complete code example.</p>
+                </a>
+                <a class="doc-card" href="modeling-guide.html">
+                    <div class="doc-eyebrow">For modelers</div>
+                    <h3>Modeling Guide</h3>
+                    <p>Step-by-step guidance for building statistically sound MMMs - priors, hierarchy, diagnostics, and iteration.</p>
+                </a>
+                <a class="doc-card" href="interpreting-results.html">
+                    <div class="doc-eyebrow">For media planners &amp; CMOs</div>
+                    <h3>Interpreting Results</h3>
+                    <p>How to read MMM outputs, communicate uncertainty, and translate posteriors into confident budget decisions.</p>
+                </a>
+                <a class="doc-card" href="measurement-calibration.html">
+                    <div class="doc-eyebrow">Measurement</div>
+                    <h3>Calibration Loop</h3>
+                    <p>Wire experiments and the MMM into one self-correcting cycle - EIG, EVOI, and the virtuous loop.</p>
+                </a>
+                <a class="doc-card" href="bayesian-workflow.html">
+                    <div class="doc-eyebrow">Foundations</div>
+                    <h3>Bayesian Workflow</h3>
+                    <p>The disciplined Bayesian process: priors, prior predictive checks, fitting, posterior diagnostics, and PPCs.</p>
+                </a>
+                <a class="doc-card" href="causal-inference.html">
+                    <div class="doc-eyebrow">Foundations</div>
+                    <h3>Causal Inference</h3>
+                    <p>DAGs, do-calculus, and counterfactuals - the causal scaffolding behind every defensible MMM specification.</p>
+                </a>
+                <a class="doc-card" href="variable-selection.html">
+                    <div class="doc-eyebrow">Methodology</div>
+                    <h3>Variable Selection</h3>
+                    <p>When to include precision controls, why confounders are non-negotiable, and how shopping for variables backfires.</p>
+                </a>
+                <a class="doc-card" href="business-stakeholders.html">
+                    <div class="doc-eyebrow">For sponsors</div>
+                    <h3>For Business Stakeholders</h3>
+                    <p>The risks of specification shopping and what defensible measurement looks like for agencies and brands.</p>
+                </a>
+                <a class="doc-card" href="demos.html">
+                    <div class="doc-eyebrow">See it run</div>
+                    <h3>Demos &amp; Reports</h3>
+                    <p>Interactive workflow demonstrations, scenario analyses, and an example MMM report from a Q4 2025 fit.</p>
+                </a>
+                <a class="doc-card" href="technical-guide.html">
+                    <div class="doc-eyebrow">Reference</div>
+                    <h3>Technical Guide</h3>
+                    <p>Math and implementation details for every model in the framework - standard, nested, multivariate, and combined.</p>
+                </a>
+                <a class="doc-card" href="https://github.com/redam94/mmm-framework/tree/main/src/mmm_framework" target="_blank" rel="noopener">
+                    <div class="doc-eyebrow">Reference &middot; Sphinx</div>
+                    <h3>API Reference</h3>
+                    <p>Module-by-module API docs (Sphinx). Browse the source on GitHub or build locally with <code>make html</code> in <code>docs/api</code>.</p>
+                </a>
+                <a class="doc-card" href="glossary.html">
+                    <div class="doc-eyebrow">Reference</div>
+                    <h3>Glossary</h3>
+                    <p>Definitions of every term used across the docs - adstock, EIG, EVOI, MFF, ITT, MDE, ROPE, and more.</p>
+                </a>
+                <a class="doc-card" href="faq.html">
+                    <div class="doc-eyebrow">Reference</div>
+                    <h3>FAQ</h3>
+                    <p>Common questions about MMMs, Bayesian methods, and the trade-offs the framework makes deliberately.</p>
+                </a>
+                <a class="doc-card" href="changelog.html">
+                    <div class="doc-eyebrow">Project</div>
+                    <h3>Versioning &amp; Changelog</h3>
+                    <p>Current version, API stability tier per module, versioning policy, and release notes.</p>
+                </a>
+                <a class="doc-card" href="about.html">
+                    <div class="doc-eyebrow">Project</div>
+                    <h3>About</h3>
+                    <p>Background on the framework, its design principles, and the audiences it serves.</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
     <!-- CTA Section -->
     <section class="cta-section">
         <div class="container">
             <h2>Ready for Honest Measurement?</h2>
             <p>The framework is open source and ready to use. Start with our documentation or dive straight into the code.</p>
             <div class="cta-buttons">
-                <a href="technical-guide.html" class="btn btn-white">Read Technical Guide</a>
+                <a href="getting-started.html" class="btn btn-white">Get Started</a>
+                <a href="technical-guide.html" class="btn btn-outline-white">Read Technical Guide</a>
                 <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
-    <!-- <footer>
-        <div class="container footer-content">
-            <span class="logo">MMM Framework</span>
-            <div class="footer-links">
-                <a href="variable-selection.html">Variable Selection</a>
-                <a href="technical-guide.html">Technical Guide</a>
-                <a href="bayesian-workflow.html">Bayesian Workflow</a>
-                <a href="causal-inference.html">Causal Inference</a>
-                <a href="faq.html">FAQ</a>
-                <a href="https://github.com/redam94/mmm-framework" target="_blank">GitHub</a>
-                <a href="https://github.com/redam94/mmm-framework/issues" target="_blank">Report Issue</a>
-            </div>
-        </div>
-    </footer> -->
+    <!-- Footer injected by shared/components.js -->
     <script src="shared/components.js"></script>
     <script>
         const chartColors = { primary: '#8fa86a', primaryDark: '#6d8a4a', accent: '#6a8fa8', warning: '#d4a86a', danger: '#c97067', success: '#6abf8a', text: '#2d3a2d', textMuted: '#5a6b5a', grid: '#d4ddd4', bg: '#fafbf9' };
