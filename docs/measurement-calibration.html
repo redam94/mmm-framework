@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Measurement &amp; Calibration | MMM Framework</title>
+    <meta name="description" content="A comprehensive guide to closed-loop measurement: how to integrate experiments and Marketing Mix Models into a single, self-correcting calibration cycle that compounds learning and improves budget decisions.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/measurement-calibration.html">
+    <meta property="og:title" content="Measurement &amp; Calibration | MMM Framework">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:description" content="The virtuous cycle of MMM and experimentation: prioritize, measure, calibrate, repeat. EIG, EVOI, the 2x2 priority map, and three calibration mechanisms.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/measurement-calibration.html">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* Page-specific styles */
+        .lead {
+            font-size: 1.2rem;
+            color: var(--color-text-muted);
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        /* Two-paradigm comparison cards */
+        .paradigm-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 1.5rem;
+            align-items: center;
+            margin: 2rem 0;
+        }
+        .paradigm-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .paradigm-card.mmm { border-left: 4px solid var(--color-primary); }
+        .paradigm-card.exp { border-left: 4px solid var(--color-warning); }
+        .paradigm-card h4 {
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-bottom: 0.5rem;
+        }
+        .paradigm-card .estimate {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            color: var(--color-text);
+            margin: 0.5rem 0;
+        }
+        .paradigm-divider {
+            font-size: 1.5rem;
+            color: var(--color-danger);
+            text-align: center;
+            font-weight: 700;
+        }
+
+        /* The 6-step cycle (loop) */
+        .loop-cycle {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 2rem 0;
+            counter-reset: cyclestep;
+        }
+        .loop-step {
+            position: relative;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.25rem 1.25rem 1.25rem 3.5rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .loop-step::before {
+            counter-increment: cyclestep;
+            content: counter(cyclestep);
+            position: absolute;
+            left: 1rem;
+            top: 1.1rem;
+            width: 2rem;
+            height: 2rem;
+            background: var(--color-primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .loop-step h4 {
+            margin: 0 0 0.4rem 0;
+            color: var(--color-primary-dark);
+            font-size: 1.05rem;
+        }
+        .loop-step p {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0;
+        }
+        @media (max-width: 1024px) {
+            .loop-cycle { grid-template-columns: 1fr; }
+            .paradigm-grid { grid-template-columns: 1fr; }
+        }
+
+        /* 2x2 priority matrix */
+        .priority-matrix {
+            display: grid;
+            grid-template-columns: 90px 1fr 1fr;
+            grid-template-rows: 50px 1fr 1fr 30px;
+            gap: 0.5rem;
+            margin: 2rem 0;
+            font-size: 0.95rem;
+        }
+        .pm-corner {
+            grid-column: 1; grid-row: 1;
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+            display: flex;
+            align-items: end;
+            justify-content: center;
+            text-align: center;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .pm-axis-x {
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+        }
+        .pm-axis-y {
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+        }
+        .pm-cell {
+            padding: 1.25rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .pm-cell .pm-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+            opacity: 0.85;
+        }
+        .pm-cell h4 { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+        .pm-cell p { font-size: 0.92rem; margin: 0; }
+        .pm-q1 { background: rgba(143, 168, 106, 0.18); border-left: 4px solid var(--color-primary); }
+        .pm-q2 { background: rgba(212, 168, 106, 0.18); border-left: 4px solid var(--color-warning); }
+        .pm-q3 { background: rgba(106, 143, 168, 0.18); border-left: 4px solid var(--color-accent); }
+        .pm-q4 { background: var(--color-bg-alt); border-left: 4px solid var(--color-border); }
+        @media (max-width: 1024px) {
+            .priority-matrix { grid-template-columns: 1fr; }
+            .pm-axis-x, .pm-axis-y, .pm-corner { display: none; }
+        }
+
+        /* Mechanism cards */
+        .mech-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .mech-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+        }
+        .mech-card .mech-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            color: var(--color-primary-dark);
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }
+        .mech-card h4 {
+            margin: 0 0 0.75rem 0;
+            color: var(--color-text);
+            font-size: 1.1rem;
+        }
+        .mech-card p { font-size: 0.92rem; }
+        @media (max-width: 1024px) {
+            .mech-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Phase grid for the implementation rollout */
+        .phase-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .phase-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-top: 4px solid var(--color-primary);
+            border-radius: 8px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .phase-card.p2 { border-top-color: var(--color-accent); }
+        .phase-card.p3 { border-top-color: var(--color-warning); }
+        .phase-card.p4 { border-top-color: var(--color-success); }
+        .phase-card .phase-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 0.12em;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+        }
+        .phase-card .phase-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin: 0.25rem 0;
+        }
+        .phase-card .phase-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.75rem;
+        }
+        .phase-card ul {
+            list-style: none;
+            padding: 0; margin: 0;
+            font-size: 0.88rem;
+        }
+        .phase-card li {
+            padding: 0.3rem 0;
+            border-top: 1px dashed var(--color-border);
+        }
+        .phase-card li:first-child { border-top: none; }
+        @media (max-width: 1024px) {
+            .phase-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* Compounding stat row */
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-card {
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+        }
+        .stat-num {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.4rem;
+            color: var(--color-primary-dark);
+            line-height: 1;
+            margin-bottom: 0.4rem;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            line-height: 1.4;
+        }
+        @media (max-width: 1024px) {
+            .stat-row { grid-template-columns: 1fr 1fr; }
+        }
+
+        .intuition {
+            background: rgba(106, 143, 168, 0.08);
+            border-left: 4px solid var(--color-accent);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+            font-size: 0.95rem;
+        }
+        .intuition .intuition-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--color-accent-dark);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Why Closed-Loop?</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#two-paradigms">The Two-Paradigm Problem</a></li>
+                <li><a href="#objectives">Two Complementary Objectives</a></li>
+            </ul>
+
+            <h3>Bayesian Foundations</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#bayes-primer">Prior, Likelihood, Posterior</a></li>
+                <li><a href="#conjugate">The Conjugate Update</a></li>
+                <li><a href="#decision-structure">Decision Structure</a></li>
+            </ul>
+
+            <h3>Prioritization Engine</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#eig">Expected Information Gain</a></li>
+                <li><a href="#evoi">Expected Value of Information</a></li>
+                <li><a href="#priority-map">The 2x2 Priority Map</a></li>
+                <li><a href="#submodularity">Submodularity &amp; Greedy Selection</a></li>
+            </ul>
+
+            <h3>Calibration Mechanisms</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#calibration">What Calibration Means</a></li>
+                <li><a href="#mech-prior">M1 - Soft Prior</a></li>
+                <li><a href="#mech-lik">M2 - Likelihood Augmentation</a></li>
+                <li><a href="#mech-pool">M3 - Hierarchical Pooling</a></li>
+                <li><a href="#validity">Validity Checks</a></li>
+            </ul>
+
+            <h3>The Virtuous Cycle</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#cycle">Six-Step Orbit</a></li>
+                <li><a href="#decay">Information Decay</a></li>
+                <li><a href="#stopping">Stopping Criteria</a></li>
+                <li><a href="#compounding">Why It Compounds</a></li>
+            </ul>
+
+            <h3>Frequentist Bridge</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#bridge">DiD / SCM as Likelihoods</a></li>
+                <li><a href="#bridge-eq">The Bridge Equation</a></li>
+            </ul>
+
+            <h3>Implementation</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#rollout">90-Day Rollout</a></li>
+                <li><a href="#metrics">Success Metrics</a></li>
+                <li><a href="#antipatterns">Anti-Patterns</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Closed-Loop Measurement &amp; Calibration</h1>
+            <p class="lead">
+                A comprehensive guide to integrating measurement into Marketing Mix Modeling. The Bayesian MMM and
+                geo-lift experiments are not competing paradigms - they are complementary nodes in one inference graph.
+                This page lays out how to wire them into a single self-correcting cycle that compounds learning over time.
+            </p>
+
+            <div class="note">
+                <h4>Why this page exists</h4>
+                <p style="margin-bottom: 0;">
+                    Most teams already run an MMM <em>and</em> a geo-lift program - and treat them as separate budgets,
+                    separate timelines, and separate answers. The closed-loop framework wires them together: the MMM
+                    chooses which experiments to run, and the experiments calibrate the next MMM. Each cycle tightens
+                    the parts of the picture that matter most for budget decisions.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="two-paradigms">The Two-Paradigm Problem</h2>
+
+            <p>
+                The MMM is the system of record for "what is each channel worth." It produces a clean ROI per channel,
+                and the planning team allocates budget against those numbers. Separately, the team runs geo-lift experiments -
+                paid search holdouts, CTV market tests, audio matched-market trials - each producing its own causal estimate.
+                Sometimes the two agree; sometimes they don't. When they disagree, someone picks the source they trust
+                more for that channel and moves on.
+            </p>
+
+            <div class="paradigm-grid">
+                <div class="paradigm-card mmm">
+                    <h4>MMM System</h4>
+                    <p class="estimate">"CTV ROI <strong>1.4x</strong>"</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0;">
+                        Tight credible interval. Joint over all channels. Identified by observational variation -
+                        which means entangled when channels move together.
+                    </p>
+                </div>
+                <div class="paradigm-divider">&#9889;</div>
+                <div class="paradigm-card exp">
+                    <h4>Experiment System</h4>
+                    <p class="estimate">"CTV ROI <strong>2.1x</strong>"</p>
+                    <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0;">
+                        Wider interval. Single-channel scope. Causally identified by the randomization itself - so the
+                        estimate isn't entangled with the rest of the marketing plan.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                The structural problem is not that either system is bad - both are well-built. The problem is that neither
+                is wired into the other. The MMM doesn't know which channels need experimental backup; the experiments
+                don't feed back into the next MMM fit. So the team keeps paying for both and keeps accepting whichever
+                number the analyst trusted that week.
+            </p>
+
+            <div class="warning">
+                <h4>A tight number is not a true number</h4>
+                <p style="margin-bottom: 0;">
+                    An MMM produces tight intervals when the model is well-regularized and the historical data tells a
+                    consistent story. But "consistent" is not the same as "correct" - when channels move in lockstep
+                    (national TV and digital flighted together; promo periods overlapping with seasonality), the model
+                    cannot tell them apart, and a regularizing prior produces a tight number anyway, anchored to an
+                    arbitrary point along an unidentified ridge. <strong>Confidently wrong is a real failure mode.</strong>
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="objectives">Two Complementary Objectives</h2>
+
+            <p>
+                Once you accept that experiments are the calibration tool, you still face the question of <em>which</em>
+                experiments. Two distinct objectives emerge - they are correlated but not identical, and a good framework
+                integrates both.
+            </p>
+
+            <div class="two-col">
+                <div class="concept-card">
+                    <h4>Epistemic - reduce uncertainty</h4>
+                    <ul>
+                        <li>Quantify posterior entropy per channel</li>
+                        <li>Pick experiments that maximally collapse the posterior</li>
+                        <li>Prioritize where beliefs are least grounded</li>
+                        <li>Metric: <strong>Expected Information Gain (EIG)</strong></li>
+                    </ul>
+                </div>
+                <div class="concept-card">
+                    <h4>Instrumental - improve decisions</h4>
+                    <ul>
+                        <li>Map ROI uncertainty to budget decision quality</li>
+                        <li>Prioritize where errors are most costly</li>
+                        <li>Quantify the dollar value of resolving each uncertainty</li>
+                        <li>Metric: <strong>Expected Value of Information (EVOI)</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <p>
+                A boutique channel may have huge posterior variance (high epistemic priority) but receive 1% of spend
+                (low decision stakes). A workhorse channel may have moderate variance but receive 30% of spend, making
+                any uncertainty extraordinarily costly. EIG and EVOI together produce a priority map that respects both.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="bayes-primer">Bayesian Foundations: Prior, Likelihood, Posterior</h2>
+
+            <p>
+                Bayesian inference is the discipline of updating beliefs in the face of new evidence. Three objects
+                appear repeatedly in this guide:
+            </p>
+
+            <ul>
+                <li><strong>Prior</strong> $p(\theta)$ - what you believe about an unknown parameter $\theta$ <em>before</em> seeing experimental data. For us, this is what the MMM tells us about a channel's ROI.</li>
+                <li><strong>Likelihood</strong> $p(\hat{y} \mid \theta)$ - the probability of observing the experimental outcome $\hat{y}$ if the truth were $\theta$.</li>
+                <li><strong>Posterior</strong> $p(\theta \mid \hat{y})$ - the updated belief about $\theta$ <em>after</em> seeing $\hat{y}$.</li>
+            </ul>
+
+            <div class="math-block">
+                $$p(\theta \mid \hat{y}) \;=\; \frac{p(\hat{y} \mid \theta)\, p(\theta)}{p(\hat{y})} \;\propto\; \underbrace{p(\hat{y} \mid \theta)}_{\text{likelihood}} \cdot \underbrace{p(\theta)}_{\text{prior}}$$
+                <span class="equation-label">(1)</span>
+            </div>
+
+            <p>
+                For the rest of this guide, $\theta_k$ denotes a channel-level causal parameter (typically ROI or elasticity)
+                for channel $k$, and $\hat{y}_k$ denotes the noisy estimate produced by an experiment.
+                The MMM provides $p(\theta_k)$. The experiment provides $p(\hat{y}_k \mid \theta_k)$. The product is what we want.
+            </p>
+
+            <h3 id="conjugate">The Gaussian Conjugate Update</h3>
+
+            <p>
+                When the prior is Gaussian and the experiment likelihood is Gaussian (the standard assumption for
+                geo-lift difference-in-differences), the math simplifies dramatically. With prior
+                $\theta \sim \mathcal{N}(\mu_0, \sigma_0^2)$ and likelihood $\hat{y} \mid \theta \sim \mathcal{N}(\theta, \sigma_e^2)$,
+                the posterior is also Gaussian:
+            </p>
+
+            <div class="math-block">
+                $$\theta \mid \hat{y} \;\sim\; \mathcal{N}\!\left(\mu_{\text{post}},\; \sigma_{\text{post}}^2\right)$$
+                $$\sigma_{\text{post}}^{-2} \;=\; \sigma_0^{-2} + \sigma_e^{-2}, \qquad \mu_{\text{post}} \;=\; \sigma_{\text{post}}^2\!\left(\frac{\mu_0}{\sigma_0^2} + \frac{\hat{y}}{\sigma_e^2}\right)$$
+                <span class="equation-label">(2)</span>
+            </div>
+
+            <div class="intuition">
+                <div class="intuition-label">Plain English</div>
+                <p style="margin: 0;">
+                    Precision (the inverse of variance) is additive. The posterior precision is the prior precision plus
+                    the experiment's precision. The posterior mean is a precision-weighted average of the prior mean
+                    and the experimental estimate - whichever is more precise pulls the posterior more strongly toward itself.
+                </p>
+            </div>
+
+            <p>
+                Equation (2) is the workhorse for almost everything that follows. EIG, calibration, and the bridge
+                from frequentist estimates all reduce to applications of this single update.
+            </p>
+
+            <h3 id="decision-structure">Decision Structure</h3>
+
+            <p>
+                Let $\theta_k$ denote the true causal ROI for channel $k \in \{1, \ldots, K\}$. The MMM produces a joint
+                posterior $p(\boldsymbol{\theta}) = p(\theta_1, \ldots, \theta_K \mid y, X, \mathcal{M})$. The planner
+                selects an experimental portfolio $A \subseteq \{1, \ldots, K\}$ together with a design $d_k$ for each
+                chosen channel:
+            </p>
+
+            <div class="math-block">
+                $$A \;=\; \{(k_1, d_1),\, (k_2, d_2),\, \dots\}, \qquad d \;=\; \{n_{\text{test}},\, \Delta_{\text{spend}},\, \text{duration},\, \ldots\}$$
+                $$\text{subject to}\quad |A| \le C_{\text{ops}},\quad \mathrm{cost}(A) \le B$$
+                <span class="equation-label">(3)</span>
+            </div>
+
+            <p>
+                Each experiment produces a noisy estimate of the true causal effect. For a geo-lift difference-in-differences
+                design, this is approximately Gaussian:
+            </p>
+
+            <div class="math-block">
+                $$\hat{\tau}_k \mid \tau_k, d \;\sim\; \mathcal{N}\!\left(\tau_k,\; \sigma_{\text{exp},k}^2(d)\right), \qquad \sigma_{\text{exp},k}^2(d) \;\approx\; \frac{2\, s^2_{\text{geo},k}}{n\, T} \cdot \frac{1}{\Delta^2_{\text{spend},k}}$$
+                <span class="equation-label">(4)</span>
+            </div>
+
+            <p>
+                where $s^2_{\text{geo},k}$ is the residual geo-week variance from the pre-period, $n$ is geos per arm,
+                and $T$ is the test duration in weeks. More geos, longer tests, and bigger spend deltas all shrink
+                experimental noise.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="eig">Expected Information Gain (EIG)</h2>
+
+            <p>
+                For a given channel $k$ and design $d$, the <strong>Expected Information Gain</strong> is the expected
+                KL divergence from the prior to the updated posterior, integrated over what experimental outcome we
+                might see. Equivalently, it is the mutual information between the unknown parameter and the
+                experimental outcome:
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{EIG}(k, d) \;=\; \mathbb{E}_{\hat{y}_k}\!\left[\, \mathrm{KL}\!\left(\, p(\theta_k \mid \hat{y}_k, d) \,\middle\|\, p(\theta_k) \,\right) \right] \;=\; H[p(\theta_k)] \;-\; \mathbb{E}_{\hat{y}_k}\!\big[H[p(\theta_k \mid \hat{y}_k)]\big]$$
+                <span class="equation-label">(5)</span>
+            </div>
+
+            <p>
+                Under the Gaussian-Gaussian setup, EIG has a remarkably clean closed form. Because the posterior
+                variance does not depend on the realized value of $\hat{y}$, the expected entropy reduction simplifies to:
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{EIG}(k, d) \;=\; \tfrac{1}{2}\log\!\left( \frac{\sigma_k^2}{\sigma_{\text{post},k}^2} \right) \;=\; \tfrac{1}{2}\log\!\left( 1 + \frac{\sigma_k^2}{\sigma_{\text{exp},k}^2(d)} \right)$$
+                <span class="equation-label">(6)</span>
+            </div>
+
+            <div class="note">
+                <h4>Read this formula carefully</h4>
+                <p style="margin-bottom: 0;">
+                    Equation (6) is the single most useful formula in this framework. Information gain depends only
+                    on a <strong>signal-to-noise ratio</strong>: the channel's prior variance divided by the
+                    experiment's noise variance. A noisy experiment on an uncertain channel can yield as much
+                    information as a precise experiment on a moderately uncertain one. Diminishing returns set in
+                    fast - going from a 1x to 4x ratio yields ~1 bit; going from 4x to 16x yields only one more.
+                </p>
+            </div>
+
+            <h3>Practical inputs required</h3>
+
+            <ul class="checklist">
+                <li><strong>Extract MMM marginals</strong> - for each channel $k$, compute $\sigma_k$ from the posterior samples of its ROI coefficient. Use the marginal standard deviation, not the standard error of the posterior mean.</li>
+                <li><strong>Estimate experimental noise per design</strong> - estimate $\sigma_{\text{exp},k}^2(d)$ from a power analysis fit on the pre-period geo-week panel. This links design choices to achievable precision.</li>
+                <li><strong>Compute the EIG grid</strong> - sweep across channels x designs, apply Eq. (6), and produce a ranked grid of $(k, d)$ pairs.</li>
+                <li><strong>Constrain &amp; select</strong> - apply geo non-overlap, budget caps, minimum duration, and non-interference. Solve the constrained selection problem; greedy is usually sufficient (see <a href="#submodularity">Submodularity</a>).</li>
+            </ul>
+
+            <p>
+                For non-Gaussian posteriors - hierarchical models, non-conjugate priors, skewed contributions - a
+                nested Monte Carlo estimator works in $O(N^2)$ samples. For prioritization purposes, the Gaussian
+                approximation in Eq. (6) is almost always sufficient. Monte Carlo refinement is reserved for
+                borderline channels.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="evoi">Expected Value of Information (EVOI)</h2>
+
+            <p>
+                EIG treats every bit of uncertainty reduction as equally valuable. But uncertainty about a channel
+                receiving 1% of spend is far less <em>costly</em> than equivalent uncertainty about a channel receiving
+                40% of spend. EVOI prices uncertainty in dollars by accounting for the asymmetric cost of being wrong.
+            </p>
+
+            <p>
+                Define the downstream action as a budget allocation $\mathbf{b} = (b_1, \ldots, b_K)$ with
+                $\sum_k b_k = B$. The organization picks $\mathbf{b}^*$ based on its current beliefs and earns
+                utility $U(\mathbf{b}, \boldsymbol{\theta}) = \sum_k \theta_k \cdot f(b_k)$, where $f(\cdot)$ is a
+                (usually concave) channel response function.
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{EVOI}(k) \;=\; \mathrm{EU}_{\text{after},k} \;-\; \mathrm{EU}_{\text{now}}$$
+                $$\mathrm{EU}_{\text{after},k} \;=\; \mathbb{E}_{\hat{y}_k}\!\left[ \max_{\mathbf{b}}\, \mathbb{E}_{\boldsymbol{\theta} \mid \hat{y}_k}\!\big[U(\mathbf{b}, \boldsymbol{\theta})\big] \right]$$
+                <span class="equation-label">(7)</span>
+            </div>
+
+            <p>
+                Closed-form EVOI is generally hard, but a useful linearized approximation drops out when reallocations
+                only happen if the experiment changes the <em>ordering</em> of channels - i.e., if the posterior mean
+                crosses a decision threshold:
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{EVOI}(k) \;\approx\; B \cdot s_k \cdot \mathbb{E}\!\left[\,\big|\hat{\theta}_{k,\text{post}} - \hat{\theta}_{k,\text{prior}}\big|\,\right] \cdot \mathbb{P}(\text{decision flips})$$
+                <span class="equation-label">(8)</span>
+            </div>
+
+            <div class="intuition">
+                <div class="intuition-label">Plain English</div>
+                <p style="margin: 0;">
+                    EVOI is large when (i) the budget at stake is big, (ii) the channel takes a lot of that budget,
+                    (iii) the experiment is likely to substantially shift the posterior mean, and (iv) there is a real
+                    chance the shift will cross a decision threshold (e.g., flip from "underspend" to "overspend").
+                </p>
+            </div>
+
+            <h3>Structural drivers</h3>
+
+            <ul class="checklist">
+                <li><strong>High prior uncertainty ($\sigma_k$ large)</strong> - wide credible intervals mean large potential for belief revision, increasing EVOI.</li>
+                <li><strong>High spend share ($s_k$ large)</strong> - channels receiving big budget fractions have higher stakes; errors cost more.</li>
+                <li><strong>Decision threshold proximity</strong> - when the posterior mean is near a budget reallocation threshold (e.g., borderline ROI = 1.0), even small uncertainty reductions have high value.</li>
+                <li><strong>Convex response (saturation)</strong> - when the response function is concave, correcting misallocation has compounding returns.</li>
+            </ul>
+
+            <div class="warning">
+                <h4>EVOI requires an explicit decision rule</h4>
+                <p style="margin-bottom: 0;">
+                    EVOI is only as good as the assumed rule for translating posteriors into budgets. Make it explicit.
+                    A simple rule: reallocate proportional to posterior mean ROI, subject to floor/ceiling constraints.
+                    A richer rule: optimizer with saturation curves and channel-level minimums. Document whichever rule
+                    you use - the EVOI computation depends on it.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="priority-map">The 2x2 Priority Map</h2>
+
+            <p>
+                Combine EIG and EVOI into a single priority score and a stakeholder-friendly visualization:
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{Score}(k) \;=\; \lambda \cdot \widetilde{\mathrm{EIG}}(k, d^*) \;+\; (1-\lambda) \cdot \widetilde{\mathrm{EVOI}}(k) \;-\; \gamma \cdot \mathrm{cost}(k, d^*) \;-\; \rho \cdot \mathrm{risk}(k)$$
+                <span class="equation-label">(9)</span>
+            </div>
+
+            <p>
+                where $\widetilde{\cdot}$ denotes min-max normalization to $[0, 1]$, $\lambda$ trades off epistemic vs.
+                instrumental value, $\gamma$ penalizes expensive experiments, and $\rho$ penalizes operational risk.
+            </p>
+
+            <div class="priority-matrix">
+                <div class="pm-corner">EIG &uarr;<br>EVOI &rarr;</div>
+                <div class="pm-axis-x">Low EVOI</div>
+                <div class="pm-axis-x">High EVOI</div>
+
+                <div class="pm-axis-y">High EIG</div>
+                <div class="pm-cell pm-q2">
+                    <div class="pm-label">Q2 - Run for learning</div>
+                    <h4>Uncertain, low-spend</h4>
+                    <p>Useful for model calibration and building geo-lift infrastructure, but lower urgency. Schedule when capacity allows.</p>
+                </div>
+                <div class="pm-cell pm-q1">
+                    <div class="pm-label">Q1 - Highest priority</div>
+                    <h4>Uncertain, high-spend</h4>
+                    <p>Run these first. Both epistemic and instrumental value are maximized. The headline targets every cycle.</p>
+                </div>
+
+                <div class="pm-axis-y">Low EIG</div>
+                <div class="pm-cell pm-q4">
+                    <div class="pm-label">Q4 - Deprioritize</div>
+                    <h4>Well-known, low-spend</h4>
+                    <p>Skip experiments. Accept the MMM estimate. Revisit only if spend materially increases or the model changes.</p>
+                </div>
+                <div class="pm-cell pm-q3">
+                    <div class="pm-label">Q3 - Monitor, don't test</div>
+                    <h4>Well-known, high-spend</h4>
+                    <p>The MMM is already well-identified here. Re-test only if model specification changes or spend levels shift dramatically.</p>
+                </div>
+            </div>
+
+            <h3 id="submodularity">Submodularity &amp; Greedy Selection</h3>
+
+            <p>
+                A non-obvious but enormously useful fact: the EIG of a <em>set</em> of experiments is a
+                <strong>submodular function</strong> of the set. Submodularity means diminishing returns - adding the
+                same experiment to a small portfolio yields more information than adding it to a large one. Formally,
+                for sets $A \subseteq A'$:
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{EIG}(A \cup \{k\}) - \mathrm{EIG}(A) \;\ge\; \mathrm{EIG}(A' \cup \{k\}) - \mathrm{EIG}(A')$$
+                <span class="equation-label">(10)</span>
+            </div>
+
+            <p>
+                Submodularity has a major practical payoff: <strong>greedy selection is provably near-optimal</strong>.
+                The Nemhauser-Wolsey-Fisher (1978) result says greedy attains at least
+                $(1 - 1/e) \approx 63\%$ of the optimum under cardinality constraints. The pseudocode is trivial:
+            </p>
+
+<pre><code># Greedy portfolio construction
+A = []
+while len(A) &lt; C_ops:
+    feasible = [k for k in channels if is_feasible(k, A)]
+    if not feasible: break
+    k_star = argmax(feasible, key=lambda k: score(k, A))
+    A.append(k_star)
+# By submodularity: EIG(A_greedy) &ge; (1 - 1/e) &middot; EIG(A_optimal)</code></pre>
+
+            <p>
+                <strong>Practical implication:</strong> after about three experiments per cycle, additional ones add
+                diminishing returns. The cycle naturally caps the test program at a sensible level - so any one
+                quarter's experimental budget should be spent on the top 2-3 priorities, not spread thin.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="calibration">Calibration: Using Experiments to Anchor the Next MMM</h2>
+
+            <p>
+                Calibration is the process of using experimental causal estimates to anchor the MMM's channel parameters
+                so that model-implied ROIs are consistent with ground truth. This can range from <strong>soft regularization</strong>
+                (Bayesian priors informed by experiments) to <strong>hard constraints</strong> (fixing parameters at
+                experimental point estimates - which we generally avoid). Three mechanisms cover the main use cases.
+            </p>
+
+            <div class="two-col">
+                <div class="concept-card">
+                    <h4>Before calibration</h4>
+                    <ul>
+                        <li>Parameters identified by observational variation alone</li>
+                        <li>Posteriors driven mostly by structural assumptions</li>
+                        <li>Attribution may reflect media collinearity, not causality</li>
+                        <li>ROI rankings unstable across model specifications</li>
+                    </ul>
+                </div>
+                <div class="concept-card">
+                    <h4>After calibration</h4>
+                    <ul>
+                        <li>Experimental likelihoods constrain key channel parameters</li>
+                        <li>Posteriors tighter on tested channels; partial pooling propagates</li>
+                        <li>Attribution anchored to causal reality for tested channels</li>
+                        <li>Remaining uncertainty quantified, not hidden</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mech-grid">
+                <div class="mech-card" id="mech-prior">
+                    <div class="mech-num">M1 - Soft prior</div>
+                    <h4>Last quarter's posterior becomes this quarter's prior</h4>
+                    <p>The most principled approach: use the experimental posterior as the prior on the corresponding MMM channel parameter. The MMM likelihood pulls unconstrained channels in fitting; the informed prior anchors the calibrated channel near its experimentally-identified value.</p>
+                </div>
+                <div class="mech-card" id="mech-lik">
+                    <div class="mech-num">M2 - Likelihood augmentation</div>
+                    <h4>Treat the experiment as one more data point</h4>
+                    <p>Add the experimental estimate as an additional term in the joint likelihood. Cleaner when the experiment overlaps the MMM training window. Requires a mapping $g(\theta_k)$ from MMM parameters to the implied geo-lift effect size.</p>
+                </div>
+                <div class="mech-card" id="mech-pool">
+                    <div class="mech-num">M3 - Hierarchical pooling</div>
+                    <h4>Tested channels pull untested siblings via shared structure</h4>
+                    <p>Information from a tested channel propagates to untested channels via a shared category-level hyperparameter. An experiment on CTV updates $\mu_{\text{video}}$, which partially informs the OLV estimate.</p>
+                </div>
+            </div>
+
+            <h3>Mechanism 1 - Soft calibration via Bayesian priors</h3>
+
+            <p>
+                The experiment on channel $k$ produces $p(\tau_k \mid \hat{y}_k)$. Pass that distribution as the prior
+                on the corresponding MMM parameter:
+            </p>
+
+            <div class="math-block">
+                $$p(\tau_k \mid \hat{y}_k) \;\propto\; p(\hat{y}_k \mid \tau_k) \cdot p(\tau_k)$$
+                $$p(\theta_k) \;\leftarrow\; p(\tau_k \mid \hat{y}_k) \quad \text{(with appropriate scale transform)}$$
+                $$p(\boldsymbol{\theta} \mid y, X) \;\propto\; p(y \mid X, \boldsymbol{\theta}) \cdot p(\theta_k \mid \hat{y}_k) \cdot p(\boldsymbol{\theta}_{-k})$$
+                <span class="equation-label">(11)</span>
+            </div>
+
+            <p>
+                The <strong>scale transform</strong> matters. A geo-lift $\hat{\tau}$ is in outcome units per spend-dollar
+                in the test window, while an MMM coefficient may be in standardized units. Convert carefully and
+                document the conversion rule in the calibration spec.
+            </p>
+
+            <h3>Mechanism 2 - Likelihood augmentation</h3>
+
+            <div class="math-block">
+                $$\log p(y, \hat{y}_k \mid X, \boldsymbol{\theta}) \;=\; \log p(y \mid X, \boldsymbol{\theta}) \;+\; \log p(\hat{y}_k \mid \theta_k)$$
+                $$p(\hat{y}_k \mid \theta_k) \;=\; \mathcal{N}\!\left(g(\theta_k),\; \sigma_{\text{exp},k}^2\right)$$
+                <span class="equation-label">(12)</span>
+            </div>
+
+            <p>
+                where $g(\theta_k)$ maps MMM channel parameters to the implied geo-lift effect size - accounting for the
+                spend delta in the test, the saturation curve evaluated at the test spend level, and any adstock effects
+                in the experiment window. <strong>Constructing $g(\cdot)$ correctly is the hardest part of this
+                mechanism;</strong> miscalibration introduces systematic bias.
+            </p>
+
+            <h3>Mechanism 3 - Hierarchical pooling</h3>
+
+            <div class="math-block">
+                $$\theta_k \mid \mu_{\text{cat}}, \sigma_{\text{cat}} \;\sim\; \mathcal{N}\!\left(\mu_{\text{cat}[k]},\; \sigma_{\text{cat}[k]}^2\right)$$
+                <span class="equation-label">(13)</span>
+            </div>
+
+            <p>
+                where $\mathrm{cat}[k]$ is the media category of channel $k$ (e.g., video, search, social). An
+                experiment on CTV updates $\mu_{\text{video}}$, which partially informs the OLV estimate. Pooling
+                strength is controlled by $\sigma_{\text{cat}}$ via a hyperprior - tighter $\sigma_{\text{cat}}$ pools
+                more strongly.
+            </p>
+
+            <h3 id="validity">Calibration validity checks</h3>
+
+            <ul class="checklist">
+                <li><strong>Scale consistency</strong> - verify that the experimental $\hat{\tau}_k$ and the MMM-implied effect use the same outcome variable and time aggregation.</li>
+                <li><strong>Coverage check</strong> - confirm that the MMM prior 95% CI for channel $k$ covers the experimental point estimate. If not, diagnose model misspecification before calibrating.</li>
+                <li><strong>Quality gate</strong> - only use experiments that pass pre-specified quality checks (balance test, pre-period MAPE, sufficient MDE, no contamination evidence) for calibration inputs.</li>
+                <li><strong>Attribution reconciliation</strong> - after refitting, confirm total attributed conversions still match observed outcomes - calibration should not break aggregate coherence.</li>
+                <li><strong>Predictive validation</strong> - hold out a test period and compare pre- vs. post-calibration MAPE. Calibration should improve predictive accuracy or at minimum not degrade it.</li>
+            </ul>
+
+            <div class="warning">
+                <h4>When experiment and MMM disagree</h4>
+                <p style="margin-bottom: 0;">
+                    If the experimental estimate falls outside the MMM posterior's plausible range, do <em>not</em>
+                    automatically trust either side. Diagnose first: (1) Did the experiment have sufficient power?
+                    (2) Was there contamination or geo spillover? (3) Is the MMM response curve evaluated at the correct
+                    spend level? (4) Are there temporal confounders in the experiment window? Work through this checklist
+                    <em>before</em> resolving the conflict. The disagreement itself is documented evidence of model
+                    fragility - which is information you want.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="cycle">The Virtuous Cycle: Six-Step Orbit</h2>
+
+            <p>
+                The full adaptive loop treats MMM calibration as a sequential Bayesian inference problem across measurement
+                cycles. Each cycle has six steps - three modeling steps that happen against historical data, and three
+                field steps that happen in the market.
+            </p>
+
+            <div class="loop-cycle">
+                <div class="loop-step">
+                    <h4>Fit baseline MMM</h4>
+                    <p>Run the Bayesian MMM on historical data with weakly informative priors. Extract posterior $p(\boldsymbol{\theta})$ over all channel ROI parameters. Flag channels with $\sigma_k$ above threshold.</p>
+                </div>
+                <div class="loop-step">
+                    <h4>Score EIG &amp; EVOI</h4>
+                    <p>Use the T<sub>0</sub> posterior as the prior. Estimate $\sigma_{\text{exp}}$ per channel given geo footprint. Produce the priority grid and select the top-K portfolio subject to operational constraints.</p>
+                </div>
+                <div class="loop-step">
+                    <h4>Run experiments (pre-registered)</h4>
+                    <p>Execute the selected geo-lift / matched-market tests with pre-specified designs. Log all deviations. Apply ITT analysis by default. Produce $p(\tau_k \mid \hat{y}_k)$ per tested channel.</p>
+                </div>
+                <div class="loop-step">
+                    <h4>Calibrate the next MMM</h4>
+                    <p>Refit via informed priors (M1) or augmented likelihood (M2). Document the degree of belief revision: pre- vs post-calibration mean and width per channel.</p>
+                </div>
+                <div class="loop-step">
+                    <h4>Allocate from the calibrated posterior</h4>
+                    <p>Make budget decisions from the calibrated MMM. Tag each line as experiment-backed or model-only. Report confidence tiers - distinguish evidence quality from point estimates.</p>
+                </div>
+                <div class="loop-step">
+                    <h4>Re-score for next cycle</h4>
+                    <p>Calibrated channels now have tighter posteriors - their EIG and EVOI drop. Recompute the priority grid with updated beliefs. Previously deprioritized channels may now rise. Begin again.</p>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>The single-sentence summary</h4>
+                <p style="margin-bottom: 0;">
+                    The MMM tells us where to look; the experiments tell us what's actually there; the next MMM bakes
+                    in what we learned. Each loop tightens the parts of the picture that matter most for budget decisions.
+                </p>
+            </div>
+
+            <h3 id="decay">Information decay &amp; re-experimentation triggers</h3>
+
+            <p>
+                Experimental calibration has a shelf life. An experiment from 18 months ago, run under different
+                competitive conditions, spend levels, or creative strategies, may no longer accurately represent current
+                channel effectiveness. Model an exponential decay of experimental information over time:
+            </p>
+
+            <div class="math-block">
+                $$\sigma_{k,\text{eff}}^2(t) \;=\; \sigma_{k,\text{post}}^2 \cdot \exp(\lambda_{\text{decay}} \cdot t)$$
+                <span class="equation-label">(14)</span>
+            </div>
+
+            <p>
+                where $\lambda_{\text{decay}}$ is calibrated from observed year-over-year MMM coefficient stability. As
+                $\sigma_{k,\text{eff}}^2$ grows, EIG and EVOI for re-experimentation rise again - creating a principled
+                re-experimentation schedule rather than relying on calendar-based intuitions. Decay rates differ by
+                channel: fast-moving digital decays in 6-12 months; stable broadcast can hold 18-24.
+            </p>
+
+            <h3 id="stopping">Adaptive stopping criteria</h3>
+
+            <p>A channel exits the active experimentation pool when all three conditions hold:</p>
+
+            <div class="math-block">
+                $$\mathrm{EIG}(k, d^*) < \varepsilon_{\text{EIG}} \quad \text{AND} \quad \mathrm{EVOI}(k) < \varepsilon_{\text{EVOI}} \quad \text{AND} \quad \mathrm{age}(\text{last\_exp}_k) < T_{\text{refresh}}$$
+                <span class="equation-label">(15)</span>
+            </div>
+
+            <p>
+                $T_{\text{refresh}}$ depends on media market dynamics, creative/targeting shifts, and competitive
+                changes. Typical values: 12-24 months for stable channels, 6-12 months for fast-moving digital surfaces.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="compounding">Why It Compounds</h2>
+
+            <p>
+                The point of running this loop is not any single experiment - it is the <em>compounding</em> of belief
+                updates over successive cycles. A useful way to see the value is to plot the trajectories of four
+                quantities that each cycle is trying to move:
+            </p>
+
+            <ol>
+                <li><strong>MMM posterior precision</strong> - the 95% credible interval width on each channel's ROI. As experiments calibrate channels, widths contract.</li>
+                <li><strong>Budget allocation</strong> - the share of total spend going to each channel. As ROIs become better-identified, allocations migrate toward the (unknown but increasingly well-estimated) optimum.</li>
+                <li><strong>Misallocation cost</strong> - the gap between current spend and the spend that would maximize portfolio outcome under the current posterior. The running tab of <em>wasted</em> dollars per week.</li>
+                <li><strong>Portfolio marginal ROI</strong> - the marginal return of the next dollar across the portfolio. Rises as misallocation falls.</li>
+            </ol>
+
+            <p>
+                For a representative five-channel portfolio over five quarterly cycles, the loop produces the
+                kind of trajectory below. The exact magnitudes depend on starting MMM uncertainty and spend asymmetry,
+                but the <em>shape</em> - sharp early gains followed by diminishing returns - is structural.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-card">
+                    <div class="stat-num">&minus;92%</div>
+                    <div class="stat-label">Weekly misallocation cost over 4 cycles (calibrated path vs. baseline)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num">+40%</div>
+                    <div class="stat-label">Portfolio marginal ROI lift over the same window</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num">~3</div>
+                    <div class="stat-label">Experiments per cycle - submodularity caps useful additions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num">0x</div>
+                    <div class="stat-label">New measurement contracts required - same vendor stack, better routing</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>How to read the four panels</h4>
+                <p style="margin-bottom: 0;">
+                    Posterior contraction is the <em>epistemic</em> outcome - what we know better. Allocation migration
+                    is the <em>operational</em> outcome - what we do differently as a result. Misallocation cost is
+                    the <em>economic</em> outcome - what poor knowledge was costing us. Portfolio mROI is the
+                    <em>strategic</em> outcome - the bottom-line lift in marginal productivity. A defensible measurement
+                    program connects all four and reports them quarterly.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="bridge">Frequentist Tools, Bayesian Framing</h2>
+
+            <p>
+                Most geo-lift estimators in active production use are frequentist by construction: difference-in-differences
+                with two-way fixed effects, synthetic control, augmented synthetic control, and time-based regression.
+                Stakeholders speak that language. Pre-registration documents demand it. None of this is in tension with
+                the Bayesian framework above.
+            </p>
+
+            <div class="definition">
+                <h4>The mental model</h4>
+                <p style="margin-bottom: 0;">
+                    Run frequentist estimators because they are well-understood, defensible, and pre-registrable.
+                    <em>Interpret</em> their outputs as Gaussian likelihoods feeding into the conjugate update of
+                    Eq. (2). Stakeholders see CIs and p-values; the MMM team sees a precision-weighted posterior.
+                    Both are correct views of the same numbers.
+                </p>
+            </div>
+
+            <h3 id="bridge-eq">The Bridge Equation</h3>
+
+            <p>
+                A frequentist point estimate $\hat{\beta}_k$ paired with a standard error $\mathrm{SE}_k$ is - under
+                mild assumptions - a Gaussian likelihood. That likelihood plugs straight into the conjugate update
+                alongside the MMM prior:
+            </p>
+
+            <div class="math-block">
+                $$\hat{\beta}_k \mid \theta_k \;\sim\; \mathcal{N}(\theta_k,\; \mathrm{SE}_k^2) \;\;\Longrightarrow\;\; \theta_k \mid \hat{\beta}_k \;\sim\; \mathcal{N}(\mu_{\text{post}},\, \sigma_{\text{post}}^2)$$
+                $$\sigma_{\text{post}}^{-2} \;=\; \sigma_0^{-2} + \mathrm{SE}_k^{-2}, \qquad \mu_{\text{post}} \;=\; \sigma_{\text{post}}^2\!\left(\frac{\mu_0}{\sigma_0^2} + \frac{\hat{\beta}_k}{\mathrm{SE}_k^2}\right)$$
+                <span class="equation-label">(16)</span>
+            </div>
+
+            <p>
+                The translation table is short: estimator output $\hat{\beta}_k$ becomes the likelihood mean;
+                $\mathrm{SE}_k^2$ becomes the likelihood variance $\sigma_e^2$; the MDE relates to the achievable
+                $\sigma_{\text{exp}}$ through the design's power calculation. Every frequentist estimator the
+                measurement team already runs - DiD, SCM, ASC, time-based regression, BSTS / CausalImpact - feeds the
+                same loop without anyone switching teams.
+            </p>
+
+            <p>
+                When the bridge isn't enough - small samples, multiple competing estimators, sequential monitoring,
+                or borrowing strength across markets - go fully Bayesian on the experiment side too. Tools include
+                BEST (robust Bayesian estimation), HDI + ROPE for decision-theoretic readouts, hierarchical / multilevel
+                models, Bayesian synthetic control, and sequential Bayesian inference (no alpha-spending required).
+                These all output posteriors that plug into Eq. (11) directly.
+            </p>
+
+            <!-- ================================================================== -->
+            <h2 id="rollout">Implementation: A 90-Day Rollout</h2>
+
+            <p>
+                A staged rollout with explicit decision gates. Phase 1 is a 90-day pilot that delivers decision-grade
+                evidence about whether to continue. The steady-state quarterly cadence is what comes after.
+            </p>
+
+            <div class="phase-grid">
+                <div class="phase-card">
+                    <div class="phase-num">Phase 1</div>
+                    <div class="phase-title">Foundation</div>
+                    <div class="phase-time">Weeks 1-6</div>
+                    <ul>
+                        <li>Audit existing MMM &amp; geo-lift artifacts</li>
+                        <li>Build Bayesian MMM in parallel</li>
+                        <li>Posterior predictive checks pass</li>
+                        <li>Side-by-side OLS vs. Bayes readout</li>
+                    </ul>
+                </div>
+                <div class="phase-card p2">
+                    <div class="phase-num">Phase 2</div>
+                    <div class="phase-title">First priority cycle</div>
+                    <div class="phase-time">Weeks 6-8</div>
+                    <ul>
+                        <li>Compute first EIG/EVOI grid</li>
+                        <li>Produce 2x2 priority map</li>
+                        <li>Stakeholder review &amp; selection</li>
+                        <li>Pre-register top 2-3 experiments</li>
+                    </ul>
+                </div>
+                <div class="phase-card p3">
+                    <div class="phase-num">Phase 3</div>
+                    <div class="phase-title">Calibration loop</div>
+                    <div class="phase-time">Weeks 9-13</div>
+                    <ul>
+                        <li>Run pre-registered experiments</li>
+                        <li>Refit MMM with calibration priors</li>
+                        <li>Pre/post allocation comparison</li>
+                        <li>Phase 1 go/no-go gate</li>
+                    </ul>
+                </div>
+                <div class="phase-card p4">
+                    <div class="phase-num">Phase 4</div>
+                    <div class="phase-title">Steady state</div>
+                    <div class="phase-time">Quarterly &middot; ongoing</div>
+                    <ul>
+                        <li>Quarterly priority + calibration cycle</li>
+                        <li>OLS pipeline retired after 2 cycles</li>
+                        <li>Re-experimentation triggers fire</li>
+                        <li>Confidence-tier reporting standard</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>Prerequisites</h3>
+
+            <ul class="checklist">
+                <li><strong>Geo-week panel data</strong> - 3+ years of the outcome metric (revenue, conversions, sessions) at the geo grain. Daily is fine; the model will aggregate.</li>
+                <li><strong>Per-channel media spend</strong> at the same geo grain or with a documented allocation rule from national to geo.</li>
+                <li><strong>Pre-period MAPE benchmarks</strong> from the existing MMM, by channel and aggregate. Needed to credibly compare the new pipeline.</li>
+                <li><strong>Past geo-lift readouts</strong> with point estimates and standard errors. These are the calibration inputs for the first cycle. Verdicts ("CTV worked") are not enough - we need the underlying numbers.</li>
+                <li><strong>Tooling</strong>: PyMC &ge; 5 or NumPyro for the Bayesian MMM and hierarchical experiment models; ArviZ for diagnostics; pyfixest or fixest (R) for the frequentist DiD baseline; JAX optional but recommended for speed.</li>
+            </ul>
+
+            <h3 id="metrics">Success Metrics</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Definition</th>
+                        <th>Target</th>
+                        <th>Cadence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Holdout MAPE</strong></td>
+                        <td>Out-of-sample predictive accuracy of the calibrated MMM</td>
+                        <td><code>&le; OLS baseline</code></td>
+                        <td>Each cycle</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Posterior contraction</strong></td>
+                        <td>Average reduction in $\sigma_k$ for tested channels post-calibration</td>
+                        <td><code>&ge; 30%</code></td>
+                        <td>Each cycle</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Misallocation &Delta;</strong></td>
+                        <td>Weekly misallocation cost vs. last cycle</td>
+                        <td><code>Falling, then flat</code></td>
+                        <td>Each cycle</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Portfolio mROI</strong></td>
+                        <td>Marginal return of the next dollar across the portfolio</td>
+                        <td><code>Rising over 4 cycles</code></td>
+                        <td>Annual review</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Calibration coverage</strong></td>
+                        <td>Fraction of spend in experiment-backed channels (vs. model-only)</td>
+                        <td><code>&ge; 60% by Year 1</code></td>
+                        <td>Each cycle</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Stakeholder fluency</strong></td>
+                        <td>Sponsor and planning team can explain priority map &amp; confidence tiers in their own words</td>
+                        <td><code>Yes by Cycle 3</code></td>
+                        <td>Cycle 3 review</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- ================================================================== -->
+            <h2 id="antipatterns">Anti-Patterns &amp; Failure Modes</h2>
+
+            <p>Six failure modes seen in similar programs. Calling them out up front so we recognize them when they happen.</p>
+
+            <ul class="checklist">
+                <li><strong>"Run all the experiments we can think of."</strong> Submodularity says marginal information per experiment falls fast. Running 8 experiments to learn what 3 would have taught you is wasted budget. The priority engine is supposed to <em>cap</em> the program; treating it as an unconstrained idea-generator defeats the point.</li>
+                <li><strong>"Calibrate every channel, every cycle."</strong> Calibration has a shelf life and a cost. Re-experimenting on a channel whose last test is 4 months old and stable is just lighting test budget on fire. Use the re-experimentation trigger; it exists for this reason.</li>
+                <li><strong>"Use a flat prior so we're not biasing the answer."</strong> A flat prior reproduces the OLS pathology. Priors are how you regularize; refusing to use informative priors is a refusal to do the regularization work. Defensible &gt; flat.</li>
+                <li><strong>"The Bayesian MMM is wider than OLS, so it's worse."</strong> The Bayesian MMM is wider <em>because</em> the OLS interval was lying about its precision. Width is information, not weakness. Reporting templates need to make this distinction explicit.</li>
+                <li><strong>"Let's just plug the experimental point estimate in as a fixed parameter."</strong> Hard calibration by point-substitution discards the experimental SE and produces over-confidence in the calibrated channel. Use the soft prior (M1) or augmented likelihood (M2). Never the point.</li>
+                <li><strong>"The model said it; I just report what comes out."</strong> The Bayesian MMM "says" what your priors and likelihood structure say. The analyst owns those choices; reporting templates should attribute structural decisions to the analyst, not to "the model."</li>
+            </ul>
+
+            <div class="warning">
+                <h4>The most insidious failure mode</h4>
+                <p style="margin-bottom: 0;">
+                    Stakeholders accept the new framework but quietly continue making allocation decisions on instinct,
+                    treating the priority map as a research artifact rather than a budget recommendation. This is invisible
+                    from the inside - the team produces the deliverables, gets compliments, and nothing gets used.
+                    <strong>Detection:</strong> at the second-cycle review, ask the sponsor to point at a specific
+                    budget reallocation that happened <em>because</em> of a calibrated posterior. If they can't, the
+                    program isn't actually running yet - only the appearance of it is.
+                </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="closing">Closing Principle</h2>
+
+            <div class="definition">
+                <p style="margin-bottom: 0;">
+                    The MMM and geo-lift experiments are not competing measurement paradigms - they are complementary
+                    nodes in a Bayesian inference graph. The MMM provides a coherent joint model of all channels with
+                    full coverage; experiments provide local causal identification for high-priority channels. Information
+                    flows are bidirectional: the MMM shapes experiment design (via EIG/EVOI prioritization), and
+                    experiments calibrate the MMM (via informed priors or augmented likelihoods). Over successive
+                    cycles, this adaptive loop systematically contracts the uncertainty that actually matters for
+                    budget decisions.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>Where to go next</h4>
+                <p style="margin-bottom: 0;">
+                    <strong>To understand the math foundations</strong> in more depth, see the
+                    <a href="bayesian-workflow.html">Bayesian Workflow</a> and
+                    <a href="causal-inference.html">Causal Inference</a> guides.
+                    <strong>To see how the MMM is implemented</strong>, see the
+                    <a href="modeling-guide.html">Modeling Guide</a> and the
+                    <a href="technical-guide.html">Technical Guide</a>.
+                    <strong>To see what the framework produces</strong>, see the
+                    <a href="demos.html">Demos &amp; Reports</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "\\(", right: "\\)", display: false},
+                    {left: "$", right: "$", display: false}
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

@@ -15,6 +15,7 @@
         { href: 'about.html', label: 'About' },
         { href: 'business-stakeholders.html', label: 'For Business' },
         { href: 'modeling-guide.html', label: 'Modeling Guide' },
+        { href: 'measurement-calibration.html', label: 'Calibration Loop' },
         { href: 'interpreting-results.html', label: 'Interpreting Results' },
         { href: 'demos.html', label: 'Demos & Reports' },
         { href: 'technical-guide.html', label: 'Technical Guide' },
