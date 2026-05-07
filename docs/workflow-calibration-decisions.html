@@ -378,7 +378,8 @@
             <a href="#constraints">7 &middot; Constraints &amp; tradeoffs</a>
             <a href="#cycles">8 &middot; The compounding loop</a>
             <a href="#frontier">9 &middot; Decision-quality frontier</a>
-            <a href="#takeaways">10 &middot; Takeaways</a>
+            <a href="#geo-experiment">10 &middot; Geo experiment design</a>
+            <a href="#takeaways">11 &middot; Takeaways</a>
         </nav>
 
         <p style="margin-top: 2rem; font-size: 1.05rem; color: var(--color-text-muted);">
@@ -1072,8 +1073,461 @@
         </section>
 
         <!-- ================================================================== -->
+        <!-- ================================================================== -->
+        <section class="section" id="geo-experiment">
+            <div class="section-num">&sect; 10 &middot; Geo experiment design</div>
+            <h2>From Fitted MMM to Field Experiment</h2>
+            <p class="section-tagline">A geo-level MMM is not just a measurement artifact &mdash; it is an experiment design engine. The posterior tells you which geos to pick, how much budget to shift, and how long to run.</p>
+
+            <p>
+                Once an MMM is fitted with geo-level variation, every posterior sample doubles as a forward
+                simulation: what would KPI do in market <em>m</em> if spend rose by $\Delta b$? The standard
+                measurement playbook defaults to picking "similar-looking" markets by eye, applying a round
+                percentage lift, and running for six to eight weeks. Each of those defaults &mdash; market
+                selection, treatment intensity, duration &mdash; is a design choice that meaningfully affects
+                information yield, and a geo-level Bayesian MMM gives you better answers for all of them.
+            </p>
+
+            <h3>What the MMM Provides for Experiment Design</h3>
+
+            <p>
+                A hierarchical geo-level MMM produces a richer set of outputs than the channel-level marginals
+                used for channel selection. The quantities relevant to test design are:
+            </p>
+
+            <table class="channel-table">
+                <thead>
+                    <tr>
+                        <th>Quantity</th>
+                        <th>Symbol</th>
+                        <th>Use in test design</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Per-geo channel posterior</td>
+                        <td class="numeric">$\beta_{k,g} \mid \mu_{k,g},\,\sigma_{k,g}^2$</td>
+                        <td>Identifies geos with most uncertainty (treated-geo ranking)</td>
+                    </tr>
+                    <tr>
+                        <td>Per-geo current spend</td>
+                        <td class="numeric">$x_{k,g}$</td>
+                        <td>Anchors the saturation-curve evaluation point</td>
+                    </tr>
+                    <tr>
+                        <td>Per-geo saturation curve</td>
+                        <td class="numeric">$S_k(\cdot;\,h_{k,g},\kappa_{k,g})$</td>
+                        <td>Local slope determines optimal $\Delta_{\text{spend}}$</td>
+                    </tr>
+                    <tr>
+                        <td>Per-geo residual variance</td>
+                        <td class="numeric">$\sigma_g^2$</td>
+                        <td>Plugs directly into the $\sigma_{\text{exp}}$ formula</td>
+                    </tr>
+                    <tr>
+                        <td>Within-geo serial correlation</td>
+                        <td class="numeric">$\rho_g$</td>
+                        <td>Determines how duration converts to precision</td>
+                    </tr>
+                    <tr>
+                        <td>Geo random-effect posteriors</td>
+                        <td class="numeric">$\mathbf{u}_g$</td>
+                        <td>Mahalanobis distance for matched-pair construction</td>
+                    </tr>
+                    <tr>
+                        <td>Cross-geo posterior correlations</td>
+                        <td class="numeric">$\mathrm{Cor}(\beta_{k,g},\beta_{k,g'})$</td>
+                        <td>Spillover and contamination diagnostics</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Step 1 &middot; Treated-Geo Selection by Information Yield</h3>
+
+            <p>
+                The ideal (treatment, control) geo pair satisfies three criteria: high pre-period correlation
+                on the KPI (well-specified counterfactual), comparable absolute scale (neither side dominates),
+                and low cross-geo spillover (independent markets). A simple balance score captures the first two:
+            </p>
+
+            <div class="math-display">
+                $$\text{Balance}(T,\,C) \;=\; \frac{\rho\!\left(y_T^{\text{pre}},\;\hat{y}_C^{\text{pre}}\right)}{1 + \left|\log\!\left(\bar{y}_T / \bar{y}_C\right)\right|}$$
+            </div>
+
+            <p>
+                But correlation on raw KPI is a noisy proxy. The richer signal from the geo-level MMM enables a
+                proper <em>information yield</em> score that combines uncertainty, saturation slope, and residual
+                noise into a single ranking criterion:
+            </p>
+
+            <div class="math-display">
+                $$I_{k,g} \;=\; \frac{\sigma_{k,g}^2 \cdot \bigl[S_k'(x_{k,g})\bigr]^2}{\sigma_g^2}$$
+            </div>
+
+            <p>
+                The numerator captures the prior variance scaled by the responsiveness of outcome to spend at
+                the current operating point; the denominator penalizes geos with noisy outcomes. Rank candidate
+                geos by $I_{k,g}$, take the top $G_T$ (typically 8–24 markets), and apply hard eligibility
+                filters (minimum population, no recent anomalies) before ranking &mdash; not as tiebreakers after.
+            </p>
+
+            <h3>Step 2 &middot; Matched-Pair Construction via Posterior Mahalanobis Distance</h3>
+
+            <p>
+                For each treated geo, the control pool must be genuinely similar in the dimensions that matter
+                for channel $k$'s effect. A hierarchical MMM gives you a far better metric than correlation
+                matching: each geo has a posterior over its random-effect vector $\mathbf{u}_g$ (channel-coefficient
+                deviations, baseline level, seasonality). Genuinely matched markets have similar
+                $\mathbf{u}_g$ posteriors. The natural distance is Mahalanobis with the joint posterior covariance:
+            </p>
+
+            <div class="math-display">
+                $$d^2(g,\,g') \;=\; (\boldsymbol{\mu}_{u,g} - \boldsymbol{\mu}_{u,g'})^\top\,\boldsymbol{\Sigma}_u^{-1}\,(\boldsymbol{\mu}_{u,g} - \boldsymbol{\mu}_{u,g'})$$
+            </div>
+
+            <p>
+                Markets close in this metric will respond similarly to channel-$k$ perturbations even if their
+                raw revenue trajectories differ in level or seasonality. In typical retail and DTC datasets,
+                Mahalanobis matching on the MMM posterior reduces post-period control-group variance by 20–40%
+                versus correlation matching on the same pre-period.
+            </p>
+
+            <div class="concept-box">
+                <h5>Hierarchical pooling as a matching tool</h5>
+                <p style="margin: 0;">
+                    Geos sharing a regional hyperparameter cluster together in posterior space. The posterior
+                    covariance over geo-level random effects is therefore already a similarity matrix &mdash;
+                    no separate matching model required. For each treated geo, take the $K$ closest control
+                    geos ($K \in \{1,2,3\}$ is typical) and use them as the donor pool.
+                </p>
+            </div>
+
+            <h3>Step 3 &middot; Treatment Intensity from the Saturation Curve</h3>
+
+            <p>
+                The signal of the experiment is the KPI lift attributable to the budget increment in treatment geos.
+                Standard practice sets the uplift as a round percentage (e.g., "add 30%") across all geos.
+                But the marginal return to spend is different at each geo's current operating point on the
+                saturation curve, so the same percentage uplift produces very different signals.
+            </p>
+
+            <p>
+                The MMM gives you the local slope of the saturation curve at each geo's observed spend:
+            </p>
+
+            <div class="math-display">
+                $$S_k'(x_{k,g}) \;=\; \frac{\partial}{\partial x} S_k(x;\,h_{k,g},\kappa_{k,g})\bigg|_{x=x_{k,g}}$$
+            </div>
+
+            <p>
+                A geo already near saturation has a small slope — a large spend increment is needed to
+                generate a detectable lift. A geo well below saturation has a steep slope — a modest increment
+                suffices. Equating the target signal-to-noise ratio across geos gives the saturation-slope-aware
+                optimal spend increment:
+            </p>
+
+            <div class="math-display">
+                $$\Delta\mathrm{spend}_g^* \;=\; \frac{\sigma_g}{S_k'(x_{k,g})} \cdot
+                  \sqrt{\frac{2\bigl(1+(T-1)\rho_g\bigr)}{GT} \cdot \frac{\eta}{1-\eta}} \cdot
+                  \frac{1}{\sigma_{k,g}}$$
+            </div>
+
+            <p>
+                where $\sigma_g$ is the geo's residual standard deviation, $\rho_g$ its within-geo serial
+                correlation, $G$ the number of treatment geos, $T$ the planned duration, and $\eta$ the
+                target power. In practice $\Delta\mathrm{spend}_g^*$ varies <strong>3–5× across geos</strong>
+                for the same channel — treating every geo identically leaves information on the table.
+            </p>
+
+            <p>
+                The effective signal the experiment must detect is:
+            </p>
+
+            <div class="math-display">
+                $$\Delta y \;=\; S_k'(x_{k,g})\cdot\Delta\mathrm{spend}_g^*, \qquad
+                  \theta \;\sim\; p(\theta \mid \mathcal{D})$$
+            </div>
+
+            <p>
+                A wide ROI posterior $\sigma_\theta$ sets a hard ceiling on achievable power regardless of
+                budget — via the delta method, $\mathrm{Var}(\Delta y) \geq \Delta b^2\,\sigma_\theta^2$.
+                Check that ceiling before committing to the design (see the interactive demo below).
+            </p>
+
+            <h3>Step 4 &middot; Duration from Serial Correlation</h3>
+
+            <p>
+                Under a difference-in-differences estimator with $n_t$ treatment geos and $n_c$ control geos
+                observed for $T$ weeks, the naive standard error shrinks as $1/\sqrt{T}$.
+                Weekly KPI data within a geo are serially correlated, however: successive weeks share
+                common demand shocks, promotions, and seasonal patterns. The MMM residuals estimate the
+                within-geo AR(1) coefficient $\rho_g$, and the corrected standard error is:
+            </p>
+
+            <div class="math-display">
+                $$\mathrm{SE}(\hat\tau) \;=\; \sigma_y\,\sqrt{\tfrac{1}{n_t} + \tfrac{1}{n_c}} \cdot
+                  \sqrt{\frac{1+(T-1)\rho_g}{T}}$$
+            </div>
+
+            <p>
+                When $\rho_g = 0$ this reduces to the familiar $1/\sqrt{T}$ formula. When $\rho_g > 0$
+                the denominator grows slower than $\sqrt{T}$, so each additional week adds less precision.
+                Empirically, Expected Information Gain (EIG) flattens after <strong>6–10 weeks</strong>
+                for geos with $\rho_g \in [0.2, 0.5]$ — common values in weekly retail or digital data.
+                Running longer costs budget without proportionally improving power.
+            </p>
+
+            <p>
+                Statistical power at duration $T$ is:
+            </p>
+
+            <div class="math-display">
+                $$\mathrm{Power}(T) \;=\; \Phi\!\left(\frac{\Delta y}{\mathrm{SE}(\hat\tau)} - z_{1-\alpha/2}\right)$$
+            </div>
+
+            <p>
+                Rearranging gives the minimum required duration for target power $1-\beta$:
+            </p>
+
+            <div class="math-display">
+                $$T^* \;=\; \frac{(z_{1-\alpha/2} + z_{1-\beta})^2\;\sigma_y^2\;(1/n_t + 1/n_c)\,(1+(T^*-1)\rho_g)}{\Delta y^2}$$
+            </div>
+
+            <p>
+                Because $T^*$ appears on both sides, solve iteratively (or use the calculator below).
+                The dashed curve in the chart adds the MMM's own posterior spread on $\theta$: even with
+                perfect execution, $\mathrm{Var}(\Delta y) = \Delta b^2\,\sigma_\theta^2$ is independent
+                of test duration and sets a hard power ceiling. Check that ceiling before committing.
+            </p>
+
+            <div class="interactive-demo">
+                <h4>10.1 &middot; Geo experiment power calculator</h4>
+                <p class="demo-instructions">
+                    Drag the sliders to configure the experiment design. The solid curve shows power under the
+                    MMM's point-estimate ROI. The dashed curve folds in posterior ROI uncertainty &mdash;
+                    it plateaus once the MMM's own spread dominates the residual noise. The vertical marker
+                    shows where your target power is first reached.
+                </p>
+
+                <div class="control-panel">
+                    <div class="control">
+                        <label>Treatment geos <span class="value" id="geoNtVal">5</span></label>
+                        <input type="range" id="geoNtSlider" min="1" max="20" step="1" value="5">
+                    </div>
+                    <div class="control">
+                        <label>Control geos <span class="value" id="geoNcVal">10</span></label>
+                        <input type="range" id="geoNcSlider" min="1" max="30" step="1" value="10">
+                    </div>
+                    <div class="control">
+                        <label>Budget uplift in treatment (%) <span class="value" id="geoBudgetVal">30%</span></label>
+                        <input type="range" id="geoBudgetSlider" min="5" max="150" step="5" value="30">
+                    </div>
+                    <div class="control">
+                        <label>Baseline weekly CV per geo <span class="value" id="geoCVVal">0.20</span></label>
+                        <input type="range" id="geoCVSlider" min="0.05" max="0.60" step="0.01" value="0.20">
+                    </div>
+                    <div class="control">
+                        <label>Channel ROI &mdash; MMM posterior mean <span class="value" id="geoROIVal">1.50</span></label>
+                        <input type="range" id="geoROISlider" min="0.30" max="4.00" step="0.05" value="1.5">
+                    </div>
+                    <div class="control">
+                        <label>ROI posterior &sigma; from MMM <span class="value" id="geoROISigVal">0.30</span></label>
+                        <input type="range" id="geoROISigSlider" min="0.05" max="1.00" step="0.05" value="0.30">
+                    </div>
+                    <div class="control">
+                        <label>Target power <span class="value" id="geoPowerVal">80%</span></label>
+                        <input type="range" id="geoPowerSlider" min="60" max="95" step="5" value="80">
+                    </div>
+                </div>
+
+                <div class="chart-container tall" id="geoPowerChart"></div>
+
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-label">Required weeks</div>
+                        <div class="metric-value accent" id="geoWeeksVal">&mdash;</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">MDE at 8 weeks</div>
+                        <div class="metric-value warning" id="geoMDEVal">&mdash;</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Expected lift per geo</div>
+                        <div class="metric-value positive" id="geoLiftVal">&mdash;</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Power ceiling (ROI uncertainty)</div>
+                        <div class="metric-value" id="geoCeilVal">&mdash;</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-box">
+                <h5>The MMM prior as a power-planning shortcut</h5>
+                <p style="margin: 0;">
+                    A tight posterior on $\theta$ (small $\sigma_\theta$) means the model is already confident
+                    about channel effectiveness &mdash; the experiment only needs to confirm it, so a shorter
+                    or smaller design is still informative. A wide posterior signals that the experiment must
+                    be large enough to move the MMM needle, not just reach nominal significance. Check whether
+                    the power ceiling (plateau of the dashed curve) is above your target before committing
+                    to the design.
+                </p>
+            </div>
+
+            <h3>Step 5 &middot; Pre-Experiment Simulation</h3>
+
+            <p>
+                Before committing real budget, run the proposed design through the fitted MMM as a
+                simulator. This catches power shortfalls and degenerate designs cheaply:
+            </p>
+
+            <ol style="line-height:1.8; padding-left:1.4rem;">
+                <li><strong>Sample a draw</strong> $\tilde\theta$ from the MMM channel posterior
+                    $p(\theta \mid \mathcal{D})$.</li>
+                <li><strong>Simulate KPI</strong> for each geo under the proposed spend schedule
+                    using $\tilde\theta$ plus a draw from $\mathcal{N}(0, \sigma_g^2)$ scaled by
+                    the serial-correlation factor $\sqrt{1+(T-1)\rho_g}$.</li>
+                <li><strong>Estimate treatment effect</strong> from the simulated data via the
+                    same difference-in-differences estimator you plan to use on real data.</li>
+                <li><strong>Repeat 500–2,000 times</strong> and record the fraction of
+                    replicates where the test reaches significance at your chosen $\alpha$.</li>
+            </ol>
+
+            <p>
+                If simulated power falls short of target, increase $\Delta\mathrm{spend}_g^*$, add
+                geos, or extend duration — then re-simulate. This loop typically takes minutes and
+                surfaces issues (skewed KPI distributions, heterogeneous geo variance) that the
+                closed-form formulas miss.
+            </p>
+
+            <h3>Step 6 &middot; Spillover and Contamination Diagnostics</h3>
+
+            <p>
+                Two geos whose channel posteriors move together are likely contaminated: a spend
+                change in the treatment geo affects the control geo (e.g., national TV spillover,
+                retargeting bleed across DMAs). The MMM captures this as cross-geo posterior
+                correlation:
+            </p>
+
+            <div class="math-display">
+                $$r_{g,g'} \;=\; \mathrm{Cor}\!\bigl(\beta_{k,g},\,\beta_{k,g'}\bigr)$$
+            </div>
+
+            <p>
+                Flag any control candidate with $|r_{g,g'}| > 0.5$ and exclude it from the donor
+                pool. If all nearby geos are contaminated, consider a holdout design where a cluster
+                of adjacent geos are jointly treated and a geographically distant cluster serves as
+                control. The adstock carryover introduces an analogous time-domain contamination:
+                include a <strong>1–2 week wash-in buffer</strong> before measuring lift, or model
+                carryover explicitly in the geo-level analysis.
+            </p>
+
+            <h3>Worked Example &mdash; CTV Campaign Design</h3>
+
+            <p>
+                The table below illustrates Steps 1–6 applied to a Connected-TV channel for a
+                national retailer. Five geos were scored; the top two by information yield became
+                treatment markets, with matched controls chosen by Mahalanobis distance.
+            </p>
+
+            <table class="channel-table">
+                <thead>
+                    <tr>
+                        <th>Geo</th>
+                        <th>Role</th>
+                        <th>$I_{k,g}$ rank</th>
+                        <th>Saturation regime</th>
+                        <th>$\Delta\mathrm{spend}_g^*$</th>
+                        <th>Required weeks $T^*$</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Atlanta</td><td>Treatment</td><td class="numeric">1st</td>
+                        <td>Sub-saturated ($S'$ = 0.82)</td>
+                        <td class="numeric">+18%</td><td class="numeric">7</td>
+                    </tr>
+                    <tr>
+                        <td>Phoenix</td><td>Treatment</td><td class="numeric">2nd</td>
+                        <td>Mid-saturated ($S'$ = 0.51)</td>
+                        <td class="numeric">+31%</td><td class="numeric">9</td>
+                    </tr>
+                    <tr>
+                        <td>Tampa</td><td>Control (Atlanta)</td><td class="numeric">&mdash;</td>
+                        <td>$d^2 = 0.9$ (closest match)</td>
+                        <td class="numeric">0%</td><td class="numeric">&mdash;</td>
+                    </tr>
+                    <tr>
+                        <td>Portland</td><td>Control (Phoenix)</td><td class="numeric">&mdash;</td>
+                        <td>$d^2 = 1.4$ (closest match)</td>
+                        <td class="numeric">0%</td><td class="numeric">&mdash;</td>
+                    </tr>
+                    <tr>
+                        <td>St. Louis</td><td>Excluded</td><td class="numeric">3rd</td>
+                        <td>$r_{g,g'} = 0.71$ (spillover)</td>
+                        <td class="numeric">&mdash;</td><td class="numeric">&mdash;</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                Atlanta's lower $\Delta\mathrm{spend}^*$ (18% vs 31%) reflects its steeper saturation
+                slope: the same ROI uncertainty is resolved more cheaply where the curve is still
+                responsive. St. Louis was excluded despite its high information yield because its
+                cross-geo posterior correlation with Atlanta ($r = 0.71$) exceeded the contamination
+                threshold.
+            </p>
+
+            <div class="insight-box">
+                <h5>Extending to (channel &times; geo) pairs</h5>
+                <p style="margin: 0;">
+                    The same greedy submodular selection logic from §9 applies when you have
+                    multiple channels competing for experiment budget. Score every (channel, geo)
+                    pair by $I_{k,g}$, run the Mahalanobis exclusion for each candidate, then
+                    greedily select pairs up to the experiment budget. The greedy sequence
+                    achieves at least $(1-1/e) \approx 63\%$ of the optimal joint information gain
+                    &mdash; and the MMM gives you the full joint posterior needed to compute it.
+                </p>
+            </div>
+
+            <h3>Closing the Calibration Loop</h3>
+
+            <p>
+                After the geo test concludes, the estimated lift $\hat\tau$ with standard error
+                $\hat\sigma_e = \mathrm{SE}(\hat\tau)$ feeds directly into the Bayesian update from §3.
+                The MMM's channel prior $\mathcal{N}(\mu_\theta, \sigma_\theta^2)$ updates by
+                precision-weighted averaging:
+            </p>
+
+            <div class="math-display">
+                $$\sigma_{\text{post}}^{-2} \;=\; \sigma_\theta^{-2} + \hat\sigma_e^{-2}, \qquad
+                  \text{EIG} \;=\; \tfrac{1}{2}\log\!\left(1 + \frac{\sigma_\theta^2}{\hat\sigma_e^2}\right)$$
+            </div>
+
+            <p>
+                Longer tests and more geos shrink $\hat\sigma_e$, increasing EIG. But submodularity applies here
+                too: once $\hat\sigma_e \ll \sigma_\theta$, additional weeks add near-zero information. The
+                design sweet spot is where the experiment's precision is <em>comparable to</em> (not far tighter
+                than) the MMM's prior uncertainty.
+            </p>
+
+            <div class="warn-box">
+                <h5>Adstock carryover, spillover, and the contamination threshold</h5>
+                <p style="margin: 0;">
+                    Adstock carryover means the first few weeks of a geo test carry contamination from pre-test
+                    spend levels — include a 1–2 week wash-in buffer or model carryover explicitly.
+                    Geo spillover (retargeting bleed, national TV halo) deflates estimated lift when treatment
+                    and control geos are adjacent; flag any control candidate with
+                    $|r_{g,g'}| = |\mathrm{Cor}(\beta_{k,g}, \beta_{k,g'})| > 0.5$ and exclude it from the
+                    donor pool. The MMM's spatial posterior correlations give you this diagnostic for free —
+                    no additional data collection required.
+                </p>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
         <section class="section" id="takeaways">
-            <div class="section-num">&sect; 10 &middot; Takeaways</div>
+            <div class="section-num">&sect; 11 &middot; Takeaways</div>
             <h2>What This Framework Buys You</h2>
 
             <div class="two-col-demo">
@@ -1975,6 +2429,122 @@
         }
 
         // ============================================================
+        // 10.1 - Geo experiment power calculator
+        // ============================================================
+        function updateGeoPower() {
+            const n_t    = parseInt(document.getElementById('geoNtSlider').value);
+            const n_c    = parseInt(document.getElementById('geoNcSlider').value);
+            const budPct = parseFloat(document.getElementById('geoBudgetSlider').value);
+            const cv     = parseFloat(document.getElementById('geoCVSlider').value);
+            const roi    = parseFloat(document.getElementById('geoROISlider').value);
+            const roiSig = parseFloat(document.getElementById('geoROISigSlider').value);
+            const tgtPow = parseInt(document.getElementById('geoPowerSlider').value);
+
+            document.getElementById('geoNtVal').textContent     = n_t;
+            document.getElementById('geoNcVal').textContent     = n_c;
+            document.getElementById('geoBudgetVal').textContent = budPct + '%';
+            document.getElementById('geoCVVal').textContent     = cv.toFixed(2);
+            document.getElementById('geoROIVal').textContent    = roi.toFixed(2);
+            document.getElementById('geoROISigVal').textContent = roiSig.toFixed(2);
+            document.getElementById('geoPowerVal').textContent  = tgtPow + '%';
+
+            // Expected fractional lift per geo: ROI × budget uplift fraction
+            const deltaY   = roi * (budPct / 100);
+            // Pooled SE base (before 1/sqrt(T) scaling), in CV units
+            const seBase   = cv * Math.sqrt(1 / n_t + 1 / n_c);
+            // ROI-uncertainty contribution via delta method (independent of T)
+            const deltaSig = (budPct / 100) * roiSig;
+
+            const z_alpha  = 1.96;    // two-sided α = 0.05
+            const z_beta   = 0.84;    // 80% power (hardcoded for MDE calculation)
+
+            // Power curves over 1–26 weeks
+            const maxWeeks = 26;
+            const weeksArr = range(1, maxWeeks, 1);
+            const powerKnown = weeksArr.map(T => {
+                const snr = deltaY / (seBase / Math.sqrt(T));
+                return gaussianCDF(snr - z_alpha, 0, 1) * 100;
+            });
+            const powerUncertain = weeksArr.map(T => {
+                const se_T     = seBase / Math.sqrt(T);
+                const totalSE  = Math.sqrt(se_T * se_T + deltaSig * deltaSig);
+                return gaussianCDF(deltaY / totalSE - z_alpha, 0, 1) * 100;
+            });
+
+            // Required weeks for target power (known-ROI curve)
+            const tgtFrac  = tgtPow;
+            let reqWeeks   = null;
+            for (let i = 0; i < weeksArr.length; i++) {
+                if (powerKnown[i] >= tgtFrac) { reqWeeks = weeksArr[i]; break; }
+            }
+
+            // MDE at 8 weeks (minimum detectable fractional lift for 80% power, α=0.05)
+            const se8  = seBase / Math.sqrt(8);
+            const mde8 = se8 * (z_alpha + z_beta);
+
+            // Power ceiling: as T→∞ the SE_t→0 so only deltaSig remains
+            const ceilPower = gaussianCDF(deltaY / deltaSig - z_alpha, 0, 1) * 100;
+
+            // ---- Update metric cards ----
+            const feasClass = reqWeeks === null ? 'negative'
+                            : reqWeeks <= 4    ? 'positive'
+                            : reqWeeks <= 8    ? 'positive'
+                            : reqWeeks <= 16   ? 'warning'
+                            :                    'negative';
+
+            document.getElementById('geoWeeksVal').textContent  = reqWeeks !== null ? reqWeeks + ' wks' : '> 26 wks';
+            document.getElementById('geoWeeksVal').className    = 'metric-value ' + feasClass;
+            document.getElementById('geoMDEVal').textContent    = (mde8 * 100).toFixed(1) + '% of baseline';
+            document.getElementById('geoLiftVal').textContent   = (deltaY * 100).toFixed(1) + '% of baseline';
+            document.getElementById('geoCeilVal').textContent   = ceilPower.toFixed(0) + '%';
+            document.getElementById('geoCeilVal').className     = 'metric-value ' +
+                (ceilPower >= tgtPow ? 'positive' : 'negative');
+
+            // ---- Build Plotly traces ----
+            const traces = [
+                {
+                    x: weeksArr, y: powerKnown,
+                    mode: 'lines+markers', name: 'Power (known ROI)',
+                    line: { color: COLORS.primary, width: 3 },
+                    marker: { size: 6 }
+                },
+                {
+                    x: weeksArr, y: powerUncertain,
+                    mode: 'lines', name: 'Power (with ROI uncertainty, &sigma;&theta;)',
+                    line: { color: COLORS.accent, width: 2, dash: 'dash' }
+                },
+                {
+                    x: [1, maxWeeks], y: [tgtPow, tgtPow],
+                    mode: 'lines', name: 'Target (' + tgtPow + '%)',
+                    line: { color: COLORS.danger, width: 1.5, dash: 'dot' }
+                }
+            ];
+
+            const shapes = [];
+            if (reqWeeks !== null) {
+                traces.push({
+                    x: [reqWeeks], y: [tgtPow],
+                    mode: 'markers', name: 'Required: ' + reqWeeks + ' wks',
+                    marker: { color: COLORS.danger, size: 14, symbol: 'circle',
+                              line: { color: 'white', width: 2 } }
+                });
+                shapes.push({
+                    type: 'line', x0: reqWeeks, x1: reqWeeks, y0: 0, y1: tgtPow,
+                    xref: 'x', yref: 'y',
+                    line: { color: COLORS.danger, width: 1, dash: 'dot' }
+                });
+            }
+
+            Plotly.react('geoPowerChart', traces, {
+                ...baseLayout,
+                xaxis: { ...baseLayout.xaxis, title: { text: 'Test duration (weeks)' }, dtick: 2 },
+                yaxis: { ...baseLayout.yaxis, title: { text: 'Statistical power (%)' }, range: [0, 105] },
+                legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' },
+                shapes
+            }, cfg);
+        }
+
+        // ============================================================
         // Wire up all controls
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
@@ -2015,6 +2585,11 @@
             ['fCostSlider', 'fKSlider', 'fEvoiSlider'].forEach(id =>
                 document.getElementById(id).addEventListener('input', updateFrontier));
             updateFrontier();
+            // 10.1
+            ['geoNtSlider', 'geoNcSlider', 'geoBudgetSlider', 'geoCVSlider',
+             'geoROISlider', 'geoROISigSlider', 'geoPowerSlider'].forEach(id =>
+                document.getElementById(id).addEventListener('input', updateGeoPower));
+            updateGeoPower();
         });
     </script>
 </body>

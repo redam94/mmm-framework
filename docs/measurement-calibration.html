@@ -341,6 +341,7 @@
                 <li><a href="#evoi">Expected Value of Information</a></li>
                 <li><a href="#priority-map">The 2x2 Priority Map</a></li>
                 <li><a href="#submodularity">Submodularity &amp; Greedy Selection</a></li>
+                <li><a href="#test-design">Experimental Design from MMM</a></li>
             </ul>
 
             <h3>Calibration Mechanisms</h3>
@@ -830,6 +831,282 @@ while len(A) &lt; C_ops:
                     Nemhauser–Wolsey–Fisher (1978) theorem, greedy selection therefore attains at least
                     $(1-1/e) \approx 63\%$ of the optimal portfolio value.
                 </p>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="test-design">Experimental Design: From Channel Selection to Experimental Spec</h2>
+
+            <p>
+                Selecting <em>which</em> channel to test is a prioritization problem (EIG, EVOI, §3–4).
+                Specifying <em>how</em> to run the test — which geos to treat, how much to spend, how long
+                to run — is a distinct design problem. A geo-level Bayesian MMM provides the inputs needed
+                to answer every design question rigorously, replacing heuristic defaults with posterior-derived
+                quantities.
+            </p>
+
+            <h3>Quantities the MMM Provides</h3>
+
+            <table class="channel-table">
+                <thead>
+                    <tr>
+                        <th>Quantity</th>
+                        <th>Symbol</th>
+                        <th>Use in test design</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Per-geo channel posterior</td>
+                        <td class="numeric">$\beta_{k,g} \mid \mu_{k,g},\,\sigma_{k,g}^2$</td>
+                        <td>Identifies geos with most prior uncertainty (treated-geo ranking)</td>
+                    </tr>
+                    <tr>
+                        <td>Per-geo current spend</td>
+                        <td class="numeric">$x_{k,g}$</td>
+                        <td>Anchors the saturation-curve evaluation point</td>
+                    </tr>
+                    <tr>
+                        <td>Per-geo saturation curve</td>
+                        <td class="numeric">$S_k(\cdot;\,h_{k,g},\kappa_{k,g})$</td>
+                        <td>Local slope determines the optimal spend increment</td>
+                    </tr>
+                    <tr>
+                        <td>Per-geo residual variance</td>
+                        <td class="numeric">$\sigma_g^2$</td>
+                        <td>Plugs directly into the standard error formula</td>
+                    </tr>
+                    <tr>
+                        <td>Within-geo serial correlation</td>
+                        <td class="numeric">$\rho_g$</td>
+                        <td>Determines how duration converts to precision</td>
+                    </tr>
+                    <tr>
+                        <td>Geo random-effect posteriors</td>
+                        <td class="numeric">$\mathbf{u}_g$</td>
+                        <td>Mahalanobis distance for matched-pair construction</td>
+                    </tr>
+                    <tr>
+                        <td>Cross-geo posterior correlations</td>
+                        <td class="numeric">$\mathrm{Cor}(\beta_{k,g},\beta_{k,g'})$</td>
+                        <td>Spillover and contamination diagnostics</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Step 1 · Treated-Geo Selection by Information Yield</h3>
+
+            <p>
+                Not all geos contribute equally to resolving channel uncertainty. The information yield
+                $I_{k,g}$ scores each geo by how much a test there would compress the posterior on
+                $\beta_{k,g}$:
+            </p>
+
+            <div class="math-block">
+                $$I_{k,g} \;=\; \frac{\sigma_{k,g}^2 \cdot \bigl[S_k'(x_{k,g})\bigr]^2}{\sigma_g^2}$$
+            </div>
+
+            <p>
+                The numerator is the product of prior uncertainty (wide posterior = more to learn) and
+                saturation slope squared (steep curve = spend increment translates to large signal).
+                The denominator is residual noise. A geo saturated for channel $k$ has a small
+                $S_k'(x_{k,g})$ and therefore low yield regardless of how uncertain the posterior is.
+                Rank geos descending by $I_{k,g}$ and select the top $G$.
+            </p>
+
+            <div class="note">
+                <strong>Greedy selection applies here too.</strong> By the same submodularity argument
+                as §4, greedy selection of geos by $I_{k,g}$ achieves at least $(1-1/e) \approx 63\%$
+                of the optimal joint information gain. Run the greedy pass once; the ranking is cheap
+                to compute from the fitted MMM.
+            </div>
+
+            <h3>Step 2 · Matched-Pair Construction via Posterior Mahalanobis Distance</h3>
+
+            <p>
+                For each selected treatment geo $g$, choose a control geo $g'$ that minimises posterior
+                Mahalanobis distance over the geo random effects $\mathbf{u}_g$:
+            </p>
+
+            <div class="math-block">
+                $$d^2(g,\,g') \;=\; (\boldsymbol{\mu}_{u,g} - \boldsymbol{\mu}_{u,g'})^\top
+                  \boldsymbol{\Sigma}_u^{-1}\,(\boldsymbol{\mu}_{u,g} - \boldsymbol{\mu}_{u,g'})$$
+            </div>
+
+            <p>
+                where $\boldsymbol{\mu}_{u,g}$ is the posterior mean of geo $g$'s random-effect vector
+                and $\boldsymbol{\Sigma}_u$ is the posterior covariance matrix of those effects.
+                Matching on Mahalanobis distance over the full posterior — rather than on raw KPI
+                correlation — accounts for parameter uncertainty and produces 20–40% lower residual
+                variance in synthetic studies. Exclude any control candidate with cross-geo posterior
+                correlation $|\mathrm{Cor}(\beta_{k,g},\beta_{k,g'})| > 0.5$ (spillover screen; see
+                Step 6).
+            </p>
+
+            <h3>Step 3 · Treatment Intensity from the Saturation Curve</h3>
+
+            <p>
+                The optimal spend increment for geo $g$ equates signal-to-noise across the panel:
+            </p>
+
+            <div class="math-block">
+                $$\Delta\mathrm{spend}_g^* \;=\; \frac{\sigma_g}{S_k'(x_{k,g})} \cdot
+                  \sqrt{\frac{2\bigl(1+(T-1)\rho_g\bigr)}{GT} \cdot \frac{\eta}{1-\eta}} \cdot
+                  \frac{1}{\sigma_{k,g}}$$
+            </div>
+
+            <p>
+                where $\eta$ is target power, $G$ is the number of treatment geos, and $T$ is
+                planned duration. The factor $S_k'(x_{k,g})^{-1}$ is the key innovation: a geo
+                near saturation (small slope) requires a proportionally larger spend increment to
+                produce the same signal as a sub-saturated geo. In practice $\Delta\mathrm{spend}_g^*$
+                varies 3–5× across geos for the same channel; applying a uniform percentage uplift
+                systematically under-powers some geos and wastes budget in others.
+            </p>
+
+            <h3>Step 4 · Duration from Serial Correlation</h3>
+
+            <p>
+                Weekly KPI within a geo is serially correlated with AR(1) coefficient $\rho_g$,
+                estimated from the MMM residuals. The corrected standard error for the
+                difference-in-differences estimator is:
+            </p>
+
+            <div class="math-block">
+                $$\mathrm{SE}(\hat\tau) \;=\; \sigma_y\,\sqrt{\tfrac{1}{n_t} + \tfrac{1}{n_c}}
+                  \cdot \sqrt{\frac{1+(T-1)\rho_g}{T}}$$
+            </div>
+
+            <p>
+                When $\rho_g = 0$ this reduces to the familiar $\sigma/\sqrt{T}$ form. The minimum
+                duration $T^*$ for target power $1-\beta$ solves:
+            </p>
+
+            <div class="math-block">
+                $$T^* \;=\; \frac{(z_{1-\alpha/2} + z_{1-\beta})^2\;\sigma_y^2\;(n_t^{-1}+n_c^{-1})
+                  \,\bigl(1+(T^*-1)\rho_g\bigr)}{\Delta y^2}$$
+            </div>
+
+            <p>
+                The implicit equation is solved by one-dimensional search. For empirically common
+                values $\rho_g \in [0.2, 0.5]$, EIG flattens after <strong>6–10 weeks</strong> —
+                running longer accumulates cost with minimal additional information.
+            </p>
+
+            <div class="definition">
+                <strong>Delta-method power ceiling.</strong> The ROI posterior uncertainty $\sigma_{k,g}$
+                also enters through the signal: $\mathrm{Var}(\Delta y) \geq \Delta b^2\,\sigma_\theta^2$.
+                This term is independent of $T$ and sets an asymptotic power floor: no duration
+                is long enough to recover power lost to a wide ROI posterior. The design is only
+                feasible if the power ceiling — $\lim_{T\to\infty} \mathrm{Power}(T)$ — exceeds
+                the target.
+            </div>
+
+            <h3>Step 5 · Pre-Experiment Simulation</h3>
+
+            <p>
+                Before committing budget, validate the proposed design by using the fitted MMM as
+                a forward simulator:
+            </p>
+
+            <ol style="line-height:1.8; padding-left:1.4rem;">
+                <li>Sample $\tilde\theta$ from the posterior $p(\theta \mid \mathcal{D})$.</li>
+                <li>Generate simulated KPI for each geo under the proposed spend schedule,
+                    adding noise $\mathcal{N}(0,\sigma_g^2)$ scaled by the serial-correlation
+                    factor $\sqrt{1+(T-1)\rho_g}$.</li>
+                <li>Fit the planned estimator (DiD, SCM, etc.) to the simulated data and record
+                    whether it reaches significance at $\alpha$.</li>
+                <li>Repeat 500–2,000 times; the fraction of significant replicates is the
+                    simulated power.</li>
+            </ol>
+
+            <p>
+                Simulated power catches issues — skewed KPI distributions, heterogeneous geo
+                variance, adstock contamination — that closed-form approximations miss. If simulated
+                power falls short, adjust $\Delta\mathrm{spend}_g^*$, add geos, or extend duration
+                and re-simulate.
+            </p>
+
+            <h3>Step 6 · Spillover and Contamination Diagnostics</h3>
+
+            <p>
+                Cross-geo spillover (national TV halo, retargeting bleed across DMAs) deflates the
+                estimated lift by partially treating the control. Diagnose contamination with the
+                cross-geo posterior correlation:
+            </p>
+
+            <div class="math-block">
+                $$r_{g,g'} \;=\; \mathrm{Cor}\!\bigl(\beta_{k,g},\,\beta_{k,g'}\bigr)$$
+            </div>
+
+            <p>
+                Flag any control candidate with $|r_{g,g'}| > 0.5$ and exclude it from the donor
+                pool. Adstock carryover introduces time-domain contamination in the first 1–2
+                weeks; include a wash-in buffer or model carryover explicitly in the geo-level
+                analysis. Both diagnostics are computed from the fitted MMM posterior — no
+                additional data collection is required.
+            </p>
+
+            <h3>Worked Example — CTV Campaign</h3>
+
+            <p>
+                Five candidate geos were scored for a Connected-TV channel. The table summarises
+                the design output of Steps 1–6.
+            </p>
+
+            <table class="channel-table">
+                <thead>
+                    <tr>
+                        <th>Geo</th>
+                        <th>Role</th>
+                        <th>$I_{k,g}$ rank</th>
+                        <th>Saturation slope $S'$</th>
+                        <th>$\Delta\mathrm{spend}_g^*$</th>
+                        <th>$T^*$ (weeks)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Atlanta</td><td>Treatment</td><td class="numeric">1st</td>
+                        <td class="numeric">0.82 (sub-saturated)</td>
+                        <td class="numeric">+18%</td><td class="numeric">7</td>
+                    </tr>
+                    <tr>
+                        <td>Phoenix</td><td>Treatment</td><td class="numeric">2nd</td>
+                        <td class="numeric">0.51 (mid-saturated)</td>
+                        <td class="numeric">+31%</td><td class="numeric">9</td>
+                    </tr>
+                    <tr>
+                        <td>Tampa</td><td>Control (Atlanta)</td><td class="numeric">&mdash;</td>
+                        <td class="numeric">$d^2 = 0.9$</td>
+                        <td class="numeric">0%</td><td class="numeric">&mdash;</td>
+                    </tr>
+                    <tr>
+                        <td>Portland</td><td>Control (Phoenix)</td><td class="numeric">&mdash;</td>
+                        <td class="numeric">$d^2 = 1.4$</td>
+                        <td class="numeric">0%</td><td class="numeric">&mdash;</td>
+                    </tr>
+                    <tr>
+                        <td>St. Louis</td><td>Excluded</td><td class="numeric">3rd</td>
+                        <td class="numeric">$r_{g,g'} = 0.71$</td>
+                        <td class="numeric">&mdash;</td><td class="numeric">&mdash;</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                Atlanta's lower $\Delta\mathrm{spend}^*$ (18% vs 31%) reflects its steeper saturation
+                slope: the same ROI uncertainty is resolved more cheaply where the response curve is
+                still responsive. St. Louis was excluded despite ranking 3rd by $I_{k,g}$ because its
+                cross-geo posterior correlation with Atlanta ($r = 0.71$) exceeded the spillover
+                threshold.
+            </p>
+
+            <div class="note">
+                <strong>Channel &times; geo generalisation.</strong> The same greedy submodular
+                selection extends to portfolios of (channel, geo) pairs. Score every pair by
+                $I_{k,g}$, apply the Mahalanobis exclusion and spillover screen, then select
+                greedily up to the experiment budget. The $(1-1/e)$ approximation bound from §4
+                applies to the joint selection problem without modification.
             </div>
 
             <!-- ================================================================== -->
