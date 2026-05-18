@@ -5,13 +5,7 @@ import { AppShell } from './components/layout';
 import { ProtectedRoute } from './components/common';
 import {
   LoginPage,
-  DashboardPage,
-  PlanningPage,
-  DataUploadPage,
-  ModelConfigPage,
-  ModelFitPage,
-  DiagnosticsPage,
-  ResultsPage,
+  AgentPage,
 } from './pages';
 import './index.css';
 
@@ -39,29 +33,14 @@ function App() {
             path="/*"
             element={
               <ProtectedRoute>
-                <AppShell>
-                  <Routes>
-                    {/* Dashboard as default */}
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
+                <Routes>
+                  {/* Agent Dashboard as default and only page */}
+                  <Route path="/" element={<Navigate to="/agent" replace />} />
+                  <Route path="/agent" element={<AgentPage />} />
 
-                    {/* Bayesian Workflow Pages */}
-                    <Route path="/planning" element={<PlanningPage />} />
-                    <Route path="/data" element={<DataUploadPage />} />
-                    <Route path="/config" element={<ModelConfigPage />} />
-                    <Route path="/config/:configId" element={<ModelConfigPage />} />
-                    <Route path="/fit" element={<ModelFitPage />} />
-                    <Route path="/diagnostics" element={<DiagnosticsPage />} />
-                    <Route path="/results" element={<ResultsPage />} />
-
-                    {/* Model-specific routes */}
-                    <Route path="/models/:modelId/diagnostics" element={<DiagnosticsPage />} />
-                    <Route path="/models/:modelId/results" element={<ResultsPage />} />
-
-                    {/* Catch all - redirect to dashboard */}
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                  </Routes>
-                </AppShell>
+                  {/* Catch all - redirect to agent */}
+                  <Route path="*" element={<Navigate to="/agent" replace />} />
+                </Routes>
               </ProtectedRoute>
             }
           />

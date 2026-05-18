@@ -98,10 +98,18 @@ def compute_saturation_curves_with_uncertainty(
                 for k, v in sat_params.items()
             }
 
+        # Scale grid by media_max to match how model was fitted
+        if hasattr(model, "_media_max") and channel in model._media_max:
+            scale_factor = model._media_max[channel] + 1e-8
+        else:
+            scale_factor = 1.0
+            
+        scaled_grid = spend_grid / scale_factor
+
         # Compute response curves
         response_samples = np.zeros((len(beta_samples), n_points))
         for i in range(n_points):
-            saturated = _apply_saturation(spend_grid[i], sat_params)
+            saturated = _apply_saturation(scaled_grid[i], sat_params)
             response_samples[:, i] = beta_samples * saturated * y_std
 
         # Compute statistics

@@ -339,9 +339,18 @@ def compute_marginal_roi(
     spend_high = spend_level * (1 + delta)
     spend_low = spend_level * (1 - delta)
 
+    # Scale inputs by media_max to match how model was fitted
+    if hasattr(model, "_media_max") and channel in model._media_max:
+        scale_factor = model._media_max[channel] + 1e-8
+    else:
+        scale_factor = 1.0
+        
+    scaled_high = spend_high / scale_factor
+    scaled_low = spend_low / scale_factor
+
     # Apply saturation function
-    response_high = _apply_saturation(spend_high, sat_params)
-    response_low = _apply_saturation(spend_low, sat_params)
+    response_high = _apply_saturation(scaled_high, sat_params)
+    response_low = _apply_saturation(scaled_low, sat_params)
 
     # Marginal response = d(response)/d(spend)
     marginal_response = (response_high - response_low) / (spend_high - spend_low)

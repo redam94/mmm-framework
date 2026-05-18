@@ -565,7 +565,8 @@ class BayesianMMM:
                 exponent = pt.clip(-sat_lam * x_adstocked, -20, 0)
                 x_saturated = 1 - pt.exp(exponent)
 
-                beta = pm.HalfNormal(f"beta_{channel_name}", sigma=0.5)
+                # Use a Gamma prior to place more mass > 1.0 (encouraging ROI > 1x)
+                beta = pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0)
                 channel_contrib = beta * x_saturated
                 channel_contribs.append(channel_contrib)
 

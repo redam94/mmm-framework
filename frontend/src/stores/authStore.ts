@@ -1,15 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getStoredApiKey, setStoredApiKey, clearStoredApiKey, validateApiKey } from '../api/client';
+import { getStoredApiKey, getStoredModelName, setStoredAuth, clearStoredAuth, validateApiKey } from '../api/client';
 
 interface AuthState {
   apiKey: string | null;
+  modelName: string | null;
   isAuthenticated: boolean;
   isValidating: boolean;
   validationError: string | null;
 
   // Actions
-  setApiKey: (apiKey: string) => Promise<boolean>;
+  setApiKey: (apiKey: string, modelName: string) => Promise<boolean>;
   clearApiKey: () => void;
   validateStoredKey: () => Promise<boolean>;
 }
@@ -18,20 +19,22 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       apiKey: getStoredApiKey(),
+      modelName: getStoredModelName(),
       isAuthenticated: !!getStoredApiKey(),
       isValidating: false,
       validationError: null,
 
-      setApiKey: async (apiKey: string) => {
+      setApiKey: async (apiKey: string, modelName: string) => {
         set({ isValidating: true, validationError: null });
 
         try {
-          const isValid = await validateApiKey(apiKey);
+          const isValid = await validateApiKey(apiKey, modelName);
 
           if (isValid) {
-            setStoredApiKey(apiKey);
+            setStoredAuth(apiKey, modelName);
             set({
               apiKey,
+              modelName,
               isAuthenticated: true,
               isValidating: false,
               validationError: null,
@@ -54,9 +57,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearApiKey: () => {
-        clearStoredApiKey();
+        clearStoredAuth();
         set({
           apiKey: null,
+          modelName: null,
           isAuthenticated: false,
           validationError: null,
         });
@@ -64,17 +68,18 @@ export const useAuthStore = create<AuthState>()(
 
       validateStoredKey: async () => {
         const apiKey = get().apiKey;
-        if (!apiKey) {
+        const modelName = get().modelName;
+        if (!apiKey || !modelName) {
           set({ isAuthenticated: false });
           return false;
         }
 
         try {
-          const isValid = await validateApiKey(apiKey);
+          const isValid = await validateApiKey(apiKey, modelName);
           set({ isAuthenticated: isValid });
           if (!isValid) {
-            clearStoredApiKey();
-            set({ apiKey: null });
+            clearStoredAuth();
+            set({ apiKey: null, modelName: null });
           }
           return isValid;
         } catch {
@@ -85,7 +90,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'mmm-auth',
-      partialize: (state) => ({ apiKey: state.apiKey }),
+      partialize: (state) => ({ apiKey: state.apiKey, modelName: state.modelName }),
     }
   )
 );

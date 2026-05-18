@@ -16,28 +16,38 @@ export const apiClient: AxiosInstance = axios.create({
 
 // Storage key for API key
 const API_KEY_STORAGE_KEY = 'mmm_api_key';
+const MODEL_NAME_STORAGE_KEY = 'mmm_model_name';
 
-// Get API key from localStorage
+// Get API key and model from localStorage
 export function getStoredApiKey(): string | null {
   return localStorage.getItem(API_KEY_STORAGE_KEY);
 }
-
-// Set API key in localStorage
-export function setStoredApiKey(apiKey: string): void {
-  localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+export function getStoredModelName(): string | null {
+  return localStorage.getItem(MODEL_NAME_STORAGE_KEY);
 }
 
-// Remove API key from localStorage
-export function clearStoredApiKey(): void {
+// Set API key and model in localStorage
+export function setStoredAuth(apiKey: string, modelName: string): void {
+  localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+  localStorage.setItem(MODEL_NAME_STORAGE_KEY, modelName);
+}
+
+// Remove API key and model from localStorage
+export function clearStoredAuth(): void {
   localStorage.removeItem(API_KEY_STORAGE_KEY);
+  localStorage.removeItem(MODEL_NAME_STORAGE_KEY);
 }
 
 // Request interceptor - add API key header
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const apiKey = getStoredApiKey();
+    const modelName = getStoredModelName();
     if (apiKey) {
       config.headers['X-API-Key'] = apiKey;
+    }
+    if (modelName) {
+      config.headers['X-Model-Name'] = modelName;
     }
     return config;
   },
@@ -58,7 +68,7 @@ apiClient.interceptors.response.use(
 
     // Handle 401 - clear API key and redirect to login
     if (error.response?.status === 401) {
-      clearStoredApiKey();
+      clearStoredAuth();
       // Dispatch event for auth state listeners
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
@@ -85,11 +95,12 @@ function getErrorMessage(error: AxiosError): string {
 }
 
 // Validate API key by making a health check request
-export async function validateApiKey(apiKey: string): Promise<boolean> {
+export async function validateApiKey(apiKey: string, modelName: string): Promise<boolean> {
   try {
     const response = await axios.get(`${API_BASE_URL}/health`, {
       headers: {
         'X-API-Key': apiKey,
+        'X-Model-Name': modelName,
       },
       timeout: 5000,
     });

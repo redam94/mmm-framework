@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Card, Title, Text, TextInput, Button } from '@tremor/react';
+import { Card, Title, Text, TextInput, Button, Select, SelectItem } from '@tremor/react';
 import { KeyIcon, ExclamationCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
 import { checkApiHealth } from '../../api/client';
 
 interface LoginFormData {
   apiKey: string;
+  modelName: string;
 }
 
 export function LoginPage() {
@@ -19,8 +20,16 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
-  } = useForm<LoginFormData>();
+  } = useForm<LoginFormData>({
+    defaultValues: {
+      modelName: 'claude-sonnet-4-6'
+    }
+  });
+
+  const selectedModel = watch('modelName');
 
   // Get the intended destination from location state
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
@@ -40,7 +49,7 @@ export function LoginPage() {
   }, [isAuthenticated, navigate, from]);
 
   const onSubmit = async (data: LoginFormData) => {
-    const success = await setApiKey(data.apiKey.trim());
+    const success = await setApiKey(data.apiKey.trim(), data.modelName);
     if (success) {
       navigate(from, { replace: true });
     }
@@ -63,6 +72,21 @@ export function LoginPage() {
         {/* Login card */}
         <Card className="mt-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div>
+              <label htmlFor="modelName" className="block text-sm font-medium text-gray-700 mb-1">
+                LLM Provider
+              </label>
+              <Select
+                id="modelName"
+                value={selectedModel}
+                onValueChange={(value) => setValue('modelName', value)}
+              >
+                <SelectItem value="claude-sonnet-4-6">Claude 4.6 Sonnet (claude-sonnet-4-6)</SelectItem>
+                <SelectItem value="gpt-4o">OpenAI GPT-4o (gpt-4o)</SelectItem>
+                <SelectItem value="gemini-3.1-pro-preview">Google Gemini (gemini-3.1-pro-preview)</SelectItem>
+              </Select>
+            </div>
+
             <div>
               <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
                 API Key

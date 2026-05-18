@@ -6,3 +6,4 @@ export { ModelConfigPage } from './ModelConfig';
 export { ModelFitPage } from './ModelFit';
 export { DiagnosticsPage } from './Diagnostics';
 export { ResultsPage } from './Results';
+export { AgentPage } from './AgentPage';

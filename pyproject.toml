@@ -29,6 +29,12 @@ dependencies = [
     "statsmodels>=0.14.0",
     "uvicorn>=0.38.0",
     "openpyxl>=3.1.0",
+    "langgraph>=0.2.14",
+    "langchain-core>=0.2.33",
+    "langchain-google-genai>=1.0.8",
+    "langchain-anthropic>=0.1.20",
+    "langchain-openai>=0.1.21",
+    "rich>=13.0.0",
 ]
 
 [dependency-groups]

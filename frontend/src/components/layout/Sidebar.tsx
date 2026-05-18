@@ -10,6 +10,7 @@ import {
   DocumentChartBarIcon,
   MapIcon,
   ArrowRightOnRectangleIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
 import { useWorkflowStore, type BayesianPhase } from '../../stores/workflowStore';
@@ -29,6 +30,7 @@ const navigation: NavItem[] = [
   { name: 'Fit Model', href: '/fit', icon: PlayIcon, phase: 'fit' },
   { name: 'Diagnostics', href: '/diagnostics', icon: MagnifyingGlassIcon, phase: 'diagnostics' },
   { name: 'Results', href: '/results', icon: DocumentChartBarIcon, phase: 'results' },
+  { name: 'Agent Copilot', href: '/agent', icon: ChatBubbleLeftRightIcon },
 ];
 
 export function Sidebar() {

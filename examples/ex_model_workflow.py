@@ -173,11 +173,11 @@ def generate_synthetic_mff(
 
             # Generate sales
             base_sales = 800000
-            tv_contribution = 0.8 * np.sqrt(tv_spend / 1000)
-            digital_contribution = 1.2 * np.sqrt(digital_spend / 1000)
-            social_contribution = 0.6 * np.sqrt(social_spend / 1000)
+            tv_contribution = 15.0 * np.sqrt(tv_spend / 1000)
+            digital_contribution = 20.0 * np.sqrt(digital_spend / 1000)
+            social_contribution = 12.0 * np.sqrt(social_spend / 1000)
             radio_contribution = (
-                0.4 * np.sqrt(radio_spend / 1000) if radio_spend > 0 else 0
+                10.0 * np.sqrt(radio_spend / 1000) if radio_spend > 0 else 0
             )
 
             media_lift = (
@@ -285,11 +285,11 @@ def generate_synthetic_mff(
 
                 # Sales at geo level
                 base_sales = 800000 * geo_multiplier
-                tv_contribution = 0.8 * np.sqrt(tv_spend * geo_multiplier / 1000)
-                digital_contribution = 1.2 * np.sqrt(
+                tv_contribution = 15.0 * np.sqrt(tv_spend * geo_multiplier / 1000)
+                digital_contribution = 20.0 * np.sqrt(
                     digital_spend * geo_multiplier / 1000
                 )
-                social_contribution = 0.6 * np.sqrt(
+                social_contribution = 12.0 * np.sqrt(
                     social_spend * geo_multiplier / 1000
                 )
 
