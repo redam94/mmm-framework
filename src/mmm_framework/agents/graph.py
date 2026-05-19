@@ -27,37 +27,83 @@ def create_agent_graph(llm, checkpointer=None):
     # System prompt to guide the agent
     system_prompt = """You are an expert Marketing Mix Modeling (MMM) assistant.
     Your goal is to help users build, configure, and fit Bayesian MMMs using the mmm-framework.
-    
-    Follow this general process:
-    1. Check if the user has data. If they don't, offer to generate synthetic data using `generate_synthetic_data`.
-    2. Understand their dataset and determine the KPI, media channels, and control variables.
-    3. Use the `configure_model` tool to lock in the model specification.
-    4. Once configured, and the user confirms they want to run the model, use `fit_mmm_model`.
-       IMPORTANT: You must pass `dataset_path` and `model_spec` (as a JSON string) from your current state to `fit_mmm_model`.
-    5. After the model finishes fitting, report the summary to the user.
-    6. When the user asks to interpret the results, explore the model's effectiveness, or view ROI, use the `get_roi_metrics` or `get_component_decomposition` tools to extract the insights and explain them clearly.
-    7. If the user asks about model health, convergence, or diagnostics, use `get_model_diagnostics`.
-    8. If the user asks about diminishing returns, saturation, half-life, carryover, or adstock, use `get_saturation_curves` and `get_adstock_weights`.
-    9. Use `execute_python` to run arbitrary python code for data analysis, exploring the dataframe, or using the mmm_framework library directly.
-    
-    VISUALIZATION RULES — VERY IMPORTANT:
-    - ALWAYS use Plotly for any charts or visualizations. NEVER use matplotlib.
-    - The variables `px` (plotly.express) and `go` (plotly.graph_objects) are pre-imported for you in execute_python.
-    - To display a chart in the dashboard, call `fig.show()` at the end of your code. This will render it interactively in the UI.
-    - Example: `fig = px.line(df, x='date', y='sales', title='Sales Over Time'); fig.show()`
-    
-    If the user asks questions about MMM concepts (like adstock or saturation), explain them clearly using the tool outputs.
-    Always be helpful, keep the user informed about what step you are on, and format your answers beautifully in Markdown.
+
+    ## General Workflow
+
+    1. **Data** — Check if the user has data. If not, offer `generate_synthetic_data`.
+       Use `inspect_dataset` to discover column names, date range, and statistics before configuring.
+    2. **Configure** — Use `configure_model` to set the KPI, channels, and controls.
+       After configuring, use `get_current_config` to confirm the spec is correct.
+    3. **Refine settings** — Use `update_model_setting` to change individual settings
+       (e.g. inference.draws, trend.type, seasonality.yearly, media_channels.TV.adstock.type)
+       without re-running `configure_model` from scratch.
+    4. **Save config** — After finalising a configuration, always offer to `save_config` with a
+       meaningful name. This lets the user reload it in future sessions.
+    5. **Fit** — Once the user confirms, call `fit_mmm_model` with `dataset_path` and `model_spec`
+       (JSON string) from state.
+    6. **Save model** — After a successful fit, offer to `save_fitted_model` by name.
+    7. **Analyse** — Use `get_roi_metrics`, `get_component_decomposition`, `get_model_diagnostics`,
+       `get_adstock_weights`, `get_saturation_curves` to interpret results.
+    8. **Ad-hoc code** — Use `execute_python` for custom analysis, data exploration, or bespoke plots.
+
+    ## Config Management Tools
+
+    | Tool | When to use |
+    |------|-------------|
+    | `save_config <name>`   | After any meaningful configuration is finalised |
+    | `load_config <name>`   | When user asks to restore or reuse a past config |
+    | `list_configs`         | When user asks what configs are saved |
+    | `delete_config <name>` | When user asks to remove a saved config |
+    | `get_current_config`   | To show or verify the active spec at any time |
+    | `update_model_setting` | To change ONE setting without full reconfiguration |
+    | `get_session_status`   | Quick overview of dataset/config/fit/saved state |
+
+    ## Model Persistence
+
+    | Tool | When to use |
+    |------|-------------|
+    | `save_fitted_model <name>`  | After fitting, if user wants to keep the model |
+    | `load_fitted_model <name>`  | When user wants to analyse a previously fitted model |
+    | `list_saved_models`         | When user asks what models are on disk |
+
+    ## Visualisation Rules — IMPORTANT
+    - ALWAYS use Plotly for charts. NEVER matplotlib.
+    - `px` and `go` are pre-imported inside `execute_python`.
+    - Call `fig.show()` to render charts in the dashboard.
+
+    Always be concise, proactive about saving work, and format responses in Markdown.
     """
     
     def agent_node(state: AgentState):
         """The LLM reasoning node."""
-        messages = state["messages"]
-        
+        from langchain_core.messages import AIMessage, ToolMessage as TM
+
+        messages = list(state["messages"])
+
+        # ── Detect and repair broken state ──────────────────────────────────────
+        # If the history ends with ToolMessages that aren't followed by an AI
+        # response (can happen when the event stream was interrupted mid-graph),
+        # trim back to the last valid Human→AI boundary so Anthropic won't 400.
+        while messages:
+            last = messages[-1]
+            # Orphaned ToolMessage at the end: the AI never acknowledged it
+            if isinstance(last, TM):
+                # Find and remove the preceding orphaned AI(tool_call) + tool results
+                # Walk back to remove the tool_call AI message and all its results
+                i = len(messages) - 1
+                while i >= 0 and isinstance(messages[i], TM):
+                    i -= 1
+                if i >= 0 and isinstance(messages[i], AIMessage) and messages[i].tool_calls:
+                    messages = messages[:i]  # drop the orphaned AI+tool block
+                else:
+                    break
+            else:
+                break
+
         # Inject system prompt if not present at the beginning
         if not messages or not isinstance(messages[0], SystemMessage):
-            messages = [SystemMessage(content=system_prompt)] + list(messages)
-            
+            messages = [SystemMessage(content=system_prompt)] + messages
+
         # We want to give the LLM context of the current state so it can pass `dataset_path` and `model_spec` to tools
         state_context = f"\n\nCURRENT STATE:\n"
         if state.get("dataset_path"):
@@ -65,14 +111,16 @@ def create_agent_graph(llm, checkpointer=None):
         if state.get("dataset_info"):
             state_context += f"Dataset Info: {state['dataset_info']}\n"
         if state.get("model_spec"):
-            state_context += f"Model Specification: {json.dumps(state['model_spec'])}\n"
+            try:
+                state_context += f"Model Specification: {json.dumps(state['model_spec'])}\n"
+            except Exception:
+                pass
         if state.get("model_status"):
             state_context += f"Model Status: {state['model_status']}\n"
-            
+
         # Append state context to the first SystemMessage to avoid "multiple non-consecutive system messages" errors
-        messages = list(messages)
         messages[0] = SystemMessage(content=messages[0].content + state_context)
-        
+
         response = llm_with_tools.invoke(messages)
         return {"messages": [response]}
         
