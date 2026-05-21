@@ -5,10 +5,13 @@ import io
 import contextlib
 import traceback
 
-from langchain_core.tools import tool, InjectedToolCallId
+from langchain_core.tools import tool, InjectedToolCallId, InjectedToolArg
 from langchain_core.messages import ToolMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from langgraph.prebuilt import InjectedState
+
+InjectedConfig = Annotated[RunnableConfig, InjectedToolArg]
 
 from mmm_framework import (
     MFFConfigBuilder,
@@ -56,11 +59,78 @@ from mmm_framework.reporting.helpers import (
     compute_component_decomposition,
     _get_diagnostics,
     compute_adstock_weights,
-    compute_saturation_curves_with_uncertainty
+    compute_saturation_curves_with_uncertainty,
+    compute_marginal_roi,
 )
 
 # Global cache to store the fitted model and avoid LangGraph msgpack serialization errors
 _MODEL_CACHE = {}
+
+_MFF_DIMENSION_COLS = ["Geography", "Product", "Campaign", "Outlet", "Creative"]
+
+
+def _build_dataset_dashboard(df, ds_path: str) -> tuple[list[str], dict]:
+    """Build both the text summary lines and the rich dashboard_data['dataset'] dict."""
+    import pandas as pd
+
+    lines = [f"### Dataset: `{ds_path}`\n"]
+    lines.append(f"**Shape**: {df.shape[0]:,} rows × {df.shape[1]} columns")
+
+    date_range = None
+    date_cols = [c for c in df.columns if any(k in c.lower() for k in ("date", "week", "period", "time"))]
+    if date_cols:
+        try:
+            dates = pd.to_datetime(df[date_cols[0]])
+            date_range = {"min": str(dates.min().date()), "max": str(dates.max().date())}
+            lines.append(f"**Date range**: {date_range['min']} → {date_range['max']}")
+        except Exception:
+            pass
+
+    variable_names: list[str] = []
+    if "VariableName" in df.columns:
+        variable_names = sorted(df["VariableName"].dropna().unique().tolist())
+        lines.append(f"\n**Variable Names** ({len(variable_names)}): {', '.join(variable_names)}")
+
+    present_dims = [c for c in _MFF_DIMENSION_COLS if c in df.columns]
+    column_stats: dict = {}
+    active_dimensions: list[str] = []
+
+    for col in present_dims:
+        non_null = df[col].dropna()
+        unique_count = int(non_null.nunique())
+        if unique_count > 1:
+            active_dimensions.append(col)
+        counts = non_null.value_counts().head(20)
+        column_stats[col] = {
+            "unique": unique_count,
+            "top_values": [{"value": str(v), "count": int(c)} for v, c in counts.items()],
+            "truncated": unique_count > 20,
+        }
+        lines.append(f"\n**{col}** ({unique_count} unique): {', '.join(str(v) for v in counts.index[:6])}")
+
+    if "VariableName" not in df.columns:
+        num = df.select_dtypes(include="number")
+        lines.append(f"\n**Numeric columns** ({len(num.columns)}):")
+        for col in num.columns[:30]:
+            s = num[col]
+            lines.append(f"  - `{col}`: mean={s.mean():.3g}, min={s.min():.3g}, max={s.max():.3g}, non-zero={int((s != 0).sum())}")
+        if len(num.columns) > 30:
+            lines.append(f"  … and {len(num.columns) - 30} more numeric columns")
+
+    geographies: list[str] = []
+    if "Geography" in df.columns:
+        geographies = sorted(df["Geography"].dropna().unique().tolist())
+
+    dataset_info = {
+        "rows": len(df),
+        "columns": df.columns.tolist(),
+        "date_range": date_range,
+        "variable_names": variable_names,
+        "geographies": geographies if geographies else ["National"],
+        "column_stats": column_stats,
+        "active_dimensions": active_dimensions,
+    }
+    return lines, dataset_info
 
 
 @tool
@@ -100,15 +170,10 @@ def generate_synthetic_data(
     else:
         info += "\nNational level data (no geographies)."
         
-    dashboard_data = state.get("dashboard_data", {})
-    if dashboard_data is None:
-        dashboard_data = {}
-    dashboard_data["dataset"] = {
-        "rows": len(df),
-        "columns": df.columns.tolist(),
-        "geographies": geographies if geographies else ["National"]
-    }
-        
+    dashboard_data = state.get("dashboard_data") or {}
+    _, dataset_info = _build_dataset_dashboard(df, output_path)
+    dashboard_data["dataset"] = dataset_info
+
     return Command(
         update={
             "dataset_path": output_path,
@@ -377,15 +442,79 @@ def fit_mmm_model(
         # Cache the model globally so interpretation tools can use it
         _MODEL_CACHE["fitted_model"] = mmm
         _MODEL_CACHE["fit_results"] = results
-        
-        dashboard_data = state.get("dashboard_data", {}) if "state" in locals() else {}
-        if dashboard_data is None:
-            dashboard_data = {}
+
+        # Auto-save the model to disk with a timestamped run name
+        from datetime import datetime, timezone
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        run_name = f"run_{run_id}"
+        model_path = os.path.join(_MODELS_DIR, run_name)
+        model_saved = False
+        try:
+            os.makedirs(model_path, exist_ok=True)
+            from mmm_framework.serialization import MMMSerializer
+            MMMSerializer().save(mmm, results, model_path)
+            model_saved = True
+            summary += f" Auto-saved as **{run_name}**."
+        except Exception as save_err:
+            summary += f" (Auto-save failed: {save_err})"
+
+        # Build a structured run record for the artifact log
+        channel_names = [m["name"] for m in spec.get("media_channels", [])]
+        control_names = [c["name"] for c in spec.get("control_variables", [])]
+        model_run = {
+            "run_id": run_id,
+            "run_name": run_name,
+            "timestamp_iso": datetime.now(timezone.utc).isoformat(),
+            "dataset_path": dataset_path,
+            "kpi": spec.get("kpi", ""),
+            "channels": channel_names,
+            "controls": control_names,
+            "trend": trend_type,
+            "seasonality": {"yearly": yearly, "monthly": monthly, "weekly": weekly},
+            "inference": {"chains": chains, "draws": draws, "tune": tune,
+                          "target_accept": target_accept},
+            "model_path": model_path if model_saved else None,
+            "report_path": report_path,
+            "summary": summary,
+            "n_obs": int(mmm.n_obs),
+            "n_channels": int(mmm.n_channels),
+        }
+
+        # Write metadata.json alongside the saved model
+        if model_saved:
+            try:
+                with open(os.path.join(model_path, "run_metadata.json"), "w") as f:
+                    json.dump(model_run, f, indent=2, default=str)
+            except Exception:
+                pass
+
+        dashboard_data = state.get("dashboard_data") or {}
         dashboard_data["model_status"] = "completed"
         dashboard_data["summary"] = summary
+        dashboard_data["model_run"] = model_run
         if report_path:
             dashboard_data["report_path"] = report_path
-        
+
+        # Auto-populate ROI and decomposition so Results tab fills immediately
+        try:
+            roi_df = compute_roi_with_uncertainty(mmm, hdi_prob=0.94)
+            dashboard_data["roi_metrics"] = roi_df.to_dict(orient="records")
+        except Exception:
+            pass
+
+        try:
+            decomp_list = compute_component_decomposition(mmm, include_time_series=False)
+            dashboard_data["decomposition"] = [
+                {
+                    "component": d.component,
+                    "total_contribution": d.total_contribution,
+                    "pct_of_total": d.pct_of_total,
+                }
+                for d in decomp_list
+            ]
+        except Exception:
+            pass
+
         return Command(
             update={
                 "model_status": "completed",
@@ -675,18 +804,83 @@ def execute_python(
     captured_plots = []
     original_pio_show = None
     original_fig_show = None
-    
+
+    # Design-consistent palette (indigo / teal / amber / rose / emerald / violet / sky …)
+    _PALETTE = [
+        '#4f46e5', '#0d9488', '#f59e0b', '#e11d48',
+        '#059669', '#7c3aed', '#0284c7', '#b45309',
+        '#6366f1', '#0f766e',
+    ]
+    # Default Plotly Express / graph_objects colors we want to remap
+    _PLOTLY_DEFAULTS = {
+        '#636efa': 0, '#ef553b': 1, '#00cc96': 2, '#ab63fa': 3, '#ffa15a': 4,
+        '#19d3f3': 5, '#ff6692': 6, '#b6e880': 7, '#ff97ff': 8, '#fecb52': 9,
+    }
+
+    def _normalize_figure(fig):
+        """Remap default colors, fix margins and suppress overlapping bar labels."""
+        color_map: dict = {}
+        next_idx = [0]
+
+        def _remap(c: str) -> str:
+            if not isinstance(c, str):
+                return c
+            key = c.lower()
+            if key not in color_map:
+                if key in _PLOTLY_DEFAULTS:
+                    color_map[key] = _PALETTE[_PLOTLY_DEFAULTS[key] % len(_PALETTE)]
+                else:
+                    color_map[key] = _PALETTE[next_idx[0] % len(_PALETTE)]
+                    next_idx[0] += 1
+            return color_map[key]
+
+        for trace in fig.data:
+            # Remap solid string colors on the marker
+            mc = getattr(getattr(trace, 'marker', None), 'color', None)
+            if isinstance(mc, str):
+                trace.marker.color = _remap(mc)
+            elif isinstance(mc, (list, tuple)):
+                # Array of colors — remap each unique color
+                trace.marker.color = [_remap(c) if isinstance(c, str) else c for c in mc]
+            # Also remap line color
+            lc = getattr(getattr(trace, 'line', None), 'color', None)
+            if isinstance(lc, str):
+                trace.line.color = _remap(lc)
+
+        # Fix bar chart text overlap: hide labels that don't fit
+        has_bar = any(getattr(t, 'type', '') in ('bar',) for t in fig.data)
+
+        fig.update_layout(
+            colorway=_PALETTE,
+            font=dict(family='Inter, system-ui, sans-serif', size=12, color='#1f2937'),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='#f9fafb',
+            margin=dict(t=90, l=70, r=40, b=80),
+            legend=dict(
+                orientation='h',
+                yanchor='bottom', y=1.02,
+                xanchor='right', x=1,
+                bgcolor='rgba(255,255,255,0.95)',
+                bordercolor='#e5e7eb', borderwidth=1,
+                font=dict(size=11, color='#374151'),
+            ),
+        )
+        if has_bar:
+            fig.update_layout(uniformtext=dict(minsize=9, mode='hide'))
+
+        return fig
+
     try:
         import plotly.io as pio
         import plotly.basedatatypes as pbd
         original_pio_show = pio.show
         original_fig_show = pbd.BaseFigure.show
-        
+
         def custom_show(fig_or_self, *args, **kwargs):
             # Called as pio.show(fig) or fig.show()
-            fig = fig_or_self
+            fig = _normalize_figure(fig_or_self)
             captured_plots.append(json.loads(fig.to_json()))
-            
+
         pio.show = custom_show
         pbd.BaseFigure.show = custom_show
     except ImportError:
@@ -1065,36 +1259,14 @@ def inspect_dataset(
             content=f"Failed to read dataset: {exc}", tool_call_id=tool_call_id,
         )]})
 
-    lines = [f"### Dataset: `{ds_path}`\n"]
-    lines.append(f"**Shape**: {df.shape[0]:,} rows × {df.shape[1]} columns")
+    lines, dataset_info = _build_dataset_dashboard(df, ds_path)
+    dashboard_data = state.get("dashboard_data") or {}
+    dashboard_data["dataset"] = dataset_info
 
-    # Date range
-    date_cols = [c for c in df.columns if any(k in c.lower() for k in ("date", "week", "period", "time"))]
-    if date_cols:
-        try:
-            dates = pd.to_datetime(df[date_cols[0]])
-            lines.append(f"**Date range**: {dates.min().date()} → {dates.max().date()}")
-        except Exception:
-            pass
-
-    # Numeric columns
-    num = df.select_dtypes(include="number")
-    lines.append(f"\n**Numeric columns** ({len(num.columns)}):")
-    for col in num.columns[:30]:
-        s = num[col]
-        lines.append(f"  - `{col}`: mean={s.mean():.3g}, min={s.min():.3g}, max={s.max():.3g}, non-zero={int((s != 0).sum())}")
-    if len(num.columns) > 30:
-        lines.append(f"  … and {len(num.columns) - 30} more numeric columns")
-
-    # Categorical
-    cat = df.select_dtypes(include="object")
-    if not cat.empty:
-        lines.append(f"\n**Categorical columns** ({len(cat.columns)}):")
-        for col in cat.columns[:10]:
-            uniq = df[col].unique()[:6]
-            lines.append(f"  - `{col}`: {df[col].nunique()} unique ({', '.join(str(v) for v in uniq)})")
-
-    return Command(update={"messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)]})
+    return Command(update={
+        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
+        "dashboard_data": dashboard_data,
+    })
 
 
 @tool
@@ -1200,11 +1372,280 @@ def list_saved_models(
     )]})
 
 
+from mmm_framework.agents.causal_tools import CAUSAL_TOOLS
+
+
+@tool
+def generate_project_report(
+    report_title: str,
+    state: Annotated[dict, InjectedState] = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Generate a comprehensive self-contained HTML project report AND a Reveal.js HTML
+    slideshow covering all findings from this MMM session: research question, data
+    overview, model specification, KPI decomposition, ROI by channel, diagnostics,
+    all captured charts, and the full assumptions log.
+
+    Use this when the user asks for a report, summary document, presentation, slides,
+    or wants to export findings.
+
+    Args:
+        report_title: Descriptive title, e.g. "UK Q1 2024 Media Mix Analysis".
+    """
+    from datetime import datetime, timezone
+    from mmm_framework.agents.report_builder import generate_html_report, generate_html_slides
+    from mmm_framework.api import sessions as sessions_store_local
+
+    date_str = datetime.now(timezone.utc).strftime("%d %B %Y")
+    dashboard = dict((state or {}).get("dashboard_data") or {})
+
+    thread_id = None
+    if config and hasattr(config, "get"):
+        thread_id = config.get("configurable", {}).get("thread_id")
+    elif config and hasattr(config, "configurable"):
+        thread_id = getattr(config.configurable, "thread_id", None)
+
+    assumptions: list = []
+    if thread_id:
+        try:
+            assumptions = sessions_store_local.list_assumptions(thread_id)
+        except Exception:
+            pass
+
+    report_path = "agent_project_report.html"
+    slides_path = "agent_project_slides.html"
+    errors: list[str] = []
+
+    try:
+        html = generate_html_report(report_title, date_str, dashboard, assumptions)
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception as e:
+        errors.append(f"Report generation failed: {e}")
+        report_path = None
+
+    try:
+        slides_html = generate_html_slides(report_title, date_str, dashboard, assumptions)
+        with open(slides_path, "w", encoding="utf-8") as f:
+            f.write(slides_html)
+    except Exception as e:
+        errors.append(f"Slideshow generation failed: {e}")
+        slides_path = None
+
+    if errors:
+        summary = "Partial generation. Errors:\n" + "\n".join(errors)
+    else:
+        summary = (
+            f"Generated project report **{report_title}** ({date_str}). "
+            "View the full report and slideshow in the Artifacts tab."
+        )
+
+    dashboard["project_report_path"] = report_path
+    dashboard["project_slides_path"] = slides_path
+
+    return Command(
+        update={
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard,
+        }
+    )
+
+
+@tool
+def generate_client_report(
+    state: Annotated[dict, InjectedState],
+    client_name: str,
+    report_title: Optional[str] = None,
+    analysis_period: Optional[str] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Generate a clean, client-ready HTML report from the fitted model.
+
+    Compared to the internal report this version:
+    • Omits MCMC diagnostics and trace plots (not relevant to clients)
+    • Adds a sticky navigation sidebar for easy section jumping
+    • Adds a confidentiality notice in the footer
+    • Formats channel names (underscores → spaces, title-case)
+    • Uses plain-language methodology description
+
+    Call this after `fit_mmm_model` when the user wants to share results externally.
+
+    Args:
+        client_name: Client/company name shown in the header and confidentiality notice.
+        report_title: Optional report title (defaults to "Marketing Mix Model Results").
+        analysis_period: Optional period string, e.g. "Q1–Q2 2024".
+    """
+    mmm = _MODEL_CACHE.get("fitted_model")
+    results = _MODEL_CACHE.get("fit_results")
+    if mmm is None:
+        return Command(update={"messages": [ToolMessage(
+            content="No fitted model found. Please fit a model first.",
+            tool_call_id=tool_call_id,
+        )]})
+
+    title = report_title or "Marketing Mix Model Results"
+    report_path = "agent_client_report.html"
+
+    try:
+        from mmm_framework.reporting.generator import ReportBuilder
+        builder = (
+            ReportBuilder()
+            .with_model(mmm, results)
+            .with_title(title)
+            .with_client(client_name)
+            .client_report()
+        )
+        if analysis_period:
+            builder = builder.with_analysis_period(analysis_period)
+
+        report = builder.build()
+        report.to_html(report_path)
+        summary = (
+            f"Client report generated at `{report_path}`. "
+            f"Diagnostics and trace plots excluded; navigation sidebar and "
+            f"confidentiality notice added."
+        )
+    except Exception as e:
+        return Command(update={"messages": [ToolMessage(
+            content=f"Failed to generate client report: {e}",
+            tool_call_id=tool_call_id,
+        )]})
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["client_report_path"] = report_path
+
+    return Command(
+        update={
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
+def generate_client_slides(
+    state: Annotated[dict, InjectedState],
+    client_name: str,
+    report_title: Optional[str] = None,
+    analysis_period: Optional[str] = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Generate a clean, client-ready Reveal.js HTML slideshow.
+
+    Compared to the internal project slides this version:
+    • Omits MCMC parameters and diagnostic statistics (R̂, ESS, divergences)
+    • Replaces "Model Diagnostics" with a plain "Model Validated" confirmation slide
+    • Skips internal analysis charts (residuals, posterior predictive checks)
+    • Formats channel names (underscores → spaces, title-case)
+    • Shows analysis period weeks instead of raw data row count
+    • Adds a confidentiality footer with the client name
+
+    Call this when the user wants presentation-ready slides to share with a client.
+
+    Args:
+        client_name: Client/company name for the title slide and confidentiality footer.
+        report_title: Optional slide deck title (defaults to "Marketing Mix Model Results").
+        analysis_period: Optional period string e.g. "Q1–Q2 2024" (informational).
+    """
+    from datetime import datetime, timezone
+    from mmm_framework.agents.report_builder import generate_html_slides
+    from mmm_framework.api import sessions as sessions_store_local
+
+    date_str = datetime.now(timezone.utc).strftime("%d %B %Y")
+    dashboard = dict((state or {}).get("dashboard_data") or {})
+
+    title = report_title or "Marketing Mix Model Results"
+    slides_path = "agent_client_slides.html"
+
+    thread_id = None
+    if config and hasattr(config, "get"):
+        thread_id = config.get("configurable", {}).get("thread_id")
+    elif config and hasattr(config, "configurable"):
+        thread_id = getattr(config.configurable, "thread_id", None)
+
+    assumptions: list = []
+    if thread_id:
+        try:
+            assumptions = sessions_store_local.list_assumptions(thread_id)
+        except Exception:
+            pass
+
+    # Enrich dashboard with saturation curves and marginal ROI if model is available
+    mmm = _MODEL_CACHE.get("fitted_model")
+    if mmm is not None:
+        try:
+            curves_result = compute_saturation_curves_with_uncertainty(mmm)
+            dashboard["saturation_curves"] = {ch: r.to_dict() for ch, r in curves_result.items()}
+        except Exception:
+            pass
+
+        roi_list = dashboard.get("roi_metrics") or []
+        if roi_list:
+            mroi_map = {}
+            for r in roi_list:
+                ch = r["channel"]
+                try:
+                    mroi_map[ch] = compute_marginal_roi(mmm, ch)
+                except Exception:
+                    pass
+            if mroi_map:
+                dashboard["marginal_roi"] = mroi_map
+
+    try:
+        slides_html = generate_html_slides(
+            title, date_str, dashboard, assumptions,
+            client_mode=True, client_name=client_name,
+        )
+        with open(slides_path, "w", encoding="utf-8") as f:
+            f.write(slides_html)
+
+        has_curves = bool(dashboard.get("saturation_curves"))
+        has_mroi = bool(dashboard.get("marginal_roi"))
+        extras = []
+        if has_curves:
+            extras.append("S-curves")
+        if has_mroi:
+            extras.append("mROI vs avg ROI")
+        if dashboard.get("roi_metrics"):
+            extras.append("channel performance")
+        extras_str = (", ".join(extras) + " slides added; ") if extras else ""
+        summary = (
+            f"Client slides generated at `{slides_path}`. "
+            f"{extras_str}"
+            f"MCMC diagnostics and internal charts excluded; "
+            f"channel names formatted; confidentiality footer added for **{client_name}**."
+        )
+    except Exception as e:
+        return Command(update={"messages": [ToolMessage(
+            content=f"Failed to generate client slides: {e}",
+            tool_call_id=tool_call_id,
+        )]})
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["client_slides_path"] = slides_path
+
+    return Command(
+        update={
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
 # List of all tools
 TOOLS = [
+    # Step 1 — Define the question (pre-registration)
+    *[t for t in CAUSAL_TOOLS if t.name == "define_research_question"],
     # Data
     generate_synthetic_data,
     inspect_dataset,
+    # Step 2 — Tell the story / DAG
+    *[t for t in CAUSAL_TOOLS if t.name in ("propose_dag", "validate_causal_identification")],
     # Config management
     configure_model,
     get_current_config,
@@ -1213,6 +1654,8 @@ TOOLS = [
     load_config,
     list_configs,
     delete_config,
+    # Step 4 — Prior predictive (before fitting)
+    *[t for t in CAUSAL_TOOLS if t.name == "prior_predictive_check"],
     # Model fitting
     fit_mmm_model,
     save_fitted_model,
@@ -1224,8 +1667,16 @@ TOOLS = [
     get_model_diagnostics,
     get_adstock_weights,
     get_saturation_curves,
+    # Step 8 — Sensitivity (post-fit)
+    *[t for t in CAUSAL_TOOLS if t.name == "leave_one_out_decomposition"],
+    # Cross-cutting — assumptions + workflow tracking
+    *[t for t in CAUSAL_TOOLS if t.name in ("record_assumption", "list_assumptions", "mark_workflow_step")],
     # Session
     get_session_status,
     # Ad-hoc
     execute_python,
+    # Reporting
+    generate_project_report,
+    generate_client_report,
+    generate_client_slides,
 ]

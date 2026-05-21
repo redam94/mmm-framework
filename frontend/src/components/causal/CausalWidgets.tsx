@@ -1,0 +1,715 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import dagre from '@dagrejs/dagre';
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  Position,
+  type Node as RFNode,
+  type Edge as RFEdge,
+  MarkerType,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import {
+  CheckCircle2, Circle, Clock, XCircle, ChevronDown, ChevronRight,
+  History, FileText, Database, Trash2, Network, BookOpen,
+} from 'lucide-react';
+
+const API_BASE = 'http://localhost:8000';
+
+// ── Shared types ────────────────────────────────────────────────────────────
+
+export interface WorkflowStep {
+  step: number;
+  title: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'done' | 'skipped';
+  inferred_status: string;
+  notes: string | null;
+  overridden: boolean;
+  updated_at: number | null;
+}
+
+export interface Assumption {
+  id: string;
+  thread_id: string;
+  key: string;
+  category: string;
+  value: any;
+  rationale: string;
+  change_note: string | null;
+  version: number;
+  is_tombstone: boolean;
+  created_at: number;
+}
+
+export interface DataFile {
+  id: string;
+  thread_id: string;
+  path: string;
+  name: string;
+  kind: string;
+  size_bytes: number | null;
+  preview: string | null;
+  meta: Record<string, any>;
+  created_at: number;
+}
+
+export interface DagPayload {
+  spec: any;
+  react_flow: {
+    nodes: Array<{ id: string; position: { x: number; y: number }; data: any; type?: string }>;
+    edges: Array<{ id: string; source: string; target: string; data?: any }>;
+  };
+  validation: { valid: boolean; errors: string[]; warnings: string[] };
+  identification?: {
+    treatment: string; outcome: string; adjustment_set: string[];
+    identifiable: boolean; notes: string[]; descendants_of_treatment: string[];
+    backdoor_paths: Array<{ path: string; blocked_by: string[] }>;
+    open_paths_remaining: Array<{ path: string }>;
+  };
+}
+
+// ── Small reusable shell ────────────────────────────────────────────────────
+
+function PanelShell({ title, icon, color = 'gray', defaultOpen = true, children, right }: {
+  title: string; icon: React.ReactNode; color?: string; defaultOpen?: boolean;
+  children: React.ReactNode; right?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4">
+        <button onClick={() => setOpen(v => !v)} className="flex items-center gap-3 flex-1 text-left">
+          {icon}
+          <span className={`font-semibold text-sm text-${color}-600 flex-1`}>{title}</span>
+          {open ? <ChevronDown size={15} className="text-gray-400" /> : <ChevronRight size={15} className="text-gray-400" />}
+        </button>
+        {right}
+      </div>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
+
+// ── 1. Workflow Checklist ───────────────────────────────────────────────────
+
+const STEP_ICON: Record<string, React.ReactNode> = {
+  pending: <Circle size={16} className="text-gray-300" />,
+  in_progress: <Clock size={16} className="text-amber-500 animate-pulse" />,
+  done: <CheckCircle2 size={16} className="text-emerald-500" />,
+  skipped: <XCircle size={16} className="text-gray-400" />,
+};
+
+export function WorkflowChecklist({ steps, onOverride }: {
+  steps: WorkflowStep[];
+  onOverride: (step: number, status: WorkflowStep['status'], notes?: string) => void;
+}) {
+  if (steps.length === 0) return null;
+  const doneCount = steps.filter(s => s.status === 'done').length;
+
+  return (
+    <PanelShell
+      title={`Scientific Workflow (${doneCount}/9)`}
+      icon={<BookOpen size={16} className="text-indigo-600" />}
+      color="indigo"
+    >
+      <div className="space-y-1.5">
+        {steps.map(s => (
+          <div
+            key={s.step}
+            className={`flex items-start gap-3 px-3 py-2 rounded-lg border transition-colors ${
+              s.status === 'done' ? 'border-emerald-100 bg-emerald-50/40' :
+              s.status === 'in_progress' ? 'border-amber-100 bg-amber-50/40' :
+              'border-gray-100 bg-white'
+            }`}
+          >
+            <div className="mt-0.5 shrink-0">{STEP_ICON[s.status] ?? STEP_ICON.pending}</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-mono text-gray-400">{s.step}</span>
+                <span className="text-sm font-semibold text-gray-800">{s.title}</span>
+                {s.overridden && (
+                  <span className="text-[10px] uppercase tracking-wider text-indigo-500 bg-indigo-50 rounded px-1.5 py-0.5">manual</span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">{s.description}</p>
+              {s.notes && <p className="text-xs text-gray-600 mt-1 italic">"{s.notes}"</p>}
+            </div>
+            <div className="shrink-0">
+              <select
+                value={s.status}
+                onChange={e => onOverride(s.step, e.target.value as WorkflowStep['status'])}
+                className="text-[11px] bg-transparent border border-gray-200 rounded px-1.5 py-1 text-gray-500 hover:border-gray-300 focus:outline-none"
+                title={`Inferred: ${s.inferred_status}`}
+              >
+                <option value="pending">pending</option>
+                <option value="in_progress">in progress</option>
+                <option value="done">done</option>
+                <option value="skipped">skipped</option>
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+    </PanelShell>
+  );
+}
+
+// ── 2. Assumptions Log ──────────────────────────────────────────────────────
+
+const CATEGORY_COLOR: Record<string, string> = {
+  research_question: 'bg-blue-50 text-blue-700 border-blue-200',
+  causal_structure:  'bg-purple-50 text-purple-700 border-purple-200',
+  identification:    'bg-indigo-50 text-indigo-700 border-indigo-200',
+  data:              'bg-amber-50 text-amber-700 border-amber-200',
+  functional_form:   'bg-orange-50 text-orange-700 border-orange-200',
+  prior:             'bg-pink-50 text-pink-700 border-pink-200',
+  external_evidence: 'bg-teal-50 text-teal-700 border-teal-200',
+  other:             'bg-gray-50 text-gray-700 border-gray-200',
+};
+
+export function AssumptionsLog({ threadId, assumptions, onRefresh }: {
+  threadId: string | null;
+  assumptions: Assumption[];
+  onRefresh: () => void;
+}) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [historyByKey, setHistoryByKey] = useState<Record<string, Assumption[]>>({});
+
+  const loadHistory = useCallback(async (key: string) => {
+    if (!threadId) return;
+    if (historyByKey[key]) {
+      setExpandedKey(expandedKey === key ? null : key);
+      return;
+    }
+    try {
+      const hist: Assumption[] = await fetch(`${API_BASE}/assumption_history/${threadId}/${encodeURIComponent(key)}`).then(r => r.json());
+      setHistoryByKey(prev => ({ ...prev, [key]: hist }));
+      setExpandedKey(key);
+    } catch (e) { console.error(e); }
+  }, [threadId, historyByKey, expandedKey]);
+
+  const retract = async (key: string) => {
+    if (!threadId) return;
+    const reason = prompt(`Retract assumption "${key}"? Enter reason for the change log:`);
+    if (!reason) return;
+    await fetch(`${API_BASE}/assumption/${threadId}/${encodeURIComponent(key)}`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    setHistoryByKey(prev => { const c = { ...prev }; delete c[key]; return c; });
+    onRefresh();
+  };
+
+  if (assumptions.length === 0) {
+    return (
+      <PanelShell title="Modeling Assumptions" icon={<FileText size={16} className="text-indigo-600" />} color="indigo">
+        <p className="text-sm text-gray-400 italic">No assumptions recorded yet. The agent will log them as you make modeling choices.</p>
+      </PanelShell>
+    );
+  }
+
+  // Group by category
+  const byCat: Record<string, Assumption[]> = {};
+  for (const a of assumptions) (byCat[a.category] ??= []).push(a);
+
+  return (
+    <PanelShell
+      title={`Modeling Assumptions (${assumptions.length})`}
+      icon={<FileText size={16} className="text-indigo-600" />}
+      color="indigo"
+    >
+      <div className="space-y-4">
+        {Object.entries(byCat).sort().map(([cat, items]) => (
+          <div key={cat}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`text-[10px] uppercase tracking-wider font-semibold rounded border px-1.5 py-0.5 ${CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.other}`}>
+                {cat.replace(/_/g, ' ')}
+              </span>
+              <span className="text-[11px] text-gray-400">{items.length}</span>
+            </div>
+            <div className="space-y-1.5">
+              {items.map(a => (
+                <div key={a.key} className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                  <div className="flex items-start gap-2 px-3 py-2">
+                    <button
+                      onClick={() => loadHistory(a.key)}
+                      className="p-0.5 rounded text-gray-400 hover:text-indigo-600 shrink-0 mt-0.5"
+                      title="Toggle history"
+                    >
+                      <History size={13} />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <code className="text-xs font-semibold text-gray-800 break-all">{a.key}</code>
+                        <span className="text-[10px] text-gray-400">v{a.version}</span>
+                        <span className="text-[10px] text-gray-400">{new Date(a.created_at * 1000).toLocaleString()}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 italic">{a.rationale}</p>
+                      {a.change_note && (
+                        <p className="text-[11px] text-indigo-600 mt-0.5">↳ {a.change_note}</p>
+                      )}
+                      <details className="mt-1">
+                        <summary className="text-[11px] text-gray-400 cursor-pointer select-none">value</summary>
+                        <pre className="text-[10px] font-mono text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 mt-1 overflow-x-auto max-h-32">{JSON.stringify(a.value, null, 2)}</pre>
+                      </details>
+                    </div>
+                    <button
+                      onClick={() => retract(a.key)}
+                      className="p-1 rounded text-gray-300 hover:text-red-500 shrink-0"
+                      title="Retract"
+                    ><Trash2 size={12} /></button>
+                  </div>
+                  {expandedKey === a.key && historyByKey[a.key] && (
+                    <div className="border-t border-gray-200 bg-white px-3 py-2 space-y-1.5">
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Change log ({historyByKey[a.key].length})</p>
+                      {historyByKey[a.key].map(h => (
+                        <div key={h.id} className="text-[11px] flex items-baseline gap-2">
+                          <span className="text-gray-400 shrink-0">v{h.version}</span>
+                          <span className="text-gray-400 shrink-0">{new Date(h.created_at * 1000).toLocaleTimeString()}</span>
+                          <span className={`${h.is_tombstone ? 'text-red-500 italic' : 'text-gray-700'}`}>
+                            {h.is_tombstone ? `retracted (${h.change_note})` : (h.change_note || 'recorded')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </PanelShell>
+  );
+}
+
+// ── 3. Files Explorer ──────────────────────────────────────────────────────
+
+export function DataFilesWidget({ files, onDelete }: {
+  files: DataFile[]; onDelete: (id: string) => void;
+}) {
+  if (files.length === 0) {
+    return (
+      <PanelShell title="Session Files" icon={<Database size={16} className="text-amber-600" />} color="amber">
+        <p className="text-sm text-gray-400 italic">No files associated with this session. Upload a CSV via the paperclip icon, or the agent can generate synthetic data.</p>
+      </PanelShell>
+    );
+  }
+
+  const fmtSize = (n: number | null) => {
+    if (n == null) return '';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <PanelShell title={`Session Files (${files.length})`} icon={<Database size={16} className="text-amber-600" />} color="amber">
+      <div className="space-y-2">
+        {files.map(f => (
+          <div key={f.id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-start gap-2 px-3 py-2">
+              <Database size={14} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-800 truncate">{f.name}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">{f.kind}</span>
+                  <span className="text-[10px] text-gray-400">{fmtSize(f.size_bytes)}</span>
+                </div>
+                <p className="text-[11px] text-gray-400 font-mono mt-0.5 truncate">{f.path}</p>
+                {f.preview && (
+                  <details className="mt-1">
+                    <summary className="text-[11px] text-gray-400 cursor-pointer select-none">preview</summary>
+                    <pre className="text-[10px] font-mono text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1 mt-1 overflow-x-auto whitespace-pre max-h-32">{f.preview}</pre>
+                  </details>
+                )}
+              </div>
+              <button
+                onClick={() => onDelete(f.id)}
+                className="p-1 rounded text-gray-300 hover:text-red-500 shrink-0"
+                title="Remove from session (file on disk is kept)"
+              ><Trash2 size={12} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </PanelShell>
+  );
+}
+
+// ── 4. DAG Viewer ──────────────────────────────────────────────────────────
+
+const NODE_STYLE: Record<string, { bg: string; border: string; text: string }> = {
+  kpi:       { bg: '#eef2ff', border: '#4f46e5', text: '#312e81' },
+  media:     { bg: '#ecfdf5', border: '#059669', text: '#064e3b' },
+  control:   { bg: '#fef3c7', border: '#d97706', text: '#78350f' },
+  mediator:  { bg: '#fce7f3', border: '#db2777', text: '#831843' },
+  outcome:   { bg: '#e0e7ff', border: '#6366f1', text: '#1e1b4b' },
+};
+
+const hStyle = (color: string, visible: boolean) => ({
+  background: color, width: 8, height: 8, border: 'none',
+  ...(visible ? {} : { opacity: 0, pointerEvents: 'none' as const }),
+});
+
+function MMMNode({ data }: { data: any }) {
+  const s = NODE_STYLE[data.nodeType] ?? NODE_STYLE.control;
+  return (
+    <div style={{
+      background: s.bg, border: `2px solid ${s.border}`, borderRadius: 12,
+      padding: '9px 16px', minWidth: 130, textAlign: 'center',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.08)', userSelect: 'none',
+    }}>
+      <Handle type="target" position={Position.Left}   id="tgt-left"   style={hStyle(s.border, true)} />
+      <Handle type="target" position={Position.Bottom} id="tgt-bottom" style={hStyle(s.border, false)} />
+      <div style={{ fontWeight: 700, fontSize: 13, color: s.text, lineHeight: 1.3 }}>{data.label}</div>
+      <div style={{
+        fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+        color: s.border, background: 'white', border: `1px solid ${s.border}55`,
+        borderRadius: 20, padding: '1px 8px', display: 'inline-block', marginTop: 5,
+      }}>
+        {data.badge}
+      </div>
+      <Handle type="source" position={Position.Right} id="src-right" style={hStyle(s.border, true)} />
+      <Handle type="source" position={Position.Top}   id="src-top"   style={hStyle(s.border, false)} />
+    </div>
+  );
+}
+
+const MMM_NODE_TYPES = { mmmNode: MMMNode };
+
+const NODE_W = 148, NODE_H = 66;
+
+function classifyNodes(
+  rfNodes: Array<{ id: string; data: any }>,
+  rfEdges: Array<{ source: string; target: string }>,
+) {
+  const outOf = new Map<string, Set<string>>();
+  rfNodes.forEach(n => outOf.set(n.id, new Set()));
+  rfEdges.forEach(e => outOf.get(e.source)?.add(e.target));
+  const mediaSet = new Set(rfNodes.filter(n => n.data?.type === 'media').map(n => n.id));
+  const isConf = (n: { id: string; data: any }) =>
+    n.data?.type === 'control' && [...(outOf.get(n.id) ?? [])].some(t => mediaSet.has(t));
+  const isBiz = (n: { id: string; data: any }) =>
+    n.data?.type === 'control' && !isConf(n);
+  return { isConf, isBiz, mediaSet, outOf };
+}
+
+function computeDAGLayout(
+  rfNodes: Array<{ id: string; data: any }>,
+  rfEdges: Array<{ source: string; target: string }>,
+): Record<string, { x: number; y: number }> {
+  if (rfNodes.length === 0) return {};
+
+  const { isConf, isBiz } = classifyNodes(rfNodes, rfEdges);
+
+  // Assign dagre rank (column) manually so the semantic order is preserved:
+  // confounders → media → mediator → kpi; biz controls in kpi column but lower rank
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({
+    rankdir: 'LR',
+    ranksep: 160,   // wider rank gap forces more pronounced S-curves
+    nodesep: 44,
+    edgesep: 25,
+    marginx: 30,
+    marginy: 30,
+  });
+
+  // Assign explicit rank constraints via dummy "rank groups"
+  const rankOf = (n: { id: string; data: any }) => {
+    if (isConf(n)) return 0;
+    if (n.data?.type === 'media') return 1;
+    if (n.data?.type === 'mediator') return 2;
+    if (n.data?.type === 'kpi') return 3;
+    if (isBiz(n)) return 3;  // same rank as KPI so they sit beside/below it
+    return 2;
+  };
+
+  rfNodes.forEach(n => {
+    g.setNode(n.id, { width: NODE_W, height: NODE_H, rank: rankOf(n) });
+  });
+
+  rfEdges.forEach(e => g.setEdge(e.source, e.target));
+
+  dagre.layout(g);
+
+  const positions: Record<string, { x: number; y: number }> = {};
+  rfNodes.forEach(n => {
+    const nd = g.node(n.id);
+    if (nd) {
+      // dagre centers on (x,y); React Flow uses top-left corner
+      positions[n.id] = { x: nd.x - NODE_W / 2, y: nd.y - NODE_H / 2 };
+    }
+  });
+  return positions;
+}
+
+function SemanticCallouts({
+  rfNodes, rfEdges, identification,
+}: {
+  rfNodes: Array<{ id: string; data: any }>;
+  rfEdges: Array<{ source: string; target: string }>;
+  identification?: DagPayload['identification'];
+}) {
+  const { isConf, mediaSet } = useMemo(
+    () => classifyNodes(rfNodes, rfEdges),
+    [rfNodes, rfEdges],
+  );
+
+  const inEdgeMap = useMemo(() => {
+    const m = new Map<string, string[]>();
+    rfNodes.forEach(n => m.set(n.id, []));
+    rfEdges.forEach(e => m.get(e.target)?.push(e.source));
+    return m;
+  }, [rfNodes, rfEdges]);
+
+  const confounders = rfNodes.filter(n => isConf(n));
+  const mediators   = rfNodes.filter(n => n.data?.type === 'mediator');
+
+  const colliders = rfNodes.filter(n => {
+    if (['kpi', 'media', 'control'].includes(n.data?.type ?? '')) return false;
+    const parents = inEdgeMap.get(n.id) ?? [];
+    return parents.length >= 2 &&
+      parents.some(p => mediaSet.has(p)) &&
+      parents.some(p => !mediaSet.has(p));
+  });
+
+  const adjustSet = identification?.adjustment_set ?? [];
+
+  return (
+    <div className="mt-3 space-y-2">
+      {confounders.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+          <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-2">
+            ✓ Include in adjustment set — confounders
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {confounders.map(n => (
+              <span key={n.id} className="text-xs font-semibold text-amber-900 bg-white border border-amber-300 rounded-full px-2.5 py-0.5">
+                {n.data?.variableName ?? n.id}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-amber-700 leading-relaxed">
+            These affect both media spend decisions and the KPI. Conditioning on them blocks backdoor paths — omitting them biases all channel ROI estimates.
+          </p>
+        </div>
+      )}
+
+      {mediators.length > 0 && (
+        <div className="rounded-xl border border-pink-200 bg-pink-50/60 px-4 py-3">
+          <p className="text-[11px] font-bold text-pink-800 uppercase tracking-wider mb-2">
+            ⊘ Do not control for — mediators
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {mediators.map(n => (
+              <span key={n.id} className="text-xs font-semibold text-pink-900 bg-white border border-pink-300 rounded-full px-2.5 py-0.5">
+                {n.data?.variableName ?? n.id}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-pink-700 leading-relaxed">
+            Controlling for a mediator blocks the causal path and will underestimate the total media effect. Use a structural mediation model to decompose direct vs indirect effects.
+          </p>
+        </div>
+      )}
+
+      {colliders.length > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50/60 px-4 py-3">
+          <p className="text-[11px] font-bold text-red-800 uppercase tracking-wider mb-2">
+            ⚠ Collider — do not condition on
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {colliders.map(n => (
+              <span key={n.id} className="text-xs font-semibold text-red-900 bg-white border border-red-300 rounded-full px-2.5 py-0.5">
+                {n.data?.variableName ?? n.id}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-red-700 leading-relaxed">
+            A collider is caused by two variables on a path. Conditioning on it opens a spurious association between its parents — including it in the model would introduce bias.
+          </p>
+        </div>
+      )}
+
+      {identification && (
+        <div className={`rounded-xl border px-4 py-3 ${
+          identification.identifiable
+            ? 'border-emerald-200 bg-emerald-50/60'
+            : 'border-red-200 bg-red-50/60'
+        }`}>
+          <p className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${
+            identification.identifiable ? 'text-emerald-800' : 'text-red-800'
+          }`}>
+            {identification.identifiable ? '✓ Effect identified' : '✗ Not identified'}
+            {' '}— {identification.treatment} → {identification.outcome}
+          </p>
+          {adjustSet.length > 0 && (
+            <p className="text-[11px] text-gray-700 mb-1.5">
+              Adjustment set: <span className="font-mono">{`{ ${adjustSet.join(', ')} }`}</span>
+            </p>
+          )}
+          {identification.backdoor_paths.length > 0 && (
+            <details className="mt-1">
+              <summary className="text-[11px] text-gray-500 cursor-pointer select-none hover:text-gray-700">
+                {identification.backdoor_paths.length} backdoor path{identification.backdoor_paths.length !== 1 ? 's' : ''}
+              </summary>
+              <div className="mt-1.5 pl-2 space-y-1">
+                {identification.backdoor_paths.map((p, i) => (
+                  <div key={i} className="text-[11px] font-mono text-gray-700">
+                    {p.path}
+                    {p.blocked_by.length > 0
+                      ? <span className="text-emerald-600"> ✓ blocked by {p.blocked_by.join(', ')}</span>
+                      : <span className="text-red-600"> ✗ OPEN</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          {identification.notes.length > 0 && (
+            <div className="mt-1.5 space-y-0.5">
+              {identification.notes.map((n, i) => (
+                <p key={i} className="text-[11px] text-gray-600 italic">{n}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DAGViewer({ dag }: { dag: DagPayload | null }) {
+  const rfNodes = dag?.react_flow?.nodes ?? [];
+  const rfEdges = dag?.react_flow?.edges ?? [];
+
+  const posMap = useMemo(() => computeDAGLayout(rfNodes, rfEdges), [rfNodes, rfEdges]);
+
+  const { isConf, isBiz } = useMemo(
+    () => classifyNodes(rfNodes, rfEdges),
+    [rfNodes, rfEdges],
+  );
+
+  const nodes: RFNode[] = useMemo(() => rfNodes.map(n => {
+    const nt = n.data?.type ?? 'control';
+    const conf = isConf(n);
+    const biz  = isBiz(n);
+    return {
+      id: n.id,
+      position: posMap[n.id] ?? { x: 0, y: 0 },
+      type: 'mmmNode',
+      data: {
+        label:    n.data?.variableName ?? n.id,
+        nodeType: nt,
+        badge:    conf ? 'confounder' : biz ? 'control' : nt,
+        ...(NODE_STYLE[nt] ?? NODE_STYLE.control),
+      },
+    };
+  }), [rfNodes, posMap, isConf, isBiz]);
+
+  const edges: RFEdge[] = useMemo(() => rfEdges.map(e => {
+    const srcNode = rfNodes.find(n => n.id === e.source);
+    const et = e.data?.edgeType ?? 'direct';
+    const color = et === 'mediated' ? '#db2777' : et === 'crossEffect' ? '#6366f1' : '#64748b';
+    const bizSrc = srcNode ? isBiz(srcNode) : false;
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: 'default',
+      sourceHandle: bizSrc ? 'src-top' : 'src-right',
+      targetHandle: bizSrc ? 'tgt-bottom' : 'tgt-left',
+      pathOptions: { curvature: 0.45 },
+      style: {
+        stroke: color, strokeWidth: 1.8,
+        strokeDasharray: et === 'crossEffect' ? '5 3' : undefined,
+      },
+      markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 },
+    };
+  }), [rfEdges, rfNodes, isBiz]);
+
+  if (!dag) {
+    return (
+      <PanelShell title="Causal DAG" icon={<Network size={16} className="text-violet-600" />} color="violet">
+        <p className="text-sm text-gray-400 italic">
+          No DAG yet. Ask the agent to <code className="text-xs bg-gray-100 px-1 rounded">propose_dag</code> after inspecting the data.
+        </p>
+      </PanelShell>
+    );
+  }
+
+  return (
+    <PanelShell title="Causal DAG" icon={<Network size={16} className="text-violet-600" />} color="violet">
+      <div style={{ height: 400 }} className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50/50">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={MMM_NODE_TYPES}
+          fitView
+          fitViewOptions={{ padding: 0.18 }}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable
+          nodesConnectable={false}
+          elementsSelectable
+          minZoom={0.3}
+          maxZoom={2}
+        >
+          <Background gap={20} size={0.8} color="#e5e7eb" />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+      <SemanticCallouts rfNodes={rfNodes} rfEdges={rfEdges} identification={dag.identification} />
+    </PanelShell>
+  );
+}
+
+// ── Data-loading hook used by AgentPage ─────────────────────────────────────
+
+export function useCausalPanels(threadId: string | null) {
+  const [workflow, setWorkflow] = useState<WorkflowStep[]>([]);
+  const [assumptions, setAssumptions] = useState<Assumption[]>([]);
+  const [files, setFiles] = useState<DataFile[]>([]);
+  const [dag, setDag] = useState<DagPayload | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!threadId) {
+      setWorkflow([]); setAssumptions([]); setFiles([]); setDag(null);
+      return;
+    }
+    try {
+      const [w, a, f, d] = await Promise.all([
+        fetch(`${API_BASE}/workflow/${threadId}`).then(r => r.json()),
+        fetch(`${API_BASE}/assumptions/${threadId}`).then(r => r.json()),
+        fetch(`${API_BASE}/files/${threadId}`).then(r => r.json()),
+        fetch(`${API_BASE}/dag/${threadId}`).then(r => r.json()),
+      ]);
+      setWorkflow(Array.isArray(w) ? w : []);
+      setAssumptions(Array.isArray(a) ? a : []);
+      setFiles(Array.isArray(f) ? f : []);
+      // /dag returns the dag payload directly (not {dag: ...}) when present; null when absent
+      setDag(d && d.spec ? d : (d?.dag ?? null));
+    } catch (e) { console.error('Causal panels refresh failed', e); }
+  }, [threadId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const overrideWorkflow = useCallback(async (step: number, status: WorkflowStep['status'], notes?: string) => {
+    if (!threadId) return;
+    await fetch(`${API_BASE}/workflow/${threadId}/${step}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, notes: notes ?? null }),
+    });
+    refresh();
+  }, [threadId, refresh]);
+
+  const deleteFile = useCallback(async (id: string) => {
+    await fetch(`${API_BASE}/files/${id}`, { method: 'DELETE' });
+    refresh();
+  }, [refresh]);
+
+  return { workflow, assumptions, files, dag, refresh, overrideWorkflow, deleteFile };
+}

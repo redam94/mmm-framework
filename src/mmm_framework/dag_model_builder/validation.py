@@ -166,9 +166,9 @@ def validate_dag(dag: DAGSpec) -> ValidationResult:
                         f"{target_node.node_type.value} node '{target_node.id}'"
                     )
 
-            # Control can point to: KPI, OUTCOME
+            # Control can point to: KPI, OUTCOME, or MEDIA (confounders affect media spend)
             if source_node.node_type == NodeType.CONTROL:
-                valid_targets = {NodeType.KPI, NodeType.OUTCOME}
+                valid_targets = {NodeType.KPI, NodeType.OUTCOME, NodeType.MEDIA}
                 if target_node.node_type not in valid_targets:
                     errors.append(
                         f"CONTROL node '{source_node.id}' cannot point to "

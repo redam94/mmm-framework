@@ -209,6 +209,11 @@ class ReportConfig:
     uncertainty_callout: bool = True
     methodology_note: bool = True
 
+    # Client presentation options
+    show_nav: bool = False          # Sticky side-nav for multi-section reports
+    confidential: bool = False      # Add "Confidential" banner to footer
+    format_channel_names: bool = False  # Replace underscores → spaces, title-case
+
     @classmethod
     def minimal(
         cls, title: str = "MMM Report", client: str | None = None

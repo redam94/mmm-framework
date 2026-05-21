@@ -5,9 +5,14 @@ import {
   Send, Bot, User, Loader2, Paperclip, ChevronDown, ChevronRight,
   Wrench, CheckCircle2, Maximize2, Minimize2, X, Download, ExternalLink,
   TrendingUp, Calendar, Layers, Zap, BarChart2, Activity, Pencil, Check, RotateCcw, Plus, Trash2,
+  Square, ArrowLeft, Play, Copy, MessagesSquare, FileCode,
+  BookOpen, Network, Database,
 } from 'lucide-react';
 import Plot from 'react-plotly.js';
 import { useAuthStore } from '../stores/authStore';
+import {
+  WorkflowChecklist, AssumptionsLog, DataFilesWidget, DAGViewer, useCausalPanels,
+} from '../components/causal/CausalWidgets';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -21,7 +26,7 @@ interface ToolCall {
 
 interface ChatMessage {
   id: string;
-  type: 'human' | 'ai';
+  type: 'human' | 'ai' | 'error';
   content: string;
   toolCalls?: ToolCall[];
 }
@@ -115,10 +120,10 @@ function applyLightModeLayout(rawLayout: any): any {
   }
 
   if (!layout.colorway) {
-    layout.colorway = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
+    layout.colorway = ['#4f46e5', '#0d9488', '#f59e0b', '#e11d48', '#059669', '#7c3aed', '#0284c7', '#b45309', '#6366f1', '#0f766e'];
   }
 
-  layout.margin = { l: 60, r: 30, t: 60, b: 70, ...(layout.margin || {}) };
+  layout.margin = { l: 70, r: 40, t: 90, b: 80, ...(layout.margin || {}) };
 
   return layout;
 }
@@ -135,7 +140,41 @@ function isLightOnWhite(hex: string): boolean {
 
 // ─── ToolCallBlock ────────────────────────────────────────────────────────────
 
-function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
+// Mapping: tool name → tab it produced an artifact in. Only tools that mutate
+// some visible workspace state appear here; pure reads (list_*, get_session_status)
+// don't get a navigation link.
+const TOOL_TO_TAB: Record<string, { tab: string; label: string }> = {
+  // Workflow
+  mark_workflow_step:               { tab: 'workflow',  label: 'Workflow' },
+  // Causal (DAG + identification + assumptions log)
+  propose_dag:                      { tab: 'causal',    label: 'Causal' },
+  validate_causal_identification:   { tab: 'causal',    label: 'Causal' },
+  define_research_question:         { tab: 'causal',    label: 'Causal' },
+  record_assumption:                { tab: 'causal',    label: 'Causal' },
+  prior_predictive_check:           { tab: 'causal',    label: 'Causal' },
+  leave_one_out_decomposition:      { tab: 'causal',    label: 'Causal' },
+  // Data
+  generate_synthetic_data:          { tab: 'data',      label: 'Data' },
+  inspect_dataset:                  { tab: 'data',      label: 'Data' },
+  // Model
+  configure_model:                  { tab: 'model',     label: 'Model' },
+  update_model_setting:             { tab: 'model',     label: 'Model' },
+  load_config:                      { tab: 'model',     label: 'Model' },
+  // Results (fit + analysis)
+  fit_mmm_model:                    { tab: 'results',   label: 'Results' },
+  load_fitted_model:                { tab: 'results',   label: 'Results' },
+  get_roi_metrics:                  { tab: 'results',   label: 'Results' },
+  get_component_decomposition:      { tab: 'results',   label: 'Results' },
+  get_model_diagnostics:            { tab: 'results',   label: 'Results' },
+  get_adstock_weights:              { tab: 'results',   label: 'Results' },
+  get_saturation_curves:            { tab: 'results',   label: 'Results' },
+  // Artifacts (code snippets, plots, REPL output)
+  execute_python:                   { tab: 'plots',     label: 'Plots' },
+  // Reporting
+  generate_project_report:          { tab: 'artifacts', label: 'Artifacts' },
+};
+
+function ToolCallBlock({ toolCall, onNavigate }: { toolCall: ToolCall; onNavigate?: (tab: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const cls = toolCall.status === 'done'
@@ -149,6 +188,9 @@ function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
     : toolCall.status === 'error'
     ? <X size={13} className="text-red-600 shrink-0" />
     : <Loader2 size={13} className="text-amber-600 animate-spin shrink-0" />;
+
+  const target = TOOL_TO_TAB[toolCall.name];
+  const showJump = toolCall.status === 'done' && target && onNavigate;
 
   return (
     <div className={`my-2 rounded-xl border text-xs font-mono overflow-hidden ${cls}`}>
@@ -179,6 +221,17 @@ function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
       )}
       {!expanded && toolCall.result && (
         <div className="px-3 pb-2 text-gray-400 text-[11px] truncate">{truncate(toolCall.result, 120)}</div>
+      )}
+      {showJump && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onNavigate!(target.tab); }}
+          className="w-full flex items-center justify-end gap-1.5 px-3 py-1.5 border-t border-black/10 text-[11px] font-sans text-emerald-700 hover:bg-emerald-100/60 transition-colors"
+          title={`Show this artifact in the ${target.label} tab`}
+        >
+          <ExternalLink size={11} />
+          <span className="font-semibold">View in {target.label}</span>
+          <ChevronRight size={11} />
+        </button>
       )}
     </div>
   );
@@ -264,10 +317,14 @@ const MD_COMPONENTS: any = {
 
 // ─── PlotCard ─────────────────────────────────────────────────────────────────
 
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function PlotCard({ plot, idx }: { plot: any; idx: number }) {
   const [fullscreen, setFullscreen] = useState(false);
   const rawTitle = plot.layout?.title?.text ?? plot.layout?.title ?? `Chart ${idx + 1}`;
-  const title = String(rawTitle);
+  const title = stripHtml(String(rawTitle));
 
   const fixedLayout = useMemo(() => applyLightModeLayout(plot.layout), [plot.layout]);
 
@@ -845,7 +902,6 @@ function generateFourierTraces(order: number, period: number, label: string): an
 
 function generateTrendTrace(type: string, spec: any): { traces: any[]; shapes: any[] } {
   const t = Array.from({ length: 100 }, (_, i) => i / 99);
-  const KNOTS = [0.2, 0.35, 0.55, 0.75];
 
   if (type === 'linear' || !type) {
     return {
@@ -855,22 +911,25 @@ function generateTrendTrace(type: string, spec: any): { traces: any[]; shapes: a
   }
 
   if (type === 'piecewise') {
-    const cps = spec?.changepoint_range
-      ? KNOTS.filter(k => k < spec.changepoint_range)
-      : KNOTS.slice(0, spec?.n_changepoints ?? 3);
-    const segments = [0, ...cps, 1];
-    const slopes = [0.8, 0.3, 1.1, -0.2, 0.6];
-    let y0 = 0.1;
-    const xAll: number[] = [];
-    const yAll: number[] = [];
-    for (let s = 0; s < segments.length - 1; s++) {
-      const xs = t.filter(x => x >= segments[s] && x <= segments[s + 1]);
-      const sl = slopes[s % slopes.length];
-      xs.forEach(x => { xAll.push(x); yAll.push(y0 + sl * (x - segments[s])); });
-      y0 = yAll[yAll.length - 1];
+    const n = spec?.n_changepoints ?? 5;
+    const range = spec?.changepoint_range ?? 0.8;
+    // Evenly space n changepoints within (0, range) — mirrors backend linspace logic
+    const cps = Array.from({ length: n }, (_, i) => range * (i + 1) / (n + 1));
+    // Enough slope variety for up to 25 changepoints (26 segments)
+    const slopes = [0.8, 0.3, 1.1, -0.2, 0.6, 0.9, -0.1, 0.7, 0.4, -0.3, 0.5, -0.4, 1.0, 0.2, -0.5, 0.8, 0.3, 1.1, -0.2, 0.6, 0.9, -0.1, 0.7, 0.4, -0.3, 0.5];
+    // Walk through sorted t values, advancing segments at each changepoint
+    const y: number[] = [];
+    let segStart = 0, segBaseY = 0.1, segIdx = 0;
+    for (const x of t) {
+      while (segIdx < cps.length && x > cps[segIdx]) {
+        segBaseY += slopes[segIdx % slopes.length] * (cps[segIdx] - segStart);
+        segStart = cps[segIdx];
+        segIdx++;
+      }
+      y.push(segBaseY + slopes[segIdx % slopes.length] * (x - segStart));
     }
     return {
-      traces: [{ x: xAll, y: yAll, name: 'Piecewise Trend', type: 'scatter', mode: 'lines', line: { color: '#6366f1', width: 2.5 } }],
+      traces: [{ x: t, y, name: 'Piecewise Trend', type: 'scatter', mode: 'lines', line: { color: '#6366f1', width: 2.5 } }],
       shapes: cps.map(cp => ({
         type: 'line', x0: cp, x1: cp, y0: 0, y1: 1, yref: 'paper',
         line: { color: '#f59e0b', width: 1.5, dash: 'dash' },
@@ -1808,6 +1867,611 @@ function PythonOutputWidget({ outputs, onClear }: { outputs: PythonOutput[]; onC
   );
 }
 
+// ─── Session + Artifact types ────────────────────────────────────────────────
+
+interface Session {
+  thread_id: string;
+  name: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface Artifact {
+  id: string;
+  thread_id: string;
+  kind: 'code_snippet' | 'report' | string;
+  payload: any;
+  created_at: number;
+}
+
+const API_BASE = 'http://localhost:8000';
+
+function authHeaders(apiKey: string | null, modelName: string | null): HeadersInit {
+  return { 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' };
+}
+
+// ─── SessionSidebar ──────────────────────────────────────────────────────────
+
+function SessionSidebar({
+  sessions, activeId, onSelect, onCreate, onRename, onDelete, collapsed, onToggle,
+}: {
+  sessions: Session[]; activeId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  if (collapsed) {
+    return (
+      <div className="w-12 border-r border-gray-200 bg-white flex flex-col items-center py-3 gap-2 shrink-0">
+        <button onClick={onToggle} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" title="Show sessions">
+          <MessagesSquare size={16} />
+        </button>
+        <button onClick={onCreate} className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white" title="New session">
+          <Plus size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-56 border-r border-gray-200 bg-white flex flex-col shrink-0">
+      <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</span>
+        <div className="flex items-center gap-1">
+          <button onClick={onCreate} className="p-1.5 rounded-md hover:bg-indigo-50 text-indigo-600" title="New session">
+            <Plus size={14} />
+          </button>
+          <button onClick={onToggle} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400" title="Collapse">
+            <ChevronRight size={14} className="rotate-180" />
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto py-2">
+        {sessions.length === 0 && (
+          <div className="px-3 py-6 text-xs text-gray-400 text-center">No sessions yet.</div>
+        )}
+        {sessions.map(s => {
+          const active = s.thread_id === activeId;
+          const isEditing = editingId === s.thread_id;
+          return (
+            <div key={s.thread_id} className={`group mx-2 mb-1 rounded-lg ${active ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+              <div className="flex items-center gap-1 px-2 py-1.5">
+                {isEditing ? (
+                  <input
+                    autoFocus value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { onRename(s.thread_id, editName.trim() || s.name); setEditingId(null); }
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    onBlur={() => { onRename(s.thread_id, editName.trim() || s.name); setEditingId(null); }}
+                    className="flex-1 text-xs bg-white border border-indigo-300 rounded px-1.5 py-1 focus:outline-none"
+                  />
+                ) : (
+                  <button onClick={() => onSelect(s.thread_id)} className="flex-1 text-left text-xs text-gray-700 truncate">
+                    {s.name}
+                  </button>
+                )}
+                {!isEditing && (
+                  <>
+                    <button
+                      onClick={() => { setEditName(s.name); setEditingId(s.thread_id); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-400 hover:text-indigo-600"
+                      title="Rename"
+                    ><Pencil size={11} /></button>
+                    <button
+                      onClick={() => { if (confirm(`Delete "${s.name}"?`)) onDelete(s.thread_id); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-400 hover:text-red-600"
+                      title="Delete"
+                    ><Trash2 size={11} /></button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── ProjectDocsWidget ───────────────────────────────────────────────────────
+
+function ProjectDocsWidget({ artifacts, onDelete }: {
+  artifacts: Artifact[];
+  onDelete: (id: string) => void;
+}) {
+  const reports = artifacts.filter(a => a.kind === 'project_report');
+  const slides  = artifacts.filter(a => a.kind === 'project_slides');
+  if (reports.length === 0 && slides.length === 0) return null;
+
+  const latest = (arr: Artifact[]) => arr.sort((a, b) => b.created_at - a.created_at)[0];
+  const reportArt = latest(reports);
+  const slidesArt = latest(slides);
+
+  const DocCard = ({ art, icon, label, viewUrl, downloadUrl }: {
+    art: Artifact; icon: React.ReactNode; label: string;
+    viewUrl: string; downloadUrl: string;
+  }) => (
+    <div className="flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        <p className="text-xs text-gray-400 truncate">{new Date(art.created_at * 1000).toLocaleString()}</p>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <a
+          href={viewUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
+        >
+          <ExternalLink size={12} /> Open
+        </a>
+        <a
+          href={downloadUrl}
+          download
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors border border-gray-200"
+        >
+          <Download size={12} /> Save
+        </a>
+        <button
+          onClick={() => onDelete(art.id)}
+          className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+          title="Remove"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <DashWidget
+      title="Project Documents"
+      dotColor="bg-indigo-500"
+      color="indigo"
+      icon={<BookOpen size={15} className="text-indigo-600 shrink-0" />}
+    >
+      <div className="space-y-2.5">
+        {reportArt && (
+          <DocCard
+            art={reportArt}
+            icon={<BookOpen size={18} />}
+            label="Project Report (HTML)"
+            viewUrl="http://localhost:8000/project-report"
+            downloadUrl="http://localhost:8000/project-report/download"
+          />
+        )}
+        {slidesArt && (
+          <DocCard
+            art={slidesArt}
+            icon={<Layers size={18} />}
+            label="Presentation Slides (Reveal.js)"
+            viewUrl="http://localhost:8000/project-slides"
+            downloadUrl="http://localhost:8000/project-slides/download"
+          />
+        )}
+        {(reports.length > 1 || slides.length > 1) && (
+          <p className="text-xs text-gray-400 text-center pt-1">Showing latest version of each. Older versions available in history.</p>
+        )}
+      </div>
+    </DashWidget>
+  );
+}
+
+// ─── ModelRunsWidget ─────────────────────────────────────────────────────────
+
+function ModelRunsWidget({
+  runs,
+  onLoad,
+  onDelete,
+}: {
+  runs: Artifact[];
+  onLoad: (runName: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (runs.length === 0) return null;
+
+  return (
+    <DashWidget
+      title={`Model Run History (${runs.length})`}
+      dotColor="bg-emerald-500"
+      color="emerald"
+      icon={<BarChart2 size={15} className="text-emerald-600 shrink-0" />}
+    >
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="min-w-full text-xs">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="px-3 py-2 text-left font-semibold text-emerald-700 border-b border-gray-200">Run</th>
+              <th className="px-3 py-2 text-left font-semibold text-emerald-700 border-b border-gray-200">Timestamp</th>
+              <th className="px-3 py-2 text-left font-semibold text-emerald-700 border-b border-gray-200">KPI</th>
+              <th className="px-3 py-2 text-center font-semibold text-emerald-700 border-b border-gray-200">Channels</th>
+              <th className="px-3 py-2 text-center font-semibold text-emerald-700 border-b border-gray-200">Draws</th>
+              <th className="px-3 py-2 text-center font-semibold text-emerald-700 border-b border-gray-200">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map(a => {
+              const r = a.payload ?? {};
+              const isExp = expanded === a.id;
+              const ts = r.timestamp_iso
+                ? new Date(r.timestamp_iso).toLocaleString()
+                : new Date(a.created_at * 1000).toLocaleString();
+              const channels: string[] = r.channels ?? [];
+              const draws = r.inference?.draws ?? r.draws ?? '—';
+              return (
+                <React.Fragment key={a.id}>
+                  <tr
+                    className="even:bg-gray-50 hover:bg-emerald-50 transition-colors cursor-pointer"
+                    onClick={() => setExpanded(isExp ? null : a.id)}
+                  >
+                    <td className="px-3 py-2 text-gray-700 border-b border-gray-100 font-mono font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        {isExp ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        {r.run_name ?? a.id.slice(0, 8)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{ts}</td>
+                    <td className="px-3 py-2 text-gray-700 border-b border-gray-100 font-medium">{r.kpi ?? '—'}</td>
+                    <td className="px-3 py-2 text-center text-gray-600 border-b border-gray-100">{channels.length}</td>
+                    <td className="px-3 py-2 text-center text-gray-600 border-b border-gray-100">{draws}</td>
+                    <td className="px-3 py-2 text-center border-b border-gray-100">
+                      <div className="flex items-center justify-center gap-1.5" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => onLoad(r.run_name)}
+                          className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-semibold text-[11px] flex items-center gap-1"
+                          title="Load this run into the agent"
+                        >
+                          <Play size={10} /> Load
+                        </button>
+                        <button
+                          onClick={() => onDelete(a.id)}
+                          className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
+                          title="Remove from history"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isExp && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-3 bg-emerald-50/60 border-b border-gray-200">
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Channels</p>
+                            <div className="flex flex-wrap gap-1">
+                              {channels.length > 0
+                                ? channels.map(ch => <span key={ch} className="px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-emerald-700 text-[11px]">{ch}</span>)
+                                : <span className="text-gray-400">none</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Controls</p>
+                            <div className="flex flex-wrap gap-1">
+                              {(r.controls ?? []).length > 0
+                                ? (r.controls as string[]).map(c => <span key={c} className="px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600 text-[11px]">{c}</span>)
+                                : <span className="text-gray-400">none</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Inference</p>
+                            <p className="text-gray-700 font-mono">
+                              {r.inference?.chains ?? '?'} chains × {r.inference?.draws ?? '?'} draws
+                              {r.inference?.tune ? ` (${r.inference.tune} tune)` : ''}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Trend / Seasonality</p>
+                            <p className="text-gray-700">{r.trend ?? '—'}</p>
+                          </div>
+                          {r.model_path && (
+                            <div className="col-span-2">
+                              <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Saved path</p>
+                              <p className="text-gray-500 font-mono text-[11px] truncate">{r.model_path}</p>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </DashWidget>
+  );
+}
+
+// ─── ArtifactsPanel ──────────────────────────────────────────────────────────
+
+function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
+  artifacts: Artifact[];
+  onRerun: (a: Artifact) => void;
+  onDelete: (id: string) => void;
+  onLoadRun: (runName: string) => void;
+}) {
+  if (artifacts.length === 0) return null;
+  const codeArtifacts = artifacts.filter(a => a.kind === 'code_snippet');
+  const reportArtifacts = artifacts.filter(a => a.kind === 'report');
+  const modelRunArtifacts = artifacts.filter(a => a.kind === 'model_run');
+  const projectDocArtifacts = artifacts.filter(a => a.kind === 'project_report' || a.kind === 'project_slides');
+
+  return (
+    <div className="space-y-4">
+      <ProjectDocsWidget artifacts={projectDocArtifacts} onDelete={onDelete} />
+      <ModelRunsWidget runs={modelRunArtifacts} onLoad={onLoadRun} onDelete={onDelete} />
+      {(codeArtifacts.length > 0 || reportArtifacts.length > 0) && (
+        <DashWidget title={`Code & Reports (${codeArtifacts.length + reportArtifacts.length})`} dotColor="bg-amber-500" color="amber">
+          <div className="space-y-3">
+            {codeArtifacts.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1.5">Code Snippets</p>
+                <div className="space-y-2">
+                  {codeArtifacts.map(a => {
+                    const code = String(a.payload?.code ?? '');
+                    return (
+                      <div key={a.id} className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-200 bg-white">
+                          <FileCode size={12} className="text-amber-600 shrink-0" />
+                          <span className="text-[11px] text-gray-500 flex-1 truncate">
+                            {new Date(a.created_at * 1000).toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(code)}
+                            className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                            title="Copy"
+                          ><Copy size={11} /></button>
+                          <button
+                            onClick={() => onRerun(a)}
+                            className="p-1 rounded hover:bg-indigo-50 text-indigo-600"
+                            title="Rerun"
+                          ><Play size={11} /></button>
+                          <button
+                            onClick={() => onDelete(a.id)}
+                            className="p-1 rounded hover:bg-red-50 text-red-500"
+                            title="Delete"
+                          ><Trash2 size={11} /></button>
+                        </div>
+                        <pre className="px-3 py-2 text-[11px] font-mono text-gray-700 overflow-x-auto whitespace-pre max-h-40">{truncate(code, 600)}</pre>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {reportArtifacts.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1.5">Reports</p>
+                <div className="space-y-1.5">
+                  {reportArtifacts.map(a => (
+                    <div key={a.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
+                      <ExternalLink size={12} className="text-violet-600 shrink-0" />
+                      <span className="text-xs text-gray-700 flex-1 truncate font-mono">{a.payload?.path ?? a.id}</span>
+                      <button onClick={() => onDelete(a.id)} className="p-1 rounded hover:bg-red-50 text-red-500" title="Delete">
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </DashWidget>
+      )}
+    </div>
+  );
+}
+
+// ─── DatasetPanel ─────────────────────────────────────────────────────────────
+
+interface DatasetInfo {
+  rows: number;
+  columns: string[];
+  date_range?: { min: string; max: string } | null;
+  variable_names?: string[];
+  geographies?: string[];
+  column_stats?: Record<string, { unique: number; top_values: { value: string; count: number }[]; truncated: boolean }>;
+  active_dimensions?: string[];
+}
+
+function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; threadId: string | null }) {
+  const [selectedVar, setSelectedVar] = useState<string | null>(null);
+  const [dimFilters, setDimFilters] = useState<Record<string, string>>({});
+  const [series, setSeries] = useState<{ date: string; value: number }[] | null>(null);
+  const [loadingSeries, setLoadingSeries] = useState(false);
+
+  const activeDims = dataset.active_dimensions ?? [];
+  const variables = dataset.variable_names ?? [];
+
+  useEffect(() => {
+    if (!selectedVar || !threadId) return;
+    setLoadingSeries(true);
+    const params = new URLSearchParams({ variable: selectedVar });
+    const activeDimFilters = activeDims.filter(d => dimFilters[d]);
+    if (activeDimFilters.length > 0) {
+      params.set('dim', activeDimFilters[0]);
+      params.set('value', dimFilters[activeDimFilters[0]]);
+    }
+    fetch(`${API_BASE}/dataset/preview/${encodeURIComponent(threadId)}?${params}`)
+      .then(r => r.json())
+      .then(data => { setSeries(data.series ?? null); })
+      .catch(() => setSeries(null))
+      .finally(() => setLoadingSeries(false));
+  }, [selectedVar, JSON.stringify(dimFilters), threadId]);
+
+  const plotData = series ? [{
+    x: series.map(p => p.date),
+    y: series.map(p => p.value),
+    type: 'scatter' as const,
+    mode: 'lines' as const,
+    line: { color: '#6366f1', width: 2 },
+    name: selectedVar ?? '',
+  }] : [];
+
+  const plotLayout = applyLightModeLayout({
+    title: selectedVar ? `${selectedVar}${dimFilters && Object.keys(dimFilters).length ? ` — ${Object.entries(dimFilters).map(([k, v]) => `${k}: ${v}`).join(', ')}` : ''}` : '',
+    xaxis: { title: 'Date' },
+    yaxis: { title: 'Value' },
+    height: 280,
+    margin: { l: 60, r: 20, t: 40, b: 60 },
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <DashWidget title="Dataset Summary" dotColor="bg-indigo-500" color="indigo">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Rows</p>
+            <p className="text-2xl font-bold text-gray-900">{dataset.rows.toLocaleString()}</p>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Columns</p>
+            <p className="text-2xl font-bold text-gray-900">{dataset.columns.length}</p>
+          </div>
+          {dataset.date_range && (
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 col-span-2">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Date Range</p>
+              <p className="text-sm font-medium text-gray-700">{dataset.date_range.min} → {dataset.date_range.max}</p>
+            </div>
+          )}
+        </div>
+      </DashWidget>
+
+      {/* Variable names + preview */}
+      {variables.length > 0 && (
+        <DashWidget title={`Variables (${variables.length})`} dotColor="bg-violet-500" color="violet">
+          {/* Dimension filters */}
+          {activeDims.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {activeDims.map(dim => {
+                const stat = dataset.column_stats?.[dim];
+                const opts = stat?.top_values ?? [];
+                return (
+                  <div key={dim} className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500 font-medium">{dim}:</span>
+                    <select
+                      value={dimFilters[dim] ?? ''}
+                      onChange={e => setDimFilters(prev => ({ ...prev, [dim]: e.target.value }))}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    >
+                      <option value="">All</option>
+                      {opts.map(o => (
+                        <option key={o.value} value={o.value}>{o.value}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Variable chips */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {variables.map(v => (
+              <button
+                key={v}
+                onClick={() => setSelectedVar(v === selectedVar ? null : v)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  selectedVar === v
+                    ? 'bg-violet-600 text-white border-violet-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-violet-400 hover:text-violet-600'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          {/* Chart */}
+          {selectedVar && (
+            <div className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
+              {loadingSeries ? (
+                <div className="flex items-center justify-center h-[280px] text-gray-400">
+                  <Loader2 size={22} className="animate-spin" />
+                </div>
+              ) : series ? (
+                <Plot
+                  data={plotData}
+                  layout={{ ...plotLayout, autosize: true }}
+                  useResizeHandler
+                  style={{ width: '100%', height: '280px' }}
+                  config={{ responsive: true, displayModeBar: false }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-[280px] text-gray-400 text-sm">No data</div>
+              )}
+            </div>
+          )}
+        </DashWidget>
+      )}
+
+      {/* Dimension value counts */}
+      {Object.entries(dataset.column_stats ?? {}).map(([dim, stat]) => (
+        <DashWidget
+          key={dim}
+          title={`${dim} (${stat.unique} unique${stat.truncated ? ', top 20 shown' : ''})`}
+          dotColor="bg-sky-500"
+          color="sky"
+          defaultOpen={false}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-3 py-2 text-left font-semibold text-sky-600 border-b border-gray-200">Value</th>
+                  <th className="px-3 py-2 text-right font-semibold text-sky-600 border-b border-gray-200">Count</th>
+                  <th className="px-3 py-2 text-right font-semibold text-sky-600 border-b border-gray-200">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stat.top_values.map((row, i) => {
+                  const total = stat.top_values.reduce((s, r) => s + r.count, 0);
+                  const pct = total > 0 ? ((row.count / total) * 100).toFixed(1) : '0.0';
+                  return (
+                    <tr key={i} className="even:bg-gray-50 hover:bg-sky-50 transition-colors">
+                      <td className="px-3 py-1.5 text-gray-700 border-b border-gray-100 font-mono">{row.value}</td>
+                      <td className="px-3 py-1.5 text-right text-gray-600 border-b border-gray-100">{row.count.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right text-gray-400 border-b border-gray-100">{pct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </DashWidget>
+      ))}
+    </div>
+  );
+}
+
+// ─── EmptyTabState ────────────────────────────────────────────────────────────
+
+function EmptyTabState({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-gray-400 space-y-3">
+      <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200 shadow-sm text-gray-300">
+        {icon}
+      </div>
+      <p className="text-base text-gray-500 font-medium">{title}</p>
+      <p className="text-sm text-gray-400 max-w-sm text-center">{hint}</p>
+    </div>
+  );
+}
+
 // ─── Main AgentPage ───────────────────────────────────────────────────────────
 
 export function AgentPage() {
@@ -1817,48 +2481,213 @@ export function AgentPage() {
   const [pythonOutputs, setPythonOutputs] = useState<PythonOutput[]>([]);
   const [loading, setLoading] = useState(false);
   const [rightExpanded, setRightExpanded] = useState(false);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(() => localStorage.getItem('mmm.activeThreadId'));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const { apiKey, modelName } = useAuthStore();
+  const causal = useCausalPanels(threadId);
+  const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('mmm.activeTab') || 'workflow');
 
+  useEffect(() => { localStorage.setItem('mmm.activeTab', activeTab); }, [activeTab]);
+
+  // Persist active session
   useEffect(() => {
-    fetch('http://localhost:8000/state/default_thread', {
-      headers: { 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' },
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.messages) {
-          const parsed: ChatMessage[] = [];
-          data.messages.forEach((m: any, i: number) => {
-            if (m.type === 'tool') return;
-            const content = normalizeContent(m.content);
-            if (!content && !m.tool_calls?.length) return;
-            parsed.push({ id: `loaded-${i}`, type: m.type, content });
-          });
-          setMessages(parsed);
+    if (threadId) localStorage.setItem('mmm.activeThreadId', threadId);
+  }, [threadId]);
+
+  // Load session list; auto-create one if none, auto-select first if no active
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/sessions`);
+        let list: Session[] = await res.json();
+        if (list.length === 0) {
+          const created = await fetch(`${API_BASE}/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).then(r => r.json());
+          list = [created];
         }
-        if (data.dashboard_data) setDashboardData(data.dashboard_data);
-      })
-      .catch(console.error);
+        setSessions(list);
+        if (!threadId || !list.some(s => s.thread_id === threadId)) {
+          setThreadId(list[0].thread_id);
+        }
+      } catch (e) { console.error('Failed to load sessions', e); }
+    })();
   }, []);
+
+  const refreshSessions = useCallback(async () => {
+    try {
+      const list: Session[] = await fetch(`${API_BASE}/sessions`).then(r => r.json());
+      setSessions(list);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const loadThreadState = useCallback(async (tid: string) => {
+    try {
+      const [stateRes, artRes] = await Promise.all([
+        fetch(`${API_BASE}/state/${tid}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json()),
+        fetch(`${API_BASE}/artifacts/${tid}`).then(r => r.json()),
+      ]);
+
+      // Build messages, pairing AI tool_calls with their ToolMessage results.
+      const parsed: ChatMessage[] = [];
+      // Maps tool_call_id → index in parsed so tool results can be stitched back in.
+      const tcIdToMsgIdx: Record<string, number> = {};
+
+      (stateRes.messages || []).forEach((m: any, i: number) => {
+        if (m.type === 'human') {
+          const content = normalizeContent(m.content);
+          if (content) parsed.push({ id: `loaded-${tid}-${i}`, type: 'human', content });
+        } else if (m.type === 'ai') {
+          const content = normalizeContent(m.content);
+          const toolCalls: ToolCall[] = (m.tool_calls || []).map((tc: any) => ({
+            id: tc.id ?? `tc-${i}-${tc.name}`,
+            name: tc.name ?? 'unknown',
+            args: tc.args ?? {},
+            status: 'done' as const,
+            result: undefined,
+          }));
+          if (!content && !toolCalls.length) return;
+          const msgIdx = parsed.length;
+          parsed.push({ id: `loaded-${tid}-${i}`, type: 'ai', content, toolCalls });
+          toolCalls.forEach(tc => { tcIdToMsgIdx[tc.id] = msgIdx; });
+        } else if (m.type === 'tool') {
+          // Stitch the result back into the matching tool call on the AI message.
+          const tcId = m.tool_call_id;
+          const msgIdx = tcId != null ? tcIdToMsgIdx[tcId] : undefined;
+          if (msgIdx != null) {
+            const msg = parsed[msgIdx];
+            const tc = msg?.toolCalls?.find(t => t.id === tcId);
+            if (tc) tc.result = normalizeContent(m.content);
+          }
+        }
+      });
+
+      setMessages(parsed);
+      setDashboardData(stateRes.dashboard_data || {});
+      setArtifacts(Array.isArray(artRes) ? artRes : []);
+      setPythonOutputs([]);
+    } catch (e) { console.error('Failed to load thread state', e); }
+  }, [apiKey, modelName]);
+
+  // Re-load whenever active session changes
+  useEffect(() => {
+    if (threadId) loadThreadState(threadId);
+  }, [threadId, loadThreadState]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ── Session actions ────────────────────────────────────────────────────────
+  const handleCreateSession = async () => {
+    const created: Session = await fetch(`${API_BASE}/sessions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+    }).then(r => r.json());
+    await refreshSessions();
+    setThreadId(created.thread_id);
+  };
+
+  const handleRenameSession = async (id: string, name: string) => {
+    await fetch(`${API_BASE}/sessions/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+    refreshSessions();
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' });
+    const remaining = sessions.filter(s => s.thread_id !== id);
+    setSessions(remaining);
+    if (id === threadId) {
+      if (remaining.length > 0) setThreadId(remaining[0].thread_id);
+      else handleCreateSession();
+    }
+  };
+
+  // ── Chat actions ───────────────────────────────────────────────────────────
   const handleClearChat = async () => {
+    if (!threadId) return;
     setMessages([]);
     setDashboardData({});
     setPythonOutputs([]);
     try {
-      await fetch('http://localhost:8000/state/default_thread', {
-        method: 'DELETE',
-        headers: { 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' },
+      await fetch(`${API_BASE}/state/${threadId}`, {
+        method: 'DELETE', headers: authHeaders(apiKey, modelName),
       });
-    } catch { /* silently ignore if backend doesn't support DELETE */ }
+    } catch { /* ignore */ }
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
+
+  const handleBack = async () => {
+    if (!threadId || loading) return;
+    // Fetch timeline, find a checkpoint before the latest human message
+    try {
+      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`).then(r => r.json());
+      if (!Array.isArray(timeline) || timeline.length < 2) return;
+      // timeline is newest-first. Find checkpoints in chronological order
+      // and rewind to the one before the latest user-visible state change.
+      // Strategy: target = the checkpoint where message_count drops by ≥1
+      // compared to current head — equivalent to "previous turn boundary".
+      const head = timeline[0];
+      let target: any = null;
+      for (let i = 1; i < timeline.length; i++) {
+        if (timeline[i].message_count < head.message_count) {
+          target = timeline[i];
+          break;
+        }
+      }
+      if (!target) target = timeline[timeline.length - 1];
+      await fetch(`${API_BASE}/rewind/${threadId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkpoint_id: target.checkpoint_id }),
+      });
+      await loadThreadState(threadId);
+    } catch (e) { console.error('Back failed', e); }
+  };
+
+  const handleRetry = async () => {
+    if (!threadId || loading) return;
+    // Find the last human message in current state
+    const lastHuman = [...messages].reverse().find(m => m.type === 'human');
+    if (!lastHuman) return;
+    try {
+      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`).then(r => r.json());
+      if (!Array.isArray(timeline)) return;
+      // Rewind to the checkpoint with the smallest message_count that is
+      // still ≥ (messages_before_last_human). That's the state right before
+      // the most recent user turn. Walk oldest→newest.
+      const ordered = [...timeline].reverse(); // oldest first
+      const targetCount = messages.findIndex(m => m.id === lastHuman.id);
+      // Find first checkpoint whose message_count ≥ targetCount but whose
+      // last_human_index < targetCount (i.e. the human is not yet in it).
+      let chosen: any = null;
+      for (const cp of ordered) {
+        if ((cp.last_human_index ?? -1) < targetCount) chosen = cp;
+        else break;
+      }
+      if (!chosen) chosen = ordered[0];
+      await fetch(`${API_BASE}/rewind/${threadId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkpoint_id: chosen.checkpoint_id }),
+      });
+      await loadThreadState(threadId);
+      handleSend(lastHuman.content);
+    } catch (e) { console.error('Retry failed', e); }
   };
 
   const handleSend = async (messageOverride?: string) => {
+    if (!threadId) return;
     const textToSend = messageOverride || input;
     if (!textToSend.trim()) return;
 
@@ -1874,11 +2703,15 @@ export function AgentPage() {
     const updateMsg = (updater: (m: ChatMessage) => ChatMessage) =>
       setMessages(prev => prev.map(m => m.id === tempAiId ? updater(m) : m));
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' },
-        body: JSON.stringify({ message: textToSend, thread_id: 'default_thread' }),
+        headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
+        body: JSON.stringify({ message: textToSend, thread_id: threadId }),
+        signal: controller.signal,
       });
       if (!response.body) return;
 
@@ -1909,6 +2742,15 @@ export function AgentPage() {
             if (data.dashboard_data && Object.keys(data.dashboard_data).length > 0)
               setDashboardData((prev: any) => ({ ...prev, ...data.dashboard_data }));
             if (data.type === 'dashboard_update') continue;
+            if (data.type === 'error') {
+              // Replace the pending AI bubble with an error notice
+              setMessages(prev => prev.map(m =>
+                m.id === tempAiId
+                  ? { ...m, type: 'error' as const, content: data.content || 'An unknown error occurred.' }
+                  : m
+              ));
+              continue;
+            }
             if (data.type === 'ai') {
               if (Array.isArray(data.tool_calls)) {
                 for (const tc of data.tool_calls) {
@@ -1946,16 +2788,35 @@ export function AgentPage() {
           } catch { /* ignore parse errors */ }
         }
       }
-    } catch (e) {
-      console.error(e);
-      // Stream error — mark any running tools as errored
+    } catch (e: any) {
+      const aborted = e?.name === 'AbortError';
+      if (!aborted) console.error(e);
       const runningKeys = Object.keys(toolCallMap).filter(k => toolCallMap[k].status === 'running');
       if (runningKeys.length > 0) {
-        runningKeys.forEach(k => { toolCallMap[k] = { ...toolCallMap[k], status: 'error', result: 'Connection error' }; });
+        runningKeys.forEach(k => {
+          toolCallMap[k] = {
+            ...toolCallMap[k],
+            status: aborted ? 'done' : 'error',
+            result: toolCallMap[k].result ?? (aborted ? 'Stopped by user' : 'Connection error'),
+          };
+        });
         updateMsg(m => ({ ...m, toolCalls: Object.values(toolCallMap) }));
       }
+      if (aborted) {
+        updateMsg(m => ({ ...m, content: (m.content || '') + (m.content ? '\n\n' : '') + '_⏹ Stopped by user._' }));
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
+      // Refresh artifacts + causal panels after the turn so newly-saved
+      // snippets, assumptions, files, DAG, and workflow status all show up.
+      if (threadId) {
+        try {
+          const arts = await fetch(`${API_BASE}/artifacts/${threadId}`).then(r => r.json());
+          if (Array.isArray(arts)) setArtifacts(arts);
+        } catch { /* ignore */ }
+        causal.refresh();
+      }
     }
   };
 
@@ -1966,14 +2827,17 @@ export function AgentPage() {
     fd.append('file', file);
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/upload', {
+      const url = threadId ? `${API_BASE}/upload?thread_id=${encodeURIComponent(threadId)}` : `${API_BASE}/upload`;
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' },
+        headers: authHeaders(apiKey, modelName),
         body: fd,
       });
       const data = await res.json();
-      if (data.path)
+      if (data.path) {
+        causal.refresh();
         handleSend(`I have uploaded a dataset at \`${data.path}\`. Please load it using the execute_python tool and run some basic EDA on it. Don't build a model yet.`);
+      }
     } catch (e) { console.error('File upload failed', e); }
     finally { setLoading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
@@ -1984,59 +2848,125 @@ export function AgentPage() {
   const handleApplySpec = useCallback((newSpec: any) => {
     setDashboardData((prev: any) => ({ ...prev, model_spec: newSpec }));
     handleSend(buildApplyMessage(newSpec));
-  }, []);
+  }, [threadId]);
+
+  const handleRerunArtifact = (a: Artifact) => {
+    if (a.kind !== 'code_snippet') return;
+    const code = String(a.payload?.code ?? '');
+    if (!code.trim()) return;
+    handleSend(
+      `Please re-run this saved code snippet using \`execute_python\`:\n\n\`\`\`python\n${code}\n\`\`\``
+    );
+  };
+
+  const handleDeleteArtifact = async (id: string) => {
+    await fetch(`${API_BASE}/artifacts/${id}`, { method: 'DELETE' });
+    setArtifacts(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleLoadRun = (runName: string) => {
+    if (!runName) return;
+    handleSend(`Please load the fitted model from run \`${runName}\` using \`load_fitted_model\`.`);
+  };
+
   const hasDecomp = dashboardData.decomposition?.length > 0;
+  const lastAssistantHasContent = messages.length > 0 && messages[messages.length - 1].type === 'ai';
+  const canRetry = !loading && messages.some(m => m.type === 'human');
+  const canBack = !loading && messages.length >= 2;
+
+  const activeSession = sessions.find(s => s.thread_id === threadId);
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 overflow-hidden font-sans">
+      <SessionSidebar
+        sessions={sessions}
+        activeId={threadId}
+        onSelect={setThreadId}
+        onCreate={handleCreateSession}
+        onRename={handleRenameSession}
+        onDelete={handleDeleteSession}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(v => !v)}
+      />
+
       {/* ── Left: Chat (1/3 width) ── */}
       {!rightExpanded && (
         <div className="w-1/3 border-r border-gray-200 flex flex-col bg-white shadow-md relative z-10 shrink-0">
           <div className="p-4 border-b border-gray-200 bg-white sticky top-0 flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 Agentic MMM Copilot
               </h1>
-              {modelName && <p className="text-xs text-gray-400 mt-0.5">{modelName}</p>}
+              <p className="text-xs text-gray-400 mt-0.5 truncate">
+                {activeSession?.name ?? '—'}{modelName ? ` · ${modelName}` : ''}
+              </p>
             </div>
-            <button
-              onClick={handleClearChat}
-              disabled={loading || messages.length === 0}
-              title="Clear conversation"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0 mt-0.5"
-            >
-              <Trash2 size={15} />
-            </button>
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              <button
+                onClick={handleBack}
+                disabled={!canBack}
+                title="Back to previous turn"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ArrowLeft size={15} />
+              </button>
+              <button
+                onClick={handleRetry}
+                disabled={!canRetry || !lastAssistantHasContent}
+                title="Regenerate last response"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <RotateCcw size={15} />
+              </button>
+              <button
+                onClick={handleClearChat}
+                disabled={loading || messages.length === 0}
+                title="Clear conversation"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50">
             {messages.map(msg => (
-              <div key={msg.id} className={`flex gap-3 ${msg.type === 'human' ? 'justify-end' : 'justify-start'}`}>
-                {msg.type === 'ai' && (
+              <div key={msg.id} className={`flex gap-3 ${msg.type === 'human' ? 'justify-end' : msg.type === 'error' ? 'justify-center' : 'justify-start'}`}>
+                {msg.type === 'error' && (
+                  <div className="rounded-xl px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm max-w-[90%] flex gap-2 items-start">
+                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <span>{msg.content}</span>
+                  </div>
+                )}
+                {msg.type !== 'error' && msg.type === 'ai' && (
                   <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
                     <Bot size={16} className="text-white" />
                   </div>
                 )}
-                <div className="max-w-[82%] flex flex-col gap-1">
-                  {msg.type === 'ai' && msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="space-y-1">
-                      {msg.toolCalls.map(tc => <ToolCallBlock key={tc.id} toolCall={tc} />)}
-                    </div>
-                  )}
-                  {(msg.content || (loading && msg.type === 'ai')) && (
-                    <div className={`rounded-2xl p-4 ${msg.type === 'human'
-                      ? 'bg-blue-600 text-white rounded-br-none'
-                      : 'bg-white text-gray-800 rounded-bl-none border border-gray-200 shadow-sm'}`}>
-                      {msg.type === 'human'
-                        ? <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                        : <div className="prose prose-sm max-w-none text-sm">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-                              {msg.content || (loading ? 'Thinking…' : '')}
-                            </ReactMarkdown>
-                          </div>}
-                    </div>
-                  )}
-                </div>
+                {msg.type !== 'error' && (
+                  <div className="max-w-[82%] flex flex-col gap-1">
+                    {msg.type === 'ai' && msg.toolCalls && msg.toolCalls.length > 0 && (
+                      <div className="space-y-1">
+                        {msg.toolCalls.map(tc => (
+                          <ToolCallBlock key={tc.id} toolCall={tc} onNavigate={setActiveTab} />
+                        ))}
+                      </div>
+                    )}
+                    {(msg.content || (loading && msg.type === 'ai')) && (
+                      <div className={`rounded-2xl p-4 ${msg.type === 'human'
+                        ? 'bg-blue-600 text-white rounded-br-none'
+                        : 'bg-white text-gray-800 rounded-bl-none border border-gray-200 shadow-sm'}`}>
+                        {msg.type === 'human'
+                          ? <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                          : <div className="prose prose-sm max-w-none text-sm">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                                {msg.content || (loading ? 'Thinking…' : '')}
+                              </ReactMarkdown>
+                            </div>}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {msg.type === 'human' && (
                   <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-1">
                     <User size={16} className="text-white" />
@@ -2061,188 +2991,277 @@ export function AgentPage() {
                 className="w-full bg-gray-100 border border-gray-200 rounded-full py-3 px-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-gray-900 placeholder-gray-400"
                 disabled={loading}
               />
-              <button onClick={() => handleSend()} disabled={loading || !input.trim()}
-                className="absolute right-2 p-2 bg-indigo-600 hover:bg-indigo-500 rounded-full text-white transition-colors disabled:opacity-50">
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-              </button>
+              {loading ? (
+                <button onClick={handleStop}
+                  className="absolute right-2 p-2 bg-red-500 hover:bg-red-400 rounded-full text-white transition-colors"
+                  title="Stop generation"
+                >
+                  <Square size={16} fill="white" />
+                </button>
+              ) : (
+                <button onClick={() => handleSend()} disabled={!input.trim()}
+                  className="absolute right-2 p-2 bg-indigo-600 hover:bg-indigo-500 rounded-full text-white transition-colors disabled:opacity-50">
+                  <Send size={18} />
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* ── Right: Workspace Dashboard (2/3 or full) ── */}
-      <div className={`${rightExpanded ? 'w-full' : 'w-2/3'} bg-gray-50 p-5 overflow-y-auto`}>
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-bold text-gray-900">Project Workspace</h2>
-          <button
-            onClick={() => setRightExpanded(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-800 shadow-sm transition-all text-sm font-medium"
-          >
-            {rightExpanded ? <><Minimize2 size={14} /> Restore Chat</> : <><Maximize2 size={14} /> Full Screen</>}
-          </button>
-        </div>
-
-        {!Object.keys(dashboardData).length && (
-          <div className="flex flex-col items-center justify-center h-[calc(100%-4rem)] text-gray-400 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center border border-gray-200 shadow-sm">
-              <Bot size={32} className="text-gray-300" />
-            </div>
-            <p className="text-base text-gray-500">Waiting for agent insights…</p>
-            <p className="text-sm text-gray-400 max-w-sm text-center">Charts and metrics will appear here as the agent works on your model.</p>
+      <div className={`${rightExpanded ? 'w-full' : 'w-2/3'} bg-gray-50 overflow-hidden flex flex-col`}>
+        {/* Header — title + tab bar + fullscreen toggle */}
+        <div className="px-5 pt-5 pb-0 bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl font-bold text-gray-900">Project Workspace</h2>
+            <button
+              onClick={() => setRightExpanded(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-800 shadow-sm transition-all text-sm font-medium"
+            >
+              {rightExpanded ? <><Minimize2 size={14} /> Restore Chat</> : <><Maximize2 size={14} /> Full Screen</>}
+            </button>
           </div>
-        )}
 
-        <div className="grid grid-cols-1 gap-4">
-          {/* Dataset */}
-          {dashboardData.dataset && (
-            <DashWidget title="Dataset Details" dotColor="bg-indigo-500" color="indigo"
-              expandContent={
-                <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto pt-4">
-                  <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Total Rows</p>
-                    <p className="text-4xl font-bold text-gray-900">{dashboardData.dataset.rows}</p>
-                  </div>
-                  <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Geographies</p>
-                    <p className="text-2xl font-medium text-gray-700">{dashboardData.dataset.geographies?.join(', ')}</p>
-                  </div>
-                </div>
-              }
-            >
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Rows</p>
-                  <p className="text-2xl font-bold text-gray-900">{dashboardData.dataset.rows}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Geographies</p>
-                  <p className="text-sm font-medium text-gray-700">{dashboardData.dataset.geographies?.join(', ')}</p>
-                </div>
-              </div>
-            </DashWidget>
-          )}
-
-          {/* Model Configuration — full detail */}
-          {hasSpec && (
-            <ModelSpecWidget
-              spec={dashboardData.model_spec}
-              editable={!modelCompleted}
-              onApplySpec={handleApplySpec}
-            />
-          )}
-
-          {/* Trend & Seasonality Preview */}
-          {hasSpec && (
-            <SeasonalityTrendWidget
-              spec={dashboardData.model_spec}
-              onQuickAction={handleSend}
-              modelCompleted={modelCompleted}
-            />
-          )}
-
-          {/* Prior Configuration */}
-          {hasSpec && (
-            <PriorConfigWidget
-              spec={dashboardData.model_spec}
-              editable={!modelCompleted}
-              onApplySpec={handleApplySpec}
-            />
-          )}
-
-          {/* Fit status */}
-          {modelCompleted && (
-            <DashWidget title="Model Successfully Fit" dotColor="bg-green-500 animate-pulse" color="green">
-              <p className="text-sm text-gray-700">{dashboardData.summary}</p>
-            </DashWidget>
-          )}
-
-          {/* Decomposition */}
-          {hasDecomp && <DecompositionWidget decomposition={dashboardData.decomposition} />}
-
-          {/* Report */}
-          {dashboardData.report_path && (
-            <DashWidget title="Full MMM Report" dotColor="bg-violet-500" color="violet"
-              expandTitle="MMM Report"
-              expandContent={
-                <div className="h-[80vh]">
-                  <iframe src="http://localhost:8000/report" className="w-full h-full rounded-xl border border-gray-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
-                </div>
-              }
-            >
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-gray-500">Full analysis report with diagnostics, ROI, and channel decomposition.</p>
-                <div className="flex gap-3">
-                  <a href="http://localhost:8000/report/download" download="mmm_report.html"
-                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-xl transition-colors font-medium">
-                    <Download size={15} /> Download
-                  </a>
-                  <a href="http://localhost:8000/report" target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-xl transition-colors font-medium border border-gray-200">
-                    <ExternalLink size={15} /> Open Tab
-                  </a>
-                </div>
-                <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '340px' }}>
-                  <iframe src="http://localhost:8000/report" className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
-                </div>
-              </div>
-            </DashWidget>
-          )}
-
-          {/* ROI Metrics */}
-          {dashboardData.roi_metrics && (() => {
-            const table = (
-              <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                    <tr>
-                      {['Channel', 'Mean ROI', '94% HDI', 'Prob. Profitable'].map(h => (
-                        <th key={h} className="px-4 py-3 font-medium">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {dashboardData.roi_metrics.map((row: any) => (
-                      <tr key={row.channel} className="bg-white hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-900">{row.channel}</td>
-                        <td className="px-4 py-3 text-emerald-600 font-semibold">{row.roi_mean?.toFixed(2)}x</td>
-                        <td className="px-4 py-3 text-gray-500">[{row.roi_hdi_low?.toFixed(2)}, {row.roi_hdi_high?.toFixed(2)}]</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500" style={{ width: `${(row.prob_profitable || 0) * 100}%` }} />
-                            </div>
-                            <span className="text-gray-700 text-xs font-medium">{((row.prob_profitable || 0) * 100).toFixed(1)}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
+          {/* Tab bar */}
+          {(() => {
+            const tabs = [
+              { id: 'workflow',  label: 'Workflow',  icon: <BookOpen size={14} />,
+                badge: `${causal.workflow.filter(s => s.status === 'done').length}/9` },
+              { id: 'causal',    label: 'Causal',    icon: <Network size={14} />,
+                badge: causal.assumptions.length > 0 ? String(causal.assumptions.length) : null,
+                dot: !!causal.dag },
+              { id: 'data',      label: 'Data',      icon: <Database size={14} />,
+                badge: causal.files.length > 0 ? String(causal.files.length) : null,
+                dot: !!dashboardData.dataset },
+              { id: 'model',     label: 'Model',     icon: <Layers size={14} />,
+                dot: hasSpec },
+              { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
+                dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
+              { id: 'plots',     label: 'Plots',     icon: <Activity size={14} />,
+                badge: (dashboardData.plots?.length || 0) > 0 ? String(dashboardData.plots.length) : null,
+                dot: (dashboardData.plots?.length || 0) > 0 },
+              { id: 'artifacts', label: 'Artifacts', icon: <FileCode size={14} />,
+                badge: (artifacts.length + pythonOutputs.length) > 0
+                  ? String(artifacts.length + pythonOutputs.length) : null },
+            ];
             return (
-              <DashWidget title="ROI Performance" dotColor="bg-emerald-500" color="emerald" expandContent={table}>
-                {table}
-              </DashWidget>
+              <div className="flex items-center gap-1 overflow-x-auto -mb-px">
+                {tabs.map(t => {
+                  const active = activeTab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setActiveTab(t.id)}
+                      className={`flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors shrink-0 ${
+                        active
+                          ? 'border-indigo-500 text-indigo-700 bg-white'
+                          : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span className={active ? 'text-indigo-600' : 'text-gray-400'}>{t.icon}</span>
+                      <span>{t.label}</span>
+                      {t.badge && (
+                        <span className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${
+                          active ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {t.badge}
+                        </span>
+                      )}
+                      {!t.badge && t.dot && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })()}
+        </div>
 
-          {/* Python REPL output */}
-          <PythonOutputWidget
-            outputs={pythonOutputs}
-            onClear={() => setPythonOutputs([])}
-          />
+        {/* Tab panels — only one is rendered at a time */}
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="grid grid-cols-1 gap-4">
 
-          {/* Generated Plots */}
-          {dashboardData.plots?.length > 0 && (
-            <DashWidget title={`Generated Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500 animate-pulse" color="fuchsia">
-              <div className="space-y-4">
-                {dashboardData.plots.map((plot: any, idx: number) => (
-                  <PlotCard key={idx} plot={plot} idx={idx} />
-                ))}
-              </div>
-            </DashWidget>
-          )}
+            {activeTab === 'workflow' && (
+              <WorkflowChecklist steps={causal.workflow} onOverride={causal.overrideWorkflow} />
+            )}
+
+            {activeTab === 'causal' && (
+              <>
+                <DAGViewer dag={causal.dag} />
+                <AssumptionsLog
+                  threadId={threadId}
+                  assumptions={causal.assumptions}
+                  onRefresh={causal.refresh}
+                />
+              </>
+            )}
+
+            {activeTab === 'data' && (
+              <>
+                <DataFilesWidget files={causal.files} onDelete={causal.deleteFile} />
+                {dashboardData.dataset ? (
+                  <DatasetPanel dataset={dashboardData.dataset} threadId={threadId} />
+                ) : (
+                  <EmptyTabState
+                    icon={<Database size={28} />}
+                    title="No dataset loaded yet"
+                    hint="Ask the agent to generate synthetic data or upload a CSV — it'll call `inspect_dataset` and details will appear here."
+                  />
+                )}
+              </>
+            )}
+
+            {activeTab === 'model' && (
+              <>
+                {hasSpec ? (
+                  <>
+                    <ModelSpecWidget
+                      spec={dashboardData.model_spec}
+                      editable={!modelCompleted}
+                      onApplySpec={handleApplySpec}
+                    />
+                    <SeasonalityTrendWidget
+                      spec={dashboardData.model_spec}
+                      onQuickAction={handleSend}
+                      modelCompleted={modelCompleted}
+                    />
+                    <PriorConfigWidget
+                      spec={dashboardData.model_spec}
+                      editable={!modelCompleted}
+                      onApplySpec={handleApplySpec}
+                    />
+                    {modelCompleted && (
+                      <DashWidget title="Model Successfully Fit" dotColor="bg-green-500 animate-pulse" color="green">
+                        <p className="text-sm text-gray-700">{dashboardData.summary}</p>
+                      </DashWidget>
+                    )}
+                  </>
+                ) : (
+                  <EmptyTabState
+                    icon={<Layers size={28} />}
+                    title="No model configured yet"
+                    hint="Ask the agent to configure a model (Step 3 of the workflow) — it'll call `configure_model` and a spec will appear here."
+                  />
+                )}
+              </>
+            )}
+
+            {activeTab === 'results' && (
+              <>
+                {!modelCompleted && !hasDecomp && !dashboardData.roi_metrics && !dashboardData.report_path && (
+                  <EmptyTabState
+                    icon={<BarChart2 size={28} />}
+                    title="No results yet"
+                    hint="Fit a model (Step 5), then ask for the decomposition or ROI."
+                  />
+                )}
+
+                {hasDecomp && <DecompositionWidget decomposition={dashboardData.decomposition} />}
+
+                {dashboardData.roi_metrics && (() => {
+                  const table = (
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                          <tr>
+                            {['Channel', 'Mean ROI', '94% HDI', 'Prob. Profitable'].map(h => (
+                              <th key={h} className="px-4 py-3 font-medium">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {dashboardData.roi_metrics.map((row: any) => (
+                            <tr key={row.channel} className="bg-white hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 font-medium text-gray-900">{row.channel}</td>
+                              <td className="px-4 py-3 text-emerald-600 font-semibold">{row.roi_mean?.toFixed(2)}x</td>
+                              <td className="px-4 py-3 text-gray-500">[{row.roi_hdi_low?.toFixed(2)}, {row.roi_hdi_high?.toFixed(2)}]</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500" style={{ width: `${(row.prob_profitable || 0) * 100}%` }} />
+                                  </div>
+                                  <span className="text-gray-700 text-xs font-medium">{((row.prob_profitable || 0) * 100).toFixed(1)}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                  return (
+                    <DashWidget title="ROI Performance" dotColor="bg-emerald-500" color="emerald" expandContent={table}>
+                      {table}
+                    </DashWidget>
+                  );
+                })()}
+
+                {dashboardData.report_path && (
+                  <DashWidget title="Full MMM Report" dotColor="bg-violet-500" color="violet"
+                    expandTitle="MMM Report"
+                    expandContent={
+                      <div className="h-[80vh]">
+                        <iframe src="http://localhost:8000/report" className="w-full h-full rounded-xl border border-gray-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
+                      </div>
+                    }
+                  >
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm text-gray-500">Full analysis report with diagnostics, ROI, and channel decomposition.</p>
+                      <div className="flex gap-3">
+                        <a href="http://localhost:8000/report/download" download="mmm_report.html"
+                          className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-xl transition-colors font-medium">
+                          <Download size={15} /> Download
+                        </a>
+                        <a href="http://localhost:8000/report" target="_blank" rel="noreferrer"
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-xl transition-colors font-medium border border-gray-200">
+                          <ExternalLink size={15} /> Open Tab
+                        </a>
+                      </div>
+                      <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '340px' }}>
+                        <iframe src="http://localhost:8000/report" className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
+                      </div>
+                    </div>
+                  </DashWidget>
+                )}
+              </>
+            )}
+
+            {activeTab === 'plots' && (
+              dashboardData.plots?.length > 0 ? (
+                <DashWidget title={`Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500" color="fuchsia">
+                  <div className="space-y-4">
+                    {dashboardData.plots.map((plot: any, idx: number) => (
+                      <PlotCard key={idx} plot={plot} idx={idx} />
+                    ))}
+                  </div>
+                </DashWidget>
+              ) : (
+                <EmptyTabState
+                  icon={<Activity size={28} />}
+                  title="No plots yet"
+                  hint="Ask the agent to run execute_python with fig.show() — charts appear here automatically."
+                />
+              )
+            )}
+
+            {activeTab === 'artifacts' && (
+              <>
+                <ArtifactsPanel
+                  artifacts={artifacts}
+                  onRerun={handleRerunArtifact}
+                  onDelete={handleDeleteArtifact}
+                  onLoadRun={handleLoadRun}
+                />
+                <PythonOutputWidget
+                  outputs={pythonOutputs}
+                  onClear={() => setPythonOutputs([])}
+                />
+              </>
+            )}
+
+          </div>
         </div>
       </div>
     </div>

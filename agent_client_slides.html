@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Media Mix Model Results & Budget Recommendations — Slides</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/reveal.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/theme/white.css"/>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/reveal.js"></script>
+<style>
+/* Override Reveal white-theme transforms and sizes */
+.reveal, .reveal * { box-sizing: border-box; }
+.reveal .slides section { text-align: left; padding: 0 2em; }
+.reveal .slides section[data-slide-type="title"] { text-align: center; }
+
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif !important;
+  text-transform: none !important;
+  letter-spacing: -0.01em !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  color: #1e293b !important;
+  word-break: break-word !important;
+}
+.reveal h1 { font-size: 1.9em !important; font-weight: 800 !important; text-align: center; }
+.reveal h2 {
+  font-size: 1.3em !important;
+  border-bottom: 2px solid #4f46e5 !important;
+  padding-bottom: 0.3em !important;
+  margin-bottom: 0.7em !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reveal h2.wrap { white-space: normal; font-size: 1.1em !important; }
+.reveal h3 { font-size: 0.95em !important; color: #475569 !important; }
+.reveal p, .reveal li {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif !important;
+  font-size: 0.82em !important; color: #334155 !important; line-height: 1.55 !important;
+  text-transform: none !important;
+}
+.reveal ul { list-style: none !important; padding: 0 !important; }
+.reveal li { padding: 0.3em 0 0.3em 1.3em !important; position: relative !important; }
+.reveal li::before { content: "▸"; position: absolute; left: 0; color: #4f46e5; font-size: 0.75em; top: 0.45em; }
+
+.reveal .slide-tag {
+  display: inline-block; background: #eef2ff; color: #4f46e5;
+  border-radius: 999px; padding: 0.2em 0.75em; font-size: 0.58em;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  margin-bottom: 0.6em;
+}
+.reveal .subtitle { color: #64748b; font-size: 0.78em; margin-top: 0.4em; }
+.reveal .rq-box {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4f46e5;
+  border-radius: 0 0.75rem 0.75rem 0; padding: 0.9em 1.1em; margin: 0.6em 0;
+  font-size: 0.82em !important; color: #1e293b !important; line-height: 1.55;
+}
+.reveal .rq-box .rq-main {
+  font-size: 1.05em !important; font-weight: 600; color: #1e293b !important; margin-bottom: 0.5em;
+}
+.reveal .rq-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4em 1em; margin-top: 0.5em; }
+.reveal .rq-meta-item { font-size: 0.85em !important; }
+.reveal .rq-meta-item .lbl { color: #94a3b8; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.stat-grid-slide { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 0.75rem 0; }
+.stat-slide { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.9rem 0.75rem; text-align: center; }
+.stat-slide .v { font-size: 1.7em; font-weight: 800; color: #4f46e5; line-height: 1; }
+.stat-slide .l { font-size: 0.6em; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.3em; }
+
+.chart-slide { height: 360px; width: 100%; }
+.finding-slide {
+  background: #f5f7ff; border-left: 3px solid #4f46e5;
+  border-radius: 0 0.5rem 0.5rem 0; padding: 0.55em 0.85em;
+  margin-bottom: 0.45em; font-size: 0.78em !important; color: #1e293b !important;
+  line-height: 1.45;
+}
+.tag-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.stag { background: #eef2ff; color: #4f46e5; border-radius: 999px; padding: 0.25em 0.7em; font-size: 0.65em; font-weight: 600; }
+</style>
+</head>
+<body>
+<div style="position:fixed;bottom:0;left:0;right:0;background:rgba(248,250,252,0.95);border-top:1px solid #e2e8f0;padding:0.3rem 1rem;font-size:0.6em;color:#94a3b8;text-align:center;z-index:100">CONFIDENTIAL — Prepared for Acme Corp · Not for distribution</div>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- Title -->
+    <section data-slide-type="title" style="text-align:center">
+      <h1 style="text-align:center">Media Mix Model Results & Budget Recommendations</h1>
+      <p class="subtitle" style="text-align:center">Acme Corp</p>
+      <p class="subtitle" style="text-align:center;font-size:0.7em;margin-top:0.75rem;color:#94a3b8">21 May 2026</p>
+    </section>
+
+    <!-- Research Question -->
+    <section>
+      <span class="slide-tag">Objective</span>
+      <h2>Research Question</h2>
+      <div class="rq-box"><div class="rq-main">What is the causal effect of media spend on Sales?</div><div class="rq-meta"><div class="rq-meta-item"><div class="lbl">business decision</div><div>Allocate media budget across channels to maximise Sales ROI</div></div><div class="rq-meta-item"><div class="lbl">treatment variable</div><div>Media Spend (across all channels)</div></div><div class="rq-meta-item"><div class="lbl">outcome variable</div><div>Sales</div></div><div class="rq-meta-item"><div class="lbl">scope notes</div><div>National level, 5 years of weekly data (260 weeks)</div></div></div></div>
+    </section>
+
+    <!-- Data -->
+    <section>
+      <span class="slide-tag">Data</span>
+      <h2>Dataset Overview</h2>
+      <div class="stat-grid-slide"><div class="stat-slide"><div class="v">259</div><div class="l">Weeks</div></div><div class="stat-slide"><div class="v" style="font-size:1.1em">2022-01-03</div><div class="l">Start</div></div><div class="stat-slide"><div class="v" style="font-size:1.1em">2026-12-21</div><div class="l">End</div></div></div>
+      <p style="margin-top:1rem"><b>KPI:</b> Sales</p>
+      <p style="margin-top:0.75rem"><b>Media Channels:</b></p><div class="tag-row" style="margin-top:0.4rem"><span class="stag">Tv</span><span class="stag">Digital</span><span class="stag">Paid Social</span><span class="stag">Radio</span></div>
+    </section>
+
+    <!-- Model Setup -->
+    <section>
+      <span class="slide-tag">Model</span>
+      <h2>Model Specification</h2>
+      <ul><li>Tv</li><li>Digital</li><li>Paid Social</li><li>Radio</li></ul>
+      <p style="margin-top:0.75rem;color:#64748b;font-size:0.85em">Bayesian marketing mix model estimating the incremental contribution of each media channel to the KPI.</p>
+    </section>
+
+    <!-- Decomposition -->
+    <section><span class="slide-tag">Results</span><h2>What Drove Sales?</h2><div class="chart-slide" id="slide-decomp"></div></section>
+
+    <!-- ROI -->
+    <section><span class="slide-tag">ROI</span><h2>Channel Return on Investment</h2><div class="chart-slide" id="slide-roi"></div></section>
+
+    <!-- Diagnostics -->
+    <section>
+      <span class="slide-tag">Validation</span>
+      <h2>Model Validation</h2>
+      <div style="text-align:center;margin:1.5rem 0"><div style="font-size:3rem">✓</div><div style="font-size:1.2rem;font-weight:700;color:#059669;margin:0.5rem 0">Model Validated</div></div><p style="color:#64748b;text-align:center">Estimates have been tested for statistical robustness and are suitable for decision-making.</p>
+    </section>
+
+    <!-- Extra charts -->
+    
+
+    <!-- Key Findings -->
+    <section>
+      <span class="slide-tag">Findings</span>
+      <h2>Key Findings</h2>
+      <div class="finding-slide"><b>Baseline</b> is the largest driver (75.8% of Sales)</div><div class="finding-slide">Media collectively drives <b>21.4%</b> of fitted Sales</div><div class="finding-slide">Highest ROI: <b>Digital</b> at 3.31x</div><div class="finding-slide">Lowest ROI: <b>Paid Social</b> at 0.60x</div><div class="finding-slide">Model estimates are statistically robust and reliable</div>
+    </section>
+
+    <!-- Next Steps -->
+    <section>
+      <span class="slide-tag">Next Steps</span>
+      <h2>Recommended Actions</h2>
+      <ul>
+        <li>Validate ROI estimates against held-out experiments or geo lift tests</li>
+        <li>Run budget optimisation using the calibrated model</li>
+        <li>Monitor for structural breaks (seasonality shifts, new channels)</li>
+        <li>Conduct a full sensitivity analysis by refitting with channel exclusions</li>
+      </ul>
+    </section>
+
+  </div>
+</div>
+<script>
+  Reveal.initialize({
+    hash: true, slideNumber: true, transition: 'fade', transitionSpeed: 'fast',
+    width: 1100, height: 700, margin: 0.05,
+  });
+  Reveal.on('ready', function() {
+    Plotly.newPlot("slide-decomp",[{"type": "pie", "labels": ["Baseline", "Digital", "Tv", "Trend", "Radio", "Paid Social", "Seasonality"], "values": [75.796563368859, 12.335338942693259, 5.814542369199531, 2.7840505242683666, 2.201953497698912, 1.0675512972809236, 2.916269353996519e-15], "hole": 0.42, "marker": {"colors": ["#4f46e5", "#0d9488", "#f59e0b", "#e11d48", "#059669", "#7c3aed", "#0284c7"]}, "textinfo": "label+percent", "textposition": "outside", "pull": [0.03, 0, 0, 0, 0, 0, 0]}],{"title": {"text": "KPI Decomposition", "font": {"size": 14, "color": "#1e293b"}}, "showlegend": true, "legend": {"orientation": "v", "x": 1.0, "y": 0.5}, "margin": {"l": 10, "r": 160, "t": 50, "b": 20}, "paper_bgcolor": "rgba(0,0,0,0)", "font": {"family": "Inter, system-ui, sans-serif", "size": 12}},{"responsive": true, "displayModeBar": false});
+      Plotly.newPlot("slide-roi",[{"type": "bar", "orientation": "h", "x": [1.1922498834879791, 3.3143047156118093, 0.6042272320978364, 3.064968111960479], "y": ["Tv", "Digital", "Paid Social", "Radio"], "error_x": {"type": "data", "symmetric": false, "array": [0.47060492431813095, 1.2199397118116893, 0.9893291856922701, 2.5997036620178977], "arrayminus": [0.4169651813908599, 1.195672649340482, 0.6041886749722007, 2.3795415481046405], "color": "#94a3b8", "thickness": 2, "width": 5}, "marker": {"color": ["#4f46e5", "#0d9488", "#f59e0b", "#e11d48"]}, "text": ["1.19x", "3.31x", "0.60x", "3.06x"], "textposition": "outside"}],{"title": {"text": "ROI by Channel (94% HDI)", "font": {"size": 14, "color": "#1e293b"}}, "xaxis": {"title": "Return per \u00a31 Spent", "automargin": true, "gridcolor": "#f1f5f9"}, "yaxis": {"automargin": true}, "margin": {"l": 10, "r": 80, "t": 50, "b": 50}, "plot_bgcolor": "#f9fafb", "paper_bgcolor": "rgba(0,0,0,0)", "font": {"family": "Inter, system-ui, sans-serif", "size": 12}, "uniformtext": {"minsize": 9, "mode": "hide"}},{"responsive": true, "displayModeBar": false});
+    setTimeout(function() {
+      document.querySelectorAll('.chart-slide').forEach(function(el) {
+        Plotly.Plots.resize(el);
+      });
+    }, 300);
+  });
+  Reveal.on('slidechanged', function() {
+    document.querySelectorAll('.chart-slide').forEach(function(el) {
+      Plotly.Plots.resize(el);
+    });
+  });
+</script>
+</body>
+</html>
