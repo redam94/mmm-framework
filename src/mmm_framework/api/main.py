@@ -539,13 +539,35 @@ class RenameSessionRequest(BaseModel):
 
 
 @app.get("/sessions")
-async def list_sessions_endpoint():
-    return JSONResponse(content=sessions_store.list_sessions())
+async def list_sessions_endpoint(
+    project_id: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+):
+    rows = sessions_store.list_sessions(project_id=project_id)
+    enriched = []
+    for row in rows:
+        detail = sessions_store.get_session(row["thread_id"])
+        enriched.append(detail if detail else row)
+    total = len(enriched)
+    page = enriched[skip: skip + limit]
+    return JSONResponse(content={"sessions": page, "total": total})
 
 
 @app.post("/sessions")
 async def create_session_endpoint(body: CreateSessionRequest):
     return JSONResponse(content=sessions_store.create_session(body.name))
+
+
+@app.get("/sessions/{thread_id}")
+async def get_session_endpoint(thread_id: str):
+    session = sessions_store.get_session(thread_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    artifacts = sessions_store.list_artifacts(thread_id)
+    assumptions = sessions_store.list_assumptions(thread_id)
+    workflow = sessions_store.get_workflow_overrides(thread_id)
+    return JSONResponse(content={**session, "artifacts": artifacts, "assumptions": assumptions, "workflow_steps": workflow})
 
 
 @app.patch("/sessions/{thread_id}")
@@ -559,6 +581,178 @@ async def rename_session_endpoint(thread_id: str, body: RenameSessionRequest):
 async def delete_session_endpoint(thread_id: str):
     sessions_store.delete_session(thread_id)
     return JSONResponse(content={"status": "ok"})
+
+
+# ── Analysis Plans ────────────────────────────────────────────────────────────
+
+class LockPlanRequest(BaseModel):
+    thread_id: str
+    name: str = "Analysis Plan"
+    dag: dict | None = None
+    research_question: dict | None = None
+    assumptions: list | None = None
+    extra: dict | None = None
+
+
+@app.get("/analysis-plans")
+async def list_analysis_plans_endpoint(
+    thread_id: str | None = None,
+    limit: int = 20,
+):
+    plans = sessions_store.list_analysis_plans(thread_id=thread_id)
+    page = plans[:limit]
+    return JSONResponse(content={"plans": page, "total": len(plans)})
+
+
+@app.get("/analysis-plans/{plan_id}")
+async def get_analysis_plan_endpoint(plan_id: str):
+    plan = sessions_store.get_analysis_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="plan not found")
+    return JSONResponse(content=plan)
+
+
+@app.post("/analysis-plans")
+async def lock_analysis_plan_endpoint(body: LockPlanRequest):
+    payload: dict = {}
+    if body.dag is not None:
+        payload["dag"] = body.dag
+    if body.research_question is not None:
+        payload["research_question"] = body.research_question
+    if body.assumptions is not None:
+        payload["assumptions"] = body.assumptions
+    if body.extra:
+        payload.update(body.extra)
+    plan = sessions_store.lock_analysis_plan(
+        thread_id=body.thread_id,
+        name=body.name,
+        payload=payload,
+    )
+    return JSONResponse(content=plan, status_code=201)
+
+
+@app.delete("/analysis-plans/{plan_id}")
+async def delete_analysis_plan_endpoint(plan_id: str):
+    if not sessions_store.delete_analysis_plan(plan_id):
+        raise HTTPException(status_code=404, detail="plan not found")
+    return JSONResponse(content={"status": "ok"})
+
+
+# ── Models (stubs derived from session model_run artifacts) ───────────────────
+
+@app.get("/models")
+async def list_models_endpoint(
+    limit: int = 8,
+    status: str | None = None,
+    project_id: str | None = None,
+):
+    """Return model_run artifacts from all sessions as lightweight ModelInfo stubs."""
+    import time as _time
+    all_sessions = sessions_store.list_sessions()
+    models = []
+    for s in all_sessions:
+        tid = s["thread_id"]
+        for art in sessions_store.list_artifacts(tid):
+            if art["kind"] != "model_run":
+                continue
+            p = art.get("payload", {})
+            run_id = p.get("run_id") or art["id"]
+            ts = art.get("created_at", _time.time())
+            models.append({
+                "model_id": art["id"],  # artifact id is unique; run_id can repeat across sessions
+                "name": p.get("run_name") or p.get("name") or run_id or f"Model {art['id'][:8]}",
+                "data_id": p.get("data_id") or "",
+                "config_id": p.get("config_id") or "",
+                "project_id": s.get("project_id"),
+                "status": p.get("status") or "completed",
+                "progress": p.get("progress") or 100,
+                "created_at": str(ts),
+                "completed_at": str(ts),
+                "thread_id": tid,
+            })
+    models.sort(key=lambda m: m["created_at"], reverse=True)
+    return JSONResponse(content={"models": models[:limit], "total": len(models)})
+
+
+def _find_model_artifact(model_id: str) -> tuple[dict | None, str | None]:
+    """Find a model_run artifact by its ID. Returns (artifact, thread_id)."""
+    for s in sessions_store.list_sessions():
+        for art in sessions_store.list_artifacts(s["thread_id"]):
+            if art["kind"] == "model_run" and art["id"] == model_id:
+                return art, s["thread_id"]
+    return None, None
+
+
+@app.get("/models/{model_id}")
+async def get_model_endpoint(model_id: str):
+    import time as _time
+    art, tid = _find_model_artifact(model_id)
+    if art is None:
+        raise HTTPException(status_code=404, detail="model not found")
+    p = art["payload"]
+    run_id = p.get("run_id") or art["id"]
+    ts = art.get("created_at", _time.time())
+    return JSONResponse(content={
+        "model_id": art["id"],
+        "name": p.get("run_name") or p.get("name") or run_id,
+        "data_id": "", "config_id": "",
+        "status": "completed", "progress": 100,
+        "created_at": str(ts), "completed_at": str(ts),
+        "thread_id": tid,
+    })
+
+
+@app.get("/models/{model_id}/dashboard")
+async def get_model_dashboard_endpoint(model_id: str):
+    """Return roi_metrics + decomposition + summary from the model's LangGraph thread."""
+    art, tid = _find_model_artifact(model_id)
+    if art is None:
+        raise HTTPException(status_code=404, detail="model not found")
+    try:
+        g = _admin_graph()
+        snap = await g.aget_state({"configurable": {"thread_id": tid}})
+        dashboard = (snap.values.get("dashboard_data") or {}) if snap and snap.values else {}
+    except Exception:
+        dashboard = {}
+    p = art["payload"]
+    return JSONResponse(content={
+        "model_id": model_id,
+        "thread_id": tid,
+        "run_id": p.get("run_id"),
+        "run_name": p.get("run_name"),
+        "kpi": p.get("kpi"),
+        "channels": p.get("channels", []),
+        "controls": p.get("controls", []),
+        "n_obs": p.get("n_obs"),
+        "n_channels": p.get("n_channels"),
+        "inference": p.get("inference", {}),
+        "trend": p.get("trend"),
+        "seasonality": p.get("seasonality", {}),
+        "summary": p.get("summary") or dashboard.get("summary"),
+        "roi_metrics": dashboard.get("roi_metrics") or [],
+        "decomposition": dashboard.get("decomposition") or [],
+        "report_path": p.get("report_path") or dashboard.get("report_path"),
+        "model_path": p.get("model_path"),
+    })
+
+
+# ── Projects (stub — agent API has no project management) ─────────────────────
+
+@app.get("/projects")
+async def list_projects_endpoint():
+    return JSONResponse(content={"projects": [], "total": 0})
+
+
+@app.post("/projects")
+async def create_project_endpoint(body: dict):
+    raise HTTPException(status_code=501, detail="Project management is not available in the agent API")
+
+
+# ── Budget Plans (stub — agent API has no budget plan management) ──────────────
+
+@app.get("/budget-plans")
+async def list_budget_plans_endpoint():
+    return JSONResponse(content={"plans": [], "total": 0})
 
 
 # ── Artifacts ─────────────────────────────────────────────────────────────────
@@ -732,6 +926,50 @@ async def dag_endpoint(thread_id: str):
             return JSONResponse(content={"dag": None})
         return JSONResponse(content=dag_payload)
     except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+class DAGUpdateRequest(BaseModel):
+    nodes: list[dict]
+    edges: list[dict]
+
+
+@app.put("/dag/{thread_id}")
+async def update_dag(thread_id: str, body: DAGUpdateRequest):
+    """Manually update the DAG for a session.
+
+    Accepts React Flow node/edge format, converts to DAGSpec, validates,
+    and persists into the agent state dashboard_data.dag.
+    """
+    from mmm_framework.dag_model_builder.frontend_adapter import react_flow_to_dag_spec, dag_spec_to_react_flow
+    from mmm_framework.dag_model_builder.validation import validate_dag
+    from mmm_framework.agents.causal_tools import validate_causal_identification
+
+    try:
+        spec = react_flow_to_dag_spec(body.nodes, body.edges)
+        validation = validate_dag(spec)
+        react_flow = dag_spec_to_react_flow(spec)
+
+        dag_payload: dict = {
+            "spec": spec.model_dump(mode="json"),
+            "react_flow": react_flow,
+            "validation": {
+                "valid": validation.valid,
+                "errors": validation.errors,
+                "warnings": validation.warnings,
+            },
+        }
+
+        config = {"configurable": {"thread_id": thread_id}}
+        agent_graph = _admin_graph()
+        snap = await agent_graph.aget_state(config)
+        dashboard = (snap.values.get("dashboard_data") or {}) if snap and snap.values else {}
+        dashboard["dag"] = dag_payload
+        await agent_graph.aupdate_state(config, {"dashboard_data": dashboard})
+
+        return JSONResponse(content=dag_payload)
+    except Exception as e:
+        logger.exception("DAG update failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

@@ -32,6 +32,7 @@ def _config_to_response(config: dict) -> ConfigResponse:
         model_settings=config["model_settings"],
         created_at=datetime.fromisoformat(config["created_at"]),
         updated_at=datetime.fromisoformat(config["updated_at"]),
+        project_id=config.get("project_id"),
     )
 
 
@@ -70,9 +71,10 @@ async def list_configs(
     storage: StorageService = Depends(get_storage),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    project_id: str | None = Query(None, description="Filter by project"),
 ):
     """List all configurations."""
-    configs = storage.list_configs()
+    configs = storage.list_configs(project_id=project_id)
     total = len(configs)
     configs = configs[skip : skip + limit]
 

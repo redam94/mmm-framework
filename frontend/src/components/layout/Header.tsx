@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { Bars3Icon } from '@heroicons/react/24/outline';
+import { ModelSwitcher } from '../common';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -8,12 +9,7 @@ interface HeaderProps {
 // Page titles mapping
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
-  '/planning': 'Model Planning',
-  '/data': 'Data Management',
-  '/config': 'Model Configuration',
-  '/fit': 'Model Fitting',
-  '/diagnostics': 'Model Diagnostics',
-  '/results': 'Results & Export',
+  '/analysis-plan': 'Analysis Plan',
 };
 
 export function Header({ onMenuClick }: HeaderProps) {
@@ -55,9 +51,8 @@ export function Header({ onMenuClick }: HeaderProps) {
           <h1 className="text-xl font-semibold text-gray-900">{getPageTitle()}</h1>
         </div>
 
-        {/* Right side actions could go here */}
         <div className="flex flex-1 items-center justify-end gap-x-4 lg:gap-x-6">
-          {/* Placeholder for notifications, user menu, etc. */}
+          <ModelSwitcher theme="light" />
         </div>
       </div>
     </header>

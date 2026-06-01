@@ -3,8 +3,9 @@ export {
   apiClient,
   API_BASE_URL,
   getStoredApiKey,
-  setStoredApiKey,
-  clearStoredApiKey,
+  getStoredModelName,
+  setStoredAuth,
+  clearStoredAuth,
   validateApiKey,
   checkApiHealth,
 } from './client';

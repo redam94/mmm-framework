@@ -2,41 +2,28 @@ import { Link, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
   HomeIcon,
-  CircleStackIcon,
-  Cog6ToothIcon,
-  PlayIcon,
   ChartBarIcon,
-  MagnifyingGlassIcon,
-  DocumentChartBarIcon,
-  MapIcon,
-  ArrowRightOnRectangleIcon,
+  ClipboardDocumentListIcon,
   ChatBubbleLeftRightIcon,
+  ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
-import { useWorkflowStore, type BayesianPhase } from '../../stores/workflowStore';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  phase?: BayesianPhase;
 }
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Planning', href: '/planning', icon: MapIcon, phase: 'planning' },
-  { name: 'Data', href: '/data', icon: CircleStackIcon, phase: 'data' },
-  { name: 'Configure', href: '/config', icon: Cog6ToothIcon, phase: 'config' },
-  { name: 'Fit Model', href: '/fit', icon: PlayIcon, phase: 'fit' },
-  { name: 'Diagnostics', href: '/diagnostics', icon: MagnifyingGlassIcon, phase: 'diagnostics' },
-  { name: 'Results', href: '/results', icon: DocumentChartBarIcon, phase: 'results' },
-  { name: 'Agent Copilot', href: '/agent', icon: ChatBubbleLeftRightIcon },
+  { name: 'Analysis Plan', href: '/analysis-plan', icon: ClipboardDocumentListIcon },
+  { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
 ];
 
 export function Sidebar() {
   const location = useLocation();
   const { clearApiKey } = useAuthStore();
-  const { currentPhase, getPhaseCompletion } = useWorkflowStore();
 
   const handleLogout = () => {
     clearApiKey();
@@ -56,8 +43,6 @@ export function Sidebar() {
           {navigation.map((item) => {
             const isActive = location.pathname === item.href ||
               (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
-            const isCurrentPhase = item.phase === currentPhase;
-            const completion = item.phase ? getPhaseCompletion(item.phase) : null;
 
             return (
               <li key={item.name}>
@@ -77,17 +62,6 @@ export function Sidebar() {
                     )}
                   />
                   <span className="flex-1">{item.name}</span>
-
-                  {/* Phase indicators */}
-                  {isCurrentPhase && (
-                    <span className="h-2 w-2 rounded-full bg-blue-500" title="Current phase" />
-                  )}
-                  {completion?.complete && !isCurrentPhase && (
-                    <span className="h-2 w-2 rounded-full bg-green-500" title="Complete" />
-                  )}
-                  {completion?.warnings && completion.warnings.length > 0 && (
-                    <span className="h-2 w-2 rounded-full bg-yellow-500" title="Has warnings" />
-                  )}
                 </Link>
               </li>
             );

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getStoredApiKey, getStoredModelName, setStoredAuth, clearStoredAuth, validateApiKey } from '../api/client';
+import { getStoredApiKey, getStoredModelName, setStoredAuth, clearStoredAuth, validateApiKey, getStoredKeyForProvider } from '../api/client';
+import { getProviderForModel } from '../constants/models';
 
 interface AuthState {
   apiKey: string | null;
@@ -11,6 +12,7 @@ interface AuthState {
 
   // Actions
   setApiKey: (apiKey: string, modelName: string) => Promise<boolean>;
+  switchModel: (modelName: string) => boolean;
   clearApiKey: () => void;
   validateStoredKey: () => Promise<boolean>;
 }
@@ -54,6 +56,17 @@ export const useAuthStore = create<AuthState>()(
           });
           return false;
         }
+      },
+
+      switchModel: (modelName: string) => {
+        const provider = getProviderForModel(modelName);
+        const key = getStoredKeyForProvider(provider);
+        if (key) {
+          setStoredAuth(key, modelName);
+          set({ apiKey: key, modelName });
+          return true;
+        }
+        return false;
       },
 
       clearApiKey: () => {

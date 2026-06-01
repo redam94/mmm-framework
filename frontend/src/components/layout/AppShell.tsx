@@ -1,26 +1,15 @@
 import { useState, Fragment } from 'react';
-import { useLocation } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { WorkflowStepper } from '../workflow';
 
 interface AppShellProps {
   children: React.ReactNode;
 }
 
-// Pages that should show the workflow stepper
-const WORKFLOW_PAGES = ['/planning', '/data', '/config', '/fit', '/diagnostics', '/results'];
-
 export function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const location = useLocation();
-
-  // Show workflow stepper on workflow-related pages
-  const showWorkflowStepper = WORKFLOW_PAGES.some(
-    (path) => location.pathname === path || location.pathname.startsWith(path + '/')
-  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -88,10 +77,6 @@ export function AppShell({ children }: AppShellProps) {
 
         <main className="py-6">
           <div className="px-4 sm:px-6 lg:px-8">
-            {/* Workflow stepper */}
-            {showWorkflowStepper && (
-              <WorkflowStepper className="mb-6" />
-            )}
             {children}
           </div>
         </main>

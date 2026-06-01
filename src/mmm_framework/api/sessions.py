@@ -46,10 +46,16 @@ def init_db() -> None:
                 thread_id  TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
                 created_at REAL NOT NULL,
-                updated_at REAL NOT NULL
+                updated_at REAL NOT NULL,
+                project_id TEXT
             )
             """
         )
+        # Migrate existing installs that predate the project_id column
+        try:
+            c.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+        except Exception:
+            pass
         c.execute(
             """
             CREATE TABLE IF NOT EXISTS artifacts (
@@ -120,25 +126,91 @@ def init_db() -> None:
         )
         c.execute("CREATE INDEX IF NOT EXISTS idx_data_files_thread ON data_files(thread_id, created_at)")
 
+        # Locked analysis plans: a snapshot of research_question + DAG + assumptions
+        # at the moment the analyst decides to "lock" the pre-registration.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analysis_plans (
+                id           TEXT PRIMARY KEY,
+                thread_id    TEXT NOT NULL,
+                name         TEXT NOT NULL,
+                locked_at    REAL NOT NULL,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+        c.execute("CREATE INDEX IF NOT EXISTS idx_plans_thread ON analysis_plans(thread_id, locked_at)")
 
-def list_sessions() -> list[dict[str, Any]]:
+
+def list_sessions(project_id: str | None = None) -> list[dict[str, Any]]:
     with _conn() as c:
-        rows = c.execute(
-            "SELECT thread_id, name, created_at, updated_at FROM sessions ORDER BY updated_at DESC"
-        ).fetchall()
+        if project_id is not None:
+            rows = c.execute(
+                "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions"
+                " WHERE project_id = ? ORDER BY updated_at DESC",
+                (project_id,),
+            ).fetchall()
+        else:
+            rows = c.execute(
+                "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions"
+                " ORDER BY updated_at DESC"
+            ).fetchall()
         return [dict(r) for r in rows]
 
 
-def create_session(name: str | None = None) -> dict[str, Any]:
+def get_session(thread_id: str) -> dict[str, Any] | None:
+    """Return a single session row with artifact_count, or None if not found."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions WHERE thread_id = ?",
+            (thread_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        session = dict(row)
+        count_row = c.execute(
+            "SELECT COUNT(*) AS n FROM artifacts WHERE thread_id = ?", (thread_id,)
+        ).fetchone()
+        session["artifact_count"] = count_row["n"] if count_row else 0
+        return session
+
+
+def create_session(name: str | None = None, project_id: str | None = None) -> dict[str, Any]:
     thread_id = uuid.uuid4().hex
     now = _now()
     display_name = name or f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}"
     with _conn() as c:
         c.execute(
-            "INSERT INTO sessions (thread_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (thread_id, display_name, now, now),
+            "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, ?)",
+            (thread_id, display_name, now, now, project_id),
         )
-    return {"thread_id": thread_id, "name": display_name, "created_at": now, "updated_at": now}
+    return {
+        "thread_id": thread_id, "name": display_name,
+        "created_at": now, "updated_at": now, "project_id": project_id,
+    }
+
+
+def update_session(thread_id: str, name: str | None = None, project_id: str | None = None) -> bool:
+    """Update session name and/or project_id. Returns True if session was found."""
+    updates = []
+    params: list[Any] = []
+    if name is not None:
+        updates.append("name = ?")
+        params.append(name)
+    if project_id is not None:
+        updates.append("project_id = ?")
+        params.append(project_id)
+    if not updates:
+        return False
+    updates.append("updated_at = ?")
+    params.append(_now())
+    params.append(thread_id)
+    with _conn() as c:
+        cur = c.execute(
+            f"UPDATE sessions SET {', '.join(updates)} WHERE thread_id = ?",
+            params,
+        )
+        return cur.rowcount > 0
 
 
 def touch_session(thread_id: str) -> None:
@@ -150,7 +222,7 @@ def touch_session(thread_id: str) -> None:
             c.execute("UPDATE sessions SET updated_at = ? WHERE thread_id = ?", (now, thread_id))
         else:
             c.execute(
-                "INSERT INTO sessions (thread_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, NULL)",
                 (thread_id, f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}", now, now),
             )
 
@@ -427,4 +499,70 @@ def list_files(thread_id: str) -> list[dict[str, Any]]:
 def delete_file(file_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM data_files WHERE id = ?", (file_id,))
+        return cur.rowcount > 0
+
+
+# ── Analysis plans ────────────────────────────────────────────────────────────
+
+def lock_analysis_plan(
+    thread_id: str,
+    name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Snapshot the current analysis plan (research question + DAG + assumptions) as a locked record."""
+    plan_id = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO analysis_plans (id, thread_id, name, locked_at, payload_json) VALUES (?, ?, ?, ?, ?)",
+            (plan_id, thread_id, name, now, json.dumps(payload, default=str)),
+        )
+    return {"id": plan_id, "thread_id": thread_id, "name": name, "locked_at": now, "payload": payload}
+
+
+def list_analysis_plans(thread_id: str | None = None) -> list[dict[str, Any]]:
+    """List analysis plans for a thread (or all plans if thread_id is None)."""
+    with _conn() as c:
+        if thread_id is not None:
+            rows = c.execute(
+                "SELECT id, thread_id, name, locked_at, payload_json FROM analysis_plans"
+                " WHERE thread_id = ? ORDER BY locked_at DESC",
+                (thread_id,),
+            ).fetchall()
+        else:
+            rows = c.execute(
+                "SELECT id, thread_id, name, locked_at, payload_json FROM analysis_plans"
+                " ORDER BY locked_at DESC"
+            ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            payload = json.loads(r["payload_json"])
+        except Exception:
+            payload = {}
+        out.append({"id": r["id"], "thread_id": r["thread_id"], "name": r["name"],
+                    "locked_at": r["locked_at"], "payload": payload})
+    return out
+
+
+def get_analysis_plan(plan_id: str) -> dict[str, Any] | None:
+    """Get a single analysis plan by ID."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT id, thread_id, name, locked_at, payload_json FROM analysis_plans WHERE id = ?",
+            (plan_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        payload = json.loads(row["payload_json"])
+    except Exception:
+        payload = {}
+    return {"id": row["id"], "thread_id": row["thread_id"], "name": row["name"],
+            "locked_at": row["locked_at"], "payload": payload}
+
+
+def delete_analysis_plan(plan_id: str) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM analysis_plans WHERE id = ?", (plan_id,))
         return cur.rowcount > 0

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
   MiniMap,
@@ -15,9 +16,14 @@ import {
 import type { Connection, Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Card, Title, Text, Button, Select, SelectItem, Badge } from '@tremor/react';
-import { PlayIcon, TrashIcon, DocumentTextIcon, EyeIcon } from '@heroicons/react/24/outline';
+import {
+  PlayIcon, TrashIcon, DocumentTextIcon, EyeIcon, LockClosedIcon, CheckBadgeIcon,
+  ArrowTopRightOnSquareIcon, PaperAirplaneIcon,
+} from '@heroicons/react/24/outline';
 import { useDAGStore, type DAGNode, type DAGNodeData, type DAGNodeType } from '../../stores/dagStore';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { apiClient, API_BASE_URL, getStoredApiKey, getStoredModelName } from '../../api/client';
+import { useAnalysisPlans } from '../../api/hooks/useSessions';
 
 // Path colors for causal analysis - based on causal role
 const PATH_COLORS = {
@@ -393,7 +399,196 @@ const nodeTypes = {
   default: CustomNode,
 };
 
+// ─── DAG Chat Panel ───────────────────────────────────────────────────────────
+
+interface PanelMsg {
+  id: string;
+  type: 'human' | 'ai' | 'error';
+  content: string;
+}
+
+function DAGChatPanel({
+  nodes,
+  edges,
+  threadId,
+  onOpenChat,
+}: {
+  nodes: Node[];
+  edges: Edge[];
+  threadId: string | null;
+  onOpenChat: () => void;
+}) {
+  const [messages, setMessages] = useState<PanelMsg[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const buildDagContext = () => {
+    const nodeList = nodes
+      .map(n => `${(n.data as DAGNodeData).label} (${(n.data as DAGNodeData).type})`)
+      .join(', ');
+    const edgeList = edges
+      .map(e => {
+        const src = nodes.find(n => n.id === e.source);
+        const tgt = nodes.find(n => n.id === e.target);
+        return `${src ? (src.data as DAGNodeData).label : e.source} → ${tgt ? (tgt.data as DAGNodeData).label : e.target}`;
+      })
+      .join('; ');
+    return `[Current DAG: ${nodes.length} node${nodes.length !== 1 ? 's' : ''}, ${edges.length} edge${edges.length !== 1 ? 's' : ''}]\nNodes: ${nodeList || 'none'}\nEdges: ${edgeList || 'none'}\n\n`;
+  };
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || loading || !threadId) return;
+
+    const humanId = crypto.randomUUID();
+    setMessages(prev => [...prev, { id: humanId, type: 'human', content: text }]);
+    setInput('');
+    setLoading(true);
+
+    const tempId = crypto.randomUUID();
+    setMessages(prev => [...prev, { id: tempId, type: 'ai', content: '' }]);
+
+    const apiKey = getStoredApiKey();
+    const modelName = getStoredModelName();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+          ...(modelName ? { 'X-Model-Name': modelName } : {}),
+        },
+        body: JSON.stringify({ message: buildDagContext() + text, thread_id: threadId }),
+        signal: controller.signal,
+      });
+
+      if (!res.body) throw new Error('No response body');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let aiContent = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === 'ai' && data.content) {
+              const chunk = typeof data.content === 'string'
+                ? data.content
+                : Array.isArray(data.content) ? data.content.map((b: any) => b?.text ?? '').join('') : '';
+              if (chunk) {
+                aiContent += chunk + '\n';
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, content: aiContent } : m));
+              }
+            } else if (data.type === 'error') {
+              setMessages(prev => prev.map(m =>
+                m.id === tempId ? { ...m, type: 'error' as const, content: data.content || 'Error' } : m
+              ));
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        setMessages(prev => prev.map(m =>
+          m.id === tempId ? { ...m, type: 'error' as const, content: 'Connection error. Is the API running?' } : m
+        ));
+      }
+    } finally {
+      abortRef.current = null;
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0">
+        <span className="text-sm font-semibold text-gray-800">Causal Advisor</span>
+        <button
+          onClick={onOpenChat}
+          className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
+          title="Open full-screen chat"
+        >
+          <span>Full screen</span>
+          <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50 min-h-0">
+        {messages.length === 0 && (
+          <p className="text-center text-gray-400 text-xs mt-6 px-2 leading-relaxed">
+            Ask me about your DAG — causal paths, confounders, model structure, or how to improve identifiability.
+            {!threadId && <span className="block mt-2 text-amber-500">No active session — open the Chat page first.</span>}
+          </p>
+        )}
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex ${msg.type === 'human' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+              msg.type === 'human'
+                ? 'bg-indigo-600 text-white rounded-br-none'
+                : msg.type === 'error'
+                ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
+            }`}>
+              {msg.content || (loading && msg.type === 'ai' ? 'Thinking…' : '')}
+            </div>
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+
+      {/* Input */}
+      <div className="p-2 border-t border-gray-200 bg-white shrink-0">
+        <div className="flex gap-2 items-end">
+          <textarea
+            className="flex-1 resize-none rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 leading-relaxed"
+            rows={2}
+            placeholder={threadId ? 'Ask about your DAG… (Enter to send)' : 'Open Chat page to start a session…'}
+            value={input}
+            disabled={!threadId || loading}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+          />
+          <button
+            onClick={loading ? () => abortRef.current?.abort() : handleSend}
+            disabled={!threadId || (!input.trim() && !loading)}
+            className="p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+            title={loading ? 'Stop' : 'Send (Enter)'}
+          >
+            {loading
+              ? <span className="block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <PaperAirplaneIcon className="h-4 w-4" />
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PlanningPage() {
+  const navigate = useNavigate();
+
   const {
     nodes: storeNodes,
     edges: storeEdges,
@@ -414,6 +609,55 @@ export function PlanningPage() {
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges);
+
+  // Lock Plan state
+  const [isLocking, setIsLocking] = useState(false);
+  const [lockedPlan, setLockedPlan] = useState<{ id: string; name: string } | null>(null);
+
+  // Chat thread — shared with AgentPage via localStorage
+  const [chatThreadId, setChatThreadId] = useState<string | null>(
+    () => localStorage.getItem('mmm.activeThreadId')
+  );
+
+  // Auto-create a session if none exists so chat is ready when the page loads
+  useEffect(() => {
+    if (chatThreadId) return;
+    (async () => {
+      try {
+        const raw = await fetch(`${API_BASE_URL}/sessions`).then(r => r.json());
+        let sessions: any[] = Array.isArray(raw) ? raw : (raw?.sessions ?? []);
+        if (sessions.length === 0) {
+          const created = await fetch(`${API_BASE_URL}/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).then(r => r.json());
+          sessions = [created];
+        }
+        const id = sessions[0].thread_id;
+        setChatThreadId(id);
+        localStorage.setItem('mmm.activeThreadId', id);
+      } catch { /* ignore if API is not running */ }
+    })();
+  }, [chatThreadId]);
+
+  // Saved plans for loading
+  const { data: savedPlansData } = useAnalysisPlans();
+  const savedPlans = savedPlansData?.plans ?? [];
+
+  const handleLoadSavedPlan = (planId: string) => {
+    const plan = savedPlans.find((p) => p.id === planId);
+    if (!plan) return;
+    const dag = (plan.payload as Record<string, unknown>)?.dag as { nodes?: unknown[]; edges?: unknown[] } | undefined;
+    if (!dag) return;
+    const loadedNodes = (dag.nodes ?? []) as Node[];
+    const loadedEdges = (dag.edges ?? []) as Edge[];
+    setStoreNodes(loadedNodes as DAGNode[]);
+    setStoreEdges(loadedEdges);
+    setNodes(loadedNodes);
+    setEdges(loadedEdges);
+    setLockedPlan({ id: plan.id, name: plan.name });
+  };
 
   // Causal analysis state
   const [analysisMode, setAnalysisMode] = useState(false);
@@ -544,6 +788,34 @@ export function PlanningPage() {
       alert('DAG is valid! You can proceed to the next phase.');
     } else {
       alert(`Validation errors:\n${validation.errors.join('\n')}`);
+    }
+  };
+
+  // Lock analysis plan
+  const handleLockPlan = async () => {
+    syncToStore();
+    const threadId = localStorage.getItem('mmm.activeThreadId');
+    if (!threadId) {
+      alert('No active chat session. Open the Chat page first to create a session, then come back to lock the plan.');
+      return;
+    }
+    const planName = `Analysis Plan — ${new Date().toLocaleDateString()}`;
+    setIsLocking(true);
+    try {
+      const { data } = await apiClient.post('/analysis-plans', {
+        thread_id: threadId,
+        name: planName,
+        dag: {
+          nodes: nodes.map((n) => ({ id: n.id, data: n.data, position: n.position })),
+          edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+        },
+      });
+      setLockedPlan({ id: data.id, name: data.name });
+    } catch (err) {
+      console.error('Lock plan failed:', err);
+      alert('Failed to lock plan. Is the API running?');
+    } finally {
+      setIsLocking(false);
     }
   };
 
@@ -964,6 +1236,18 @@ export function PlanningPage() {
             <SelectItem value="mediation">With Mediation</SelectItem>
             <SelectItem value="multivariate">Multi-Outcome</SelectItem>
           </Select>
+          {savedPlans.length > 0 && (
+            <Select
+              placeholder="Load saved plan"
+              onValueChange={handleLoadSavedPlan}
+            >
+              {savedPlans.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </Select>
+          )}
           <Button
             icon={TrashIcon}
             variant="secondary"
@@ -978,13 +1262,29 @@ export function PlanningPage() {
           <Button icon={PlayIcon} onClick={handleValidateAndContinue}>
             Validate & Continue
           </Button>
+          {lockedPlan ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium">
+              <CheckBadgeIcon className="h-4 w-4 text-green-600" />
+              Plan locked
+            </div>
+          ) : (
+            <Button
+              icon={LockClosedIcon}
+              variant="secondary"
+              onClick={handleLockPlan}
+              loading={isLocking}
+              disabled={isLocking}
+            >
+              Lock Analysis Plan
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Main content */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-5 gap-4" style={{ minHeight: '680px' }}>
         {/* Node palette */}
-        <Card className="col-span-1">
+        <Card className="col-span-1 overflow-y-auto" style={{ maxHeight: '720px' }}>
           <Title className="text-sm">Add Nodes</Title>
           <div className="mt-4 space-y-2">
             {NODE_TYPES.map(({ type, label, color }) => (
@@ -1073,7 +1373,7 @@ export function PlanningPage() {
         </Card>
 
         {/* DAG Canvas */}
-        <Card className="col-span-2 h-[600px]">
+        <Card className="col-span-2 h-[680px]">
           <div className="mb-2 px-2 flex justify-between items-center">
             <Text className="text-xs text-gray-500">
               Drag from a node's bottom handle to another node's top handle to create a directed connection.
@@ -1125,8 +1425,10 @@ export function PlanningPage() {
           </div>
         </Card>
 
-        {/* Narrative panel */}
-        <Card className="col-span-1">
+        {/* Right panel — narrative + causal analysis + chat */}
+        <div className="col-span-2 flex flex-col gap-3" style={{ height: '680px' }}>
+        {/* Narrative + Validation + Causal Analysis (scrollable) */}
+        <Card className="overflow-y-auto" style={{ maxHeight: '340px', flexShrink: 0 }}>
           <div className="flex items-center gap-2">
             <DocumentTextIcon className="h-5 w-5 text-gray-500" />
             <Title className="text-sm">Generated Narrative</Title>
@@ -1564,6 +1866,17 @@ export function PlanningPage() {
             </div>
           )}
         </Card>
+
+        {/* Chat panel */}
+        <div className="flex-1 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden min-h-0">
+          <DAGChatPanel
+            nodes={nodes}
+            edges={edges}
+            threadId={chatThreadId}
+            onOpenChat={() => navigate('/chat')}
+          />
+        </div>
+        </div>
       </div>
     </div>
   );

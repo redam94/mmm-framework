@@ -5,6 +5,7 @@ import { Card, Title, Text, TextInput, Button, Select, SelectItem } from '@tremo
 import { KeyIcon, ExclamationCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
 import { checkApiHealth } from '../../api/client';
+import { MODELS, PROVIDER_LABELS, getModelsByProvider, type Provider } from '../../constants/models';
 
 interface LoginFormData {
   apiKey: string;
@@ -81,9 +82,14 @@ export function LoginPage() {
                 value={selectedModel}
                 onValueChange={(value) => setValue('modelName', value)}
               >
-                <SelectItem value="claude-sonnet-4-6">Claude 4.6 Sonnet (claude-sonnet-4-6)</SelectItem>
-                <SelectItem value="gpt-4o">OpenAI GPT-4o (gpt-4o)</SelectItem>
-                <SelectItem value="gemini-3.1-pro-preview">Google Gemini (gemini-3.1-pro-preview)</SelectItem>
+                {(Object.entries(getModelsByProvider()) as [Provider, typeof MODELS[number][]][]).map(
+                  ([provider, models]) =>
+                    models.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {PROVIDER_LABELS[provider]} — {m.label}
+                      </SelectItem>
+                    ))
+                )}
               </Select>
             </div>
 

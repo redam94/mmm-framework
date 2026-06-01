@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import type { ApiError } from './types';
+import { getProviderForModel } from '../constants/models';
 
 // API Base URL - defaults to localhost for development
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -14,9 +15,10 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Storage key for API key
+// Storage keys
 const API_KEY_STORAGE_KEY = 'mmm_api_key';
 const MODEL_NAME_STORAGE_KEY = 'mmm_model_name';
+const PROVIDER_KEYS_STORAGE_KEY = 'mmm_provider_keys';
 
 // Get API key and model from localStorage
 export function getStoredApiKey(): string | null {
@@ -26,10 +28,30 @@ export function getStoredModelName(): string | null {
   return localStorage.getItem(MODEL_NAME_STORAGE_KEY);
 }
 
-// Set API key and model in localStorage
+// Per-provider key storage
+export function getStoredProviderKeys(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(PROVIDER_KEYS_STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function getStoredKeyForProvider(provider: string): string | null {
+  return getStoredProviderKeys()[provider] ?? null;
+}
+
+export function setStoredKeyForProvider(provider: string, key: string): void {
+  const keys = getStoredProviderKeys();
+  keys[provider] = key;
+  localStorage.setItem(PROVIDER_KEYS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+// Set API key and model in localStorage (also persists to per-provider bucket)
 export function setStoredAuth(apiKey: string, modelName: string): void {
   localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
   localStorage.setItem(MODEL_NAME_STORAGE_KEY, modelName);
+  setStoredKeyForProvider(getProviderForModel(modelName), apiKey);
 }
 
 // Remove API key and model from localStorage

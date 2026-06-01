@@ -1,3 +1,13 @@
+// Budget plan hooks
+export {
+  budgetPlanKeys,
+  useBudgetPlans,
+  useBudgetPlan,
+  useCreateBudgetPlan,
+  useDeleteBudgetPlan,
+} from './useBudgetPlans';
+export type { BudgetPlanInfo, BudgetPlanCreateRequest } from './useBudgetPlans';
+
 // Data hooks
 export {
   dataKeys,
@@ -48,3 +58,26 @@ export {
   useHealth,
   useHealthDetailed,
 } from './useHealth';
+
+// Project hooks
+export {
+  projectKeys,
+  useProjects,
+  useProject,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+} from './useProjects';
+
+// Session hooks
+export {
+  sessionKeys,
+  useSessions,
+  useSession,
+  useCreateSession,
+  useUpdateSession,
+  useDeleteSession,
+  analysisPlansKeys,
+  useAnalysisPlans,
+} from './useSessions';
+export type { AnalysisPlanInfo } from './useSessions';

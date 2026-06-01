@@ -41,7 +41,7 @@ class StorageService:
     def _ensure_dirs(self):
         """Ensure storage directories exist."""
         if self.settings.storage_backend == "local":
-            for subdir in ["data", "configs", "models", "results"]:
+            for subdir in ["data", "configs", "models", "results", "projects", "budget_plans"]:
                 (self.settings.storage_path / subdir).mkdir(parents=True, exist_ok=True)
 
     def _get_path(self, category: str, item_id: str, ext: str = "") -> Path:
@@ -59,6 +59,165 @@ class StorageService:
         return hashlib.sha256(data).hexdigest()[:16]
 
     # =========================================================================
+    # Budget Plan Storage
+    # =========================================================================
+
+    def save_budget_plan(
+        self,
+        name: str,
+        model_id: str,
+        spend_changes: dict[str, Any],
+        baseline_outcome: float,
+        scenario_outcome: float,
+        outcome_change: float,
+        outcome_change_pct: float,
+        channel_details: dict[str, Any] | None = None,
+        description: str | None = None,
+        project_id: str | None = None,
+        plan_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Save a named budget plan with its scenario result."""
+        plan_id = plan_id or self.generate_id()
+        now = datetime.utcnow().isoformat()
+        metadata: dict[str, Any] = {
+            "plan_id": plan_id,
+            "name": name,
+            "description": description,
+            "model_id": model_id,
+            "spend_changes": spend_changes,
+            "baseline_outcome": baseline_outcome,
+            "scenario_outcome": scenario_outcome,
+            "outcome_change": outcome_change,
+            "outcome_change_pct": outcome_change_pct,
+            "channel_details": channel_details or {},
+            "created_at": now,
+            "project_id": project_id,
+        }
+        meta_path = self._get_path("budget_plans", f"{plan_id}", ".json")
+        meta_path.write_text(json.dumps(metadata, indent=2, default=str))
+        return metadata
+
+    def get_budget_plan(self, plan_id: str) -> dict[str, Any]:
+        """Get a budget plan by ID."""
+        meta_path = self._get_path("budget_plans", plan_id, ".json")
+        if not meta_path.exists():
+            raise StorageError(f"Budget plan not found: {plan_id}")
+        return json.loads(meta_path.read_text())
+
+    def list_budget_plans(
+        self,
+        model_id: str | None = None,
+        project_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List budget plans, optionally filtered by model or project."""
+        plans_dir = self.settings.storage_path / "budget_plans"
+        plans = []
+        for plan_file in plans_dir.glob("*.json"):
+            try:
+                plan = json.loads(plan_file.read_text())
+                if model_id is not None and plan.get("model_id") != model_id:
+                    continue
+                if project_id is not None and plan.get("project_id") != project_id:
+                    continue
+                plans.append(plan)
+            except Exception:
+                continue
+        return sorted(plans, key=lambda x: x.get("created_at", ""), reverse=True)
+
+    def delete_budget_plan(self, plan_id: str) -> bool:
+        """Delete a budget plan."""
+        meta_path = self._get_path("budget_plans", plan_id, ".json")
+        if meta_path.exists():
+            meta_path.unlink()
+            return True
+        return False
+
+    def budget_plan_exists(self, plan_id: str) -> bool:
+        """Check if a budget plan exists."""
+        return self._get_path("budget_plans", plan_id, ".json").exists()
+
+    # =========================================================================
+    # Project Storage
+    # =========================================================================
+
+    def save_project(
+        self,
+        name: str,
+        description: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or overwrite a project record."""
+        project_id = project_id or self.generate_id()
+        now = datetime.utcnow().isoformat()
+        metadata: dict[str, Any] = {
+            "project_id": project_id,
+            "name": name,
+            "description": description,
+            "created_at": now,
+            "updated_at": now,
+        }
+        meta_path = self._get_path("projects", f"{project_id}_meta", ".json")
+        meta_path.write_text(json.dumps(metadata, indent=2))
+        return metadata
+
+    def get_project_metadata(self, project_id: str) -> dict[str, Any]:
+        """Get project metadata."""
+        meta_path = self._get_path("projects", f"{project_id}_meta", ".json")
+        if not meta_path.exists():
+            raise StorageError(f"Project not found: {project_id}")
+        return json.loads(meta_path.read_text())
+
+    def update_project_metadata(
+        self, project_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update project fields."""
+        metadata = self.get_project_metadata(project_id)
+        for key, value in updates.items():
+            if value is not None:
+                metadata[key] = value
+        metadata["updated_at"] = datetime.utcnow().isoformat()
+        meta_path = self._get_path("projects", f"{project_id}_meta", ".json")
+        meta_path.write_text(json.dumps(metadata, indent=2))
+        return metadata
+
+    def list_projects(self) -> list[dict[str, Any]]:
+        """List all projects."""
+        projects_dir = self.settings.storage_path / "projects"
+        projects = []
+        for meta_file in projects_dir.glob("*_meta.json"):
+            try:
+                projects.append(json.loads(meta_file.read_text()))
+            except Exception:
+                continue
+        return sorted(projects, key=lambda x: x.get("updated_at", ""), reverse=True)
+
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project record (does not cascade-delete member resources)."""
+        meta_path = self._get_path("projects", f"{project_id}_meta", ".json")
+        if meta_path.exists():
+            meta_path.unlink()
+            return True
+        return False
+
+    def project_exists(self, project_id: str) -> bool:
+        """Check if a project exists."""
+        return self._get_path("projects", f"{project_id}_meta", ".json").exists()
+
+    def count_by_project(self, project_id: str) -> dict[str, int]:
+        """Count data/config/model resources that belong to a project."""
+        counts: dict[str, int] = {"data_count": 0, "config_count": 0, "model_count": 0}
+        for item in self.list_data():
+            if item.get("project_id") == project_id:
+                counts["data_count"] += 1
+        for item in self.list_configs():
+            if item.get("project_id") == project_id:
+                counts["config_count"] += 1
+        for item in self.list_models():
+            if item.get("project_id") == project_id:
+                counts["model_count"] += 1
+        return counts
+
+    # =========================================================================
     # Data Storage
     # =========================================================================
 
@@ -67,6 +226,7 @@ class StorageService:
         file_content: bytes,
         filename: str,
         data_id: str | None = None,
+        project_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Save uploaded data file.
@@ -131,6 +291,7 @@ class StorageService:
             "size_bytes": len(file_content),
             "file_ext": ext,
             "hash": self.compute_hash(file_content),
+            "project_id": project_id,
         }
 
         meta_path = self._get_path("data", f"{data_id}_meta", ".json")
@@ -160,14 +321,16 @@ class StorageService:
             raise StorageError(f"Data not found: {data_id}")
         return json.loads(meta_path.read_text())
 
-    def list_data(self) -> list[dict[str, Any]]:
-        """List all stored datasets."""
+    def list_data(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """List stored datasets, optionally filtered by project."""
         data_dir = self.settings.storage_path / "data"
         datasets = []
 
         for meta_file in data_dir.glob("*_meta.json"):
             try:
                 metadata = json.loads(meta_file.read_text())
+                if project_id is not None and metadata.get("project_id") != project_id:
+                    continue
                 datasets.append(metadata)
             except Exception:
                 continue
@@ -206,6 +369,7 @@ class StorageService:
         self,
         config_data: dict[str, Any],
         config_id: str | None = None,
+        project_id: str | None = None,
     ) -> dict[str, Any]:
         """Save model configuration."""
         config_id = config_id or self.generate_id()
@@ -216,6 +380,8 @@ class StorageService:
             config_data["created_at"] = now
         config_data["updated_at"] = now
         config_data["config_id"] = config_id
+        if project_id is not None:
+            config_data["project_id"] = project_id
 
         # Save config
         config_path = self._get_path("configs", config_id, ".json")
@@ -244,14 +410,16 @@ class StorageService:
 
         return self.save_config(config, config_id)
 
-    def list_configs(self) -> list[dict[str, Any]]:
-        """List all configurations."""
+    def list_configs(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """List configurations, optionally filtered by project."""
         config_dir = self.settings.storage_path / "configs"
         configs = []
 
         for config_file in config_dir.glob("*.json"):
             try:
                 config = json.loads(config_file.read_text())
+                if project_id is not None and config.get("project_id") != project_id:
+                    continue
                 configs.append(config)
             except Exception:
                 continue
@@ -279,9 +447,12 @@ class StorageService:
         self,
         model_id: str,
         metadata: dict[str, Any],
+        project_id: str | None = None,
     ) -> None:
         """Save model metadata."""
         metadata["model_id"] = model_id
+        if project_id is not None:
+            metadata["project_id"] = project_id
         meta_path = self._get_path("models", f"{model_id}_meta", ".json")
         meta_path.write_text(json.dumps(metadata, indent=2, default=str))
 
@@ -337,14 +508,16 @@ class StorageService:
             raise StorageError(f"Artifact not found: {model_id}/{artifact_name}")
         return artifact_path
 
-    def list_models(self) -> list[dict[str, Any]]:
-        """List all models."""
+    def list_models(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """List models, optionally filtered by project."""
         models_dir = self.settings.storage_path / "models"
         models = []
 
         for meta_file in models_dir.glob("*_meta.json"):
             try:
                 metadata = json.loads(meta_file.read_text())
+                if project_id is not None and metadata.get("project_id") != project_id:
+                    continue
                 models.append(metadata)
             except Exception:
                 continue

@@ -1,94 +1,82 @@
-import { Card, Title, Text, Select, SelectItem, Metric, Tab, TabGroup, TabList, TabPanels, TabPanel, Button } from '@tremor/react';
+import { Card, Title, Text, Select, SelectItem, Tab, TabGroup, TabList, TabPanels, TabPanel, Button, Badge } from '@tremor/react';
 import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
-import { useModels, useModelFit, useDecomposition, useResponseCurves, useGenerateReport } from '../../api/hooks';
+import { useQuery } from '@tanstack/react-query';
+import { useModels } from '../../api/hooks';
+import { apiClient } from '../../api/client';
 import { useProjectStore } from '../../stores/projectStore';
 import { LoadingPage, LoadingSpinner } from '../../components/common/LoadingSpinner';
 import Plot from 'react-plotly.js';
 
-// Model fit chart component
-function ModelFitChart({ modelId }: { modelId: string }) {
-  const { data, isLoading } = useModelFit(modelId);
-
-  if (isLoading) return <LoadingSpinner />;
-  if (!data) return <Text className="text-gray-500">No fit data available</Text>;
-
-  return (
-    <div>
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="p-3 bg-gray-50 rounded-lg">
-          <Text className="text-xs text-gray-500">R²</Text>
-          <Metric>{(data.r2 * 100).toFixed(1)}%</Metric>
-        </div>
-        <div className="p-3 bg-gray-50 rounded-lg">
-          <Text className="text-xs text-gray-500">RMSE</Text>
-          <Metric>{data.rmse.toFixed(2)}</Metric>
-        </div>
-        <div className="p-3 bg-gray-50 rounded-lg">
-          <Text className="text-xs text-gray-500">MAPE</Text>
-          <Metric>{(data.mape * 100).toFixed(1)}%</Metric>
-        </div>
-      </div>
-      <Plot
-        data={[
-          {
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Observed',
-            x: data.periods,
-            y: data.observed,
-            line: { color: '#6B7280' },
-          },
-          {
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Predicted',
-            x: data.periods,
-            y: data.predicted_mean,
-            line: { color: '#3B82F6' },
-          },
-        ]}
-        layout={{
-          height: 400,
-          margin: { t: 20, r: 20, b: 40, l: 60 },
-          showlegend: true,
-          legend: { orientation: 'h', y: -0.15 },
-          xaxis: { title: { text: 'Period' } },
-          yaxis: { title: { text: 'Value' } },
-        }}
-        config={{ responsive: true }}
-        style={{ width: '100%' }}
-      />
-    </div>
-  );
+interface ModelDashboard {
+  model_id: string;
+  thread_id: string;
+  run_id: string | null;
+  run_name: string | null;
+  kpi: string | null;
+  channels: string[];
+  controls: string[];
+  n_obs: number | null;
+  n_channels: number | null;
+  inference: Record<string, number>;
+  trend: string | null;
+  seasonality: Record<string, number>;
+  summary: string | null;
+  roi_metrics: Array<{
+    channel: string;
+    roi_mean: number;
+    roi_hdi_lower?: number;
+    roi_hdi_upper?: number;
+    total_contribution?: number;
+    pct_of_total?: number;
+    [key: string]: unknown;
+  }>;
+  decomposition: Array<{
+    component: string;
+    total_contribution: number;
+    pct_of_total: number;
+  }>;
+  report_path: string | null;
+  model_path: string | null;
 }
 
-// Decomposition chart component
-function DecompositionChart({ modelId }: { modelId: string }) {
-  const { data, isLoading } = useDecomposition(modelId);
+function useModelDashboard(modelId: string | undefined) {
+  return useQuery({
+    queryKey: ['model-dashboard', modelId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ModelDashboard>(`/models/${modelId}/dashboard`);
+      return data;
+    },
+    enabled: !!modelId,
+    staleTime: Infinity,
+  });
+}
 
-  if (isLoading) return <LoadingSpinner />;
-  if (!data) return <Text className="text-gray-500">No decomposition data available</Text>;
+function RoiChart({ data }: { data: ModelDashboard['roi_metrics'] }) {
+  if (!data.length) return <Text className="text-gray-500">No ROI metrics available</Text>;
 
-  const traces = Object.entries(data.components).map(([name, values], i) => ({
-    type: 'scatter' as const,
-    mode: 'none' as const,
-    name,
-    x: data.periods,
-    y: values,
-    stackgroup: 'one',
-    fillcolor: `hsl(${(i * 50) % 360}, 70%, 50%)`,
-  }));
+  const channels = data.map((r) => r.channel);
+  const means = data.map((r) => r.roi_mean ?? 0);
+  const lows = data.map((r) => r.roi_hdi_lower ?? r.roi_mean ?? 0);
+  const highs = data.map((r) => r.roi_hdi_upper ?? r.roi_mean ?? 0);
+  const errLow = means.map((m, i) => m - lows[i]);
+  const errHigh = highs.map((m, i) => i - m + highs[i]);
 
   return (
     <Plot
-      data={traces}
+      data={[{
+        type: 'bar',
+        x: channels,
+        y: means,
+        error_y: { type: 'data', symmetric: false, array: errHigh, arrayminus: errLow, visible: true },
+        marker: { color: means.map((v) => v >= 1 ? '#10B981' : '#EF4444') },
+        name: 'ROI',
+      }]}
       layout={{
-        height: 400,
-        margin: { t: 20, r: 20, b: 40, l: 60 },
-        showlegend: true,
-        legend: { orientation: 'h', y: -0.2 },
-        xaxis: { title: { text: 'Period' } },
-        yaxis: { title: { text: 'Contribution' } },
+        height: 380,
+        margin: { t: 20, r: 20, b: 80, l: 60 },
+        yaxis: { title: { text: 'ROI (return per $ spent)' }, zeroline: true, zerolinecolor: '#6B7280' },
+        xaxis: { tickangle: -30 },
+        showlegend: false,
       }}
       config={{ responsive: true }}
       style={{ width: '100%' }}
@@ -96,93 +84,103 @@ function DecompositionChart({ modelId }: { modelId: string }) {
   );
 }
 
-// Response curves component
-function ResponseCurvesChart({ modelId }: { modelId: string }) {
-  const { data, isLoading } = useResponseCurves(modelId);
+function DecompositionChart({ data, kpi }: { data: ModelDashboard['decomposition']; kpi: string | null }) {
+  if (!data.length) return <Text className="text-gray-500">No decomposition data available</Text>;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (!data) return <Text className="text-gray-500">No response curve data available</Text>;
-
-  const channels = Object.keys(data.channels);
-  const cols = Math.min(channels.length, 3);
+  const COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#F97316','#84CC16','#EC4899','#6B7280'];
 
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-${cols} gap-4`}>
-      {channels.map((channel) => {
-        const curve = data.channels[channel];
-        return (
-          <Card key={channel}>
-            <Title className="text-sm">{channel}</Title>
-            <Plot
-              data={[
-                {
-                  type: 'scatter',
-                  mode: 'lines',
-                  name: 'Response',
-                  x: curve.spend,
-                  y: curve.response,
-                  line: { color: '#3B82F6' },
-                },
-                {
-                  type: 'scatter',
-                  mode: 'lines',
-                  name: 'HDI',
-                  x: [...curve.spend, ...curve.spend.slice().reverse()],
-                  y: [...curve.response_hdi_high, ...curve.response_hdi_low.slice().reverse()],
-                  fill: 'toself',
-                  fillcolor: 'rgba(59, 130, 246, 0.2)',
-                  line: { color: 'transparent' },
-                  showlegend: false,
-                },
-                {
-                  type: 'scatter',
-                  mode: 'markers',
-                  name: 'Current',
-                  x: [curve.current_spend],
-                  y: [curve.response[Math.floor(curve.spend.indexOf(curve.current_spend))] || 0],
-                  marker: { color: '#EF4444', size: 10 },
-                },
-              ]}
-              layout={{
-                height: 200,
-                margin: { t: 10, r: 10, b: 40, l: 50 },
-                showlegend: false,
-                xaxis: { title: { text: 'Spend' } },
-                yaxis: { title: { text: 'Response' } },
-              }}
-              config={{ responsive: true, displayModeBar: false }}
-              style={{ width: '100%' }}
-            />
-          </Card>
-        );
-      })}
+    <div className="grid grid-cols-2 gap-6">
+      <Plot
+        data={[{
+          type: 'pie',
+          labels: data.map((d) => d.component),
+          values: data.map((d) => d.pct_of_total),
+          textinfo: 'label+percent',
+          hovertemplate: '%{label}: %{value:.1f}%<extra></extra>',
+          marker: { colors: COLORS },
+        }]}
+        layout={{ height: 360, margin: { t: 20, r: 20, b: 20, l: 20 }, showlegend: false }}
+        config={{ responsive: true }}
+        style={{ width: '100%' }}
+      />
+      <div className="space-y-2 self-center">
+        {data.map((d, i) => (
+          <div key={d.component} className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+              <span className="text-gray-700 truncate max-w-[160px]">{d.component}</span>
+            </div>
+            <div className="text-right ml-4">
+              <span className="font-medium text-gray-900">{d.pct_of_total.toFixed(1)}%</span>
+              <span className="text-gray-500 ml-2 text-xs">{d.total_contribution?.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            </div>
+          </div>
+        ))}
+        {kpi && <p className="text-xs text-gray-400 mt-3">Contribution to {kpi}</p>}
+      </div>
+    </div>
+  );
+}
+
+function SummaryPanel({ dash }: { dash: ModelDashboard }) {
+  const inf = dash.inference || {};
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'KPI', value: dash.kpi || '—' },
+          { label: 'Observations', value: dash.n_obs?.toString() || '—' },
+          { label: 'Channels', value: dash.n_channels?.toString() || dash.channels.length.toString() },
+          { label: 'Trend', value: dash.trend || '—' },
+          { label: 'Chains', value: inf.chains?.toString() || '—' },
+          { label: 'Draws', value: inf.draws?.toString() || '—' },
+          { label: 'Tune', value: inf.tune?.toString() || '—' },
+          { label: 'Target Accept', value: inf.target_accept?.toString() || '—' },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-gray-50 rounded-lg p-3">
+            <p className="text-xs text-gray-500">{label}</p>
+            <p className="text-sm font-semibold text-gray-900 mt-0.5">{value}</p>
+          </div>
+        ))}
+      </div>
+      {dash.channels.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Media Channels</p>
+          <div className="flex flex-wrap gap-1.5">
+            {dash.channels.map((ch) => <Badge key={ch} color="blue">{ch}</Badge>)}
+          </div>
+        </div>
+      )}
+      {dash.controls.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Controls</p>
+          <div className="flex flex-wrap gap-1.5">
+            {dash.controls.map((c) => <Badge key={c} color="gray">{c}</Badge>)}
+          </div>
+        </div>
+      )}
+      {dash.summary && (
+        <div className="bg-blue-50 rounded-lg p-4">
+          <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">Fit Summary</p>
+          <pre className="text-xs text-blue-900 whitespace-pre-wrap font-mono leading-relaxed">{dash.summary}</pre>
+        </div>
+      )}
     </div>
   );
 }
 
 export function ResultsPage() {
-  const { data: modelsData, isLoading } = useModels({ status: 'completed' });
+  const { data: modelsData, isLoading } = useModels({ status: 'completed' } as any);
   const { selectedModelId, setSelectedModel } = useProjectStore();
-  const reportMutation = useGenerateReport(selectedModelId || '');
+  const { data: dash, isLoading: dashLoading } = useModelDashboard(selectedModelId || undefined);
 
-  if (isLoading) {
-    return <LoadingPage message="Loading models..." />;
-  }
+  if (isLoading) return <LoadingPage message="Loading models..." />;
 
-  const models = modelsData?.models.filter((m) => m.status === 'completed') || [];
+  const models = modelsData?.models.filter((m) => m.status === 'completed') ?? [];
 
-  const handleGenerateReport = () => {
-    if (!selectedModelId) return;
-    reportMutation.mutate({
-      title: 'MMM Results Report',
-      sections: {
-        executive_summary: true,
-        model_fit: true,
-        channel_contributions: true,
-        response_curves: true,
-        diagnostics: true,
-      },
-    });
+  const handleOpenReport = () => {
+    window.open('/report', '_blank');
   };
 
   return (
@@ -192,73 +190,77 @@ export function ResultsPage() {
           <Title>Results & Export</Title>
           <Text>View model results and generate reports</Text>
         </div>
-        {selectedModelId && (
-          <Button
-            icon={DocumentArrowDownIcon}
-            onClick={handleGenerateReport}
-            loading={reportMutation.isPending}
-          >
-            Generate Report
+        {dash?.report_path && (
+          <Button icon={DocumentArrowDownIcon} onClick={handleOpenReport}>
+            View Report
           </Button>
         )}
       </div>
 
-      {/* Model selector */}
       <Card>
         <Title className="text-sm">Select Model</Title>
         <div className="mt-4">
-          <Select
-            value={selectedModelId || ''}
-            onValueChange={(v) => setSelectedModel(v)}
-            placeholder="Select a completed model..."
-          >
-            {models.map((m) => (
-              <SelectItem key={m.model_id} value={m.model_id}>
-                {m.name || m.model_id}
-              </SelectItem>
-            ))}
-          </Select>
+          {models.length === 0 ? (
+            <Text className="text-gray-400 text-sm">
+              No completed models found. Fit a model via the Agent Copilot first.
+            </Text>
+          ) : (
+            <Select
+              value={selectedModelId || ''}
+              onValueChange={(v) => setSelectedModel(v)}
+              placeholder="Select a completed model..."
+            >
+              {models.map((m) => (
+                <SelectItem key={m.model_id} value={m.model_id}>
+                  {m.name || m.model_id}
+                </SelectItem>
+              ))}
+            </Select>
+          )}
         </div>
       </Card>
 
-      {/* Results tabs */}
-      {selectedModelId ? (
-        <TabGroup>
-          <TabList>
-            <Tab>Model Fit</Tab>
-            <Tab>Decomposition</Tab>
-            <Tab>Response Curves</Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel>
-              <Card className="mt-4">
-                <Title className="text-sm">Observed vs Predicted</Title>
-                <div className="mt-4">
-                  <ModelFitChart modelId={selectedModelId} />
-                </div>
-              </Card>
-            </TabPanel>
-            <TabPanel>
-              <Card className="mt-4">
-                <Title className="text-sm">Component Decomposition</Title>
-                <div className="mt-4">
-                  <DecompositionChart modelId={selectedModelId} />
-                </div>
-              </Card>
-            </TabPanel>
-            <TabPanel>
-              <div className="mt-4">
-                <Title className="text-sm mb-4">Saturation Response Curves</Title>
-                <ResponseCurvesChart modelId={selectedModelId} />
-              </div>
-            </TabPanel>
-          </TabPanels>
-        </TabGroup>
-      ) : (
+      {selectedModelId && (
+        dashLoading ? (
+          <Card><LoadingSpinner /></Card>
+        ) : dash ? (
+          <TabGroup>
+            <TabList>
+              <Tab>Summary</Tab>
+              <Tab>ROI Metrics</Tab>
+              <Tab>Decomposition</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <Card className="mt-4">
+                  <SummaryPanel dash={dash} />
+                </Card>
+              </TabPanel>
+              <TabPanel>
+                <Card className="mt-4">
+                  <Title className="text-sm mb-1">Return on Investment by Channel</Title>
+                  <Text className="text-xs text-gray-500 mb-4">94% HDI error bars. Green = ROI &gt; 1.</Text>
+                  <RoiChart data={dash.roi_metrics} />
+                </Card>
+              </TabPanel>
+              <TabPanel>
+                <Card className="mt-4">
+                  <Title className="text-sm mb-4">Aggregate Component Decomposition</Title>
+                  <DecompositionChart data={dash.decomposition} kpi={dash.kpi} />
+                </Card>
+              </TabPanel>
+            </TabPanels>
+          </TabGroup>
+        ) : (
+          <Card>
+            <Text className="text-gray-500 text-center">Could not load model data.</Text>
+          </Card>
+        )
+      )}
+
+      {!selectedModelId && models.length > 0 && (
         <Card>
-          <Text className="text-gray-500 text-center">
-            Select a completed model to view results
-          </Text>
+          <Text className="text-gray-500 text-center">Select a model above to view results.</Text>
         </Card>
       )}
     </div>

@@ -163,6 +163,7 @@ def _metadata_to_model_info(metadata: dict) -> ModelInfo:
             else None
         ),
         error_message=metadata.get("error_message"),
+        project_id=metadata.get("project_id"),
         diagnostics=metadata.get("diagnostics"),
     )
 
@@ -460,10 +461,11 @@ async def list_models(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status_filter: JobStatus | None = None,
+    project_id: str | None = Query(None, description="Filter by project"),
     storage: StorageService = Depends(get_storage),
 ):
     """List all models with optional status filter."""
-    all_models = storage.list_models()
+    all_models = storage.list_models(project_id=project_id)
 
     # Apply status filter
     if status_filter:

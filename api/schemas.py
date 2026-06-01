@@ -57,6 +57,51 @@ class AllocationMethod(str, Enum):
 # =============================================================================
 
 
+# =============================================================================
+# Project Models
+# =============================================================================
+
+
+class ProjectCreateRequest(BaseModel):
+    """Request to create a new project."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str | None = None
+
+
+class ProjectUpdateRequest(BaseModel):
+    """Request to update a project."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
+
+
+class ProjectResponse(BaseModel):
+    """Project response."""
+
+    project_id: str
+    name: str
+    description: str | None
+    created_at: datetime
+    updated_at: datetime
+    data_count: int = 0
+    config_count: int = 0
+    model_count: int = 0
+    session_count: int = 0
+
+
+class ProjectListResponse(BaseModel):
+    """List of projects."""
+
+    projects: list[ProjectResponse]
+    total: int
+
+
+# =============================================================================
+# Data Models
+# =============================================================================
+
+
 class DataUploadResponse(BaseModel):
     """Response after uploading data."""
 
@@ -68,6 +113,7 @@ class DataUploadResponse(BaseModel):
     dimensions: dict[str, list[str]]
     created_at: datetime
     size_bytes: int
+    project_id: str | None = None
 
 
 class DataInfo(BaseModel):
@@ -82,6 +128,7 @@ class DataInfo(BaseModel):
     created_at: datetime
     size_bytes: int
     preview: list[dict[str, Any]] | None = None
+    project_id: str | None = None
 
 
 class DataListResponse(BaseModel):
@@ -248,6 +295,7 @@ class ConfigCreateRequest(BaseModel):
     description: str | None = None
     mff_config: MFFConfigSchema
     model_settings: ModelConfigSchema = Field(default_factory=ModelConfigSchema)
+    project_id: str | None = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -269,6 +317,7 @@ class ConfigResponse(BaseModel):
     model_settings: ModelConfigSchema
     created_at: datetime
     updated_at: datetime
+    project_id: str | None = None
 
 
 class ConfigListResponse(BaseModel):
@@ -290,6 +339,7 @@ class ModelFitRequest(BaseModel):
     config_id: str
     name: str | None = None
     description: str | None = None
+    project_id: str | None = None
     # Optional overrides
     n_chains: int | None = None
     n_draws: int | None = None
@@ -312,6 +362,7 @@ class ModelInfo(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None
+    project_id: str | None = None
     # Diagnostics (available after completion)
     diagnostics: dict[str, Any] | None = None
 
@@ -372,6 +423,48 @@ class ScenarioResponse(BaseModel):
     outcome_change: float
     outcome_change_pct: float
     spend_changes: dict[str, dict[str, float]]
+
+
+# =============================================================================
+# Budget Plan Models
+# =============================================================================
+
+
+class BudgetPlanCreateRequest(BaseModel):
+    """Request to save a named budget plan (scenario + result)."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
+    model_id: str
+    spend_changes: dict[str, float] = Field(
+        ..., description="Channel → % change in spend (e.g. 0.1 = +10%)"
+    )
+    time_period: tuple[int, int] | None = None
+    project_id: str | None = None
+
+
+class BudgetPlanInfo(BaseModel):
+    """Saved budget plan with scenario result."""
+
+    plan_id: str
+    name: str
+    description: str | None = None
+    model_id: str
+    spend_changes: dict[str, float]
+    baseline_outcome: float
+    scenario_outcome: float
+    outcome_change: float
+    outcome_change_pct: float
+    channel_details: dict[str, dict[str, float]] = Field(default_factory=dict)
+    created_at: datetime
+    project_id: str | None = None
+
+
+class BudgetPlanListResponse(BaseModel):
+    """List of saved budget plans."""
+
+    plans: list[BudgetPlanInfo]
+    total: int
 
 
 class PredictionRequest(BaseModel):
@@ -729,6 +822,7 @@ class ExtendedModelFitRequest(BaseModel):
     config_id: str
     name: str | None = None
     description: str | None = None
+    project_id: str | None = None
 
     # Mediator data (for nested/combined models with observed mediators)
     mediator_data_id: str | None = Field(
@@ -823,6 +917,7 @@ class ExtendedModelInfo(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None
+    project_id: str | None = None
     diagnostics: dict[str, Any] | None = None
 
     # Extended model specifics

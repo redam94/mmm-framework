@@ -726,6 +726,74 @@ def leave_one_out_decomposition(
     })
 
 
+# ── Define (lock) an analysis plan ───────────────────────────────────────────
+
+@tool
+def define_analysis_plan(
+    name: str = "Analysis Plan",
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Snapshot the current research question, causal DAG, and all recorded
+    assumptions into a LOCKED analysis plan artifact.
+
+    Call this after the research question, DAG, and key priors have been
+    established — before fitting the model. The locked plan serves as a
+    pre-registration document to prevent post-hoc rationalisation.
+
+    Args:
+        name: Human-readable name for this plan (e.g. "Q4 MMM pre-registration").
+    """
+    tid = _thread_id_from(config)
+    if not tid:
+        return Command(update={"messages": [ToolMessage(
+            content="No active thread id; cannot lock analysis plan.",
+            tool_call_id=tool_call_id,
+        )]})
+
+    # Pull latest assumptions from session store
+    current_assumptions = sessions_store.list_assumptions(tid, include_history=False)
+
+    # Extract research question if present
+    rq = next((a["value"] for a in current_assumptions if a["key"] == "research_question"), None)
+
+    # Pull DAG from dashboard_data if available
+    dashboard = state.get("dashboard_data", {}) if state else {}
+    dag_data = dashboard.get("dag")
+
+    payload: dict[str, Any] = {
+        "research_question": rq,
+        "dag": dag_data,
+        "assumptions": [
+            {k: a[k] for k in ("key", "category", "value", "rationale", "version")}
+            for a in current_assumptions
+        ],
+    }
+
+    plan = sessions_store.lock_analysis_plan(thread_id=tid, name=name, payload=payload)
+    plan_id = plan["id"]
+
+    assumption_count = len(current_assumptions)
+    lines = [
+        f"**Analysis plan locked** — `{plan_id[:8]}…`",
+        "",
+        f"- **Name:** {name}",
+        f"- **Research question:** {'✓' if rq else '⚠ not recorded yet'}",
+        f"- **DAG:** {'✓' if dag_data else '⚠ not recorded yet'}",
+        f"- **Recorded assumptions:** {assumption_count}",
+        "",
+        "This plan is now immutable. Any changes after this point are explicitly "
+        "tracked as divergences from the pre-registered analysis.",
+    ]
+
+    return Command(update={
+        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
+        "dashboard_data": {**dashboard, "analysis_plan_id": plan_id, "analysis_plan_name": name},
+    })
+
+
 CAUSAL_TOOLS = [
     define_research_question,
     propose_dag,
@@ -735,4 +803,5 @@ CAUSAL_TOOLS = [
     mark_workflow_step,
     prior_predictive_check,
     leave_one_out_decomposition,
+    define_analysis_plan,
 ]

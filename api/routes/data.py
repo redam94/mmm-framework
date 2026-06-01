@@ -108,9 +108,10 @@ async def list_data(
     storage: StorageService = Depends(get_storage),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum items to return"),
+    project_id: str | None = Query(None, description="Filter by project"),
 ):
     """List all uploaded datasets."""
-    datasets = storage.list_data()
+    datasets = storage.list_data(project_id=project_id)
 
     # Apply pagination
     total = len(datasets)
@@ -127,6 +128,7 @@ async def list_data(
                 dimensions=d["dimensions"],
                 created_at=datetime.fromisoformat(d["created_at"]),
                 size_bytes=d["size_bytes"],
+                project_id=d.get("project_id"),
             )
             for d in datasets
         ],
