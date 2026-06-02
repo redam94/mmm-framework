@@ -171,5 +171,41 @@ export async function getModelConfig(): Promise<ServerModelConfig | null> {
   }
 }
 
+// Placeholder "key" used when the server manages credentials itself (Vertex AI /
+// ADC or a server-side env key). The backend normalises it away — see
+// _SENTINEL_API_KEYS in mmm_framework/agents/llm.py.
+export const SERVER_MANAGED_KEY = 'server-managed';
+
+// A selectable Vertex AI model discovered by the server.
+export interface VertexModel {
+  id: string;
+  provider: string;       // vertex_gemini | vertex_anthropic
+  family: string;         // gemini | claude
+  display_name: string;
+  source: string;         // live | catalog | config
+  location: string | null;
+}
+
+export interface VertexModelsResponse {
+  project: string | null;
+  location: string | null;
+  active_model: string;
+  models: VertexModel[];
+}
+
+// List Vertex models available to the server's configured project/region.
+// Returns an empty list (not an error) when discovery is unavailable, so the
+// caller can fall back to free-text entry.
+export async function getVertexModels(): Promise<VertexModelsResponse | null> {
+  try {
+    const response = await axios.get<VertexModelsResponse>(`${API_BASE_URL}/vertex-models`, {
+      timeout: 15000,
+    });
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
 // Export base URL for use in other modules
 export { API_BASE_URL };

@@ -33,11 +33,14 @@ See ``config/model_config.example.yaml`` for an annotated template.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
+
+logger = logging.getLogger(__name__)
 
 Provider = Literal[
     "vertex_anthropic",
@@ -89,6 +92,15 @@ _PROVIDER_FAMILY: dict[str, str] = {
     "google_genai": "gemini",
 }
 
+# Within Vertex, a selected model's family maps to the Vertex provider that
+# serves it. Used so a user can pick a Gemini *or* Claude id from the discovered
+# list and have build_llm route to the right Vertex backend (never to a direct,
+# key-based provider — the ADC-only security property is preserved).
+_VERTEX_PROVIDER_FOR_FAMILY: dict[str, str] = {
+    "claude": "vertex_anthropic",
+    "gemini": "vertex_gemini",
+}
+
 # Environment variables that already carry a key for each direct provider.
 _PROVIDER_ENV_KEYS: dict[str, tuple[str, ...]] = {
     "anthropic": ("ANTHROPIC_API_KEY",),
@@ -129,6 +141,12 @@ class ModelConfig(BaseModel):
 
     # --- Direct provider settings (ignored by Vertex providers) ---
     api_key: str | None = None
+
+    # Optional convenience model ids surfaced in the Vertex model picker in
+    # addition to live-discovered models (e.g. Claude/Model-Garden ids, which
+    # can't be reliably enumerated). These are user-curated — verify them in
+    # your Vertex console; they are never auto-populated with guessed ids.
+    extra_models: list[str] = Field(default_factory=list)
 
     # Free-form passthrough to the underlying LangChain constructor.
     model_kwargs: dict[str, Any] = Field(default_factory=dict)
@@ -387,8 +405,15 @@ def build_llm(
 
     if cfg.uses_vertex:
         # ADC is authoritative: never let a stale/dummy client key hijack Vertex.
-        if model_name and _model_family(model_name) == _PROVIDER_FAMILY[cfg.provider]:
-            cfg = cfg.model_copy(update={"model": model_name})
+        # A selected model may belong to either Vertex family — route to the
+        # matching Vertex provider (vertex_gemini / vertex_anthropic), keeping
+        # the same project/location/credentials. Cross-family selection never
+        # leaves Vertex (no direct, key-based provider), so ADC still governs.
+        if model_name:
+            target = _VERTEX_PROVIDER_FOR_FAMILY.get(_model_family(model_name))
+            if target:
+                cfg = cfg.model_copy(update={"provider": target, "model": model_name})
+            # Unknown family (e.g. an OpenAI id) is ignored: keep server config.
         return _build_from_config(cfg)
 
     # Direct provider: honor per-request UI overrides.
@@ -436,3 +461,166 @@ def describe_active_config(config: ModelConfig | None = None) -> dict[str, Any]:
         "max_tokens": cfg.max_tokens,
         "requires_api_key": requires_api_key,
     }
+
+
+# ── Vertex model discovery ──────────────────────────────────────────────────
+
+
+def _normalize_model_id(name: str | None) -> str:
+    """Reduce a Vertex resource name to the bare id the constructor expects.
+
+    ``publishers/google/models/gemini-2.5-pro`` -> ``gemini-2.5-pro`` and
+    ``models/gemini-2.5-pro`` -> ``gemini-2.5-pro``. The bare form is exactly
+    what ``build_llm`` passes to ``ChatGoogleGenerativeAI`` / ``ChatAnthropicVertex``.
+    """
+    if not name:
+        return ""
+    if "/models/" in name:
+        return name.split("/models/")[-1]
+    if name.startswith("models/"):
+        return name.split("/", 1)[1]
+    return name
+
+
+def _discover_gemini_vertex_models(
+    project: str | None, location: str | None, credentials_path: str | None
+) -> list[dict[str, Any]]:
+    """Live-list Gemini base models available to the project/region via ADC.
+
+    Scoped to ``location`` so it never offers models the region can't serve.
+    Returns ``[]`` on any failure (missing creds, no project, API error) so the
+    caller degrades gracefully to manual entry.
+    """
+    try:
+        from google import genai
+
+        client = genai.Client(
+            vertexai=True,
+            project=project,
+            location=location,
+            credentials=_load_credentials(credentials_path),
+        )
+        out: list[dict[str, Any]] = []
+        for m in client.models.list(config={"query_base": True}):
+            mid = _normalize_model_id(getattr(m, "name", None))
+            if not mid or "gemini" not in mid.lower():
+                continue
+            actions = [a.lower() for a in (getattr(m, "supported_actions", None) or [])]
+            # Keep only chat-capable models (skip embeddings, etc.). If the model
+            # doesn't report actions, include it rather than hide it.
+            if actions and not any("generatecontent" in a for a in actions):
+                continue
+            out.append(
+                {
+                    "id": mid,
+                    "provider": "vertex_gemini",
+                    "family": "gemini",
+                    "display_name": getattr(m, "display_name", None) or mid,
+                    "source": "live",
+                    "location": location,
+                }
+            )
+        return out
+    except Exception as exc:
+        logger.debug("Gemini Vertex model discovery failed: %s", exc)
+        return []
+
+
+def _discover_anthropic_vertex_models(
+    project: str | None, location: str | None, credentials_path: str | None
+) -> list[dict[str, Any]]:
+    """Best-effort list of Claude models from the Model Garden catalog.
+
+    This is the global publisher catalog (not project/region enablement), so it
+    is advisory: entries are tagged ``source="catalog"`` and the picker always
+    keeps a free-text field. Returns ``[]`` on any failure — Claude selection
+    then relies on ``extra_models`` and manual entry, never on guessed ids.
+    """
+    try:
+        from google.cloud import aiplatform_v1beta1 as ga
+
+        client_options = (
+            {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
+            if location
+            else None
+        )
+        client = ga.ModelGardenServiceClient(
+            credentials=_load_credentials(credentials_path),
+            client_options=client_options,
+        )
+        out: list[dict[str, Any]] = []
+        for pm in client.list_publisher_models(parent="publishers/anthropic"):
+            mid = _normalize_model_id(getattr(pm, "name", None))
+            if "claude" not in mid.lower():
+                continue
+            out.append(
+                {
+                    "id": mid,
+                    "provider": "vertex_anthropic",
+                    "family": "claude",
+                    "display_name": mid,
+                    "source": "catalog",
+                    "location": location,
+                }
+            )
+        return out
+    except Exception as exc:
+        logger.debug("Anthropic Vertex model discovery failed: %s", exc)
+        return []
+
+
+def _dedupe_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop duplicate ids, keeping the first (live > catalog > config order)."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for m in models:
+        if m["id"] in seen:
+            continue
+        seen.add(m["id"])
+        out.append(m)
+    return out
+
+
+def list_vertex_models(
+    config: ModelConfig | None = None,
+    *,
+    project: str | None = None,
+    location: str | None = None,
+    credentials_path: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return selectable Vertex models for the given (or configured) project/region.
+
+    Combines: live-discovered Gemini models (project/region-scoped), a
+    best-effort Claude catalog from Model Garden, and any user-curated
+    ``extra_models`` from the config. Each entry is
+    ``{id, provider, family, display_name, source, location}``. The list may be
+    empty (e.g. ADC not configured); callers should always also allow free-text
+    model entry. Never raises — discovery failures degrade to fewer entries.
+    """
+    cfg = config or load_model_config()
+    project = project if project is not None else cfg.project
+    location = location if location is not None else cfg.location
+    credentials_path = (
+        credentials_path if credentials_path is not None else cfg.credentials_path
+    )
+
+    models: list[dict[str, Any]] = []
+    models += _discover_gemini_vertex_models(project, location, credentials_path)
+    models += _discover_anthropic_vertex_models(project, location, credentials_path)
+
+    for mid in cfg.extra_models or []:
+        family = _model_family(mid)
+        provider = _VERTEX_PROVIDER_FOR_FAMILY.get(family)
+        if provider:
+            models.append(
+                {
+                    "id": mid,
+                    "provider": provider,
+                    "family": family,
+                    "display_name": mid,
+                    "source": "config",
+                    "location": location,
+                }
+            )
+
+    return _dedupe_models(models)

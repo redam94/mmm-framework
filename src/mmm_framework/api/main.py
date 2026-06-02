@@ -1101,6 +1101,52 @@ async def model_config_endpoint():
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
+# Small in-process TTL cache: Vertex model discovery is a network call.
+_vertex_models_cache: dict[tuple, tuple[float, list]] = {}
+_VERTEX_MODELS_TTL = 300.0  # seconds
+
+
+@app.get("/vertex-models")
+async def vertex_models_endpoint(
+    project: str | None = None, location: str | None = None
+):
+    """List selectable Vertex models for the configured (or given) project/region.
+
+    Combines live-discovered Gemini models, a best-effort Claude catalog, and any
+    configured ``extra_models``. Results are cached briefly. The frontend should
+    still offer a free-text field for ids not in the list (e.g. versioned Claude
+    ids pasted from the Vertex console).
+    """
+    import time
+
+    from mmm_framework.agents.llm import list_vertex_models, load_model_config
+
+    try:
+        cfg = load_model_config()
+        proj = project or cfg.project
+        loc = location or cfg.location
+        key = (proj, loc)
+        now = time.monotonic()
+        cached = _vertex_models_cache.get(key)
+        if cached and (now - cached[0]) < _VERTEX_MODELS_TTL:
+            models = cached[1]
+        else:
+            # Run the (blocking) discovery off the event loop.
+            models = await asyncio.to_thread(
+                list_vertex_models, cfg, project=proj, location=loc
+            )
+            _vertex_models_cache[key] = (now, models)
+        return {
+            "project": proj,
+            "location": loc,
+            "active_model": cfg.model,
+            "models": models,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Failed to list Vertex models")
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
 @app.get("/report")
 async def view_report():
     """Serve the generated HTML report inline for embedding."""

@@ -16,6 +16,7 @@ from mmm_framework.agents.llm import (
     build_llm,
     describe_active_config,
     infer_provider_from_model,
+    list_vertex_models,
     load_model_config,
 )
 
@@ -175,10 +176,23 @@ def test_vertex_allows_same_family_model_swap(capture_cfg):
     assert out.api_key is None
 
 
-def test_vertex_gemini_rejects_claude_model_name(capture_cfg):
+def test_vertex_cross_family_switches_provider(capture_cfg):
+    # Picking a Claude id while configured for vertex_gemini routes to
+    # vertex_anthropic (same project/location/ADC), and vice versa.
+    cfg = ModelConfig(provider="vertex_gemini", model="gemini-2.5-pro", project="p")
+    out = build_llm(cfg, model_name="claude-sonnet-4-5@20250929")
+    assert out.provider == "vertex_anthropic"
+    assert out.model == "claude-sonnet-4-5@20250929"
+    assert out.project == "p"  # project/location preserved
+    assert out.api_key is None  # never leaves Vertex / never takes a key
+
+
+def test_vertex_unknown_family_keeps_config(capture_cfg):
+    # An OpenAI id has no Vertex provider -> ignore it, keep server config.
     cfg = ModelConfig(provider="vertex_gemini", model="gemini-2.5-pro")
-    out = build_llm(cfg, model_name="claude-sonnet-4-6")
-    assert out.model == "gemini-2.5-pro"  # mismatched family ignored
+    out = build_llm(cfg, model_name="gpt-4o")
+    assert out.provider == "vertex_gemini"
+    assert out.model == "gemini-2.5-pro"
 
 
 def test_direct_provider_honors_client_override(capture_cfg):
@@ -314,3 +328,108 @@ def test_describe_no_key_needed_when_env_present(monkeypatch):
     cfg = ModelConfig(provider="anthropic", model="claude-sonnet-4-6")
     info = describe_active_config(cfg)
     assert info["requires_api_key"] is False
+
+
+# ── Vertex model discovery ──────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("publishers/google/models/gemini-2.5-pro", "gemini-2.5-pro"),
+        ("publishers/anthropic/models/claude-3-5-sonnet", "claude-3-5-sonnet"),
+        ("models/gemini-2.5-flash", "gemini-2.5-flash"),
+        ("gemini-2.5-pro", "gemini-2.5-pro"),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_normalize_model_id(raw, expected):
+    assert llm_mod._normalize_model_id(raw) == expected
+
+
+def test_list_vertex_models_combines_sources(monkeypatch):
+    # Stub the two discovery helpers so no network is hit.
+    monkeypatch.setattr(
+        llm_mod,
+        "_discover_gemini_vertex_models",
+        lambda p, loc, c: [
+            {
+                "id": "gemini-2.5-pro",
+                "provider": "vertex_gemini",
+                "family": "gemini",
+                "display_name": "Gemini 2.5 Pro",
+                "source": "live",
+                "location": loc,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        llm_mod,
+        "_discover_anthropic_vertex_models",
+        lambda p, loc, c: [
+            {
+                "id": "claude-3-5-sonnet",
+                "provider": "vertex_anthropic",
+                "family": "claude",
+                "display_name": "claude-3-5-sonnet",
+                "source": "catalog",
+                "location": loc,
+            },
+        ],
+    )
+    cfg = ModelConfig(
+        provider="vertex_anthropic",
+        model="claude-x",
+        project="p",
+        location="us-east5",
+        extra_models=[
+            "claude-sonnet-4-5@20250929",
+            "gpt-4o",
+        ],  # gpt-4o has no vertex provider
+    )
+    models = list_vertex_models(cfg)
+    ids = [m["id"] for m in models]
+    assert "gemini-2.5-pro" in ids
+    assert "claude-3-5-sonnet" in ids
+    assert "claude-sonnet-4-5@20250929" in ids  # extra_models (claude family)
+    assert "gpt-4o" not in ids  # non-vertex family dropped
+    # config extra carries the right provider/source
+    extra = next(m for m in models if m["id"] == "claude-sonnet-4-5@20250929")
+    assert extra["provider"] == "vertex_anthropic"
+    assert extra["source"] == "config"
+
+
+def test_list_vertex_models_dedupes(monkeypatch):
+    monkeypatch.setattr(
+        llm_mod,
+        "_discover_gemini_vertex_models",
+        lambda p, loc, c: [
+            {
+                "id": "gemini-2.5-pro",
+                "provider": "vertex_gemini",
+                "family": "gemini",
+                "display_name": "g",
+                "source": "live",
+                "location": loc,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        llm_mod, "_discover_anthropic_vertex_models", lambda p, loc, c: []
+    )
+    # extra_models repeats the live id -> should be deduped (live kept)
+    cfg = ModelConfig(
+        provider="vertex_gemini",
+        model="gemini-2.5-pro",
+        extra_models=["gemini-2.5-pro"],
+    )
+    models = list_vertex_models(cfg)
+    assert [m["id"] for m in models].count("gemini-2.5-pro") == 1
+    assert models[0]["source"] == "live"
+
+
+def test_discovery_helpers_never_raise(monkeypatch):
+    # With no usable credentials/SDK path, helpers must return [] not raise.
+    assert llm_mod._discover_gemini_vertex_models(None, None, None) == []
+    assert llm_mod._discover_anthropic_vertex_models(None, None, None) == []

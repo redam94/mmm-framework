@@ -51,6 +51,15 @@ location: us-east5
 # only to authenticate as a specific service account from an explicit key file.
 credentials_path:
 
+# Convenience model ids to add to the Vertex model picker, on top of the
+# live-discovered Gemini models. Useful for Claude / Model Garden ids, which
+# can't be reliably enumerated. Verify each id in your Vertex console — these
+# are shown as-is and never guessed for you. Example:
+#   extra_models:
+#     - claude-sonnet-4-5@20250929
+#     - claude-opus-4-1@20250805
+extra_models: []
+
 # --- Direct API providers (used only by anthropic / openai / google_genai) --
 # API key. Usually leave blank and set the provider's environment variable
 # instead (ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY).

@@ -8,6 +8,7 @@ from mmm_framework.agents.llm import (
     ModelConfig,
     build_llm,
     describe_active_config,
+    list_vertex_models,
     load_model_config,
 )
 
@@ -19,4 +20,5 @@ __all__ = [
     "build_llm",
     "load_model_config",
     "describe_active_config",
+    "list_vertex_models",
 ]

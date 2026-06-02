@@ -94,10 +94,47 @@ resolves them depends on the **server's** configured provider:
 A blank or sentinel key (`""`, `server-managed`) is always normalised to "no
 client key", so it can never clobber the server's own credential.
 
+## Selecting a Vertex model
+
+You don't have to hard-code a single `model:` — the agent can discover the
+models available to your project/region and let you pick one.
+
+- **`GET /vertex-models`** returns the selectable models for the configured (or
+  `?project=&location=`-overridden) project/region:
+  `{ project, location, active_model, models: [{id, provider, family, display_name, source, location}] }`.
+  Results are cached for ~5 minutes (discovery is a network call).
+- **Gemini** models are discovered **live** (`source: "live"`), scoped to the
+  configured region, so you're never offered a model the region can't serve.
+- **Claude** is best-effort (`source: "catalog"`, the global Model Garden
+  catalog). Because Vertex Claude ids carry rotating `@version` suffixes and the
+  catalog ignores per-project enablement, **a free-text field is always
+  available** — paste the exact id from your Vertex console.
+- Add your own convenience ids with **`extra_models`** in the config
+  (`source: "config"`); these are shown as-is, never guessed for you.
+
+In the React **Login** page (server-managed/Vertex mode) this surfaces as a
+**Model** dropdown plus an "Or enter a model id" field. The chosen id rides as
+`X-Model-Name`; `build_llm` routes it to the matching Vertex backend by family —
+a Gemini id → `vertex_gemini`, a Claude id → `vertex_anthropic` — keeping the
+same project/region/ADC and **never** falling back to a key-based provider.
+
+> Cross-family selection keeps the configured `location`. If you pick a Claude
+> id while configured for a Gemini-only region (e.g. `us-central1`), set a
+> Claude-serving region (e.g. `us-east5`) in the config or `MMM_LLM_LOCATION`.
+
+Programmatic use:
+
+```python
+from mmm_framework.agents import list_vertex_models, load_model_config
+for m in list_vertex_models(load_model_config()):
+    print(m["provider"], m["id"], f"({m['source']})")
+```
+
 ## Frontend behaviour
 
 `GET /model-config` returns a non-secret summary (provider, model, region,
 `uses_adc`, `requires_api_key`). When `requires_api_key` is `false` (Vertex/ADC
 or a server-side env key), the **Login** page shows a "Server-managed
-credentials" panel and a single **Continue** button — no key entry. Otherwise it
-shows the usual provider selector + API-key field.
+credentials" panel and a **Continue** button — no key entry — plus the Vertex
+**Model** picker described above. Otherwise it shows the usual provider selector
++ API-key field.

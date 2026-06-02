@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { Card, Title, Text, TextInput, Button, Select, SelectItem } from '@tremor/react';
 import { KeyIcon, ExclamationCircleIcon, ChartBarIcon, CloudIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
-import { checkApiHealth, getModelConfig, type ServerModelConfig } from '../../api/client';
+import { checkApiHealth, getModelConfig, getVertexModels, SERVER_MANAGED_KEY, type ServerModelConfig, type VertexModel } from '../../api/client';
 import { MODELS, PROVIDER_LABELS, getModelsByProvider, type Provider } from '../../constants/models';
 
 interface LoginFormData {
@@ -12,17 +12,17 @@ interface LoginFormData {
   modelName: string;
 }
 
-// Placeholder key used when the server manages credentials itself (Vertex AI /
-// ADC or a server-side env key). The backend normalises this away — see
-// _SENTINEL_API_KEYS in mmm_framework/agents/llm.py.
-const SERVER_MANAGED_KEY = 'server-managed';
-
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, setApiKey, isValidating, validationError } = useAuthStore();
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
+  const [vertexModels, setVertexModels] = useState<VertexModel[]>([]);
+  // The model chosen in server-managed (Vertex) mode: either a discovered id or
+  // a free-text id pasted from the Vertex console.
+  const [vertexModel, setVertexModel] = useState<string>('');
+  const [customModel, setCustomModel] = useState<string>('');
 
   const {
     register,
@@ -46,8 +46,21 @@ export function LoginPage() {
     checkApiHealth().then((healthy) => {
       setApiStatus(healthy ? 'online' : 'offline');
     });
-    getModelConfig().then(setServerConfig);
+    getModelConfig().then((cfg) => {
+      setServerConfig(cfg);
+      if (cfg) setVertexModel(cfg.model);
+    });
   }, []);
+
+  // When the server uses Vertex AI, discover the selectable models so the user
+  // can pick one instead of being locked to the server's default.
+  useEffect(() => {
+    if (serverConfig?.uses_vertex) {
+      getVertexModels().then((res) => {
+        if (res?.models?.length) setVertexModels(res.models);
+      });
+    }
+  }, [serverConfig?.uses_vertex]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -60,6 +73,25 @@ export function LoginPage() {
   // env key), so no user-entered API key is required.
   const serverManaged = serverConfig != null && !serverConfig.requires_api_key;
 
+  // Options for the Vertex model dropdown: the server default first, then any
+  // discovered models (deduped). Free-text entry is always available alongside.
+  const vertexOptions = (() => {
+    const ids = new Set<string>();
+    const opts: { id: string; label: string }[] = [];
+    if (serverConfig?.model) {
+      ids.add(serverConfig.model);
+      opts.push({ id: serverConfig.model, label: `${serverConfig.model} (default)` });
+    }
+    for (const m of vertexModels) {
+      if (ids.has(m.id)) continue;
+      ids.add(m.id);
+      const tag = m.family === 'claude' ? 'Claude' : m.family === 'gemini' ? 'Gemini' : m.family;
+      const suffix = m.source === 'catalog' ? ' (catalog)' : '';
+      opts.push({ id: m.id, label: `${tag} — ${m.display_name}${suffix}` });
+    }
+    return opts;
+  })();
+
   const onSubmit = async (data: LoginFormData) => {
     const success = await setApiKey(data.apiKey.trim(), data.modelName);
     if (success) {
@@ -68,7 +100,9 @@ export function LoginPage() {
   };
 
   const onServerManagedSignIn = async () => {
-    const model = serverConfig?.model || selectedModel;
+    // Free-text id (pasted from the console) wins, then the dropdown selection,
+    // then the server default.
+    const model = customModel.trim() || vertexModel || serverConfig?.model || selectedModel;
     const success = await setApiKey(SERVER_MANAGED_KEY, model);
     if (success) {
       navigate(from, { replace: true });
@@ -130,6 +164,37 @@ export function LoginPage() {
                   </div>
                 )}
               </dl>
+
+              {serverConfig?.uses_vertex && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Model
+                    </label>
+                    <Select
+                      value={customModel ? '' : vertexModel}
+                      onValueChange={(v) => { setVertexModel(v); setCustomModel(''); }}
+                    >
+                      {vertexOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Or enter a model id
+                    </label>
+                    <TextInput
+                      placeholder="e.g. claude-sonnet-4-5@20250929"
+                      value={customModel}
+                      onChange={(e) => setCustomModel(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Paste an exact id from your Vertex Model Garden console (overrides the dropdown).
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {validationError && (
                 <p className="text-sm text-red-600">{validationError}</p>
