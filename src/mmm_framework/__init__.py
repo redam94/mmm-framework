@@ -108,6 +108,12 @@ from .jobs import (
 
 from . import mmm_extensions
 from . import dag_model_builder
+from . import diagnostics
+from .diagnostics import (
+    parameter_learning,
+    plot_parameter_learning,
+    plot_prior_posterior_overlay,
+)
 from . import excel_config
 from .excel_config import (
     TemplateGenerator,
@@ -165,6 +171,10 @@ __all__ = [
     "ControlSelectionConfig",
     "ModelConfig",
     "TrendConfig",
+    # Diagnostics
+    "parameter_learning",
+    "plot_parameter_learning",
+    "plot_prior_posterior_overlay",
     # Builders
     "PriorConfigBuilder",
     "AdstockConfigBuilder",

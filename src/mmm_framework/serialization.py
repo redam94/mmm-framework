@@ -163,11 +163,20 @@ class MMMSerializer:
         # 4. Create instance
         adstock_alphas = metadata.get("adstock_alphas", [0.0, 0.3, 0.5, 0.7, 0.9])
 
+        experiments = None
+        if metadata.get("experiments"):
+            from .calibration.likelihood import ExperimentMeasurement
+
+            experiments = [
+                ExperimentMeasurement.from_dict(e) for e in metadata["experiments"]
+            ]
+
         instance = BayesianMMM(
             panel=panel,
             model_config=model_config,
             trend_config=trend_config,
             adstock_alphas=adstock_alphas,
+            experiments=experiments,
         )
 
         # 5. Load scaling parameters
@@ -297,7 +306,7 @@ class MMMSerializer:
             "n_obs": model.n_obs,
             "n_channels": model.n_channels,
             "n_controls": model.n_controls,
-            "n_time_periods": model.n_time_periods,
+            "n_time_periods": model.n_periods,
             "channel_names": model.channel_names,
             "control_names": model.control_names,
             "has_geo": model.has_geo,
@@ -309,6 +318,11 @@ class MMMSerializer:
             metadata["geo_names"] = model.geo_names
         if model.has_product:
             metadata["product_names"] = model.product_names
+
+        # Experiment calibration likelihoods (so a reloaded model can be re-fit
+        # with the same incrementality anchoring it was originally built with).
+        if getattr(model, "experiments", None):
+            metadata["experiments"] = [e.to_dict() for e in model.experiments]
 
         return metadata
 

@@ -440,6 +440,42 @@ class TestCrossEffectSpec:
         assert spec.prior_sigma == 0.3  # Default value
 
 
+class TestBuildCrossEffectMatrixSign:
+    """The cross-effect prior controls the SIGN constraint via the free RV it creates."""
+
+    def _free_rv_names(self, effect_type):
+        from mmm_framework.mmm_extensions.components import build_cross_effect_matrix
+
+        with pm.Model() as m:
+            build_cross_effect_matrix(
+                [CrossEffectSpec(1, 0, effect_type, 0.3)], n_outcomes=2
+            )
+        return {rv.name for rv in m.free_RVs}
+
+    def test_cannibalization_creates_halfnormal_raw(self):
+        # psi = -HalfNormal: the free RV is the (non-negative) magnitude "psi_1_0_raw".
+        names = self._free_rv_names("cannibalization")
+        assert "psi_1_0_raw" in names
+        assert "psi_1_0" not in names
+
+    def test_unconstrained_creates_normal_no_raw(self):
+        # psi ~ Normal: the free RV is "psi_1_0", no "_raw" magnitude, no sign constraint.
+        names = self._free_rv_names("unconstrained")
+        assert "psi_1_0" in names
+        assert "psi_1_0_raw" not in names
+
+    def test_unconstrained_sign_is_free(self):
+        from mmm_framework.mmm_extensions.components import build_cross_effect_matrix
+
+        with pm.Model() as m:
+            build_cross_effect_matrix(
+                [CrossEffectSpec(1, 0, "unconstrained", 1.0)], n_outcomes=2
+            )
+            draws = pm.draw(m["psi_1_0"], draws=500, random_seed=0)
+        # A Normal prior puts mass on BOTH signs (unlike the one-sided cannibalization).
+        assert (draws > 0).any() and (draws < 0).any()
+
+
 # =============================================================================
 # MediaTransformResult Tests
 # =============================================================================

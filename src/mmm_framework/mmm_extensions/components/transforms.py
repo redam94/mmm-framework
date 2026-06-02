@@ -10,9 +10,16 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-import numpy as np
 import pytensor.tensor as pt
 from pytensor import scan as pytensor_scan
+
+# Parametric FIR adstock kernels live in the shared low-level transforms layer
+# so both the core model and the extensions can use them without duplication.
+from ...transforms.adstock_pt import (
+    adstock_weights_pt,
+    apply_adstock_pt,
+    parametric_adstock_pt,
+)
 
 
 def geometric_adstock_pt(
@@ -222,6 +229,9 @@ __all__ = [
     "geometric_adstock_pt",
     "geometric_adstock_convolution",
     "geometric_adstock_matrix",
+    "adstock_weights_pt",
+    "apply_adstock_pt",
+    "parametric_adstock_pt",
     "apply_transformation_pipeline",
     "logistic_saturation_pt",
     "hill_saturation",

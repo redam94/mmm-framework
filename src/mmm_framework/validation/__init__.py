@@ -47,8 +47,14 @@ Generate HTML report:
 
 from .builders import ValidationConfigBuilder
 from .channel_diagnostics import ChannelDiagnostics
+from .geo_identification import (
+    GeoIdentificationDiagnostic,
+    GeoSpendVariation,
+    geo_spend_variation_diagnostic,
+)
 from .config import (
     CalibrationConfig,
+    CausalRefutationConfig,
     ChannelDiagnosticsConfig,
     CrossValidationConfig,
     ModelComparisonConfig,
@@ -79,8 +85,11 @@ from .residual_diagnostics import ResidualDiagnostics
 from .results import (
     BootstrapResults,
     CalibrationResults,
+    CausalRefutationResults,
     ChannelConvergenceResult,
     ChannelDiagnosticsResults,
+    ChannelRobustness,
+    CollinearCluster,
     ConvergenceSummary,
     CrossValidationResults,
     CVFoldResult,
@@ -92,13 +101,16 @@ from .results import (
     ModelComparisonResults,
     PPCCheckResult,
     PPCResults,
+    RefutationTest,
     ResidualDiagnosticsResults,
     SensitivityResults,
     StabilityResults,
     TestResult,
+    UnobservedConfoundingSensitivity,
     ValidationSummary,
     WAICResults,
 )
+from .sensitivity_unobserved import UnobservedConfoundingAnalysis
 from .validator import ModelValidator
 
 __all__ = [
@@ -127,6 +139,13 @@ __all__ = [
     "SensitivityConfig",
     "StabilityConfig",
     "CalibrationConfig",
+    "CausalRefutationConfig",
+    # Causal sensitivity / refutation
+    "UnobservedConfoundingAnalysis",
+    "UnobservedConfoundingSensitivity",
+    "ChannelRobustness",
+    "CausalRefutationResults",
+    "RefutationTest",
     # Results
     "ValidationSummary",
     "ConvergenceSummary",
@@ -136,6 +155,10 @@ __all__ = [
     "ResidualDiagnosticsResults",
     "ChannelConvergenceResult",
     "ChannelDiagnosticsResults",
+    "CollinearCluster",
+    "GeoIdentificationDiagnostic",
+    "GeoSpendVariation",
+    "geo_spend_variation_diagnostic",
     "LOOResults",
     "WAICResults",
     "ModelComparisonEntry",

@@ -121,6 +121,83 @@ class BayesianMMMExtractor(
         # Model specification
         bundle.model_specification = self._get_model_specification()
 
+        # Causal assumptions (identification strategy, designated confounders,
+        # and the unobserved-confounding robustness-value table). This makes the
+        # always-on CausalAssumptionsSection come alive with model-specific data.
+        bundle = self._extract_causal_assumptions(bundle)
+
+        return bundle
+
+    def _extract_causal_assumptions(self, bundle: MMMDataBundle) -> MMMDataBundle:
+        """Populate ``bundle.causal_assumptions`` for the CausalAssumptionsSection.
+
+        Surfaces what the fitted model actually rests on: the confounders it was
+        told to adjust for (the *resolved* causal roles it enforced, P1), a plain
+        identification-strategy statement, and the per-channel robustness value to
+        unobserved confounding (P0-2). Degrades gracefully -- any failure leaves
+        ``causal_assumptions`` as ``None`` so the section still renders its
+        always-on no-unobserved-confounding caveat.
+        """
+        try:
+            from ...config import CausalControlRole
+
+            assumptions: dict[str, Any] = {}
+
+            # Designated confounders = controls the model resolved to CONFOUNDER.
+            # Read the RESOLVED roles the model enforced (guaranteed to match the
+            # fit), not a re-derivation from a DAG the model may not have.
+            control_names = list(getattr(self.mmm, "control_names", []) or [])
+            roles = list(getattr(self.mmm, "_control_causal_roles", []) or [])
+            # Only read roles when they align 1:1 with the control names; a
+            # mismatch (e.g. a corrupted/hand-mutated model) would let zip()
+            # silently truncate and under-report confounders, so skip instead.
+            if len(control_names) == len(roles):
+                confounders = [
+                    name
+                    for name, role in zip(control_names, roles)
+                    if role == CausalControlRole.CONFOUNDER
+                ]
+            else:
+                confounders = []
+            if confounders:
+                assumptions["assumed_confounders"] = confounders
+                assumptions["identification_strategy"] = (
+                    "Effects are identified by back-door adjustment for the "
+                    f"designated confounder(s): {', '.join(confounders)}. SUTVA "
+                    "and <em>no unobserved</em> confounding are assumed; the "
+                    "estimate is causal only if every common cause of spend and "
+                    "the KPI is among the adjusted variables."
+                )
+            else:
+                # Honest framing: nothing was designated, so the number leans
+                # entirely on the (usually false) no-unobserved-confounding
+                # assumption rather than on any adjustment.
+                assumptions["identification_strategy"] = (
+                    "No confounders were explicitly designated, so the reported "
+                    "effects rest entirely on the no-unobserved-confounding "
+                    "assumption (see caveat) rather than on any back-door "
+                    "adjustment. Anchor high-stakes channels with a geo-lift / "
+                    "incrementality experiment (mmm_framework.calibration)."
+                )
+
+            # Robustness to unobserved confounding (P0-2) -- needs a fitted trace.
+            if getattr(self.mmm, "_trace", None) is not None:
+                try:
+                    from ...validation.sensitivity_unobserved import (
+                        UnobservedConfoundingAnalysis,
+                    )
+
+                    sensitivity = UnobservedConfoundingAnalysis(self.mmm).run()
+                    rob = sensitivity.to_dict()
+                    if rob.get("channels"):
+                        assumptions["robustness"] = rob
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Robustness extraction skipped: %s", exc)
+
+            bundle.causal_assumptions = assumptions or None
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Causal-assumptions extraction failed: %s", exc)
+            bundle.causal_assumptions = None
         return bundle
 
     # -------------------------------------------------------------------------

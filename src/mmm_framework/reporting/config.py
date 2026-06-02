@@ -192,6 +192,7 @@ class ReportConfig:
     decomposition: SectionConfig = field(default_factory=SectionConfig)
     saturation: SectionConfig = field(default_factory=SectionConfig)
     sensitivity: SectionConfig = field(default_factory=SectionConfig)
+    causal_assumptions: SectionConfig = field(default_factory=SectionConfig)
     methodology: SectionConfig = field(default_factory=SectionConfig)
     diagnostics: SectionConfig = field(default_factory=SectionConfig)
     # Extended model sections
@@ -210,8 +211,8 @@ class ReportConfig:
     methodology_note: bool = True
 
     # Client presentation options
-    show_nav: bool = False          # Sticky side-nav for multi-section reports
-    confidential: bool = False      # Add "Confidential" banner to footer
+    show_nav: bool = False  # Sticky side-nav for multi-section reports
+    confidential: bool = False  # Add "Confidential" banner to footer
     format_channel_names: bool = False  # Replace underscores → spaces, title-case
 
     @classmethod

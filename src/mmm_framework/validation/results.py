@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    import plotly.graph_objects as go
+    pass
 
 
 # =============================================================================
@@ -246,6 +246,28 @@ class ChannelConvergenceResult:
 
 
 @dataclass
+class CollinearCluster:
+    """A cluster of channels that are too collinear to identify separately.
+
+    When channels move together (spend is scaled up/down jointly), the data
+    cannot attribute effect between them: their *combined* effect is identified
+    but the per-channel split is not, regardless of confounding. The cluster's
+    per-channel ROIs should be read as a group, not individually.
+    """
+
+    channels: list[str]
+    max_correlation: float
+    explanation: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "channels": self.channels,
+            "max_correlation": self.max_correlation,
+            "explanation": self.explanation,
+        }
+
+
+@dataclass
 class ChannelDiagnosticsResults:
     """Results from channel diagnostics."""
 
@@ -253,8 +275,16 @@ class ChannelDiagnosticsResults:
     correlation_matrix: pd.DataFrame
     convergence_by_channel: dict[str, ChannelConvergenceResult]
     identifiability_issues: list[str] = field(default_factory=list)
+    # Weak-identification reporting (P2-2): collinear clusters whose per-channel
+    # effects cannot be separated, the design-matrix condition number (a
+    # higher-order collinearity signal pairwise correlation misses), and
+    # grouped-prior recommendations. Defaults keep existing constructions valid.
+    collinear_clusters: list[CollinearCluster] = field(default_factory=list)
+    condition_number: float | None = None
+    grouped_prior_recommendations: list[str] = field(default_factory=list)
     multicollinearity_warning: bool = field(init=False)
     convergence_warning: bool = field(init=False)
+    weak_identification_warning: bool = field(init=False)
 
     def __post_init__(self):
         # Check for high VIF
@@ -264,6 +294,9 @@ class ChannelDiagnosticsResults:
         self.convergence_warning = any(
             not c.converged for c in self.convergence_by_channel.values()
         )
+
+        # Weakly identified if any collinear cluster was detected.
+        self.weak_identification_warning = len(self.collinear_clusters) > 0
 
     def summary(self) -> pd.DataFrame:
         """Get summary DataFrame."""
@@ -293,8 +326,12 @@ class ChannelDiagnosticsResults:
                 k: v.to_dict() for k, v in self.convergence_by_channel.items()
             },
             "identifiability_issues": self.identifiability_issues,
+            "collinear_clusters": [c.to_dict() for c in self.collinear_clusters],
+            "condition_number": self.condition_number,
+            "grouped_prior_recommendations": self.grouped_prior_recommendations,
             "multicollinearity_warning": self.multicollinearity_warning,
             "convergence_warning": self.convergence_warning,
+            "weak_identification_warning": self.weak_identification_warning,
         }
 
 
@@ -814,6 +851,171 @@ class CalibrationResults:
 
 
 # =============================================================================
+# Unobserved-confounding sensitivity (Cinelli-Hazlett style)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ChannelRobustness:
+    """Per-channel sensitivity of the media effect to unobserved confounding."""
+
+    channel: str
+    estimate: float  # posterior mean of beta (standardized scale)
+    std_error: float  # posterior sd of beta
+    t_value: float  # estimate / std_error (z-score analog)
+    dof: int  # nominal residual degrees of freedom
+    partial_r2: float  # partial R^2 of treatment with outcome
+    robustness_value: float  # RV_q: confounder partial R^2 to nullify the effect
+    robustness_value_half: float  # RV to halve the effect
+    fragile_threshold: float = 0.10
+
+    @property
+    def is_fragile(self) -> bool:
+        """Effect could be overturned by a weak (< threshold) confounder."""
+        return (
+            np.isfinite(self.robustness_value)
+            and self.robustness_value < self.fragile_threshold
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "channel": self.channel,
+            "estimate": self.estimate,
+            "std_error": self.std_error,
+            "t_value": self.t_value,
+            "dof": self.dof,
+            "partial_r2": self.partial_r2,
+            "robustness_value": self.robustness_value,
+            "robustness_value_half": self.robustness_value_half,
+            "is_fragile": self.is_fragile,
+        }
+
+
+@dataclass
+class UnobservedConfoundingSensitivity:
+    """Robustness of each channel effect to an unobserved confounder."""
+
+    channels: list[ChannelRobustness]
+    dof: int
+    q: float
+    caveat: str
+
+    @property
+    def fragile_channels(self) -> list[str]:
+        return [c.channel for c in self.channels if c.is_fragile]
+
+    def summary(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "Channel": [c.channel for c in self.channels],
+                "Estimate": [f"{c.estimate:.3f}" for c in self.channels],
+                "t-value": [f"{c.t_value:.2f}" for c in self.channels],
+                "Partial R²": [f"{c.partial_r2:.3f}" for c in self.channels],
+                "Robustness Value": [
+                    f"{c.robustness_value:.3f}" for c in self.channels
+                ],
+                "Fragile": ["Yes" if c.is_fragile else "No" for c in self.channels],
+            }
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "channels": [c.to_dict() for c in self.channels],
+            "dof": self.dof,
+            "q": self.q,
+            "fragile_channels": self.fragile_channels,
+            "caveat": self.caveat,
+        }
+
+
+# =============================================================================
+# Causal refutation suite (placebo / negative control / random cause / subset)
+# =============================================================================
+
+
+@dataclass
+class RefutationTest:
+    """Result of a single causal refutation test.
+
+    For *vanishing-effect* tests (placebo treatment, negative-control outcome) a
+    correct model should collapse the effect toward zero. For *stability* tests
+    (random common cause, data subset) a correct model's estimate should barely
+    move. ``passed`` encodes the appropriate per-test criterion; ``precision`` is
+    the refit standard error, reported so an underpowered "pass" is not oversold.
+    """
+
+    name: str
+    kind: Literal["vanish", "stable"]
+    passed: bool
+    description: str
+    original_effect: float | None = None
+    refuted_effect: float | None = None
+    refuted_ci_low: float | None = None
+    refuted_ci_high: float | None = None
+    precision: float | None = None  # refit sd of the effect of interest
+    channel: str | None = None
+    details: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "kind": self.kind,
+            "passed": self.passed,
+            "description": self.description,
+            "original_effect": self.original_effect,
+            "refuted_effect": self.refuted_effect,
+            "refuted_ci_low": self.refuted_ci_low,
+            "refuted_ci_high": self.refuted_ci_high,
+            "precision": self.precision,
+            "channel": self.channel,
+            "details": self.details,
+        }
+
+
+@dataclass
+class CausalRefutationResults:
+    """Aggregate results of the causal refutation suite."""
+
+    tests: list[RefutationTest]
+    underpowered: bool = False
+    n_passed: int = field(init=False)
+    n_failed: int = field(init=False)
+    all_passed: bool = field(init=False)
+
+    def __post_init__(self):
+        self.n_passed = sum(1 for t in self.tests if t.passed)
+        self.n_failed = sum(1 for t in self.tests if not t.passed)
+        self.all_passed = self.n_failed == 0 and len(self.tests) > 0
+
+    def summary(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "Test": [t.name for t in self.tests],
+                "Type": [t.kind for t in self.tests],
+                "Channel": [t.channel or "-" for t in self.tests],
+                "Original": [
+                    f"{t.original_effect:.3f}" if t.original_effect is not None else "-"
+                    for t in self.tests
+                ],
+                "Refuted": [
+                    f"{t.refuted_effect:.3f}" if t.refuted_effect is not None else "-"
+                    for t in self.tests
+                ],
+                "Result": ["Pass" if t.passed else "FAIL" for t in self.tests],
+            }
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tests": [t.to_dict() for t in self.tests],
+            "underpowered": self.underpowered,
+            "n_passed": self.n_passed,
+            "n_failed": self.n_failed,
+            "all_passed": self.all_passed,
+        }
+
+
+# =============================================================================
 # Validation Summary
 # =============================================================================
 
@@ -843,6 +1045,10 @@ class ValidationSummary:
     sensitivity: SensitivityResults | None = None
     stability: StabilityResults | None = None
     calibration: CalibrationResults | None = None
+
+    # Causal checks
+    unobserved_confounding: UnobservedConfoundingSensitivity | None = None
+    causal_refutation: CausalRefutationResults | None = None
 
     # Overall assessment
     overall_quality: Literal["excellent", "good", "acceptable", "poor"] = "acceptable"
@@ -913,6 +1119,14 @@ class ValidationSummary:
                 self.cross_validation.to_dict() if self.cross_validation else None
             ),
             "calibration": self.calibration.to_dict() if self.calibration else None,
+            "unobserved_confounding": (
+                self.unobserved_confounding.to_dict()
+                if self.unobserved_confounding
+                else None
+            ),
+            "causal_refutation": (
+                self.causal_refutation.to_dict() if self.causal_refutation else None
+            ),
         }
 
     def to_html_report(self, include_charts: bool = True) -> str:
@@ -1208,7 +1422,7 @@ class ValidationSummary:
             "<div class='report-container'>",
             # Header
             "<header class='report-header'>",
-            f"<h1>Model Validation Report</h1>",
+            "<h1>Model Validation Report</h1>",
             f"<div class='subtitle'>{self.model_name}</div>",
             f"<div class='date'>Generated: {self.validation_date}</div>",
             f"<span class='quality-badge {self.overall_quality}'>{self.overall_quality}</span>",
@@ -1763,6 +1977,7 @@ __all__ = [
     # Channel diagnostics
     "ChannelConvergenceResult",
     "ChannelDiagnosticsResults",
+    "CollinearCluster",
     # Model comparison
     "LOOResults",
     "WAICResults",
@@ -1781,6 +1996,11 @@ __all__ = [
     "LiftTestResult",
     "LiftTestComparison",
     "CalibrationResults",
+    # Causal sensitivity / refutation
+    "ChannelRobustness",
+    "UnobservedConfoundingSensitivity",
+    "RefutationTest",
+    "CausalRefutationResults",
     # Summary
     "ValidationSummary",
 ]

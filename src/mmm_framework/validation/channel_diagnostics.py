@@ -13,7 +13,11 @@ import numpy as np
 import pandas as pd
 
 from .config import ChannelDiagnosticsConfig
-from .results import ChannelConvergenceResult, ChannelDiagnosticsResults
+from .results import (
+    ChannelConvergenceResult,
+    ChannelDiagnosticsResults,
+    CollinearCluster,
+)
 
 if TYPE_CHECKING:
     import arviz as az
@@ -228,11 +232,27 @@ class ChannelDiagnostics:
             vif_scores, correlation_matrix, channel_names
         )
 
+        # Weak-identification analysis (P2-2): collinear clusters, the design
+        # condition number, and grouped-prior recommendations.
+        clusters = self._detect_collinear_clusters(correlation_matrix, channel_names)
+        condition_number = self._condition_number(correlation_matrix)
+        recommendations = self._recommend_grouped_priors(clusters)
+        for cl in clusters:
+            identifiability_issues.append(
+                "Non-identifiable channel cluster "
+                f"{cl.channels} (|r| up to {cl.max_correlation:.2f}): their "
+                "individual ROIs cannot be separated from observational data; "
+                "read them as a group."
+            )
+
         return ChannelDiagnosticsResults(
             vif_scores=vif_scores,
             correlation_matrix=correlation_matrix,
             convergence_by_channel=convergence_by_channel,
             identifiability_issues=identifiability_issues,
+            collinear_clusters=clusters,
+            condition_number=condition_number,
+            grouped_prior_recommendations=recommendations,
         )
 
     def vif_analysis(self) -> pd.DataFrame:
@@ -319,6 +339,116 @@ class ChannelDiagnostics:
         """Compute correlation matrix for media channels."""
         corr = np.corrcoef(X_media, rowvar=False)
         return pd.DataFrame(corr, index=channel_names, columns=channel_names)
+
+    def _detect_collinear_clusters(
+        self,
+        correlation_matrix: pd.DataFrame,
+        channel_names: list[str],
+    ) -> list[CollinearCluster]:
+        """Group channels into clusters that cannot be separately identified.
+
+        Two channels are linked when their absolute correlation exceeds the
+        configured threshold; clusters are the connected components of that
+        graph. A cluster of size >= 2 is weakly identified: the data sees their
+        combined movement, not the per-channel split.
+        """
+        threshold = self.config.correlation_threshold
+        n = len(channel_names)
+        # Union-find over channels.
+        parent = list(range(n))
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a: int, b: int) -> None:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                if abs(float(correlation_matrix.iloc[i, j])) > threshold:
+                    union(i, j)
+
+        groups: dict[int, list[int]] = {}
+        for i in range(n):
+            groups.setdefault(find(i), []).append(i)
+
+        clusters: list[CollinearCluster] = []
+        for members in groups.values():
+            if len(members) < 2:
+                continue
+            chans = [channel_names[m] for m in members]
+            max_corr = max(
+                abs(float(correlation_matrix.iloc[a, b]))
+                for a in members
+                for b in members
+                if a < b
+            )
+            clusters.append(
+                CollinearCluster(
+                    channels=chans,
+                    max_correlation=max_corr,
+                    explanation=(
+                        f"Channels {chans} move together (|r| up to {max_corr:.2f}); "
+                        "their individual effects are weakly identified and should "
+                        "be interpreted as a group, anchored by an experiment, or "
+                        "fit with a grouped prior."
+                    ),
+                )
+            )
+        return clusters
+
+    @staticmethod
+    def _condition_number(correlation_matrix: pd.DataFrame) -> float | None:
+        """Condition number of the channel correlation matrix.
+
+        Captures higher-order (multi-channel) collinearity that pairwise
+        correlations miss; a large value (> ~30) signals an ill-conditioned
+        design where per-channel estimates are unstable.
+        """
+        try:
+            cond = float(np.linalg.cond(np.asarray(correlation_matrix.values)))
+            return cond if np.isfinite(cond) else None
+        except Exception:
+            return None
+
+    def _recommend_grouped_priors(self, clusters: list[CollinearCluster]) -> list[str]:
+        """Recommend grouped/hierarchical priors for collinear clusters.
+
+        Reporting only -- this does NOT change the model. Where clustered
+        channels already share a ``parent_channel`` (hierarchical media group),
+        the recommendation names it; otherwise it suggests grouping them.
+        """
+        if not clusters:
+            return []
+        media_groups: dict[str, list[str]] = (
+            getattr(self.model, "media_groups", {}) or {}
+        )
+        recs: list[str] = []
+        for cl in clusters:
+            shared_parent = None
+            for parent, children in media_groups.items():
+                if sum(1 for c in cl.channels if c in children) >= 2:
+                    shared_parent = parent
+                    break
+            if shared_parent:
+                recs.append(
+                    f"Channels {cl.channels} are collinear and already share the "
+                    f"'{shared_parent}' media group -- a hierarchical (partial-"
+                    "pooling) prior across that group would borrow strength and "
+                    "stabilize their split."
+                )
+            else:
+                recs.append(
+                    f"Channels {cl.channels} are collinear -- consider a grouped "
+                    "prior (shared group-level scale) or report their combined "
+                    "effect rather than overconfident per-channel ROIs."
+                )
+        return recs
 
     def _identify_issues(
         self,

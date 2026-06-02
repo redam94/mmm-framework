@@ -104,9 +104,6 @@ class CombinedMMM(BaseExtendedMMM):
             build_partial_observation_model,
             build_multivariate_likelihood,
         )
-        from ..components.transforms import (
-            logistic_saturation_pt as logistic_saturation,
-        )
 
         coords = self._build_coords()
 
@@ -119,19 +116,25 @@ class CombinedMMM(BaseExtendedMMM):
             )
             Y = pm.Data("Y", Y_matrix, dims=("obs", "outcome"))
 
-            # Media transformations
+            # Media transformations: normalize -> geometric adstock -> logistic
+            # saturation (the previously-unused ``alpha`` is now the carryover).
             media_transformed = []
+            channel_tx = {}  # channel -> (x_sat, apply, x_input) for experiments
             for i, channel in enumerate(self.channel_names):
                 x = X_media[:, i]
                 alpha = pm.Beta(f"alpha_{channel}", alpha=2, beta=2)
                 lam = pm.Gamma(f"lambda_{channel}", alpha=3, beta=1)
-                x_sat = logistic_saturation(x, lam)
+                apply = self._media_transform_apply(i, alpha, lam)
+                x_sat = apply(x)
                 media_transformed.append(x_sat)
+                channel_tx[channel] = (x_sat, apply, x)
 
             media_transformed = pt.stack(media_transformed, axis=1)
 
             # Mediator models
             mediator_values = {}
+            # Per-mediator media->mediator coefficient RVs (by reference).
+            channel_mediator_betas: dict[str, dict] = {}
             for med_config in self.config.nested.mediators:
                 med_name = med_config.name
                 affecting = self._get_affecting_channels(med_name)
@@ -140,6 +143,7 @@ class CombinedMMM(BaseExtendedMMM):
 
                 # Media effects on mediator
                 med_effect = pt.zeros(self.n_obs)
+                med_betas: dict = {}
                 for ch in affecting:
                     if ch in self.channel_names:
                         ch_idx = self.channel_names.index(ch)
@@ -150,6 +154,8 @@ class CombinedMMM(BaseExtendedMMM):
                             sigma=med_config.media_effect.sigma,
                         )
                         med_effect = med_effect + beta * media_transformed[:, ch_idx]
+                        med_betas[ch] = beta
+                channel_mediator_betas[med_name] = med_betas
 
                 mediator_latent = alpha_med + med_effect
 
@@ -203,6 +209,7 @@ class CombinedMMM(BaseExtendedMMM):
                 mu_list.append(mu_k)
 
             mu = pt.stack(mu_list, axis=1)
+            pm.Deterministic("mu", mu, dims=("obs", "outcome"))
 
             # Multivariate likelihood
             build_multivariate_likelihood(
@@ -214,22 +221,52 @@ class CombinedMMM(BaseExtendedMMM):
                 dims=("obs", "outcome"),
             )
 
-            # Derived quantities
+            # Derived quantities. ``indirect`` respects the mediator->outcome
+            # routing (``_get_affected_outcomes``) so it matches ``mu`` exactly.
             for i, channel in enumerate(self.channel_names):
                 for k, outcome_name in enumerate(self.outcome_names):
                     direct = beta_direct[k, i]
 
                     indirect = pt.zeros(())
                     for m, med_name in enumerate(self.mediator_names):
-                        beta_name = f"beta_{channel}_to_{med_name}"
-                        if beta_name in model.named_vars:
-                            indirect = indirect + model[beta_name] * gamma[k, m]
+                        if outcome_name not in self._get_affected_outcomes(med_name):
+                            continue
+                        beta = channel_mediator_betas.get(med_name, {}).get(channel)
+                        if beta is not None:
+                            indirect = indirect + beta * gamma[k, m]
 
                     pm.Deterministic(f"direct_{channel}_{outcome_name}", direct)
                     pm.Deterministic(f"indirect_{channel}_{outcome_name}", indirect)
                     pm.Deterministic(
                         f"total_{channel}_{outcome_name}", direct + indirect
                     )
+
+            # Experiment calibration: per (channel, outcome) the total effect is
+            # the direct media coefficient plus the routed mediated paths --
+            # coef = beta_direct[k,c] + sum_{m affecting k} beta_{c->m} * gamma[k,m]
+            # -- applied to the channel's saturated spend (raw outcome scale).
+            if self.experiments:
+                handles: dict = {}
+                for k, outcome_name in enumerate(self.outcome_names):
+                    for c, channel in enumerate(self.channel_names):
+                        coef = beta_direct[k, c]
+                        for m, med_name in enumerate(self.mediator_names):
+                            if outcome_name not in self._get_affected_outcomes(
+                                med_name
+                            ):
+                                continue
+                            beta = channel_mediator_betas.get(med_name, {}).get(channel)
+                            if beta is not None:
+                                coef = coef + beta * gamma[k, m]
+                        x_sat, apply, x_input = channel_tx[channel]
+                        handles[(channel, outcome_name)] = {
+                            "coef": coef,
+                            "x_sat": x_sat,
+                            "apply": apply,
+                            "x_input": x_input,
+                            "spend_obs": self.X_media[:, c],
+                        }
+                self._add_experiment_likelihoods(handles, scale=1.0)
 
         return model
 

@@ -58,8 +58,27 @@ def create_saturation_prior(
         lam_beta = kwargs.get("lam_beta", 1)
         return {"lam": pm.Gamma(f"{name}_lam", alpha=lam_alpha, beta=lam_beta)}
     elif saturation_type == "hill":
+        # Data-anchored half-saturation point (equifinality guardrail, opt-in):
+        # when explicit ``kappa_lower``/``kappa_upper`` bounds are supplied
+        # (e.g. from SaturationConfig.compute_kappa_bounds_from_data), bound
+        # kappa to the observed-spend range so the Hill "elbow" cannot drift
+        # outside the data's support. Otherwise keep the weakly-informative
+        # Beta(2, 2) so existing fits are unchanged.
+        kappa_lower = kwargs.get("kappa_lower")
+        kappa_upper = kwargs.get("kappa_upper")
+        if kappa_lower is not None and kappa_upper is not None:
+            if not (kappa_upper > kappa_lower):
+                raise ValueError(
+                    "kappa_upper must exceed kappa_lower for data-anchored kappa; "
+                    f"got lower={kappa_lower}, upper={kappa_upper}."
+                )
+            kappa = pm.Uniform(
+                f"{name}_kappa", lower=float(kappa_lower), upper=float(kappa_upper)
+            )
+        else:
+            kappa = pm.Beta(f"{name}_kappa", alpha=2, beta=2)
         return {
-            "kappa": pm.Beta(f"{name}_kappa", alpha=2, beta=2),
+            "kappa": kappa,
             "slope": pm.Gamma(f"{name}_slope", alpha=3, beta=1),
         }
     else:

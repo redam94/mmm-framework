@@ -168,13 +168,15 @@ class ExecutiveSummarySection(Section):
                 f'<div class="ci">{metric["ci"]}</div>' if metric.get("ci") else ""
             )
 
-            cards.append(f"""
+            cards.append(
+                f"""
                 <div class="metric-card {highlight_class}">
                     <div class="value">{metric["value"]}</div>
                     <div class="label">{metric["label"]}</div>
                     {ci_html}
                 </div>
-            """)
+            """
+            )
 
         return f"""
             <div class="metrics-grid">
@@ -416,14 +418,16 @@ class ChannelROISection(Section):
                 conf_class = "uncertain"
                 status = "Uncertain"
 
-            rows.append(f"""
+            rows.append(
+                f"""
                 <tr>
                     <td>{ch}</td>
                     <td class="mono">{mean:.2f}</td>
                     <td class="mono">[{lower:.2f}, {upper:.2f}]</td>
                     <td class="{conf_class}">{status}</td>
                 </tr>
-            """)
+            """
+            )
 
         return f"""
             <table class="data-table">
@@ -444,11 +448,13 @@ class ChannelROISection(Section):
         pills = []
         for ch in channels:
             color = self.config.channel_colors.get(ch)
-            pills.append(f"""
+            pills.append(
+                f"""
                 <div class="channel-pill">
                     <span class="dot" style="background: {color}"></span>{ch}
                 </div>
-            """)
+            """
+            )
 
         return f"""
             <div class="channel-legend">{''.join(pills)}</div>
@@ -485,23 +491,27 @@ class DecompositionSection(Section):
         content_parts = []
 
         # Introduction
-        content_parts.append("""
+        content_parts.append(
+            """
             <p>
                 Revenue decomposition breaks down the predicted outcome into component contributions: 
                 baseline, trend, seasonality, media channels, and control variables. Each component's 
                 contribution sums to the total predicted revenue.
             </p>
-        """)
+        """
+        )
 
         # Aggregation note for geo models
         if has_geo:
-            content_parts.append("""
+            content_parts.append(
+                """
             <div class="callout insight">
                 <p><strong>Multi-geography model:</strong> The default view shows contributions 
                 aggregated across all geographies. Use the dropdown selectors to examine 
                 contribution patterns for individual regions.</p>
             </div>
-            """)
+            """
+            )
 
         # =====================================================================
         # STACKED AREA CHART (Time Series View)
@@ -567,13 +577,15 @@ class DecompositionSection(Section):
                 if hasattr(self.config, "format_currency")
                 else f"{value:,.0f}"
             )
-            rows.append(f"""
+            rows.append(
+                f"""
                 <tr data-geo="agg">
                     <td>{comp}</td>
                     <td class="mono">{formatted_value}</td>
                     <td class="mono">{pct:.1%}</td>
                 </tr>
-            """)
+            """
+            )
 
         # Build geo-level rows (hidden by default)
         geo_rows = ""
@@ -671,12 +683,14 @@ class SaturationSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=280),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Saturation Curves</h3>
                 <p>The saturation curves show diminishing returns as spend increases. 
                 The orange diamond marks current spend levels.</p>
                 {sat_chart}
-            """)
+            """
+            )
 
         # Adstock curves
         if self.data.adstock_curves:
@@ -686,11 +700,13 @@ class SaturationSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=350),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Adstock Decay</h3>
                 <p>Carryover effects show how advertising impact persists over time.</p>
                 {adstock_chart}
-            """)
+            """
+            )
 
         if not content_parts:
             return ""
@@ -714,12 +730,14 @@ class SensitivitySection(Section):
         content_parts = []
 
         # Overview text
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <p>
                 Sensitivity analysis explores how results change under alternative model specifications.
                 Robust findings should be stable across reasonable specification choices.
             </p>
-        """)
+        """
+        )
 
         # Sensitivity chart
         if "scenarios" in self.data.sensitivity_results:
@@ -744,13 +762,15 @@ class SensitivitySection(Section):
                 cells = "".join(f'<td class="mono">{cell}</td>' for cell in row[1:])
                 rows.append(f"<tr><td>{row[0]}</td>{cells}</tr>")
 
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Specification Comparison</h3>
                 <table class="data-table">
                     <thead><tr>{''.join(f'<th>{h}</th>' for h in table_data[0])}</tr></thead>
                     <tbody>{''.join(rows[1:])}</tbody>
                 </table>
-            """)
+            """
+            )
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -770,7 +790,8 @@ class MethodologySection(Section):
         # Model specification
         if self.data.model_specification:
             spec = self.data.model_specification
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <div class="methodology-note">
                     <h4>Model Specification</h4>
                     <p>This analysis uses a Bayesian Marketing Mix Model with the following components:</p>
@@ -787,12 +808,14 @@ class MethodologySection(Section):
                         {spec.get("tune", 1000)} warmup).
                     </p>
                 </div>
-            """)
+            """
+            )
 
         # Honest uncertainty principles
         if self.config.methodology_note:
             ci_level = int(self.section_config.credible_interval * 100)
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <div class="methodology-note">
                     <h4>Honest Uncertainty Principles</h4>
                     <p>This report follows principles of honest uncertainty quantification:</p>
@@ -804,9 +827,129 @@ class MethodologySection(Section):
                         <li>Experimental validation proposed for high-stakes, uncertain estimates</li>
                     </ul>
                 </div>
-            """)
+            """
+            )
 
         return self._render_section_wrapper("\n".join(content_parts))
+
+
+class CausalAssumptionsSection(Section):
+    """Causal assumptions, identification strategy and sensitivity to unobserved
+    confounding.
+
+    Always renders the no-unobserved-confounding / SUTVA caveat (the honest
+    framing a causal-branded tool owes its readers). When the data bundle carries
+    ``causal_assumptions`` (identification strategy, assumed confounders, and the
+    robustness-value table from
+    ``mmm_framework.validation``), those details are rendered too.
+    """
+
+    section_id: str = "causal-assumptions"
+    default_title: str = "Causal Assumptions"
+
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+
+        parts: list[str] = []
+
+        # Always-on caveat banner.
+        parts.append(
+            """
+            <div class="methodology-note" style="border-left: 4px solid #d4a86a;">
+                <h4>⚠️ Identification rests on assumptions, not just fit</h4>
+                <p>
+                    The channel effects below are causal <em>only if</em> every common
+                    cause of media spend and the KPI is measured and adjusted for
+                    (<strong>no unobserved confounding</strong>), and one unit's spend
+                    does not affect another's outcome (<strong>SUTVA</strong>). In
+                    marketing the dominant hidden confounder is
+                    <strong>unobserved demand</strong> &mdash; budgets rise when demand
+                    is expected to rise &mdash; which no adjustment set can remove.
+                    Good fit, tight
+                    intervals and passing posterior-predictive checks are all
+                    compatible with confounding bias. Effects should be anchored with
+                    randomized geo-lift / incrementality experiments where the stakes
+                    are high.
+                </p>
+            </div>
+            """
+        )
+
+        ca = self.data.causal_assumptions or {}
+
+        strategy = ca.get("identification_strategy")
+        if strategy:
+            parts.append(
+                f"""
+                <div class="methodology-note">
+                    <h4>Identification Strategy</h4>
+                    <p>{strategy}</p>
+                </div>
+                """
+            )
+
+        confounders = ca.get("assumed_confounders")
+        if confounders:
+            items = "".join(f"<li>{c}</li>" for c in confounders)
+            parts.append(
+                f"""
+                <div class="methodology-note">
+                    <h4>Assumed Confounders (adjusted for)</h4>
+                    <ul style="margin: 0.5rem 0 0 1.5rem;">{items}</ul>
+                </div>
+                """
+            )
+
+        robustness = ca.get("robustness")
+        if robustness and robustness.get("channels"):
+            parts.append(self._render_robustness_table(robustness))
+
+        return self._render_section_wrapper("\n".join(parts))
+
+    def _render_robustness_table(self, robustness: dict) -> str:
+        rows = []
+        for ch in robustness["channels"]:
+            rv = ch.get("robustness_value")
+            pr2 = ch.get("partial_r2")
+            fragile = ch.get("is_fragile")
+            rv_s = f"{rv:.3f}" if isinstance(rv, (int, float)) else "-"
+            pr2_s = f"{pr2:.3f}" if isinstance(pr2, (int, float)) else "-"
+            cls = "negative" if fragile else "positive"
+            status = "Fragile" if fragile else "Robust"
+            rows.append(
+                f"""
+                <tr>
+                    <td>{ch.get("channel", "?")}</td>
+                    <td class="mono">{rv_s}</td>
+                    <td class="mono">{pr2_s}</td>
+                    <td class="{cls}">{status}</td>
+                </tr>
+                """
+            )
+        caveat = robustness.get("caveat", "")
+        return f"""
+            <h3>Robustness to Unobserved Confounding</h3>
+            <p>
+                The <strong>robustness value</strong> is the share of residual variance
+                an unobserved confounder would need to explain in <em>both</em> a
+                channel's spend and the KPI to nullify its estimated effect. Larger is
+                more robust; channels flagged "Fragile" could be overturned by a weak
+                confounder.
+            </p>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Robustness Value</th>
+                        <th>Partial R²</th>
+                        <th>Assessment</th>
+                    </tr>
+                </thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+            <p class="section-subtitle" style="margin-top: 0.75rem;">{caveat}</p>
+        """
 
 
 class DiagnosticsSection(Section):
@@ -836,7 +979,8 @@ class DiagnosticsSection(Section):
             rhat_status = "✅ Pass" if rhat_max < 1.01 else f"⚠️ {rhat_max:.3f}"
             ess_status = "✅ Pass" if ess_min > 400 else f"⚠️ {ess_min:.0f}"
 
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Convergence Diagnostics</h3>
                 <table class="data-table" style="max-width: 500px;">
                     <thead><tr><th>Diagnostic</th><th>Value</th><th>Status</th></tr></thead>
@@ -846,7 +990,8 @@ class DiagnosticsSection(Section):
                         <tr><td>ESS bulk (min)</td><td class="mono">{ess_min:.0f}</td><td>{ess_status}</td></tr>
                     </tbody>
                 </table>
-            """)
+            """
+            )
 
         # Trace plots
         if self.data.trace_data and self.data.trace_parameters:
@@ -856,11 +1001,13 @@ class DiagnosticsSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=180),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Trace Plots</h3>
                 <p>Visual inspection of MCMC chains for key parameters.</p>
                 {trace_chart}
-            """)
+            """
+            )
 
         # Prior/posterior comparison
         if self.data.prior_samples and self.data.posterior_samples:
@@ -873,11 +1020,13 @@ class DiagnosticsSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=int(250 * min(len_params / 6, 1))),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Prior vs Posterior</h3>
                 <p>Comparison shows how data updated prior beliefs.</p>
                 {prior_post_chart}
-            """)
+            """
+            )
 
         if not content_parts:
             return ""
@@ -903,10 +1052,12 @@ class GeographicSection(Section):
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Geographic performance summary table
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <h3>Performance by Geography</h3>
             <p>Regional breakdown with {ci_level}% credible intervals.</p>
-        """)
+        """
+        )
 
         # Build performance table
         table_rows = []
@@ -921,7 +1072,8 @@ class GeographicSection(Section):
             roi_ci = f"[{roi.get('lower', 0):.2f}, {roi.get('upper', 0):.2f}]"
             contrib_str = self._format_percentage(contribution.get("mean", 0))
 
-            table_rows.append(f"""
+            table_rows.append(
+                f"""
                 <tr>
                     <td><strong>{geo}</strong></td>
                     <td class="mono">{rev_str}</td>
@@ -929,9 +1081,11 @@ class GeographicSection(Section):
                     <td class="mono muted">{roi_ci}</td>
                     <td class="mono">{contrib_str}</td>
                 </tr>
-            """)
+            """
+            )
 
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <table class="data-table">
                 <thead>
                     <tr>
@@ -946,7 +1100,8 @@ class GeographicSection(Section):
                     {''.join(table_rows)}
                 </tbody>
             </table>
-        """)
+        """
+        )
 
         # Geographic ROI heatmap/chart
         if self.data.geo_roi:
@@ -959,11 +1114,13 @@ class GeographicSection(Section):
                     height=max(300, len(self.data.geo_names) * 40)
                 ),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Channel ROI by Geography</h3>
                 <p>Heatmap showing channel performance across regions. Darker colors indicate higher ROI.</p>
                 {geo_chart}
-            """)
+            """
+            )
 
         # Geographic contribution breakdown
         if self.data.geo_contribution:
@@ -973,10 +1130,12 @@ class GeographicSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=400),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Contribution Decomposition by Geography</h3>
                 {geo_decomp}
-            """)
+            """
+            )
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -999,12 +1158,14 @@ class MediatorSection(Section):
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Introduction
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <h3>Indirect Effects Through Mediators</h3>
             <p>Marketing affects sales both directly and indirectly through intermediate outcomes 
             (e.g., awareness, consideration). This analysis decomposes total effects into direct 
             and mediated pathways with {ci_level}% credible intervals.</p>
-        """)
+        """
+        )
 
         # Pathway diagram (visual representation)
         pathway_chart = charts.create_mediator_pathway_chart(
@@ -1017,9 +1178,11 @@ class MediatorSection(Section):
         content_parts.append(pathway_chart)
 
         # Effects table by channel
-        content_parts.append("""
+        content_parts.append(
+            """
             <h3>Effect Decomposition by Channel</h3>
-        """)
+        """
+        )
 
         table_rows = []
         for channel in self.data.channel_names or []:
@@ -1055,7 +1218,8 @@ class MediatorSection(Section):
 
             pct_mediated = (indirect_mean / total_mean * 100) if total_mean != 0 else 0
 
-            table_rows.append(f"""
+            table_rows.append(
+                f"""
                 <tr>
                     <td><strong>{channel}</strong></td>
                     <td class="mono">{total_str}</td>
@@ -1064,9 +1228,11 @@ class MediatorSection(Section):
                     <td class="mono">{indirect_str}</td>
                     <td class="mono">{pct_mediated:.1f}%</td>
                 </tr>
-            """)
+            """
+            )
 
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <table class="data-table">
                 <thead>
                     <tr>
@@ -1082,7 +1248,8 @@ class MediatorSection(Section):
                     {''.join(table_rows)}
                 </tbody>
             </table>
-        """)
+        """
+        )
 
         # Mediator time series
         if self.data.mediator_time_series and self.data.dates is not None:
@@ -1093,16 +1260,19 @@ class MediatorSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=350),
             )
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <h3>Mediator Values Over Time</h3>
                 <p>Tracking awareness, consideration, and other intermediate outcomes.</p>
                 {mediator_ts_chart}
-            """)
+            """
+            )
 
         # Interpretation callout
         if self.data.total_indirect_effect:
             indirect = self.data.total_indirect_effect
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <div class="callout">
                     <strong>Key Insight:</strong> Approximately 
                     <strong>{self._format_percentage(indirect.get('mean', 0))}</strong> 
@@ -1111,7 +1281,8 @@ class MediatorSection(Section):
                     effect operates through measured mediators. Direct response accounts for 
                     the remainder.
                 </div>
-            """)
+            """
+            )
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -1134,13 +1305,15 @@ class CannibalizationSection(Section):
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Introduction
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <h3>Cross-Product Effects</h3>
             <p>Marketing for one product may cannibalize sales of another (substitution) or 
             boost them (halo effects). This matrix shows cross-product effects with {ci_level}% 
             credible intervals. Negative values indicate cannibalization; positive values 
             indicate synergy.</p>
-        """)
+        """
+        )
 
         # Cannibalization heatmap
         cannib_chart = charts.create_cannibalization_heatmap(
@@ -1155,10 +1328,12 @@ class CannibalizationSection(Section):
 
         # Net effects table
         if self.data.net_product_effects:
-            content_parts.append("""
+            content_parts.append(
+                """
                 <h3>Net Product Effects</h3>
                 <p>Direct marketing effect minus cannibalization from other products' marketing.</p>
-            """)
+            """
+            )
 
             table_rows = []
             for product in self.data.product_names:
@@ -1172,7 +1347,8 @@ class CannibalizationSection(Section):
                     "danger" if cannib < -0.05 else ("success" if cannib > 0.05 else "")
                 )
 
-                table_rows.append(f"""
+                table_rows.append(
+                    f"""
                     <tr>
                         <td><strong>{product}</strong></td>
                         <td class="mono">{self._format_currency(direct)}</td>
@@ -1180,9 +1356,11 @@ class CannibalizationSection(Section):
                         <td class="mono"><strong>{self._format_currency(net)}</strong></td>
                         <td class="mono">{(cannib/direct*100) if direct else 0:.1f}%</td>
                     </tr>
-                """)
+                """
+                )
 
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -1197,13 +1375,16 @@ class CannibalizationSection(Section):
                         {''.join(table_rows)}
                     </tbody>
                 </table>
-            """)
+            """
+            )
 
         # Detailed cross-effects table
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <h3>Detailed Cross-Product Matrix</h3>
             <p>Effect of row product's marketing on column product's sales.</p>
-        """)
+        """
+        )
 
         # Build matrix table
         header_cells = "<th>Source \\ Target</th>" + "".join(
@@ -1240,7 +1421,8 @@ class CannibalizationSection(Section):
                     )
             matrix_rows.append(f'<tr>{"".join(row_cells)}</tr>')
 
-        content_parts.append(f"""
+        content_parts.append(
+            f"""
             <table class="data-table matrix-table">
                 <thead><tr>{header_cells}</tr></thead>
                 <tbody>{''.join(matrix_rows)}</tbody>
@@ -1251,7 +1433,8 @@ class CannibalizationSection(Section):
                 <span class="muted">Gray</span> = not significant (CI includes zero).
                 Hover for credible intervals.
             </p>
-        """)
+        """
+        )
 
         # Key insights
         significant_cannib = []
@@ -1288,11 +1471,13 @@ class CannibalizationSection(Section):
                     f"<strong>Strongest synergies:</strong> {', '.join(synergy_items)}"
                 )
 
-            content_parts.append(f"""
+            content_parts.append(
+                f"""
                 <div class="callout">
                     {'<br>'.join(insights)}
                 </div>
-            """)
+            """
+            )
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -1305,6 +1490,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "decomposition": DecompositionSection,
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
+    "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,
     "geographic": GeographicSection,

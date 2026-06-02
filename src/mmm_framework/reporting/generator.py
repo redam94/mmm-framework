@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
     GeographicSection,
@@ -122,6 +123,11 @@ class MMMReportGenerator:
             ("cannibalization", CannibalizationSection, self.config.cannibalization),
             ("saturation", SaturationSection, self.config.saturation),
             ("sensitivity", SensitivitySection, self.config.sensitivity),
+            (
+                "causal_assumptions",
+                CausalAssumptionsSection,
+                self.config.causal_assumptions,
+            ),
             ("methodology", MethodologySection, self.config.methodology),
             ("diagnostics", DiagnosticsSection, self.config.diagnostics),
         ]
@@ -212,7 +218,7 @@ class MMMReportGenerator:
 
         # Post-process: replace raw underscore channel names when in client mode
         if self.config.format_channel_names and self.data:
-            for ch in (self.data.channel_names or []):
+            for ch in self.data.channel_names or []:
                 if "_" in ch:
                     sections_html = sections_html.replace(
                         html.escape(ch), html.escape(self._fmt_channel(ch))
@@ -248,7 +254,9 @@ class MMMReportGenerator:
         # Build footer
         conf_line = ""
         if self.config.confidential:
-            client_label = f" — {html.escape(self.config.client)}" if self.config.client else ""
+            client_label = (
+                f" — {html.escape(self.config.client)}" if self.config.client else ""
+            )
             conf_line = f'<p class="confidential-notice">⚠ CONFIDENTIAL{client_label} — Not for distribution</p>'
         footer = f"""
         <footer class="report-footer">
@@ -262,7 +270,8 @@ class MMMReportGenerator:
         if self.config.show_nav:
             nav_items = "".join(
                 f'<a href="#{s.section_id}" class="nav-item">{html.escape(s.title)}</a>'
-                for s in self._sections if s.is_enabled
+                for s in self._sections
+                if s.is_enabled
             )
             nav_html = f'<nav class="report-nav" id="reportNav">{nav_items}</nav>'
 

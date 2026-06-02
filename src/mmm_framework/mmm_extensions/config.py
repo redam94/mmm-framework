@@ -31,12 +31,23 @@ class MediatorType(str, Enum):
 
 
 class CrossEffectType(str, Enum):
-    """Type of cross-product effect."""
+    """Type of cross-product effect.
+
+    ``CANNIBALIZATION`` (``psi = -HalfNormal``) and ``HALO`` (``psi = +HalfNormal``)
+    impose the *sign* a priori. ``UNCONSTRAINED`` (``psi ~ Normal(0, sigma)``) lets the
+    data choose the sign -- preferable when you do not want to assume the direction, and
+    the honest default given that a one-sided prior makes "the posterior is below zero"
+    near-automatic. Note that on *observed* sibling outcomes the directional cross-effect
+    ``psi`` is confounded with the residual correlation (only their sum is identified), so
+    an unconstrained ``psi`` measures a *cross-outcome association*, not causal
+    cannibalization -- see :func:`mmm_framework.mmm_extensions.builders.cross_effect`.
+    """
 
     CANNIBALIZATION = "cannibalization"
     HALO = "halo"
     SYMMETRIC = "symmetric"
     ASYMMETRIC = "asymmetric"
+    UNCONSTRAINED = "unconstrained"
 
 
 class EffectConstraint(str, Enum):

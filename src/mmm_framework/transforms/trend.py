@@ -154,20 +154,28 @@ def create_piecewise_trend_matrix(
 
     Notes
     -----
-    The full piecewise linear model is:
-        trend(t) = k + m*t + A @ delta
+    This matrix drives the Facebook Prophet piecewise-*linear* trend, in which each
+    ``delta[j]`` is a change in the growth *rate* (slope) that takes effect at
+    changepoint ``s[j]``. The full trend is
+
+        trend(t) = (k + A[t] @ delta) * t + (m + A[t] @ gamma),
+        with gamma[j] = -s[j] * delta[j],
 
     where:
-    - k is the base intercept
-    - m is the base growth rate
-    - delta are the changepoint adjustments (often with sparse priors)
+    - ``k`` is the base growth rate (slope before any changepoint),
+    - ``m`` is the offset (level at t = 0),
+    - ``delta`` are the per-changepoint *slope* adjustments (often with sparse priors),
+    - ``gamma`` is the offset correction that keeps the trend *continuous* at each
+      changepoint (without it, changing the slope would introduce a jump).
 
-    This is the approach used by Facebook Prophet for trend modeling.
+    The design matrix A implements the indicator
 
-    The design matrix A implements the formula:
-        A[t, j] = 1 if t >= s[j] else 0
+        A[t, j] = 1 if t >= s[j] else 0,
 
-    so the change at changepoint j affects all subsequent time points.
+    so ``A[t] @ delta`` accumulates the slope changes of every changepoint at or before
+    ``t``. Note the cumulative slope multiplies ``t`` -- using ``A @ delta`` as a bare
+    additive term instead (omitting the ``* t``) yields piecewise-*constant* level shifts,
+    not the intended slope changes.
 
     See Also
     --------

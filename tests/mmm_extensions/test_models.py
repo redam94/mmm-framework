@@ -61,6 +61,7 @@ from mmm_framework.mmm_extensions.builders import (
     foot_traffic_mediator,
     cannibalization_effect,
     halo_effect,
+    cross_effect,
 )
 
 # =============================================================================
@@ -833,6 +834,22 @@ class TestFactoryFunctions:
         assert config.target_outcome == "budget"
         assert config.effect_type == CrossEffectType.HALO
         # Halo implies positive effect (enforced in model, not config)
+
+    def test_cross_effect_unconstrained_factory(self):
+        """The signless cross_effect factory sets an UNCONSTRAINED, always-active effect."""
+        config = cross_effect(source="cold_brew", target="original", prior_sigma=0.5)
+        assert config.source_outcome == "cold_brew"
+        assert config.target_outcome == "original"
+        assert config.effect_type == CrossEffectType.UNCONSTRAINED
+        assert config.prior_sigma == 0.5
+        assert config.promotion_modulated is False  # always_active by default
+
+    def test_cross_effect_builder_unconstrained(self):
+        """Builder .unconstrained() selects the no-predefined-sign type."""
+        config = (
+            CrossEffectConfigBuilder("a", "b").unconstrained().always_active().build()
+        )
+        assert config.effect_type == CrossEffectType.UNCONSTRAINED
 
 
 # =============================================================================

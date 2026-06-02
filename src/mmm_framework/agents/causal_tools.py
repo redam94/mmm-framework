@@ -8,6 +8,7 @@ in `api/sessions.py`. We get it through LangChain's `RunnableConfig`
 injection — every LangGraph tool invocation receives the run config, which
 includes `configurable.thread_id`.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,10 @@ from mmm_framework.dag_model_builder.dag_spec import (
 )
 from mmm_framework.dag_model_builder.frontend_adapter import dag_spec_to_react_flow
 from mmm_framework.dag_model_builder.identification import (
+    classify_dag_roles,
+    frontdoor_criterion,
     identification_report,
+    iv_criterion,
     propose_adjustment_set,
     report_to_dict,
 )
@@ -46,6 +50,7 @@ def _thread_id_from(config: RunnableConfig | None) -> str | None:
 
 
 # ── 1. Define the research question (Step 1 of workflow) ─────────────────────
+
 
 @tool
 def define_research_question(
@@ -74,10 +79,16 @@ def define_research_question(
     """
     tid = _thread_id_from(config)
     if not tid:
-        return Command(update={"messages": [ToolMessage(
-            content="No active thread id; cannot store research question.",
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No active thread id; cannot store research question.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     payload = {
         "question": question,
@@ -106,21 +117,23 @@ def define_research_question(
         f"- **Scope:** {scope_notes or '_not specified_'}\n\n"
         f"This is now Assumption #1 (`research_question`). Edits will be versioned."
     )
-    return Command(update={
-        "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
-        "dashboard_data": dashboard,
-    })
+    return Command(
+        update={
+            "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard,
+        }
+    )
 
 
 # ── 2. Propose a causal DAG (Step 2 of workflow) ─────────────────────────────
+
 
 def _normalize_node_ids(names: list[str]) -> list[tuple[str, str]]:
     """Return [(node_id, variable_name), ...] with deterministic id slugs."""
     out = []
     seen = set()
     for n in names:
-        slug = (n.lower().replace(" ", "_")
-                .replace("-", "_").replace("/", "_"))
+        slug = n.lower().replace(" ", "_").replace("-", "_").replace("/", "_")
         base = slug or "node"
         candidate = base
         i = 2
@@ -142,6 +155,7 @@ def propose_dag(
     direct_media: list[str] = None,
     confounders: list[dict[str, Any]] = None,
     cross_effects: list[dict[str, str]] = None,
+    instruments: list[dict[str, str]] = None,
     narrative: str = "",
     config: InjectedConfig = None,
     state: Annotated[dict, InjectedState] = None,
@@ -182,13 +196,16 @@ def propose_dag(
     mediator_inputs = mediator_inputs or {}
     confounders = confounders or []
     cross_effects = cross_effects or []
+    instruments = instruments or []
 
     nodes: list[DAGNode] = []
     edges: list[DAGEdge] = []
 
     # KPI
     kpi_pair = _normalize_node_ids([kpi])[0]
-    nodes.append(DAGNode(id=kpi_pair[0], variable_name=kpi_pair[1], node_type=NodeType.KPI))
+    nodes.append(
+        DAGNode(id=kpi_pair[0], variable_name=kpi_pair[1], node_type=NodeType.KPI)
+    )
 
     # Media (build name → id lookup as we go)
     media_pairs = _normalize_node_ids(media_channels)
@@ -207,12 +224,18 @@ def propose_dag(
     mediator_name_to_id = {name: nid for nid, name in mediator_pairs}
     media_routed_through_mediator: set[str] = set()
     for med_id, med_name in mediator_pairs:
-        nodes.append(DAGNode(id=med_id, variable_name=med_name, node_type=NodeType.MEDIATOR))
-        edges.append(DAGEdge(source=med_id, target=kpi_pair[0], edge_type=EdgeType.MEDIATED))
+        nodes.append(
+            DAGNode(id=med_id, variable_name=med_name, node_type=NodeType.MEDIATOR)
+        )
+        edges.append(
+            DAGEdge(source=med_id, target=kpi_pair[0], edge_type=EdgeType.MEDIATED)
+        )
         for upstream_media_name in mediator_inputs.get(med_name, []):
             src_id = media_name_to_id.get(upstream_media_name)
             if src_id:
-                edges.append(DAGEdge(source=src_id, target=med_id, edge_type=EdgeType.MEDIATED))
+                edges.append(
+                    DAGEdge(source=src_id, target=med_id, edge_type=EdgeType.MEDIATED)
+                )
                 media_routed_through_mediator.add(src_id)
 
     # Direct media → KPI edges. Default: any media not already routed through a mediator.
@@ -234,23 +257,56 @@ def propose_dag(
         cid_pair = _normalize_node_ids([cname])[0]
         if cid_pair[0] in {n.id for n in nodes}:
             continue
-        nodes.append(DAGNode(id=cid_pair[0], variable_name=cid_pair[1], node_type=NodeType.CONTROL))
+        nodes.append(
+            DAGNode(
+                id=cid_pair[0], variable_name=cid_pair[1], node_type=NodeType.CONTROL
+            )
+        )
         name_to_id[cid_pair[1]] = cid_pair[0]
         for target_name in affects:
             tid_node = name_to_id.get(target_name)
             if tid_node is None:
                 # The user named a target that isn't a node yet; add it as a control
                 tid_node = _normalize_node_ids([target_name])[0][0]
-                nodes.append(DAGNode(id=tid_node, variable_name=target_name, node_type=NodeType.CONTROL))
+                nodes.append(
+                    DAGNode(
+                        id=tid_node,
+                        variable_name=target_name,
+                        node_type=NodeType.CONTROL,
+                    )
+                )
                 name_to_id[target_name] = tid_node
             edges.append(DAGEdge(source=cid_pair[0], target=tid_node))
+
+    # Instruments — each becomes an INSTRUMENT node with a DIRECT edge into its
+    # treatment (exogenous variation that reaches the KPI only through the
+    # treatment). Enables the IV identification check.
+    for inst in instruments:
+        iname = inst.get("name", "Instrument")
+        treatment_name = inst.get("treatment")
+        iid_pair = _normalize_node_ids([iname])[0]
+        if iid_pair[0] in {n.id for n in nodes}:
+            continue
+        nodes.append(
+            DAGNode(
+                id=iid_pair[0],
+                variable_name=iid_pair[1],
+                node_type=NodeType.INSTRUMENT,
+            )
+        )
+        name_to_id[iid_pair[1]] = iid_pair[0]
+        treat_id = name_to_id.get(treatment_name)
+        if treat_id is not None:
+            edges.append(DAGEdge(source=iid_pair[0], target=treat_id))
 
     # Cross effects between outcomes
     for ce in cross_effects:
         src = name_to_id.get(ce.get("source", ""))
         tgt = name_to_id.get(ce.get("target", ""))
         if src and tgt:
-            edges.append(DAGEdge(source=src, target=tgt, edge_type=EdgeType.CROSS_EFFECT))
+            edges.append(
+                DAGEdge(source=src, target=tgt, edge_type=EdgeType.CROSS_EFFECT)
+            )
 
     spec = DAGSpec(nodes=nodes, edges=edges)
     validation = validate_dag(spec)
@@ -298,15 +354,22 @@ def propose_dag(
         for w in validation.warnings:
             lines.append(f"  - {w}")
     lines.append("")
-    lines.append("Use `validate_causal_identification` next to check whether the causal effect is identified.")
+    lines.append(
+        "Use `validate_causal_identification` next to check whether the causal effect is identified."
+    )
 
-    return Command(update={
-        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
-        "dashboard_data": dashboard,
-    })
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard,
+        }
+    )
 
 
 # ── 3. Validate causal identification (backdoor) ─────────────────────────────
+
 
 @tool
 def validate_causal_identification(
@@ -323,7 +386,9 @@ def validate_causal_identification(
     backdoor criterion. If `adjustment_set` is not supplied, a heuristic set
     is proposed and reported.
 
-    NOTE: Backdoor-only. Frontdoor/IV identification is not checked here.
+    NOTE: Checks back-door adjustment, and additionally reports front-door
+    identification when the DAG has mediators and IV identification when it has
+    declared instruments. Full-ID (Tian-Pearl) is not checked.
 
     Args:
         treatment: variable_name OR node_id of the treatment.
@@ -333,10 +398,16 @@ def validate_causal_identification(
     dashboard = state.get("dashboard_data", {}) if state else {}
     dag_payload = dashboard.get("dag")
     if not dag_payload:
-        return Command(update={"messages": [ToolMessage(
-            content="No DAG found in state. Call `propose_dag` first.",
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No DAG found in state. Call `propose_dag` first.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     spec = DAGSpec.model_validate(dag_payload["spec"])
 
@@ -347,14 +418,20 @@ def validate_causal_identification(
     t_id = _resolve(treatment)
     y_id = _resolve(outcome)
     if not t_id or not y_id:
-        return Command(update={"messages": [ToolMessage(
-            content=(
-                f"Could not resolve treatment='{treatment}' or outcome='{outcome}' "
-                f"to a node in the DAG. Known variables: "
-                f"{', '.join(spec.variable_names)}"
-            ),
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"Could not resolve treatment='{treatment}' or outcome='{outcome}' "
+                            f"to a node in the DAG. Known variables: "
+                            f"{', '.join(spec.variable_names)}"
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     z_ids: list[str] | None = None
     if adjustment_set is not None:
@@ -400,10 +477,109 @@ def validate_causal_identification(
     for note in rep.notes:
         lines.append(f"\n_{note}_")
 
-    return Command(update={
-        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
-        "dashboard_data": dashboard,
-    })
+    # Automatic control-role guidance. Non-experts do not need to know causal
+    # inference to avoid bad controls: classify every control against ALL media
+    # treatments and tell the user, in plain language, what each one is and what
+    # to do. Confounders are kept (un-shrunk); mediators/colliders are flagged
+    # for removal (the model refuses to fit with them as controls).
+    control_nodes = spec.control_nodes
+    if control_nodes:
+        media_ids = [n.id for n in spec.media_nodes]
+        control_ids = [n.id for n in control_nodes]
+        roles = classify_dag_roles(spec, media_ids, y_id, control_ids)
+        marker = {
+            "confounder": "✅ keep",
+            "precision_control": "• keep",
+            "mediator": "⛔ REMOVE",
+            "collider": "⛔ REMOVE",
+        }
+        lines.append("")
+        lines.append("**Control variable roles (auto-detected):**")
+        for node in control_nodes:
+            role, reason = roles.role_for(node.id)
+            label = role.replace("_", " ")
+            lines.append(
+                f"  - `{node.variable_name}` — **{label}** "
+                f"[{marker.get(role, '?')}]: {reason}"
+            )
+        if any(
+            roles.role_for(n.id)[0] in ("mediator", "collider") for n in control_nodes
+        ):
+            lines.append(
+                "\n_Variables marked ⛔ REMOVE are 'bad controls': conditioning on "
+                "them biases the effect estimate. The model will refuse to fit "
+                "while they are listed as controls — drop them from the control "
+                "set. If one is genuinely a common cause of media and the KPI, "
+                "re-draw it as a confounder instead._"
+            )
+
+    # Front-door identification (when mediators are present): an alternative to
+    # back-door adjustment that can identify the effect *through* the mediation
+    # pathway even when treatment and outcome are confounded.
+    if spec.has_mediators:
+        med_ids = [m.id for m in spec.mediator_nodes]
+        med_names = {m.id: m.variable_name for m in spec.mediator_nodes}
+        fd = frontdoor_criterion(spec, t_id, med_ids, y_id)
+        verdict = "✅ Yes" if fd.identifiable else "❌ No"
+        lines.append("")
+        lines.append(
+            f"**Front-door check** (through {', '.join(f'`{med_names[m]}`' for m in med_ids)}): "
+            f"**{verdict}**"
+        )
+        if fd.identifiable:
+            lines.append(
+                "  - The effect is identified via the mediation pathway by the "
+                "front-door formula, even without measuring the treatment-outcome "
+                "confounders."
+            )
+        else:
+            for note in fd.notes:
+                lines.append(f"  - {note}")
+
+    # IV identification (when instruments are declared): identifies the effect
+    # using exogenous variation that reaches the KPI only through a treatment --
+    # one of the few routes that survives unobserved demand confounding.
+    if spec.has_instruments:
+        lines.append("")
+        lines.append("**Instrumental-variable check:**")
+        for z in spec.instrument_nodes:
+            iv = iv_criterion(spec, z.id, t_id, y_id)
+            verdict = "✅ valid" if iv.identifiable else "❌ invalid"
+            lines.append(
+                f"  - `{z.variable_name}` → `{treatment}`: **{verdict}** "
+                f"(relevant={iv.is_relevant}, exogenous={iv.is_exogenous}, "
+                f"exclusion={iv.satisfies_exclusion})"
+            )
+            if iv.identifiable and iv.weak_instrument_warning:
+                lines.append(f"    - ⚠️ {iv.weak_instrument_warning}")
+            elif not iv.identifiable:
+                for note in iv.notes:
+                    lines.append(f"    - {note}")
+
+    # Honest framing: identifiability here is *conditional on the DAG being
+    # complete*. The dominant MMM confounder -- unobserved demand (spend rises
+    # when demand is expected to rise) -- is by definition NOT in the graph, and
+    # no adjustment set can remove an unobserved confounder.
+    lines.append("")
+    lines.append(
+        "⚠️ **Identification rests on a NO-UNOBSERVED-CONFOUNDING assumption.** "
+        "Even when identifiable *under this DAG*, the estimate is only causal if "
+        "every common cause of spend and the KPI is measured and included. In MMM "
+        "the key confounder is usually **unobserved demand**, which no adjustment "
+        "set can fix. Anchor effects with a geo-lift / incrementality experiment "
+        "(`mmm_framework.calibration`) and quantify exposure with the "
+        "unobserved-confounding robustness value "
+        "(`ValidationConfigBuilder().with_unobserved_confounding()`)."
+    )
+
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard,
+        }
+    )
 
 
 # ── 4. Assumptions log ───────────────────────────────────────────────────────
@@ -437,21 +613,37 @@ def record_assumption(
     """
     tid = _thread_id_from(config)
     if not tid:
-        return Command(update={"messages": [ToolMessage(
-            content="No active thread; cannot record assumption.",
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No active thread; cannot record assumption.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     rec = sessions_store.record_assumption(
-        thread_id=tid, key=key, value=value, rationale=rationale,
-        category=category, change_note=change_note or None,
+        thread_id=tid,
+        key=key,
+        value=value,
+        rationale=rationale,
+        category=category,
+        change_note=change_note or None,
     )
-    return Command(update={"messages": [ToolMessage(
-        content=(
-            f"📌 Recorded assumption `{key}` v{rec['version']} "
-            f"(category: {rec['category']})."
-        ),
-        tool_call_id=tool_call_id,
-    )]})
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=(
+                        f"📌 Recorded assumption `{key}` v{rec['version']} "
+                        f"(category: {rec['category']})."
+                    ),
+                    tool_call_id=tool_call_id,
+                )
+            ]
+        }
+    )
 
 
 @tool
@@ -468,14 +660,28 @@ def list_assumptions(
     """
     tid = _thread_id_from(config)
     if not tid:
-        return Command(update={"messages": [ToolMessage(
-            content="No active thread; nothing to list.", tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No active thread; nothing to list.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     items = sessions_store.list_assumptions(tid, include_history=include_history)
     if not items:
-        return Command(update={"messages": [ToolMessage(
-            content="_No assumptions recorded yet._", tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="_No assumptions recorded yet._",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     lines = [f"### Assumptions ({len(items)})", ""]
     by_cat: dict[str, list[dict]] = {}
@@ -489,12 +695,20 @@ def list_assumptions(
                 f"- `{a['key']}` v{a['version']} — {v_preview}\n  _{a['rationale']}_"
             )
         lines.append("")
-    return Command(update={"messages": [ToolMessage(
-        content="\n".join(lines), tool_call_id=tool_call_id,
-    )]})
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content="\n".join(lines),
+                    tool_call_id=tool_call_id,
+                )
+            ]
+        }
+    )
 
 
 # ── 5. Workflow step override ────────────────────────────────────────────────
+
 
 @tool
 def mark_workflow_step(
@@ -517,23 +731,45 @@ def mark_workflow_step(
     """
     tid = _thread_id_from(config)
     if not tid:
-        return Command(update={"messages": [ToolMessage(
-            content="No active thread; cannot mark step.", tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No active thread; cannot mark step.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     if status not in {"pending", "in_progress", "done", "skipped"}:
         status = "in_progress"
     if step < 1 or step > 9:
-        return Command(update={"messages": [ToolMessage(
-            content="step must be in [1, 9].", tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="step must be in [1, 9].",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     sessions_store.set_workflow_step(tid, step, status, notes or None)
-    return Command(update={"messages": [ToolMessage(
-        content=f"Step {step} marked **{status}**" + (f": {notes}" if notes else "."),
-        tool_call_id=tool_call_id,
-    )]})
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Step {step} marked **{status}**"
+                    + (f": {notes}" if notes else "."),
+                    tool_call_id=tool_call_id,
+                )
+            ]
+        }
+    )
 
 
 # ── 6. Prior predictive check (Step 4) ───────────────────────────────────────
+
 
 @tool
 def prior_predictive_check(
@@ -556,26 +792,39 @@ def prior_predictive_check(
 
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
-        return Command(update={"messages": [ToolMessage(
-            content=(
-                "Prior predictive check needs a built PyMC model object. "
-                "Run a quick throwaway fit (draws=10, tune=10) first, then "
-                "call this tool — the result reflects the priors, not the "
-                "(barely-touched) posterior."
-            ),
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            "Prior predictive check needs a built PyMC model object. "
+                            "Run a quick throwaway fit (draws=10, tune=10) first, then "
+                            "call this tool — the result reflects the priors, not the "
+                            "(barely-touched) posterior."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     try:
         idata = mmm.sample_prior_predictive(samples=int(n_samples))
     except Exception as e:
-        return Command(update={"messages": [ToolMessage(
-            content=f"Prior predictive sampling failed: {e}",
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Prior predictive sampling failed: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     # Summary stats on the prior-predictive KPI
     try:
         import numpy as np
+
         pp = idata.prior_predictive
         var = list(pp.data_vars)[0]  # first observed-data variable
         arr = pp[var].values.reshape(-1)
@@ -603,8 +852,11 @@ def prior_predictive_check(
             value=summary,
             rationale=(
                 "Prior predictive sanity check. "
-                + ("⚠️ More than 5% of samples imply negative outcomes — consider tighter priors."
-                   if flag_neg else "Implied outcome range looks plausible.")
+                + (
+                    "⚠️ More than 5% of samples imply negative outcomes — consider tighter priors."
+                    if flag_neg
+                    else "Implied outcome range looks plausible."
+                )
             ),
             category="prior",
             change_note=f"n_samples={n_samples}",
@@ -615,18 +867,27 @@ def prior_predictive_check(
         lines.append(f"Could not summarize: {summary['error']}")
     else:
         lines.append(f"- Samples: {summary['samples']:,}")
-        lines.append(f"- Implied KPI range (5–95%): [{summary['p05']:,.0f}, {summary['p95']:,.0f}]")
+        lines.append(
+            f"- Implied KPI range (5–95%): [{summary['p05']:,.0f}, {summary['p95']:,.0f}]"
+        )
         lines.append(f"- Median: {summary['median']:,.0f}")
         lines.append(f"- Fraction negative: {summary['frac_negative']:.1%}")
         if flag_neg:
-            lines.append("\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting.")
-    return Command(update={
-        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
-        "dashboard_data": dashboard,
-    })
+            lines.append(
+                "\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting."
+            )
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard,
+        }
+    )
 
 
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────
+
 
 @tool
 def leave_one_out_decomposition(
@@ -654,34 +915,57 @@ def leave_one_out_decomposition(
 
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
-        return Command(update={"messages": [ToolMessage(
-            content="No fitted model; fit one first.", tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No fitted model; fit one first.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     try:
         decomp = compute_component_decomposition(mmm, include_time_series=False)
     except Exception as e:
-        return Command(update={"messages": [ToolMessage(
-            content=f"Could not compute decomposition: {e}",
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not compute decomposition: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     target = component_to_drop.strip().lower()
     components = [(d.component, d.total_contribution) for d in decomp]
-    match_idx = next((i for i, (c, _) in enumerate(components) if c.lower() == target), -1)
+    match_idx = next(
+        (i for i, (c, _) in enumerate(components) if c.lower() == target), -1
+    )
     if match_idx < 0:
-        return Command(update={"messages": [ToolMessage(
-            content=(
-                f"Component `{component_to_drop}` not found. Known: "
-                + ", ".join(f"`{c}`" for c, _ in components)
-            ),
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"Component `{component_to_drop}` not found. Known: "
+                            + ", ".join(f"`{c}`" for c, _ in components)
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     total = sum(v for _, v in components)
     dropped_name, dropped_val = components[match_idx]
     remaining = [(c, v) for c, v in components if c != dropped_name]
     remaining_total = sum(v for _, v in remaining)
-    new_pct = [(c, v / remaining_total if remaining_total else 0.0) for c, v in remaining]
+    new_pct = [
+        (c, v / remaining_total if remaining_total else 0.0) for c, v in remaining
+    ]
     pct_loss = dropped_val / total if total else 0.0
 
     dashboard = state.get("dashboard_data", {}) if state else {}
@@ -720,13 +1004,18 @@ def leave_one_out_decomposition(
     ]
     for c, p in new_pct:
         lines.append(f"  - `{c}`: {p:.1%}")
-    return Command(update={
-        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
-        "dashboard_data": dashboard,
-    })
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard,
+        }
+    )
 
 
 # ── Define (lock) an analysis plan ───────────────────────────────────────────
+
 
 @tool
 def define_analysis_plan(
@@ -748,16 +1037,25 @@ def define_analysis_plan(
     """
     tid = _thread_id_from(config)
     if not tid:
-        return Command(update={"messages": [ToolMessage(
-            content="No active thread id; cannot lock analysis plan.",
-            tool_call_id=tool_call_id,
-        )]})
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No active thread id; cannot lock analysis plan.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     # Pull latest assumptions from session store
     current_assumptions = sessions_store.list_assumptions(tid, include_history=False)
 
     # Extract research question if present
-    rq = next((a["value"] for a in current_assumptions if a["key"] == "research_question"), None)
+    rq = next(
+        (a["value"] for a in current_assumptions if a["key"] == "research_question"),
+        None,
+    )
 
     # Pull DAG from dashboard_data if available
     dashboard = state.get("dashboard_data", {}) if state else {}
@@ -788,10 +1086,89 @@ def define_analysis_plan(
         "tracked as divergences from the pre-registered analysis.",
     ]
 
-    return Command(update={
-        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)],
-        "dashboard_data": {**dashboard, "analysis_plan_id": plan_id, "analysis_plan_name": name},
-    })
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": {
+                **dashboard,
+                "analysis_plan_id": plan_id,
+                "analysis_plan_name": name,
+            },
+        }
+    )
+
+
+@tool
+def check_spec_divergence(
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Compare the CURRENT causal DAG against the most recently LOCKED analysis plan
+    and report any divergences (channels/controls/edges or hyperparameters added,
+    removed, or changed since pre-registration).
+
+    Use this before fitting or reporting to make pre-registration enforceable:
+    it turns "the spec was logged" into "the spec was checked". List items are
+    matched by identity, so reordering is not flagged.
+    """
+    from mmm_framework.config import diff_spec, summarize_spec_diff
+
+    tid = _thread_id_from(config)
+    plans = sessions_store.list_analysis_plans(tid) if tid else []
+    if not plans:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            "No locked analysis plan found. Call "
+                            "`define_analysis_plan` first to pre-register the spec."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    # Most recent plan (plans are returned newest-first or we take max locked_at).
+    latest = max(plans, key=lambda p: p.get("locked_at", 0))
+    frozen_dag = (latest.get("payload") or {}).get("dag") or {}
+    frozen_spec = frozen_dag.get("spec", frozen_dag)
+
+    dashboard = state.get("dashboard_data", {}) if state else {}
+    current_dag = dashboard.get("dag") or {}
+    current_spec = current_dag.get("spec", current_dag)
+
+    changes = diff_spec(frozen_spec, current_spec)
+    plan_id = latest.get("id", "")[:8]
+    if not changes:
+        content = (
+            f"✅ The current DAG matches the pre-registered plan `{plan_id}…`. "
+            "No divergence."
+        )
+    else:
+        content = (
+            f"⚠️ The current DAG **diverges** from the pre-registered plan "
+            f"`{plan_id}…`. Reported results should disclose this.\n\n"
+            + summarize_spec_diff(changes)
+        )
+
+    return Command(
+        update={
+            "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
+            "dashboard_data": {
+                **dashboard,
+                "spec_divergences": [
+                    {"path": ch.path, "kind": ch.kind, "old": ch.old, "new": ch.new}
+                    for ch in changes
+                ],
+            },
+        }
+    )
 
 
 CAUSAL_TOOLS = [
@@ -804,4 +1181,5 @@ CAUSAL_TOOLS = [
     prior_predictive_check,
     leave_one_out_decomposition,
     define_analysis_plan,
+    check_spec_divergence,
 ]

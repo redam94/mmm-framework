@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from .config import (
     CalibrationConfig,
+    CausalRefutationConfig,
     ChannelDiagnosticsConfig,
     CrossValidationConfig,
     ModelComparisonConfig,
@@ -59,6 +60,7 @@ class ValidationConfigBuilder:
         self._sensitivity_config = SensitivityConfig()
         self._stability_config = StabilityConfig()
         self._calibration_config = CalibrationConfig()
+        self._causal_refutation_config = CausalRefutationConfig()
 
         self._run_ppc = True
         self._run_residuals = True
@@ -68,6 +70,9 @@ class ValidationConfigBuilder:
         self._run_sensitivity = False
         self._run_stability = False
         self._run_calibration = False
+        self._run_unobserved_confounding = False
+        self._unobserved_confounding_q = 1.0
+        self._run_causal_refutation = False
 
         self._lift_tests: list[LiftTestResult] | None = None
         self._generate_plots = True
@@ -107,6 +112,7 @@ class ValidationConfigBuilder:
         self._run_cv = True
         self._run_sensitivity = True
         self._run_stability = True
+        self._run_unobserved_confounding = True  # cheap; surfaces the honest caveat
         return self
 
     def with_ppc(
@@ -371,6 +377,50 @@ class ValidationConfigBuilder:
         )
         return self
 
+    def with_unobserved_confounding(self, q: float = 1.0) -> Self:
+        """Enable per-channel robustness-value sensitivity to unobserved confounding.
+
+        Parameters
+        ----------
+        q : float
+            Fraction of the effect a hidden confounder must explain away
+            (``1.0`` -> nullify the effect entirely).
+        """
+        self._run_unobserved_confounding = True
+        self._unobserved_confounding_q = q
+        return self
+
+    def with_causal_refutation(
+        self,
+        *,
+        placebo: bool = True,
+        negative_control: bool = True,
+        random_common_cause: bool = True,
+        data_subset: bool = True,
+        subset_fraction: float = 0.8,
+        draws: int = 300,
+        tune: int = 300,
+        chains: int = 2,
+    ) -> Self:
+        """Enable the causal refutation suite (each enabled test refits once).
+
+        Expensive: every enabled test refits the model on perturbed data. Tests
+        either expect the effect to vanish (placebo, negative control) or to stay
+        stable (random common cause, data subset).
+        """
+        self._run_causal_refutation = True
+        self._causal_refutation_config = CausalRefutationConfig(
+            run_placebo=placebo,
+            run_negative_control=negative_control,
+            run_random_common_cause=random_common_cause,
+            run_data_subset=data_subset,
+            subset_fraction=subset_fraction,
+            draws=draws,
+            tune=tune,
+            chains=chains,
+        )
+        return self
+
     def without_ppc(self) -> Self:
         """Disable posterior predictive checks."""
         self._run_ppc = False
@@ -415,6 +465,7 @@ class ValidationConfigBuilder:
             sensitivity=self._sensitivity_config,
             stability=self._stability_config,
             calibration=self._calibration_config,
+            causal_refutation=self._causal_refutation_config,
             run_ppc=self._run_ppc,
             run_residuals=self._run_residuals,
             run_channel_diagnostics=self._run_channel_diagnostics,
@@ -423,6 +474,9 @@ class ValidationConfigBuilder:
             run_sensitivity=self._run_sensitivity,
             run_stability=self._run_stability,
             run_calibration=self._run_calibration,
+            run_unobserved_confounding=self._run_unobserved_confounding,
+            unobserved_confounding_q=self._unobserved_confounding_q,
+            run_causal_refutation=self._run_causal_refutation,
             lift_tests=self._lift_tests,
             generate_plots=self._generate_plots,
             verbose=self._verbose,

@@ -116,9 +116,6 @@ class MultivariateMMM(BaseExtendedMMM):
             compute_cross_effect_contribution,
         )
         from ..components.observation import build_multivariate_likelihood
-        from ..components.transforms import (
-            logistic_saturation_pt as logistic_saturation,
-        )
 
         coords = self._build_coords()
 
@@ -131,8 +128,10 @@ class MultivariateMMM(BaseExtendedMMM):
             )
             Y = pm.Data("Y", Y_matrix, dims=("obs", "outcome"))
 
-            # Media transformations
+            # Media transformations: normalize -> geometric adstock -> logistic
+            # saturation (the previously-unused ``alpha`` is now the carryover).
             media_transformed = []
+            channel_tx = {}  # channel -> (x_sat, apply, x_input) for experiments
             for i, channel in enumerate(self.channel_names):
                 x = X_media[:, i]
 
@@ -144,8 +143,10 @@ class MultivariateMMM(BaseExtendedMMM):
                     alpha = pm.Beta(f"alpha_{channel}", alpha=2, beta=2)
 
                 lam = pm.Gamma(f"lambda_{channel}", alpha=3, beta=1)
-                x_sat = logistic_saturation(x, lam)
+                apply = self._media_transform_apply(i, alpha, lam)
+                x_sat = apply(x)
                 media_transformed.append(x_sat)
+                channel_tx[channel] = (x_sat, apply, x)
 
             media_transformed = pt.stack(media_transformed, axis=1)
 
@@ -196,6 +197,7 @@ class MultivariateMMM(BaseExtendedMMM):
                 mu_list.append(mu_k)
 
             mu = pt.stack(mu_list, axis=1)
+            pm.Deterministic("mu", mu, dims=("obs", "outcome"))
 
             # Multivariate likelihood
             build_multivariate_likelihood(
@@ -206,6 +208,23 @@ class MultivariateMMM(BaseExtendedMMM):
                 self.config.lkj_eta,
                 dims=("obs", "outcome"),
             )
+
+            # Experiment calibration: per (channel, outcome) the model-implied
+            # contribution is beta_media[outcome, channel] * saturated spend.
+            # Outcomes are modelled on their raw scale, so scale = 1.0.
+            if self.experiments:
+                handles = {}
+                for k, outcome in enumerate(self.outcome_names):
+                    for c, channel in enumerate(self.channel_names):
+                        x_sat, apply, x_input = channel_tx[channel]
+                        handles[(channel, outcome)] = {
+                            "coef": beta_media[k, c],
+                            "x_sat": x_sat,
+                            "apply": apply,
+                            "x_input": x_input,
+                            "spend_obs": self.X_media[:, c],
+                        }
+                self._add_experiment_likelihoods(handles, scale=1.0)
 
         return model
 

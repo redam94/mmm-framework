@@ -23,6 +23,9 @@ class NodeType(str, Enum):
     CONTROL = "control"
     MEDIATOR = "mediator"
     OUTCOME = "outcome"
+    INSTRUMENT = (
+        "instrument"  # exogenous variable affecting the KPI only via a treatment
+    )
 
 
 class EdgeType(str, Enum):
@@ -44,7 +47,9 @@ class DAGNode(BaseModel):
     variable_name : str
         Name of the variable in the MFF dataset.
     node_type : NodeType
-        Type of node (KPI, MEDIA, CONTROL, MEDIATOR, OUTCOME).
+        Type of node (KPI, MEDIA, CONTROL, MEDIATOR, OUTCOME, INSTRUMENT).
+        INSTRUMENT nodes drive IV identification checks only; they are not
+        emitted as model regressors.
     label : str | None
         Display label for the node (defaults to variable_name).
     dimensions : list[str]
@@ -196,6 +201,16 @@ class DAGSpec(BaseModel):
     def mediator_nodes(self) -> list[DAGNode]:
         """Get all mediator nodes."""
         return self.get_nodes_by_type(NodeType.MEDIATOR)
+
+    @property
+    def instrument_nodes(self) -> list[DAGNode]:
+        """Get all instrument nodes."""
+        return self.get_nodes_by_type(NodeType.INSTRUMENT)
+
+    @property
+    def has_instruments(self) -> bool:
+        """Check if DAG has any instrument nodes."""
+        return len(self.instrument_nodes) > 0
 
     @property
     def outcome_nodes(self) -> list[DAGNode]:

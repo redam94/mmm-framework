@@ -3,13 +3,29 @@ BayesianMMM - Main model class.
 
 This module contains the BayesianMMM class which orchestrates
 model building, fitting, and prediction.
+
+Identifiability note (equifinality, critique.md §3.6)
+-----------------------------------------------------
+The core model uses logistic saturation (a single ``sat_lam`` per channel) and,
+by default, normalized adstock (``AdstockConfig.normalize=True``). Normalization
+folds the total carryover magnitude into the channel coefficient ``beta``, so a
+channel's adstock decay, saturation strength, and ``beta`` trade off against one
+another: visibly different parameter combinations can fit the data almost
+equally well. This is intrinsic to additive MMM, not a defect, but it means the
+per-channel decomposition is only weakly identified from observational spend
+alone. The framework's primary remedy is experiment-calibrated coefficient
+priors (:mod:`mmm_framework.calibration`), which anchor ``beta`` to randomized
+evidence and thereby break the trade-off; weakly-informative priors and (for the
+Hill path) data-anchored ``kappa`` bounds help at the margin. See
+:func:`mmm_framework.transforms.adstock.adstock_weights` for the kernel-level
+discussion.
 """
 
 from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 import arviz as az
 import numpy as np
@@ -17,15 +33,24 @@ import pandas as pd
 import pymc as pm
 import pytensor.tensor as pt
 
-from ..config import ModelConfig
+from ..config import (
+    AdstockConfig,
+    AdstockType,
+    CausalControlRole,
+    ModelConfig,
+    PriorConfig,
+    PriorType,
+)
 from ..data_loader import PanelDataset
 from ..utils import compute_hdi_bounds
 from ..transforms import (
+    adstock_weights,
     geometric_adstock_2d,
     create_fourier_features,
     create_bspline_basis,
     create_piecewise_trend_matrix,
 )
+from ..transforms.adstock_pt import parametric_adstock_pt
 
 from .results import (
     MMMResults,
@@ -38,6 +63,87 @@ from .trend_config import TrendType, TrendConfig
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from ..calibration.likelihood import ExperimentMeasurement
+
+# Map an AdstockType to the kernel name used by the parametric adstock kernels.
+_ADSTOCK_KIND = {
+    AdstockType.GEOMETRIC: "geometric",
+    AdstockType.DELAYED: "delayed",
+    AdstockType.WEIBULL: "weibull",
+    AdstockType.NONE: "none",
+}
+
+# Control-coefficient prior widths (on standardized data), keyed by causal role.
+# A *confounder* must not be shrunk toward zero: the project README proves that
+# shrinking a confounder biases the media coefficient by (1 - s)*gamma*Cov/Var,
+# so confounders get a wide, weakly-informative prior. Every other control --
+# including any left unmarked -- keeps the model's historical Normal(0, 0.5),
+# which is mildly regularizing (a precision-control choice). These are fixed
+# widths by role, not the per-control ``coefficient_prior`` (which the core
+# model has never honored for controls; honoring it now would silently change
+# existing fits).
+_CONFOUNDER_PRIOR_SIGMA = 2.0
+_PRECISION_CONTROL_PRIOR_SIGMA = 0.5
+
+# Causal roles that must never be conditioned on as controls (doing so induces
+# bias for a total-effect estimate). Refused at model-construction time.
+_BLOCKED_CONTROL_ROLES = (CausalControlRole.MEDIATOR, CausalControlRole.COLLIDER)
+
+
+def _hdi_finite(samples: "NDArray", hdi_prob: float) -> tuple[float, float]:
+    """HDI bounds over the finite entries of ``samples``.
+
+    A pathological posterior can put non-finite values into the predictive draws;
+    ``np.percentile`` would then return NaN and silently poison the interval.
+    Filtering to finite draws keeps a few bad samples from corrupting the bound,
+    and only returns ``(nan, nan)`` when there is nothing usable to summarize.
+    """
+    finite = samples[np.isfinite(samples)]
+    if finite.size < 2:
+        return float("nan"), float("nan")
+    low, high = compute_hdi_bounds(finite, hdi_prob=hdi_prob, axis=0)
+    return float(low), float(high)
+
+
+def _sample_from_prior_config(
+    name: str,
+    prior: PriorConfig | None,
+    default: Callable[[], "pt.TensorVariable"],
+) -> "pt.TensorVariable":
+    """Sample a PyMC variable from a :class:`PriorConfig`, or a default.
+
+    Honors the common prior distributions configured on an
+    :class:`AdstockConfig` so the core model's parametric adstock respects
+    user-specified priors. Falls back to ``default()`` when ``prior`` is None
+    or its distribution is not recognized.
+    """
+    if prior is None:
+        return default()
+
+    p = prior.params
+    dist = prior.distribution
+    if dist == PriorType.BETA:
+        return pm.Beta(name, alpha=p.get("alpha", 2.0), beta=p.get("beta", 2.0))
+    if dist == PriorType.GAMMA:
+        return pm.Gamma(name, alpha=p.get("alpha", 2.0), beta=p.get("beta", 1.0))
+    if dist == PriorType.HALF_NORMAL:
+        return pm.HalfNormal(name, sigma=p.get("sigma", 1.0))
+    if dist == PriorType.NORMAL:
+        return pm.Normal(name, mu=p.get("mu", 0.0), sigma=p.get("sigma", 1.0))
+    if dist == PriorType.LOG_NORMAL:
+        return pm.LogNormal(name, mu=p.get("mu", 0.0), sigma=p.get("sigma", 1.0))
+    if dist == PriorType.TRUNCATED_NORMAL:
+        return pm.TruncatedNormal(
+            name,
+            mu=p.get("mu", 0.0),
+            sigma=p.get("sigma", 1.0),
+            lower=p.get("lower"),
+            upper=p.get("upper"),
+        )
+    if dist == PriorType.HALF_STUDENT_T:
+        return pm.HalfStudentT(name, nu=p.get("nu", 3.0), sigma=p.get("sigma", 1.0))
+    return default()
+
 
 class BayesianMMM:
     """
@@ -45,7 +151,10 @@ class BayesianMMM:
 
     This implementation prioritizes numerical stability:
     - All data is standardized before modeling
-    - Adstock is pre-computed at fixed alpha values
+    - Adstock: by default pre-computed at fixed alphas and blended via a learned
+      mix (fast). Set ``ModelConfig.use_parametric_adstock=True`` to instead
+      estimate a continuous in-graph kernel per channel, honoring each
+      ``MediaChannelConfig.adstock`` (geometric, delayed, or Weibull).
     - Logistic saturation is used (more stable than Hill)
     - Priors are carefully scaled for standardized data
     - Flexible trend modeling with GP, spline, and piecewise options
@@ -72,6 +181,7 @@ class BayesianMMM:
         model_config: ModelConfig,
         trend_config: TrendConfig | None = None,
         adstock_alphas: list[float] | None = None,
+        experiments: "Sequence[ExperimentMeasurement] | None" = None,
     ):
         self.panel = panel
         self.model_config = model_config
@@ -81,6 +191,15 @@ class BayesianMMM:
         self.mff_config = panel.config
         self.hierarchical_config = model_config.hierarchical
         self.seasonality_config = model_config.seasonality
+        self.use_parametric_adstock = getattr(
+            model_config, "use_parametric_adstock", False
+        )
+
+        # Experimental results folded in as in-graph likelihood terms (None ->
+        # the model graph is byte-identical to the un-calibrated model).
+        self.experiments: list["ExperimentMeasurement"] = (
+            list(experiments) if experiments else []
+        )
 
         self._model: pm.Model | None = None
         self._trace: az.InferenceData | None = None
@@ -89,6 +208,19 @@ class BayesianMMM:
         self._scaling_params: dict[str, Any] = {}
 
         self._prepare_data()
+
+    def add_experiment_calibration(
+        self, experiments: "Sequence[ExperimentMeasurement]"
+    ) -> "BayesianMMM":
+        """Register experiment likelihood terms and invalidate the built graph.
+
+        The experiments are folded into the model as likelihood terms the next
+        time the graph is built (so call this before :meth:`fit`). Returns
+        ``self`` for chaining.
+        """
+        self.experiments = list(experiments)
+        self._model = None  # force a rebuild that includes the new likelihoods
+        return self
 
     def _prepare_data(self):
         """Prepare and standardize all data."""
@@ -121,6 +253,13 @@ class BayesianMMM:
         # Store scaling parameters
         self._scaling_params["y_mean"] = self.y_mean
         self._scaling_params["y_std"] = self.y_std
+
+        # Per-channel max of the raw series, used to normalize media for the
+        # parametric (in-graph) adstock path.
+        self._media_raw_max = {
+            ch: float(self.X_media_raw[:, c].max())
+            for c, ch in enumerate(self.channel_names)
+        }
 
         # === Pre-compute adstocked media at fixed alphas ===
         self._media_max = {}
@@ -158,6 +297,13 @@ class BayesianMMM:
         else:
             self.X_controls = None
 
+        # === Causal roles of controls (bad-control prevention) ===
+        # Read each control's causal role from its config and refuse to condition
+        # on mediators/colliders (doing so biases a total-effect estimate). This
+        # is the enforcement point for both manually-typed roles (P1-2) and roles
+        # the DAG builder infers from the identified adjustment set (P1-1).
+        self._control_causal_roles = self._resolve_control_causal_roles()
+
         # === Geo/product info ===
         self.has_geo = self.panel.coords.has_geo
         self.has_product = self.panel.coords.has_product
@@ -190,6 +336,55 @@ class BayesianMMM:
         # === Media hierarchy ===
         self.media_groups = self.mff_config.get_hierarchical_media_groups()
         self.has_media_hierarchy = len(self.media_groups) > 0
+
+    def _resolve_control_causal_roles(self) -> list[CausalControlRole | None]:
+        """Resolve the causal role of each control and refuse bad controls.
+
+        Returns a list aligned with ``self.control_names`` giving each control's
+        :class:`CausalControlRole` (or ``None`` when unmarked). Raises
+        ``ValueError`` if any control is a mediator or collider, because
+        conditioning on a post-treatment / collider variable induces bias for a
+        total-effect estimate (the exact "bad control" error the framework
+        documents). This is intentionally a hard failure: a silently-conditioned
+        mediator produces a confidently wrong number.
+        """
+        roles: list[CausalControlRole | None] = []
+        blocked: list[str] = []
+        for name in self.control_names:
+            cfg = self.mff_config.get_control_config(name)
+            role = getattr(cfg, "causal_role", None) if cfg is not None else None
+            roles.append(role)
+            if role in _BLOCKED_CONTROL_ROLES:
+                reason = getattr(cfg, "causal_role_reason", None)
+                detail = f" ({reason})" if reason else ""
+                blocked.append(f"'{name}' [{role.value}]{detail}")
+
+        if blocked:
+            raise ValueError(
+                "Refusing to condition on post-treatment / collider variables "
+                "used as controls: "
+                + "; ".join(blocked)
+                + ". Conditioning on a mediator blocks part of the media effect, "
+                "and conditioning on a collider opens a spurious path -- either "
+                "biases a total-effect estimate. Remove these from `controls`. "
+                "If a variable is genuinely a common cause of media and the KPI, "
+                "mark it `causal_role=CausalControlRole.CONFOUNDER` instead."
+            )
+        return roles
+
+    def _control_prior_sigmas(self) -> np.ndarray:
+        """Per-control coefficient-prior standard deviations, keyed by role.
+
+        Confounders receive a wide, un-shrunk prior; every other control keeps
+        the model's historical regularizing width. Returned as a vector so the
+        single ``beta_controls`` random variable (relied on by reporting and
+        validation) keeps its name and ``(n_controls,)`` shape.
+        """
+        sigmas = np.full(self.n_controls, _PRECISION_CONTROL_PRIOR_SIGMA)
+        for i, role in enumerate(self._control_causal_roles):
+            if role == CausalControlRole.CONFOUNDER:
+                sigmas[i] = _CONFOUNDER_PRIOR_SIGMA
+        return sigmas
 
     def _get_group_indices(self, level_name: str) -> np.ndarray:
         """Get group indices for a hierarchical level."""
@@ -357,10 +552,17 @@ class BayesianMMM:
         A_tensor = pt.as_tensor_variable(A)
         s_tensor = pt.as_tensor_variable(s)
 
+        # Prophet piecewise-linear trend: each ``delta_j`` adjusts the growth *rate*
+        # (slope) from changepoint ``s_j`` onward, and ``gamma_j = -s_j * delta_j`` keeps
+        # the trend continuous at the changepoint. The cumulative slope ``k + A . delta``
+        # multiplies ``t``; ``m + A . gamma`` is the offset. (Previously ``A . delta`` was
+        # added *without* the ``* t``, which produced piecewise-constant level shifts
+        # rather than the intended slope changes -- the lone ``gamma`` continuity term,
+        # meaningless under level shifts, is the tell that slope changes were intended.)
         gamma = -s_tensor * delta
-        trend_unique = (
-            k * t_unique_tensor + pt.dot(A_tensor, delta) + m + pt.dot(A_tensor, gamma)
-        )
+        slope = k + pt.dot(A_tensor, delta)
+        offset = m + pt.dot(A_tensor, gamma)
+        trend_unique = slope * t_unique_tensor + offset
 
         return trend_unique[time_idx]
 
@@ -478,19 +680,188 @@ class BayesianMMM:
 
         return adstock_low, adstock_high
 
+    def _prepare_raw_media_for_model(
+        self, X_media_raw: np.ndarray | None = None
+    ) -> np.ndarray:
+        """Normalize raw media per channel for the parametric adstock path.
+
+        Adstock is applied in-graph for this path, so the model is fed the
+        normalized *raw* series (scaled to roughly [0, 1] by the per-channel
+        training max) rather than a pre-adstocked series.
+        """
+        if X_media_raw is None:
+            X_media_raw = self.X_media_raw
+
+        normalized = np.zeros_like(X_media_raw, dtype=np.float64)
+        for c, ch_name in enumerate(self.channel_names):
+            max_val = self._media_raw_max[ch_name] + 1e-8
+            normalized[:, c] = X_media_raw[:, c] / max_val
+        return normalized
+
+    def _get_adstock_config(self, channel_name: str) -> AdstockConfig:
+        """Resolve the AdstockConfig for a channel, defaulting to geometric."""
+        media_cfg = self.mff_config.get_media_config(channel_name)
+        if media_cfg is not None and media_cfg.adstock is not None:
+            return media_cfg.adstock
+        return AdstockConfig.geometric()
+
+    def _channel_adstock_apply(
+        self, channel_name: str
+    ) -> "Callable[[pt.TensorVariable], pt.TensorVariable]":
+        """Return a closure applying this channel's in-graph adstock kernel.
+
+        The kernel's random variables (decay/delay/shape/scale) are created once
+        here; the returned closure re-applies that *same* kernel to any input
+        series. This lets the model adstock both the observed spend and a
+        perturbed (e.g. experiment-scaled) spend with shared parameters, which is
+        what the marginal-ROAS experiment likelihood needs.
+        """
+        cfg = self._get_adstock_config(channel_name)
+        kind = _ADSTOCK_KIND.get(cfg.type, "geometric")
+        l_max = cfg.l_max
+        normalize = cfg.normalize
+
+        if kind == "none":
+            return lambda x: x
+
+        if kind == "geometric":
+            alpha = _sample_from_prior_config(
+                f"adstock_alpha_{channel_name}",
+                cfg.alpha_prior,
+                lambda: pm.Beta(f"adstock_alpha_{channel_name}", alpha=2, beta=2),
+            )
+            return lambda x: parametric_adstock_pt(
+                x, "geometric", l_max, alpha=alpha, normalize=normalize
+            )
+
+        if kind == "delayed":
+            alpha = _sample_from_prior_config(
+                f"adstock_alpha_{channel_name}",
+                cfg.alpha_prior,
+                lambda: pm.Beta(f"adstock_alpha_{channel_name}", alpha=2, beta=2),
+            )
+            theta = _sample_from_prior_config(
+                f"adstock_theta_{channel_name}",
+                cfg.theta_prior,
+                lambda: pm.HalfNormal(f"adstock_theta_{channel_name}", sigma=2.0),
+            )
+            return lambda x: parametric_adstock_pt(
+                x, "delayed", l_max, alpha=alpha, theta=theta, normalize=normalize
+            )
+
+        # weibull
+        shape = _sample_from_prior_config(
+            f"adstock_shape_{channel_name}",
+            cfg.shape_prior,
+            lambda: pm.Gamma(f"adstock_shape_{channel_name}", alpha=2.0, beta=1.0),
+        )
+        scale = _sample_from_prior_config(
+            f"adstock_scale_{channel_name}",
+            cfg.scale_prior,
+            lambda: pm.Gamma(f"adstock_scale_{channel_name}", alpha=2.0, beta=1.0),
+        )
+        return lambda x: parametric_adstock_pt(
+            x, "weibull", l_max, shape=shape, scale=scale, normalize=normalize
+        )
+
+    def _build_channel_adstock(
+        self, channel_name: str, x_raw: "pt.TensorVariable"
+    ) -> "pt.TensorVariable":
+        """Build the in-graph parametric adstock for one channel.
+
+        Reads the channel's :class:`AdstockConfig` (type, l_max, normalize, and
+        priors) and estimates a continuous adstock kernel, supporting geometric,
+        delayed, and Weibull carryover shapes.
+        """
+        return self._channel_adstock_apply(channel_name)(x_raw)
+
+    def compute_adstock_curves(
+        self, l_max_default: int = 8
+    ) -> dict[str, np.ndarray] | None:
+        """Posterior-mean adstock kernel (lag weights) per channel.
+
+        Returns the *actual* estimated carryover shape for reporting, so a
+        delayed or Weibull channel is rendered with its true (possibly humped)
+        kernel rather than being forced to a geometric curve. Requires a fitted
+        model; returns None before fitting.
+        """
+        if self._trace is None or not hasattr(self._trace, "posterior"):
+            return None
+
+        posterior = self._trace.posterior
+        curves: dict[str, np.ndarray] = {}
+
+        for ch in self.channel_names:
+            if self.use_parametric_adstock:
+                cfg = self._get_adstock_config(ch)
+                kind = _ADSTOCK_KIND.get(cfg.type, "geometric")
+                l_max = cfg.l_max
+                if kind == "none":
+                    curves[ch] = adstock_weights("none", l_max)
+                elif kind in ("geometric", "delayed"):
+                    name = f"adstock_alpha_{ch}"
+                    if name not in posterior:
+                        continue
+                    alpha = float(posterior[name].values.mean())
+                    theta = 0.0
+                    if kind == "delayed" and f"adstock_theta_{ch}" in posterior:
+                        theta = float(posterior[f"adstock_theta_{ch}"].values.mean())
+                    curves[ch] = adstock_weights(
+                        kind, l_max, alpha=alpha, theta=theta, normalize=cfg.normalize
+                    )
+                else:  # weibull
+                    if (
+                        f"adstock_shape_{ch}" not in posterior
+                        or f"adstock_scale_{ch}" not in posterior
+                    ):
+                        continue
+                    shape = float(posterior[f"adstock_shape_{ch}"].values.mean())
+                    scale = float(posterior[f"adstock_scale_{ch}"].values.mean())
+                    curves[ch] = adstock_weights(
+                        "weibull",
+                        l_max,
+                        shape=shape,
+                        scale=scale,
+                        normalize=cfg.normalize,
+                    )
+            else:
+                # Legacy two-point mix: reconstruct the effective kernel as the
+                # learned convex blend of the low/high fixed-alpha geometrics.
+                name = f"adstock_{ch}"
+                if name not in posterior:
+                    continue
+                mix = float(posterior[name].values.mean())
+                lags = np.arange(l_max_default)
+                a_low = self.adstock_alphas[0]
+                a_high = self.adstock_alphas[-1]
+                w = (1 - mix) * (a_low**lags) + mix * (a_high**lags)
+                total = w.sum()
+                curves[ch] = w / total if total > 0 else w
+
+        return curves or None
+
     def _build_model(self) -> pm.Model:
         """Build the PyMC model with Data for prediction support."""
         coords = self._build_coords()
-        X_adstock_low, X_adstock_high = self._prepare_media_data_for_model()
+
+        if self.use_parametric_adstock:
+            X_media_raw_norm = self._prepare_raw_media_for_model()
+        else:
+            X_adstock_low, X_adstock_high = self._prepare_media_data_for_model()
 
         with pm.Model(coords=coords) as model:
             # MUTABLE DATA
-            X_media_low_data = pm.Data(
-                "X_media_low", X_adstock_low, dims=("obs", "channel")
-            )
-            X_media_high_data = pm.Data(
-                "X_media_high", X_adstock_high, dims=("obs", "channel")
-            )
+            if self.use_parametric_adstock:
+                X_media_raw_data = pm.Data(
+                    "X_media_raw", X_media_raw_norm, dims=("obs", "channel")
+                )
+            else:
+                X_media_low_data = pm.Data(
+                    "X_media_low", X_adstock_low, dims=("obs", "channel")
+                )
+                X_media_high_data = pm.Data(
+                    "X_media_high", X_adstock_high, dims=("obs", "channel")
+                )
 
             if self.X_controls is not None:
                 X_controls_data = pm.Data(
@@ -501,10 +872,16 @@ class BayesianMMM:
             geo_idx_data = pm.Data("geo_idx", self.geo_idx)
             product_idx_data = pm.Data("product_idx", self.product_idx)
 
-            n_obs_data = X_media_low_data.shape[0]
+            if self.use_parametric_adstock:
+                n_obs_data = X_media_raw_data.shape[0]
+            else:
+                n_obs_data = X_media_low_data.shape[0]
 
             # INTERCEPT
             intercept = pm.Normal("intercept", mu=0, sigma=0.5)
+            pm.Deterministic(
+                "intercept_component", intercept + pt.zeros(n_obs_data), dims="obs"
+            )
 
             # TREND
             trend = self._build_trend_component(model, time_idx_data)
@@ -539,6 +916,7 @@ class BayesianMMM:
                 geo_contribution = geo_effect[geo_idx_data]
             else:
                 geo_contribution = pt.zeros(n_obs_data)
+            pm.Deterministic("geo_component", geo_contribution, dims="obs")
 
             # PRODUCT EFFECTS
             if self.has_product and self.hierarchical_config.pool_across_product:
@@ -550,25 +928,66 @@ class BayesianMMM:
                 product_contribution = product_effect[product_idx_data]
             else:
                 product_contribution = pt.zeros(n_obs_data)
+            pm.Deterministic("product_component", product_contribution, dims="obs")
 
             # MEDIA EFFECTS
             channel_contribs = []
+            # Per-channel in-graph handles, captured so an experiment likelihood
+            # can re-express each channel's estimand (contribution / ROAS /
+            # mROAS) from the *same* beta, saturation, and adstock parameters.
+            channel_handles: dict[str, dict[str, Any]] = {}
 
             for c, channel_name in enumerate(self.channel_names):
-                x_low = X_media_low_data[:, c]
-                x_high = X_media_high_data[:, c]
-
-                adstock_mix = pm.Beta(f"adstock_{channel_name}", alpha=2, beta=2)
-                x_adstocked = (1 - adstock_mix) * x_low + adstock_mix * x_high
+                if self.use_parametric_adstock:
+                    # Estimate a continuous adstock kernel in-graph (geometric,
+                    # delayed, or Weibull) per the channel's AdstockConfig. Keep
+                    # the apply-closure so a perturbed spend can be re-adstocked
+                    # with the *same* kernel RVs (marginal-ROAS likelihood).
+                    adstock_apply = self._channel_adstock_apply(channel_name)
+                    x_input = X_media_raw_data[:, c]
+                    x_adstocked = adstock_apply(x_input)
+                else:
+                    # Legacy: blend two fixed-alpha geometric adstocks.
+                    adstock_apply = None
+                    x_input = None
+                    x_low = X_media_low_data[:, c]
+                    x_high = X_media_high_data[:, c]
+                    adstock_mix = pm.Beta(f"adstock_{channel_name}", alpha=2, beta=2)
+                    x_adstocked = (1 - adstock_mix) * x_low + adstock_mix * x_high
 
                 sat_lam = pm.Exponential(f"sat_lam_{channel_name}", lam=0.5)
                 exponent = pt.clip(-sat_lam * x_adstocked, -20, 0)
                 x_saturated = 1 - pt.exp(exponent)
 
-                # Use a Gamma prior to place more mass > 1.0 (encouraging ROI > 1x)
-                beta = pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0)
+                # Coefficient (effect size). When an experiment-calibrated
+                # ``roi_prior`` is configured for this channel (e.g. derived from
+                # a geo-lift test by ``mmm_framework.calibration``), honor it --
+                # this is how randomized incrementality evidence enters the
+                # likelihood. Otherwise use a Gamma prior placing more mass > 1.0
+                # (encouraging ROI > 1x).
+                media_cfg = self.mff_config.get_media_config(channel_name)
+                roi_prior = getattr(media_cfg, "roi_prior", None)
+                beta = _sample_from_prior_config(
+                    f"beta_{channel_name}",
+                    roi_prior,
+                    lambda: pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0),
+                )
                 channel_contrib = beta * x_saturated
                 channel_contribs.append(channel_contrib)
+
+                channel_handles[channel_name] = {
+                    "index": c,
+                    "beta": beta,
+                    "sat_lam": sat_lam,
+                    "channel_contrib": channel_contrib,  # standardized, per-obs
+                    "adstock_apply": adstock_apply,  # parametric path only
+                    "x_input": x_input,  # normalized raw series (parametric)
+                    "x_low": x_low if not self.use_parametric_adstock else None,
+                    "x_high": x_high if not self.use_parametric_adstock else None,
+                    "adstock_mix": (
+                        adstock_mix if not self.use_parametric_adstock else None
+                    ),
+                }
 
             media_matrix = pt.stack(channel_contribs, axis=1)
             media_contribution = media_matrix.sum(axis=1)
@@ -578,17 +997,37 @@ class BayesianMMM:
             )
             pm.Deterministic("media_total", media_contribution)
 
+            # EXPERIMENT LIKELIHOODS (incrementality / lift / ROAS calibration)
+            # Fold any registered experimental results into the joint posterior
+            # as likelihood terms on the model-implied estimand. No-op (and graph
+            # byte-identical) when no experiments are registered.
+            if self.experiments:
+                self._add_experiment_likelihoods(channel_handles)
+
             # CONTROL EFFECTS
+            # A single ``beta_controls`` vector (kept for reporting/validation
+            # which read it by name) but with a per-control prior width: a
+            # confounder gets a wide, un-shrunk prior so it is not biased toward
+            # zero, while precision controls keep the historical Normal(0, 0.5).
+            # Mediators/colliders were already refused in ``_prepare_data``.
             if self.n_controls > 0:
+                control_sigmas = self._control_prior_sigmas()
                 beta_controls = pm.Normal(
                     "beta_controls",
                     mu=0,
-                    sigma=0.5,
+                    sigma=control_sigmas,
                     shape=self.n_controls,
                 )
                 control_contribution = pt.dot(X_controls_data, beta_controls)
+                # Per-control, per-obs contribution (column c = X[:, c] * beta_c).
+                pm.Deterministic(
+                    "control_contributions",
+                    X_controls_data * beta_controls,
+                    dims=("obs", "control"),
+                )
             else:
                 control_contribution = pt.zeros(n_obs_data)
+            pm.Deterministic("controls_total", control_contribution, dims="obs")
 
             # COMBINE AND LIKELIHOOD
             mu = (
@@ -608,6 +1047,237 @@ class BayesianMMM:
             )
 
         return model
+
+    # =====================================================================
+    # Experiment (incrementality / lift / ROAS) calibration likelihoods
+    # =====================================================================
+
+    def _period_to_indices(
+        self, test_period: tuple[Any, Any]
+    ) -> tuple[int, int] | None:
+        """Resolve an experiment window to ``(start_idx, end_idx)`` period codes.
+
+        Accepts dates (parsed against the panel's period axis) or integer period
+        indices. Returns the first and last period indices that fall inside the
+        date window, or ``None`` when *no* period does (window entirely outside
+        the panel, or reversed). The indices index into ``coords.periods`` -- the
+        same axis ``self.time_idx`` is built from -- so a date window resolves to
+        exactly the observations whose period lies in ``[start, end]``.
+
+        (This is a corrected re-implementation of the validator's date parser,
+        which uses ``start_idx == 0`` as a "not found" sentinel and so mis-handles
+        a window starting at period 0 and silently maps out-of-range windows onto
+        the whole panel.)
+        """
+        start, end = test_period
+        if isinstance(start, (int, np.integer)) and isinstance(end, (int, np.integer)):
+            return int(start), int(end)
+
+        try:
+            start_date = pd.to_datetime(start)
+            end_date = pd.to_datetime(end)
+        except Exception:
+            return int(start), int(end)
+
+        periods = pd.DatetimeIndex(pd.to_datetime(list(self.panel.coords.periods)))
+        in_window = np.asarray((periods >= start_date) & (periods <= end_date))
+        matched = np.flatnonzero(in_window)
+        if matched.size == 0:
+            return None
+        return int(matched[0]), int(matched[-1])
+
+    def _experiment_obs_mask(
+        self, exp: "ExperimentMeasurement"
+    ) -> NDArray[np.bool_] | None:
+        """Boolean obs mask for an experiment window (+ optional geo restriction).
+
+        Returns ``None`` (with a warning) when the experiment cannot be located:
+        an unparseable window, geos that the model does not have, or a window
+        that selects no observations.
+        """
+        try:
+            indices = self._period_to_indices(exp.test_period)
+        except (ValueError, TypeError) as exc:
+            warnings.warn(
+                f"Experiment on {exp.channel!r} skipped: cannot parse period "
+                f"{exp.test_period!r} ({exc}).",
+                stacklevel=3,
+            )
+            return None
+
+        if indices is None:
+            warnings.warn(
+                f"Experiment on {exp.channel!r} skipped: window "
+                f"{exp.test_period!r} falls outside the panel's period range.",
+                stacklevel=3,
+            )
+            return None
+
+        start_idx, end_idx = indices
+        mask = (self.time_idx >= start_idx) & (self.time_idx <= end_idx)
+
+        if exp.holdout_regions:
+            if not self.has_geo:
+                # A geo-restricted measurement cannot be represented on a model
+                # with no geo dimension (it would be fit against the national
+                # contribution, biasing it). Skip rather than silently mis-scale.
+                warnings.warn(
+                    f"Experiment on {exp.channel!r} skipped: holdout_regions "
+                    f"{exp.holdout_regions} require a geo model but this model has "
+                    "no geo dimension.",
+                    stacklevel=3,
+                )
+                return None
+            else:
+                name_to_idx = {g: j for j, g in enumerate(self.geo_names)}
+                unknown = [g for g in exp.holdout_regions if g not in name_to_idx]
+                if unknown:
+                    warnings.warn(
+                        f"Experiment on {exp.channel!r} skipped: unknown "
+                        f"holdout_regions {unknown}.",
+                        stacklevel=3,
+                    )
+                    return None
+                hold_idx = [name_to_idx[g] for g in exp.holdout_regions]
+                mask = mask & np.isin(self.geo_idx, hold_idx)
+
+        if not mask.any():
+            warnings.warn(
+                f"Experiment on {exp.channel!r} skipped: window "
+                f"{exp.test_period!r} selects no observations.",
+                stacklevel=3,
+            )
+            return None
+        return mask
+
+    def _perturbed_contribution_sum(
+        self,
+        handle: dict[str, Any],
+        mask: NDArray[np.bool_],
+        mask_idx: np.ndarray,
+        lift: float,
+    ) -> "pt.TensorVariable":
+        """Standardized contribution sum over the window with spend scaled by lift.
+
+        Re-evaluates the channel's adstock+saturation at spend scaled by
+        ``(1 + lift)`` *inside the window only*, reusing the channel's existing
+        ``beta``, ``sat_lam`` and adstock RVs so the marginal effect is a genuine
+        function of the fitted parameters. Adstock is linear, so scaling the
+        normalized input is exact. The sum is taken over the same window mask the
+        observed contribution uses (carryover landing after the window is not
+        counted -- matching ``compute_marginal_contributions``).
+        """
+        ch_idx = handle["index"]
+        sat_lam = handle["sat_lam"]
+        beta = handle["beta"]
+
+        if self.use_parametric_adstock:
+            pert_mult = np.ones(self.n_obs, dtype=np.float64)
+            pert_mult[mask] = 1.0 + lift
+            x_pert = handle["x_input"] * pt.as_tensor_variable(pert_mult)
+            a_pert = handle["adstock_apply"](x_pert)
+        else:
+            # Legacy two-alpha blend: re-adstock the perturbed raw series in numpy
+            # (exact, adstock is linear) and re-blend with the same learned mix RV,
+            # normalizing by the same per-channel max the base model used.
+            x_media_pert = self.X_media_raw.copy()
+            x_media_pert[mask, ch_idx] *= 1.0 + lift
+            max_val = self._media_max[self.channel_names[ch_idx]] + 1e-8
+            alpha_low = self.adstock_alphas[0]
+            alpha_high = self.adstock_alphas[-1]
+            pert_low = (
+                geometric_adstock_2d(x_media_pert, alpha_low)[:, ch_idx] / max_val
+            )
+            pert_high = (
+                geometric_adstock_2d(x_media_pert, alpha_high)[:, ch_idx] / max_val
+            )
+            mix = handle["adstock_mix"]
+            a_pert = (1 - mix) * pt.as_tensor_variable(pert_low) + mix * (
+                pt.as_tensor_variable(pert_high)
+            )
+
+        sat_pert = 1 - pt.exp(pt.clip(-sat_lam * a_pert, -20, 0))
+        contrib_pert = beta * sat_pert
+        return contrib_pert[mask_idx].sum()
+
+    def _add_experiment_likelihoods(self, channel_handles: dict[str, dict]) -> None:
+        """Fold registered experiments into the graph as likelihood terms.
+
+        Called inside the ``pm.Model`` context of :meth:`_build_model`. Each
+        experiment's model-implied estimand (contribution / ROAS / marginal ROAS)
+        is built from the channel's in-graph parameters and compared to the
+        measured value via :func:`mmm_framework.calibration.likelihood.attach_experiment_likelihood`.
+        Experiments that cannot be located or scaled are skipped with a warning
+        rather than aborting the build.
+        """
+        from ..calibration.likelihood import (
+            ExperimentEstimand,
+            attach_experiment_likelihood,
+        )
+
+        used_names: set[str] = set()
+        for i, exp in enumerate(self.experiments):
+            if exp.channel not in channel_handles:
+                warnings.warn(
+                    f"Experiment skipped: unknown channel {exp.channel!r}.",
+                    stacklevel=2,
+                )
+                continue
+
+            mask = self._experiment_obs_mask(exp)
+            if mask is None:
+                continue
+            mask_idx = np.where(mask)[0]
+            handle = channel_handles[exp.channel]
+            ch_idx = handle["index"]
+
+            contrib_std = handle["channel_contrib"][mask_idx].sum()
+            contribution = contrib_std * self.y_std
+
+            if exp.spend is not None:
+                spend_window = float(exp.spend)
+            else:
+                spend_window = float(self.X_media_raw[mask_idx, ch_idx].sum())
+
+            if exp.estimand is ExperimentEstimand.CONTRIBUTION:
+                estimand = contribution
+            elif exp.estimand is ExperimentEstimand.ROAS:
+                if spend_window <= 0:
+                    warnings.warn(
+                        f"ROAS experiment on {exp.channel!r} skipped: window "
+                        "spend is zero (cannot form ROAS denominator).",
+                        stacklevel=2,
+                    )
+                    continue
+                estimand = contribution / spend_window
+            else:  # MROAS
+                if spend_window <= 0:
+                    warnings.warn(
+                        f"mROAS experiment on {exp.channel!r} skipped: window "
+                        "spend is zero (cannot form marginal-spend denominator).",
+                        stacklevel=2,
+                    )
+                    continue
+                lift = exp.spend_lift_pct / 100.0
+                contrib_pert_std = self._perturbed_contribution_sum(
+                    handle, mask, mask_idx, lift
+                )
+                delta_contribution = (contrib_pert_std - contrib_std) * self.y_std
+                spend_delta = lift * spend_window
+                estimand = delta_contribution / spend_delta
+
+            # Reserve both the likelihood node name and the companion
+            # ``{name}_model_estimand`` Deterministic so two experiments with
+            # colliding explicit names can't clobber each other's nodes.
+            base_name = exp.default_node_name(i)
+            name = base_name
+            bump = 2
+            while name in used_names or f"{name}_model_estimand" in used_names:
+                name = f"{base_name}_{bump}"
+                bump += 1
+            used_names.add(name)
+            used_names.add(f"{name}_model_estimand")
+            attach_experiment_likelihood(name, estimand, exp)
 
     @property
     def model(self) -> pm.Model:
@@ -730,15 +1400,19 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(X_media)
-
         with self.model:
-            pm.set_data(
-                {
-                    "X_media_low": X_adstock_low,
-                    "X_media_high": X_adstock_high,
-                }
-            )
+            if self.use_parametric_adstock:
+                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
+            else:
+                X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(
+                    X_media
+                )
+                pm.set_data(
+                    {
+                        "X_media_low": X_adstock_low,
+                        "X_media_high": X_adstock_high,
+                    }
+                )
 
             if X_controls is not None and self.n_controls > 0:
                 X_controls_std = (X_controls - self.control_mean) / self.control_std
@@ -995,9 +1669,22 @@ class BayesianMMM:
         spend_increase_pct: float = 10.0,
         time_period: tuple[int, int] | None = None,
         channels: list[str] | None = None,
+        compute_uncertainty: bool = True,
+        hdi_prob: float = 0.94,
         random_seed: int | None = None,
     ) -> pd.DataFrame:
-        """Compute marginal contributions for a given spend increase."""
+        """Compute marginal contributions for a given spend increase.
+
+        When ``compute_uncertainty`` is True the marginal contribution and
+        marginal ROAS are propagated through the full posterior (saturation and
+        coefficient uncertainty included) and the returned frame gains HDI
+        columns. This addresses critique.md §3.9: the headline efficiency number
+        should never be reported as a bare point estimate.
+
+        Uncertainty requires the baseline and increased posterior-predictive
+        draws to be *paired* so the sampled observation noise cancels in their
+        per-draw difference; a single shared seed is used to guarantee that.
+        """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -1006,8 +1693,17 @@ class BayesianMMM:
 
         time_mask = self._get_time_mask(time_period)
 
-        baseline_pred = self.predict(random_seed=random_seed)
+        # Pair the baseline/increased draws. With ``random_seed=None`` each
+        # predict() call would re-seed independently and the observation noise
+        # would not cancel, inflating the HDI -- so synthesize one shared seed.
+        pair_seed = random_seed
+        if compute_uncertainty and pair_seed is None:
+            pair_seed = int(np.random.default_rng().integers(0, 2**31 - 1))
+
+        baseline_pred = self.predict(random_seed=pair_seed)
         baseline_total = baseline_pred.y_pred_mean[time_mask].sum()
+        if compute_uncertainty:
+            baseline_samples = baseline_pred.y_pred_samples[:, time_mask].sum(axis=1)
 
         results = []
 
@@ -1019,7 +1715,7 @@ class BayesianMMM:
 
             increased_pred = self.predict(
                 X_media=X_media_increased,
-                random_seed=random_seed,
+                random_seed=pair_seed,
             )
             increased_total = increased_pred.y_pred_mean[time_mask].sum()
 
@@ -1032,15 +1728,38 @@ class BayesianMMM:
                 marginal_contrib / spend_increase if spend_increase > 0 else 0
             )
 
-            results.append(
-                {
-                    "Channel": channel,
-                    "Current Spend": current_spend,
-                    f"Spend Increase ({spend_increase_pct}%)": spend_increase,
-                    "Marginal Contribution": marginal_contrib,
-                    "Marginal ROAS": marginal_roas,
-                }
-            )
+            row = {
+                "Channel": channel,
+                "Current Spend": current_spend,
+                f"Spend Increase ({spend_increase_pct}%)": spend_increase,
+                "Marginal Contribution": marginal_contrib,
+                "Marginal ROAS": marginal_roas,
+            }
+
+            if compute_uncertainty:
+                increased_samples = increased_pred.y_pred_samples[:, time_mask].sum(
+                    axis=1
+                )
+                contrib_samples = increased_samples - baseline_samples
+                contrib_low, contrib_high = _hdi_finite(contrib_samples, hdi_prob)
+                # Guard the per-draw division: a channel with no spend in the
+                # period has spend_increase == 0, which would make every
+                # marginal_roas sample inf/nan and poison the HDI.
+                if spend_increase > 0:
+                    roas_samples = contrib_samples / spend_increase
+                    roas_low, roas_high = _hdi_finite(roas_samples, hdi_prob)
+                else:
+                    roas_low = roas_high = 0.0
+                row.update(
+                    {
+                        "Marginal Contribution HDI Low": contrib_low,
+                        "Marginal Contribution HDI High": contrib_high,
+                        "Marginal ROAS HDI Low": roas_low,
+                        "Marginal ROAS HDI High": roas_high,
+                    }
+                )
+
+            results.append(row)
 
         return pd.DataFrame(results)
 
@@ -1099,10 +1818,58 @@ class BayesianMMM:
             "scenario_prediction": scenario_pred.y_pred_mean,
         }
 
-    def sample_prior_predictive(self, samples: int = 500) -> az.InferenceData:
+    def sample_prior_predictive(
+        self, samples: int = 500, random_seed: int | None = None
+    ) -> az.InferenceData:
         """Sample from prior predictive distribution."""
         with self.model:
-            return pm.sample_prior_predictive(samples=samples)
+            return pm.sample_prior_predictive(samples=samples, random_seed=random_seed)
+
+    def compute_parameter_learning(
+        self,
+        var_names: list[str] | None = None,
+        *,
+        prior_samples: int = 1000,
+        random_seed: int | None = None,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Quantify how much the data updated each parameter relative to its prior.
+
+        Draws prior samples and compares them to the fitted posterior, returning the
+        prior-to-posterior **contraction**, **overlap**, and location **shift** for every
+        parameter -- the honest way to tell whether a posterior reflects the *data* or
+        merely re-states an informative/constrained prior. See
+        :func:`mmm_framework.diagnostics.parameter_learning`.
+
+        Parameters
+        ----------
+        var_names:
+            Parameters to diagnose. ``None`` (default) uses the model's free random
+            variables (``beta_*``, ``sat_lam_*``, ``adstock_*``, ``intercept``, ...).
+        prior_samples:
+            Number of prior draws used to estimate the prior moments/overlap.
+        random_seed:
+            Seed for the prior draw (reproducibility).
+        **kwargs:
+            Forwarded to :func:`~mmm_framework.diagnostics.parameter_learning`
+            (e.g. ``bins``, ``c_strong``, ``c_weak``, ``ovl_dominated``).
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per parameter, sorted by ``contraction`` ascending (most
+            prior-dominated first).
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        from ..diagnostics import parameter_learning
+
+        if var_names is None:
+            var_names = [rv.name for rv in self.model.free_RVs]
+        prior = self.sample_prior_predictive(
+            samples=prior_samples, random_seed=random_seed
+        )
+        return parameter_learning(prior, self._trace, var_names=var_names, **kwargs)
 
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary."""

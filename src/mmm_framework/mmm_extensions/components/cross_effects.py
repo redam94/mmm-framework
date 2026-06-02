@@ -52,14 +52,17 @@ def build_cross_effect_matrix(
         param_name = f"{name_prefix}_{spec.source_idx}_{spec.target_idx}"
 
         if spec.effect_type == "cannibalization":
-            # Negative effect
+            # Sign imposed negative: psi = -HalfNormal (free RV is "<name>_raw").
             psi_raw = pm.HalfNormal(f"{param_name}_raw", sigma=spec.prior_sigma)
             psi = -psi_raw
         elif spec.effect_type == "halo":
-            # Positive effect
+            # Sign imposed positive: psi = +HalfNormal.
             psi = pm.HalfNormal(param_name, sigma=spec.prior_sigma)
         else:
-            # Unconstrained
+            # No sign imposed: psi ~ Normal (free RV is "<name>", no "_raw" suffix). Covers
+            # "unconstrained" (and the legacy "symmetric"/"asymmetric" directionality flags).
+            # The data picks the sign; on observed outcomes psi is confounded with the
+            # residual correlation, so read it as a cross-outcome association.
             psi = pm.Normal(param_name, mu=0, sigma=spec.prior_sigma)
 
         psi_matrix = pt.set_subtensor(psi_matrix[spec.source_idx, spec.target_idx], psi)

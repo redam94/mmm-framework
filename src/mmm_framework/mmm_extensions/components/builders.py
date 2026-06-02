@@ -10,12 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import pymc as pm
 import pytensor.tensor as pt
 
 from .transforms import (
-    geometric_adstock_convolution,
     logistic_saturation_pt,
     hill_saturation,
+    parametric_adstock_pt,
 )
 from .priors import create_adstock_prior, create_saturation_prior, create_effect_prior
 
@@ -69,15 +70,19 @@ def build_media_transforms(
     MediaTransformResult
         Transformed media and parameters
     """
-    n_channels = len(channel_names)
     prefix = f"{name_prefix}_" if name_prefix else ""
 
     adstock_params = {}
     saturation_params = {}
     transformed_channels = []
 
-    # Create adstock parameters
-    if share_params:
+    adstock_type = adstock_config.get("type", "geometric")
+    l_max = adstock_config.get("l_max", 8)
+    normalize = adstock_config.get("normalize", True)
+
+    # Create the shared decay prior only for kernels that use alpha, so we
+    # don't introduce an unused (orphan) RV for Weibull/none.
+    if share_params and adstock_type in ("geometric", "delayed"):
         alpha = create_adstock_prior(
             f"{prefix}alpha_shared",
             prior_type=adstock_config.get("prior_type", "beta"),
@@ -89,19 +94,52 @@ def build_media_transforms(
     for i, channel in enumerate(channel_names):
         x = X_media[:, i]
 
-        # Adstock
-        if share_params:
-            alpha = adstock_params["shared"]
-        else:
-            alpha = create_adstock_prior(
-                f"{prefix}alpha_{channel}",
-                prior_type=adstock_config.get("prior_type", "beta"),
-                **adstock_config.get("prior_params", {}),
-            )
-            adstock_params[channel] = alpha
+        # Adstock — dispatch on kernel shape so delayed/Weibull are honored
+        # rather than silently falling back to geometric.
+        if adstock_type == "none":
+            x_adstocked = x
+        elif adstock_type in ("geometric", "delayed"):
+            if share_params:
+                alpha = adstock_params["shared"]
+            else:
+                alpha = create_adstock_prior(
+                    f"{prefix}alpha_{channel}",
+                    prior_type=adstock_config.get("prior_type", "beta"),
+                    **adstock_config.get("prior_params", {}),
+                )
+                adstock_params[channel] = alpha
 
-        l_max = adstock_config.get("l_max", 8)
-        x_adstocked = geometric_adstock_convolution(x, alpha, l_max)
+            if adstock_type == "geometric":
+                x_adstocked = parametric_adstock_pt(
+                    x, "geometric", l_max, alpha=alpha, normalize=normalize
+                )
+            else:
+                theta = pm.HalfNormal(
+                    f"{prefix}theta_{channel}",
+                    sigma=adstock_config.get("theta_sigma", 2.0),
+                )
+                adstock_params[f"{channel}_theta"] = theta
+                x_adstocked = parametric_adstock_pt(
+                    x, "delayed", l_max, alpha=alpha, theta=theta, normalize=normalize
+                )
+        elif adstock_type == "weibull":
+            shape = pm.Gamma(
+                f"{prefix}shape_{channel}",
+                alpha=adstock_config.get("shape_alpha", 2.0),
+                beta=adstock_config.get("shape_beta", 1.0),
+            )
+            scale = pm.Gamma(
+                f"{prefix}scale_{channel}",
+                alpha=adstock_config.get("scale_alpha", 2.0),
+                beta=adstock_config.get("scale_beta", 1.0),
+            )
+            adstock_params[channel] = shape
+            adstock_params[f"{channel}_scale"] = scale
+            x_adstocked = parametric_adstock_pt(
+                x, "weibull", l_max, shape=shape, scale=scale, normalize=normalize
+            )
+        else:
+            raise ValueError(f"Unknown adstock type: {adstock_type!r}")
 
         # Saturation
         sat_type = saturation_config.get("type", "logistic")

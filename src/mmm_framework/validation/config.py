@@ -124,6 +124,51 @@ class CalibrationConfig:
     tolerance_multiplier: float = 1.5  # Allow 1.5x SE deviation
 
 
+@dataclass(frozen=True)
+class CausalRefutationConfig:
+    """Configuration for the causal refutation suite (each test refits once).
+
+    Because the media coefficient prior is positive-mean, a placebo coefficient
+    does NOT vanish to zero -- so vanishing-effect tests are measured by **fit**,
+    not by the coefficient:
+
+    * ``negative_control_outcome`` permutes the KPI; a valid, regularized model
+      should be unable to fit the scrambled outcome (refit R^2 below
+      ``negative_control_r2_threshold``).
+    * ``placebo_treatment`` permutes media; scrambled media should add no
+      incremental explanatory power over a media-free baseline (incremental media
+      R^2 below ``media_r2_threshold``).
+
+    Stability tests compare the per-channel coefficient before/after and pass when
+    it moves less than ``move_tolerance`` (relative):
+
+    * ``random_common_cause`` injects a random control.
+    * ``data_subset`` refits on a random subset.
+
+    ``precision`` (refit coefficient SD) is reported on stability tests so an
+    underpowered "pass" is not oversold.
+    """
+
+    run_placebo: bool = True
+    run_negative_control: bool = True
+    run_random_common_cause: bool = True
+    run_data_subset: bool = True
+
+    subset_fraction: float = 0.8
+    media_r2_threshold: float = 0.05  # placebo: incremental media R^2 must be below
+    negative_control_r2_threshold: float = 0.25  # neg-control: refit R^2 must be below
+    move_tolerance: float = 0.5  # stability tests: |refit-orig| < tol * |original|
+    # Flag a "pass" as underpowered if the median stability-refit coefficient SD
+    # exceeds this multiple of the original coefficient magnitude.
+    underpowered_se_ratio: float = 1.0
+
+    # Short refit settings (cheaper than a production fit).
+    draws: int = 300
+    tune: int = 300
+    chains: int = 2
+    random_seed: int = 1234
+
+
 @dataclass
 class ValidationConfig:
     """
@@ -160,6 +205,9 @@ class ValidationConfig:
     sensitivity: SensitivityConfig = field(default_factory=SensitivityConfig)
     stability: StabilityConfig = field(default_factory=StabilityConfig)
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
+    causal_refutation: CausalRefutationConfig = field(
+        default_factory=CausalRefutationConfig
+    )
 
     # Which validations to run
     run_ppc: bool = True
@@ -170,6 +218,11 @@ class ValidationConfig:
     run_sensitivity: bool = False  # Expensive
     run_stability: bool = False  # Expensive
     run_calibration: bool = False  # Requires external data
+    run_unobserved_confounding: bool = False  # Cheap: per-channel robustness values
+    run_causal_refutation: bool = False  # Expensive: refits the model per test
+
+    # Reduce-effect fraction for the robustness value (1.0 -> nullify the effect).
+    unobserved_confounding_q: float = 1.0
 
     # Calibration data (set via builder)
     lift_tests: list[LiftTestResult] | None = None
@@ -233,6 +286,8 @@ class ValidationConfig:
             run_sensitivity=True,
             run_stability=True,
             run_calibration=False,  # Still requires external data
+            run_unobserved_confounding=True,  # Cheap; surfaces the honest caveat
+            run_causal_refutation=False,  # Expensive (refits); explicit opt-in only
         )
 
 
@@ -246,5 +301,6 @@ __all__ = [
     "SensitivityConfig",
     "StabilityConfig",
     "CalibrationConfig",
+    "CausalRefutationConfig",
     "ValidationConfig",
 ]

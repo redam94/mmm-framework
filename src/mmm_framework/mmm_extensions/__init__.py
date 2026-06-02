@@ -82,6 +82,7 @@ from .builders import (
     foot_traffic_mediator,
     cannibalization_effect,
     halo_effect,
+    cross_effect,
     # Variable Selection
     HorseshoeConfigBuilder,
     SpikeSlabConfigBuilder,
@@ -264,6 +265,7 @@ __all__ = [
     "foot_traffic_mediator",
     "cannibalization_effect",
     "halo_effect",
+    "cross_effect",
     "sparse_controls",
     "selection_with_inclusion_probs",
     "dense_controls",

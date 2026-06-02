@@ -176,6 +176,11 @@ class MMMDataBundle:
     # Sensitivity analysis
     sensitivity_results: dict[str, Any] | None = None
 
+    # Causal assumptions / identification + unobserved-confounding robustness.
+    # Keys (all optional): "identification_strategy" (str), "assumed_confounders"
+    # (list[str]), "robustness" (UnobservedConfoundingSensitivity.to_dict()).
+    causal_assumptions: dict[str, Any] | None = None
+
     # Model specification info
     model_specification: dict[str, Any] | None = None
 

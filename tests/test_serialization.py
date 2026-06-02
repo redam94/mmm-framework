@@ -65,7 +65,7 @@ class TestMMMSerializerMetadataCollection:
             n_obs = 100
             n_channels = 3
             n_controls = 2
-            n_time_periods = 52
+            n_periods = 52
             channel_names = ["TV", "Radio", "Digital"]
             control_names = ["Price", "Promo"]
             has_geo = False
@@ -99,7 +99,7 @@ class TestMMMSerializerMetadataCollection:
             n_obs = 100
             n_channels = 3
             n_controls = 2
-            n_time_periods = 52
+            n_periods = 52
             channel_names = ["TV", "Radio", "Digital"]
             control_names = ["Price", "Promo"]
             has_geo = True
@@ -123,7 +123,7 @@ class TestMMMSerializerMetadataCollection:
             n_obs = 100
             n_channels = 3
             n_controls = 2
-            n_time_periods = 52
+            n_periods = 52
             channel_names = ["TV", "Radio", "Digital"]
             control_names = ["Price", "Promo"]
             has_geo = False
@@ -356,7 +356,7 @@ class TestSerializerFormatVersion:
             n_obs = 100
             n_channels = 3
             n_controls = 2
-            n_time_periods = 52
+            n_periods = 52
             channel_names = ["TV", "Radio", "Digital"]
             control_names = ["Price", "Promo"]
             has_geo = False
@@ -469,7 +469,7 @@ class TestMMMSerializerEdgeCases:
             n_obs = 10
             n_channels = 1
             n_controls = 0
-            n_time_periods = 10
+            n_periods = 10
             channel_names = ["TV"]
             control_names = []
             has_geo = False
@@ -513,7 +513,7 @@ class TestMMMSerializerSaveLoadPath:
             n_obs = 10
             n_channels = 1
             n_controls = 0
-            n_time_periods = 10
+            n_periods = 10
             channel_names = ["TV"]
             control_names = []
             has_geo = False

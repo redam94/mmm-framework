@@ -35,9 +35,19 @@ class MarginalAnalysisResult:
     spend_increase_pct : float
         Percentage spend increase.
     marginal_contribution : float
-        Additional outcome from the spend increase.
+        Additional outcome from the spend increase (posterior mean).
     marginal_roas : float
-        Return on additional spend.
+        Return on additional spend (posterior mean).
+    marginal_contribution_hdi_low, marginal_contribution_hdi_high : float | None
+        Credible-interval bounds on the marginal contribution, propagated from
+        the posterior. ``None`` when uncertainty was not computed.
+    marginal_roas_hdi_low, marginal_roas_hdi_high : float | None
+        Credible-interval bounds on the marginal ROAS. ``None`` when uncertainty
+        was not computed. The headline efficiency number should always be read
+        with this interval -- a marginal ROAS point estimate with no uncertainty
+        is the §3.9 problem the framework set out to fix.
+    hdi_prob : float | None
+        Probability mass of the reported HDI (e.g. 0.94).
     """
 
     channel: str
@@ -46,6 +56,11 @@ class MarginalAnalysisResult:
     spend_increase_pct: float
     marginal_contribution: float
     marginal_roas: float
+    marginal_contribution_hdi_low: float | None = None
+    marginal_contribution_hdi_high: float | None = None
+    marginal_roas_hdi_low: float | None = None
+    marginal_roas_hdi_high: float | None = None
+    hdi_prob: float | None = None
 
 
 @dataclass
@@ -184,6 +199,8 @@ class MMMAnalyzer:
         spend_increase_pct: float = 10.0,
         time_period: tuple[int, int] | None = None,
         channels: list[str] | None = None,
+        compute_uncertainty: bool = True,
+        hdi_prob: float = 0.94,
         random_seed: int | None = None,
     ) -> pd.DataFrame:
         """
@@ -199,18 +216,26 @@ class MMMAnalyzer:
             Time period for calculation.
         channels : list[str], optional
             Channels to analyze. If None, uses all.
+        compute_uncertainty : bool
+            If True (default), propagate posterior uncertainty and include HDI
+            bounds on marginal contribution and marginal ROAS.
+        hdi_prob : float
+            Probability mass for the HDI.
         random_seed : int, optional
             Random seed for reproducibility.
 
         Returns
         -------
         pd.DataFrame
-            Marginal contribution analysis.
+            Marginal contribution analysis (with HDI columns when
+            ``compute_uncertainty`` is True).
         """
         return self._model.compute_marginal_contributions(
             spend_increase_pct=spend_increase_pct,
             time_period=time_period,
             channels=channels,
+            compute_uncertainty=compute_uncertainty,
+            hdi_prob=hdi_prob,
             random_seed=random_seed,
         )
 

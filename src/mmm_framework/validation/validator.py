@@ -34,7 +34,7 @@ from .results import (
 )
 
 if TYPE_CHECKING:
-    import arviz as az
+    pass
 
 
 class ModelValidator:
@@ -222,6 +222,39 @@ class ModelValidator:
                 logger.warning(f"Calibration check failed: {e}")
                 summary.warnings.append(f"Calibration check failed: {str(e)}")
 
+        # Unobserved-confounding sensitivity (cheap; surfaces the honest caveat)
+        if config.run_unobserved_confounding:
+            try:
+                summary.unobserved_confounding = self._run_unobserved_confounding(
+                    config
+                )
+                if config.verbose:
+                    frag = summary.unobserved_confounding.fragile_channels
+                    logger.info(
+                        f"Unobserved-confounding sensitivity: {len(frag)} fragile "
+                        f"channel(s)"
+                    )
+            except Exception as e:
+                logger.warning(f"Unobserved-confounding sensitivity failed: {e}")
+                summary.warnings.append(
+                    f"Unobserved-confounding sensitivity failed: {str(e)}"
+                )
+
+        # Causal refutation suite (expensive: refits the model per test)
+        if config.run_causal_refutation:
+            try:
+                summary.causal_refutation = self._run_causal_refutation(config)
+                if config.verbose:
+                    cr = summary.causal_refutation
+                    extra = " (underpowered)" if cr.underpowered else ""
+                    logger.info(
+                        f"Causal refutation: {cr.n_passed}/{len(cr.tests)} passed"
+                        f"{extra}"
+                    )
+            except Exception as e:
+                logger.warning(f"Causal refutation failed: {e}")
+                summary.warnings.append(f"Causal refutation failed: {str(e)}")
+
         # Assess overall quality
         summary.overall_quality = self._assess_quality(summary)
         summary.critical_issues = self._identify_issues(summary)
@@ -353,7 +386,6 @@ class ModelValidator:
 
     def _ensure_log_likelihood(self, trace: Any) -> Any:
         """Ensure log likelihood is computed in the trace."""
-        import arviz as az
 
         # Check if log likelihood already exists
         if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
@@ -845,8 +877,14 @@ class ModelValidator:
             # MEDIA CONTRIBUTIONS
             for ch_idx, ch in enumerate(trained_model.channel_names):
                 # Use learned adstock mixing from posterior samples
-                mix = adstock_mix_samples[ch][s] if adstock_mix_samples[ch] is not None else 0.5
-                x_adstocked = (1 - mix) * X_adstock_low[:, ch_idx] + mix * X_adstock_high[:, ch_idx]
+                mix = (
+                    adstock_mix_samples[ch][s]
+                    if adstock_mix_samples[ch] is not None
+                    else 0.5
+                )
+                x_adstocked = (1 - mix) * X_adstock_low[
+                    :, ch_idx
+                ] + mix * X_adstock_high[:, ch_idx]
 
                 # Apply saturation
                 lam = sat_lam_samples[ch][s] if sat_lam_samples[ch] is not None else 1.0
@@ -859,7 +897,11 @@ class ModelValidator:
             # CONTROL CONTRIBUTIONS
             if X_controls_std is not None and beta_controls_samples is not None:
                 for ctrl_idx in range(X_controls_std.shape[1]):
-                    y_pred = y_pred + beta_controls_samples[s, ctrl_idx] * X_controls_std[:, ctrl_idx]
+                    y_pred = (
+                        y_pred
+                        + beta_controls_samples[s, ctrl_idx]
+                        * X_controls_std[:, ctrl_idx]
+                    )
 
             # OBSERVATION NOISE
             if sigma_samples is not None:
@@ -1120,9 +1162,7 @@ class ModelValidator:
         BayesianMMM
             New model with modified priors.
         """
-        from copy import deepcopy
         from mmm_framework import BayesianMMM
-        from mmm_framework.config import ModelConfig
 
         original_model = self.model
 
@@ -1146,8 +1186,6 @@ class ModelValidator:
         original_build = new_model._build_model
 
         def scaled_build():
-            import pymc as pm
-            import pytensor.tensor as pt
 
             # Build the model with scaled priors
             model = original_build()
@@ -1326,7 +1364,6 @@ class ModelValidator:
         BootstrapResults
             Bootstrap parameter distributions.
         """
-        from mmm_framework import BayesianMMM
 
         n_bootstrap = min(stab_config.n_bootstrap, 20)  # Cap for performance
         key_params = list(self._extract_parameter_estimates(self.model).keys())
@@ -1602,7 +1639,7 @@ class ModelValidator:
         CalibrationResults
             Comparison results between model and experimental estimates.
         """
-        from .results import CalibrationResults, LiftTestComparison
+        from .results import CalibrationResults
 
         calib_config = config.calibration
         lift_tests = config.lift_tests
@@ -1686,7 +1723,6 @@ class ModelValidator:
         tuple[float, float, float]
             (estimate, ci_low, ci_high) for the channel contribution.
         """
-        import pandas as pd
 
         # Parse test period to time indices
         start_idx, end_idx = self._parse_period_to_indices(lift_test.test_period)
@@ -1743,19 +1779,39 @@ class ModelValidator:
         test_period: tuple[str, str],
     ) -> tuple[int, int]:
         """
-        Convert date strings to time indices.
+        Convert date strings (or integer indices) to a ``(start_idx, end_idx)``
+        period range.
+
+        Uses boolean period selection (the first and last periods that fall in
+        ``[start, end]``) rather than loop side-effects, and raises when no period
+        falls in the window -- so a lift test specified outside the panel is
+        rejected (and skipped by the calibration loop) instead of being silently
+        scored against the whole panel. Mirrors
+        :meth:`mmm_framework.model.base.BayesianMMM._period_to_indices`.
 
         Parameters
         ----------
         test_period : tuple[str, str]
-            (start_date, end_date) as strings.
+            (start_date, end_date) as date strings or integer indices.
 
         Returns
         -------
         tuple[int, int]
-            (start_idx, end_idx) as integer indices.
+            (start_idx, end_idx) as integer period indices.
         """
+        import numpy as np
         import pandas as pd
+
+        # Prefer the model's corrected parser when it exposes one (BayesianMMM).
+        model_parser = getattr(self.model, "_period_to_indices", None)
+        if callable(model_parser):
+            result = model_parser(test_period)
+            if result is None:
+                raise ValueError(
+                    f"test_period {test_period!r} falls outside the model's "
+                    "period range."
+                )
+            return result
 
         start_str, end_str = test_period
 
@@ -1767,7 +1823,7 @@ class ModelValidator:
             # If not parseable as dates, try as integer indices
             try:
                 return int(start_str), int(end_str)
-            except ValueError:
+            except (ValueError, TypeError):
                 raise ValueError(f"Cannot parse test_period: {test_period}")
 
         # Get panel dates
@@ -1777,24 +1833,348 @@ class ModelValidator:
                 # Get period level from MultiIndex
                 period_col = self.model.mff_config.columns.period
                 period_values = panel_index.get_level_values(period_col)
-                unique_periods = pd.to_datetime(period_values.unique())
+                unique_periods = pd.DatetimeIndex(
+                    pd.to_datetime(period_values.unique())
+                )
             else:
-                unique_periods = pd.to_datetime(panel_index)
+                unique_periods = pd.DatetimeIndex(pd.to_datetime(panel_index))
 
-            # Find start and end indices
-            start_idx = 0
-            end_idx = len(unique_periods) - 1
-
-            for i, period in enumerate(unique_periods):
-                if period >= start_date and start_idx == 0:
-                    start_idx = i
-                if period <= end_date:
-                    end_idx = i
-
-            return start_idx, end_idx
+            in_window = np.asarray(
+                (unique_periods >= start_date) & (unique_periods <= end_date)
+            )
+            matched = np.flatnonzero(in_window)
+            if matched.size == 0:
+                raise ValueError(
+                    f"test_period {test_period!r} falls outside the model's "
+                    "period range."
+                )
+            return int(matched[0]), int(matched[-1])
 
         # Fallback: assume indices directly
         raise ValueError("Cannot determine time indices from panel data")
+
+    # =========================================================================
+    # Causal sensitivity & refutation
+    # =========================================================================
+
+    def _run_unobserved_confounding(self, config: ValidationConfig) -> Any:
+        """Per-channel robustness of media effects to unobserved confounding."""
+        from .sensitivity_unobserved import UnobservedConfoundingAnalysis
+
+        return UnobservedConfoundingAnalysis(self.model).run(
+            q=config.unobserved_confounding_q
+        )
+
+    def _run_causal_refutation(self, config: ValidationConfig) -> Any:
+        """Run the causal refutation suite (placebo / neg-control / RCC / subset).
+
+        Each enabled test refits the model once on perturbed data and is scored by
+        the appropriate criterion (fit-based for vanishing tests, coefficient
+        stability for stability tests). A failing or non-computable test does not
+        abort the suite.
+        """
+        from .results import CausalRefutationResults
+
+        rc = config.causal_refutation
+        rng = np.random.default_rng(rc.random_seed)
+
+        original_betas = self._channel_betas(self.model)
+        original_full_r2 = self._r2(
+            self.model.y_raw,
+            self.model.predict(return_original_scale=True).y_pred_mean,
+        )
+        original_incr_r2 = self._incremental_media_r2(self.model)
+
+        tests = []
+        if rc.run_placebo:
+            tests.append(
+                self._safe_refute(
+                    self._refute_placebo,
+                    rc,
+                    rng,
+                    original_incr_r2,
+                    name="placebo_treatment",
+                    kind="vanish",
+                )
+            )
+        if rc.run_negative_control:
+            tests.append(
+                self._safe_refute(
+                    self._refute_negative_control,
+                    rc,
+                    rng,
+                    original_full_r2,
+                    name="negative_control_outcome",
+                    kind="vanish",
+                )
+            )
+        if rc.run_random_common_cause:
+            tests.append(
+                self._safe_refute(
+                    self._refute_random_common_cause,
+                    rc,
+                    rng,
+                    original_betas,
+                    name="random_common_cause",
+                    kind="stable",
+                )
+            )
+        if rc.run_data_subset:
+            tests.append(
+                self._safe_refute(
+                    self._refute_data_subset,
+                    rc,
+                    rng,
+                    original_betas,
+                    name="data_subset",
+                    kind="stable",
+                )
+            )
+        tests = [t for t in tests if t is not None]
+
+        # Underpowered if the median stability-refit coefficient SD is large
+        # relative to the typical original coefficient magnitude -- a "pass"
+        # would then be uninformative.
+        stability_sds = [
+            t.precision for t in tests if t.kind == "stable" and t.precision is not None
+        ]
+        orig_mag = (
+            float(np.median([abs(m) for m, _ in original_betas.values()]))
+            if original_betas
+            else 1.0
+        )
+        underpowered = bool(stability_sds) and (
+            float(np.median(stability_sds))
+            > rc.underpowered_se_ratio * max(orig_mag, 1e-8)
+        )
+
+        return CausalRefutationResults(tests=tests, underpowered=underpowered)
+
+    def _safe_refute(self, fn, rc, rng, ctx, *, name: str, kind: str):
+        from .results import RefutationTest
+
+        try:
+            return fn(rc, rng, ctx)
+        except Exception as e:  # noqa: BLE001 - one test must not abort the suite
+            logger.warning(f"Refutation '{name}' failed: {e}")
+            return RefutationTest(
+                name=name,
+                kind=kind,
+                passed=False,
+                description="Refutation could not be computed.",
+                details=f"error: {e}",
+            )
+
+    def _fit_clone(self, panel: Any, rc: Any) -> Any:
+        from mmm_framework import BayesianMMM
+
+        new_model = BayesianMMM(
+            panel=panel,
+            model_config=self.model.model_config,
+            trend_config=self.model.trend_config,
+            adstock_alphas=self.model.adstock_alphas,
+        )
+        new_model.fit(
+            draws=rc.draws, tune=rc.tune, chains=rc.chains, random_seed=rc.random_seed
+        )
+        return new_model
+
+    def _channel_betas(self, model: Any) -> dict[str, tuple[float, float]]:
+        """Per-channel (posterior mean, sd) of the media coefficient."""
+        posterior = model._trace.posterior
+        out: dict[str, tuple[float, float]] = {}
+        for ch in model.channel_names:
+            name = f"beta_{ch}"
+            if name in posterior:
+                d = np.asarray(posterior[name].values).reshape(-1)
+                mean = float(np.mean(d))
+                sd = float(np.std(d, ddof=1)) if d.size > 1 else float("nan")
+                out[ch] = (mean, sd)
+        return out
+
+    @staticmethod
+    def _r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        y_true = np.asarray(y_true, dtype=float)
+        y_pred = np.asarray(y_pred, dtype=float)
+        sst = float(np.sum((y_true - y_true.mean()) ** 2))
+        if sst <= 0:
+            return 0.0
+        sse = float(np.sum((y_true - y_pred) ** 2))
+        return 1.0 - sse / sst
+
+    def _incremental_media_r2(self, model: Any) -> float:
+        """R^2 improvement media adds over a media-free baseline (same model)."""
+        y_true = model.y_raw
+        full = model.predict(return_original_scale=True).y_pred_mean
+        zeros = np.zeros_like(model.X_media_raw)
+        base = model.predict(X_media=zeros, return_original_scale=True).y_pred_mean
+        return self._r2(y_true, full) - self._r2(y_true, base)
+
+    def _refute_placebo(self, rc: Any, rng: Any, original_incr_r2: float) -> Any:
+        from .results import RefutationTest
+        from mmm_framework.data_loader import PanelDataset
+
+        panel = self.model.panel
+        X_media = panel.X_media.copy()
+        for col in X_media.columns:
+            X_media[col] = rng.permutation(X_media[col].values)
+        new_panel = PanelDataset(
+            y=panel.y,
+            X_media=X_media,
+            X_controls=panel.X_controls,
+            index=panel.index,
+            config=panel.config,
+            coords=panel.coords,
+        )
+        refit = self._fit_clone(new_panel, rc)
+        incr = self._incremental_media_r2(refit)
+        passed = incr < rc.media_r2_threshold
+        return RefutationTest(
+            name="placebo_treatment",
+            kind="vanish",
+            passed=passed,
+            description="Permuted media spend; scrambled media should add no fit.",
+            original_effect=original_incr_r2,
+            refuted_effect=incr,
+            details=(
+                f"incremental media R^2: original {original_incr_r2:.3f} -> "
+                f"placebo {incr:.3f} (threshold {rc.media_r2_threshold})."
+            ),
+        )
+
+    def _refute_negative_control(
+        self, rc: Any, rng: Any, original_full_r2: float
+    ) -> Any:
+        from .results import RefutationTest
+        from mmm_framework.data_loader import PanelDataset
+        import pandas as pd
+
+        panel = self.model.panel
+        y_perm = pd.Series(
+            rng.permutation(panel.y.values), index=panel.y.index, name=panel.y.name
+        )
+        new_panel = PanelDataset(
+            y=y_perm,
+            X_media=panel.X_media,
+            X_controls=panel.X_controls,
+            index=panel.index,
+            config=panel.config,
+            coords=panel.coords,
+        )
+        refit = self._fit_clone(new_panel, rc)
+        r2 = self._r2(
+            refit.y_raw, refit.predict(return_original_scale=True).y_pred_mean
+        )
+        passed = r2 < rc.negative_control_r2_threshold
+        return RefutationTest(
+            name="negative_control_outcome",
+            kind="vanish",
+            passed=passed,
+            description="Permuted KPI; a valid model cannot fit a scrambled outcome.",
+            original_effect=original_full_r2,
+            refuted_effect=r2,
+            details=(
+                f"refit R^2 vs permuted KPI = {r2:.3f} "
+                f"(threshold {rc.negative_control_r2_threshold}; "
+                f"original fit R^2 = {original_full_r2:.3f})."
+            ),
+        )
+
+    def _refute_random_common_cause(
+        self, rc: Any, rng: Any, original_betas: dict
+    ) -> Any:
+        from mmm_framework.data_loader import PanelDataset, PanelCoordinates
+        import pandas as pd
+
+        panel = self.model.panel
+        n = len(panel.y)
+        rcc = rng.standard_normal(n)
+        if panel.X_controls is not None and panel.X_controls.shape[1] > 0:
+            X_controls = panel.X_controls.copy()
+            X_controls["__random_common_cause__"] = rcc
+            controls = list(panel.coords.controls) + ["__random_common_cause__"]
+        else:
+            X_controls = pd.DataFrame(
+                {"__random_common_cause__": rcc}, index=panel.y.index
+            )
+            controls = ["__random_common_cause__"]
+        new_coords = PanelCoordinates(
+            periods=panel.coords.periods,
+            geographies=panel.coords.geographies,
+            products=panel.coords.products,
+            channels=panel.coords.channels,
+            controls=controls,
+        )
+        new_panel = PanelDataset(
+            y=panel.y,
+            X_media=panel.X_media,
+            X_controls=X_controls,
+            index=panel.index,
+            config=panel.config,
+            coords=new_coords,
+        )
+        refit = self._fit_clone(new_panel, rc)
+        return self._stability_test(
+            "random_common_cause",
+            "Injected a random control; channel effects should be stable.",
+            refit,
+            original_betas,
+            rc,
+        )
+
+    def _refute_data_subset(self, rc: Any, rng: Any, original_betas: dict) -> Any:
+        panel = self.model.panel
+        n = len(panel.y)
+        k = max(5, int(round(rc.subset_fraction * n)))
+        idx = np.sort(rng.choice(n, size=k, replace=False))
+        sliced = self._slice_panel_data(panel, idx)
+        refit = self._fit_clone(sliced, rc)
+        return self._stability_test(
+            "data_subset",
+            f"Refit on a random {int(rc.subset_fraction * 100)}% subset; "
+            f"effects should be stable.",
+            refit,
+            original_betas,
+            rc,
+        )
+
+    def _stability_test(
+        self, name: str, desc: str, refit: Any, original_betas: dict, rc: Any
+    ) -> Any:
+        from .results import RefutationTest
+
+        refit_betas = self._channel_betas(refit)
+        worst_ch = None
+        worst_move = -1.0
+        worst_orig = worst_new = worst_sd = None
+        moves: list[float] = []
+        sds: list[float] = []
+        for ch, (omean, _osd) in original_betas.items():
+            if ch not in refit_betas:
+                continue
+            nmean, nsd = refit_betas[ch]
+            move = abs(nmean - omean) / max(abs(omean), 1e-8)
+            moves.append(move)
+            if np.isfinite(nsd):
+                sds.append(nsd)
+            if move > worst_move:
+                worst_move, worst_ch = move, ch
+                worst_orig, worst_new, worst_sd = omean, nmean, nsd
+        passed = bool(moves) and all(m < rc.move_tolerance for m in moves)
+        return RefutationTest(
+            name=name,
+            kind="stable",
+            passed=passed,
+            description=desc,
+            original_effect=worst_orig,
+            refuted_effect=worst_new,
+            precision=worst_sd,
+            channel=worst_ch,
+            details=(
+                f"largest relative coefficient move: {worst_ch} "
+                f"{worst_move:.1%} (tolerance {rc.move_tolerance:.0%})."
+            ),
+        )
 
     def _get_trace(self) -> Any:
         """Get ArviZ trace from model."""
@@ -1850,6 +2230,17 @@ class ModelValidator:
                 else:
                     warnings += 1
 
+        # Causal refutation failures are red flags (possible spurious fit)
+        if summary.causal_refutation:
+            issues += summary.causal_refutation.n_failed
+
+        # NOTE: fragility to unobserved confounding is intentionally NOT scored
+        # here. It is near-universal in observational MMM (unobserved demand
+        # confounds every channel), so penalizing the quality grade for it would
+        # mean no model is ever "excellent" and would conflate an identification
+        # caveat with a model defect. It is surfaced as a recommendation (anchor
+        # with experiments) instead -- see _generate_recommendations.
+
         # Determine quality
         if issues == 0 and warnings <= 1:
             return "excellent"
@@ -1889,6 +2280,16 @@ class ModelValidator:
                     f"Convergence issues for channels: {', '.join(non_converged)}"
                 )
 
+        if summary.causal_refutation:
+            failed = [t.name for t in summary.causal_refutation.tests if not t.passed]
+            if failed:
+                issues.append("Causal refutation FAILED: " + ", ".join(failed))
+            if summary.causal_refutation.underpowered:
+                issues.append(
+                    "Causal refutation refits were underpowered; "
+                    "passes are inconclusive (report precision)"
+                )
+
         return issues
 
     def _generate_recommendations(self, summary: ValidationSummary) -> list[str]:
@@ -1918,6 +2319,23 @@ class ModelValidator:
                 recommendations.append(
                     f"LOO-CV has {loo.n_bad_k} bad Pareto k values - consider using K-fold CV"
                 )
+
+        if (
+            summary.unobserved_confounding
+            and summary.unobserved_confounding.fragile_channels
+        ):
+            recommendations.append(
+                "Effects for "
+                + ", ".join(summary.unobserved_confounding.fragile_channels)
+                + " are sensitive to unobserved confounding - anchor them with a "
+                "geo-lift / incrementality experiment (mmm_framework.calibration)."
+            )
+
+        if summary.causal_refutation and not summary.causal_refutation.all_passed:
+            recommendations.append(
+                "One or more causal refutation tests failed - investigate possible "
+                "spurious fit before trusting channel effects."
+            )
 
         return recommendations
 

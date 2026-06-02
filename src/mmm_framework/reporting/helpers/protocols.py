@@ -12,20 +12,18 @@ from typing import Any, Protocol, runtime_checkable
 
 @runtime_checkable
 class HasTrace(Protocol):
-    """Protocol for objects with ArviZ trace."""
+    """Protocol for objects with an ArviZ InferenceData trace."""
 
     @property
-    def _trace(self) -> Any: ...
+    def trace(self) -> Any: ...
 
 
 @runtime_checkable
 class HasModel(Protocol):
-    """Protocol for objects with PyMC model."""
+    """Protocol for objects with a PyMC model."""
 
     @property
     def model(self) -> Any: ...
-    @property
-    def _model(self) -> Any: ...
 
 
 @runtime_checkable

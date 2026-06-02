@@ -86,8 +86,14 @@ class NestedMMM(BaseExtendedMMM):
         self,
         med_config: "MediatorConfig",
         media_transformed: pt.TensorVariable,
+        channel_mediator_betas: dict,
     ) -> pt.TensorVariable:
-        """Build model for a single mediator."""
+        """Build model for a single mediator.
+
+        ``channel_mediator_betas`` is populated in place with this mediator's
+        per-channel media-effect coefficient RVs (by reference), keyed
+        ``channel_mediator_betas[mediator_name][channel] = beta``.
+        """
         from ..config import MediatorType
         from ..components.observation import (
             build_partial_observation_model,
@@ -115,20 +121,29 @@ class NestedMMM(BaseExtendedMMM):
             dims=None,
         )
 
-        # Handle single vs multiple channels
+        # Handle single vs multiple channels. Record each channel's media->
+        # mediator coefficient RV *by reference* (keyed by the actual channel
+        # name, robust to the single- vs multi-channel naming split) so the
+        # experiment likelihood can reconstruct the mediated channel effect.
+        med_betas: dict[str, pt.TensorVariable] = {}
         if len(channel_indices) == 1:
-            media_effect = beta * media_transformed[:, channel_indices[0]]
+            idx0 = channel_indices[0]
+            media_effect = beta * media_transformed[:, idx0]
+            med_betas[self.channel_names[idx0]] = beta
         else:
             # Create per-channel betas
             betas = []
-            for i, idx in enumerate(channel_indices):
+            for idx in channel_indices:
+                ch_name = self.channel_names[idx]
                 b = create_effect_prior(
-                    f"beta_{affecting[i]}_to_{med_name}",
+                    f"beta_{ch_name}_to_{med_name}",
                     constrained=constraint,
                     sigma=med_config.media_effect.sigma,
                 )
                 betas.append(b * media_transformed[:, idx])
+                med_betas[ch_name] = b
             media_effect = sum(betas)
+        channel_mediator_betas[med_name] = med_betas
 
         # Latent mediator value
         mediator_latent = alpha_med + media_effect
@@ -168,18 +183,23 @@ class NestedMMM(BaseExtendedMMM):
     def _build_model(self) -> pm.Model:
         """Build the nested model."""
         from ..components.priors import create_effect_prior
-        from ..components.transforms import (
-            logistic_saturation_pt as logistic_saturation,
-        )
 
         coords = self._build_coords()
+
+        # Per-(channel) transform handles and media->mediator coefficient RVs,
+        # captured locally (never on ``self`` -- they are graph objects) so the
+        # experiment likelihood can reconstruct each channel's total (mediated +
+        # direct) effect on the outcome.
+        channel_mediator_betas: dict[str, dict] = {}
+        channel_tx: dict = {}
 
         with pm.Model(coords=coords) as model:
             # Data
             X_media = pm.Data("X_media", self.X_media, dims=("obs", "channel"))
             y = pm.Data("y", self.y, dims="obs")
 
-            # Media transformations (simplified)
+            # Media transformations: normalize -> geometric adstock -> logistic
+            # saturation (the previously-unused ``alpha`` is now the carryover).
             media_transformed = []
             for i, channel in enumerate(self.channel_names):
                 x = X_media[:, i]
@@ -187,8 +207,10 @@ class NestedMMM(BaseExtendedMMM):
                 alpha = pm.Beta(f"alpha_{channel}", alpha=2, beta=2)
                 lam = pm.Gamma(f"lambda_{channel}", alpha=3, beta=1)
 
-                x_sat = logistic_saturation(x, lam)
+                apply = self._media_transform_apply(i, alpha, lam)
+                x_sat = apply(x)
                 media_transformed.append(x_sat)
+                channel_tx[channel] = (x_sat, apply, x)
 
             media_transformed = pt.stack(media_transformed, axis=1)
 
@@ -196,7 +218,7 @@ class NestedMMM(BaseExtendedMMM):
             mediator_values = {}
             for med_config in self.config.mediators:
                 mediator_values[med_config.name] = self._build_mediator_model(
-                    med_config, media_transformed
+                    med_config, media_transformed, channel_mediator_betas
                 )
 
             # Outcome model
@@ -204,6 +226,7 @@ class NestedMMM(BaseExtendedMMM):
 
             # Mediator → Outcome effects
             mediator_contrib = pt.zeros(self.n_obs)
+            gammas: dict = {}  # mediator -> outcome-effect RV (by reference)
             for med_config in self.config.mediators:
                 med_name = med_config.name
 
@@ -212,6 +235,7 @@ class NestedMMM(BaseExtendedMMM):
                     constrained=med_config.outcome_effect.constraint.value,
                     sigma=med_config.outcome_effect.sigma,
                 )
+                gammas[med_name] = gamma
 
                 med_effect = gamma * mediator_values[med_name]
                 mediator_contrib = mediator_contrib + med_effect
@@ -220,6 +244,7 @@ class NestedMMM(BaseExtendedMMM):
 
             # Direct media effects
             direct_contrib = pt.zeros(self.n_obs)
+            deltas: dict = {}  # channel -> direct-effect RV (by reference)
             for i, channel in enumerate(self.channel_names):
                 # Check if any mediator allows direct effects for this channel
                 has_direct = any(
@@ -230,6 +255,7 @@ class NestedMMM(BaseExtendedMMM):
 
                 if has_direct:
                     delta = pm.Normal(f"delta_direct_{channel}", mu=0, sigma=0.5)
+                    deltas[channel] = delta
                     direct_contrib = direct_contrib + delta * media_transformed[:, i]
                     pm.Deterministic(
                         f"direct_effect_{channel}",
@@ -239,6 +265,7 @@ class NestedMMM(BaseExtendedMMM):
 
             # Combine
             mu = alpha_y + mediator_contrib + direct_contrib
+            pm.Deterministic("mu", mu, dims="obs")
 
             # Likelihood
             sigma = pm.HalfNormal("sigma_y", sigma=0.5)
@@ -247,7 +274,55 @@ class NestedMMM(BaseExtendedMMM):
             # Derived: indirect effects
             self._add_indirect_effect_deterministics(model, media_transformed)
 
+            # Experiment calibration: a channel's total effect on the outcome is
+            # its mediated path(s) plus any direct effect --
+            # coef_c = sum_m beta_{c->m} * gamma_m + delta_c -- applied to the
+            # channel's saturated spend. Single outcome on its raw scale (=1.0).
+            if self.experiments:
+                self._add_experiment_likelihoods(
+                    self._build_experiment_handles(
+                        channel_tx, gammas, deltas, channel_mediator_betas
+                    ),
+                    scale=1.0,
+                )
+
         return model
+
+    def _build_experiment_handles(
+        self,
+        channel_tx: dict,
+        gammas: dict,
+        deltas: dict,
+        channel_mediator_betas: dict,
+    ) -> dict:
+        """Assemble per-channel experiment handles for the nested model.
+
+        The effective coefficient is the sum over mediators of the channel's
+        media->mediator coefficient times that mediator's outcome coefficient,
+        plus the channel's direct effect (when present). Channels with no path to
+        the outcome are omitted (an experiment on one is skipped with a warning).
+        """
+        handles: dict = {}
+        for channel in self.channel_names:
+            coef = None
+            for med_name, med_betas in channel_mediator_betas.items():
+                if channel in med_betas and med_name in gammas:
+                    term = med_betas[channel] * gammas[med_name]
+                    coef = term if coef is None else coef + term
+            if channel in deltas:
+                coef = deltas[channel] if coef is None else coef + deltas[channel]
+            if coef is None:
+                continue  # channel has no path to the outcome
+            x_sat, apply, x_input = channel_tx[channel]
+            ch_idx = self.channel_names.index(channel)
+            handles[channel] = {
+                "coef": coef,
+                "x_sat": x_sat,
+                "apply": apply,
+                "x_input": x_input,
+                "spend_obs": self.X_media[:, ch_idx],
+            }
+        return handles
 
     def _add_indirect_effect_deterministics(
         self,

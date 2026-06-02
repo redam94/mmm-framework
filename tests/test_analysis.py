@@ -310,6 +310,28 @@ class TestMMMAnalyzerMethods:
 
         pd.testing.assert_frame_equal(result, expected_df)
 
+    def test_compute_marginal_contributions_forwards_uncertainty_kwargs(self):
+        """The wrapper must forward the new compute_uncertainty/hdi_prob kwargs."""
+        from unittest.mock import MagicMock
+
+        from mmm_framework.analysis import MMMAnalyzer
+
+        model = MagicMock()
+        model._trace = "mock_trace"
+        model.compute_marginal_contributions.return_value = pd.DataFrame()
+
+        MMMAnalyzer(model).compute_marginal_contributions(
+            spend_increase_pct=10.0, compute_uncertainty=False, hdi_prob=0.9
+        )
+        model.compute_marginal_contributions.assert_called_once_with(
+            spend_increase_pct=10.0,
+            time_period=None,
+            channels=None,
+            compute_uncertainty=False,
+            hdi_prob=0.9,
+            random_seed=None,
+        )
+
     def test_compute_saturation_curves_validates_channel(self):
         """Test that compute_saturation_curves validates channel name."""
         from mmm_framework.analysis import MMMAnalyzer

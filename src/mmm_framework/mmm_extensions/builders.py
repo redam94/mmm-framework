@@ -436,6 +436,17 @@ class CrossEffectConfigBuilder:
         self._type = CrossEffectType.HALO
         return self
 
+    def unconstrained(self) -> Self:
+        """No predefined sign: ``psi ~ Normal(0, sigma)``, the data picks the direction.
+
+        Prefer this when you do not want to assume cannibalization vs. halo. On observed
+        outcomes the directional effect is confounded with the residual correlation (only
+        their sum is identified), so the estimate is a *cross-outcome association*, not a
+        causal cannibalization -- see :func:`cross_effect`.
+        """
+        self._type = CrossEffectType.UNCONSTRAINED
+        return self
+
     def symmetric(self) -> Self:
         """Bidirectional effect."""
         self._type = CrossEffectType.SYMMETRIC
@@ -1287,6 +1298,39 @@ def cannibalization_effect(
 def halo_effect(source: str, target: str) -> CrossEffectConfig:
     """Create halo cross-effect configuration."""
     return CrossEffectConfigBuilder(source, target).halo().always_active().build()
+
+
+def cross_effect(
+    source: str,
+    target: str,
+    prior_sigma: float = 0.5,
+    promotion_column: str | None = None,
+) -> CrossEffectConfig:
+    """Create a **signless** (unconstrained) cross-outcome effect ``source -> target``.
+
+    Unlike :func:`cannibalization_effect` (which forces ``psi <= 0``) or
+    :func:`halo_effect` (``psi >= 0``), this places a symmetric ``Normal(0, prior_sigma)``
+    prior on ``psi`` and lets the data choose the direction. Use it when you do not want to
+    assume cannibalization vs. halo -- and note that a one-sided prior makes
+    "``P(psi < 0) ~ 1``" near-automatic, so an unconstrained prior is the honest default for
+    *measuring* a cross-outcome association.
+
+    Identification caveat
+    ---------------------
+    The cross-effect enters as ``psi * Y_source`` on the **observed** sibling outcome, while
+    the residual covariance also links the outcomes. Only their *sum* (the total residual
+    covariance) is identified -- the split between the directional ``psi`` and the symmetric
+    residual correlation is set by the prior, not the data. So an unconstrained ``psi`` is a
+    **cross-outcome association**, not a causal cannibalization estimate, and it is confounded
+    with the shared-demand correlation already captured by the residual covariance (the actual
+    "joint shock"). To estimate *causal* substitution, model it on exogenous drivers
+    (cross-product media/price), use a share/compositional model, or run an experiment.
+    """
+    builder = CrossEffectConfigBuilder(source, target).unconstrained().always_active()
+    builder.with_prior_sigma(prior_sigma)
+    if promotion_column:
+        builder.modulated_by_promotion(promotion_column)
+    return builder.build()
 
 
 # =============================================================================

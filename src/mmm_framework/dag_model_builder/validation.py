@@ -184,6 +184,18 @@ def validate_dag(dag: DAGSpec) -> ValidationResult:
                         f"{target_node.node_type.value} node '{target_node.id}'"
                     )
 
+            # Instrument can point ONLY to MEDIA (the treatment). An instrument
+            # that reaches the KPI/outcome other than through the treatment
+            # violates the exclusion restriction and is not a valid IV.
+            if source_node.node_type == NodeType.INSTRUMENT:
+                valid_targets = {NodeType.MEDIA}
+                if target_node.node_type not in valid_targets:
+                    errors.append(
+                        f"INSTRUMENT node '{source_node.id}' must point only to a "
+                        f"MEDIA treatment node, not {target_node.node_type.value} "
+                        f"node '{target_node.id}' (exclusion restriction)"
+                    )
+
             # Cross-effect edges must be between outcomes
             if edge.edge_type == EdgeType.CROSS_EFFECT:
                 if not (source_node.is_target and target_node.is_target):
@@ -288,8 +300,9 @@ def validate_dag_against_data(
 
     # Check each node's variable name exists
     for node in dag.nodes:
-        # Skip mediators - they may be latent
-        if node.node_type == NodeType.MEDIATOR:
+        # Skip mediators (may be latent) and instruments (exogenous variation
+        # used only for identification reasoning, not necessarily a data column).
+        if node.node_type in (NodeType.MEDIATOR, NodeType.INSTRUMENT):
             continue
 
         if node.variable_name not in available_vars:

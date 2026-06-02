@@ -1,0 +1,133 @@
+"""Per-variable configurations (KPI, media channels, controls)."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+from .enums import CausalControlRole, DimensionType, PriorType, VariableRole
+from .priors import PriorConfig
+from .transforms import AdstockConfig, SaturationConfig
+
+
+class VariableConfig(BaseModel):
+    """Configuration for a single variable in the MFF."""
+
+    name: str = Field(
+        ..., description="Variable name as it appears in VariableName column"
+    )
+    role: VariableRole
+    dimensions: list[DimensionType] = Field(
+        default_factory=lambda: [DimensionType.PERIOD],
+        description="Dimensions this variable is defined over",
+    )
+
+    # Optional metadata
+    display_name: str | None = None
+    unit: str | None = None
+
+    model_config = {"extra": "forbid"}
+
+    @property
+    def dim_names(self) -> list[str]:
+        """Get dimension names as strings."""
+        return [d.value for d in self.dimensions]
+
+    @property
+    def has_geo(self) -> bool:
+        return DimensionType.GEOGRAPHY in self.dimensions
+
+    @property
+    def has_product(self) -> bool:
+        return DimensionType.PRODUCT in self.dimensions
+
+
+class MediaChannelConfig(VariableConfig):
+    """Extended configuration for media channels."""
+
+    role: VariableRole = VariableRole.MEDIA
+
+    # Transformation configs
+    adstock: AdstockConfig = Field(default_factory=AdstockConfig.geometric)
+    saturation: SaturationConfig = Field(default_factory=SaturationConfig.hill)
+
+    # Coefficient prior (enforces positivity by default)
+    coefficient_prior: PriorConfig = Field(
+        default_factory=lambda: PriorConfig.half_normal(sigma=2.0)
+    )
+
+    # Experiment-calibrated prior on the channel's effect coefficient (``beta``).
+    # When set -- e.g. derived from a geo-lift / incrementality experiment by
+    # :mod:`mmm_framework.calibration` -- this OVERRIDES the core model's default
+    # media-coefficient prior, anchoring the channel's effect to randomized
+    # evidence. ``None`` preserves the model's built-in default, so the field is
+    # purely additive and changes no existing behavior. Despite the name it is a
+    # prior on the (saturation-scaled) coefficient, not on raw ROI; the
+    # calibration module maps a measured lift to this coefficient scale.
+    roi_prior: PriorConfig | None = None
+
+    # Hierarchical grouping (e.g., "social" groups meta, snapchat, twitter)
+    parent_channel: str | None = None
+
+    # Split dimensions beyond base dimensions (e.g., Outlet for social platforms)
+    split_dimensions: list[DimensionType] = Field(default_factory=list)
+
+    model_config = {"extra": "forbid"}
+
+    @property
+    def is_child_channel(self) -> bool:
+        return self.parent_channel is not None
+
+    @property
+    def all_dimensions(self) -> list[DimensionType]:
+        """All dimensions including splits."""
+        return list(set(self.dimensions + self.split_dimensions))
+
+
+class ControlVariableConfig(VariableConfig):
+    """Configuration for control variables."""
+
+    role: VariableRole = VariableRole.CONTROL
+
+    # Allow negative effects for controls (e.g., price)
+    allow_negative: bool = True
+
+    # Prior configuration
+    coefficient_prior: PriorConfig = Field(
+        default_factory=lambda: PriorConfig(
+            distribution=PriorType.NORMAL, params={"mu": 0, "sigma": 1}
+        )
+    )
+
+    # For sparse selection (horseshoe-like behavior)
+    use_shrinkage: bool = False
+
+    # Causal role of this control, used to prevent "bad control" bias. ``None``
+    # (the default) is treated as a precision control, preserving existing
+    # behavior. When set to ``CONFOUNDER`` the core model routes the coefficient
+    # to a wide, un-shrunk prior (shrinking a confounder biases the media
+    # effect); ``MEDIATOR`` / ``COLLIDER`` are refused at model-construction time
+    # because conditioning on them induces bias for a total-effect estimate. The
+    # DAG builder populates this automatically from the identified adjustment set
+    # (see :mod:`mmm_framework.dag_model_builder.config_translator`).
+    causal_role: CausalControlRole | None = None
+
+    # Human-readable provenance for ``causal_role`` (e.g. which treatment makes
+    # this a post-treatment variable). Populated by the DAG classifier so the
+    # model's bad-control refusal can explain *why* a control was rejected.
+    causal_role_reason: str | None = None
+
+    model_config = {"extra": "forbid"}
+
+
+class KPIConfig(VariableConfig):
+    """Configuration for the target KPI variable."""
+
+    role: VariableRole = VariableRole.KPI
+
+    # Log transform for multiplicative model
+    log_transform: bool = False
+
+    # Minimum value (for log safety)
+    floor_value: float = 1e-6
+
+    model_config = {"extra": "forbid"}
