@@ -23,3 +23,7 @@ node_modules/
 *.db-*
 *.nc
 *.nc.gz
+
+# Local LLM/model configuration (copy of config/model_config.example.yaml)
+config/model_config.yaml
+model_config.yaml

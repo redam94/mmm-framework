@@ -106,27 +106,18 @@ def _admin_graph():
 
 
 def get_llm(model_name: str | None, api_key: str | None):
-    if not model_name:
-        model_name = "claude-sonnet-4-6"
+    """Build the agent's chat model from the server's model configuration.
 
-    if "gpt" in model_name.lower():
-        from langchain_openai import ChatOpenAI
-        kwargs: dict = {"model": model_name, "temperature": 0}
-        if api_key:
-            kwargs["api_key"] = api_key
-        return ChatOpenAI(**kwargs)
-    elif "claude" in model_name.lower():
-        from langchain_anthropic import ChatAnthropic
-        kwargs = {"model": model_name, "temperature": 0}
-        if api_key:
-            kwargs["api_key"] = api_key
-        return ChatAnthropic(**kwargs)
-    else:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        kwargs = {"model": model_name, "temperature": 0}
-        if api_key:
-            kwargs["api_key"] = api_key
-        return ChatGoogleGenerativeAI(**kwargs)
+    The provider, model, and (for Vertex AI) GCP project/region/credentials come
+    from the model configuration file -- see ``config/model_config.example.yaml``
+    and ``mmm_framework.agents.llm``. The per-request ``X-Model-Name`` /
+    ``X-API-Key`` headers are passed through as overrides, but when the server is
+    configured for a Vertex provider, Application Default Credentials remain
+    authoritative and a client-supplied key is ignored.
+    """
+    from mmm_framework.agents.llm import build_llm
+
+    return build_llm(model_name=model_name, api_key=api_key)
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
@@ -1090,6 +1081,24 @@ async def upload_file(file: UploadFile = File(...), thread_id: str | None = None
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/model-config")
+async def model_config_endpoint():
+    """Report the active LLM provider/model (non-secret).
+
+    Lets the frontend decide whether to prompt for an API key: when the server
+    authenticates via Vertex AI / ADC (or a server-side env key),
+    ``requires_api_key`` is False and the login key prompt can be skipped. Never
+    returns the API key or credentials contents.
+    """
+    from mmm_framework.agents.llm import describe_active_config
+
+    try:
+        return describe_active_config()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Failed to describe model config")
+        return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
 @app.get("/report")

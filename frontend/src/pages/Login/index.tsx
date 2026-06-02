@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Card, Title, Text, TextInput, Button, Select, SelectItem } from '@tremor/react';
-import { KeyIcon, ExclamationCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { KeyIcon, ExclamationCircleIcon, ChartBarIcon, CloudIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
-import { checkApiHealth } from '../../api/client';
+import { checkApiHealth, getModelConfig, type ServerModelConfig } from '../../api/client';
 import { MODELS, PROVIDER_LABELS, getModelsByProvider, type Provider } from '../../constants/models';
 
 interface LoginFormData {
@@ -12,11 +12,17 @@ interface LoginFormData {
   modelName: string;
 }
 
+// Placeholder key used when the server manages credentials itself (Vertex AI /
+// ADC or a server-side env key). The backend normalises this away — see
+// _SENTINEL_API_KEYS in mmm_framework/agents/llm.py.
+const SERVER_MANAGED_KEY = 'server-managed';
+
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, setApiKey, isValidating, validationError } = useAuthStore();
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
 
   const {
     register,
@@ -35,11 +41,12 @@ export function LoginPage() {
   // Get the intended destination from location state
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
-  // Check API health on mount
+  // Check API health and active model configuration on mount
   useEffect(() => {
     checkApiHealth().then((healthy) => {
       setApiStatus(healthy ? 'online' : 'offline');
     });
+    getModelConfig().then(setServerConfig);
   }, []);
 
   // Redirect if already authenticated
@@ -49,8 +56,20 @@ export function LoginPage() {
     }
   }, [isAuthenticated, navigate, from]);
 
+  // The server manages its own credentials (Vertex AI / ADC, or a server-side
+  // env key), so no user-entered API key is required.
+  const serverManaged = serverConfig != null && !serverConfig.requires_api_key;
+
   const onSubmit = async (data: LoginFormData) => {
     const success = await setApiKey(data.apiKey.trim(), data.modelName);
+    if (success) {
+      navigate(from, { replace: true });
+    }
+  };
+
+  const onServerManagedSignIn = async () => {
+    const model = serverConfig?.model || selectedModel;
+    const success = await setApiKey(SERVER_MANAGED_KEY, model);
     if (success) {
       navigate(from, { replace: true });
     }
@@ -72,67 +91,124 @@ export function LoginPage() {
 
         {/* Login card */}
         <Card className="mt-8">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <label htmlFor="modelName" className="block text-sm font-medium text-gray-700 mb-1">
-                LLM Provider
-              </label>
-              <Select
-                id="modelName"
-                value={selectedModel}
-                onValueChange={(value) => setValue('modelName', value)}
-              >
-                {(Object.entries(getModelsByProvider()) as [Provider, typeof MODELS[number][]][]).map(
-                  ([provider, models]) =>
-                    models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {PROVIDER_LABELS[provider]} — {m.label}
-                      </SelectItem>
-                    ))
-                )}
-              </Select>
-            </div>
-
-            <div>
-              <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
-                API Key
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <KeyIcon className="h-5 w-5 text-gray-400" />
+          {serverManaged ? (
+            // ── Server-managed credentials (Vertex AI / ADC) ──────────────
+            <div className="space-y-6">
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-md">
+                <CloudIcon className="h-6 w-6 text-blue-500 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-medium text-blue-800">
+                    Server-managed credentials
+                  </h3>
+                  <p className="mt-1 text-sm text-blue-700">
+                    {serverConfig?.uses_adc
+                      ? 'Authenticating to Vertex AI with Application Default Credentials. No API key needed.'
+                      : 'The server provides the model credentials. No API key needed.'}
+                  </p>
                 </div>
-                <TextInput
-                  id="apiKey"
-                  type="password"
-                  placeholder="Enter your API key"
-                  className="pl-10"
-                  error={!!errors.apiKey || !!validationError}
-                  {...register('apiKey', {
-                    required: 'API key is required',
-                    minLength: {
-                      value: 8,
-                      message: 'API key must be at least 8 characters',
-                    },
-                  })}
-                />
               </div>
-              {errors.apiKey && (
-                <p className="mt-2 text-sm text-red-600">{errors.apiKey.message}</p>
-              )}
-              {validationError && (
-                <p className="mt-2 text-sm text-red-600">{validationError}</p>
-              )}
-            </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              loading={isValidating}
-              disabled={apiStatus === 'offline'}
-            >
-              {isValidating ? 'Validating...' : 'Sign In'}
-            </Button>
-          </form>
+              <dl className="text-sm divide-y divide-gray-100">
+                <div className="flex justify-between py-2">
+                  <dt className="text-gray-500">Provider</dt>
+                  <dd className="font-medium text-gray-900">{serverConfig?.provider}</dd>
+                </div>
+                <div className="flex justify-between py-2">
+                  <dt className="text-gray-500">Model</dt>
+                  <dd className="font-medium text-gray-900 text-right break-all">{serverConfig?.model}</dd>
+                </div>
+                {serverConfig?.location && (
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500">Region</dt>
+                    <dd className="font-medium text-gray-900">{serverConfig.location}</dd>
+                  </div>
+                )}
+                {serverConfig?.project && (
+                  <div className="flex justify-between py-2">
+                    <dt className="text-gray-500">GCP Project</dt>
+                    <dd className="font-medium text-gray-900 text-right break-all">{serverConfig.project}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {validationError && (
+                <p className="text-sm text-red-600">{validationError}</p>
+              )}
+
+              <Button
+                type="button"
+                className="w-full"
+                loading={isValidating}
+                disabled={apiStatus === 'offline'}
+                onClick={onServerManagedSignIn}
+              >
+                {isValidating ? 'Connecting...' : 'Continue'}
+              </Button>
+            </div>
+          ) : (
+            // ── API-key entry (direct providers) ──────────────────────────
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <div>
+                <label htmlFor="modelName" className="block text-sm font-medium text-gray-700 mb-1">
+                  LLM Provider
+                </label>
+                <Select
+                  id="modelName"
+                  value={selectedModel}
+                  onValueChange={(value) => setValue('modelName', value)}
+                >
+                  {(Object.entries(getModelsByProvider()) as [Provider, typeof MODELS[number][]][]).map(
+                    ([provider, models]) =>
+                      models.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {PROVIDER_LABELS[provider]} — {m.label}
+                        </SelectItem>
+                      ))
+                  )}
+                </Select>
+              </div>
+
+              <div>
+                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
+                  API Key
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <KeyIcon className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <TextInput
+                    id="apiKey"
+                    type="password"
+                    placeholder="Enter your API key"
+                    className="pl-10"
+                    error={!!errors.apiKey || !!validationError}
+                    {...register('apiKey', {
+                      required: 'API key is required',
+                      minLength: {
+                        value: 8,
+                        message: 'API key must be at least 8 characters',
+                      },
+                    })}
+                  />
+                </div>
+                {errors.apiKey && (
+                  <p className="mt-2 text-sm text-red-600">{errors.apiKey.message}</p>
+                )}
+                {validationError && (
+                  <p className="mt-2 text-sm text-red-600">{validationError}</p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                loading={isValidating}
+                disabled={apiStatus === 'offline'}
+              >
+                {isValidating ? 'Validating...' : 'Sign In'}
+              </Button>
+            </form>
+          )}
 
           {/* API status indicator */}
           <div className="mt-6 pt-4 border-t border-gray-200">
@@ -180,7 +256,9 @@ export function LoginPage() {
 
         {/* Help text */}
         <p className="text-center text-sm text-gray-500">
-          Need an API key? Contact your administrator or check the documentation.
+          {serverManaged
+            ? 'Credentials are configured on the server.'
+            : 'Need an API key? Contact your administrator or check the documentation.'}
         </p>
       </div>
     </div>

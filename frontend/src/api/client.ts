@@ -144,5 +144,32 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 }
 
+// Active LLM configuration reported by the server (non-secret).
+export interface ServerModelConfig {
+  provider: string;
+  model: string;
+  uses_vertex: boolean;
+  uses_adc: boolean;
+  project: string | null;
+  location: string | null;
+  temperature: number;
+  max_tokens: number | null;
+  // False when the server authenticates itself (Vertex AI / ADC or an env key),
+  // so the UI can skip prompting the user for an API key.
+  requires_api_key: boolean;
+}
+
+// Fetch the server's active model configuration, or null if unavailable.
+export async function getModelConfig(): Promise<ServerModelConfig | null> {
+  try {
+    const response = await axios.get<ServerModelConfig>(`${API_BASE_URL}/model-config`, {
+      timeout: 5000,
+    });
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
 // Export base URL for use in other modules
 export { API_BASE_URL };

@@ -1,0 +1,60 @@
+# ============================================================================
+# MMM Agent — Model Configuration
+# ============================================================================
+# The MMM agent reads this file at startup to decide which LLM to talk to.
+# Copy it to `config/model_config.yaml` (which is git-ignored) and edit:
+#
+#     cp config/model_config.example.yaml config/model_config.yaml
+#
+# Alternatively, point the agent at any path with the MMM_MODEL_CONFIG env var,
+# or override individual fields with MMM_LLM_* env vars (handy on a VM):
+#
+#     export MMM_MODEL_CONFIG=/etc/mmm/model_config.yaml
+#     export MMM_LLM_PROVIDER=vertex_gemini
+#     export MMM_LLM_PROJECT=my-gcp-project
+#
+# Resolution order: MMM_MODEL_CONFIG -> ./model_config.yaml -> ./config/model_config.yaml
+# ----------------------------------------------------------------------------
+
+# Which backend to use. One of:
+#   vertex_anthropic  Claude on Google Vertex AI (Model Garden)  -> ADC
+#   vertex_gemini     Gemini on Google Vertex AI                 -> ADC
+#   anthropic         Anthropic API (direct)                     -> api_key
+#   openai            OpenAI API (direct)                        -> api_key
+#   google_genai      Gemini Developer API (direct)              -> api_key
+provider: vertex_anthropic
+
+# Model id.
+#   * Vertex Claude uses Vertex Model Garden publisher ids, which may differ
+#     from the direct Anthropic names and can carry an "@version" suffix. Copy
+#     the EXACT id for your region from the Vertex AI Model Garden console,
+#     e.g. "claude-sonnet-4-5@20250929" (verify the current value yourself —
+#     this is only a placeholder).
+#   * Vertex Gemini uses ids like "gemini-2.5-pro".
+#   * Direct providers use their usual names (claude-sonnet-4-6, gpt-4o, ...).
+model: claude-sonnet-4-5@20250929
+
+# Sampling / output controls.
+temperature: 0
+max_tokens: 8192          # max_output_tokens on Vertex. Raise for long report
+                          # turns; Claude-on-Vertex otherwise defaults to 4096.
+
+# --- Google Vertex AI settings (used only by the vertex_* providers) --------
+# GCP project id. Leave blank to use the ADC / VM-metadata project.
+project:
+# Region that actually serves your model. Claude lives in a subset of regions
+# (e.g. us-east5, europe-west1); Gemini is commonly us-central1. If left blank,
+# the agent defaults to us-east5 for Claude and us-central1 for Gemini.
+location: us-east5
+# Path to a service-account JSON key. LEAVE BLANK on a GCP VM to use
+# Application Default Credentials (the VM's attached service account). Set it
+# only to authenticate as a specific service account from an explicit key file.
+credentials_path:
+
+# --- Direct API providers (used only by anthropic / openai / google_genai) --
+# API key. Usually leave blank and set the provider's environment variable
+# instead (ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY).
+api_key:
+
+# Extra kwargs passed straight through to the underlying LangChain chat model.
+model_kwargs: {}

@@ -2,53 +2,58 @@
 Example: Agentic MMM Workflow
 =============================
 
-This example demonstrates how to use the new agentic framework to 
+This example demonstrates how to use the new agentic framework to
 build, configure, and fit a Marketing Mix Model interactively using LangGraph.
 
+The LLM is selected by the model configuration file rather than hard-coded
+here. Either copy `config/model_config.example.yaml` to
+`config/model_config.yaml` and edit it, or set an API key env var for a direct
+provider (ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY). For Vertex AI on
+a GCP VM, set `provider: vertex_anthropic` (or `vertex_gemini`) in the config
+file -- Application Default Credentials are used automatically.
+
 Usage:
-    export GOOGLE_API_KEY="your-api-key"
+    # Direct provider (no config file needed):
+    export ANTHROPIC_API_KEY="your-api-key"
+    python examples/ex_agent_workflow.py
+
+    # Or Vertex AI / ADC on a GCP VM:
+    cp config/model_config.example.yaml config/model_config.yaml  # then edit
     python examples/ex_agent_workflow.py
 """
 
-import os
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from rich.console import Console
 from rich.markdown import Markdown
 
-from mmm_framework.agents import create_agent_graph
+from mmm_framework.agents import build_llm, create_agent_graph, load_model_config
 
 def main():
-    # 1. Initialize the LLM
-    # Make sure you have GOOGLE_API_KEY set in your environment
-    if "GOOGLE_API_KEY" not in os.environ:
-        print("Warning: GOOGLE_API_KEY environment variable not set.")
-        print("Please set it to run this example: export GOOGLE_API_KEY='your-api-key'")
-        # For the sake of the example, we will let it fail later if not set,
-        # but you could mock the LLM here for testing.
-        
+    # 1. Initialize the LLM from the model configuration file (+ env overrides).
+    #    See config/model_config.example.yaml for all options, including Vertex
+    #    AI providers that authenticate via Application Default Credentials.
     print("Initializing LLM and Agent Graph...")
-    
-    # You can easily swap out the LLM provider here.
-    # Make sure to set the appropriate environment variable (GOOGLE_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)
-    
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        from langchain_anthropic import ChatAnthropic
-        print("Using Anthropic Claude 3.5 Sonnet")
-        llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
-    elif os.environ.get("OPENAI_API_KEY"):
-        from langchain_openai import ChatOpenAI
-        print("Using OpenAI GPT-4o")
-        llm = ChatOpenAI(model="gpt-4o", temperature=0)
-    elif os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"):
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        print("Using Google Gemini 1.5 Pro")
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
+
+    cfg = load_model_config()
+    if cfg.uses_adc:
+        auth = "Application Default Credentials"
+    elif cfg.uses_vertex:
+        auth = "explicit service-account key"
     else:
-        raise ValueError("No API key found. Please set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_API_KEY.")
-    
-    
+        auth = "API key"
+    print(f"Provider: {cfg.provider} | Model: {cfg.model} | Auth: {auth}")
+
+    try:
+        llm = build_llm(cfg)
+    except Exception as exc:
+        raise SystemExit(
+            f"Failed to initialise the LLM ({cfg.provider}): {exc}\n"
+            "Set an API key env var (ANTHROPIC_API_KEY / OPENAI_API_KEY / "
+            "GOOGLE_API_KEY) for a direct provider, or configure Vertex AI in "
+            "config/model_config.yaml."
+        ) from exc
+
     # Compile the graph with a memory checkpointer to keep conversation state
     memory = MemorySaver()
     agent_graph = create_agent_graph(llm, checkpointer=memory)

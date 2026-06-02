@@ -47,6 +47,20 @@ cd frontend && npm run dev                # Terminal 4: React UI (Vite)
 uv run python examples/ex_model_workflow.py
 ```
 
+## Configure the agent LLM (Vertex AI / ADC / API keys)
+
+The LangGraph agent's LLM is chosen by a model configuration file, not hard-coded.
+See `docs/model-configuration.md` and `src/mmm_framework/agents/llm.py`.
+
+```bash
+cp config/model_config.example.yaml config/model_config.yaml   # then edit
+# Vertex AI on a GCP VM uses Application Default Credentials (no API key):
+#   provider: vertex_anthropic | vertex_gemini ; set project + location
+# Direct providers use API keys (anthropic / openai / google_genai).
+# Override any field via env: MMM_LLM_PROVIDER, MMM_LLM_MODEL, MMM_LLM_PROJECT, ...
+uv run python examples/ex_vertex_agent.py      # Vertex/ADC smoke test
+```
+
 ## Directory Structure
 
 ```
@@ -336,3 +350,5 @@ analysis = MarginalAnalysisResult.from_model(model, results)
 | Rate limiting errors | Check `api/rate_limiter.py` configuration |
 | Serialization errors | Ensure cloudpickle version matches across environments |
 | DAG validation fails | Check `dag_model_builder/validation.py` for requirements |
+| Agent LLM auth / wrong provider | Check `config/model_config.yaml` (or `MMM_LLM_*` env); see `docs/model-configuration.md`. On GCP, Vertex uses ADC — grant the VM service account `roles/aiplatform.user` |
+| Vertex "model not found" / 404 | Use the exact Model Garden id (may have `@version`) and a `location` region that serves it (Claude: e.g. `us-east5`) |
