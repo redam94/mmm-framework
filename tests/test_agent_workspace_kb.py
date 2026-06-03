@@ -1,0 +1,447 @@
+"""Tests for the agent knowledge-base + workspace upgrade.
+
+Covers the new primitives wired into the agent: the scoped workspace directory,
+the thread-scoped model cache, project identity, knowledge-base storage +
+retrieval, the new agent tools, and the new API endpoints (projects, KB,
+downloads). Embeddings are stubbed so the suite needs no network/credentials.
+"""
+
+from __future__ import annotations
+
+import importlib
+import os
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture()
+def store(tmp_path, monkeypatch):
+    """Point the session store + checkpointer + workspace at a temp location."""
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+    from mmm_framework.api import sessions as ss
+
+    monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
+    ss.init_db()
+    return ss
+
+
+# ── workspace ────────────────────────────────────────────────────────────────
+
+
+def test_workspace_dirs_and_traversal_guard(store, monkeypatch):
+    from mmm_framework.agents import workspace as W
+
+    td = W.thread_dir("threadA")
+    assert td.exists() and td.name == "threadA"
+    # safe_join allows nested paths
+    assert W.safe_join(td, "sub/out.csv").name == "out.csv"
+    # ...but blocks escapes
+    with pytest.raises(ValueError):
+        W.safe_join(td, "../../etc/passwd")
+    # is_within: a workspace file passes, /etc/hosts fails
+    f = td / "x.txt"
+    f.write_text("hi")
+    assert W.is_within(str(f))
+    assert not W.is_within("/etc/hosts")
+
+
+def test_register_generated_files(store, monkeypatch):
+    from mmm_framework.agents import workspace as W
+
+    td = W.thread_dir("threadB")
+    before = W.snapshot_dir(td)
+    (td / "report.csv").write_text("a,b\n1,2\n")
+    regs = W.register_generated_files("threadB", before)
+    assert len(regs) == 1 and regs[0]["name"] == "report.csv"
+    # idempotent: unchanged file is not re-registered
+    again = W.register_generated_files("threadB", W.snapshot_dir(td))
+    assert again == []
+
+
+def test_plot_store_is_content_addressed(store):
+    from mmm_framework.agents import workspace as W
+
+    fig = {"data": [{"type": "bar", "x": ["a"], "y": [1]}], "layout": {"title": "t"}}
+    pid = W.store_plot(fig)
+    # same content -> same id (dedup); resolvable to disk
+    assert W.store_plot(dict(fig)) == pid
+    assert W.plot_path(pid) is not None
+    # different content -> different id
+    assert W.store_plot({"data": [], "layout": {}}) != pid
+    assert W.plot_path("nope") is None
+
+
+def test_execute_python_emits_plot_refs_not_inline_json(store):
+    from mmm_framework.agents import tools as T
+
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    cfg = {"configurable": {"thread_id": sess["thread_id"]}}
+    code = "import plotly.express as px; px.bar(x=['a'], y=[1]).show()"
+    cmd = T.execute_python.func(
+        state={"dashboard_data": {}}, code=code, tool_call_id="c", config=cfg
+    )
+    plots = cmd.update["dashboard_data"]["plots"]
+    assert len(plots) == 1
+    # lightweight ref, NOT the full figure JSON
+    assert "id" in plots[0] and "data" not in plots[0]
+
+
+def test_execute_python_writes_downloadable_and_inputs_readable(
+    store, tmp_path, monkeypatch
+):
+    """Unified workspace: everything execute_python writes (even a BARE relative
+    name) lands in the session workspace and is registered for download, and
+    workspace files (generated/uploaded data) are readable by name."""
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    monkeypatch.chdir(tmp_path)  # a server cwd distinct from the workspace
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    tid = sess["thread_id"]
+    cfg = {"configurable": {"thread_id": tid}}
+    cwd_before = os.path.realpath(os.getcwd())
+
+    # a dataset already in the workspace is readable by its bare name
+    (W.thread_dir(tid) / "synthetic_mff_data.csv").write_text(
+        "date,sales\n2024-01-01,100\n"
+    )
+    r = T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="import pandas as pd; print('rows', len(pd.read_csv('synthetic_mff_data.csv')))",
+        tool_call_id="c1",
+        config=cfg,
+    )
+    assert "rows 1" in r.update["messages"][0].content  # NOT FileNotFoundError
+
+    # a BARE relative write is auto-registered for download (the key behaviour)
+    T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="import pandas as pd; pd.DataFrame({'a':[1,2]}).to_csv('out.csv', index=False); print('ok')",
+        tool_call_id="c2",
+        config=cfg,
+    )
+    assert "out.csv" in [f["name"] for f in store.list_files(tid)]
+    assert (W.thread_dir(tid) / "out.csv").exists()
+    # it did NOT leak into the server cwd, and the cwd is restored
+    assert not (tmp_path / "out.csv").exists()
+    assert os.path.realpath(os.getcwd()) == cwd_before
+
+
+def test_generate_synthetic_data_writes_to_workspace(store):
+    """generate_synthetic_data writes into the workspace, exposes an absolute
+    dataset_path, and registers the file for download."""
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    tid = sess["thread_id"]
+    cfg = {"configurable": {"thread_id": tid}}
+
+    cmd = T.generate_synthetic_data.func(
+        state={"dashboard_data": {}}, n_weeks=8, tool_call_id="g", config=cfg
+    )
+    dp = cmd.update["dataset_path"]
+    assert os.path.isabs(dp) and dp.endswith("synthetic_mff_data.csv")
+    assert (W.thread_dir(tid) / "synthetic_mff_data.csv").exists()
+    assert "synthetic_mff_data.csv" in [f["name"] for f in store.list_files(tid)]
+
+
+def test_fit_spec_accepts_bare_string_channels():
+    """Regression: fit must tolerate media_channels/control_variables given as
+    bare strings (what weaker models emit) — previously 'string indices must be
+    integers'."""
+    from mmm_framework.agents.tools import _normalize_spec_vars
+
+    spec = {
+        "kpi": "Sales",
+        "media_channels": ["TV", "Digital", "Paid_Social"],
+        "control_variables": ["Price_Index", "Distribution"],
+    }
+    _normalize_spec_vars(spec)
+    assert spec["media_channels"] == [
+        {"name": "TV"},
+        {"name": "Digital"},
+        {"name": "Paid_Social"},
+    ]
+    assert spec["control_variables"] == [
+        {"name": "Price_Index"},
+        {"name": "Distribution"},
+    ]
+    # the line that used to crash now works
+    assert spec["media_channels"][0]["name"] == "TV"
+
+    # dict form is preserved; malformed entries are dropped
+    spec2 = {
+        "media_channels": [{"name": "TV", "adstock": {"l_max": 8}}, None, 5, {"x": 1}]
+    }
+    _normalize_spec_vars(spec2)
+    assert spec2["media_channels"] == [{"name": "TV", "adstock": {"l_max": 8}}]
+
+
+# ── LM Studio (local OpenAI-compatible endpoint) ─────────────────────────────
+
+
+def test_lmstudio_provider_builds_and_routes():
+    from mmm_framework.agents.llm import (
+        ModelConfig,
+        build_llm,
+        describe_active_config,
+        list_lmstudio_models,
+    )
+
+    cfg = ModelConfig(provider="lmstudio", model="qwen2.5-7b-instruct")
+    llm = build_llm(config=cfg)
+    base = str(
+        getattr(llm, "openai_api_base", "") or getattr(llm.root_client, "base_url", "")
+    )
+    assert type(llm).__name__ == "ChatOpenAI" and "localhost:1234" in base
+    assert llm.model_name == "qwen2.5-7b-instruct"
+
+    # a model override stays on the lmstudio endpoint (does NOT re-route to a cloud provider)
+    llm2 = build_llm(config=cfg, model_name="llama-3.1-8b-instruct", api_key="x")
+    assert (
+        type(llm2).__name__ == "ChatOpenAI"
+        and llm2.model_name == "llama-3.1-8b-instruct"
+    )
+
+    # custom base_url honored
+    cfg2 = ModelConfig(
+        provider="lmstudio", model="m", base_url="http://host.local:4321/v1"
+    )
+    llm3 = build_llm(config=cfg2)
+    assert "host.local:4321" in str(
+        getattr(llm3, "openai_api_base", "")
+        or getattr(llm3.root_client, "base_url", "")
+    )
+
+    d = describe_active_config(cfg)
+    assert d["requires_api_key"] is False and d["is_local_endpoint"] is True
+    assert d["base_url"].endswith("/v1")
+
+    # a per-request base_url override (X-Base-Url) retargets the local endpoint
+    llm4 = build_llm(config=cfg, base_url="http://10.0.0.5:1234/v1")
+    assert "10.0.0.5:1234" in str(
+        getattr(llm4, "openai_api_base", "")
+        or getattr(llm4.root_client, "base_url", "")
+    )
+
+    # ...but a base_url override is IGNORED for a cloud provider (no SSRF redirect)
+    cloud = ModelConfig(provider="anthropic", model="claude-sonnet-4-6", api_key="x")
+    llm5 = build_llm(config=cloud, base_url="http://evil.example/v1")
+    assert type(llm5).__name__ == "ChatAnthropic"
+
+    # discovery degrades gracefully when LM Studio isn't running
+    assert list_lmstudio_models(cfg, base_url="http://127.0.0.1:59999/v1") == []
+
+
+def test_client_provider_override():
+    """X-Provider lets a non-Vertex deployment switch provider entirely, but a
+    Vertex-locked server ignores it (ADC stays authoritative)."""
+    from mmm_framework.agents.llm import ModelConfig, build_llm
+
+    def base_of(llm):
+        return str(
+            getattr(llm, "openai_api_base", "")
+            or getattr(getattr(llm, "root_client", None), "base_url", "")
+        )
+
+    anthro = ModelConfig(provider="anthropic", model="claude-sonnet-4-6")
+    # direct server -> switch to LM Studio
+    llm = build_llm(
+        config=anthro,
+        provider="lmstudio",
+        base_url="http://localhost:1234/v1",
+        model_name="qwen2.5-7b",
+    )
+    assert type(llm).__name__ == "ChatOpenAI" and "1234" in base_of(llm)
+    # direct server -> switch to OpenAI with a client key
+    llm = build_llm(
+        config=anthro, provider="openai", api_key="sk-x", model_name="gpt-4o"
+    )
+    assert type(llm).__name__ == "ChatOpenAI" and llm.model_name == "gpt-4o"
+    # Vertex server is locked: X-Provider is ignored (stays on Vertex/ADC)
+    vtx = ModelConfig(
+        provider="vertex_anthropic", model="claude@x", location="us-east5"
+    )
+    llm = build_llm(config=vtx, provider="lmstudio", base_url="http://evil/v1")
+    assert type(llm).__name__ == "ChatAnthropicVertex"
+    # junk provider falls through to model-name inference (no crash)
+    llm = build_llm(config=anthro, provider="nope", api_key="x", model_name="gpt-4o")
+    assert type(llm).__name__ == "ChatOpenAI"
+
+
+# ── thread-scoped model cache ────────────────────────────────────────────────
+
+
+def test_model_cache_is_thread_scoped_and_bounded():
+    from mmm_framework.agents import runtime as rt
+
+    rt.set_current_thread("t1")
+    rt.MODEL_CACHE["fitted_model"] = "A"
+    rt.set_current_thread("t2")
+    rt.MODEL_CACHE["fitted_model"] = "B"
+    rt.set_current_thread("t1")
+    assert rt.MODEL_CACHE.get("fitted_model") == "A"
+    rt.set_current_thread("t2")
+    assert rt.MODEL_CACHE.get("fitted_model") == "B"
+    # LRU bound = 2: touching a third thread evicts the least-recently-used
+    rt.set_current_thread("t3")
+    rt.MODEL_CACHE["fitted_model"] = "C"
+    assert (
+        "t1" not in rt.MODEL_CACHE.thread_ids() or len(rt.MODEL_CACHE.thread_ids()) <= 2
+    )
+
+
+# ── projects + resolution ────────────────────────────────────────────────────
+
+
+def test_projects_crud_and_resolution(store):
+    assert any(p["project_id"] == "default" for p in store.list_projects())
+    proj = store.create_project("Acme", "client")
+    pid = proj["project_id"]
+    sess = store.create_session(name="s", project_id=pid)
+    assert store.resolve_project_id(sess["thread_id"]) == pid
+    assert store.resolve_project_id("ghost") == "default"
+    # delete reassigns sessions and refuses the default project
+    assert store.delete_project(pid) is True
+    assert store.resolve_project_id(sess["thread_id"]) == "default"
+    assert store.delete_project("default") is False
+
+
+# ── knowledge base ───────────────────────────────────────────────────────────
+
+
+def test_kb_chunk_store_and_cosine_search(store, monkeypatch):
+    from mmm_framework.agents import knowledge_base as kb
+
+    proj = store.create_project("KB")
+    pid = proj["project_id"]
+    chunks = kb.chunk_text(
+        "alpha adstock.\n\n" + "beta saturation. " * 40, size=200, overlap=40
+    )
+    assert len(chunks) >= 2
+
+    doc = store.add_kb_document(pid, "n.md", "/tmp/n.md", "markdown", 10)
+    vecs = [[1, 0, 0, 0], [0, 1, 0, 0], [0.9, 0.1, 0, 0]]
+    rows = []
+    for i, (c, v) in enumerate(zip(chunks[:3], vecs)):
+        blob, dim = kb._to_blob(v)
+        rows.append((i, c, blob, dim))
+    store.add_kb_chunks(doc["id"], pid, rows)
+    store.set_kb_document_status(doc["id"], "ready", n_chunks=len(rows))
+
+    monkeypatch.setattr(kb, "embed_query", lambda q, cfg=None: [0.95, 0.05, 0, 0])
+    res = kb.search(pid, "tv adstock", top_k=2)
+    assert res and res[0]["chunk_index"] in (0, 2)
+    assert res[0]["score"] > 0.9
+
+    assert store.list_kb_documents(pid)[0]["status"] == "ready"
+    assert store.delete_kb_document(doc["id"]) is True
+    assert store.iter_kb_chunks(pid) == []
+
+
+def test_extract_text_formats(tmp_path):
+    from mmm_framework.agents import knowledge_base as kb
+
+    md = tmp_path / "a.md"
+    md.write_text("# Title\nbody")
+    assert "body" in kb.extract_text(md)
+    assert kb.kind_for("x.pdf") == "pdf" and kb.kind_for("y.csv") == "csv"
+
+
+# ── agent tools ──────────────────────────────────────────────────────────────
+
+
+def test_new_tools_registered_and_schema_hides_injected_args(store):
+    from mmm_framework.agents.tools import TOOLS
+
+    names = {t.name for t in TOOLS}
+    for expected in {
+        "library_reference",
+        "search_knowledge_base",
+        "list_knowledge_base",
+        "list_workspace_files",
+        "read_workspace_file",
+        "grep_workspace",
+        "query_past_results",
+        "run_budget_scenario",
+        "run_marginal_analysis",
+        "define_analysis_plan",
+        "check_spec_divergence",
+    }:
+        assert expected in names, f"missing tool {expected}"
+
+    grep = next(t for t in TOOLS if t.name == "grep_workspace")
+    # injected config must NOT be exposed to the model
+    assert "config" not in grep.args and "pattern" in grep.args
+
+
+def test_workspace_tools_functional(store, monkeypatch):
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    cfg = {"configurable": {"thread_id": sess["thread_id"]}}
+    W.thread_dir(sess["thread_id"]).joinpath("notes.txt").write_text(
+        "alpha adstock\nbeta\n"
+    )
+
+    assert "notes.txt" in T.list_workspace_files.invoke({}, config=cfg)
+    assert "adstock" in T.grep_workspace.invoke({"pattern": "adstock"}, config=cfg)
+    assert "alpha adstock" in T.read_workspace_file.invoke(
+        {"path": "notes.txt"}, config=cfg
+    )
+    assert "menu" in T.library_reference.invoke({}).lower()
+
+
+# ── API endpoints ────────────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def client(store, tmp_path, monkeypatch):
+    import mmm_framework.api.main as main
+
+    monkeypatch.setattr(main, "DB_PATH", store.DB_PATH)
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as c:
+        yield c
+
+
+def test_api_projects_kb_and_downloads(client, store):
+    # default project exists
+    r = client.get("/projects")
+    assert r.status_code == 200
+    assert any(p["project_id"] == "default" for p in r.json()["projects"])
+
+    pid = client.post("/projects", json={"name": "Acme"}).json()["project_id"]
+    tid = client.post("/sessions", json={"name": "s", "project_id": pid}).json()[
+        "thread_id"
+    ]
+    assert client.get(f"/sessions?project_id={pid}").json()["total"] == 1
+
+    # empty KB list/search take no embedding call
+    assert client.get(f"/projects/{pid}/kb").json()["total"] == 0
+    assert (
+        client.get(f"/projects/{pid}/kb/search", params={"q": "x"}).json()["results"]
+        == []
+    )
+
+    # generated file download (inside workspace = allowed)
+    from mmm_framework.agents import workspace as W
+
+    fp = W.thread_dir(tid) / "out.csv"
+    fp.write_text("a,b\n1,2\n")
+    rec = store.register_file(tid, str(fp), "out.csv", "export", 8)
+    assert client.get(f"/workspace/{tid}/files").json()["total"] == 1
+    dl = client.get(f"/files/{rec['id']}/download")
+    assert dl.status_code == 200 and dl.content == b"a,b\n1,2\n"
+
+    # a path outside the allow-list is refused
+    bad = store.register_file(tid, "/etc/hosts", "hosts", "export", 1)
+    assert client.get(f"/files/{bad['id']}/download").status_code == 403

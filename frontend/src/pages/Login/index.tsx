@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { Card, Title, Text, TextInput, Button, Select, SelectItem } from '@tremor/react';
 import { KeyIcon, ExclamationCircleIcon, ChartBarIcon, CloudIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
-import { checkApiHealth, getModelConfig, getVertexModels, SERVER_MANAGED_KEY, type ServerModelConfig, type VertexModel } from '../../api/client';
+import { checkApiHealth, getModelConfig, getVertexModels, getLmStudioModels, SERVER_MANAGED_KEY, type ServerModelConfig, type VertexModel, type LmStudioModel } from '../../api/client';
 import { MODELS, PROVIDER_LABELS, getModelsByProvider, type Provider } from '../../constants/models';
 
 interface LoginFormData {
@@ -15,12 +15,15 @@ interface LoginFormData {
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, setApiKey, isValidating, validationError } = useAuthStore();
+  const { isAuthenticated, setApiKey, setBaseUrl, isValidating, validationError } = useAuthStore();
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
   const [vertexModels, setVertexModels] = useState<VertexModel[]>([]);
-  // The model chosen in server-managed (Vertex) mode: either a discovered id or
-  // a free-text id pasted from the Vertex console.
+  const [lmStudioModels, setLmStudioModels] = useState<LmStudioModel[]>([]);
+  // Editable LM Studio base URL (defaults to the server's configured value).
+  const [localBaseUrl, setLocalBaseUrl] = useState<string>('');
+  // The model chosen in server-managed mode (Vertex or a local LM Studio
+  // endpoint): either a discovered id or a free-text id.
   const [vertexModel, setVertexModel] = useState<string>('');
   const [customModel, setCustomModel] = useState<string>('');
 
@@ -49,6 +52,7 @@ export function LoginPage() {
     getModelConfig().then((cfg) => {
       setServerConfig(cfg);
       if (cfg) setVertexModel(cfg.model);
+      if (cfg?.is_local_endpoint) setLocalBaseUrl(cfg.base_url || 'http://localhost:1234/v1');
     });
   }, []);
 
@@ -61,6 +65,18 @@ export function LoginPage() {
       });
     }
   }, [serverConfig?.uses_vertex]);
+
+  // When the server points at a local LM Studio endpoint, discover the loaded
+  // models (at the chosen base URL) so the user can pick which one to chat with.
+  useEffect(() => {
+    if (!serverConfig?.is_local_endpoint) return;
+    const t = setTimeout(() => {
+      getLmStudioModels(localBaseUrl || undefined).then((res) => {
+        setLmStudioModels(res?.models ?? []);
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [serverConfig?.is_local_endpoint, localBaseUrl]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -92,6 +108,23 @@ export function LoginPage() {
     return opts;
   })();
 
+  // Options for the LM Studio model dropdown: the server default first, then the
+  // models LM Studio currently has loaded.
+  const lmStudioOptions = (() => {
+    const ids = new Set<string>();
+    const opts: { id: string; label: string }[] = [];
+    if (serverConfig?.model) {
+      ids.add(serverConfig.model);
+      opts.push({ id: serverConfig.model, label: `${serverConfig.model} (default)` });
+    }
+    for (const m of lmStudioModels) {
+      if (ids.has(m.id)) continue;
+      ids.add(m.id);
+      opts.push({ id: m.id, label: m.display_name });
+    }
+    return opts;
+  })();
+
   const onSubmit = async (data: LoginFormData) => {
     const success = await setApiKey(data.apiKey.trim(), data.modelName);
     if (success) {
@@ -103,6 +136,10 @@ export function LoginPage() {
     // Free-text id (pasted from the console) wins, then the dropdown selection,
     // then the server default.
     const model = customModel.trim() || vertexModel || serverConfig?.model || selectedModel;
+    // For a local endpoint, persist the chosen base URL so chat requests target it.
+    if (serverConfig?.is_local_endpoint) {
+      setBaseUrl(localBaseUrl.trim() || null);
+    }
     const success = await setApiKey(SERVER_MANAGED_KEY, model);
     if (success) {
       navigate(from, { replace: true });
@@ -132,10 +169,12 @@ export function LoginPage() {
                 <CloudIcon className="h-6 w-6 text-blue-500 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm font-medium text-blue-800">
-                    Server-managed credentials
+                    {serverConfig?.is_local_endpoint ? 'Local model (LM Studio)' : 'Server-managed credentials'}
                   </h3>
                   <p className="mt-1 text-sm text-blue-700">
-                    {serverConfig?.uses_adc
+                    {serverConfig?.is_local_endpoint
+                      ? `Using a local OpenAI-compatible server at ${serverConfig?.base_url ?? 'http://localhost:1234/v1'}. No API key needed.`
+                      : serverConfig?.uses_adc
                       ? 'Authenticating to Vertex AI with Application Default Credentials. No API key needed.'
                       : 'The server provides the model credentials. No API key needed.'}
                   </p>
@@ -191,6 +230,55 @@ export function LoginPage() {
                     />
                     <p className="mt-1 text-xs text-gray-500">
                       Paste an exact id from your Vertex Model Garden console (overrides the dropdown).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {serverConfig?.is_local_endpoint && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      LM Studio server URL
+                    </label>
+                    <TextInput
+                      placeholder="http://localhost:1234/v1"
+                      value={localBaseUrl}
+                      onChange={(e) => setLocalBaseUrl(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      The base URL of LM Studio's local server (Developer tab → Start Server).
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Loaded model
+                    </label>
+                    <Select
+                      value={customModel ? '' : vertexModel}
+                      onValueChange={(v) => { setVertexModel(v); setCustomModel(''); }}
+                    >
+                      {lmStudioOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                      ))}
+                    </Select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {lmStudioModels.length > 0
+                        ? 'Models currently loaded in LM Studio.'
+                        : 'LM Studio not detected — start it and load a model, or type an id below.'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Or enter a model id
+                    </label>
+                    <TextInput
+                      placeholder="e.g. qwen2.5-7b-instruct"
+                      value={customModel}
+                      onChange={(e) => setCustomModel(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Use the model identifier shown in LM Studio (overrides the dropdown).
                     </p>
                   </div>
                 </div>

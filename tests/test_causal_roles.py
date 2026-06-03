@@ -509,3 +509,67 @@ class TestAgentRoleGuidance:
         edges = [DAGEdge(source="tv", target="sales")]
         content = self._invoke(DAGSpec(nodes=nodes, edges=edges))
         assert "Control variable roles" not in content
+
+
+# =============================================================================
+# propose_dag: a confounder that is ALSO listed as a control must still fan out
+# =============================================================================
+
+
+class TestProposeDagConfounderAlsoControl:
+    """Regression: a variable named in BOTH ``controls`` and ``confounders``
+    (e.g. Distribution) used to lose its confounder fan-out. The controls loop
+    created the node first, so propose_dag's "node already exists" check hit a
+    ``continue`` and skipped the ``affects`` edges entirely — the backdoor edges
+    Distribution->TV / Distribution->Radio silently vanished, leaving the DAG
+    with only N->KPI edges. See causal_tools.propose_dag."""
+
+    def _build(self, **kwargs):
+        from mmm_framework.agents.causal_tools import propose_dag
+
+        cmd = propose_dag.func(config=None, state=None, tool_call_id="t", **kwargs)
+        spec = cmd.update["dashboard_data"]["dag"]["spec"]
+        pairs = [(e["source"], e["target"]) for e in spec["edges"]]
+        return spec["nodes"], pairs
+
+    def test_confounder_also_control_keeps_fan_out(self):
+        nodes, edges = self._build(
+            kpi="Sales",
+            media_channels=["Digital", "Paid_Social", "Radio", "TV"],
+            controls=["Price_Index", "Distribution"],
+            confounders=[
+                {"name": "Distribution", "affects": ["TV", "Radio", "Sales"]}
+            ],
+        )
+        # The confounder fan-out survives even though Distribution is a control.
+        assert ("distribution", "tv") in edges
+        assert ("distribution", "radio") in edges
+        assert ("distribution", "sales") in edges
+        # 7 nodes (Distribution not duplicated) and 8 edges with no dupes.
+        assert len(nodes) == 7
+        assert len(edges) == 8
+        assert len(edges) == len(set(edges))
+
+    def test_no_duplicate_kpi_edge(self):
+        # `affects` includes the KPI, which the controls loop already wired up;
+        # the dedup must collapse the two Distribution->Sales edges into one.
+        _, edges = self._build(
+            kpi="Sales",
+            media_channels=["TV"],
+            controls=["Distribution"],
+            confounders=[{"name": "Distribution", "affects": ["Sales"]}],
+        )
+        assert edges.count(("distribution", "sales")) == 1
+
+    def test_plain_confounder_not_in_controls_still_works(self):
+        # The original (non-overlapping) path must be unaffected: a confounder
+        # that is NOT also a control still creates its node and fan-out.
+        nodes, edges = self._build(
+            kpi="Sales",
+            media_channels=["TV"],
+            controls=["Price_Index"],
+            confounders=[{"name": "Demand", "affects": ["TV", "Sales"]}],
+        )
+        assert any(n["variable_name"] == "Demand" for n in nodes)
+        assert ("demand", "tv") in edges
+        assert ("demand", "sales") in edges

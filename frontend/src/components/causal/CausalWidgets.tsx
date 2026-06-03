@@ -20,8 +20,11 @@ import {
   History, FileText, Database, Trash2, Network, BookOpen, Pencil, Save, X,
   Plus,
 } from 'lucide-react';
+import { API_BASE_URL } from '../../api/client';
 
-const API_BASE = 'http://localhost:8000';
+// Same origin as the app: relative "/api" in dev (proxied via vite.config.ts),
+// or VITE_API_URL when set.
+const API_BASE = API_BASE_URL;
 
 // ── Shared types ────────────────────────────────────────────────────────────
 

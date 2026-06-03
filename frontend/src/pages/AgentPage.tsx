@@ -2,16 +2,19 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   Send, Bot, User, Loader2, Paperclip, ChevronDown, ChevronRight,
   Wrench, CheckCircle2, Maximize2, Minimize2, X, Download, ExternalLink,
   TrendingUp, Calendar, Layers, Zap, BarChart2, Activity, Pencil, Check, RotateCcw, Plus, Trash2,
   Square, ArrowLeft, Play, Copy, MessagesSquare, FileCode,
-  BookOpen, Network, Database,
+  BookOpen, Network, Database, BrainCircuit, Search, UploadCloud, FolderOpen, FileText, File as FileIcon,
 } from 'lucide-react';
 import Plot from 'react-plotly.js';
 import { useAuthStore } from '../stores/authStore';
 import { ModelSwitcher } from '../components/common';
+import { API_BASE_URL } from '../api/client';
 import {
   WorkflowChecklist, AssumptionsLog, DataFilesWidget, EditableDAGViewer, useCausalPanels,
 } from '../components/causal/CausalWidgets';
@@ -313,9 +316,30 @@ const MD_COMPONENTS: any = {
   th: ({ children }: any) => <th className="px-3 py-2 text-left font-semibold text-indigo-600 border border-gray-200">{children}</th>,
   td: ({ children }: any) => <td className="px-3 py-2 text-gray-700 border border-gray-200">{children}</td>,
   tr: ({ children }: any) => <tr className="even:bg-gray-50">{children}</tr>,
-  code: ({ inline, children }: any) => inline
-    ? <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-xs font-mono">{children}</code>
-    : <pre className="bg-gray-50 rounded-lg p-3 overflow-x-auto text-xs font-mono text-gray-700 border border-gray-200 my-2"><code>{children}</code></pre>,
+  code: ({ inline, className, children }: any) => {
+    const raw = String(children ?? '').replace(/\n$/, '');
+    const langMatch = /language-(\w+)/.exec(className || '');
+    // react-markdown v10 no longer passes `inline`; fall back to detecting a
+    // fenced block via the language className or a multi-line body.
+    const isBlock = inline === false || !!langMatch || raw.includes('\n');
+    if (!isBlock) {
+      return <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-xs font-mono">{children}</code>;
+    }
+    return (
+      <SyntaxHighlighter
+        language={langMatch ? langMatch[1] : 'text'}
+        style={oneLight}
+        PreTag="div"
+        customStyle={{
+          margin: '0.5rem 0', borderRadius: '0.5rem', fontSize: '0.75rem',
+          border: '1px solid #e5e7eb', background: '#f9fafb',
+        }}
+        codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
+      >
+        {raw}
+      </SyntaxHighlighter>
+    );
+  },
 };
 
 // ─── PlotCard ─────────────────────────────────────────────────────────────────
@@ -324,16 +348,52 @@ function stripHtml(s: string): string {
   return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Browser-side plot cache. Plots are content-addressed on the backend and served
+// with an immutable cache header, so a given id never changes — we fetch its JSON
+// at most once per session (and the browser HTTP-caches it across reloads). A
+// plot can arrive either inline ({data, layout}, legacy) or as a ref ({id, title}).
+const _plotCache = new Map<string, any>();
+
+function usePlotFigure(plot: any): any | null {
+  const isRef = !!(plot && plot.id && !plot.data);
+  const [fig, setFig] = useState<any | null>(
+    isRef ? _plotCache.get(plot.id) ?? null : plot
+  );
+  useEffect(() => {
+    if (!isRef) { setFig(plot); return; }
+    const cached = _plotCache.get(plot.id);
+    if (cached) { setFig(cached); return; }
+    let alive = true;
+    // No auth header → maximally cacheable; the agent API serves plots publicly.
+    fetch(`${API_BASE}/plots/${plot.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j) { _plotCache.set(plot.id, j); if (alive) setFig(j); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isRef, plot]);
+  return fig;
+}
+
 function PlotCard({ plot, idx }: { plot: any; idx: number }) {
   const [fullscreen, setFullscreen] = useState(false);
-  const rawTitle = plot.layout?.title?.text ?? plot.layout?.title ?? `Chart ${idx + 1}`;
-  const title = stripHtml(String(rawTitle));
+  const fig = usePlotFigure(plot);
 
-  const fixedLayout = useMemo(() => applyLightModeLayout(plot.layout), [plot.layout]);
+  const rawTitle =
+    fig?.layout?.title?.text ?? fig?.layout?.title ?? plot?.title ?? `Chart ${idx + 1}`;
+  const title = stripHtml(String(rawTitle || `Chart ${idx + 1}`));
 
+  const fixedLayout = useMemo(() => applyLightModeLayout(fig?.layout), [fig]);
+
+  if (!fig) {
+    return (
+      <div className="rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm h-[400px] flex items-center justify-center text-sm text-gray-400">
+        Loading chart…
+      </div>
+    );
+  }
   const plotEl = (height: string) => (
     <Plot
-      data={plot.data}
+      data={fig.data}
       layout={{ ...fixedLayout, autosize: true }}
       useResizeHandler
       style={{ width: '100%', height }}
@@ -1711,7 +1771,6 @@ function parseTextTable(text: string): { headers: string[]; rows: string[][] } |
 
 function PythonCodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
-  const lines = code.split('\n');
   return (
     <div className="rounded-t-lg overflow-hidden border border-gray-700">
       <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800">
@@ -1728,17 +1787,18 @@ function PythonCodeBlock({ code }: { code: string }) {
           {copied ? <><Check size={10} />Copied</> : 'Copy'}
         </button>
       </div>
-      <div className="bg-gray-900 overflow-x-auto max-h-64">
-        <table className="w-full border-collapse">
-          <tbody>
-            {lines.map((line, i) => (
-              <tr key={i} className="hover:bg-white/[0.03]">
-                <td className="select-none text-right text-[10px] font-mono text-gray-600 pl-3 pr-3 w-7 align-top leading-5 border-r border-gray-800">{i + 1}</td>
-                <td className="pl-3 pr-3 text-[11px] font-mono text-gray-100 whitespace-pre leading-5">{line || '​'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="overflow-x-auto max-h-64 bg-[#fafafa]">
+        <SyntaxHighlighter
+          language="python"
+          style={oneLight}
+          showLineNumbers
+          PreTag="div"
+          customStyle={{ margin: 0, padding: '0.5rem 0', fontSize: '0.6875rem', background: '#fafafa', lineHeight: '1.25rem' }}
+          lineNumberStyle={{ minWidth: '2.25em', paddingRight: '0.75em', color: '#9ca3af', userSelect: 'none' }}
+          codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
+        >
+          {code.replace(/\n$/, '')}
+        </SyntaxHighlighter>
       </div>
     </div>
   );
@@ -1842,7 +1902,9 @@ function PythonOutputWidget({ outputs, onClear }: { outputs: PythonOutput[]; onC
       <div className="space-y-4">
         {outputs.map((out, idx) => {
           const isCollapsed = collapsed.has(out.id);
-          const firstLine = out.code.trim().split('\n')[0];
+          // Historical outputs may have no paired code_snippet → show output only.
+          const hasCode = !!out.code.trim();
+          const firstLine = hasCode ? out.code.trim().split('\n')[0] : '(output only)';
           return (
             <div key={out.id} className="rounded-xl overflow-hidden shadow-sm">
               {/* Cell header */}
@@ -1858,7 +1920,7 @@ function PythonOutputWidget({ outputs, onClear }: { outputs: PythonOutput[]; onC
               </button>
               {!isCollapsed && (
                 <div className="border-l border-r border-b border-gray-200 rounded-b-xl overflow-hidden">
-                  <PythonCodeBlock code={out.code} />
+                  {hasCode && <PythonCodeBlock code={out.code} />}
                   <PythonOutputBlock output={out.output} hasError={out.hasError} />
                 </div>
               )}
@@ -1882,21 +1944,141 @@ interface Session {
 interface Artifact {
   id: string;
   thread_id: string;
-  kind: 'code_snippet' | 'report' | string;
+  kind: 'code_snippet' | 'report' | 'model_run' | 'project_report' | 'project_slides' | 'text_output' | string;
   payload: any;
   created_at: number;
 }
 
-const API_BASE = 'http://localhost:8000';
+// ─── Project + KB + Workspace types ──────────────────────────────────────────
+
+interface Project {
+  project_id: string;
+  name: string;
+  description?: string | null;
+  session_count?: number;
+  doc_count?: number;
+  created_at: number;
+  updated_at: number;
+}
+
+interface KbDocument {
+  id: string;
+  name: string;
+  kind: string;
+  size_bytes: number | null;
+  n_chunks: number;
+  status: 'pending' | 'ready' | 'error' | string;
+  created_at: number;
+}
+
+interface KbSearchResult {
+  document: string;
+  chunk_index: number;
+  text: string;
+  score: number;
+}
+
+interface WorkspaceFile {
+  id: string;
+  name: string;
+  path: string;
+  kind: string;
+  size_bytes: number | null;
+  created_at: number;
+}
+
+// Single source of truth from the API client: relative "/api" in dev (proxied),
+// or VITE_API_URL when set. Keeps all fetch() calls on the same origin as the app.
+const API_BASE = API_BASE_URL;
 
 function authHeaders(apiKey: string | null, modelName: string | null): HeadersInit {
-  return { 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' };
+  const h: Record<string, string> = { 'X-API-Key': apiKey || '', 'X-Model-Name': modelName || '' };
+  // Optional provider/base-url overrides; harmless for non-chat routes.
+  const baseUrl = (typeof localStorage !== 'undefined' && localStorage.getItem('mmm_base_url')) || '';
+  const provider = (typeof localStorage !== 'undefined' && localStorage.getItem('mmm_provider')) || '';
+  if (baseUrl) h['X-Base-Url'] = baseUrl;
+  if (provider) h['X-Provider'] = provider;
+  return h;
+}
+
+function fmtBytes(n: number | null | undefined): string {
+  if (n == null) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ─── ProjectPicker (in SessionSidebar) ───────────────────────────────────────
+
+function ProjectPicker({ projects, projectId, onSelect, onCreate }: {
+  projects: Project[];
+  projectId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: (name: string, description?: string) => Promise<void> | void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Degraded mode: /projects unavailable. Hide the picker entirely.
+  if (projects.length === 0 && projectId == null) return null;
+
+  const submit = async () => {
+    const n = name.trim();
+    if (!n) return;
+    setBusy(true);
+    try { await onCreate(n); setName(''); setCreating(false); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="px-3 py-2.5 border-b border-gray-200 bg-gray-50/60">
+      <div className="flex items-center gap-1 mb-1.5">
+        <FolderOpen size={12} className="text-indigo-500 shrink-0" />
+        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider flex-1">Project</span>
+        <button
+          onClick={() => setCreating(v => !v)}
+          className="p-1 rounded hover:bg-indigo-50 text-indigo-600"
+          title="New project"
+        ><Plus size={12} /></button>
+      </div>
+      {creating ? (
+        <div className="flex items-center gap-1">
+          <input
+            autoFocus value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') { setCreating(false); setName(''); } }}
+            placeholder="Project name…"
+            disabled={busy}
+            className="flex-1 text-xs bg-white border border-indigo-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+          <button onClick={submit} disabled={busy || !name.trim()}
+            className="p-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40" title="Create">
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+          </button>
+        </div>
+      ) : (
+        <select
+          value={projectId ?? ''}
+          onChange={e => onSelect(e.target.value)}
+          className="w-full text-xs bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        >
+          {projects.map(p => (
+            <option key={p.project_id} value={p.project_id}>
+              {p.name}{typeof p.session_count === 'number' ? ` (${p.session_count})` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
 }
 
 // ─── SessionSidebar ──────────────────────────────────────────────────────────
 
 function SessionSidebar({
   sessions, activeId, onSelect, onCreate, onRename, onDelete, collapsed, onToggle,
+  projects, projectId, onProjectSelect, onProjectCreate,
 }: {
   sessions: Session[]; activeId: string | null;
   onSelect: (id: string) => void;
@@ -1905,6 +2087,10 @@ function SessionSidebar({
   onDelete: (id: string) => void;
   collapsed: boolean;
   onToggle: () => void;
+  projects: Project[];
+  projectId: string | null;
+  onProjectSelect: (id: string) => void;
+  onProjectCreate: (name: string, description?: string) => Promise<void> | void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -1924,6 +2110,12 @@ function SessionSidebar({
 
   return (
     <div className="w-56 border-r border-gray-200 bg-white flex flex-col shrink-0">
+      <ProjectPicker
+        projects={projects}
+        projectId={projectId}
+        onSelect={onProjectSelect}
+        onCreate={onProjectCreate}
+      />
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</span>
         <div className="flex items-center gap-1">
@@ -2050,8 +2242,8 @@ function ProjectDocsWidget({ artifacts, onDelete }: {
             art={reportArt}
             icon={<BookOpen size={18} />}
             label="Project Report (HTML)"
-            viewUrl="http://localhost:8000/project-report"
-            downloadUrl="http://localhost:8000/project-report/download"
+            viewUrl={`${API_BASE}/project-report`}
+            downloadUrl={`${API_BASE}/project-report/download`}
           />
         )}
         {slidesArt && (
@@ -2059,8 +2251,8 @@ function ProjectDocsWidget({ artifacts, onDelete }: {
             art={slidesArt}
             icon={<Layers size={18} />}
             label="Presentation Slides (Reveal.js)"
-            viewUrl="http://localhost:8000/project-slides"
-            downloadUrl="http://localhost:8000/project-slides/download"
+            viewUrl={`${API_BASE}/project-slides`}
+            downloadUrl={`${API_BASE}/project-slides/download`}
           />
         )}
         {(reports.length > 1 || slides.length > 1) && (
@@ -2239,6 +2431,12 @@ function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
                             className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
                             title="Copy"
                           ><Copy size={11} /></button>
+                          <a
+                            href={`${API_BASE}/artifacts/${a.id}/download`}
+                            download
+                            className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                            title="Download"
+                          ><Download size={11} /></a>
                           <button
                             onClick={() => onRerun(a)}
                             className="p-1 rounded hover:bg-indigo-50 text-indigo-600"
@@ -2250,7 +2448,17 @@ function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
                             title="Delete"
                           ><Trash2 size={11} /></button>
                         </div>
-                        <pre className="px-3 py-2 text-[11px] font-mono text-gray-700 overflow-x-auto whitespace-pre max-h-40">{truncate(code, 600)}</pre>
+                        <div className="overflow-x-auto max-h-40 bg-[#fafafa]">
+                          <SyntaxHighlighter
+                            language="python"
+                            style={oneLight}
+                            PreTag="div"
+                            customStyle={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.6875rem', background: '#fafafa' }}
+                            codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
+                          >
+                            {truncate(code, 600)}
+                          </SyntaxHighlighter>
+                        </div>
                       </div>
                     );
                   })}
@@ -2265,6 +2473,12 @@ function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
                     <div key={a.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
                       <ExternalLink size={12} className="text-violet-600 shrink-0" />
                       <span className="text-xs text-gray-700 flex-1 truncate font-mono">{a.payload?.path ?? a.id}</span>
+                      <a
+                        href={`${API_BASE}/artifacts/${a.id}/download`}
+                        download
+                        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+                        title="Download"
+                      ><Download size={11} /></a>
                       <button onClick={() => onDelete(a.id)} className="p-1 rounded hover:bg-red-50 text-red-500" title="Delete">
                         <Trash2 size={11} />
                       </button>
@@ -2461,6 +2675,285 @@ function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; threadId: s
   );
 }
 
+// ─── WorkspaceFilesWidget (Data tab) ─────────────────────────────────────────
+
+function WorkspaceFilesWidget({ threadId, apiKey, modelName, refreshKey }: {
+  threadId: string | null;
+  apiKey: string | null;
+  modelName: string | null;
+  refreshKey: number;
+}) {
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+
+  useEffect(() => {
+    if (!threadId) { setFiles([]); return; }
+    let cancelled = false;
+    fetch(`${API_BASE}/workspace/${encodeURIComponent(threadId)}/files`, { headers: authHeaders(apiKey, modelName) })
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setFiles(Array.isArray(data?.files) ? data.files : []); })
+      .catch(() => { if (!cancelled) setFiles([]); });
+    return () => { cancelled = true; };
+  }, [threadId, apiKey, modelName, refreshKey]);
+
+  if (files.length === 0) {
+    return (
+      <PanelShellLite title="Workspace Outputs" icon={<FolderOpen size={16} className="text-teal-600" />} color="teal">
+        <p className="text-sm text-gray-400 italic">No generated files yet. When the agent writes reports, CSVs, or PNGs via <code className="text-xs bg-gray-100 px-1 rounded">execute_python</code>, they appear here for download.</p>
+      </PanelShellLite>
+    );
+  }
+
+  return (
+    <PanelShellLite title={`Workspace Outputs (${files.length})`} icon={<FolderOpen size={16} className="text-teal-600" />} color="teal">
+      <div className="space-y-2">
+        {files.map(f => (
+          <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
+            <FileIcon size={14} className="text-teal-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-gray-800 truncate">{f.name}</span>
+                <span className="text-[10px] uppercase tracking-wider text-teal-700 bg-teal-50 rounded px-1.5 py-0.5 border border-teal-200">{f.kind}</span>
+                <span className="text-[10px] text-gray-400">{fmtBytes(f.size_bytes)}</span>
+              </div>
+              <p className="text-[11px] text-gray-400 font-mono mt-0.5 truncate">{f.path}</p>
+            </div>
+            <a
+              href={`${API_BASE}/files/${f.id}/download`}
+              download
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors border border-gray-200 shrink-0"
+            >
+              <Download size={12} /> Save
+            </a>
+          </div>
+        ))}
+      </div>
+    </PanelShellLite>
+  );
+}
+
+// Small collapsible shell (mirrors CausalWidgets PanelShell) for new widgets.
+function PanelShellLite({ title, icon, color = 'gray', children }: {
+  title: React.ReactNode; icon: React.ReactNode; color?: string; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <button onClick={() => setOpen(v => !v)} className="w-full flex items-center gap-3 px-5 py-4 text-left">
+        {icon}
+        <span className={`font-semibold text-sm text-${color}-600 flex-1`}>{title}</span>
+        {open ? <ChevronDown size={15} className="text-gray-400" /> : <ChevronRight size={15} className="text-gray-400" />}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
+
+// ─── KnowledgeTab ─────────────────────────────────────────────────────────────
+
+const KB_STATUS_STYLE: Record<string, string> = {
+  ready:   'bg-emerald-50 text-emerald-700 border-emerald-200',
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  error:   'bg-red-50 text-red-700 border-red-200',
+};
+
+function KnowledgeTab({ projectId, apiKey, modelName }: {
+  projectId: string | null;
+  apiKey: string | null;
+  modelName: string | null;
+}) {
+  const [docs, setDocs] = useState<KbDocument[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<KbSearchResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const fetchDocs = useCallback(async () => {
+    if (!projectId) { setDocs([]); return; }
+    try {
+      const data = await fetch(`${API_BASE}/projects/${projectId}/kb`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
+      setDocs(Array.isArray(data?.documents) ? data.documents : []);
+    } catch { /* leave as-is */ }
+  }, [projectId, apiKey, modelName]);
+
+  useEffect(() => {
+    if (!projectId) { setDocs([]); return; }
+    setLoading(true);
+    fetchDocs().finally(() => setLoading(false));
+  }, [projectId, fetchDocs]);
+
+  // Poll while any document is still ingesting (pending → ready/error).
+  useEffect(() => {
+    if (!projectId) return;
+    if (!docs.some(d => d.status === 'pending')) return;
+    const t = setInterval(fetchDocs, 3000);
+    return () => clearInterval(t);
+  }, [projectId, docs, fetchDocs]);
+
+  const uploadFile = useCallback(async (file: File) => {
+    if (!projectId) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      // NOTE: do not set Content-Type — the browser sets the multipart boundary.
+      const res = await fetch(`${API_BASE}/projects/${projectId}/kb`, {
+        method: 'POST', headers: authHeaders(apiKey, modelName), body: fd,
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        setError(e?.detail ?? e?.error ?? `Upload failed (${res.status})`);
+      }
+      await fetchDocs();
+    } catch {
+      setError('Upload failed — is the API running?');
+    } finally {
+      setUploading(false);
+    }
+  }, [projectId, apiKey, modelName, fetchDocs]);
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) uploadFile(f);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) uploadFile(f);
+  };
+
+  const deleteDoc = async (id: string) => {
+    if (!confirm('Remove this document from the knowledge base?')) return;
+    await fetch(`${API_BASE}/kb/${id}`, { method: 'DELETE', headers: authHeaders(apiKey, modelName) });
+    fetchDocs();
+  };
+
+  const runSearch = async () => {
+    const q = query.trim();
+    if (!q || !projectId) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ q, k: '6' });
+      const data = await fetch(`${API_BASE}/projects/${projectId}/kb/search?${params}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
+      setResults(Array.isArray(data?.results) ? data.results : []);
+    } catch {
+      setError('Search failed.');
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  if (!projectId) {
+    return (
+      <EmptyTabState
+        icon={<BrainCircuit size={28} />}
+        title="No project selected"
+        hint="Select or create a project in the sidebar to manage its knowledge base."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Upload zone */}
+      <PanelShellLite title="Knowledge Base" icon={<BrainCircuit size={16} className="text-indigo-600" />} color="indigo">
+        <input ref={fileRef} type="file" className="hidden" onChange={onPickFile}
+          accept=".txt,.md,.markdown,.csv,.pdf,.docx,.xlsx" />
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={`flex flex-col items-center justify-center gap-2 py-8 px-4 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+            dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
+          }`}
+        >
+          {uploading ? (
+            <><Loader2 size={22} className="text-indigo-500 animate-spin" />
+              <p className="text-sm text-gray-500">Uploading & ingesting…</p></>
+          ) : (
+            <><UploadCloud size={22} className="text-indigo-400" />
+              <p className="text-sm text-gray-600 font-medium">Drop a file or click to upload</p>
+              <p className="text-xs text-gray-400">txt · md · csv · pdf · docx · xlsx</p></>
+          )}
+        </div>
+        {error && <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5">{error}</p>}
+
+        {/* Document list */}
+        <div className="mt-4 space-y-2">
+          {loading && docs.length === 0 ? (
+            <div className="flex items-center justify-center py-6 text-gray-400"><Loader2 size={18} className="animate-spin" /></div>
+          ) : docs.length === 0 ? (
+            <p className="text-sm text-gray-400 italic text-center py-2">No documents yet. Upload context files the agent can look up.</p>
+          ) : docs.map(d => (
+            <div key={d.id} className="flex items-start gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
+              <FileText size={14} className="text-indigo-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-800 truncate">{d.name}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5 border border-indigo-200">{d.kind}</span>
+                  <span className="text-[10px] text-gray-400">{fmtBytes(d.size_bytes)}</span>
+                  {d.n_chunks > 0 && <span className="text-[10px] text-gray-400">{d.n_chunks} chunk{d.n_chunks !== 1 ? 's' : ''}</span>}
+                  <span className={`text-[10px] uppercase tracking-wider font-semibold rounded border px-1.5 py-0.5 ${KB_STATUS_STYLE[d.status] ?? KB_STATUS_STYLE.error}`}>
+                    {d.status === 'pending' && <Loader2 size={9} className="inline animate-spin mr-1" />}
+                    {d.status}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => deleteDoc(d.id)} className="p-1 rounded text-gray-300 hover:text-red-500 shrink-0" title="Delete">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </PanelShellLite>
+
+      {/* Search */}
+      <PanelShellLite title="Search Knowledge Base" icon={<Search size={16} className="text-teal-600" />} color="teal">
+        <div className="flex items-center gap-2">
+          <input
+            type="text" value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && runSearch()}
+            placeholder="Search the knowledge base…"
+            className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+          />
+          <button onClick={runSearch} disabled={searching || !query.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-500 disabled:opacity-40">
+            {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Search
+          </button>
+        </div>
+        {results != null && (
+          <div className="mt-3 space-y-2">
+            {results.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No matches found.</p>
+            ) : results.map((r, i) => (
+              <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="flex items-baseline gap-2 mb-1">
+                  <FileText size={12} className="text-teal-600 shrink-0" />
+                  <span className="text-xs font-semibold text-gray-700 truncate flex-1">{r.document}</span>
+                  <span className="text-[10px] text-gray-400">#{r.chunk_index}</span>
+                  <span className="text-[10px] font-mono text-teal-600 bg-teal-50 rounded px-1.5 py-0.5 border border-teal-200">{r.score.toFixed(3)}</span>
+                </div>
+                <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap line-clamp-6">{r.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </PanelShellLite>
+    </div>
+  );
+}
+
 // ─── EmptyTabState ────────────────────────────────────────────────────────────
 
 function EmptyTabState({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
@@ -2490,6 +2983,12 @@ export function AgentPage() {
   const [threadId, setThreadId] = useState<string | null>(() => localStorage.getItem('mmm.activeThreadId'));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  // Gate session loading until /projects has resolved (success or failure) so we
+  // know whether to filter by project. Degraded mode (error) → projectId stays null.
+  const [projectsReady, setProjectsReady] = useState(false);
+  const [workspaceRefreshKey, setWorkspaceRefreshKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -2498,6 +2997,40 @@ export function AgentPage() {
   const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('mmm.activeTab') || 'workflow');
 
   useEffect(() => { localStorage.setItem('mmm.activeTab', activeTab); }, [activeTab]);
+
+  // Persist the selected project id
+  useEffect(() => {
+    if (projectId) localStorage.setItem('mmm.projectId', projectId);
+  }, [projectId]);
+
+  const loadProjects = useCallback(async (): Promise<Project[]> => {
+    const data = await fetch(`${API_BASE}/projects`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
+    return Array.isArray(data?.projects) ? data.projects : [];
+  }, [apiKey, modelName]);
+
+  // Effect P (mount): resolve the project list + selected project, then unlock
+  // session loading. On error, degrade to a single implicit project (projectId=null).
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await loadProjects();
+        setProjects(list);
+        if (list.length > 0) {
+          const stored = localStorage.getItem('mmm.projectId');
+          const pick = stored && list.some(p => p.project_id === stored) ? stored : list[0].project_id;
+          setProjectId(pick);
+        } else {
+          setProjectId(null);
+        }
+      } catch (e) {
+        console.error('Failed to load projects (degrading to single implicit project)', e);
+        setProjects([]);
+        setProjectId(null);
+      } finally {
+        setProjectsReady(true);
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resume session from ?session=<thread_id> query param (e.g. launched from Dashboard)
   useEffect(() => {
@@ -2510,17 +3043,22 @@ export function AgentPage() {
     if (threadId) localStorage.setItem('mmm.activeThreadId', threadId);
   }, [threadId]);
 
-  // Load session list; auto-create one if none, auto-select first if no active
+  // Load session list (filtered by project); auto-create one if none, auto-select
+  // first if no active. Gated on projectsReady so the filter is known up front.
   useEffect(() => {
+    if (!projectsReady) return;
     (async () => {
       try {
-        const raw = await fetch(`${API_BASE}/sessions`).then(r => r.json());
+        const url = projectId
+          ? `${API_BASE}/sessions?project_id=${encodeURIComponent(projectId)}`
+          : `${API_BASE}/sessions`;
+        const raw = await fetch(url).then(r => r.json());
         let list: Session[] = Array.isArray(raw) ? raw : (raw?.sessions ?? []);
         if (list.length === 0) {
           const created = await fetch(`${API_BASE}/sessions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
+            body: JSON.stringify(projectId ? { project_id: projectId } : {}),
           }).then(r => r.json());
           list = [created];
         }
@@ -2530,14 +3068,36 @@ export function AgentPage() {
         }
       } catch (e) { console.error('Failed to load sessions', e); }
     })();
-  }, []);
+  }, [projectId, projectsReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshSessions = useCallback(async () => {
     try {
-      const raw = await fetch(`${API_BASE}/sessions`).then(r => r.json());
+      const url = projectId
+        ? `${API_BASE}/sessions?project_id=${encodeURIComponent(projectId)}`
+        : `${API_BASE}/sessions`;
+      const raw = await fetch(url).then(r => r.json());
       setSessions(Array.isArray(raw) ? raw : (raw?.sessions ?? []));
     } catch (e) { console.error(e); }
+  }, [projectId]);
+
+  // Project actions
+  const handleProjectSelect = useCallback((id: string) => {
+    setProjectId(id);
   }, []);
+
+  const handleProjectCreate = useCallback(async (name: string, description?: string) => {
+    try {
+      const created: Project = await fetch(`${API_BASE}/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
+        body: JSON.stringify({ name, description }),
+      }).then(r => r.json());
+      const list = await loadProjects().catch(() => null);
+      if (list) setProjects(list);
+      else setProjects(prev => [...prev, created]);
+      if (created?.project_id) setProjectId(created.project_id);
+    } catch (e) { console.error('Failed to create project', e); }
+  }, [apiKey, modelName, loadProjects]);
 
   const loadThreadState = useCallback(async (tid: string) => {
     try {
@@ -2582,8 +3142,32 @@ export function AgentPage() {
 
       setMessages(parsed);
       setDashboardData(stateRes.dashboard_data || {});
-      setArtifacts(Array.isArray(artRes) ? artRes : []);
-      setPythonOutputs([]);
+      const arts: Artifact[] = Array.isArray(artRes) ? artRes : [];
+      setArtifacts(arts);
+
+      // Rehydrate persisted python outputs from text_output artifacts, pairing
+      // each with its code_snippet by call_id (code may be unavailable for some).
+      const codeByCall: Record<string, string> = {};
+      for (const a of arts) {
+        if (a.kind === 'code_snippet' && a.payload?.call_id) {
+          codeByCall[a.payload.call_id] = String(a.payload.code ?? '');
+        }
+      }
+      const rehydrated: PythonOutput[] = arts
+        .filter(a => a.kind === 'text_output')
+        .sort((x, y) => x.created_at - y.created_at)
+        .map(a => {
+          const callId = String(a.payload?.call_id ?? a.id);
+          const output = String(a.payload?.stdout ?? '');
+          return {
+            id: callId,
+            code: codeByCall[callId] ?? '',
+            output,
+            hasError: !!a.payload?.is_error,
+            plotCount: Number(a.payload?.plot_count ?? 0),
+          };
+        });
+      setPythonOutputs(rehydrated);
     } catch (e) { console.error('Failed to load thread state', e); }
   }, [apiKey, modelName]);
 
@@ -2599,7 +3183,8 @@ export function AgentPage() {
   // ── Session actions ────────────────────────────────────────────────────────
   const handleCreateSession = async () => {
     const created: Session = await fetch(`${API_BASE}/sessions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(projectId ? { project_id: projectId } : {}),
     }).then(r => r.json());
     await refreshSessions();
     setThreadId(created.thread_id);
@@ -2827,6 +3412,8 @@ export function AgentPage() {
           if (Array.isArray(arts)) setArtifacts(arts);
         } catch { /* ignore */ }
         causal.refresh();
+        // Refresh workspace output files (newly generated reports/CSVs/PNGs).
+        setWorkspaceRefreshKey(k => k + 1);
       }
     }
   };
@@ -2920,6 +3507,10 @@ export function AgentPage() {
         onDelete={handleDeleteSession}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(v => !v)}
+        projects={projects}
+        projectId={projectId}
+        onProjectSelect={handleProjectSelect}
+        onProjectCreate={handleProjectCreate}
       />
 
       {/* ── Left: Chat (1/3 width) ── */}
@@ -3064,6 +3655,8 @@ export function AgentPage() {
               { id: 'data',      label: 'Data',      icon: <Database size={14} />,
                 badge: causal.files.length > 0 ? String(causal.files.length) : null,
                 dot: !!dashboardData.dataset },
+              { id: 'knowledge', label: 'Knowledge', icon: <BrainCircuit size={14} />,
+                badge: null, dot: false },
               { id: 'model',     label: 'Model',     icon: <Layers size={14} />,
                 dot: hasSpec },
               { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
@@ -3141,6 +3734,12 @@ export function AgentPage() {
             {activeTab === 'data' && (
               <>
                 <DataFilesWidget files={causal.files} onDelete={causal.deleteFile} />
+                <WorkspaceFilesWidget
+                  threadId={threadId}
+                  apiKey={apiKey}
+                  modelName={modelName}
+                  refreshKey={workspaceRefreshKey}
+                />
                 {dashboardData.dataset ? (
                   <DatasetPanel dataset={dashboardData.dataset} threadId={threadId} />
                 ) : (
@@ -3151,6 +3750,14 @@ export function AgentPage() {
                   />
                 )}
               </>
+            )}
+
+            {activeTab === 'knowledge' && (
+              <KnowledgeTab
+                projectId={projectId}
+                apiKey={apiKey}
+                modelName={modelName}
+              />
             )}
 
             {activeTab === 'model' && (
@@ -3243,24 +3850,24 @@ export function AgentPage() {
                     expandTitle="MMM Report"
                     expandContent={
                       <div className="h-[80vh]">
-                        <iframe src="http://localhost:8000/report" className="w-full h-full rounded-xl border border-gray-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
+                        <iframe src={`${API_BASE}/report`} className="w-full h-full rounded-xl border border-gray-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
                       </div>
                     }
                   >
                     <div className="flex flex-col gap-3">
                       <p className="text-sm text-gray-500">Full analysis report with diagnostics, ROI, and channel decomposition.</p>
                       <div className="flex gap-3">
-                        <a href="http://localhost:8000/report/download" download="mmm_report.html"
+                        <a href={`${API_BASE}/report/download`} download="mmm_report.html"
                           className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-xl transition-colors font-medium">
                           <Download size={15} /> Download
                         </a>
-                        <a href="http://localhost:8000/report" target="_blank" rel="noreferrer"
+                        <a href={`${API_BASE}/report`} target="_blank" rel="noreferrer"
                           className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-xl transition-colors font-medium border border-gray-200">
                           <ExternalLink size={15} /> Open Tab
                         </a>
                       </div>
                       <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '340px' }}>
-                        <iframe src="http://localhost:8000/report" className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
+                        <iframe src={`${API_BASE}/report`} className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
                       </div>
                     </div>
                   </DashWidget>

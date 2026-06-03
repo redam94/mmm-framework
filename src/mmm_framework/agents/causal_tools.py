@@ -255,14 +255,19 @@ def propose_dag(
         cname = conf.get("name", "Confounder")
         affects = conf.get("affects", [])
         cid_pair = _normalize_node_ids([cname])[0]
-        if cid_pair[0] in {n.id for n in nodes}:
-            continue
-        nodes.append(
-            DAGNode(
-                id=cid_pair[0], variable_name=cid_pair[1], node_type=NodeType.CONTROL
+        # The confounder node may already exist (e.g. the same variable was also
+        # listed in `controls`). In that case keep the existing node, but still
+        # add its fan-out edges below — otherwise the confounder→target edges
+        # (the whole point of declaring a confounder) silently disappear.
+        if cid_pair[0] not in {n.id for n in nodes}:
+            nodes.append(
+                DAGNode(
+                    id=cid_pair[0],
+                    variable_name=cid_pair[1],
+                    node_type=NodeType.CONTROL,
+                )
             )
-        )
-        name_to_id[cid_pair[1]] = cid_pair[0]
+            name_to_id[cid_pair[1]] = cid_pair[0]
         for target_name in affects:
             tid_node = name_to_id.get(target_name)
             if tid_node is None:
@@ -307,6 +312,21 @@ def propose_dag(
             edges.append(
                 DAGEdge(source=src, target=tgt, edge_type=EdgeType.CROSS_EFFECT)
             )
+
+    # Dedup edges by (source, target), keeping the first occurrence so the
+    # original edge_type is preserved. A confounder whose `affects` includes the
+    # KPI (or a node already wired up as a control) would otherwise produce a
+    # duplicate edge, e.g. Distribution→Sales added by both the controls loop and
+    # the confounder fan-out.
+    seen_edges: set[tuple[str, str]] = set()
+    deduped_edges: list[DAGEdge] = []
+    for edge in edges:
+        key = (edge.source, edge.target)
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        deduped_edges.append(edge)
+    edges = deduped_edges
 
     spec = DAGSpec(nodes=nodes, edges=edges)
     validation = validate_dag(spec)
@@ -789,7 +809,9 @@ def prior_predictive_check(
     still faster than the real fit and gives us a model to draw from.
     """
     from mmm_framework.agents.tools import _MODEL_CACHE  # avoid circular import
+    from mmm_framework.agents.runtime import set_current_thread
 
+    set_current_thread(_thread_id_from(config))
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
         return Command(
@@ -911,8 +933,10 @@ def leave_one_out_decomposition(
             Must match a component in the existing decomposition.
     """
     from mmm_framework.agents.tools import _MODEL_CACHE
+    from mmm_framework.agents.runtime import set_current_thread
     from mmm_framework.reporting.helpers import compute_component_decomposition
 
+    set_current_thread(_thread_id_from(config))
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
         return Command(

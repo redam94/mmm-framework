@@ -3,8 +3,14 @@ import type { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConf
 import type { ApiError } from './types';
 import { getProviderForModel } from '../constants/models';
 
-// API Base URL - defaults to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// API Base URL.
+// - If VITE_API_URL is set, use it verbatim (absolute URL).
+// - Otherwise in dev, use the relative "/api" prefix so requests go same-origin
+//   through the Vite dev-server proxy (see vite.config.ts). This means only the
+//   Vite port needs to be forwarded/tunneled — the backend is reachable through it.
+// - In a production build with no override, fall back to the legacy absolute URL.
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://localhost:8000');
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
@@ -19,6 +25,8 @@ export const apiClient: AxiosInstance = axios.create({
 const API_KEY_STORAGE_KEY = 'mmm_api_key';
 const MODEL_NAME_STORAGE_KEY = 'mmm_model_name';
 const PROVIDER_KEYS_STORAGE_KEY = 'mmm_provider_keys';
+const BASE_URL_STORAGE_KEY = 'mmm_base_url';
+const PROVIDER_STORAGE_KEY = 'mmm_provider';
 
 // Get API key and model from localStorage
 export function getStoredApiKey(): string | null {
@@ -26,6 +34,32 @@ export function getStoredApiKey(): string | null {
 }
 export function getStoredModelName(): string | null {
   return localStorage.getItem(MODEL_NAME_STORAGE_KEY);
+}
+
+// Optional backend provider override (e.g. 'lmstudio', 'openai', 'vertex_gemini').
+// Sent as X-Provider; the server honors it only when it is NOT Vertex-locked.
+export function getStoredProvider(): string | null {
+  return localStorage.getItem(PROVIDER_STORAGE_KEY);
+}
+export function setStoredProvider(provider: string | null): void {
+  if (provider && provider.trim()) {
+    localStorage.setItem(PROVIDER_STORAGE_KEY, provider.trim());
+  } else {
+    localStorage.removeItem(PROVIDER_STORAGE_KEY);
+  }
+}
+
+// Optional override for a local OpenAI-compatible endpoint (LM Studio). Sent as
+// the X-Base-Url header; the server honors it only for the lmstudio provider.
+export function getStoredBaseUrl(): string | null {
+  return localStorage.getItem(BASE_URL_STORAGE_KEY);
+}
+export function setStoredBaseUrl(baseUrl: string | null): void {
+  if (baseUrl && baseUrl.trim()) {
+    localStorage.setItem(BASE_URL_STORAGE_KEY, baseUrl.trim());
+  } else {
+    localStorage.removeItem(BASE_URL_STORAGE_KEY);
+  }
 }
 
 // Per-provider key storage
@@ -58,6 +92,8 @@ export function setStoredAuth(apiKey: string, modelName: string): void {
 export function clearStoredAuth(): void {
   localStorage.removeItem(API_KEY_STORAGE_KEY);
   localStorage.removeItem(MODEL_NAME_STORAGE_KEY);
+  localStorage.removeItem(BASE_URL_STORAGE_KEY);
+  localStorage.removeItem(PROVIDER_STORAGE_KEY);
 }
 
 // Request interceptor - add API key header
@@ -65,11 +101,19 @@ apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const apiKey = getStoredApiKey();
     const modelName = getStoredModelName();
+    const baseUrl = getStoredBaseUrl();
+    const provider = getStoredProvider();
     if (apiKey) {
       config.headers['X-API-Key'] = apiKey;
     }
     if (modelName) {
       config.headers['X-Model-Name'] = modelName;
+    }
+    if (baseUrl) {
+      config.headers['X-Base-Url'] = baseUrl;
+    }
+    if (provider) {
+      config.headers['X-Provider'] = provider;
     }
     return config;
   },
@@ -157,6 +201,10 @@ export interface ServerModelConfig {
   // False when the server authenticates itself (Vertex AI / ADC or an env key),
   // so the UI can skip prompting the user for an API key.
   requires_api_key: boolean;
+  // True when the model is served from a local OpenAI-compatible endpoint
+  // (e.g. LM Studio); base_url is that endpoint.
+  is_local_endpoint?: boolean;
+  base_url?: string | null;
 }
 
 // Fetch the server's active model configuration, or null if unavailable.
@@ -200,6 +248,36 @@ export async function getVertexModels(): Promise<VertexModelsResponse | null> {
   try {
     const response = await axios.get<VertexModelsResponse>(`${API_BASE_URL}/vertex-models`, {
       timeout: 15000,
+    });
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+// A model currently loaded in LM Studio (its OpenAI-compatible /v1/models).
+export interface LmStudioModel {
+  id: string;
+  provider: string;       // lmstudio
+  family: string;         // lmstudio
+  display_name: string;
+  source: string;         // live
+}
+
+export interface LmStudioModelsResponse {
+  base_url: string;
+  active_model: string | null;
+  models: LmStudioModel[];
+}
+
+// List models loaded in LM Studio. Optionally probe a specific base URL (so the
+// UI can discover models at a URL the user just typed). Returns null/empty if
+// LM Studio isn't running, so the caller falls back to free-text entry.
+export async function getLmStudioModels(baseUrl?: string | null): Promise<LmStudioModelsResponse | null> {
+  try {
+    const response = await axios.get<LmStudioModelsResponse>(`${API_BASE_URL}/lmstudio-models`, {
+      params: baseUrl ? { base_url: baseUrl } : undefined,
+      timeout: 8000,
     });
     return response.data;
   } catch {

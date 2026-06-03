@@ -10,6 +10,7 @@ sibling tables in the same DB file:
 'saved_model'. `payload_json` is whatever the frontend needs to render or
 rerun the artifact (e.g. {"code": "..."} for code_snippet).
 """
+
 from __future__ import annotations
 
 import json
@@ -67,7 +68,9 @@ def init_db() -> None:
             )
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_thread ON artifacts(thread_id, created_at)")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_thread ON artifacts(thread_id, created_at)"
+        )
 
         # Modeling assumptions: a key/value log per session with full versioned
         # history. Each row is an immutable snapshot; the "current" value for a
@@ -88,7 +91,9 @@ def init_db() -> None:
             )
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_assumptions_thread_key ON assumptions(thread_id, key, version)")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_assumptions_thread_key ON assumptions(thread_id, key, version)"
+        )
 
         # Workflow status: which of the 9 canonical steps are done/in-progress.
         # We mostly infer status from state, but store manual overrides + notes
@@ -124,7 +129,9 @@ def init_db() -> None:
             )
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_data_files_thread ON data_files(thread_id, created_at)")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_data_files_thread ON data_files(thread_id, created_at)"
+        )
 
         # Locked analysis plans: a snapshot of research_question + DAG + assumptions
         # at the moment the analyst decides to "lock" the pre-registration.
@@ -139,7 +146,71 @@ def init_db() -> None:
             )
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_plans_thread ON analysis_plans(thread_id, locked_at)")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_plans_thread ON analysis_plans(thread_id, locked_at)"
+        )
+
+        # Projects: group sessions and own a knowledge base. A session belongs
+        # to a project via sessions.project_id.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                project_id  TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                description TEXT,
+                created_at  REAL NOT NULL,
+                updated_at  REAL NOT NULL
+            )
+            """
+        )
+
+        # Knowledge-base documents: the source files a user adds for context,
+        # scoped to a project. Bytes live on disk (path); chunks+embeddings in
+        # kb_chunks.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kb_documents (
+                id         TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                path       TEXT NOT NULL,
+                kind       TEXT NOT NULL,
+                size_bytes INTEGER,
+                n_chunks   INTEGER NOT NULL DEFAULT 0,
+                status     TEXT NOT NULL,
+                error      TEXT,
+                meta_json  TEXT,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kb_docs_project ON kb_documents(project_id, created_at)"
+        )
+
+        # Knowledge-base chunks: one row per text chunk with its embedding stored
+        # as a float32 little-endian BLOB. Brute-force cosine search avoids a
+        # vector-store dependency.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kb_chunks (
+                id          TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL,
+                project_id  TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                text        TEXT NOT NULL,
+                embedding   BLOB NOT NULL,
+                dim         INTEGER NOT NULL,
+                created_at  REAL NOT NULL
+            )
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kb_chunks_project ON kb_chunks(project_id)"
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kb_chunks_doc ON kb_chunks(document_id)"
+        )
 
 
 def list_sessions(project_id: str | None = None) -> list[dict[str, Any]]:
@@ -175,22 +246,31 @@ def get_session(thread_id: str) -> dict[str, Any] | None:
         return session
 
 
-def create_session(name: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+def create_session(
+    name: str | None = None, project_id: str | None = None
+) -> dict[str, Any]:
     thread_id = uuid.uuid4().hex
     now = _now()
-    display_name = name or f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}"
+    display_name = (
+        name or f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}"
+    )
     with _conn() as c:
         c.execute(
             "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, ?)",
             (thread_id, display_name, now, now, project_id),
         )
     return {
-        "thread_id": thread_id, "name": display_name,
-        "created_at": now, "updated_at": now, "project_id": project_id,
+        "thread_id": thread_id,
+        "name": display_name,
+        "created_at": now,
+        "updated_at": now,
+        "project_id": project_id,
     }
 
 
-def update_session(thread_id: str, name: str | None = None, project_id: str | None = None) -> bool:
+def update_session(
+    thread_id: str, name: str | None = None, project_id: str | None = None
+) -> bool:
     """Update session name and/or project_id. Returns True if session was found."""
     updates = []
     params: list[Any] = []
@@ -217,13 +297,23 @@ def touch_session(thread_id: str) -> None:
     """Bump updated_at; if the row doesn't exist (legacy thread), insert it."""
     now = _now()
     with _conn() as c:
-        row = c.execute("SELECT 1 FROM sessions WHERE thread_id = ?", (thread_id,)).fetchone()
+        row = c.execute(
+            "SELECT 1 FROM sessions WHERE thread_id = ?", (thread_id,)
+        ).fetchone()
         if row:
-            c.execute("UPDATE sessions SET updated_at = ? WHERE thread_id = ?", (now, thread_id))
+            c.execute(
+                "UPDATE sessions SET updated_at = ? WHERE thread_id = ?",
+                (now, thread_id),
+            )
         else:
             c.execute(
                 "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, NULL)",
-                (thread_id, f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}", now, now),
+                (
+                    thread_id,
+                    f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}",
+                    now,
+                    now,
+                ),
             )
 
 
@@ -257,7 +347,13 @@ def add_artifact(thread_id: str, kind: str, payload: dict[str, Any]) -> dict[str
     with _conn() as c:
         c.execute(
             "INSERT INTO artifacts (id, thread_id, kind, payload_json, created_at) VALUES (?, ?, ?, ?, ?)",
-            (artifact["id"], thread_id, kind, json.dumps(payload, default=str), artifact["created_at"]),
+            (
+                artifact["id"],
+                thread_id,
+                kind,
+                json.dumps(payload, default=str),
+                artifact["created_at"],
+            ),
         )
     return artifact
 
@@ -286,6 +382,27 @@ def list_artifacts(thread_id: str) -> list[dict[str, Any]]:
     return out
 
 
+def get_artifact(artifact_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        r = c.execute(
+            "SELECT id, thread_id, kind, payload_json, created_at FROM artifacts WHERE id = ?",
+            (artifact_id,),
+        ).fetchone()
+    if r is None:
+        return None
+    try:
+        payload = json.loads(r["payload_json"])
+    except Exception:
+        payload = {"raw": r["payload_json"]}
+    return {
+        "id": r["id"],
+        "thread_id": r["thread_id"],
+        "kind": r["kind"],
+        "payload": payload,
+        "created_at": r["created_at"],
+    }
+
+
 def delete_artifact(artifact_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM artifacts WHERE id = ?", (artifact_id,))
@@ -296,12 +413,12 @@ def delete_artifact(artifact_id: str) -> bool:
 
 ASSUMPTION_CATEGORIES = {
     "research_question",  # what we're estimating
-    "causal_structure",    # DAG-level claims (e.g. "TV does not confound display")
-    "data",                # data assumptions (e.g. "weekly aggregation is appropriate")
-    "functional_form",     # adstock/saturation choices
-    "prior",               # specific prior choices and their justification
-    "identification",      # backdoor/instrument/frontdoor claims
-    "external_evidence",   # benchmarks, experiments, prior MMMs
+    "causal_structure",  # DAG-level claims (e.g. "TV does not confound display")
+    "data",  # data assumptions (e.g. "weekly aggregation is appropriate")
+    "functional_form",  # adstock/saturation choices
+    "prior",  # specific prior choices and their justification
+    "identification",  # backdoor/instrument/frontdoor claims
+    "external_evidence",  # benchmarks, experiments, prior MMMs
     "other",
 }
 
@@ -331,12 +448,29 @@ def record_assumption(
             (id, thread_id, key, category, value_json, rationale, change_note, version, is_tombstone, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             """,
-            (aid, thread_id, key, category, json.dumps(value, default=str), rationale, change_note, next_version, now),
+            (
+                aid,
+                thread_id,
+                key,
+                category,
+                json.dumps(value, default=str),
+                rationale,
+                change_note,
+                next_version,
+                now,
+            ),
         )
     return {
-        "id": aid, "thread_id": thread_id, "key": key, "category": category,
-        "value": value, "rationale": rationale, "change_note": change_note,
-        "version": next_version, "is_tombstone": False, "created_at": now,
+        "id": aid,
+        "thread_id": thread_id,
+        "key": key,
+        "category": category,
+        "value": value,
+        "rationale": rationale,
+        "change_note": change_note,
+        "version": next_version,
+        "is_tombstone": False,
+        "created_at": now,
     }
 
 
@@ -360,7 +494,13 @@ def retract_assumption(thread_id: str, key: str, reason: str) -> dict[str, Any] 
             """,
             (aid, thread_id, key, reason, next_version, now),
         )
-    return {"id": aid, "key": key, "version": next_version, "is_tombstone": True, "created_at": now}
+    return {
+        "id": aid,
+        "key": key,
+        "version": next_version,
+        "is_tombstone": True,
+        "created_at": now,
+    }
 
 
 def _row_to_assumption(r: sqlite3.Row) -> dict[str, Any]:
@@ -369,14 +509,22 @@ def _row_to_assumption(r: sqlite3.Row) -> dict[str, Any]:
     except Exception:
         value = r["value_json"]
     return {
-        "id": r["id"], "thread_id": r["thread_id"], "key": r["key"],
-        "category": r["category"], "value": value, "rationale": r["rationale"],
-        "change_note": r["change_note"], "version": r["version"],
-        "is_tombstone": bool(r["is_tombstone"]), "created_at": r["created_at"],
+        "id": r["id"],
+        "thread_id": r["thread_id"],
+        "key": r["key"],
+        "category": r["category"],
+        "value": value,
+        "rationale": r["rationale"],
+        "change_note": r["change_note"],
+        "version": r["version"],
+        "is_tombstone": bool(r["is_tombstone"]),
+        "created_at": r["created_at"],
     }
 
 
-def list_assumptions(thread_id: str, include_history: bool = False) -> list[dict[str, Any]]:
+def list_assumptions(
+    thread_id: str, include_history: bool = False
+) -> list[dict[str, Any]]:
     """If include_history is False, returns the latest version per key.
     Otherwise returns every row ordered by (key, version).
     """
@@ -411,19 +559,25 @@ def get_assumption_history(thread_id: str, key: str) -> list[dict[str, Any]]:
 # ── Workflow status ──────────────────────────────────────────────────────────
 
 WORKFLOW_STEPS = [
-    (1, "Define the Question",            "Pre-register the causal/business question."),
-    (2, "Tell the Story of Your Data",    "Generative narrative + DAG."),
-    (3, "Build the Model",                "Specify components and priors."),
-    (4, "Prior Predictive Check",         "Simulate from priors; sanity-check implied outcomes."),
-    (5, "Fit the Model",                  "Run MCMC."),
-    (6, "Computational Diagnostics",      "R-hat, ESS, divergences."),
-    (7, "Posterior Predictive Check",     "Compare fit to observed data."),
-    (8, "Sensitivity Analysis",           "Stress-test conclusions."),
-    (9, "Communicate Results",            "Honest uncertainty + decision."),
+    (1, "Define the Question", "Pre-register the causal/business question."),
+    (2, "Tell the Story of Your Data", "Generative narrative + DAG."),
+    (3, "Build the Model", "Specify components and priors."),
+    (
+        4,
+        "Prior Predictive Check",
+        "Simulate from priors; sanity-check implied outcomes.",
+    ),
+    (5, "Fit the Model", "Run MCMC."),
+    (6, "Computational Diagnostics", "R-hat, ESS, divergences."),
+    (7, "Posterior Predictive Check", "Compare fit to observed data."),
+    (8, "Sensitivity Analysis", "Stress-test conclusions."),
+    (9, "Communicate Results", "Honest uncertainty + decision."),
 ]
 
 
-def set_workflow_step(thread_id: str, step: int, status: str, notes: str | None = None) -> dict[str, Any]:
+def set_workflow_step(
+    thread_id: str, step: int, status: str, notes: str | None = None
+) -> dict[str, Any]:
     now = _now()
     with _conn() as c:
         c.execute(
@@ -437,7 +591,13 @@ def set_workflow_step(thread_id: str, step: int, status: str, notes: str | None 
             """,
             (thread_id, step, status, notes, now),
         )
-    return {"thread_id": thread_id, "step": step, "status": status, "notes": notes, "updated_at": now}
+    return {
+        "thread_id": thread_id,
+        "step": step,
+        "status": status,
+        "notes": notes,
+        "updated_at": now,
+    }
 
 
 def get_workflow_overrides(thread_id: str) -> dict[int, dict[str, Any]]:
@@ -450,6 +610,7 @@ def get_workflow_overrides(thread_id: str) -> dict[int, dict[str, Any]]:
 
 
 # ── Data files registry ──────────────────────────────────────────────────────
+
 
 def register_file(
     thread_id: str,
@@ -468,11 +629,28 @@ def register_file(
             INSERT INTO data_files (id, thread_id, path, name, kind, size_bytes, preview, meta_json, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (fid, thread_id, path, name, kind, size_bytes, preview, json.dumps(meta or {}, default=str), now),
+            (
+                fid,
+                thread_id,
+                path,
+                name,
+                kind,
+                size_bytes,
+                preview,
+                json.dumps(meta or {}, default=str),
+                now,
+            ),
         )
     return {
-        "id": fid, "thread_id": thread_id, "path": path, "name": name, "kind": kind,
-        "size_bytes": size_bytes, "preview": preview, "meta": meta or {}, "created_at": now,
+        "id": fid,
+        "thread_id": thread_id,
+        "path": path,
+        "name": name,
+        "kind": kind,
+        "size_bytes": size_bytes,
+        "preview": preview,
+        "meta": meta or {},
+        "created_at": now,
     }
 
 
@@ -488,12 +666,42 @@ def list_files(thread_id: str) -> list[dict[str, Any]]:
             meta = json.loads(r["meta_json"]) if r["meta_json"] else {}
         except Exception:
             meta = {}
-        out.append({
-            "id": r["id"], "thread_id": r["thread_id"], "path": r["path"],
-            "name": r["name"], "kind": r["kind"], "size_bytes": r["size_bytes"],
-            "preview": r["preview"], "meta": meta, "created_at": r["created_at"],
-        })
+        out.append(
+            {
+                "id": r["id"],
+                "thread_id": r["thread_id"],
+                "path": r["path"],
+                "name": r["name"],
+                "kind": r["kind"],
+                "size_bytes": r["size_bytes"],
+                "preview": r["preview"],
+                "meta": meta,
+                "created_at": r["created_at"],
+            }
+        )
     return out
+
+
+def get_file(file_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        r = c.execute("SELECT * FROM data_files WHERE id = ?", (file_id,)).fetchone()
+    if r is None:
+        return None
+    try:
+        meta = json.loads(r["meta_json"]) if r["meta_json"] else {}
+    except Exception:
+        meta = {}
+    return {
+        "id": r["id"],
+        "thread_id": r["thread_id"],
+        "path": r["path"],
+        "name": r["name"],
+        "kind": r["kind"],
+        "size_bytes": r["size_bytes"],
+        "preview": r["preview"],
+        "meta": meta,
+        "created_at": r["created_at"],
+    }
 
 
 def delete_file(file_id: str) -> bool:
@@ -503,6 +711,7 @@ def delete_file(file_id: str) -> bool:
 
 
 # ── Analysis plans ────────────────────────────────────────────────────────────
+
 
 def lock_analysis_plan(
     thread_id: str,
@@ -517,7 +726,13 @@ def lock_analysis_plan(
             "INSERT INTO analysis_plans (id, thread_id, name, locked_at, payload_json) VALUES (?, ?, ?, ?, ?)",
             (plan_id, thread_id, name, now, json.dumps(payload, default=str)),
         )
-    return {"id": plan_id, "thread_id": thread_id, "name": name, "locked_at": now, "payload": payload}
+    return {
+        "id": plan_id,
+        "thread_id": thread_id,
+        "name": name,
+        "locked_at": now,
+        "payload": payload,
+    }
 
 
 def list_analysis_plans(thread_id: str | None = None) -> list[dict[str, Any]]:
@@ -540,8 +755,15 @@ def list_analysis_plans(thread_id: str | None = None) -> list[dict[str, Any]]:
             payload = json.loads(r["payload_json"])
         except Exception:
             payload = {}
-        out.append({"id": r["id"], "thread_id": r["thread_id"], "name": r["name"],
-                    "locked_at": r["locked_at"], "payload": payload})
+        out.append(
+            {
+                "id": r["id"],
+                "thread_id": r["thread_id"],
+                "name": r["name"],
+                "locked_at": r["locked_at"],
+                "payload": payload,
+            }
+        )
     return out
 
 
@@ -558,11 +780,283 @@ def get_analysis_plan(plan_id: str) -> dict[str, Any] | None:
         payload = json.loads(row["payload_json"])
     except Exception:
         payload = {}
-    return {"id": row["id"], "thread_id": row["thread_id"], "name": row["name"],
-            "locked_at": row["locked_at"], "payload": payload}
+    return {
+        "id": row["id"],
+        "thread_id": row["thread_id"],
+        "name": row["name"],
+        "locked_at": row["locked_at"],
+        "payload": payload,
+    }
 
 
 def delete_analysis_plan(plan_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM analysis_plans WHERE id = ?", (plan_id,))
         return cur.rowcount > 0
+
+
+# ── Projects ────────────────────────────────────────────────────────────────
+
+_DEFAULT_PROJECT_ID = "default"
+
+
+def ensure_default_project() -> str:
+    """Create the built-in Default Project if absent; return its id."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT project_id FROM projects WHERE project_id = ?",
+            (_DEFAULT_PROJECT_ID,),
+        ).fetchone()
+        if row is None:
+            now = _now()
+            c.execute(
+                "INSERT INTO projects (project_id, name, description, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (
+                    _DEFAULT_PROJECT_ID,
+                    "Default Project",
+                    "Auto-created home for sessions without an explicit project.",
+                    now,
+                    now,
+                ),
+            )
+    return _DEFAULT_PROJECT_ID
+
+
+def create_project(name: str, description: str | None = None) -> dict[str, Any]:
+    project_id = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO projects (project_id, name, description, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (project_id, name or "Untitled Project", description, now, now),
+        )
+    return get_project(project_id)  # type: ignore[return-value]
+
+
+def _project_counts(c: sqlite3.Connection, project_id: str) -> dict[str, int]:
+    session_count = c.execute(
+        "SELECT COUNT(*) AS n FROM sessions WHERE project_id = ?", (project_id,)
+    ).fetchone()["n"]
+    doc_count = c.execute(
+        "SELECT COUNT(*) AS n FROM kb_documents WHERE project_id = ?", (project_id,)
+    ).fetchone()["n"]
+    return {"session_count": session_count, "doc_count": doc_count}
+
+
+def list_projects() -> list[dict[str, Any]]:
+    ensure_default_project()
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT project_id, name, description, created_at, updated_at FROM projects"
+            " ORDER BY (project_id = 'default') DESC, updated_at DESC"
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d.update(_project_counts(c, r["project_id"]))
+            out.append(d)
+        return out
+
+
+def get_project(project_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT project_id, name, description, created_at, updated_at FROM projects WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d.update(_project_counts(c, project_id))
+        return d
+
+
+def update_project(
+    project_id: str, name: str | None = None, description: str | None = None
+) -> bool:
+    sets, params = [], []
+    if name is not None:
+        sets.append("name = ?")
+        params.append(name)
+    if description is not None:
+        sets.append("description = ?")
+        params.append(description)
+    if not sets:
+        return False
+    sets.append("updated_at = ?")
+    params.append(_now())
+    params.append(project_id)
+    with _conn() as c:
+        cur = c.execute(
+            f"UPDATE projects SET {', '.join(sets)} WHERE project_id = ?", params
+        )
+        return cur.rowcount > 0
+
+
+def delete_project(project_id: str) -> bool:
+    """Delete a project. Its sessions become unassigned (project_id NULL) and
+    its KB documents/chunks are removed. The built-in Default Project cannot be
+    deleted."""
+    if project_id == _DEFAULT_PROJECT_ID:
+        return False
+    with _conn() as c:
+        cur = c.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))
+        if cur.rowcount == 0:
+            return False
+        c.execute(
+            "UPDATE sessions SET project_id = NULL WHERE project_id = ?", (project_id,)
+        )
+        c.execute("DELETE FROM kb_chunks WHERE project_id = ?", (project_id,))
+        c.execute("DELETE FROM kb_documents WHERE project_id = ?", (project_id,))
+        return True
+
+
+def resolve_project_id(thread_id: str | None) -> str:
+    """The project a session belongs to, falling back to the Default Project.
+
+    Never returns None — the knowledge base always has a home.
+    """
+    ensure_default_project()
+    if not thread_id:
+        return _DEFAULT_PROJECT_ID
+    with _conn() as c:
+        row = c.execute(
+            "SELECT project_id FROM sessions WHERE thread_id = ?", (thread_id,)
+        ).fetchone()
+    if row and row["project_id"]:
+        return row["project_id"]
+    return _DEFAULT_PROJECT_ID
+
+
+# ── Knowledge-base documents + chunks ───────────────────────────────────────
+
+
+def add_kb_document(
+    project_id: str,
+    name: str,
+    path: str,
+    kind: str,
+    size_bytes: int | None = None,
+    status: str = "pending",
+    meta: dict | None = None,
+) -> dict[str, Any]:
+    doc_id = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO kb_documents (id, project_id, name, path, kind, size_bytes,"
+            " n_chunks, status, error, meta_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?)",
+            (
+                doc_id,
+                project_id,
+                name,
+                path,
+                kind,
+                size_bytes,
+                status,
+                json.dumps(meta or {}, default=str),
+                now,
+            ),
+        )
+    return get_kb_document(doc_id)  # type: ignore[return-value]
+
+
+def set_kb_document_status(
+    doc_id: str, status: str, n_chunks: int | None = None, error: str | None = None
+) -> None:
+    sets, params = ["status = ?"], [status]
+    if n_chunks is not None:
+        sets.append("n_chunks = ?")
+        params.append(n_chunks)
+    if error is not None:
+        sets.append("error = ?")
+        params.append(error)
+    params.append(doc_id)
+    with _conn() as c:
+        c.execute(f"UPDATE kb_documents SET {', '.join(sets)} WHERE id = ?", params)
+
+
+def _row_to_kb_doc(r: sqlite3.Row) -> dict[str, Any]:
+    try:
+        meta = json.loads(r["meta_json"]) if r["meta_json"] else {}
+    except Exception:
+        meta = {}
+    return {
+        "id": r["id"],
+        "project_id": r["project_id"],
+        "name": r["name"],
+        "path": r["path"],
+        "kind": r["kind"],
+        "size_bytes": r["size_bytes"],
+        "n_chunks": r["n_chunks"],
+        "status": r["status"],
+        "error": r["error"],
+        "meta": meta,
+        "created_at": r["created_at"],
+    }
+
+
+def list_kb_documents(project_id: str) -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM kb_documents WHERE project_id = ? ORDER BY created_at DESC",
+            (project_id,),
+        ).fetchall()
+        return [_row_to_kb_doc(r) for r in rows]
+
+
+def get_kb_document(doc_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute("SELECT * FROM kb_documents WHERE id = ?", (doc_id,)).fetchone()
+        return _row_to_kb_doc(row) if row else None
+
+
+def delete_kb_document(doc_id: str) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM kb_documents WHERE id = ?", (doc_id,))
+        if cur.rowcount == 0:
+            return False
+        c.execute("DELETE FROM kb_chunks WHERE document_id = ?", (doc_id,))
+        return True
+
+
+def add_kb_chunks(
+    document_id: str, project_id: str, chunks: list[tuple[int, str, bytes, int]]
+) -> int:
+    """Insert chunk rows. ``chunks`` is a list of (chunk_index, text, embedding_blob, dim)."""
+    now = _now()
+    rows = [
+        (uuid.uuid4().hex, document_id, project_id, idx, text, emb, dim, now)
+        for (idx, text, emb, dim) in chunks
+    ]
+    with _conn() as c:
+        c.executemany(
+            "INSERT INTO kb_chunks (id, document_id, project_id, chunk_index, text,"
+            " embedding, dim, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+    return len(rows)
+
+
+def iter_kb_chunks(project_id: str) -> list[dict[str, Any]]:
+    """All chunks for a project (id, document_id, chunk_index, text, embedding bytes, dim)."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, document_id, chunk_index, text, embedding, dim FROM kb_chunks"
+            " WHERE project_id = ?",
+            (project_id,),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "document_id": r["document_id"],
+                "chunk_index": r["chunk_index"],
+                "text": r["text"],
+                "embedding": r["embedding"],
+                "dim": r["dim"],
+            }
+            for r in rows
+        ]
