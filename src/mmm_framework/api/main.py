@@ -10,7 +10,7 @@ from typing import Any
 
 import aiosqlite
 from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -956,6 +956,32 @@ async def list_artifacts_endpoint(thread_id: str):
 async def delete_artifact_endpoint(artifact_id: str):
     sessions_store.delete_artifact(artifact_id)
     return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/sessions/{thread_id}/export")
+async def export_session_endpoint(thread_id: str, format: str = "py"):
+    """Download the session's Python work as a standalone, runnable script.
+
+    Synthesizes a preamble that reconstitutes tool-injected state (dataset,
+    fitted model, helpers), then the execute_python cells in order — so the
+    download is a real, portable reproduction of the session, not a code dump
+    that NameErrors. See ``agents/session_export.build_session_script``.
+    """
+    import re
+
+    from mmm_framework.agents.session_export import build_session_script
+
+    script = build_session_script(thread_id)
+    sess = sessions_store.get_session(thread_id) or {}
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(sess.get("name") or thread_id)).strip(
+        "_"
+    )
+    filename = f"{slug or 'session'}.py"
+    return Response(
+        content=script,
+        media_type="text/x-python; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Assumptions log ──────────────────────────────────────────────────────────

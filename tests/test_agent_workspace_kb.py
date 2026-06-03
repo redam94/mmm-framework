@@ -445,3 +445,270 @@ def test_api_projects_kb_and_downloads(client, store):
     # a path outside the allow-list is refused
     bad = store.register_file(tid, "/etc/hosts", "hosts", "export", 1)
     assert client.get(f"/files/{bad['id']}/download").status_code == 403
+
+
+# ── warm-kernel namespace persistence ────────────────────────────────────────
+
+
+def _new_thread(store):
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    tid = sess["thread_id"]
+    return tid, {"configurable": {"thread_id": tid}}
+
+
+def test_namespace_persists_across_calls(store):
+    """A variable defined in one execute_python call is visible in the next."""
+    from mmm_framework.agents import tools as T
+
+    tid, cfg = _new_thread(store)
+    T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="x = 41; y = pd.DataFrame({'a': [1, 2, 3]})",
+        tool_call_id="c1",
+        config=cfg,
+    )
+    r = T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="print('x is', x + 1); print('len', len(y))",
+        tool_call_id="c2",
+        config=cfg,
+    )
+    out = r.update["messages"][0].content
+    assert "NameError" not in out
+    assert "x is 42" in out and "len 3" in out
+
+
+def test_namespace_isolated_per_thread(store):
+    """Variables don't leak between sessions (thread-scoped buckets)."""
+    from mmm_framework.agents import tools as T
+
+    tid_a, cfg_a = _new_thread(store)
+    tid_b, cfg_b = _new_thread(store)
+    T.execute_python.func(
+        state={"dashboard_data": {}}, code="secret = 7", tool_call_id="a", config=cfg_a
+    )
+    r = T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="print(secret)",
+        tool_call_id="b",
+        config=cfg_b,
+    )
+    assert "NameError" in r.update["messages"][0].content
+
+
+def test_reset_namespace_clears_vars_with_hint(store):
+    """reset_namespace wipes user vars; a missing name yields a self-healing hint."""
+    from mmm_framework.agents import tools as T
+
+    tid, cfg = _new_thread(store)
+    T.execute_python.func(
+        state={"dashboard_data": {}}, code="z = 99", tool_call_id="c1", config=cfg
+    )
+    T.reset_namespace.func(tool_call_id="r", config=cfg)
+    r = T.execute_python.func(
+        state={"dashboard_data": {}}, code="print(z)", tool_call_id="c2", config=cfg
+    )
+    out = r.update["messages"][0].content
+    assert "NameError" in out
+    assert "Hint:" in out and "`z`" in out
+
+
+def test_save_and_load_result_survives_reset(store):
+    """save_result persists to disk; load_result reloads it after a kernel reset."""
+    from mmm_framework.agents import tools as T
+
+    tid, cfg = _new_thread(store)
+    T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="save_result('mytbl', pd.DataFrame({'a': [1, 2]}))",
+        tool_call_id="c1",
+        config=cfg,
+    )
+    T.reset_namespace.func(tool_call_id="r", config=cfg)
+    r = T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="t = load_result('mytbl'); print('rows', len(t)); print(list_saved_results())",
+        tool_call_id="c2",
+        config=cfg,
+    )
+    out = r.update["messages"][0].content
+    assert "NameError" not in out
+    assert "rows 2" in out and "mytbl" in out
+
+
+def test_dataset_autobinds_as_df(store):
+    """The active dataset is auto-loaded as `df` even on a cold kernel."""
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    tid, cfg = _new_thread(store)
+    (W.thread_dir(tid) / "data.csv").write_text(
+        "date,sales\n2024-01-01,100\n2024-01-08,120\n"
+    )
+    r = T.execute_python.func(
+        state={"dashboard_data": {}, "dataset_path": "data.csv"},
+        code="print('cols', list(df.columns)); print('n', len(df))",
+        tool_call_id="c1",
+        config=cfg,
+    )
+    out = r.update["messages"][0].content
+    assert "NameError" not in out
+    assert "cols ['date', 'sales']" in out and "n 2" in out
+
+
+def test_save_load_handles_dotted_names(store):
+    """Names with dots (e.g. 'q4.2024') must not collide via suffix truncation."""
+    from mmm_framework.agents import tools as T
+
+    tid, cfg = _new_thread(store)
+    r = T.execute_python.func(
+        state={"dashboard_data": {}},
+        code=(
+            "save_result('q4.2024', pd.DataFrame({'a': [1]}))\n"
+            "save_result('q4.2023', pd.DataFrame({'a': [2, 2]}))\n"
+            "print('n2024', len(load_result('q4.2024')))\n"
+            "print('n2023', len(load_result('q4.2023')))\n"
+            "print(sorted(list_saved_results()))"
+        ),
+        tool_call_id="c1",
+        config=cfg,
+    )
+    out = r.update["messages"][0].content
+    assert "NameError" not in out and "Error executing" not in out
+    assert "n2024 1" in out and "n2023 2" in out  # distinct, no collision
+    assert "['q4.2023', 'q4.2024']" in out
+
+
+def test_namespace_precedence_system_wins_user_persists(store):
+    """System names re-win every call; user-defined names persist alongside."""
+    from mmm_framework.agents import tools as T
+
+    tid, cfg = _new_thread(store)
+    T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="pd = 5; keep = 123",  # shadow a system name + define a user name
+        tool_call_id="c1",
+        config=cfg,
+    )
+    r = T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="print('has_df', hasattr(pd, 'DataFrame')); print('keep', keep)",
+        tool_call_id="c2",
+        config=cfg,
+    )
+    out = r.update["messages"][0].content
+    assert "has_df True" in out  # pd restored to the module
+    assert "keep 123" in out  # user var survived
+
+
+def test_df_reloads_when_dataset_changes(store):
+    """`df` refreshes when the active dataset_path changes (new upload)."""
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    tid, cfg = _new_thread(store)
+    wd = W.thread_dir(tid)
+    (wd / "d1.csv").write_text("a\n1\n")
+    (wd / "d2.csv").write_text("a\n1\n2\n3\n")
+
+    r1 = T.execute_python.func(
+        state={"dashboard_data": {}, "dataset_path": "d1.csv"},
+        code="print('n', len(df))",
+        tool_call_id="c1",
+        config=cfg,
+    )
+    assert "n 1" in r1.update["messages"][0].content
+
+    r2 = T.execute_python.func(
+        state={"dashboard_data": {}, "dataset_path": "d2.csv"},
+        code="print('n', len(df))",
+        tool_call_id="c2",
+        config=cfg,
+    )
+    assert "n 3" in r2.update["messages"][0].content  # refreshed to the new dataset
+
+
+def test_save_result_not_registered_as_download(store):
+    """save_result snapshots (results/) stay out of the user-facing Files tab."""
+    from mmm_framework.agents import tools as T
+
+    tid, cfg = _new_thread(store)
+    T.execute_python.func(
+        state={"dashboard_data": {}},
+        code="save_result('internal', pd.DataFrame({'a': [1]}))",
+        tool_call_id="c1",
+        config=cfg,
+    )
+    names = [f["name"] for f in store.list_files(tid)]
+    assert not any(n.startswith("internal") for n in names)
+
+
+# ── session → portable .py export ────────────────────────────────────────────
+
+
+def test_session_export_runs_standalone(store, tmp_path, monkeypatch):
+    """The exported script reconstitutes injected state (df) and actually RUNS —
+    not a code dump that NameErrors. This is the test that makes it real."""
+    from mmm_framework.agents.session_export import build_session_script
+
+    tid, _ = _new_thread(store)
+    # a dataset the session 'worked on', registered like an upload
+    data = tmp_path / "data.csv"
+    data.write_text("a,b\n1,2\n3,4\n5,6\n")
+    store.register_file(tid, str(data), "data.csv", "dataset", data.stat().st_size)
+    # a cell that depends on the INJECTED `df` and the INJECTED save_result helper
+    store.add_artifact(
+        tid,
+        "code_snippet",
+        {
+            "call_id": "c1",
+            "code": "print('rows', len(df))\nsave_result('head', df.head(2))",
+        },
+    )
+    store.add_artifact(
+        tid, "text_output", {"call_id": "c1", "stdout": "rows 3", "is_error": False}
+    )
+
+    script = build_session_script(tid)
+    # preamble reconstitutes what the kernel injected
+    assert "import mmm_framework as mmf" in script
+    assert "df = pd.read_csv(dataset_path)" in script
+    assert "def save_result(" in script
+
+    # …and it executes cleanly with the dataset present in cwd
+    monkeypatch.chdir(tmp_path)
+    g: dict = {}
+    exec(compile(script, "<export>", "exec"), g)  # must not raise
+    saved = list((tmp_path / "results").glob("head.*"))
+    assert saved, "save_result() in the exported cell did not produce a file"
+
+
+def test_session_export_reconstitutes_fitted_model_and_marks_errors(store):
+    """A fit (a TOOL call, no code_snippet) must appear in the preamble as a model
+    load; an errored cell is marked, not dropped."""
+    from mmm_framework.agents.session_export import build_session_script
+
+    tid, _ = _new_thread(store)
+    store.add_artifact(
+        tid,
+        "model_run",
+        {
+            "run_name": "run_X",
+            "model_path": "mmm_models/run_X",
+            "dataset_path": "/abs/data.csv",
+        },
+    )
+    store.add_artifact(
+        tid, "code_snippet", {"call_id": "c1", "code": "print(results.summary())"}
+    )
+    store.add_artifact(
+        tid,
+        "text_output",
+        {"call_id": "c1", "stdout": "NameError: results", "is_error": True},
+    )
+
+    script = build_session_script(tid)
+    assert "MMMSerializer().load('mmm_models/run_X')" in script  # fit reconstituted
+    assert "print(results.summary())" in script  # cell kept
+    assert "raised an error" in script  # errored cell marked, not dropped

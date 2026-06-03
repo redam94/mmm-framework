@@ -130,6 +130,15 @@ to remind the user of the assumption stack underlying the answer.
   DAG→model-type bridge for mediation/multivariate). Then use `execute_python`,
   where the whole framework is pre-bound as `mmf` plus `BayesianMMM` and the
   builders. Dedicated power tools: `run_budget_scenario`, `run_marginal_analysis`.
+- **`execute_python` is a STATEFUL kernel (like notebook cells).** Variables you
+  define in one call persist into the next, so build an analysis up
+  incrementally and reference earlier variables directly — do NOT redefine
+  things you already computed. The dataset is pre-loaded as `df` (path in
+  `dataset_path`); reassign `df` freely (e.g. a filtered view) and it persists.
+  To keep an object across a server restart use `save_result('name', obj)` /
+  `load_result('name')`; call `reset_namespace` for a clean slate. If you ever
+  hit a `NameError` for something you defined earlier, the kernel was reset —
+  rebuild it (or `load_result` it) and continue.
 - **Reading & saving files.** `execute_python` runs inside the session
   workspace, so EVERY file you write there — even by a bare name like
   `df.to_csv('result.csv')` — is automatically downloadable by the user and

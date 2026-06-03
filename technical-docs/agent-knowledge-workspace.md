@@ -250,9 +250,46 @@ browser caches it permanently and identical figures dedup. `PlotCard` fetches by
 (in-memory `Map` + browser HTTP cache) and renders inline figures too (back-compat for
 plots saved before this change).
 
+## 11c. Stateful `execute_python` ("warm kernel")
+
+`execute_python` keeps a **persistent per-thread namespace** so the agent can build an
+analysis incrementally — variables defined in one call are visible in the next, exactly
+like notebook cells. This matches the LLM's universal prior about code tools (Jupyter /
+code-interpreter), which previously broke because each call `exec`'d a fresh `env`.
+
+* **Store:** `NAMESPACE_CACHE` in `runtime.py` — a `_ThreadScopedNamespace` (subclass of
+  the model cache): thread-scoped, **LRU(2)-over-threads**, dropped on eviction / process
+  restart. Same out-of-checkpoint rationale as `MODEL_CACHE` (the namespace holds live,
+  non-msgpack-serializable objects).
+* **Precedence contract:** each call re-layers the *reserved system bindings*
+  (`pd/np/plt/mmf`, builders, `OUTPUT_DIR`, `dataset_path`, `save_result`/`load_result`,
+  and `mmm`/`results` from `MODEL_CACHE`) on top of the persistent namespace via
+  `ns.update(env)` — so a refit refreshes `mmm`/`results` and system names can't be
+  permanently shadowed. **User-defined names persist untouched.** `exec(code, ns)` uses a
+  **single dict** (splitting globals/locals would break top-level `def`/`class` scoping).
+* **Dataset auto-bind:** `df` is auto-loaded from `dataset_path` **once** (only if not
+  already in the namespace; .csv/.parquet, ≤250 MB, best-effort) so the most common
+  cross-cell reference works even on a cold kernel, while still letting the analyst
+  reassign `df` and have it persist.
+* **Durability (req: survive restart):** `save_result(name, obj)` / `load_result(name)`
+  persist named objects to `<thread_dir>/results/` — parquet for DataFrames/Series
+  (fallback pickle), cloudpickle otherwise. `list_saved_results()` lists them. The
+  deliverable files an analyst writes to the workspace are durable regardless; this is for
+  *intermediate* objects worth keeping.
+* **Self-healing:** a `NameError` appends a hint that the kernel may have been reset and to
+  rebuild / `load_result` — turning the one failure mode into a recoverable one.
+* **`reset_namespace` tool:** clears the current thread's namespace for a fresh kernel
+  (saved results on disk are untouched).
+
 ## 11. Concurrency / safety assumptions
 
 Single-user / low-concurrency local tool. `execute_python` is **unsandboxed in-process
 `exec`** — the workspace dir is an *organizational* boundary, not a security one. `chdir`
-is wrapped in `try/finally` to always restore. The thread-scoped model cache is bounded
-(LRU 2) to cap memory. Download routes are id-based + path-guarded to prevent traversal.
+is wrapped in `try/finally` to always restore. The thread-scoped model cache **and the
+warm-kernel namespace** are bounded (LRU 2) to cap memory. The warm namespace is
+**process-local**: it persists only while successive `/chat` calls hit the same live
+process (true for the documented single-process `uvicorn --reload`); under `--workers N`
+or after a restart it goes cold and the agent falls back to `load_result` / rebuilding.
+Two `execute_python` calls emitted in the *same* turn share one namespace dict (GIL-safe,
+but interleaved) — acceptable under this single-user posture. Download routes are id-based
++ path-guarded to prevent traversal.

@@ -16,6 +16,7 @@ InjectedConfig = Annotated[RunnableConfig, InjectedToolArg]
 
 from mmm_framework.agents.runtime import (
     MODEL_CACHE as _MODEL_CACHE,
+    NAMESPACE_CACHE as _NAMESPACE_CACHE,
     set_current_thread,
     get_current_thread,
 )
@@ -1009,12 +1010,24 @@ def execute_python(
     `dataset_path` — e.g. `pd.read_csv('synthetic_mff_data.csv')` or
     `pd.read_csv(dataset_path)`.
 
+    STATE PERSISTS across calls (a warm kernel): variables you define in one
+    call are available in the next, so you can build an analysis up
+    incrementally — exactly like cells in a Jupyter notebook. The dataset is
+    auto-loaded as `df` (and its location as `dataset_path`), so you can use
+    `df` straight away; reassign it (e.g. a filtered view) and your version
+    persists. To keep an object across a server restart, call
+    `save_result('name', obj)` and later `load_result('name')`
+    (`list_saved_results()` shows what's saved). Call `reset_namespace` to wipe
+    all variables for a fresh kernel.
+
     Pre-bound: `pd`, `np`, `plt`, `matplotlib`, `px`, `go`. The whole framework
     is reachable via `mmf` (the mmm_framework package — e.g. `mmf.analysis`,
     `mmf.mmm_extensions`, `mmf.reporting`) and the convenience names
     `BayesianMMM`, `ModelConfigBuilder`, `MediaChannelConfigBuilder`, etc. If a
     model is fitted, `mmm` (BayesianMMM) and `results` (MMMResults) are bound.
-    Call `library_reference()` to see the full menu of capabilities.
+    These framework/system names refresh every call and cannot be permanently
+    shadowed; your own variables are never touched. Call `library_reference()`
+    to see the full menu of capabilities.
 
     Always print() what you want to see. Use Plotly + `fig.show()` for charts.
     """
@@ -1034,6 +1047,14 @@ def execute_python(
 
     matplotlib.use("agg")
     import matplotlib.pyplot as plt
+
+    # Persistent per-thread namespace ("warm kernel"): variables defined in one
+    # execute_python call survive into the next within the same live process, so
+    # the agent can build an analysis up incrementally. We compute the reserved
+    # SYSTEM bindings into ``env`` below, then re-layer them on top of ``ns`` on
+    # EVERY call (so a refit refreshes ``mmm``/``results`` and system names can't
+    # be permanently shadowed). User-defined names in ``ns`` are left untouched.
+    ns = _NAMESPACE_CACHE.namespace()
 
     env = {
         "pd": pd,
@@ -1098,6 +1119,99 @@ def execute_python(
         env["mmm"] = mmm
     if results is not None:
         env["results"] = results
+
+    # ── Durable named results (survive a kernel reset / server restart) ──────
+    # The warm namespace is in-process only; these helpers persist *named*
+    # objects to the on-disk workspace (parquet for tabular data, cloudpickle
+    # otherwise) so the agent can reload them in a later session — the same
+    # "disk is the durable fallback" pattern the model cache uses.
+    _results_dir = (work_dir / "results") if work_dir is not None else None
+
+    def _result_path(name, ext):
+        # Concatenate the extension (do NOT use Path.with_suffix: a name like
+        # "q4.2024" would have ".2024" treated as a suffix and be truncated to
+        # "q4.parquet", silently colliding with "q4.2023").
+        if _results_dir is None:
+            raise RuntimeError("No workspace directory available for saving results.")
+        _results_dir.mkdir(parents=True, exist_ok=True)
+        return _results_dir / f"{_ws._safe_segment(str(name))}{ext}"
+
+    def save_result(name, obj):
+        """Persist ``obj`` under ``name`` so it survives a kernel reset / server
+        restart. DataFrames/Series -> parquet (fallback pickle); anything else
+        -> cloudpickle. Reload later with ``load_result(name)``. Returns the
+        file path written."""
+        if isinstance(obj, (pd.DataFrame, pd.Series)):
+            frame = obj.to_frame() if isinstance(obj, pd.Series) else obj
+            try:
+                p = _result_path(name, ".parquet")
+                frame.to_parquet(p)
+                return str(p)
+            except Exception:
+                pass  # pyarrow/fastparquet missing -> fall through to pickle
+        try:
+            import cloudpickle as _pk
+        except Exception:
+            import pickle as _pk
+        p = _result_path(name, ".pkl")
+        with open(p, "wb") as _fh:
+            _pk.dump(obj, _fh)
+        return str(p)
+
+    def load_result(name):
+        """Reload an object saved earlier with ``save_result(name)``."""
+        pq = _result_path(name, ".parquet")
+        if pq.exists():
+            return pd.read_parquet(pq)
+        pk = _result_path(name, ".pkl")
+        if pk.exists():
+            try:
+                import cloudpickle as _pk
+            except Exception:
+                import pickle as _pk
+            with open(pk, "rb") as _fh:
+                return _pk.load(_fh)
+        raise FileNotFoundError(
+            f"No saved result named {name!r}. Available: {list_saved_results()}"
+        )
+
+    def list_saved_results():
+        """Names previously persisted with ``save_result`` in this session."""
+        if _results_dir is None or not _results_dir.exists():
+            return []
+        return sorted(
+            {p.stem for p in _results_dir.glob("*") if p.suffix in (".parquet", ".pkl")}
+        )
+
+    env["save_result"] = save_result
+    env["load_result"] = load_result
+    env["list_saved_results"] = list_saved_results
+
+    # ── Convenience dataset bindings ─────────────────────────────────────────
+    # `dataset_path` always reflects the active dataset. `df` is auto-loaded from
+    # it so the most common cross-cell reference works even on a cold kernel —
+    # (re)loaded only when the active dataset CHANGES (tracked via a private
+    # marker), so the analyst can reassign `df` (a filtered view) and have it
+    # persist, while a freshly uploaded dataset still refreshes `df`.
+    _ds_path = state.get("dataset_path") if isinstance(state, dict) else None
+    if _ds_path:
+        env["dataset_path"] = _ds_path
+    if _ds_path and ns.get("__mmm_df_source__") != _ds_path:
+        try:
+            _p = str(_ds_path)
+            if not os.path.isabs(_p) and work_dir is not None:
+                _cand = os.path.join(str(work_dir), _p)
+                if os.path.exists(_cand):
+                    _p = _cand
+            _too_big = os.path.exists(_p) and os.path.getsize(_p) > 250 * 1024 * 1024
+            if not _too_big and _p.lower().endswith(".csv"):
+                env["df"] = pd.read_csv(_p)
+                ns["__mmm_df_source__"] = _ds_path
+            elif not _too_big and _p.lower().endswith(".parquet"):
+                env["df"] = pd.read_parquet(_p)
+                ns["__mmm_df_source__"] = _ds_path
+        except Exception:
+            pass  # auto-load is best-effort; the agent can load explicitly
 
     stdout_capture = io.StringIO()
 
@@ -1222,7 +1336,12 @@ def execute_python(
             contextlib.redirect_stdout(stdout_capture),
             contextlib.redirect_stderr(stdout_capture),
         ):
-            exec(code, env)
+            # Re-layer the reserved system bindings on top of the persistent
+            # namespace, then exec against the SINGLE namespace dict (one dict
+            # keeps top-level def/class scoping correct — splitting into
+            # globals/locals would silently break it).
+            ns.update(env)
+            exec(code, ns)
         output = stdout_capture.getvalue()
         if not output:
             output = "Code executed successfully with no output."
@@ -1230,6 +1349,17 @@ def execute_python(
         captured = stdout_capture.getvalue()
         prefix = (captured + "\n") if captured else ""
         output = f"{prefix}Error executing code:\n{traceback.format_exc()}"
+        if isinstance(e, NameError):
+            _missing = getattr(e, "name", None)
+            _ref = f"`{_missing}`" if _missing else "a variable"
+            output += (
+                f"\n\nHint: variables persist across execute_python calls only "
+                f"within a live session. {_ref} from an earlier call is gone — the "
+                f"kernel may have been reset (e.g. a server restart). The dataset is "
+                f"auto-loaded as `df` and `dataset_path` is set, so reload/rebuild "
+                f"what you need; or call `load_result('name')` if you saved it "
+                f"earlier with `save_result('name', obj)`."
+            )
     finally:
         # Always restore the working directory, even on error.
         try:
@@ -1275,12 +1405,13 @@ def execute_python(
         dashboard_data["plots"] = existing_plots + plot_refs
 
     # Register any files the code wrote to the workspace so they become listable
-    # and downloadable from the frontend.
+    # and downloadable from the frontend. The `results/` subdir (save_result
+    # snapshots, reloaded by name) is excluded so it doesn't clutter deliverables.
     new_files = []
     if work_dir is not None:
         try:
             new_files = _ws.register_generated_files(
-                thread_id, before_snapshot, kind="export"
+                thread_id, before_snapshot, kind="export", exclude_dirs=("results",)
             )
         except Exception:
             new_files = []
@@ -1300,6 +1431,41 @@ def execute_python(
         update={
             "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
             "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
+def reset_namespace(
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Reset the Python kernel: clear every variable defined in previous
+    `execute_python` calls, giving a fresh namespace. The system names
+    (`pd`, `np`, `mmf`, the builders, `df`, `dataset_path`,
+    `save_result`/`load_result`, and `mmm`/`results` if a model is fitted) are
+    re-provided automatically on the next `execute_python` call.
+
+    Use this when accumulated variables are confusing the analysis, after a big
+    context switch, or to free memory. Files you saved with `save_result` (and
+    any workspace files) are on disk and are NOT affected.
+    """
+    _activate_thread(config)
+    _NAMESPACE_CACHE.reset()
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=(
+                        "Python kernel reset — all previously defined variables "
+                        "were cleared. The dataset (`df`), framework (`mmf`), and "
+                        "helpers are restored on the next `execute_python` call. "
+                        "Saved results on disk are untouched."
+                    ),
+                    tool_call_id=tool_call_id,
+                )
+            ]
         }
     )
 
@@ -2684,6 +2850,7 @@ TOOLS = [
     query_past_results,
     # Ad-hoc
     execute_python,
+    reset_namespace,
     # Reporting
     generate_project_report,
     generate_client_report,

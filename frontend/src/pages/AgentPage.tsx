@@ -348,13 +348,38 @@ function stripHtml(s: string): string {
   return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Viewport gate: true once the element is within `rootMargin` of the viewport.
+// Used to defer heavy work (mounting Plotly, highlighting code) for off-screen
+// cards so the number of LIVE heavy widgets stays bounded by what's visible —
+// this is what keeps the page responsive as outputs accumulate. Stays true once
+// seen (we don't tear widgets back down) so scrolling back is instant; the cap
+// is on how many ever mount *at once* during the initial reveal, not lifetime.
+function useInView<T extends Element>(rootMargin = '800px'): [React.RefObject<T>, boolean] {
+  const ref = useRef<T>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || inView) return;
+    if (typeof IntersectionObserver === 'undefined') { setInView(true); return; }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setInView(true);
+      },
+      { rootMargin }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [rootMargin, inView]);
+  return [ref, inView];
+}
+
 // Browser-side plot cache. Plots are content-addressed on the backend and served
 // with an immutable cache header, so a given id never changes — we fetch its JSON
 // at most once per session (and the browser HTTP-caches it across reloads). A
 // plot can arrive either inline ({data, layout}, legacy) or as a ref ({id, title}).
 const _plotCache = new Map<string, any>();
 
-function usePlotFigure(plot: any): any | null {
+function usePlotFigure(plot: any, enabled: boolean = true): any | null {
   const isRef = !!(plot && plot.id && !plot.data);
   const [fig, setFig] = useState<any | null>(
     isRef ? _plotCache.get(plot.id) ?? null : plot
@@ -363,6 +388,7 @@ function usePlotFigure(plot: any): any | null {
     if (!isRef) { setFig(plot); return; }
     const cached = _plotCache.get(plot.id);
     if (cached) { setFig(cached); return; }
+    if (!enabled) return;  // defer the fetch until the card is near the viewport
     let alive = true;
     // No auth header → maximally cacheable; the agent API serves plots publicly.
     fetch(`${API_BASE}/plots/${plot.id}`)
@@ -370,13 +396,21 @@ function usePlotFigure(plot: any): any | null {
       .then((j) => { if (j) { _plotCache.set(plot.id, j); if (alive) setFig(j); } })
       .catch(() => {});
     return () => { alive = false; };
-  }, [isRef, plot]);
+  }, [isRef, plot, enabled]);
   return fig;
 }
 
-function PlotCard({ plot, idx }: { plot: any; idx: number }) {
+// React.memo: a plot object keeps its identity once appended to dashboardData
+// (we merge, never rebuild existing refs), so memoization stops every chart from
+// re-rendering — and react-plotly from re-running Plotly.react() — on every SSE
+// chunk while the agent streams. Combined with the viewport gate below, this is
+// what fixes the "freezes as more outputs accumulate" symptom.
+const PlotCard = React.memo(function PlotCard({ plot, idx }: { plot: any; idx: number }) {
   const [fullscreen, setFullscreen] = useState(false);
-  const fig = usePlotFigure(plot);
+  // The observed wrapper is ALWAYS in the DOM (even before reveal) so the
+  // IntersectionObserver can fire; only the heavy <Plot> mounts once in view.
+  const [wrapRef, inView] = useInView<HTMLDivElement>();
+  const fig = usePlotFigure(plot, inView);
 
   const rawTitle =
     fig?.layout?.title?.text ?? fig?.layout?.title ?? plot?.title ?? `Chart ${idx + 1}`;
@@ -384,26 +418,23 @@ function PlotCard({ plot, idx }: { plot: any; idx: number }) {
 
   const fixedLayout = useMemo(() => applyLightModeLayout(fig?.layout), [fig]);
 
-  if (!fig) {
-    return (
-      <div className="rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm h-[400px] flex items-center justify-center text-sm text-gray-400">
-        Loading chart…
-      </div>
-    );
-  }
-  const plotEl = (height: string) => (
-    <Plot
-      data={fig.data}
-      layout={{ ...fixedLayout, autosize: true }}
-      useResizeHandler
-      style={{ width: '100%', height }}
-      config={{ responsive: true, displayModeBar: true, displaylogo: false, modeBarButtonsToRemove: ['sendDataToCloud'] }}
-    />
-  );
+  const plotEl = (height: string) =>
+    fig ? (
+      <Plot
+        data={fig.data}
+        layout={{ ...fixedLayout, autosize: true }}
+        useResizeHandler
+        style={{ width: '100%', height }}
+        config={{ responsive: true, displayModeBar: true, displaylogo: false, modeBarButtonsToRemove: ['sendDataToCloud'] }}
+      />
+    ) : null;
 
   return (
     <>
-      <div className="rounded-xl overflow-hidden border border-gray-200 bg-white relative group shadow-sm">
+      <div
+        ref={wrapRef}
+        className="rounded-xl overflow-hidden border border-gray-200 bg-white relative group shadow-sm min-h-[400px]"
+      >
         <button
           onClick={() => setFullscreen(true)}
           className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/90 text-gray-400 hover:text-gray-700 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all border border-gray-200"
@@ -412,7 +443,13 @@ function PlotCard({ plot, idx }: { plot: any; idx: number }) {
           <Maximize2 size={15} />
         </button>
         <p className="text-xs text-gray-500 px-4 pt-3 pb-0 font-semibold truncate">{title}</p>
-        {plotEl('360px')}
+        {inView && fig ? (
+          plotEl('360px')
+        ) : (
+          <div className="h-[360px] flex items-center justify-center text-sm text-gray-400">
+            {inView ? 'Loading chart…' : ''}
+          </div>
+        )}
       </div>
       {fullscreen && (
         <Modal title={title} onClose={() => setFullscreen(false)} fullWidth>
@@ -421,7 +458,13 @@ function PlotCard({ plot, idx }: { plot: any; idx: number }) {
       )}
     </>
   );
-}
+}, (a, b) =>
+  // Plots are content-addressed by `id`, but each streaming update re-parses the
+  // dashboard_data JSON, giving every plot ref a NEW object identity. Compare by
+  // id (falling back to reference for legacy inline figures) so existing charts
+  // are not needlessly re-rendered when a new plot arrives.
+  a.idx === b.idx && (a.plot?.id ?? a.plot) === (b.plot?.id ?? b.plot)
+);
 
 // ─── ModelSpecWidget ──────────────────────────────────────────────────────────
 
@@ -1877,13 +1920,59 @@ function PythonOutputBlock({ output, hasError }: { output: string; hasError: boo
   );
 }
 
-function PythonOutputWidget({ outputs, onClear }: { outputs: PythonOutput[]; onClear: () => void }) {
+// One REPL cell. Memoized + viewport-gated: the expensive SyntaxHighlighter and
+// output block only mount when the cell scrolls near view, and a streaming update
+// to OTHER cells (or the collapse of a sibling) never re-highlights this one.
+const PythonCell = React.memo(function PythonCell({
+  out,
+  index,
+  isCollapsed,
+  onToggle,
+}: {
+  out: PythonOutput;
+  index: number;
+  isCollapsed: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const hasCode = !!out.code.trim();
+  const firstLine = hasCode ? out.code.trim().split('\n')[0] : '(output only)';
+  return (
+    <div ref={ref} className="rounded-xl overflow-hidden shadow-sm">
+      {/* Cell header */}
+      <button
+        onClick={() => onToggle(out.id)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 transition-colors text-left border border-gray-200 rounded-t-xl"
+      >
+        <span className="text-[10px] font-mono text-gray-400 shrink-0">In [{index + 1}]</span>
+        <span className="flex-1 text-[11px] font-mono text-gray-600 truncate">{firstLine}</span>
+        {out.hasError && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">ERROR</span>}
+        {out.plotCount > 0 && <span className="text-[9px] bg-fuchsia-100 text-fuchsia-600 px-1.5 py-0.5 rounded font-semibold">{out.plotCount} plot{out.plotCount > 1 ? 's' : ''}</span>}
+        {isCollapsed ? <ChevronRight size={13} className="text-gray-400 shrink-0" /> : <ChevronDown size={13} className="text-gray-400 shrink-0" />}
+      </button>
+      {!isCollapsed && (
+        <div className="border-l border-r border-b border-gray-200 rounded-b-xl overflow-hidden min-h-[2.5rem]">
+          {inView ? (
+            <>
+              {hasCode && <PythonCodeBlock code={out.code} />}
+              <PythonOutputBlock output={out.output} hasError={out.hasError} />
+            </>
+          ) : (
+            <div className="h-10 bg-gray-50" />
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+function PythonOutputWidget({ outputs, onClear, onExport }: { outputs: PythonOutput[]; onClear: () => void; onExport?: () => void }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const toggle = (id: string) => setCollapsed(prev => {
+  const toggle = useCallback((id: string) => setCollapsed(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
-  });
+  }), []);
 
   if (outputs.length === 0) return null;
 
@@ -1895,42 +1984,92 @@ function PythonOutputWidget({ outputs, onClear }: { outputs: PythonOutput[]; onC
     >
       <div className="space-y-1 mb-2 flex items-center justify-between">
         <p className="text-xs text-gray-500">{outputs.length} execution{outputs.length > 1 ? 's' : ''} recorded this session.</p>
-        <button onClick={onClear} className="text-[10px] text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors">
-          <Trash2 size={11} /> Clear
-        </button>
+        <div className="flex items-center gap-3">
+          {onExport && (
+            <button onClick={onExport} className="text-[10px] text-gray-400 hover:text-indigo-600 flex items-center gap-1 transition-colors" title="Download this session's work as a standalone, runnable Python script">
+              <Download size={11} /> Download .py
+            </button>
+          )}
+          <button onClick={onClear} className="text-[10px] text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors">
+            <Trash2 size={11} /> Clear
+          </button>
+        </div>
       </div>
       <div className="space-y-4">
-        {outputs.map((out, idx) => {
-          const isCollapsed = collapsed.has(out.id);
-          // Historical outputs may have no paired code_snippet → show output only.
-          const hasCode = !!out.code.trim();
-          const firstLine = hasCode ? out.code.trim().split('\n')[0] : '(output only)';
-          return (
-            <div key={out.id} className="rounded-xl overflow-hidden shadow-sm">
-              {/* Cell header */}
-              <button
-                onClick={() => toggle(out.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 transition-colors text-left border border-gray-200 rounded-t-xl"
-              >
-                <span className="text-[10px] font-mono text-gray-400 shrink-0">In [{idx + 1}]</span>
-                <span className="flex-1 text-[11px] font-mono text-gray-600 truncate">{firstLine}</span>
-                {out.hasError && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">ERROR</span>}
-                {out.plotCount > 0 && <span className="text-[9px] bg-fuchsia-100 text-fuchsia-600 px-1.5 py-0.5 rounded font-semibold">{out.plotCount} plot{out.plotCount > 1 ? 's' : ''}</span>}
-                {isCollapsed ? <ChevronRight size={13} className="text-gray-400 shrink-0" /> : <ChevronDown size={13} className="text-gray-400 shrink-0" />}
-              </button>
-              {!isCollapsed && (
-                <div className="border-l border-r border-b border-gray-200 rounded-b-xl overflow-hidden">
-                  {hasCode && <PythonCodeBlock code={out.code} />}
-                  <PythonOutputBlock output={out.output} hasError={out.hasError} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {outputs.map((out, idx) => (
+          <PythonCell
+            key={out.id}
+            out={out}
+            index={idx}
+            isCollapsed={collapsed.has(out.id)}
+            onToggle={toggle}
+          />
+        ))}
       </div>
     </DashWidget>
   );
 }
+
+// One chat message. Memoized so a streaming update — which fires setMessages on
+// every node-step — only re-renders the message that actually changed (the one
+// being streamed) instead of re-parsing markdown + re-highlighting code for the
+// ENTIRE conversation each step. `pending` is computed in the parent as
+// `loading && isLast`, so the global `loading` flip doesn't invalidate the
+// already-rendered history (only the last bubble depends on it).
+const ChatMessageBubble = React.memo(function ChatMessageBubble({
+  msg,
+  pending,
+  onNavigate,
+}: {
+  msg: ChatMessage;
+  pending: boolean;
+  onNavigate: (tab: string) => void;
+}) {
+  return (
+    <div className={`flex gap-3 ${msg.type === 'human' ? 'justify-end' : msg.type === 'error' ? 'justify-center' : 'justify-start'}`}>
+      {msg.type === 'error' && (
+        <div className="rounded-xl px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm max-w-[90%] flex gap-2 items-start">
+          <span className="shrink-0 mt-0.5">⚠️</span>
+          <span>{msg.content}</span>
+        </div>
+      )}
+      {msg.type !== 'error' && msg.type === 'ai' && (
+        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
+          <Bot size={16} className="text-white" />
+        </div>
+      )}
+      {msg.type !== 'error' && (
+        <div className="max-w-[82%] flex flex-col gap-1">
+          {msg.type === 'ai' && msg.toolCalls && msg.toolCalls.length > 0 && (
+            <div className="space-y-1">
+              {msg.toolCalls.map(tc => (
+                <ToolCallBlock key={tc.id} toolCall={tc} onNavigate={onNavigate} />
+              ))}
+            </div>
+          )}
+          {(msg.content || (pending && msg.type === 'ai')) && (
+            <div className={`rounded-2xl p-4 ${msg.type === 'human'
+              ? 'bg-blue-600 text-white rounded-br-none'
+              : 'bg-white text-gray-800 rounded-bl-none border border-gray-200 shadow-sm'}`}>
+              {msg.type === 'human'
+                ? <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                : <div className="prose prose-sm max-w-none text-sm">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                      {msg.content || (pending ? 'Thinking…' : '')}
+                    </ReactMarkdown>
+                  </div>}
+            </div>
+          )}
+        </div>
+      )}
+      {msg.type === 'human' && (
+        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-1">
+          <User size={16} className="text-white" />
+        </div>
+      )}
+    </div>
+  );
+});
 
 // ─── Session + Artifact types ────────────────────────────────────────────────
 
@@ -3551,49 +3690,13 @@ export function AgentPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex gap-3 ${msg.type === 'human' ? 'justify-end' : msg.type === 'error' ? 'justify-center' : 'justify-start'}`}>
-                {msg.type === 'error' && (
-                  <div className="rounded-xl px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm max-w-[90%] flex gap-2 items-start">
-                    <span className="shrink-0 mt-0.5">⚠️</span>
-                    <span>{msg.content}</span>
-                  </div>
-                )}
-                {msg.type !== 'error' && msg.type === 'ai' && (
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
-                    <Bot size={16} className="text-white" />
-                  </div>
-                )}
-                {msg.type !== 'error' && (
-                  <div className="max-w-[82%] flex flex-col gap-1">
-                    {msg.type === 'ai' && msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <div className="space-y-1">
-                        {msg.toolCalls.map(tc => (
-                          <ToolCallBlock key={tc.id} toolCall={tc} onNavigate={setActiveTab} />
-                        ))}
-                      </div>
-                    )}
-                    {(msg.content || (loading && msg.type === 'ai')) && (
-                      <div className={`rounded-2xl p-4 ${msg.type === 'human'
-                        ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-white text-gray-800 rounded-bl-none border border-gray-200 shadow-sm'}`}>
-                        {msg.type === 'human'
-                          ? <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                          : <div className="prose prose-sm max-w-none text-sm">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-                                {msg.content || (loading ? 'Thinking…' : '')}
-                              </ReactMarkdown>
-                            </div>}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {msg.type === 'human' && (
-                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-1">
-                    <User size={16} className="text-white" />
-                  </div>
-                )}
-              </div>
+            {messages.map((msg, i) => (
+              <ChatMessageBubble
+                key={msg.id}
+                msg={msg}
+                pending={loading && i === messages.length - 1}
+                onNavigate={setActiveTab}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>
@@ -3880,7 +3983,7 @@ export function AgentPage() {
                 <DashWidget title={`Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500" color="fuchsia">
                   <div className="space-y-4">
                     {dashboardData.plots.map((plot: any, idx: number) => (
-                      <PlotCard key={idx} plot={plot} idx={idx} />
+                      <PlotCard key={plot?.id ?? idx} plot={plot} idx={idx} />
                     ))}
                   </div>
                 </DashWidget>
@@ -3904,6 +4007,7 @@ export function AgentPage() {
                 <PythonOutputWidget
                   outputs={pythonOutputs}
                   onClear={() => setPythonOutputs([])}
+                  onExport={threadId ? () => window.open(`${API_BASE}/sessions/${threadId}/export`, '_blank') : undefined}
                 />
               </>
             )}

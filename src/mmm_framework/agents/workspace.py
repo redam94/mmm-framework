@@ -162,17 +162,30 @@ def diff_new_files(directory: Path, before: dict[str, float]) -> list[Path]:
 
 
 def register_generated_files(
-    thread_id: str, before: dict[str, float], kind: str = "export"
+    thread_id: str,
+    before: dict[str, float],
+    kind: str = "export",
+    exclude_dirs: tuple[str, ...] = (),
 ) -> list[dict]:
     """Register files written to the thread workspace into ``data_files``.
 
     Returns the list of registered file records (so callers can surface
     download ids). Skips files already registered at the same path+size.
+    ``exclude_dirs`` names subdirectories of the thread workspace whose files
+    should NOT be registered (e.g. ``("results",)`` — internal save_result
+    snapshots that are reloaded by name, not user-facing deliverables).
     """
     from mmm_framework.api import sessions as sessions_store
 
     d = thread_dir(thread_id)
     new_files = diff_new_files(d, before)
+    if exclude_dirs:
+        roots = [(d / sub).resolve() for sub in exclude_dirs]
+        new_files = [
+            p
+            for p in new_files
+            if not any(p.resolve().is_relative_to(r) for r in roots)
+        ]
     if not new_files:
         return []
 

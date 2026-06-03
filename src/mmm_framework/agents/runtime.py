@@ -113,3 +113,38 @@ class _ThreadScopedModelCache:
 
 
 MODEL_CACHE = _ThreadScopedModelCache(maxsize=2)
+
+
+# ── Thread-scoped REPL namespace ("warm kernel") ────────────────────────────
+
+
+class _ThreadScopedNamespace(_ThreadScopedModelCache):
+    """Per-thread persistent namespace for the ``execute_python`` warm kernel.
+
+    Same thread-scoping + LRU-over-threads semantics as ``MODEL_CACHE``: a
+    variable defined in one ``execute_python`` call survives into the next call
+    **in the same live process** — so the agent can build up an analysis
+    incrementally the way every notebook / REPL works, instead of each call
+    starting from a blank slate.
+
+    When the bucket is evicted (LRU) or the process restarts the namespace goes
+    cold (empty). Durability of *specific* objects across that boundary is the
+    job of the ``save_result``/``load_result`` helpers, which persist named
+    objects to the on-disk workspace (mirroring how ``MMMSerializer`` is the
+    durable fallback for the model cache). This is NOT a security or isolation
+    boundary — like ``MODEL_CACHE`` it is an in-process convenience cache.
+    """
+
+    def namespace(self) -> dict:
+        """The current thread's namespace dict (created on demand)."""
+        return self._bucket()
+
+    def reset(self, thread_id: str | None = None) -> None:
+        """Clear the current thread's namespace (start a fresh kernel)."""
+        with self._lock:
+            tid = thread_id or get_current_thread()
+            self._buckets[tid] = {}
+            self._buckets.move_to_end(tid)
+
+
+NAMESPACE_CACHE = _ThreadScopedNamespace(maxsize=2)
