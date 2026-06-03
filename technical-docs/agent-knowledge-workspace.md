@@ -281,6 +281,23 @@ code-interpreter), which previously broke because each call `exec`'d a fresh `en
 * **`reset_namespace` tool:** clears the current thread's namespace for a fresh kernel
   (saved results on disk are untouched).
 
+**Kernel abstraction (Phase 1 of `agent-session-kernels.md`).** The execution above is now
+behind a `KernelManager` seam (`agents/kernels.py`); `execute_python` builds a `KernelContext`
+and dispatches to `MANAGER.get_or_spawn(thread_id).execute(code, ctx)`, then does the unchanged
+API-side post-processing (content-address plots, register files, build the `Command`). Two
+implementations, selected by **`MMM_AGENT_KERNEL`** (default `inprocess`):
+* **`InProcessKernel`** (default) — exactly the in-process warm namespace described above
+  (delegates to `NAMESPACE_CACHE`); zero behavior change.
+* **`SubprocessKernel`** (opt-in, `MMM_AGENT_KERNEL=subprocess`) — one `ipykernel` process per
+  session via the sync `jupyter_client` API; the multi-user-ready evolution toward
+  `agent-session-kernels.md`. Faithful to the in-process contract (same plot normalization,
+  the `Error executing code` + NameError hint via the shared `format_execution_error`, echo
+  suppression, df auto-bind). **Phase-1 boundary:** fits still run in the API process, so
+  `mmm`/`results` are NOT bound in the subprocess (referencing them raises `NameError`) until
+  Phase 2 relocates fits. Not sandboxed yet (Phase 3). Bounded by an LRU cap
+  (`MMM_MAX_KERNELS`, default 8) + a per-cell wall-clock cap (`MMM_CELL_TIMEOUT`, default 600s);
+  kernels are reaped on app shutdown (`atexit` + the FastAPI lifespan).
+
 ## 11. Concurrency / safety assumptions
 
 Single-user / low-concurrency local tool. `execute_python` is **unsandboxed in-process

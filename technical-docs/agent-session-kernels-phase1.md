@@ -1,5 +1,10 @@
 # Phase 1 Implementation Plan — Kernel Abstraction Behind a Flag
 
+> **Status: COMPLETE (2026-06-03).** PR1 (extractions) · PR2 (KernelManager seam +
+> InProcessKernel) · PR3 (SubprocessKernel + adversarial-review fixes) · PR4 (these docs).
+> Default `inprocess` is behavior-unchanged; `MMM_AGENT_KERNEL=subprocess` opt-in. Next:
+> Phase 2 (fits + the ~12 model tools into the kernel) — see `agent-session-kernels.md` §3.5/§6.
+
 **Parent design:** `agent-session-kernels.md` (v2). **Goal of Phase 1:** introduce a
 `KernelManager` seam so `execute_python` stops caring *where* code runs, with two
 implementations — `InProcessKernel` (today's warm kernel, the **default**, zero behavior
