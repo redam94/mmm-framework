@@ -1,6 +1,7 @@
 import os
 import json
 import importlib
+from pathlib import Path
 from typing import Annotated, Any, Optional
 import io
 import contextlib
@@ -21,6 +22,7 @@ from mmm_framework.agents.runtime import (
     get_current_thread,
 )
 from mmm_framework.agents import workspace as _ws
+from mmm_framework.agents.kernels import KernelContext, ExecuteResult, KernelManager
 
 
 def _activate_thread(config) -> str:
@@ -1114,6 +1116,291 @@ def format_execution_error(
     return out
 
 
+class InProcessKernel:
+    """Phase-1 default kernel: runs code in-process in the thread-scoped warm
+    namespace (NAMESPACE_CACHE). A faithful move of execute_python's execution
+    body behind the Kernel seam -- identical behavior. SubprocessKernel (PR3)
+    will talk jupyter_client; this one delegates to the in-process namespace,
+    whose per-thread state lives in NAMESPACE_CACHE, so a single shared
+    instance is correct (per_session=False)."""
+
+    per_session = False
+
+    def execute(self, code, ctx):
+        work_dir = Path(ctx.work_dir) if ctx.work_dir else None
+
+        import pandas as pd
+        import numpy as np
+
+        # Force non-interactive backend so matplotlib works in server threads
+        import matplotlib
+
+        matplotlib.use("agg")
+        import matplotlib.pyplot as plt
+
+        # Persistent per-thread namespace ("warm kernel"): variables defined in one
+        # execute_python call survive into the next within the same live process, so
+        # the agent can build an analysis up incrementally. We compute the reserved
+        # SYSTEM bindings into ``env`` below, then re-layer them on top of ``ns`` on
+        # EVERY call (so a refit refreshes ``mmm``/``results`` and system names can't
+        # be permanently shadowed). User-defined names in ``ns`` are left untouched.
+        ns = _NAMESPACE_CACHE.namespace()
+
+        env = {
+            "pd": pd,
+            "np": np,
+            "plt": plt,
+            "matplotlib": matplotlib,
+            "OUTPUT_DIR": str(work_dir) if work_dir is not None else os.getcwd(),
+            "os": os,
+            "json": json,
+        }
+
+        # Also pre-import plotly so the agent can use it easily
+        try:
+            import plotly.express as px
+            import plotly.graph_objects as go
+
+            env["px"] = px
+            env["go"] = go
+        except ImportError:
+            pass
+
+        # Expose the full framework surface so the agent can reach ALL features
+        # (extensions, analysis, calibration, reporting) without import boilerplate.
+        try:
+            import mmm_framework as mmf
+
+            env["mmf"] = mmf
+            env["mmm_framework"] = mmf
+            # Eagerly import the key submodules so `mmf.analysis` / `mmf.reporting`
+            # / `mmf.mmm_extensions` resolve (importing a submodule registers it as
+            # an attribute of the package). Each is guarded + cached in sys.modules,
+            # so the cost is paid at most once per process. mmm_extensions is lazy
+            # for PyMC, so importing the package itself stays cheap.
+            for _sub in ("analysis", "mmm_extensions", "reporting", "diagnostics"):
+                try:
+                    _mod = importlib.import_module(f"mmm_framework.{_sub}")
+                    env[_sub] = _mod
+                except Exception:
+                    pass
+            for _name in (
+                "BayesianMMM",
+                "ModelConfigBuilder",
+                "MediaChannelConfigBuilder",
+                "ControlVariableConfigBuilder",
+                "KPIConfigBuilder",
+                "PriorConfigBuilder",
+                "AdstockConfigBuilder",
+                "SaturationConfigBuilder",
+                "SeasonalityConfigBuilder",
+                "MFFConfigBuilder",
+                "TrendConfigBuilder",
+                "load_mff",
+            ):
+                if _name in globals():
+                    env[_name] = globals()[_name]
+        except Exception:
+            pass
+
+        mmm = ctx.mmm
+        results = ctx.results
+        if mmm is not None:
+            env["mmm"] = mmm
+        if results is not None:
+            env["results"] = results
+
+        # ── Durable named results (survive a kernel reset / server restart) ──────
+        # The warm namespace is in-process only; these helpers persist *named*
+        # objects to the on-disk workspace (parquet for tabular data, cloudpickle
+        # otherwise) so the agent can reload them in a later session — the same
+        # "disk is the durable fallback" pattern the model cache uses.
+        _results_dir = (work_dir / "results") if work_dir is not None else None
+
+        def _result_path(name, ext):
+            # Concatenate the extension (do NOT use Path.with_suffix: a name like
+            # "q4.2024" would have ".2024" treated as a suffix and be truncated to
+            # "q4.parquet", silently colliding with "q4.2023").
+            if _results_dir is None:
+                raise RuntimeError(
+                    "No workspace directory available for saving results."
+                )
+            _results_dir.mkdir(parents=True, exist_ok=True)
+            return _results_dir / f"{_ws._safe_segment(str(name))}{ext}"
+
+        def save_result(name, obj):
+            """Persist ``obj`` under ``name`` so it survives a kernel reset / server
+            restart. DataFrames/Series -> parquet (fallback pickle); anything else
+            -> cloudpickle. Reload later with ``load_result(name)``. Returns the
+            file path written."""
+            if isinstance(obj, (pd.DataFrame, pd.Series)):
+                frame = obj.to_frame() if isinstance(obj, pd.Series) else obj
+                try:
+                    p = _result_path(name, ".parquet")
+                    frame.to_parquet(p)
+                    return str(p)
+                except Exception:
+                    pass  # pyarrow/fastparquet missing -> fall through to pickle
+            try:
+                import cloudpickle as _pk
+            except Exception:
+                import pickle as _pk
+            p = _result_path(name, ".pkl")
+            with open(p, "wb") as _fh:
+                _pk.dump(obj, _fh)
+            return str(p)
+
+        def load_result(name):
+            """Reload an object saved earlier with ``save_result(name)``."""
+            pq = _result_path(name, ".parquet")
+            if pq.exists():
+                return pd.read_parquet(pq)
+            pk = _result_path(name, ".pkl")
+            if pk.exists():
+                try:
+                    import cloudpickle as _pk
+                except Exception:
+                    import pickle as _pk
+                with open(pk, "rb") as _fh:
+                    return _pk.load(_fh)
+            raise FileNotFoundError(
+                f"No saved result named {name!r}. Available: {list_saved_results()}"
+            )
+
+        def list_saved_results():
+            """Names previously persisted with ``save_result`` in this session."""
+            if _results_dir is None or not _results_dir.exists():
+                return []
+            return sorted(
+                {
+                    p.stem
+                    for p in _results_dir.glob("*")
+                    if p.suffix in (".parquet", ".pkl")
+                }
+            )
+
+        env["save_result"] = save_result
+        env["load_result"] = load_result
+        env["list_saved_results"] = list_saved_results
+
+        # ── Convenience dataset bindings ─────────────────────────────────────────
+        # `dataset_path` always reflects the active dataset. `df` is auto-loaded from
+        # it so the most common cross-cell reference works even on a cold kernel —
+        # (re)loaded only when the active dataset CHANGES (tracked via a private
+        # marker), so the analyst can reassign `df` (a filtered view) and have it
+        # persist, while a freshly uploaded dataset still refreshes `df`.
+        _ds_path = ctx.dataset_path
+        if _ds_path:
+            env["dataset_path"] = _ds_path
+        if _ds_path and ns.get("__mmm_df_source__") != _ds_path:
+            try:
+                _p = str(_ds_path)
+                if not os.path.isabs(_p) and work_dir is not None:
+                    _cand = os.path.join(str(work_dir), _p)
+                    if os.path.exists(_cand):
+                        _p = _cand
+                _too_big = (
+                    os.path.exists(_p) and os.path.getsize(_p) > 250 * 1024 * 1024
+                )
+                if not _too_big and _p.lower().endswith(".csv"):
+                    env["df"] = pd.read_csv(_p)
+                    ns["__mmm_df_source__"] = _ds_path
+                elif not _too_big and _p.lower().endswith(".parquet"):
+                    env["df"] = pd.read_parquet(_p)
+                    ns["__mmm_df_source__"] = _ds_path
+            except Exception:
+                pass  # auto-load is best-effort; the agent can load explicitly
+
+        stdout_capture = io.StringIO()
+
+        # Intercept Plotly show() calls — both pio.show(fig) and fig.show()
+        captured_plots = []
+        original_pio_show = None
+        original_fig_show = None
+
+        try:
+            import plotly.io as pio
+            import plotly.basedatatypes as pbd
+
+            original_pio_show = pio.show
+            original_fig_show = pbd.BaseFigure.show
+
+            def custom_show(fig_or_self, *args, **kwargs):
+                # Called as pio.show(fig) or fig.show()
+                fig = _normalize_figure(fig_or_self)
+                captured_plots.append(json.loads(fig.to_json()))
+
+            pio.show = custom_show
+            pbd.BaseFigure.show = custom_show
+        except ImportError:
+            pass
+
+        # Run inside the per-session workspace so EVERY file the agent writes (bare
+        # relative name or via OUTPUT_DIR) lands there and becomes downloadable +
+        # grep-able. The input-producing tools (generate_synthetic_data, uploads)
+        # also write into this same directory and expose absolute dataset paths, so
+        # reads by name or by dataset_path resolve correctly. The cwd is restored in
+        # the finally block even if the executed code calls os.chdir itself.
+        _prev_cwd = os.getcwd()
+        try:
+            if work_dir is not None:
+                os.chdir(work_dir)
+            with (
+                contextlib.redirect_stdout(stdout_capture),
+                contextlib.redirect_stderr(stdout_capture),
+            ):
+                # Re-layer the reserved system bindings on top of the persistent
+                # namespace, then exec against the SINGLE namespace dict (one dict
+                # keeps top-level def/class scoping correct — splitting into
+                # globals/locals would silently break it).
+                ns.update(env)
+                exec(code, ns)
+            output = stdout_capture.getvalue()
+            if not output:
+                output = "Code executed successfully with no output."
+        except Exception as e:
+            captured = stdout_capture.getvalue()
+            prefix = (captured + "\n") if captured else ""
+            output = prefix + format_execution_error(
+                traceback.format_exc(),
+                is_name_error=isinstance(e, NameError),
+                missing_name=getattr(e, "name", None),
+            )
+        finally:
+            # Always restore the working directory, even on error.
+            try:
+                os.chdir(_prev_cwd)
+            except Exception:
+                pass
+            # Restore original show methods
+            try:
+                import plotly.io as pio
+                import plotly.basedatatypes as pbd
+
+                if original_pio_show is not None:
+                    pio.show = original_pio_show
+                if original_fig_show is not None:
+                    pbd.BaseFigure.show = original_fig_show
+            except Exception:
+                pass
+        return ExecuteResult(
+            stdout=output,
+            plots=captured_plots,
+            is_error="Error executing code" in output,
+        )
+
+    def reset(self):
+        _NAMESPACE_CACHE.reset()
+
+    def shutdown(self):
+        pass
+
+
+_KERNELS = KernelManager(
+    os.environ.get("MMM_AGENT_KERNEL", "inprocess"), {"inprocess": InProcessKernel}
+)
+
+
 @tool
 def execute_python(
     state: Annotated[dict, InjectedState],
@@ -1162,252 +1449,16 @@ def execute_python(
         work_dir = None
     before_snapshot = _ws.snapshot_dir(work_dir) if work_dir is not None else {}
 
-    import pandas as pd
-    import numpy as np
-
-    # Force non-interactive backend so matplotlib works in server threads
-    import matplotlib
-
-    matplotlib.use("agg")
-    import matplotlib.pyplot as plt
-
-    # Persistent per-thread namespace ("warm kernel"): variables defined in one
-    # execute_python call survive into the next within the same live process, so
-    # the agent can build an analysis up incrementally. We compute the reserved
-    # SYSTEM bindings into ``env`` below, then re-layer them on top of ``ns`` on
-    # EVERY call (so a refit refreshes ``mmm``/``results`` and system names can't
-    # be permanently shadowed). User-defined names in ``ns`` are left untouched.
-    ns = _NAMESPACE_CACHE.namespace()
-
-    env = {
-        "pd": pd,
-        "np": np,
-        "plt": plt,
-        "matplotlib": matplotlib,
-        "OUTPUT_DIR": str(work_dir) if work_dir is not None else os.getcwd(),
-        "os": os,
-        "json": json,
-    }
-
-    # Also pre-import plotly so the agent can use it easily
-    try:
-        import plotly.express as px
-        import plotly.graph_objects as go
-
-        env["px"] = px
-        env["go"] = go
-    except ImportError:
-        pass
-
-    # Expose the full framework surface so the agent can reach ALL features
-    # (extensions, analysis, calibration, reporting) without import boilerplate.
-    try:
-        import mmm_framework as mmf
-
-        env["mmf"] = mmf
-        env["mmm_framework"] = mmf
-        # Eagerly import the key submodules so `mmf.analysis` / `mmf.reporting`
-        # / `mmf.mmm_extensions` resolve (importing a submodule registers it as
-        # an attribute of the package). Each is guarded + cached in sys.modules,
-        # so the cost is paid at most once per process. mmm_extensions is lazy
-        # for PyMC, so importing the package itself stays cheap.
-        for _sub in ("analysis", "mmm_extensions", "reporting", "diagnostics"):
-            try:
-                _mod = importlib.import_module(f"mmm_framework.{_sub}")
-                env[_sub] = _mod
-            except Exception:
-                pass
-        for _name in (
-            "BayesianMMM",
-            "ModelConfigBuilder",
-            "MediaChannelConfigBuilder",
-            "ControlVariableConfigBuilder",
-            "KPIConfigBuilder",
-            "PriorConfigBuilder",
-            "AdstockConfigBuilder",
-            "SaturationConfigBuilder",
-            "SeasonalityConfigBuilder",
-            "MFFConfigBuilder",
-            "TrendConfigBuilder",
-            "load_mff",
-        ):
-            if _name in globals():
-                env[_name] = globals()[_name]
-    except Exception:
-        pass
-
-    mmm = _MODEL_CACHE.get("fitted_model")
-    results = _MODEL_CACHE.get("fit_results")
-    if mmm is not None:
-        env["mmm"] = mmm
-    if results is not None:
-        env["results"] = results
-
-    # ── Durable named results (survive a kernel reset / server restart) ──────
-    # The warm namespace is in-process only; these helpers persist *named*
-    # objects to the on-disk workspace (parquet for tabular data, cloudpickle
-    # otherwise) so the agent can reload them in a later session — the same
-    # "disk is the durable fallback" pattern the model cache uses.
-    _results_dir = (work_dir / "results") if work_dir is not None else None
-
-    def _result_path(name, ext):
-        # Concatenate the extension (do NOT use Path.with_suffix: a name like
-        # "q4.2024" would have ".2024" treated as a suffix and be truncated to
-        # "q4.parquet", silently colliding with "q4.2023").
-        if _results_dir is None:
-            raise RuntimeError("No workspace directory available for saving results.")
-        _results_dir.mkdir(parents=True, exist_ok=True)
-        return _results_dir / f"{_ws._safe_segment(str(name))}{ext}"
-
-    def save_result(name, obj):
-        """Persist ``obj`` under ``name`` so it survives a kernel reset / server
-        restart. DataFrames/Series -> parquet (fallback pickle); anything else
-        -> cloudpickle. Reload later with ``load_result(name)``. Returns the
-        file path written."""
-        if isinstance(obj, (pd.DataFrame, pd.Series)):
-            frame = obj.to_frame() if isinstance(obj, pd.Series) else obj
-            try:
-                p = _result_path(name, ".parquet")
-                frame.to_parquet(p)
-                return str(p)
-            except Exception:
-                pass  # pyarrow/fastparquet missing -> fall through to pickle
-        try:
-            import cloudpickle as _pk
-        except Exception:
-            import pickle as _pk
-        p = _result_path(name, ".pkl")
-        with open(p, "wb") as _fh:
-            _pk.dump(obj, _fh)
-        return str(p)
-
-    def load_result(name):
-        """Reload an object saved earlier with ``save_result(name)``."""
-        pq = _result_path(name, ".parquet")
-        if pq.exists():
-            return pd.read_parquet(pq)
-        pk = _result_path(name, ".pkl")
-        if pk.exists():
-            try:
-                import cloudpickle as _pk
-            except Exception:
-                import pickle as _pk
-            with open(pk, "rb") as _fh:
-                return _pk.load(_fh)
-        raise FileNotFoundError(
-            f"No saved result named {name!r}. Available: {list_saved_results()}"
-        )
-
-    def list_saved_results():
-        """Names previously persisted with ``save_result`` in this session."""
-        if _results_dir is None or not _results_dir.exists():
-            return []
-        return sorted(
-            {p.stem for p in _results_dir.glob("*") if p.suffix in (".parquet", ".pkl")}
-        )
-
-    env["save_result"] = save_result
-    env["load_result"] = load_result
-    env["list_saved_results"] = list_saved_results
-
-    # ── Convenience dataset bindings ─────────────────────────────────────────
-    # `dataset_path` always reflects the active dataset. `df` is auto-loaded from
-    # it so the most common cross-cell reference works even on a cold kernel —
-    # (re)loaded only when the active dataset CHANGES (tracked via a private
-    # marker), so the analyst can reassign `df` (a filtered view) and have it
-    # persist, while a freshly uploaded dataset still refreshes `df`.
-    _ds_path = state.get("dataset_path") if isinstance(state, dict) else None
-    if _ds_path:
-        env["dataset_path"] = _ds_path
-    if _ds_path and ns.get("__mmm_df_source__") != _ds_path:
-        try:
-            _p = str(_ds_path)
-            if not os.path.isabs(_p) and work_dir is not None:
-                _cand = os.path.join(str(work_dir), _p)
-                if os.path.exists(_cand):
-                    _p = _cand
-            _too_big = os.path.exists(_p) and os.path.getsize(_p) > 250 * 1024 * 1024
-            if not _too_big and _p.lower().endswith(".csv"):
-                env["df"] = pd.read_csv(_p)
-                ns["__mmm_df_source__"] = _ds_path
-            elif not _too_big and _p.lower().endswith(".parquet"):
-                env["df"] = pd.read_parquet(_p)
-                ns["__mmm_df_source__"] = _ds_path
-        except Exception:
-            pass  # auto-load is best-effort; the agent can load explicitly
-
-    stdout_capture = io.StringIO()
-
-    # Intercept Plotly show() calls — both pio.show(fig) and fig.show()
-    captured_plots = []
-    original_pio_show = None
-    original_fig_show = None
-
-    try:
-        import plotly.io as pio
-        import plotly.basedatatypes as pbd
-
-        original_pio_show = pio.show
-        original_fig_show = pbd.BaseFigure.show
-
-        def custom_show(fig_or_self, *args, **kwargs):
-            # Called as pio.show(fig) or fig.show()
-            fig = _normalize_figure(fig_or_self)
-            captured_plots.append(json.loads(fig.to_json()))
-
-        pio.show = custom_show
-        pbd.BaseFigure.show = custom_show
-    except ImportError:
-        pass
-
-    # Run inside the per-session workspace so EVERY file the agent writes (bare
-    # relative name or via OUTPUT_DIR) lands there and becomes downloadable +
-    # grep-able. The input-producing tools (generate_synthetic_data, uploads)
-    # also write into this same directory and expose absolute dataset paths, so
-    # reads by name or by dataset_path resolve correctly. The cwd is restored in
-    # the finally block even if the executed code calls os.chdir itself.
-    _prev_cwd = os.getcwd()
-    try:
-        if work_dir is not None:
-            os.chdir(work_dir)
-        with (
-            contextlib.redirect_stdout(stdout_capture),
-            contextlib.redirect_stderr(stdout_capture),
-        ):
-            # Re-layer the reserved system bindings on top of the persistent
-            # namespace, then exec against the SINGLE namespace dict (one dict
-            # keeps top-level def/class scoping correct — splitting into
-            # globals/locals would silently break it).
-            ns.update(env)
-            exec(code, ns)
-        output = stdout_capture.getvalue()
-        if not output:
-            output = "Code executed successfully with no output."
-    except Exception as e:
-        captured = stdout_capture.getvalue()
-        prefix = (captured + "\n") if captured else ""
-        output = prefix + format_execution_error(
-            traceback.format_exc(),
-            is_name_error=isinstance(e, NameError),
-            missing_name=getattr(e, "name", None),
-        )
-    finally:
-        # Always restore the working directory, even on error.
-        try:
-            os.chdir(_prev_cwd)
-        except Exception:
-            pass
-        # Restore original show methods
-        try:
-            import plotly.io as pio
-            import plotly.basedatatypes as pbd
-
-            if original_pio_show is not None:
-                pio.show = original_pio_show
-            if original_fig_show is not None:
-                pbd.BaseFigure.show = original_fig_show
-        except Exception:
-            pass
+    ctx = KernelContext(
+        thread_id=thread_id,
+        work_dir=str(work_dir) if work_dir is not None else None,
+        dataset_path=state.get("dataset_path") if isinstance(state, dict) else None,
+        mmm=_MODEL_CACHE.get("fitted_model"),
+        results=_MODEL_CACHE.get("fit_results"),
+    )
+    result = _KERNELS.get_or_spawn(thread_id).execute(code, ctx)
+    output = result.stdout
+    captured_plots = result.plots
 
     dashboard_data = dict(state.get("dashboard_data") or {})
 
@@ -1483,7 +1534,7 @@ def reset_namespace(
     any workspace files) are on disk and are NOT affected.
     """
     _activate_thread(config)
-    _NAMESPACE_CACHE.reset()
+    _KERNELS.reset(get_current_thread())
     return Command(
         update={
             "messages": [
