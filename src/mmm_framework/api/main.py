@@ -73,6 +73,12 @@ async def lifespan(app: FastAPI):
     await memory.setup()
     sessions_store.init_db()
     yield
+    try:  # reap any per-session subprocess kernels on graceful shutdown
+        from mmm_framework.agents.tools import _KERNELS
+
+        _KERNELS.shutdown_all()
+    except Exception:
+        pass
     if _aiosqlite_conn:
         await _aiosqlite_conn.close()
 

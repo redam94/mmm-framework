@@ -107,7 +107,17 @@ def load_result(name):
             import pickle as _pk
         with open(pk, "rb") as _fh:
             return _pk.load(_fh)
-    raise FileNotFoundError(f"No saved result named {name!r}")
+    raise FileNotFoundError(
+        f"No saved result named {name!r}. Available: {list_saved_results()}"
+    )
+
+
+def list_saved_results():
+    """Names previously persisted with save_result (in ./results)."""
+    d = _Path("results")
+    if not d.exists():
+        return []
+    return sorted({p.stem for p in d.glob("*") if p.suffix in (".parquet", ".pkl")})
 '''
 
 

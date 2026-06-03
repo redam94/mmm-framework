@@ -22,7 +22,12 @@ from mmm_framework.agents.runtime import (
     get_current_thread,
 )
 from mmm_framework.agents import workspace as _ws
-from mmm_framework.agents.kernels import KernelContext, ExecuteResult, KernelManager
+from mmm_framework.agents.kernels import (
+    KernelContext,
+    ExecuteResult,
+    KernelManager,
+    SubprocessKernel,
+)
 
 
 def _activate_thread(config) -> str:
@@ -1412,8 +1417,15 @@ class InProcessKernel:
 
 
 _KERNELS = KernelManager(
-    os.environ.get("MMM_AGENT_KERNEL", "inprocess"), {"inprocess": InProcessKernel}
+    os.environ.get("MMM_AGENT_KERNEL", "inprocess"),
+    {"inprocess": InProcessKernel, "subprocess": SubprocessKernel},
 )
+
+# Reap any subprocess kernels on interpreter exit so child processes/fds aren't
+# orphaned (the app lifespan also calls this on graceful shutdown).
+import atexit as _atexit
+
+_atexit.register(_KERNELS.shutdown_all)
 
 
 @tool
