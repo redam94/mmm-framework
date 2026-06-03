@@ -712,3 +712,39 @@ def test_session_export_reconstitutes_fitted_model_and_marks_errors(store):
     assert "MMMSerializer().load('mmm_models/run_X')" in script  # fit reconstituted
     assert "print(results.summary())" in script  # cell kept
     assert "raised an error" in script  # errored cell marked, not dropped
+
+
+# ── PR1: shared kernel helpers (extracted for InProcess/Subprocess parity) ────
+
+
+def test_format_execution_error_invariants():
+    """The load-bearing 'Error executing code' substring + NameError hint must be
+    produced by the shared formatter (api/main.py keys is_error off it;
+    session_export marks cells with it; both kernel impls will reuse it)."""
+    from mmm_framework.agents.tools import format_execution_error
+
+    plain = format_execution_error("Traceback...\nValueError: x")
+    assert plain.startswith("Error executing code:\n")
+    assert "Hint:" not in plain
+
+    named = format_execution_error("tb", is_name_error=True, missing_name="tbl")
+    assert "Error executing code" in named
+    assert "`tbl`" in named and "load_result" in named
+
+    anon = format_execution_error("tb", is_name_error=True, missing_name=None)
+    assert "a variable" in anon
+
+
+def test_normalize_figure_applies_palette():
+    """The extracted _normalize_figure remaps default Plotly colors to the design
+    palette and sets the colorway (same behavior both kernel impls must produce)."""
+    import plotly.graph_objects as go
+    from mmm_framework.agents.tools import _normalize_figure, _PALETTE
+
+    fig = go.Figure(go.Bar(x=["a", "b"], y=[1, 2], marker_color="#636efa"))
+    _normalize_figure(fig)
+    # default plotly blue (#636efa) maps to the first palette color
+    assert fig.data[0].marker.color.lower() == _PALETTE[0].lower()
+    assert tuple(c.lower() for c in fig.layout.colorway) == tuple(
+        c.lower() for c in _PALETTE
+    )
