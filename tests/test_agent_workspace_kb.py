@@ -748,3 +748,37 @@ def test_normalize_figure_applies_palette():
     assert tuple(c.lower() for c in fig.layout.colorway) == tuple(
         c.lower() for c in _PALETTE
     )
+
+
+# ── regression: read tools tolerate bare-string channels/controls ────────────
+
+
+def test_read_tools_tolerate_bare_string_vars(store, tmp_path, monkeypatch):
+    """get_current_config/save_config/load_config must not crash with 'string
+    indices must be integers' when model_spec has bare-string channels/controls
+    (weaker models emit the simple form). Reproduces the live /chat crash."""
+    from mmm_framework.agents import tools as T
+
+    monkeypatch.chdir(tmp_path)  # save_config writes under cwd/mmm_configs
+    tid, cfg = _new_thread(store)
+    spec = {
+        "kpi": "sales",
+        "media_channels": ["TV", "Digital"],  # bare strings (not dicts)
+        "control_variables": ["price", "holiday"],  # the case that crashed
+    }
+    state = {"model_spec": spec, "dashboard_data": {}}
+
+    # get_current_config — the reported crash site
+    r = T.get_current_config.func(state=state, tool_call_id="c1")
+    txt = r.update["messages"][0].content
+    assert "string indices" not in txt
+    assert "`TV`" in txt and "price" in txt and "holiday" in txt
+
+    # save_config then load_config round-trip with bare-string vars
+    s = T.save_config.func(state=state, name="bare", tool_call_id="c2")
+    assert "string indices" not in s.update["messages"][0].content
+    loaded = T.load_config.func(
+        state={"dashboard_data": {}}, name="bare", tool_call_id="c3"
+    )
+    lt = loaded.update["messages"][0].content
+    assert "string indices" not in lt and "TV" in lt and "price" in lt

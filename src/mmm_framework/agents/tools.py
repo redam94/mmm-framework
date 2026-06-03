@@ -130,6 +130,21 @@ def _normalize_spec_vars(spec: dict) -> dict:
     return spec
 
 
+def _normalized_spec(spec: dict | None) -> dict:
+    """A deepcopy of ``spec`` with bare-string ``media_channels`` /
+    ``control_variables`` normalized to ``{"name": ...}`` dicts.
+
+    For READ/display tools (``get_current_config``, ``save_config``,
+    ``load_config``) that subscript ``c['name']`` / ``ch.get(...)`` and would
+    otherwise crash with "string indices must be integers" when a weaker model
+    emitted the bare-string form. ``fit_mmm_model`` already normalizes its own
+    copy; this gives the read paths the same tolerance without mutating state.
+    """
+    import copy as _copy
+
+    return _normalize_spec_vars(_copy.deepcopy(spec or {}))
+
+
 def _build_dataset_dashboard(df, ds_path: str) -> tuple[list[str], dict]:
     """Build both the text summary lines and the rich dashboard_data['dataset'] dict."""
     import pandas as pd
@@ -1569,8 +1584,6 @@ def save_config(
     Save the current model configuration to a named JSON file so it can be reloaded later.
     The name should be a short identifier like 'baseline', 'tv_heavy', or 'q4_2024'.
     """
-    import copy
-
     spec = state.get("model_spec")
     if not spec or not spec.get("kpi"):
         return Command(
@@ -1584,10 +1597,12 @@ def save_config(
             }
         )
 
+    spec = _normalized_spec(spec)  # tolerate bare-string channels/controls
+
     os.makedirs(_CONFIGS_DIR, exist_ok=True)
     path = os.path.join(_CONFIGS_DIR, f"{name}.json")
     with open(path, "w") as f:
-        json.dump(dict(copy.deepcopy(spec)), f, indent=2)
+        json.dump(dict(spec), f, indent=2)
 
     return Command(
         update={
@@ -1631,6 +1646,7 @@ def load_config(
 
     with open(path) as f:
         spec = json.load(f)
+    spec = _normalize_spec_vars(spec)  # tolerate bare-string channels/controls
 
     dashboard_data = dict(state.get("dashboard_data") or {})
     dashboard_data["model_spec"] = spec
@@ -1746,6 +1762,8 @@ def get_current_config(
                 ]
             }
         )
+
+    spec = _normalized_spec(spec)  # tolerate bare-string channels/controls
 
     lines = ["### Active Model Configuration\n"]
     lines.append(
