@@ -61,6 +61,8 @@ class Kernel(Protocol):
 
     def run_model_op(self, op_name: str, kwargs: dict) -> dict: ...
 
+    def fit(self, model_spec: dict, dataset_path: str) -> dict: ...
+
     def reset(self) -> None: ...
 
     def shutdown(self) -> None: ...
@@ -271,6 +273,22 @@ try:
 
     def _mmm_emit_op(_name, _kw):
         _mmm_pdd({"application/vnd.mmm-modelop+json": _mmm_run_op(_name, _kw)})
+
+    def _mmm_emit_fit(_spec, _dataset_path):
+        # Fit IN the kernel: mmm/results become module GLOBALS so the subsequent
+        # run_model_op / execute_python see the fitted model (removes the
+        # Phase-1 boundary). Only the JSON `info` crosses the MIME channel.
+        global mmm, results
+        try:
+            from mmm_framework.agents.fitting import build_and_fit
+
+            mmm, results, _info = build_and_fit(_spec, _dataset_path)
+        except Exception as _e:
+            _mmm_pdd(
+                {"application/vnd.mmm-modelop+json": {"error": "Error fitting model: " + str(_e)}}
+            )
+            return
+        _mmm_pdd({"application/vnd.mmm-modelop+json": _info})
 except Exception:
     pass
 
@@ -314,6 +332,8 @@ class SubprocessKernel:
         # wall-clock cap per cell: interrupt, then after a grace kill — so a hung
         # cell can't wedge the session (and the lock) forever
         self._cell_timeout = float(os.environ.get("MMM_CELL_TIMEOUT", "600"))
+        # fits are long; their own (larger) wall-clock cap
+        self._fit_timeout = float(os.environ.get("MMM_FIT_TIMEOUT", "1800"))
         self._interrupt_grace = float(
             os.environ.get("MMM_KERNEL_INTERRUPT_GRACE", "15")
         )
@@ -543,4 +563,30 @@ class SubprocessKernel:
                 "dashboard": {},
                 "error": "model op returned no result",
             }
+        return _json_safe(modelops[0])
+
+    def fit(self, model_spec: dict, dataset_path: str) -> dict:
+        # Fit IN the kernel so the model becomes a kernel global (run_model_op /
+        # execute_python then see it). The kernel spawns in the dataset's
+        # directory (= the session workspace) so the report/auto-save land there.
+        ctx = KernelContext(
+            thread_id="",
+            work_dir=os.path.dirname(os.path.abspath(dataset_path)) or None,
+            dataset_path=dataset_path,
+        )
+        with self._lock:
+            try:
+                self._ensure_started(ctx)
+                code = f"_mmm_emit_fit({model_spec!r}, {dataset_path!r})\n"
+                _, _, modelops, err = self._run(
+                    code, silent=False, capture=True, cell_timeout=self._fit_timeout
+                )
+            except Exception as e:  # noqa: BLE001
+                self._teardown()
+                return {"error": f"Error fitting model: {e}"}
+        if err is not None:
+            detail = err.get("evalue") or err.get("ename") or "error"
+            return {"error": f"Error fitting model: {detail}"}
+        if not modelops:
+            return {"error": "fit returned no result"}
         return _json_safe(modelops[0])

@@ -843,3 +843,43 @@ def test_fit_save_load_roundtrip(store, tmp_path, monkeypatch):
         state={"dashboard_data": {}}, tool_call_id="r", config=cfg
     )
     assert "No fitted model" not in roi.update["messages"][0].content
+
+
+@pytest.mark.slow
+def test_subprocess_fit_then_interpret_removes_boundary(store):
+    """The Phase-2 milestone: fit IN the subprocess kernel, then a model op finds
+    the model there (no longer the Phase-1 'no model in subprocess' boundary)."""
+    pytest.importorskip("jupyter_client")
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.kernels import SubprocessKernel
+
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    tid = sess["thread_id"]
+    cfg = {"configurable": {"thread_id": tid}}
+    T.generate_synthetic_data.func(
+        state={"dashboard_data": {}}, n_weeks=30, tool_call_id="g", config=cfg
+    )
+    ds = str(W.thread_dir(tid) / "synthetic_mff_data.csv")
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [
+            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
+        ],
+        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "time_granularity": "weekly",
+        "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
+    }
+
+    k = SubprocessKernel()
+    try:
+        info = k.fit(spec, ds)
+        assert "error" not in info, info
+        assert "fitted successfully" in info["summary"].lower()
+        # the model is now a kernel global -> run_model_op finds it (boundary gone)
+        roi = k.run_model_op("roi_metrics", {})
+        assert roi.get("error") is None, roi
+        assert "ROI" in (roi.get("content") or "")
+    finally:
+        k.shutdown()

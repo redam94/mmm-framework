@@ -23,6 +23,7 @@ from mmm_framework.agents.runtime import (
 )
 from mmm_framework.agents import workspace as _ws
 from mmm_framework.agents import model_ops as _model_ops
+from mmm_framework.agents.fitting import _mff_config_from_spec, build_and_fit
 from mmm_framework.agents.kernels import (
     KernelContext,
     ExecuteResult,
@@ -63,44 +64,12 @@ from mmm_framework.builders.prior import (
 )
 
 
-def _build_prior(p: dict):
-    """Convert a {distribution, params} dict into a PriorConfig."""
-    dist = p.get("distribution", "half_normal")
-    params = p.get("params", {})
-    b = PriorConfigBuilder()
-    if dist == "normal":
-        b.normal(mu=float(params.get("mu", 0.0)), sigma=float(params.get("sigma", 1.0)))
-    elif dist == "log_normal":
-        b.log_normal(
-            mu=float(params.get("mu", 0.0)), sigma=float(params.get("sigma", 1.0))
-        )
-    elif dist == "gamma":
-        b.gamma(
-            alpha=float(params.get("alpha", 2.0)), beta=float(params.get("beta", 1.0))
-        )
-    elif dist == "beta":
-        b.beta(
-            alpha=float(params.get("alpha", 2.0)), beta=float(params.get("beta", 2.0))
-        )
-    elif dist == "truncated_normal":
-        b.truncated_normal(
-            mu=float(params.get("mu", 0.0)),
-            sigma=float(params.get("sigma", 1.0)),
-            lower=float(params.get("lower", 0.0)),
-        )
-    elif dist == "half_student_t":
-        b.half_student_t(
-            nu=float(params.get("nu", 3.0)), sigma=float(params.get("sigma", 1.0))
-        )
-    else:  # half_normal (default)
-        b.half_normal(sigma=float(params.get("sigma", 1.0)))
-    return b.build()
+# _build_prior + _mff_config_from_spec moved to agents/fitting.py (kernel-importable,
+# no cycle) alongside build_and_fit; imported below.
 
 
 from mmm_framework.reporting.helpers import (
     generate_model_summary,
-    compute_roi_with_uncertainty,
-    compute_component_decomposition,
     compute_saturation_curves_with_uncertainty,
     compute_marginal_roi,
 )
@@ -147,92 +116,6 @@ def _normalized_spec(spec: dict | None) -> dict:
     import copy as _copy
 
     return _normalize_spec_vars(_copy.deepcopy(spec or {}))
-
-
-def _mff_config_from_spec(spec: dict):
-    """Build an ``MFFConfig`` from a (normalized) model_spec dict.
-
-    Extracted from ``fit_mmm_model`` so the SAME builder logic produces the panel
-    a saved model is reloaded against in ``load_fitted_model`` (the serializer's
-    ``load`` requires a compatible ``PanelDataset``). Pre-factors the fit
-    relocation (Phase 2 PR-C)."""
-    mff_builder = MFFConfigBuilder()
-
-    # KPI
-    kpi_builder = KPIConfigBuilder(spec["kpi"])
-    if spec.get("kpi_level") == "geo":
-        kpi_builder.by_geo()
-    else:
-        kpi_builder.national()
-    mff_builder.with_kpi_builder(kpi_builder)
-
-    # Per-channel prior overrides keyed by channel name
-    media_priors = spec.get("priors", {}).get("media", {})
-    control_priors_cfg = spec.get("priors", {}).get("controls", {})
-
-    # Media — read adstock/saturation type + priors from spec
-    for media in spec.get("media_channels", []):
-        ch_name = media["name"]
-        ch_priors = media_priors.get(ch_name, {})
-        ch_builder = MediaChannelConfigBuilder(ch_name).national()
-
-        adstock_cfg = media.get("adstock", {})
-        adstock_type = adstock_cfg.get("type", "geometric").lower()
-        l_max = int(adstock_cfg.get("l_max", 8))
-        ab = AdstockConfigBuilder()
-        if adstock_type == "weibull":
-            ab.weibull().with_max_lag(l_max)
-        elif adstock_type == "delayed":
-            ab.delayed().with_max_lag(l_max)
-        else:
-            ab.geometric().with_max_lag(l_max)
-        if "adstock_alpha" in ch_priors:
-            ab.with_alpha_prior(_build_prior(ch_priors["adstock_alpha"]))
-        if "adstock_theta" in ch_priors:
-            ab.with_theta_prior(_build_prior(ch_priors["adstock_theta"]))
-        ch_builder.with_adstock_builder(ab)
-
-        sat_type = media.get("saturation", {}).get("type", "hill").lower()
-        sb = SaturationConfigBuilder()
-        if sat_type == "logistic":
-            sb.logistic()
-        elif sat_type in ("michaelis_menten", "michaelis-menten"):
-            sb.michaelis_menten()
-        elif sat_type == "tanh":
-            sb.tanh()
-        else:
-            sb.hill()
-        if "saturation_kappa" in ch_priors:
-            sb.with_kappa_prior(_build_prior(ch_priors["saturation_kappa"]))
-        if "saturation_slope" in ch_priors:
-            sb.with_slope_prior(_build_prior(ch_priors["saturation_slope"]))
-        ch_builder.with_saturation_builder(sb)
-
-        if "coefficient" in ch_priors:
-            ch_builder.with_coefficient_prior(_build_prior(ch_priors["coefficient"]))
-
-        mff_builder.add_media_builder(ch_builder)
-
-    # Controls — apply coefficient priors from spec when provided
-    for control in spec.get("control_variables", []):
-        cv_name = control["name"]
-        cv_builder = ControlVariableConfigBuilder(cv_name).national()
-        cv_priors = control_priors_cfg.get(cv_name, {})
-        if cv_priors.get("allow_negative", True) is False:
-            cv_builder.positive_only()
-        if "coefficient" in cv_priors:
-            cv_builder.with_coefficient_prior(_build_prior(cv_priors["coefficient"]))
-        mff_builder.add_control_builder(cv_builder)
-
-    granularity = spec.get("time_granularity", "weekly").lower()
-    if granularity == "daily":
-        mff_builder.daily()
-    elif granularity == "monthly":
-        mff_builder.monthly()
-    else:
-        mff_builder.weekly()
-    mff_builder.with_date_format("%Y-%m-%d")
-    return mff_builder.build()
 
 
 def _build_dataset_dashboard(df, ds_path: str) -> tuple[list[str], dict]:
@@ -454,231 +337,28 @@ def fit_mmm_model(
         A Command that updates the model_status and fit_results_summary in the state.
     """
     _activate_thread(config)
+    # Dispatch the build+fit to the active kernel: in-process it fits here and
+    # stores the model in MODEL_CACHE (unchanged behavior); in the subprocess it
+    # fits IN the kernel so `mmm`/`results` become kernel globals (the model now
+    # lives where execute_python + run_model_op run — removing the Phase-1
+    # boundary). build_and_fit raises on failure -> InProcessKernel.fit raises ->
+    # caught here; SubprocessKernel.fit returns the failure as {error}.
     try:
         spec = json.loads(model_spec)
         _normalize_spec_vars(spec)  # accept bare-string channel/control lists
-
-        # 1. Build MFFConfig (shared with load_fitted_model so a saved model
-        #    reloads against an identical panel).
-        mff_config = _mff_config_from_spec(spec)
-
-        # 2. Load Data
-        panel = load_mff(dataset_path, mff_config)
-
-        # 3. Model Config — read inference settings from spec when provided
-        inf = spec.get("inference", {})
-        chains = int(inf.get("chains", 4))
-        draws = int(inf.get("draws", 1000))
-        tune = int(inf.get("tune", 1000))
-        target_accept = float(inf.get("target_accept", 0.85))
-        random_seed = int(inf.get("random_seed", 42))
-
-        model_config_builder = (
-            ModelConfigBuilder()
-            .bayesian_numpyro()
-            .with_chains(chains)
-            .with_draws(draws)
-            .with_tune(tune)
-            .with_target_accept(target_accept)
-        )
-
-        # Seasonality
-        season = spec.get("seasonality", {})
-        yearly = int(season.get("yearly", 0))
-        monthly = int(season.get("monthly", 0))
-        weekly = int(season.get("weekly", 0))
-        if yearly > 0 or monthly > 0 or weekly > 0:
-            sb = SeasonalityConfigBuilder()
-            if yearly > 0:
-                sb.with_yearly(order=yearly)
-            if monthly > 0:
-                sb.with_monthly(order=monthly)
-            if weekly > 0:
-                sb.with_weekly(order=weekly)
-            model_config_builder.with_seasonality_builder(sb)
-
-        model_config = model_config_builder.build()
-
-        # Trend config — read type, structural parameters, and priors from spec
-        trend_spec = spec.get("trend", {})
-        trend_type = trend_spec.get("type", "linear").lower()
-        trend_prior_cfg = spec.get("priors", {}).get("trend", {})
-        tb = TrendConfigBuilder()
-        if trend_type == "piecewise":
-            tb.piecewise()
-            if "n_changepoints" in trend_spec:
-                tb.with_n_changepoints(int(trend_spec["n_changepoints"]))
-            if "changepoint_range" in trend_spec:
-                tb.with_changepoint_range(float(trend_spec["changepoint_range"]))
-            if "changepoint_prior_scale" in trend_prior_cfg:
-                tb.with_changepoint_prior_scale(
-                    float(trend_prior_cfg["changepoint_prior_scale"])
-                )
-        elif trend_type == "spline":
-            tb.spline()
-            if "n_knots" in trend_spec:
-                tb.with_n_knots(int(trend_spec["n_knots"]))
-            if "spline_degree" in trend_spec:
-                tb.with_spline_degree(int(trend_spec["spline_degree"]))
-            if "spline_prior_sigma" in trend_prior_cfg:
-                tb.with_spline_prior_sigma(float(trend_prior_cfg["spline_prior_sigma"]))
-        elif trend_type == "gaussian_process":
-            tb.gaussian_process()
-            if "gp_lengthscale_prior_mu" in trend_prior_cfg:
-                tb.with_gp_lengthscale(
-                    mu=float(trend_prior_cfg["gp_lengthscale_prior_mu"]),
-                    sigma=float(trend_prior_cfg.get("gp_lengthscale_prior_sigma", 0.2)),
-                )
-            if "gp_amplitude_prior_sigma" in trend_prior_cfg:
-                tb.with_gp_amplitude(
-                    sigma=float(trend_prior_cfg["gp_amplitude_prior_sigma"])
-                )
-        elif trend_type == "none":
-            pass
-        else:  # linear
-            tb.linear()
-            if (
-                "growth_prior_mu" in trend_prior_cfg
-                or "growth_prior_sigma" in trend_prior_cfg
-            ):
-                tb.with_growth_prior(
-                    mu=float(trend_prior_cfg.get("growth_prior_mu", 0.0)),
-                    sigma=float(trend_prior_cfg.get("growth_prior_sigma", 0.1)),
-                )
-        trend_config = tb.build()
-
-        # 4. Fit Model
-        mmm = BayesianMMM(panel, model_config, trend_config)
-        results = mmm.fit(random_seed=random_seed)
-
-        # 5. Generate a brief summary
-        summary = (
-            f"Model fitted successfully! "
-            f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
-            f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}, "
-            f"Inference: {chains} chains × {draws} draws."
-        )
-
-        # Generate full report immediately for convenience
-        report_path = "agent_mmm_report.html"
-        try:
-            from mmm_framework.reporting.generator import ReportBuilder
-
-            report = (
-                ReportBuilder().with_model(mmm, results).enable_all_sections().build()
-            )
-            report.to_html(report_path)
-            summary += f" Full HTML report generated at {report_path}."
-        except Exception as e:
-            summary += f" Note: Report generation failed: {str(e)}"
-            report_path = None
-
-        # Cache the model globally so interpretation tools can use it
-        _MODEL_CACHE["fitted_model"] = mmm
-        _MODEL_CACHE["fit_results"] = results
-
-        # Auto-save the model to disk with a timestamped run name
-        from datetime import datetime, timezone
-
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        run_name = f"run_{run_id}"
-        model_path = os.path.join(_MODELS_DIR, run_name)
-        model_saved = False
-        try:
-            os.makedirs(model_path, exist_ok=True)
-            from mmm_framework.serialization import MMMSerializer
-
-            # save(model, path, ...) — the model carries its own trace; there is
-            # no `results` param (the prior `save(mmm, results, model_path)`
-            # mis-bound `results` to `path`, so the auto-save ALWAYS failed and no
-            # model was ever persisted to disk).
-            MMMSerializer.save(mmm, model_path)
-            model_saved = True
-            summary += f" Auto-saved as **{run_name}**."
-        except Exception as save_err:
-            summary += f" (Auto-save failed: {save_err})"
-
-        # Build a structured run record for the artifact log
-        channel_names = [m["name"] for m in spec.get("media_channels", [])]
-        control_names = [c["name"] for c in spec.get("control_variables", [])]
-        model_run = {
-            "run_id": run_id,
-            "run_name": run_name,
-            "timestamp_iso": datetime.now(timezone.utc).isoformat(),
-            "dataset_path": dataset_path,
-            "kpi": spec.get("kpi", ""),
-            "channels": channel_names,
-            "controls": control_names,
-            "trend": trend_type,
-            "seasonality": {"yearly": yearly, "monthly": monthly, "weekly": weekly},
-            "inference": {
-                "chains": chains,
-                "draws": draws,
-                "tune": tune,
-                "target_accept": target_accept,
-            },
-            "model_path": model_path if model_saved else None,
-            "report_path": report_path,
-            "summary": summary,
-            "n_obs": int(mmm.n_obs),
-            "n_channels": int(mmm.n_channels),
-        }
-
-        # Write metadata.json alongside the saved model
-        if model_saved:
-            try:
-                with open(os.path.join(model_path, "run_metadata.json"), "w") as f:
-                    json.dump(model_run, f, indent=2, default=str)
-            except Exception:
-                pass
-
-        dashboard_data = state.get("dashboard_data") or {}
-        dashboard_data["model_status"] = "completed"
-        dashboard_data["summary"] = summary
-        dashboard_data["model_run"] = model_run
-        if report_path:
-            dashboard_data["report_path"] = report_path
-
-        # Auto-populate ROI and decomposition so Results tab fills immediately
-        try:
-            roi_df = compute_roi_with_uncertainty(mmm, hdi_prob=0.94)
-            dashboard_data["roi_metrics"] = roi_df.to_dict(orient="records")
-        except Exception:
-            pass
-
-        try:
-            decomp_list = compute_component_decomposition(
-                mmm, include_time_series=False
-            )
-            dashboard_data["decomposition"] = [
-                {
-                    "component": d.component,
-                    "total_contribution": d.total_contribution,
-                    "pct_of_total": d.pct_of_total,
-                }
-                for d in decomp_list
-            ]
-        except Exception:
-            pass
-
-        return Command(
-            update={
-                "model_status": "completed",
-                "fit_results_summary": summary,
-                "report_path": report_path,
-                "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
-                "dashboard_data": dashboard_data,
-            }
-        )
+        info = _KERNELS.get_or_spawn(get_current_thread()).fit(spec, dataset_path)
     except Exception as e:
-        error_msg = f"Error fitting model: {str(e)}"
+        info = {"error": f"Error fitting model: {str(e)}"}
 
-        dashboard_data = state.get("dashboard_data", {}) if "state" in locals() else {}
-        if dashboard_data is None:
-            dashboard_data = {}
+    if not isinstance(info, dict) or info.get("error"):
+        error_msg = (
+            info.get("error")
+            if isinstance(info, dict)
+            else "Error fitting model: unknown error"
+        )
+        dashboard_data = dict(state.get("dashboard_data") or {})
         dashboard_data["model_status"] = "error"
         dashboard_data["error"] = error_msg
-
         return Command(
             update={
                 "model_status": "error",
@@ -687,6 +367,19 @@ def fit_mmm_model(
                 "dashboard_data": dashboard_data,
             }
         )
+
+    summary = info["summary"]
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data.update(info.get("dashboard") or {})
+    return Command(
+        update={
+            "model_status": "completed",
+            "fit_results_summary": summary,
+            "report_path": info.get("report_path"),
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
 
 
 # ── Model-op dispatch (Phase 2) ───────────────────────────────────────────────
@@ -1215,6 +908,14 @@ class InProcessKernel:
             return {"content": None, "dashboard": {}, "error": _model_ops.NO_MODEL_MSG}
         res = op(mmm, _MODEL_CACHE.get("fit_results"), **(kwargs or {}))
         return _json_safe(res)
+
+    def fit(self, model_spec, dataset_path):
+        # In-process: fit here and deposit the model in MODEL_CACHE (unchanged
+        # behavior). build_and_fit raises on failure -> the tool catches it.
+        mmm, results, info = build_and_fit(model_spec, dataset_path)
+        _MODEL_CACHE["fitted_model"] = mmm
+        _MODEL_CACHE["fit_results"] = results
+        return info
 
     def reset(self):
         _NAMESPACE_CACHE.reset()
