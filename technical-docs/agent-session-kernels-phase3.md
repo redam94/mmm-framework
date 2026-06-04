@@ -161,13 +161,20 @@ Phase 4d.
 > `169.254.169.254`), which rootless macOS can't combine with port-forward — so macOS-dev `tcp`
 > has open egress (accepted; the metadata-block matters on the GCP VM, which runs `ipc`).
 
-- **PR-F.1 — Container image:** pinned/hash-locked deps, non-root user, read-only rootfs + the
-  framework + `ipykernel`; `tini` as PID 1 (so SIGINT/zombies behave — §3.4). Baked, no per-spawn
-  pull.
-- **PR-F.2 — `KernelProvisioner` (`MMM_KERNEL_RUNTIME`, default `podman`):** subclass launching the
-  kernel via `podman run` with the connection file shared in (per PR-F.0), carrying the PR-E.1
-  scrubbed env, workspace-only bind mount (`nosuid,nodev,noexec`, no host FS), masked/minimized
-  `/proc`+`/sys`. Wire into `SubprocessKernel._start()` behind the kernel impl.
+- **PR-F.1 — Container image — ✅ DONE** (`deploy/kernel/Containerfile` + `requirements.lock`):
+  pinned dep closure (`uv export`), framework on PYTHONPATH, `g++`/`gcc` for runtime compile, `tini`
+  as PID 1, non-root uid 10001, headless mpl, scratch under `/tmp`. Smoke-tested (2.53 GB).
+  Read-only rootfs is a *run-time* flag (PR-F.3/F.5); hash-locking is a noted prod follow-up.
+- **PR-F.2 — `ContainerKernel` — ✅ DONE** (`agents/container_kernel.py`, impl `container`):
+  subclasses `SubprocessKernel`, **reuses the whole protocol** (`_run`/`execute`/`run_model_op`/
+  `fit`/`_teardown`); only `_start`/`reset` differ — launch via `podman run`, connect with a
+  `BlockingKernelClient`, and a `_ContainerManager` shim maps `is_alive`/`interrupt`/`shutdown`
+  onto podman. Carries the PR-E.1 scrubbed env (config-only subset — host path/python vars are
+  *not* forwarded), workspace bind-mount at the same abs path (`--userns=keep-id --user
+  host-uid` so it's writable rootless), transport per PR-F.0. **Validated:** execute + host-
+  visible workspace write + cross-cell persistence + in-container plot capture (slow test). The
+  cgroup/seccomp/read-only/masked-proc *run flags* slot into `_resource_args`/`_security_args`
+  (PR-F.3).
 - **PR-F.3 — Resource caps:** cgroup mem (~2 GB), `pids.max`, ulimits, seccomp default-deny; the
   per-cell wall-clock cap escalates to an **out-of-band cgroup kill** (SIGINT can't stop a compiled
   sampler — §3.4). Per-kernel disk + inode quota at the mount (tmpfs/overlay `size=`).

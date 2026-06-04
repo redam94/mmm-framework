@@ -472,3 +472,82 @@ def test_subprocess_audits_spawn(caplog, tmp_path):
             k.shutdown()
     msgs = [r.getMessage() for r in caplog.records if r.name == "mmm_audit"]
     assert any("kernel_spawn" in m for m in msgs)
+
+
+# ── Phase 3 PR-F.2: ContainerKernel (runs the kernel inside `podman run`) ──────
+
+
+def _container_runtime():
+    """The runtime bin iff a container kernel can actually run here (podman + the
+    built image present). Returns None -> the container tests skip."""
+    import os
+    import shutil
+    import subprocess
+
+    b = (
+        os.environ.get("MMM_KERNEL_RUNTIME_BIN")
+        or shutil.which("podman")
+        or "/opt/podman/bin/podman"
+    )
+    if not os.path.exists(b):
+        return None
+    img = os.environ.get("MMM_KERNEL_IMAGE", "mmm-kernel:latest")
+    try:
+        if subprocess.run([b, "image", "exists", img]).returncode != 0:
+            return None
+    except Exception:
+        return None
+    return b
+
+
+@pytest.mark.slow
+def test_container_kernel_executes_writes_workspace_and_captures_plot(monkeypatch):
+    """The kernel runs inside a podman container: code executes non-root, the
+    bind-mounted session workspace is writable (host-visible), state persists
+    across cells, and an in-container plot is captured over the MIME channel."""
+    import os
+    import shutil
+    import uuid as _uuid
+
+    runtime = _container_runtime()
+    if not runtime:
+        pytest.skip("podman + mmm-kernel image not available")
+
+    # Workspace must be under the user home (podman-machine shares it; the sandbox
+    # tmp is not bind-mountable). Unique dir, cleaned up after.
+    ws = os.path.join(
+        os.path.expanduser("~"), ".cache", "mmm-ktest-" + _uuid.uuid4().hex[:8]
+    )
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", ws)
+    monkeypatch.setenv("MMM_KERNEL_RUNTIME_BIN", runtime)
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "tcp")
+    monkeypatch.setenv("MMM_KERNEL_READY_TIMEOUT", "120")
+
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.container_kernel import ContainerKernel
+
+    tid = "ctest"
+    wd = str(W.thread_dir(tid))
+    k = ContainerKernel(tid)
+    try:
+        r = k.execute(
+            "import os\nprint('uid', os.getuid())\n"
+            "open('probe.txt','w').write('ok')\nprint('wrote')",
+            _ctx(wd),
+        )
+        assert not r.is_error, r.stdout
+        assert "wrote" in r.stdout
+        assert os.path.exists(os.path.join(wd, "probe.txt"))  # host sees the write
+        # state persists in the same container; an in-container plot is captured
+        r2 = k.execute(
+            "import plotly.express as px\n"
+            "print('persists', 'probe.txt' in os.listdir('.'))\n"
+            "px.bar(x=['a'], y=[1]).show()",
+            _ctx(wd),
+        )
+        assert not r2.is_error, r2.stdout
+        assert "persists True" in r2.stdout
+        assert len(r2.plots) == 1
+    finally:
+        k.shutdown()
+        shutil.rmtree(ws, ignore_errors=True)

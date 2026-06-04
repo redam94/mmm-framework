@@ -31,6 +31,7 @@ from mmm_framework.agents.kernels import (
     KernelManager,
     SubprocessKernel,
 )
+from mmm_framework.agents.container_kernel import ContainerKernel
 
 
 def _activate_thread(config) -> str:
@@ -932,7 +933,11 @@ class InProcessKernel:
 
 _KERNELS = KernelManager(
     os.environ.get("MMM_AGENT_KERNEL", "inprocess"),
-    {"inprocess": InProcessKernel, "subprocess": SubprocessKernel},
+    {
+        "inprocess": InProcessKernel,
+        "subprocess": SubprocessKernel,
+        "container": ContainerKernel,
+    },
 )
 
 # Reap any subprocess kernels on interpreter exit so child processes/fds aren't
