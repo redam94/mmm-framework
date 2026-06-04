@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import importlib
 from pathlib import Path
 from typing import Annotated, Any, Optional
@@ -1013,17 +1014,25 @@ def execute_python(
         plot_refs = []
         for fig in captured_plots:
             try:
-                pid = _ws.store_plot(fig)
-                layout = fig.get("layout") or {}
-                t = layout.get("title")
-                title = (
-                    t.get("text")
-                    if isinstance(t, dict)
-                    else (t if isinstance(t, str) else "")
+                pid = _ws.store_plot(fig, thread_id)
+            except ValueError as exc:
+                # Rejected (oversize / not a figure) — drop it. Inlining would
+                # defeat the size cap and re-introduce the untrusted payload.
+                logging.getLogger("mmm_audit").warning(
+                    "plot_rejected thread=%s reason=%s", thread_id, exc
                 )
-                plot_refs.append({"id": pid, "title": title or ""})
+                continue
             except Exception:
-                plot_refs.append(fig)
+                plot_refs.append(fig)  # store write failed — back-compat inline
+                continue
+            layout = fig.get("layout") or {}
+            t = layout.get("title")
+            title = (
+                t.get("text")
+                if isinstance(t, dict)
+                else (t if isinstance(t, str) else "")
+            )
+            plot_refs.append({"id": pid, "title": title or ""})
         dashboard_data["plots"] = existing_plots + plot_refs
 
     # Register any files the code wrote to the workspace so they become listable
@@ -1039,8 +1048,8 @@ def execute_python(
             new_files = []
 
     content = f"### Python Execution Result\n```text\n{output}\n```"
-    if captured_plots:
-        content += f"\n\n*Generated {len(captured_plots)} Plotly interactive chart(s). View them in the Plots tab.*"
+    if captured_plots and plot_refs:
+        content += f"\n\n*Generated {len(plot_refs)} Plotly interactive chart(s). View them in the Plots tab.*"
     if new_files:
         names = ", ".join(f"`{f['name']}`" for f in new_files[:8])
         more = "" if len(new_files) <= 8 else f" (+{len(new_files) - 8} more)"

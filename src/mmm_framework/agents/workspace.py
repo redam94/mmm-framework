@@ -71,13 +71,34 @@ def plot_store_dir() -> Path:
     return d
 
 
-def store_plot(fig_json: dict) -> str:
-    """Write a Plotly figure JSON to the content-addressed store once and return
-    its id (a hash of the content). Identical figures collapse to one file, and
-    the id can be served with an immutable cache header so the browser caches it
-    permanently."""
-    payload = json.dumps(fig_json, sort_keys=True, default=str)
-    pid = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+# A single captured figure is untrusted egress from the kernel: cap its size
+# (default 5 MiB; tune with MMM_PLOT_MAX_BYTES) and keep only the real Plotly
+# figure keys so a cell can't smuggle arbitrary payloads through the plot MIME.
+_PLOT_MAX_BYTES = int(os.environ.get("MMM_PLOT_MAX_BYTES", str(5 * 1024 * 1024)))
+_PLOT_ALLOWED_KEYS = ("data", "layout", "frames", "config")
+
+
+def store_plot(fig_json: dict, thread_id: str | None = None) -> str:
+    """Write a captured Plotly figure to the content-addressed store and return
+    its id.
+
+    The figure is **untrusted egress** from the kernel (Phase 3 PR-E.3): it is
+    schema-validated (must be a ``{"data": [...], ...}`` figure dict; extra
+    top-level keys are dropped) and size-capped (``MMM_PLOT_MAX_BYTES``) — a
+    violation raises ``ValueError`` so the caller drops it (never stores or
+    serves arbitrary bytes). The id is **salted with ``thread_id``** so it is not
+    guessable from figure content across sessions — the id IS the capability,
+    since ``GET /plots/{id}`` has no other tenant ACL — and identical figures
+    don't dedup across tenants. Within one session, identical figures still
+    collapse to one id, so the immutable-cache browser behavior is preserved."""
+    if not isinstance(fig_json, dict) or not isinstance(fig_json.get("data"), list):
+        raise ValueError("not a Plotly figure (expected a dict with a 'data' list)")
+    fig = {k: fig_json[k] for k in _PLOT_ALLOWED_KEYS if k in fig_json}
+    payload = json.dumps(fig, sort_keys=True, default=str)
+    if len(payload.encode("utf-8")) > _PLOT_MAX_BYTES:
+        raise ValueError(f"figure exceeds MMM_PLOT_MAX_BYTES ({_PLOT_MAX_BYTES} bytes)")
+    salt = f"{thread_id or ''}\x00"
+    pid = hashlib.sha256((salt + payload).encode("utf-8")).hexdigest()[:24]
     path = plot_store_dir() / f"{pid}.json"
     if not path.exists():
         path.write_text(payload, encoding="utf-8")

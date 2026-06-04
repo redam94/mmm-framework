@@ -72,6 +72,39 @@ def test_plot_store_is_content_addressed(store):
     assert W.plot_path("nope") is None
 
 
+def test_store_plot_thread_salt_and_validation(store, monkeypatch):
+    """Phase 3 PR-E.3: plot ids are salted per session (not cross-tenant
+    guessable / no cross-tenant dedup), the payload is schema-validated +
+    size-capped, and extra top-level keys are stripped."""
+    import pytest as _pytest
+
+    from mmm_framework.agents import workspace as W
+
+    fig = {"data": [{"type": "bar", "x": ["a"], "y": [1]}], "layout": {"title": "t"}}
+    a1 = W.store_plot(fig, "threadA")
+    a2 = W.store_plot(dict(fig), "threadA")
+    b1 = W.store_plot(fig, "threadB")
+    assert a1 == a2  # within-session dedup preserved (immutable caching)
+    assert a1 != b1  # different session -> different id (no cross-tenant dedup)
+    assert W.store_plot(fig) != a1  # unsalted differs again
+    assert W.plot_path(a1) is not None and W.plot_path(b1) is not None
+
+    # untrusted egress: non-figure payloads are rejected
+    with _pytest.raises(ValueError):
+        W.store_plot({"not": "a figure"}, "threadA")
+    with _pytest.raises(ValueError):
+        W.store_plot("just a string", "threadA")
+
+    # extra top-level keys are dropped (no smuggling through the plot channel)
+    pid = W.store_plot({"data": [], "layout": {}, "evil": "x" * 50}, "threadA")
+    assert "evil" not in W.plot_path(pid).read_text()
+
+    # oversize is rejected (caller drops it)
+    monkeypatch.setattr(W, "_PLOT_MAX_BYTES", 50)
+    with _pytest.raises(ValueError):
+        W.store_plot({"data": [{"big": "y" * 200}], "layout": {}}, "threadA")
+
+
 def test_execute_python_emits_plot_refs_not_inline_json(store):
     from mmm_framework.agents import tools as T
 
