@@ -782,3 +782,64 @@ def test_read_tools_tolerate_bare_string_vars(store, tmp_path, monkeypatch):
     )
     lt = loaded.update["messages"][0].content
     assert "string indices" not in lt and "TV" in lt and "price" in lt
+
+
+@pytest.mark.slow
+def test_fit_save_load_roundtrip(store, tmp_path, monkeypatch):
+    """End-to-end proof of the Phase 2 PR-C bug fixes: a real fit now actually
+    auto-saves to disk (the auto-save call was broken), and the saved model
+    loads back and serves an interpretation tool."""
+    import json
+
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    monkeypatch.chdir(tmp_path)  # mmm_models/ lands here, not the repo
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    tid = sess["thread_id"]
+    cfg = {"configurable": {"thread_id": tid}}
+
+    T.generate_synthetic_data.func(
+        state={"dashboard_data": {}}, n_weeks=30, tool_call_id="g", config=cfg
+    )
+    ds = str(W.thread_dir(tid) / "synthetic_mff_data.csv")
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [
+            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
+        ],
+        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "time_granularity": "weekly",
+        "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
+    }
+
+    fit = T.fit_mmm_model.func(
+        state={"dashboard_data": {}},
+        dataset_path=ds,
+        model_spec=json.dumps(spec),
+        tool_call_id="f",
+        config=cfg,
+    )
+    summary = fit.update["messages"][0].content
+    assert "fitted successfully" in summary.lower()
+    assert (
+        "Auto-save failed" not in summary and "Auto-saved" in summary
+    )  # the bug is fixed
+    run_name = fit.update["dashboard_data"]["model_run"]["run_name"]
+    model_dir = tmp_path / "mmm_models" / run_name
+    assert (model_dir / "metadata.json").exists()  # the model is actually on disk
+
+    # cold the cache, then load from disk and interpret
+    T._MODEL_CACHE.clear_thread(tid)
+    loaded = T.load_fitted_model.func(
+        state={"model_spec": spec, "dataset_path": ds},
+        name=run_name,
+        tool_call_id="l",
+        config=cfg,
+    )
+    assert "loaded" in loaded.update["messages"][0].content.lower()
+    roi = T.get_roi_metrics.func(
+        state={"dashboard_data": {}}, tool_call_id="r", config=cfg
+    )
+    assert "No fitted model" not in roi.update["messages"][0].content

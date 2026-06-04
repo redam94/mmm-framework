@@ -149,6 +149,92 @@ def _normalized_spec(spec: dict | None) -> dict:
     return _normalize_spec_vars(_copy.deepcopy(spec or {}))
 
 
+def _mff_config_from_spec(spec: dict):
+    """Build an ``MFFConfig`` from a (normalized) model_spec dict.
+
+    Extracted from ``fit_mmm_model`` so the SAME builder logic produces the panel
+    a saved model is reloaded against in ``load_fitted_model`` (the serializer's
+    ``load`` requires a compatible ``PanelDataset``). Pre-factors the fit
+    relocation (Phase 2 PR-C)."""
+    mff_builder = MFFConfigBuilder()
+
+    # KPI
+    kpi_builder = KPIConfigBuilder(spec["kpi"])
+    if spec.get("kpi_level") == "geo":
+        kpi_builder.by_geo()
+    else:
+        kpi_builder.national()
+    mff_builder.with_kpi_builder(kpi_builder)
+
+    # Per-channel prior overrides keyed by channel name
+    media_priors = spec.get("priors", {}).get("media", {})
+    control_priors_cfg = spec.get("priors", {}).get("controls", {})
+
+    # Media — read adstock/saturation type + priors from spec
+    for media in spec.get("media_channels", []):
+        ch_name = media["name"]
+        ch_priors = media_priors.get(ch_name, {})
+        ch_builder = MediaChannelConfigBuilder(ch_name).national()
+
+        adstock_cfg = media.get("adstock", {})
+        adstock_type = adstock_cfg.get("type", "geometric").lower()
+        l_max = int(adstock_cfg.get("l_max", 8))
+        ab = AdstockConfigBuilder()
+        if adstock_type == "weibull":
+            ab.weibull().with_max_lag(l_max)
+        elif adstock_type == "delayed":
+            ab.delayed().with_max_lag(l_max)
+        else:
+            ab.geometric().with_max_lag(l_max)
+        if "adstock_alpha" in ch_priors:
+            ab.with_alpha_prior(_build_prior(ch_priors["adstock_alpha"]))
+        if "adstock_theta" in ch_priors:
+            ab.with_theta_prior(_build_prior(ch_priors["adstock_theta"]))
+        ch_builder.with_adstock_builder(ab)
+
+        sat_type = media.get("saturation", {}).get("type", "hill").lower()
+        sb = SaturationConfigBuilder()
+        if sat_type == "logistic":
+            sb.logistic()
+        elif sat_type in ("michaelis_menten", "michaelis-menten"):
+            sb.michaelis_menten()
+        elif sat_type == "tanh":
+            sb.tanh()
+        else:
+            sb.hill()
+        if "saturation_kappa" in ch_priors:
+            sb.with_kappa_prior(_build_prior(ch_priors["saturation_kappa"]))
+        if "saturation_slope" in ch_priors:
+            sb.with_slope_prior(_build_prior(ch_priors["saturation_slope"]))
+        ch_builder.with_saturation_builder(sb)
+
+        if "coefficient" in ch_priors:
+            ch_builder.with_coefficient_prior(_build_prior(ch_priors["coefficient"]))
+
+        mff_builder.add_media_builder(ch_builder)
+
+    # Controls — apply coefficient priors from spec when provided
+    for control in spec.get("control_variables", []):
+        cv_name = control["name"]
+        cv_builder = ControlVariableConfigBuilder(cv_name).national()
+        cv_priors = control_priors_cfg.get(cv_name, {})
+        if cv_priors.get("allow_negative", True) is False:
+            cv_builder.positive_only()
+        if "coefficient" in cv_priors:
+            cv_builder.with_coefficient_prior(_build_prior(cv_priors["coefficient"]))
+        mff_builder.add_control_builder(cv_builder)
+
+    granularity = spec.get("time_granularity", "weekly").lower()
+    if granularity == "daily":
+        mff_builder.daily()
+    elif granularity == "monthly":
+        mff_builder.monthly()
+    else:
+        mff_builder.weekly()
+    mff_builder.with_date_format("%Y-%m-%d")
+    return mff_builder.build()
+
+
 def _build_dataset_dashboard(df, ds_path: str) -> tuple[list[str], dict]:
     """Build both the text summary lines and the rich dashboard_data['dataset'] dict."""
     import pandas as pd
@@ -372,91 +458,9 @@ def fit_mmm_model(
         spec = json.loads(model_spec)
         _normalize_spec_vars(spec)  # accept bare-string channel/control lists
 
-        # 1. Build MFFConfig
-        mff_builder = MFFConfigBuilder()
-
-        # KPI
-        kpi_builder = KPIConfigBuilder(spec["kpi"])
-        if spec.get("kpi_level") == "geo":
-            kpi_builder.by_geo()
-        else:
-            kpi_builder.national()
-        mff_builder.with_kpi_builder(kpi_builder)
-
-        # Per-channel prior overrides keyed by channel name
-        media_priors = spec.get("priors", {}).get("media", {})
-        control_priors_cfg = spec.get("priors", {}).get("controls", {})
-
-        # Media — read adstock/saturation type + priors from spec
-        for media in spec.get("media_channels", []):
-            ch_name = media["name"]
-            ch_priors = media_priors.get(ch_name, {})
-            ch_builder = MediaChannelConfigBuilder(ch_name).national()
-
-            # Adstock
-            adstock_cfg = media.get("adstock", {})
-            adstock_type = adstock_cfg.get("type", "geometric").lower()
-            l_max = int(adstock_cfg.get("l_max", 8))
-            ab = AdstockConfigBuilder()
-            if adstock_type == "weibull":
-                ab.weibull().with_max_lag(l_max)
-            elif adstock_type == "delayed":
-                ab.delayed().with_max_lag(l_max)
-            else:
-                ab.geometric().with_max_lag(l_max)
-            if "adstock_alpha" in ch_priors:
-                ab.with_alpha_prior(_build_prior(ch_priors["adstock_alpha"]))
-            if "adstock_theta" in ch_priors:
-                ab.with_theta_prior(_build_prior(ch_priors["adstock_theta"]))
-            ch_builder.with_adstock_builder(ab)
-
-            # Saturation
-            sat_type = media.get("saturation", {}).get("type", "hill").lower()
-            sb = SaturationConfigBuilder()
-            if sat_type == "logistic":
-                sb.logistic()
-            elif sat_type in ("michaelis_menten", "michaelis-menten"):
-                sb.michaelis_menten()
-            elif sat_type == "tanh":
-                sb.tanh()
-            else:
-                sb.hill()
-            if "saturation_kappa" in ch_priors:
-                sb.with_kappa_prior(_build_prior(ch_priors["saturation_kappa"]))
-            if "saturation_slope" in ch_priors:
-                sb.with_slope_prior(_build_prior(ch_priors["saturation_slope"]))
-            ch_builder.with_saturation_builder(sb)
-
-            # Coefficient prior
-            if "coefficient" in ch_priors:
-                ch_builder.with_coefficient_prior(
-                    _build_prior(ch_priors["coefficient"])
-                )
-
-            mff_builder.add_media_builder(ch_builder)
-
-        # Controls — apply coefficient priors from spec when provided
-        for control in spec.get("control_variables", []):
-            cv_name = control["name"]
-            cv_builder = ControlVariableConfigBuilder(cv_name).national()
-            cv_priors = control_priors_cfg.get(cv_name, {})
-            if cv_priors.get("allow_negative", True) is False:
-                cv_builder.positive_only()
-            if "coefficient" in cv_priors:
-                cv_builder.with_coefficient_prior(
-                    _build_prior(cv_priors["coefficient"])
-                )
-            mff_builder.add_control_builder(cv_builder)
-
-        granularity = spec.get("time_granularity", "weekly").lower()
-        if granularity == "daily":
-            mff_builder.daily()
-        elif granularity == "monthly":
-            mff_builder.monthly()
-        else:
-            mff_builder.weekly()
-        mff_builder.with_date_format("%Y-%m-%d")
-        mff_config = mff_builder.build()
+        # 1. Build MFFConfig (shared with load_fitted_model so a saved model
+        #    reloads against an identical panel).
+        mff_config = _mff_config_from_spec(spec)
 
         # 2. Load Data
         panel = load_mff(dataset_path, mff_config)
@@ -584,7 +588,11 @@ def fit_mmm_model(
             os.makedirs(model_path, exist_ok=True)
             from mmm_framework.serialization import MMMSerializer
 
-            MMMSerializer().save(mmm, results, model_path)
+            # save(model, path, ...) — the model carries its own trace; there is
+            # no `results` param (the prior `save(mmm, results, model_path)`
+            # mis-bound `results` to `path`, so the auto-save ALWAYS failed and no
+            # model was ever persisted to disk).
+            MMMSerializer.save(mmm, model_path)
             model_saved = True
             summary += f" Auto-saved as **{run_name}**."
         except Exception as save_err:
@@ -1948,12 +1956,35 @@ def load_fitted_model(
             }
         )
 
+    # The serializer rebuilds the live PyMC model against a COMPATIBLE panel, so
+    # loading needs this session's dataset + model spec (it returns a single
+    # model, not a (model, results) tuple — the prior `load(save_dir)` omitted the
+    # required `panel` and mis-unpacked, so load ALWAYS failed).
+    spec = state.get("model_spec") if isinstance(state, dict) else None
+    dataset_path = state.get("dataset_path") if isinstance(state, dict) else None
+    if not spec or not spec.get("kpi") or not dataset_path:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"To load **{name}**, this session needs the original dataset and its "
+                            "model configuration (the saved model is rebuilt against a compatible "
+                            "panel). Restore the dataset + model spec, then load again."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
     try:
         from mmm_framework.serialization import MMMSerializer
 
-        mmm, results = MMMSerializer().load(save_dir)
+        panel = load_mff(dataset_path, _mff_config_from_spec(_normalized_spec(spec)))
+        mmm = MMMSerializer.load(save_dir, panel)
         _MODEL_CACHE["fitted_model"] = mmm
-        _MODEL_CACHE["fit_results"] = results
+        _MODEL_CACHE["fit_results"] = None
         return Command(
             update={
                 "messages": [

@@ -96,3 +96,63 @@ def test_save_fitted_model_calls_serializer_with_correct_signature(
     # (model, path) — NOT (model, results, path)
     assert captured["call"] == ("MODEL_OBJ", "mmm_models/v1")
     T._MODEL_CACHE.clear_thread("t_save_fix")
+
+
+# ── Phase 2 PR-C: panel helper + load_fitted_model fix ────────────────────────
+
+
+def test_mff_config_from_spec_builds():
+    from mmm_framework.agents.tools import _mff_config_from_spec
+
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [
+            {
+                "name": "TV",
+                "adstock": {"type": "weibull", "l_max": 4},
+                "saturation": {"type": "logistic"},
+            }
+        ],
+        "control_variables": [{"name": "Price"}],
+        "time_granularity": "monthly",
+    }
+    assert type(_mff_config_from_spec(spec)).__name__ == "MFFConfig"
+
+
+def test_load_fitted_model_passes_panel_and_sets_cache(monkeypatch, tmp_path):
+    """Regression for the latent bug: load(save_dir) omitted the REQUIRED panel
+    and mis-unpacked a single return -> always 'Load failed'. Now it rebuilds the
+    panel and calls load(save_dir, panel)."""
+    import os
+
+    import mmm_framework.serialization as S
+    from mmm_framework.agents import tools as T
+
+    monkeypatch.setattr(T, "_mff_config_from_spec", lambda spec: "MFFCFG")
+    monkeypatch.setattr(T, "load_mff", lambda path, cfg: "PANEL")
+    captured = {}
+
+    class _FakeSer:
+        @staticmethod
+        def load(path, panel, *a, **k):
+            captured["call"] = (str(path), panel)
+            return "LOADED_MODEL"
+
+    monkeypatch.setattr(S, "MMMSerializer", _FakeSer)
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("mmm_models/v1", exist_ok=True)
+    T.set_current_thread("t_load")
+    T._MODEL_CACHE.clear_thread("t_load")
+
+    cmd = T.load_fitted_model.func(
+        state={"model_spec": {"kpi": "Sales"}, "dataset_path": "data.csv"},
+        name="v1",
+        tool_call_id="t",
+        config={"configurable": {"thread_id": "t_load"}},
+    )
+    out = cmd.update["messages"][0].content
+    assert "Load failed" not in out and "loaded" in out.lower()
+    assert captured["call"] == ("mmm_models/v1", "PANEL")  # the panel is now passed
+    T.set_current_thread("t_load")
+    assert T._MODEL_CACHE.get("fitted_model") == "LOADED_MODEL"
+    T._MODEL_CACHE.clear_thread("t_load")
