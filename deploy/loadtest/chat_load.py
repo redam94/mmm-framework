@@ -24,12 +24,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-import statistics
 import time
 
 
 async def _one_user(client, base: str, project_id: str, idx: int) -> dict:
-    import httpx  # local import so the file imports without httpx at lint time
 
     t0 = time.monotonic()
     result = {"ok": False, "first_event_s": None, "done_s": None, "error": None}

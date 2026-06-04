@@ -1059,6 +1059,93 @@ def test_subprocess_cold_reload_after_eviction(store):
         mgr.shutdown_all()
 
 
+@pytest.mark.slow
+def test_container_kernel_fit_interpret_and_cold_reload(tmp_path, monkeypatch):
+    """Capstone (Phase 3/4): a real fit runs INSIDE the sandboxed container
+    (compile + sample under the read-only rootfs), auto-saves to the bind-mounted
+    mmm_models, and after eviction a COLD container rehydrates the model THROUGH
+    the mount and interprets it. Also asserts 4d's active-fit accounting
+    increments around the fit (not just that the /metrics line exists)."""
+    import os
+    import shutil
+    import subprocess
+    import uuid as _uuid
+
+    runtime = os.environ.get("MMM_KERNEL_RUNTIME_BIN") or "/opt/podman/bin/podman"
+    image = os.environ.get("MMM_KERNEL_IMAGE", "mmm-kernel:latest")
+    if (
+        not os.path.exists(runtime)
+        or subprocess.run([runtime, "image", "exists", image]).returncode != 0
+    ):
+        pytest.skip("podman + mmm-kernel image not available")
+
+    # workspace under HOME (podman-machine shares it; sandbox tmp isn't bind-mountable)
+    ws = os.path.join(
+        os.path.expanduser("~"), ".cache", "mmm-kfit-" + _uuid.uuid4().hex[:8]
+    )
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", ws)
+    monkeypatch.setenv("MMM_KERNEL_RUNTIME_BIN", runtime)
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "tcp")
+    monkeypatch.setenv("MMM_KERNEL_READY_TIMEOUT", "180")
+    monkeypatch.setenv("MMM_KERNEL_FIT_TIMEOUT", "1800")
+
+    from mmm_framework.api import sessions as ss
+
+    monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
+    ss.init_db()
+
+    from mmm_framework.agents import audit_sink as A
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.container_kernel import ContainerKernel
+    from mmm_framework.agents.kernels import KernelManager
+
+    A.install_audit_sink(str(tmp_path / "audit.jsonl"))  # so fit events are counted
+
+    proj = ss.create_project("P")
+    sA = ss.create_session(name="a", project_id=proj["project_id"])["thread_id"]
+    sB = ss.create_session(name="b", project_id=proj["project_id"])["thread_id"]
+    T.generate_synthetic_data.func(
+        state={"dashboard_data": {}},
+        n_weeks=30,
+        tool_call_id="g",
+        config={"configurable": {"thread_id": sA}},
+    )
+    ds = str(W.thread_dir(sA) / "synthetic_mff_data.csv")
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [
+            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
+        ],
+        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "time_granularity": "weekly",
+        "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
+    }
+
+    done_before = A.event_counts().get("kernel_fit_done", 0)
+    mgr = KernelManager("container", {"container": ContainerKernel})
+    mgr._max = 1  # one live kernel -> spawning B evicts A
+    try:
+        kA = mgr.get_or_spawn(sA)
+        info = kA.fit(spec, ds)  # the fit runs INSIDE the container
+        assert "error" not in info, info
+        assert kA.run_model_op("roi_metrics", {}).get("error") is None  # warm interpret
+        # 4d: the fit bracketed itself with fit_start/done (active_fits accounting)
+        assert A.event_counts().get("kernel_fit_done", 0) > done_before
+
+        mgr.get_or_spawn(sB)  # evicts (shuts down) A's container
+        kA2 = mgr.get_or_spawn(sA)  # NEW cold container for A
+        assert kA2 is not kA
+        roi = kA2.run_model_op(
+            "roi_metrics", {}
+        )  # rehydrate from the mounted mmm_models
+        assert roi.get("error") is None, roi
+        assert "ROI" in (roi.get("content") or "")
+    finally:
+        mgr.shutdown_all()
+        shutil.rmtree(ws, ignore_errors=True)
+
+
 # ── Phase 3 PR-F.6: hosted profile activation ─────────────────────────────────
 
 
