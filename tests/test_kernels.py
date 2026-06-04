@@ -650,3 +650,66 @@ def test_container_network_none_blocks_egress_and_metadata():
         text=True,
     )
     assert "BLOCKED" in r.stdout, (r.stdout, r.stderr)
+
+
+# ── Phase 3 PR-F.5: ephemeral overlay + teardown-wipe + fail-closed ───────────
+
+
+def test_container_kernel_fail_closed_when_sandbox_incomplete(monkeypatch, tmp_path):
+    """With MMM_KERNEL_REQUIRE_SANDBOX on (the hosted profile), a weakened sandbox
+    (read-only off) is refused at spawn — no kernel rather than a half-sandboxed
+    one. Runs without podman: the refusal happens before `podman run`."""
+    monkeypatch.setenv("MMM_KERNEL_REQUIRE_SANDBOX", "1")
+    monkeypatch.setenv("MMM_KERNEL_READONLY", "0")  # the deliberate weakening
+    monkeypatch.setenv(
+        "MMM_KERNEL_TRANSPORT", "ipc"
+    )  # egress denied; read-only is the gap
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+
+    from mmm_framework.agents.container_kernel import ContainerKernel
+    from mmm_framework.agents.kernels import KernelContext
+
+    k = ContainerKernel("t")
+    r = k.execute("print(1)", KernelContext(thread_id="t", work_dir=str(tmp_path)))
+    assert r.is_error
+    assert "fail-closed" in r.stdout.lower()
+    assert "read-only" in r.stdout.lower()
+
+
+@pytest.mark.slow
+def test_container_kernel_teardown_wipes_ctrl_keeps_workspace(monkeypatch):
+    """Teardown discards the ephemeral container + wipes the per-kernel control
+    dir (which holds the ZMQ HMAC key), but the PERSISTENT workspace survives
+    (cold-reload + .py export depend on it)."""
+    import os
+    import shutil
+    import uuid as _uuid
+
+    runtime = _container_runtime()
+    if not runtime:
+        pytest.skip("podman + mmm-kernel image not available")
+
+    ws = os.path.join(
+        os.path.expanduser("~"), ".cache", "mmm-ktest-" + _uuid.uuid4().hex[:8]
+    )
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", ws)
+    monkeypatch.setenv("MMM_KERNEL_RUNTIME_BIN", runtime)
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "tcp")
+    monkeypatch.setenv("MMM_KERNEL_READY_TIMEOUT", "120")
+
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.container_kernel import ContainerKernel
+
+    wd = str(W.thread_dir("ctest"))
+    k = ContainerKernel("ctest")
+    ctrl = None
+    try:
+        r = k.execute("open('keep.txt','w').write('persist')", _ctx(wd))
+        assert not r.is_error, r.stdout
+        ctrl = k._ctrl_dir
+        assert ctrl and os.path.isdir(ctrl)  # control dir + conn file present
+    finally:
+        k.shutdown()
+    assert ctrl is not None and not os.path.exists(ctrl)  # wiped (HMAC key gone)
+    assert os.path.exists(os.path.join(wd, "keep.txt"))  # workspace survived
+    shutil.rmtree(ws, ignore_errors=True)

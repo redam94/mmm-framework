@@ -197,10 +197,16 @@ Phase 4d.
   per-spawn `kernel_egress` audit line records the posture. *Note:* with deny-all there are no
   per-packet "drops" to log (nothing escapes); per-drop logging is the allowlist-proxy model
   (Phase 4d). This is the control that actually stops ADC token theft.
-- **PR-F.5 — Ephemeral overlay + teardown-wipe + fail-closed:** per-kernel ephemeral overlay
-  separate from the persistent workspace mount; on evict/crash kill the cgroup, unmount and wipe
-  the overlay before any reuse (never the persistent session dir — §1.3). **Fail-closed:** if any
-  isolation control fails to apply at spawn, refuse to run the kernel.
+- **PR-F.5 — Ephemeral overlay + teardown-wipe + fail-closed — ✅ DONE** (`_teardown` override,
+  `_verify_isolation`): the container's writable state is **already ephemeral** — read-only rootfs
+  + `/tmp` tmpfs are discarded by `podman rm -f` on teardown (never reused). `_teardown` then wipes
+  the per-kernel **control dir** (the connection file holds the ZMQ HMAC key; ipc sockets live
+  there) — but **never** the persistent workspace bind-mount (cold-reload + `.py` export depend on
+  it, §1.3). **Fail-closed:** with `MMM_KERNEL_REQUIRE_SANDBOX` on (the hosted profile sets it),
+  `_verify_isolation` refuses to spawn unless `--read-only` + `--cap-drop ALL` + `--memory` are in
+  the launch command and the egress posture is `denied` (a bad podman flag already fails the run →
+  no kernel). **Validated:** fail-closed refuses a read-only-off spawn (no podman needed); teardown
+  wipes the control dir while the workspace probe survives (slow test).
 - **PR-F.6 — Hosted profile activation:** flip the (until-now inert) `hosted` switch on — forbid
   guessable thread_ids (no `default_thread`, server-minted uuid4), drop `Path.cwd()` from
   `allowed_roots`, move report output into the workspace mount (closes Phase-2 PR-D.4). **Exit

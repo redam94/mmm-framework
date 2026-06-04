@@ -322,6 +322,11 @@ class ContainerKernel(SubprocessKernel):
             "-f",
             launch_conn,
         ]
+        # Fail-closed (PR-F.5): in a hardened profile, refuse to launch if any
+        # isolation control is missing — a half-applied sandbox is worse than an
+        # honest unsandboxed kernel (§4). (podman-run failures below are the other
+        # fail-closed path: a bad flag => no kernel rather than a weak one.)
+        self._verify_isolation(cmd)
         proc = subprocess.run(cmd, env=self._podman_env, capture_output=True, text=True)
         if proc.returncode != 0:
             raise RuntimeError(f"podman run failed: {proc.stderr.strip()[:500]}")
@@ -352,6 +357,48 @@ class ContainerKernel(SubprocessKernel):
             thread_id=self._thread_id,
             posture=self._egress_posture,
         )
+
+    def _verify_isolation(self, cmd: list[str]) -> None:
+        """Fail-closed gate (PR-F.5). When ``MMM_KERNEL_REQUIRE_SANDBOX`` is on
+        (the hosted profile sets it), refuse to spawn unless every isolation
+        control is present in the launch command + the egress posture is denied."""
+        if os.environ.get("MMM_KERNEL_REQUIRE_SANDBOX", "0") in ("0", "false", "no"):
+            return
+        problems = []
+        if "--read-only" not in cmd:
+            problems.append("rootfs not read-only")
+        if not ("--cap-drop" in cmd and "ALL" in cmd):
+            problems.append("capabilities not dropped")
+        if "--memory" not in cmd:
+            problems.append("no memory cap")
+        if not self._egress_posture.startswith("denied"):
+            problems.append(f"egress {self._egress_posture}")
+        if problems:
+            _audit(
+                "spawn_refused",
+                level=logging.ERROR,
+                thread_id=self._thread_id,
+                reasons="; ".join(problems),
+            )
+            raise RuntimeError(
+                "fail-closed: refusing to spawn, isolation incomplete: "
+                + "; ".join(problems)
+            )
+
+    def _teardown(self) -> None:
+        # The ephemeral overlay (read-only rootfs + /tmp tmpfs) is discarded by
+        # `podman rm -f` (via the shim's shutdown_kernel) — never reused. Then wipe
+        # the per-kernel control dir (the connection file holds the ZMQ HMAC key,
+        # and ipc sockets live there). The PERSISTENT workspace bind-mount is NOT
+        # touched — cold-reload + the .py export depend on it (§1.3).
+        super()._teardown()
+        ctrl = self._ctrl_dir
+        if ctrl:
+            import shutil
+
+            shutil.rmtree(ctrl, ignore_errors=True)
+            _audit("overlay_wiped", thread_id=self._thread_id, ctrl=ctrl)
+            self._ctrl_dir = None
 
     def reset(self) -> None:
         # A container "restart" is teardown + fresh run (vs. jupyter restart_kernel).
