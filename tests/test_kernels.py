@@ -551,3 +551,52 @@ def test_container_kernel_executes_writes_workspace_and_captures_plot(monkeypatc
     finally:
         k.shutdown()
         shutil.rmtree(ws, ignore_errors=True)
+
+
+@pytest.mark.slow
+def test_container_kernel_resource_caps_and_readonly(monkeypatch):
+    """PR-F.3: the container drops all Linux capabilities, enforces the cgroup
+    memory cap, and runs on a read-only rootfs (only the workspace + scratch
+    tmpfs are writable)."""
+    import os
+    import shutil
+    import uuid as _uuid
+
+    runtime = _container_runtime()
+    if not runtime:
+        pytest.skip("podman + mmm-kernel image not available")
+
+    ws = os.path.join(
+        os.path.expanduser("~"), ".cache", "mmm-ktest-" + _uuid.uuid4().hex[:8]
+    )
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", ws)
+    monkeypatch.setenv("MMM_KERNEL_RUNTIME_BIN", runtime)
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "tcp")
+    monkeypatch.setenv("MMM_KERNEL_READY_TIMEOUT", "120")
+    monkeypatch.setenv("MMM_KERNEL_MEM", "512m")  # deterministic cap to assert
+
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.container_kernel import ContainerKernel
+
+    wd = str(W.thread_dir("ctest"))
+    k = ContainerKernel("ctest")
+    try:
+        r = k.execute(
+            "print('cap', open('/proc/self/status').read().split('CapEff:')[1].split()[0])",
+            _ctx(wd),
+        )
+        assert "cap 0000000000000000" in r.stdout, r.stdout  # all caps dropped
+        r2 = k.execute(
+            "print('mem', open('/sys/fs/cgroup/memory.max').read().strip())", _ctx(wd)
+        )
+        assert "mem 536870912" in r2.stdout, r2.stdout  # 512 MiB cgroup cap
+        r3 = k.execute(
+            "import os\n"
+            "try:\n open('/opt/mmm/x','w').write('y'); print('WRITABLE')\n"
+            "except OSError: print('READONLY')",
+            _ctx(wd),
+        )
+        assert "READONLY" in r3.stdout, r3.stdout  # read-only rootfs
+    finally:
+        k.shutdown()
+        shutil.rmtree(ws, ignore_errors=True)

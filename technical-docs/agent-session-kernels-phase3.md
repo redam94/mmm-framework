@@ -175,9 +175,17 @@ Phase 4d.
   visible workspace write + cross-cell persistence + in-container plot capture (slow test). The
   cgroup/seccomp/read-only/masked-proc *run flags* slot into `_resource_args`/`_security_args`
   (PR-F.3).
-- **PR-F.3 — Resource caps:** cgroup mem (~2 GB), `pids.max`, ulimits, seccomp default-deny; the
-  per-cell wall-clock cap escalates to an **out-of-band cgroup kill** (SIGINT can't stop a compiled
-  sampler — §3.4). Per-kernel disk + inode quota at the mount (tmpfs/overlay `size=`).
+- **PR-F.3 — Resource caps — ✅ DONE** (`_resource_args`/`_security_args`/`_extra_mount_args`):
+  cgroup `--memory`(=`--memory-swap`, default 2 GB) + `--pids-limit` + `--cpus` + `nofile`/`nproc`
+  ulimits; `--cap-drop ALL` + `--security-opt no-new-privileges` + `--read-only` rootfs; podman's
+  default-deny seccomp + masked `/proc`//`sys` (custom via `MMM_KERNEL_SECCOMP`); a per-kernel
+  scratch **tmpfs at /tmp with a size quota** (must be `exec` — pytensor `dlopen`s compiled ops).
+  The per-cell wall-clock cap's escalation **is already an out-of-band kill** for containers:
+  `_run` → interrupt (`podman kill -s INT`) → `_teardown` (`podman rm -f` = whole-container/cgroup
+  SIGKILL), inherited. **Validated:** `CapEff=0` (all caps dropped), `memory.max`=cap, read-only
+  rootfs (write to `/opt` errors), and **pytensor compiles C under the sandbox** (fit stack intact).
+  *Note:* podman exposes no tmpfs **inode** quota — size cap bounds it; per-tenant inode limits on
+  the persistent workspace are a host-fs project-quota concern (prod).
 - **PR-F.4 — Egress deny-by-default + metadata block:** deny all egress; explicitly block
   link-local/`169.254.169.254`/`metadata.google.internal`; the chat model API is **not**
   allowlisted (the kernel has no reason to call it). **Log every drop** (`mmm_audit`

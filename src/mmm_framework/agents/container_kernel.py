@@ -146,6 +146,8 @@ class ContainerKernel(SubprocessKernel):
         }
         # Never let the in-container framework recurse into spawning kernels.
         env["MMM_AGENT_KERNEL"] = "inprocess"
+        # Under --read-only rootfs the only writable home is the scratch tmpfs.
+        env["HOME"] = "/tmp"
         return env
 
     def _net_args(self) -> list[str]:
@@ -157,13 +159,47 @@ class ContainerKernel(SubprocessKernel):
         return ["--network", net] if net else []
 
     def _resource_args(self) -> list[str]:
-        return []  # PR-F.3
+        # PR-F.3: cgroup mem + pids + cpu caps and fd/proc ulimits so a runaway or
+        # hostile cell can't exhaust the host. mem==memory-swap disables extra swap.
+        mem = os.environ.get("MMM_KERNEL_MEM", "2g")
+        return [
+            "--memory",
+            mem,
+            "--memory-swap",
+            mem,
+            "--pids-limit",
+            os.environ.get("MMM_KERNEL_PIDS", "512"),
+            "--cpus",
+            os.environ.get("MMM_KERNEL_CPUS", "4"),
+            "--ulimit",
+            f"nofile={os.environ.get('MMM_KERNEL_NOFILE', '4096')}:"
+            f"{os.environ.get('MMM_KERNEL_NOFILE', '4096')}",
+            "--ulimit",
+            f"nproc={os.environ.get('MMM_KERNEL_NPROC', '512')}:"
+            f"{os.environ.get('MMM_KERNEL_NPROC', '512')}",
+        ]
 
     def _security_args(self) -> list[str]:
-        return []  # PR-F.3
+        # PR-F.3: drop all caps, forbid privilege escalation, read-only rootfs.
+        # podman applies its default-deny seccomp profile automatically (unless a
+        # custom one is given via MMM_KERNEL_SECCOMP) and masks sensitive /proc//sys.
+        args = ["--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
+        if os.environ.get("MMM_KERNEL_READONLY", "1") not in ("0", "false", "no"):
+            args.append("--read-only")
+        seccomp = os.environ.get("MMM_KERNEL_SECCOMP")
+        if seccomp:
+            args += ["--security-opt", f"seccomp={seccomp}"]
+        return args
 
     def _extra_mount_args(self) -> list[str]:
-        return []  # PR-F.5 (ephemeral overlay / tmpfs)
+        # PR-F.3/F.5: a per-kernel scratch tmpfs (the ONLY writable area besides the
+        # workspace mount under --read-only), with a hard disk-size quota. It must
+        # allow exec — pytensor compiles C ops into base_compiledir (=/tmp/pytensor)
+        # and dlopen()s them, so noexec would break every fit. (podman exposes no
+        # tmpfs *inode* quota; the size cap bounds the tmpfs, and per-tenant inode
+        # limits on the persistent workspace are a host-fs project-quota concern.)
+        size = os.environ.get("MMM_KERNEL_TMPFS_SIZE", "1g")
+        return ["--tmpfs", f"/tmp:rw,exec,nosuid,nodev,size={size}"]
 
     def _ctrl_root(self) -> str:
         """Per-kernel host dir (under the shared workspace root) for the connection
