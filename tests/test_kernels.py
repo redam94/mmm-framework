@@ -11,6 +11,9 @@ from mmm_framework.agents.kernels import ExecuteResult, KernelManager
 class _Shared:
     per_session = False
 
+    def __init__(self, thread_id=None):
+        self.thread_id = thread_id
+
     def execute(self, code, ctx):
         return ExecuteResult(stdout="ok")
 
@@ -24,7 +27,8 @@ class _Shared:
 class _PerSession:
     per_session = True
 
-    def __init__(self):
+    def __init__(self, thread_id=None):
+        self.thread_id = thread_id
         self.events = []
 
     def execute(self, code, ctx):
@@ -281,14 +285,18 @@ def test_inprocess_run_model_op_no_model_and_unknown():
     T.set_current_thread(None)
 
 
-def test_subprocess_run_model_op_no_model_when_cold():
+def test_subprocess_run_model_op_no_model_when_cold(tmp_path, monkeypatch):
     from mmm_framework.agents.kernels import SubprocessKernel
     from mmm_framework.agents.model_ops import NO_MODEL_MSG
 
-    k = (
-        SubprocessKernel()
-    )  # never started -> no model, and we don't spawn to learn that
-    assert k.run_model_op("roi_metrics", {})["error"] == NO_MODEL_MSG
+    # Fresh session: the kernel spawns + tries to rehydrate from disk, finds no
+    # saved model, and returns no-model.
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+    k = SubprocessKernel(thread_id="t_empty")
+    try:
+        assert k.run_model_op("roi_metrics", {})["error"] == NO_MODEL_MSG
+    finally:
+        k.shutdown()
 
 
 def test_subprocess_run_model_op_channel_roundtrip(subk):

@@ -300,6 +300,9 @@ def build_and_fit(spec: dict, dataset_path: str):
         "summary": summary,
         "n_obs": int(mmm.n_obs),
         "n_channels": int(mmm.n_channels),
+        # the full normalized spec — so a cold kernel can rebuild the panel and
+        # reload this model from disk (PR-C.3 cold-reload).
+        "spec": spec,
     }
     if model_saved:
         try:

@@ -627,6 +627,11 @@ class InProcessKernel:
 
     per_session = False
 
+    def __init__(self, thread_id=None):
+        # thread_id is accepted (the manager passes it) but unused — in-process
+        # per-thread state lives in NAMESPACE_CACHE/MODEL_CACHE via the ContextVar.
+        self._thread_id = thread_id
+
     def execute(self, code, ctx):
         work_dir = Path(ctx.work_dir) if ctx.work_dir else None
 

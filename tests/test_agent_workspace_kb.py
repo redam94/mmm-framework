@@ -883,3 +883,53 @@ def test_subprocess_fit_then_interpret_removes_boundary(store):
         assert "ROI" in (roi.get("content") or "")
     finally:
         k.shutdown()
+
+
+@pytest.mark.slow
+def test_subprocess_cold_reload_after_eviction(store):
+    """PR-C.3 exit: fit in a subprocess kernel, EVICT it (a 2nd session under a
+    1-kernel cap), then interpret session A again -> the respawned (cold) kernel
+    rehydrates the model from disk and still works."""
+    pytest.importorskip("jupyter_client")
+    import json
+
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.kernels import KernelManager, SubprocessKernel
+
+    proj = store.create_project("P")
+    sA = store.create_session(name="a", project_id=proj["project_id"])["thread_id"]
+    sB = store.create_session(name="b", project_id=proj["project_id"])["thread_id"]
+    T.generate_synthetic_data.func(
+        state={"dashboard_data": {}},
+        n_weeks=30,
+        tool_call_id="g",
+        config={"configurable": {"thread_id": sA}},
+    )
+    ds = str(W.thread_dir(sA) / "synthetic_mff_data.csv")
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [
+            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
+        ],
+        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "time_granularity": "weekly",
+        "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
+    }
+
+    mgr = KernelManager("subprocess", {"subprocess": SubprocessKernel})
+    mgr._max = 1  # one live kernel -> spawning B evicts A
+    try:
+        kA = mgr.get_or_spawn(sA)
+        assert "error" not in kA.fit(spec, ds)
+        assert kA.run_model_op("roi_metrics", {}).get("error") is None  # warm
+
+        mgr.get_or_spawn(sB).run_model_op("roi_metrics", {})  # evicts (shuts down) A
+
+        kA2 = mgr.get_or_spawn(sA)  # NEW cold kernel for A
+        assert kA2 is not kA
+        roi = kA2.run_model_op("roi_metrics", {})  # must rehydrate A's model from disk
+        assert roi.get("error") is None, roi
+        assert "ROI" in (roi.get("content") or "")
+    finally:
+        mgr.shutdown_all()

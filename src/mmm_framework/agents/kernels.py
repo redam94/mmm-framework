@@ -104,7 +104,7 @@ class KernelManager:
         with self._lock:  # double-checked: never spawn two kernels for one session
             inst = self._instances.get(key)
             if inst is None:
-                inst = self._instances[key] = self._factories[self._impl]()
+                inst = self._instances[key] = self._factories[self._impl](thread_id)
                 # evict the least-recently-used kernel(s) beyond the cap
                 while len(self._instances) > self._max:
                     _ek, _ev = self._instances.popitem(last=False)
@@ -262,11 +262,45 @@ try:
     from mmm_framework.agents import model_ops as _mmm_mo
     from IPython.display import publish_display_data as _mmm_pdd
 
+    def _mmm_rehydrate():
+        # Cold-reload: a respawned (LRU-evicted) kernel has no `mmm` global, but
+        # the session's last fit is on disk under <cwd>/mmm_models. Load the
+        # latest, rebuilding the panel from the spec+dataset persisted in
+        # run_metadata.json. Returns the model (and sets the globals) or None.
+        global mmm, results
+        import os as _os
+        import json as _json
+        import glob as _glob
+
+        try:
+            _dirs = sorted(_glob.glob(_os.path.join("mmm_models", "run_*")))
+            if not _dirs:
+                return None
+            _latest = _dirs[-1]
+            with open(_os.path.join(_latest, "run_metadata.json")) as _f:
+                _meta = _json.load(_f)
+            _spec = _meta.get("spec")
+            _dsp = _meta.get("dataset_path")
+            if not _spec or not _dsp:
+                return None
+            from mmm_framework.agents.fitting import _mff_config_from_spec
+            from mmm_framework import load_mff
+            from mmm_framework.serialization import MMMSerializer
+
+            _panel = load_mff(_dsp, _mff_config_from_spec(_spec))
+            mmm = MMMSerializer.load(_latest, _panel)
+            results = None
+            return mmm
+        except Exception:
+            return None
+
     def _mmm_run_op(_name, _kw):
         _op = _mmm_mo.OPS.get(_name)
         if _op is None:
             return {"content": None, "dashboard": {}, "error": "Unknown model op: " + str(_name)}
         _m = globals().get("mmm")
+        if _m is None:
+            _m = _mmm_rehydrate()  # cold kernel -> try loading the last fit from disk
         if _m is None:
             return {"content": None, "dashboard": {}, "error": _mmm_mo.NO_MODEL_MSG}
         return _op(_m, globals().get("results"), **(_kw or {}))
@@ -321,7 +355,12 @@ class SubprocessKernel:
 
     per_session = True
 
-    def __init__(self):
+    def __init__(self, thread_id: str | None = None):
+        # The session this kernel serves — so it always spawns in the SAME
+        # work_dir (the session's thread_dir) for fit / run_model_op / execute,
+        # which is what lets a respawned (LRU-evicted) cold kernel rehydrate the
+        # model from disk (PR-C.3).
+        self._thread_id = thread_id
         self._km = None
         self._kc = None
         self._lock = threading.Lock()
@@ -339,22 +378,34 @@ class SubprocessKernel:
         )
 
     # ── lifecycle ────────────────────────────────────────────────────────────
-    def _start(self, ctx: "KernelContext") -> None:
+    def _work_dir(self) -> str | None:
+        """This session's workspace dir (the kernel's cwd) — where its dataset,
+        auto-saved models, and outputs live."""
+        if not self._thread_id:
+            return None
+        try:
+            from mmm_framework.agents import workspace as _ws
+
+            return str(_ws.thread_dir(self._thread_id))
+        except Exception:
+            return None
+
+    def _start(self) -> None:
         from jupyter_client.manager import KernelManager as _JKM
 
         self._km = _JKM(kernel_name="python3")
-        self._km.start_kernel(cwd=ctx.work_dir or None)
+        self._km.start_kernel(cwd=self._work_dir() or None)
         self._kc = self._km.client()
         self._kc.start_channels()
         self._kc.wait_for_ready(timeout=self._ready_timeout)
         self._run(_build_startup_source(), silent=True, capture=False)
         self._started = True
 
-    def _ensure_started(self, ctx: "KernelContext") -> None:
+    def _ensure_started(self) -> None:
         if self._started and self._km is not None and self._km.is_alive():
             return
         self._teardown()
-        self._start(ctx)
+        self._start()
 
     def _teardown(self) -> None:
         try:
@@ -484,7 +535,7 @@ class SubprocessKernel:
         # kernel so the next call respawns cleanly.
         with self._lock:
             try:
-                self._ensure_started(ctx)
+                self._ensure_started()
                 _, _, _, h_err = self._run(
                     _per_call_header(ctx), silent=True, capture=False
                 )
@@ -532,14 +583,14 @@ class SubprocessKernel:
         from mmm_framework.agents.model_ops import NO_MODEL_MSG
 
         with self._lock:
-            # A model op only has a model if the kernel is already live (the fit
-            # moves here in PR-C). A cold/unstarted kernel has no model -> no-model
-            # (don't spawn just to discover that). The op result rides the
-            # dedicated MIME channel, NOT stdout (which carries pymc/serializer
-            # prints + progress bars), so a noisy compute can't corrupt it.
-            if not (self._started and self._km is not None and self._km.is_alive()):
-                return {"content": None, "dashboard": {}, "error": NO_MODEL_MSG}
+            # Ensure the kernel is live (spawning in the session's work_dir), then
+            # run the op. If the kernel is cold (LRU-evicted/respawned) the op's
+            # driver rehydrates the model from disk first (PR-C.3). The op result
+            # rides the dedicated MIME channel, NOT stdout (which carries
+            # pymc/serializer prints + progress bars), so a noisy compute can't
+            # corrupt it.
             try:
+                self._ensure_started()
                 code = f"_mmm_emit_op({op_name!r}, {dict(kwargs or {})!r})\n"
                 _, _, modelops, err = self._run(
                     code, silent=False, capture=True, cell_timeout=self._cell_timeout
@@ -567,16 +618,12 @@ class SubprocessKernel:
 
     def fit(self, model_spec: dict, dataset_path: str) -> dict:
         # Fit IN the kernel so the model becomes a kernel global (run_model_op /
-        # execute_python then see it). The kernel spawns in the dataset's
-        # directory (= the session workspace) so the report/auto-save land there.
-        ctx = KernelContext(
-            thread_id="",
-            work_dir=os.path.dirname(os.path.abspath(dataset_path)) or None,
-            dataset_path=dataset_path,
-        )
+        # execute_python then see it). The kernel runs in the session work_dir, so
+        # the auto-save lands in <work_dir>/mmm_models — findable by a later
+        # (cold) kernel for the same session to rehydrate from.
         with self._lock:
             try:
-                self._ensure_started(ctx)
+                self._ensure_started()
                 code = f"_mmm_emit_fit({model_spec!r}, {dataset_path!r})\n"
                 _, _, modelops, err = self._run(
                     code, silent=False, capture=True, cell_timeout=self._fit_timeout
