@@ -208,6 +208,130 @@ def marginal_analysis(
         return _err(f"Marginal analysis failed: {e}")
 
 
+def prior_predictive_check(
+    mmm: Any, results: Any = None, *, n_samples: int = 500
+) -> dict:
+    """Sample the prior predictive (live PyMC) and summarize the implied KPI
+    scale. Returns markdown + dashboard + an `assumption` payload the causal tool
+    wrapper records host-side (record_assumption must NOT run in the kernel)."""
+    try:
+        idata = mmm.sample_prior_predictive(samples=int(n_samples))
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Prior predictive sampling failed: {e}")
+    try:
+        import numpy as np
+
+        pp = idata.prior_predictive
+        var = list(pp.data_vars)[0]
+        arr = pp[var].values.reshape(-1)
+        summary = {
+            "samples": int(arr.size),
+            "min": float(np.nanmin(arr)),
+            "p05": float(np.nanpercentile(arr, 5)),
+            "median": float(np.nanmedian(arr)),
+            "p95": float(np.nanpercentile(arr, 95)),
+            "max": float(np.nanmax(arr)),
+            "frac_negative": float(np.mean(arr < 0)),
+        }
+    except Exception as e:  # noqa: BLE001
+        summary = {"error": str(e)}
+
+    flag_neg = summary.get("frac_negative", 0) > 0.05
+    lines = ["### Prior Predictive Check", ""]
+    if "error" in summary:
+        lines.append(f"Could not summarize: {summary['error']}")
+    else:
+        lines.append(f"- Samples: {summary['samples']:,}")
+        lines.append(
+            f"- Implied KPI range (5–95%): [{summary['p05']:,.0f}, {summary['p95']:,.0f}]"
+        )
+        lines.append(f"- Median: {summary['median']:,.0f}")
+        lines.append(f"- Fraction negative: {summary['frac_negative']:.1%}")
+        if flag_neg:
+            lines.append(
+                "\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting."
+            )
+    res = _ok("\n".join(lines), {"prior_predictive_summary": summary})
+    res["assumption"] = {
+        "key": "prior_predictive_check",
+        "value": summary,
+        "rationale": "Prior predictive sanity check. "
+        + (
+            "⚠️ More than 5% of samples imply negative outcomes — consider tighter priors."
+            if flag_neg
+            else "Implied outcome range looks plausible."
+        ),
+        "category": "prior",
+        "change_note": f"n_samples={int(n_samples)}",
+    }
+    return res
+
+
+def leave_one_out(
+    mmm: Any, results: Any = None, *, component_to_drop: str = ""
+) -> dict:
+    """Reweight the existing posterior decomposition with one component zeroed
+    (NOT a refit). Returns markdown + dashboard + an `assumption` payload."""
+    try:
+        from mmm_framework.reporting.helpers import compute_component_decomposition
+
+        decomp = compute_component_decomposition(mmm, include_time_series=False)
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Could not compute decomposition: {e}")
+
+    target = (component_to_drop or "").strip().lower()
+    components = [(d.component, float(d.total_contribution)) for d in decomp]
+    match_idx = next(
+        (i for i, (c, _) in enumerate(components) if c.lower() == target), -1
+    )
+    if match_idx < 0:
+        return _err(
+            f"Component `{component_to_drop}` not found. Known: "
+            + ", ".join(f"`{c}`" for c, _ in components)
+        )
+
+    total = sum(v for _, v in components)
+    dropped_name, dropped_val = components[match_idx]
+    remaining = [(c, v) for c, v in components if c != dropped_name]
+    remaining_total = sum(v for _, v in remaining)
+    new_pct = [
+        (c, v / remaining_total if remaining_total else 0.0) for c, v in remaining
+    ]
+    pct_loss = dropped_val / total if total else 0.0
+    sensitivity = {
+        "dropped": dropped_name,
+        "fraction_dropped": pct_loss,
+        "remaining_decomposition": [
+            {"component": c, "pct_of_remaining": p} for c, p in new_pct
+        ],
+    }
+    lines = [
+        "⚠️ **This is NOT a sensitivity refit.** It only reweights the *existing* "
+        "posterior decomposition assuming the dropped channel contributed zero. "
+        "Use this for quick what-if framing only; for honest sensitivity to "
+        "the fit, re-run `fit_mmm_model` with the channel removed.",
+        "",
+        f"### Leave-one-out: drop `{dropped_name}`",
+        "",
+        f"- `{dropped_name}` accounts for **{pct_loss:.1%}** of fitted KPI.",
+        "- Remaining components renormalize to:",
+    ]
+    for c, p in new_pct:
+        lines.append(f"  - `{c}`: {p:.1%}")
+    res = _ok("\n".join(lines), {"sensitivity_loo": sensitivity})
+    res["assumption"] = {
+        "key": f"sensitivity::loo::{dropped_name}",
+        "value": sensitivity,
+        "rationale": (
+            f"Leave-one-out: dropping `{dropped_name}` removes {pct_loss:.1%} "
+            "of total fitted KPI (post-hoc reweighting; not a refit)."
+        ),
+        "category": "other",
+        "change_note": "leave-one-out decomposition",
+    }
+    return res
+
+
 # Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
 OPS = {
     "roi_metrics": roi_metrics,
@@ -217,4 +341,6 @@ OPS = {
     "saturation_curves": saturation_curves,
     "budget_scenario": budget_scenario,
     "marginal_analysis": marginal_analysis,
+    "prior_predictive_check": prior_predictive_check,
+    "leave_one_out": leave_one_out,
 }

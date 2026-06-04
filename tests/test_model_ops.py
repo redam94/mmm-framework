@@ -18,6 +18,8 @@ def test_ops_registry_complete():
         "saturation_curves",
         "budget_scenario",
         "marginal_analysis",
+        "prior_predictive_check",
+        "leave_one_out",
     }
 
 
@@ -178,3 +180,21 @@ def test_load_fitted_model_passes_panel_and_sets_cache(monkeypatch, tmp_path):
     T.set_current_thread("t_load")
     assert T._MODEL_CACHE.get("fitted_model") == "LOADED_MODEL"
     T._MODEL_CACHE.clear_thread("t_load")
+
+
+def test_causal_tools_no_model_message():
+    """prior_predictive_check / leave_one_out_decomposition now dispatch through
+    the kernel; with no model they return no-model and record no assumption."""
+    from mmm_framework.agents import causal_tools as C
+    from mmm_framework.agents import tools as T
+
+    cfg = {"configurable": {"thread_id": "t_causal"}}
+    T._MODEL_CACHE.clear_thread("t_causal")
+    p = C.prior_predictive_check.func(
+        n_samples=10, config=cfg, state={}, tool_call_id="t"
+    )
+    assert "No fitted model" in p.update["messages"][0].content
+    lo = C.leave_one_out_decomposition.func(
+        component_to_drop="TV", config=cfg, state={}, tool_call_id="t"
+    )
+    assert "No fitted model" in lo.update["messages"][0].content

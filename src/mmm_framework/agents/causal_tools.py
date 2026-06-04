@@ -808,104 +808,18 @@ def prior_predictive_check(
     pre-fit check, do a short throwaway fit (draws=10, tune=10) first — it's
     still faster than the real fit and gives us a model to draw from.
     """
-    from mmm_framework.agents.tools import _MODEL_CACHE  # avoid circular import
-    from mmm_framework.agents.runtime import set_current_thread
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command
+    from mmm_framework.agents.runtime import set_current_thread, get_current_thread
 
     set_current_thread(_thread_id_from(config))
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=(
-                            "Prior predictive check needs a built PyMC model object. "
-                            "Run a quick throwaway fit (draws=10, tune=10) first, then "
-                            "call this tool — the result reflects the priors, not the "
-                            "(barely-touched) posterior."
-                        ),
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-    try:
-        idata = mmm.sample_prior_predictive(samples=int(n_samples))
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Prior predictive sampling failed: {e}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    # Summary stats on the prior-predictive KPI
-    try:
-        import numpy as np
-
-        pp = idata.prior_predictive
-        var = list(pp.data_vars)[0]  # first observed-data variable
-        arr = pp[var].values.reshape(-1)
-        summary = {
-            "samples": int(arr.size),
-            "min": float(np.nanmin(arr)),
-            "p05": float(np.nanpercentile(arr, 5)),
-            "median": float(np.nanmedian(arr)),
-            "p95": float(np.nanpercentile(arr, 95)),
-            "max": float(np.nanmax(arr)),
-            "frac_negative": float(np.mean(arr < 0)),
-        }
-    except Exception as e:
-        summary = {"error": str(e)}
-
-    dashboard = state.get("dashboard_data", {}) if state else {}
-    dashboard["prior_predictive_summary"] = summary
-
-    tid = _thread_id_from(config)
-    flag_neg = summary.get("frac_negative", 0) > 0.05
-    if tid:
-        sessions_store.record_assumption(
-            thread_id=tid,
-            key="prior_predictive_check",
-            value=summary,
-            rationale=(
-                "Prior predictive sanity check. "
-                + (
-                    "⚠️ More than 5% of samples imply negative outcomes — consider tighter priors."
-                    if flag_neg
-                    else "Implied outcome range looks plausible."
-                )
-            ),
-            category="prior",
-            change_note=f"n_samples={n_samples}",
-        )
-
-    lines = ["### Prior Predictive Check", ""]
-    if "error" in summary:
-        lines.append(f"Could not summarize: {summary['error']}")
-    else:
-        lines.append(f"- Samples: {summary['samples']:,}")
-        lines.append(
-            f"- Implied KPI range (5–95%): [{summary['p05']:,.0f}, {summary['p95']:,.0f}]"
-        )
-        lines.append(f"- Median: {summary['median']:,.0f}")
-        lines.append(f"- Fraction negative: {summary['frac_negative']:.1%}")
-        if flag_neg:
-            lines.append(
-                "\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting."
-            )
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
-            ],
-            "dashboard_data": dashboard,
-        }
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "prior_predictive_check", {"n_samples": int(n_samples)}
     )
+    _assumption = res.pop("assumption", None) if isinstance(res, dict) else None
+    tid = _thread_id_from(config)
+    if _assumption and tid and not res.get("error"):
+        sessions_store.record_assumption(thread_id=tid, **_assumption)
+    return _modelop_command(res, state or {}, tool_call_id)
 
 
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────
@@ -932,110 +846,18 @@ def leave_one_out_decomposition(
         component_to_drop: name of the component to zero out (case-insensitive).
             Must match a component in the existing decomposition.
     """
-    from mmm_framework.agents.tools import _MODEL_CACHE
-    from mmm_framework.agents.runtime import set_current_thread
-    from mmm_framework.reporting.helpers import compute_component_decomposition
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command
+    from mmm_framework.agents.runtime import set_current_thread, get_current_thread
 
     set_current_thread(_thread_id_from(config))
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model; fit one first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-    try:
-        decomp = compute_component_decomposition(mmm, include_time_series=False)
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Could not compute decomposition: {e}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    target = component_to_drop.strip().lower()
-    components = [(d.component, d.total_contribution) for d in decomp]
-    match_idx = next(
-        (i for i, (c, _) in enumerate(components) if c.lower() == target), -1
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "leave_one_out", {"component_to_drop": component_to_drop}
     )
-    if match_idx < 0:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=(
-                            f"Component `{component_to_drop}` not found. Known: "
-                            + ", ".join(f"`{c}`" for c, _ in components)
-                        ),
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    total = sum(v for _, v in components)
-    dropped_name, dropped_val = components[match_idx]
-    remaining = [(c, v) for c, v in components if c != dropped_name]
-    remaining_total = sum(v for _, v in remaining)
-    new_pct = [
-        (c, v / remaining_total if remaining_total else 0.0) for c, v in remaining
-    ]
-    pct_loss = dropped_val / total if total else 0.0
-
-    dashboard = state.get("dashboard_data", {}) if state else {}
-    dashboard["sensitivity_loo"] = {
-        "dropped": dropped_name,
-        "fraction_dropped": pct_loss,
-        "remaining_decomposition": [
-            {"component": c, "pct_of_remaining": p} for c, p in new_pct
-        ],
-    }
-
+    _assumption = res.pop("assumption", None) if isinstance(res, dict) else None
     tid = _thread_id_from(config)
-    if tid:
-        sessions_store.record_assumption(
-            thread_id=tid,
-            key=f"sensitivity::loo::{dropped_name}",
-            value=dashboard["sensitivity_loo"],
-            rationale=(
-                f"Leave-one-out: dropping `{dropped_name}` removes {pct_loss:.1%} "
-                "of total fitted KPI (post-hoc reweighting; not a refit)."
-            ),
-            category="other",
-            change_note="leave-one-out decomposition",
-        )
-
-    lines = [
-        "⚠️ **This is NOT a sensitivity refit.** It only reweights the *existing* "
-        "posterior decomposition assuming the dropped channel contributed zero. "
-        "Use this for quick what-if framing only; for honest sensitivity to "
-        "the fit, re-run `fit_mmm_model` with the channel removed.",
-        "",
-        f"### Leave-one-out: drop `{dropped_name}`",
-        "",
-        f"- `{dropped_name}` accounts for **{pct_loss:.1%}** of fitted KPI.",
-        f"- Remaining components renormalize to:",
-    ]
-    for c, p in new_pct:
-        lines.append(f"  - `{c}`: {p:.1%}")
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
-            ],
-            "dashboard_data": dashboard,
-        }
-    )
+    if _assumption and tid and not res.get("error"):
+        sessions_store.record_assumption(thread_id=tid, **_assumption)
+    return _modelop_command(res, state or {}, tool_call_id)
 
 
 # ── Define (lock) an analysis plan ───────────────────────────────────────────
