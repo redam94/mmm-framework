@@ -171,11 +171,50 @@ def saturation_curves(mmm: Any, results: Any = None) -> dict:
         return _err(f"Error computing saturation: {str(e)}")
 
 
-# Registry: the name -> op map the kernel dispatch (PR-B) will resolve against.
+def budget_scenario(
+    mmm: Any, results: Any = None, *, spend_changes: dict = None
+) -> dict:
+    """What-if budget scenario (live posterior-predictive). `spend_changes` maps
+    channel -> fractional change. Returns a markdown summary (no dashboard)."""
+    try:
+        import json as _json
+
+        changes = spend_changes or {}
+        result = mmm.what_if_scenario(changes)
+        text = _json.dumps(result, indent=2, default=str)
+        content = (
+            f"### Budget scenario\nApplied: {changes}\n```json\n{text[:4000]}\n```"
+        )
+        return _ok(content, {})
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Scenario failed: {e}")
+
+
+def marginal_analysis(
+    mmm: Any, results: Any = None, *, spend_increase_pct: float = 10.0, channels=None
+) -> dict:
+    """Marginal contributions / mROAS for a spend bump (live posterior-predictive
+    per channel). Returns a markdown table (no dashboard)."""
+    try:
+        df = mmm.compute_marginal_contributions(
+            spend_increase_pct=spend_increase_pct, channels=channels
+        )
+        content = (
+            f"### Marginal analysis (+{spend_increase_pct}% spend)\n```\n"
+            f"{df.to_string()[:4000]}\n```"
+        )
+        return _ok(content, {})
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Marginal analysis failed: {e}")
+
+
+# Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
 OPS = {
     "roi_metrics": roi_metrics,
     "component_decomposition": component_decomposition,
     "model_diagnostics": model_diagnostics,
     "adstock_weights": adstock_weights,
     "saturation_curves": saturation_curves,
+    "budget_scenario": budget_scenario,
+    "marginal_analysis": marginal_analysis,
 }

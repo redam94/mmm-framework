@@ -2353,18 +2353,6 @@ def run_budget_scenario(
     {"TV": 0.2, "Search": -0.1} for +20% TV, -10% Search). Returns the predicted
     KPI change vs baseline."""
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model in this session. Fit or load a model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
     try:
         changes = json.loads(spend_changes)
     except Exception as exc:
@@ -2378,17 +2366,10 @@ def run_budget_scenario(
                 ]
             }
         )
-    try:
-        result = mmm.what_if_scenario(changes)
-        text = json.dumps(result, indent=2, default=str)
-        content = (
-            f"### Budget scenario\nApplied: {changes}\n```json\n{text[:4000]}\n```"
-        )
-    except Exception as exc:  # noqa: BLE001
-        content = f"Scenario failed: {exc}"
-    return Command(
-        update={"messages": [ToolMessage(content=content, tool_call_id=tool_call_id)]}
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "budget_scenario", {"spend_changes": changes}
     )
+    return _modelop_command(res, {}, tool_call_id)
 
 
 @tool
@@ -2402,37 +2383,17 @@ def run_marginal_analysis(
     bump (default +10%) on the fitted model — i.e. the incremental return of the
     next dollar per channel. `channels` is an optional JSON list to restrict to."""
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model in this session. Fit or load a model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
     chans = None
     if channels:
         try:
             chans = json.loads(channels)
         except Exception:
             chans = None
-    try:
-        df = mmm.compute_marginal_contributions(
-            spend_increase_pct=spend_increase_pct, channels=chans
-        )
-        content = (
-            f"### Marginal analysis (+{spend_increase_pct}% spend)\n```\n"
-            f"{df.to_string()[:4000]}\n```"
-        )
-    except Exception as exc:  # noqa: BLE001
-        content = f"Marginal analysis failed: {exc}"
-    return Command(
-        update={"messages": [ToolMessage(content=content, tool_call_id=tool_call_id)]}
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "marginal_analysis",
+        {"spend_increase_pct": spend_increase_pct, "channels": chans},
     )
+    return _modelop_command(res, {}, tool_call_id)
 
 
 # List of all tools

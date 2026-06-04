@@ -16,7 +16,29 @@ def test_ops_registry_complete():
         "model_diagnostics",
         "adstock_weights",
         "saturation_curves",
+        "budget_scenario",
+        "marginal_analysis",
     }
+
+
+def test_analysis_tools_no_model_message():
+    """run_budget_scenario / run_marginal_analysis now dispatch through the kernel;
+    with no model they return the no-model error via run_model_op."""
+    from mmm_framework.agents import tools as T
+
+    cfg = {"configurable": {"thread_id": "t_analysis"}}
+    T._MODEL_CACHE.clear_thread("t_analysis")
+    b = T.run_budget_scenario.func(
+        spend_changes='{"TV": 0.1}', config=cfg, tool_call_id="t"
+    )
+    assert "No fitted model" in b.update["messages"][0].content
+    m = T.run_marginal_analysis.func(config=cfg, tool_call_id="t")
+    assert "No fitted model" in m.update["messages"][0].content
+    # bad JSON is still caught BEFORE the model dispatch (input validation)
+    bad = T.run_budget_scenario.func(
+        spend_changes="{not json", config=cfg, tool_call_id="t"
+    )
+    assert "Could not parse" in bad.update["messages"][0].content
 
 
 def test_ops_return_error_as_data_on_bad_model():
