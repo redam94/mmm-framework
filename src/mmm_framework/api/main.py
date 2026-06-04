@@ -1165,19 +1165,96 @@ async def delete_file_endpoint(file_id: str):
 # ── Generated-file downloads (req 4) ──────────────────────────────────────────
 
 
-def _guarded_file_response(path: str, filename: str | None = None) -> FileResponse:
-    """FileResponse over `path`, but only if it sits inside an allowed root
-    (workspace / uploads / mmm_models / mmm_configs / CWD) — blocks traversal."""
+def _safe_open_within(path: str) -> "tuple[int, int]":
+    """Open ``path`` read-only for serving, TOCTOU-safe (Phase 3 PR-E.2).
+
+    The kernel can write into the workspace, so a file we resolved a moment ago
+    could be swapped for a symlink to ``/etc/passwd`` before we open it. Guard by
+    (1) validating the *resolved* path is inside an allowed root, (2) opening the
+    realpath with ``O_NOFOLLOW`` so a symlinked final component is rejected, and
+    (3) confirming the opened fd is a regular file. Returns ``(fd, size)``;
+    raises ``HTTPException`` (403 outside roots, 404 missing/non-regular). The
+    caller owns the fd. (The narrow parent-dir-swap race is closed for real by
+    the Tier-2 read-only mount namespace; this is defense-in-depth today.)"""
+    import stat as _stat
+
     from mmm_framework.agents import workspace as _ws
 
-    if not path or not os.path.isfile(path):
+    if not path:
         raise HTTPException(status_code=404, detail="File not found")
+    # is_within() resolves symlinks, so an out-of-roots target is refused here.
     if not _ws.is_within(path):
         raise HTTPException(status_code=403, detail="File is outside the allowed roots")
-    return FileResponse(
+    realpath = os.path.realpath(path)
+    if not _ws.is_within(realpath):
+        raise HTTPException(status_code=403, detail="File is outside the allowed roots")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(realpath, flags)
+    except OSError:  # symlinked final component (O_NOFOLLOW) or vanished
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        st = os.fstat(fd)
+        if not _stat.S_ISREG(st.st_mode):
+            raise HTTPException(status_code=404, detail="File not found")
+    except HTTPException:
+        os.close(fd)
+        raise
+    except OSError:
+        os.close(fd)
+        raise HTTPException(status_code=404, detail="File not found")
+    return fd, st.st_size
+
+
+def _iter_fd(fd: int, chunk: int = 64 * 1024):
+    """Stream an open fd in chunks, closing it when exhausted — so the response
+    is served from the exact fd we validated, never re-opened."""
+    f = os.fdopen(fd, "rb")
+    try:
+        while True:
+            data = f.read(chunk)
+            if not data:
+                break
+            yield data
+    finally:
+        f.close()
+
+
+def _safe_serve(
+    path: str,
+    media_type: str,
+    *,
+    download_name: str | None = None,
+    headers: "dict[str, str] | None" = None,
+) -> StreamingResponse:
+    """TOCTOU-safe serve of a file inside an allowed root. ``download_name`` sets
+    an attachment Content-Disposition (else the body renders inline)."""
+    fd, size = _safe_open_within(path)
+    hdrs = {"Content-Length": str(size), **(headers or {})}
+    if download_name:
+        safe_name = os.path.basename(download_name).replace('"', "")
+        hdrs["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+    return StreamingResponse(_iter_fd(fd), media_type=media_type, headers=hdrs)
+
+
+def _safe_upload_name(filename: str | None, default: str) -> str:
+    """A traversal-safe filename for an upload: the basename only (no path
+    separators) and never ``.``/``..`` — so a crafted ``filename`` can't steer
+    where the bytes land (Phase 3 PR-E.2)."""
+    name = os.path.basename(filename or "")
+    return default if (not name or name in (".", "..")) else name
+
+
+def _guarded_file_response(path: str, filename: str | None = None) -> StreamingResponse:
+    """Attachment download of ``path``, only if it sits inside an allowed root
+    (workspace / uploads / mmm_models / mmm_configs / CWD) — blocks traversal and
+    symlink-swap (TOCTOU)."""
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return _safe_serve(
         path,
-        filename=filename or os.path.basename(path),
-        media_type="application/octet-stream",
+        "application/octet-stream",
+        download_name=filename or os.path.basename(path),
     )
 
 
@@ -1260,8 +1337,10 @@ async def kb_upload_endpoint(project_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
     kb_dir = _ws.project_kb_dir(project_id)
-    name = file.filename or "document.txt"
-    dest = os.path.join(str(kb_dir), name)
+    # Flatten to a safe basename + safe_join so a crafted filename ("../../x")
+    # can't escape the project KB dir (Phase 3 PR-E.2).
+    name = _safe_upload_name(file.filename, "document.txt")
+    dest = str(_ws.safe_join(kb_dir, name))
     with open(dest, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     size_bytes = os.path.getsize(dest)
@@ -1493,15 +1572,15 @@ async def upload_file(file: UploadFile = File(...), thread_id: str | None = None
     else:
         upload_dir = os.path.join("uploads", tid)
         os.makedirs(upload_dir, exist_ok=True)
-    file_location = os.path.abspath(
-        os.path.join(upload_dir, file.filename or "upload.bin")
-    )
+    # Flatten to a safe basename + safe_join so a crafted filename can't escape
+    # the upload dir (Phase 3 PR-E.2). safe_join resolves + returns an abs path.
+    name = _safe_upload_name(file.filename, "upload.bin")
+    file_location = str(_ws.safe_join(Path(upload_dir), name))
     with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     size_bytes = os.path.getsize(file_location)
     preview: str | None = None
-    name = file.filename or "upload.bin"
     kind = "upload"
     if name.lower().endswith((".csv", ".tsv", ".txt")):
         try:
@@ -1627,6 +1706,12 @@ async def lmstudio_models_endpoint(base_url: str | None = None):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
+# These reports are written CWD-relative by the agent tools; CWD is still an
+# allowed root in this profile, so _safe_serve passes — but it now blocks a
+# symlink swapped in by a kernel cell (TOCTOU, Phase 3 PR-E.2). Moving the output
+# into the workspace mount + dropping CWD from allowed_roots is Tier-2 (PR-F.6).
+
+
 @app.get("/report")
 async def view_report():
     """Serve the generated HTML report inline for embedding."""
@@ -1636,7 +1721,7 @@ async def view_report():
             status_code=404,
             content={"error": "No report generated yet. Fit a model first."},
         )
-    return FileResponse(report_path, media_type="text/html")
+    return _safe_serve(report_path, "text/html")
 
 
 @app.get("/report/download")
@@ -1647,10 +1732,8 @@ async def download_report():
         return JSONResponse(
             status_code=404, content={"error": "No report generated yet."}
         )
-    return FileResponse(
-        report_path,
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=mmm_report.html"},
+    return _safe_serve(
+        report_path, "application/octet-stream", download_name="mmm_report.html"
     )
 
 
@@ -1665,7 +1748,7 @@ async def view_project_report():
                 "error": "No project report yet. Ask the agent to generate_project_report."
             },
         )
-    return FileResponse(p, media_type="text/html")
+    return _safe_serve(p, "text/html")
 
 
 @app.get("/project-report/download")
@@ -1675,10 +1758,8 @@ async def download_project_report():
         return JSONResponse(
             status_code=404, content={"error": "No project report yet."}
         )
-    return FileResponse(
-        p,
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=mmm_project_report.html"},
+    return _safe_serve(
+        p, "application/octet-stream", download_name="mmm_project_report.html"
     )
 
 
@@ -1693,7 +1774,7 @@ async def view_project_slides():
                 "error": "No slideshow yet. Ask the agent to generate_project_report."
             },
         )
-    return FileResponse(p, media_type="text/html")
+    return _safe_serve(p, "text/html")
 
 
 @app.get("/project-slides/download")
@@ -1701,10 +1782,8 @@ async def download_project_slides():
     p = "agent_project_slides.html"
     if not os.path.exists(p):
         return JSONResponse(status_code=404, content={"error": "No slideshow yet."})
-    return FileResponse(
-        p,
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=mmm_project_slides.html"},
+    return _safe_serve(
+        p, "application/octet-stream", download_name="mmm_project_slides.html"
     )
 
 
@@ -1719,7 +1798,7 @@ async def view_client_report():
                 "error": "No client report yet. Ask the agent to generate_client_report."
             },
         )
-    return FileResponse(p, media_type="text/html")
+    return _safe_serve(p, "text/html")
 
 
 @app.get("/client-report/download")
@@ -1727,10 +1806,8 @@ async def download_client_report():
     p = "agent_client_report.html"
     if not os.path.exists(p):
         return JSONResponse(status_code=404, content={"error": "No client report yet."})
-    return FileResponse(
-        p,
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=mmm_client_report.html"},
+    return _safe_serve(
+        p, "application/octet-stream", download_name="mmm_client_report.html"
     )
 
 
@@ -1745,7 +1822,7 @@ async def view_client_slides():
                 "error": "No client slides yet. Ask the agent to generate_client_slides."
             },
         )
-    return FileResponse(p, media_type="text/html")
+    return _safe_serve(p, "text/html")
 
 
 @app.get("/client-slides/download")
@@ -1753,10 +1830,8 @@ async def download_client_slides():
     p = "agent_client_slides.html"
     if not os.path.exists(p):
         return JSONResponse(status_code=404, content={"error": "No client slides yet."})
-    return FileResponse(
-        p,
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": "attachment; filename=mmm_client_slides.html"},
+    return _safe_serve(
+        p, "application/octet-stream", download_name="mmm_client_slides.html"
     )
 
 

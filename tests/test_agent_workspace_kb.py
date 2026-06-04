@@ -447,6 +447,79 @@ def test_api_projects_kb_and_downloads(client, store):
     assert client.get(f"/files/{bad['id']}/download").status_code == 403
 
 
+# ── Phase 3 PR-E.2: path / TOCTOU hardening ──────────────────────────────────
+
+
+def test_safe_upload_name_flattens_and_guards():
+    from mmm_framework.api.main import _safe_upload_name
+
+    assert _safe_upload_name("../../etc/passwd", "d.bin") == "passwd"
+    assert _safe_upload_name("/abs/evil.csv", "d.bin") == "evil.csv"
+    assert _safe_upload_name("sub/dir/x.csv", "d.bin") == "x.csv"
+    for bad in ("..", ".", "", None):
+        assert _safe_upload_name(bad, "d.bin") == "d.bin"
+    assert _safe_upload_name("normal.csv", "d.bin") == "normal.csv"
+
+
+def test_download_rejects_symlink_escape(client, store):
+    """A symlink inside the workspace pointing OUTSIDE the allowed roots is
+    refused — is_within resolves the link target before serving (PR-E.2)."""
+    import os
+
+    from mmm_framework.agents import workspace as W
+
+    if not os.path.exists("/etc/hosts"):
+        pytest.skip("/etc/hosts not present")
+    pid = client.post("/projects", json={"name": "Sym"}).json()["project_id"]
+    tid = client.post("/sessions", json={"name": "s", "project_id": pid}).json()[
+        "thread_id"
+    ]
+    link = W.thread_dir(tid) / "sneaky.csv"
+    try:
+        os.symlink("/etc/hosts", link)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not supported here")
+    rec = store.register_file(tid, str(link), "sneaky.csv", "export", 1)
+    assert client.get(f"/files/{rec['id']}/download").status_code == 403
+
+
+def test_report_endpoints_serve_and_missing(client, monkeypatch, tmp_path):
+    """The report endpoints serve via the TOCTOU-safe path now; missing keeps the
+    helpful 404 JSON, present serves inline html (cwd is still an allowed root)."""
+    monkeypatch.chdir(tmp_path)  # isolate from any repo-root agent_mmm_report.html
+    r = client.get("/report")
+    assert r.status_code == 404 and "error" in r.json()
+    (tmp_path / "agent_mmm_report.html").write_text("<html>hi</html>")
+    r2 = client.get("/report")
+    assert r2.status_code == 200
+    assert r2.headers["content-type"].startswith("text/html")
+    assert r2.content == b"<html>hi</html>"
+    # download variant: same bytes, attachment disposition
+    r3 = client.get("/report/download")
+    assert r3.status_code == 200
+    assert "attachment" in r3.headers.get("content-disposition", "")
+    assert r3.content == b"<html>hi</html>"
+
+
+def test_upload_filename_traversal_is_flattened(client, store):
+    """A crafted upload filename can't escape the session dir — it's flattened to
+    a basename and safe_join'd (PR-E.2)."""
+    from mmm_framework.agents import workspace as W
+
+    pid = client.post("/projects", json={"name": "U"}).json()["project_id"]
+    tid = client.post("/sessions", json={"name": "s", "project_id": pid}).json()[
+        "thread_id"
+    ]
+    r = client.post(
+        f"/upload?thread_id={tid}",
+        files={"file": ("../../evil.csv", b"x,y\n1,2\n", "text/csv")},
+    )
+    assert r.status_code == 200
+    td = W.thread_dir(tid)
+    assert (td / "evil.csv").exists()  # landed inside the session dir
+    assert not (td.parent.parent / "evil.csv").exists()  # nothing escaped
+
+
 # ── warm-kernel namespace persistence ────────────────────────────────────────
 
 
