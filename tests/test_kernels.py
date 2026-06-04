@@ -413,3 +413,38 @@ def test_subprocess_env_scrub_hides_secrets_from_cell(tmp_path, monkeypatch):
         assert data["mmm_model"] == "claude-benign"
     finally:
         k.shutdown()
+
+
+# ── Phase 3 PR-E.4: audit logging ─────────────────────────────────────────────
+
+
+def test_kernel_manager_audits_eviction(caplog):
+    import logging
+
+    from mmm_framework.agents.kernels import KernelManager
+
+    m = KernelManager("sub", {"sub": _PerSession})
+    m._max = 1
+    with caplog.at_level(logging.INFO, logger="mmm_audit"):
+        m.get_or_spawn("t1")
+        m.get_or_spawn("t2")  # over the cap -> evicts t1
+    msgs = [r.getMessage() for r in caplog.records if r.name == "mmm_audit"]
+    assert any("kernel_evict_lru" in m and "key=t1" in m for m in msgs)
+
+
+def test_subprocess_audits_spawn(caplog, tmp_path):
+    import logging
+
+    pytest.importorskip("jupyter_client")
+    pytest.importorskip("ipykernel")
+    from mmm_framework.agents.kernels import SubprocessKernel
+
+    with caplog.at_level(logging.INFO, logger="mmm_audit"):
+        k = SubprocessKernel(thread_id="t_audit")
+        try:
+            r = k.execute("x = 1", _ctx(str(tmp_path)))
+            assert not r.is_error, r.stdout
+        finally:
+            k.shutdown()
+    msgs = [r.getMessage() for r in caplog.records if r.name == "mmm_audit"]
+    assert any("kernel_spawn" in m for m in msgs)

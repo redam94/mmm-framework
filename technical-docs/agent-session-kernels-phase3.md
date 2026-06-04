@@ -64,7 +64,11 @@ are OCI.
 
 ## 3. Tier 1 — host-side hardening PRs (cross-platform, testable now)
 
-### PR-E.1 — Env scrub at kernel spawn (the headline win)
+> **Status: COMPLETE (2026-06-03).** PR-E.1 `7a1a201` · PR-E.2 `a150da9` · PR-E.3 + PR-E.4 (this
+> series). Default `inprocess` unchanged; full fast suite green. Next: Tier 2 (§4), gated on the
+> PR-F.0 connectivity spike. The hosted trust-model switch remains **inert** until Tier 2 lands.
+
+### PR-E.1 — Env scrub at kernel spawn (the headline win) — ✅ DONE
 `SubprocessKernel._start()` (`kernels.py:397`) calls `start_kernel(cwd=...)` with **no `env=`**, so
 the kernel inherits the API's full `os.environ` — a hostile cell reads every API key + the ADC
 path in one line. jupyter_client 8.7.0 passes `env=` straight through `LocalProvisioner` →
@@ -114,28 +118,30 @@ path in one line. jupyter_client 8.7.0 passes `env=` straight through `LocalProv
   already kills the symlink hole. Dropping `cwd` pairs with moving reports into the workspace
   (Phase-2 PR-D.4 / Tier-2 mount work) — defer it there, behind the (inert) hosted profile.
 
-### PR-E.3 — Plot channel: per-thread namespacing + retrieval ACL + payload caps
+### PR-E.3 — Plot channel: thread-salted ids + payload caps — ✅ DONE
 The plot store is shared + content-addressed and `GET /plots/{id}` (`main.py:1184`) has **no
-thread check**, so a known/guessable id crosses tenants; the plotly payload has no size or schema
-cap (a cell can encode another session's data into a figure).
-- **Namespace plots per thread:** `store_plot(fig, thread_id)` writes under
-  `plots/<thread>/<hash>.json` (keep content-hash for browser-immutable caching *within* a thread).
-  The dashboard ref carries `{thread, id, title}`.
-- **ACL on retrieval:** `GET /plots/{thread_id}/{plot_id}` (or `?thread=`) resolves only within
-  that thread's namespace — a 404 for a mismatch. ("thread_id as capability" — §1.1.)
-- **Cap + validate at capture** (`kernels.py` `_run` plotly branch + `tools.py` post-process):
-  reject a plotly payload over `MMM_PLOT_MAX_BYTES` (~5 MB) and shape-check it's a
-  `{data,layout}` figure dict (strip stray top-level keys); on reject, drop with an audit line
-  rather than storing arbitrary bytes.
-- **Back-compat:** keep serving legacy flat `plots/<hash>.json` ids read-only so old dashboards
-  don't 404; new writes are namespaced.
+thread check**, so a content-guessable id crosses tenants; the plotly payload had no size or schema
+cap (a cell can encode another session's data into a figure). **Decision (user 2026-06-03):
+thread-*salted* ids, no frontend change** (over a path-scoped `/plots/{thread}/{id}` route).
+- **Salt the id with `thread_id`** (`store_plot(fig, thread_id)`): `id = sha256(thread_id\0 +
+  payload)[:24]`, stored flat at `plots/<id>.json`. The id stays a single opaque token — so
+  `GET /plots/{id}` and the React/Streamlit fetch URL are **unchanged** — but it is no longer
+  guessable from figure content across sessions (the id IS the capability, and ids only reach a
+  client via that session's SSE stream), and identical figures no longer dedup across tenants.
+  Within a session, identical figures still collapse to one id (immutable browser caching kept).
+- **Cap + schema-validate at capture** (in `store_plot`, the single funnel for both kernels):
+  reject a payload over `MMM_PLOT_MAX_BYTES` (default 5 MiB) or that isn't a `{"data": [...], …}`
+  figure dict (raise `ValueError`); keep only the real figure keys (`data/layout/frames/config`)
+  so a cell can't smuggle arbitrary content. The `execute_python` loop **drops** a rejected plot
+  (with a `plot_rejected` audit line) instead of inlining it (which would defeat the cap).
 
-### PR-E.4 — Audit logging
-No audit log exists; kernel lifecycle is silent. Add a `mmm_audit` stdlib logger (structured
-`extra=` fields: `event`, `thread_id`, `kernel_id`, `detail`) and emit at: spawn, LRU-evict,
-respawn, death (`_run` "kernel died"), timeout→interrupt, timeout→kill, plot-payload-rejected.
-Single sink (stdout/container logs) for Tier 1; the denied-egress/denied-syscall events and any
-off-host/tamper-evident sink are Tier 2 (PR-F) / Phase 4d.
+### PR-E.4 — Audit logging — ✅ DONE
+No audit log existed; kernel lifecycle was silent. Added a `mmm_audit` stdlib logger + `_audit(event,
+**fields)` helper in `kernels.py`, emitting `key=value` lines at: `kernel_spawn`, `kernel_evict_lru`,
+`kernel_respawn`, `kernel_died`, `kernel_timeout_interrupt`, `kernel_timeout_kill` (and
+`plot_rejected` from `tools.py`). Single stdlib sink (stdout/container logs) for Tier 1; the
+denied-egress/denied-syscall events and any off-host/tamper-evident sink are Tier 2 (PR-F) /
+Phase 4d.
 
 ## 4. Tier 2 — the Linux container sandbox PRs (Podman)
 

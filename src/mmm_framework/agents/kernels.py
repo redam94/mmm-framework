@@ -16,12 +16,27 @@ shared instance is correct.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
+
+# Structured audit trail for kernel lifecycle + security events (Phase 3 PR-E.4).
+# Single stdlib sink for now; the denied-egress/denied-syscall events and an
+# off-host/tamper-evident sink are Tier 2 (PR-F) / Phase 4d.
+_audit_log = logging.getLogger("mmm_audit")
+
+
+def _audit(event: str, *, level: int = logging.INFO, **fields: Any) -> None:
+    """Emit one ``key=value`` audit line for ``event`` (never raises)."""
+    try:
+        parts = " ".join(f"{k}={v}" for k, v in fields.items() if v is not None)
+        _audit_log.log(level, "%s %s", event, parts)
+    except Exception:
+        pass
 
 
 @dataclass
@@ -111,6 +126,7 @@ class KernelManager:
                     if _ek == key:  # never evict the one we just created
                         self._instances[_ek] = _ev
                         break
+                    _audit("kernel_evict_lru", key=_ek, max=self._max)
                     try:
                         _ev.shutdown()
                     except Exception:
@@ -535,10 +551,13 @@ class SubprocessKernel:
         self._kc.wait_for_ready(timeout=self._ready_timeout)
         self._run(_build_startup_source(), silent=True, capture=False)
         self._started = True
+        _audit("kernel_spawn", thread_id=self._thread_id)
 
     def _ensure_started(self) -> None:
         if self._started and self._km is not None and self._km.is_alive():
             return
+        if self._started:  # was up but died/was killed -> cold respawn
+            _audit("kernel_respawn", level=logging.WARNING, thread_id=self._thread_id)
         self._teardown()
         self._start()
 
@@ -603,6 +622,9 @@ class SubprocessKernel:
                         "traceback": [],
                     }
                     died = True
+                    _audit(
+                        "kernel_died", level=logging.WARNING, thread_id=self._thread_id
+                    )
                     break
                 if cell_timeout:
                     if (
@@ -610,6 +632,12 @@ class SubprocessKernel:
                         and (time.monotonic() - start) > cell_timeout
                     ):
                         interrupted_at = time.monotonic()
+                        _audit(
+                            "kernel_timeout_interrupt",
+                            level=logging.WARNING,
+                            thread_id=self._thread_id,
+                            cell_timeout=int(cell_timeout),
+                        )
                         try:
                             self._km.interrupt_kernel()  # SIGINT — works for pure Python
                         except Exception:
@@ -618,6 +646,12 @@ class SubprocessKernel:
                         interrupted_at is not None
                         and (time.monotonic() - interrupted_at) > self._interrupt_grace
                     ):
+                        _audit(
+                            "kernel_timeout_kill",
+                            level=logging.WARNING,
+                            thread_id=self._thread_id,
+                            cell_timeout=int(cell_timeout),
+                        )
                         self._teardown()  # interrupt ignored -> kill; next call respawns
                         err = {
                             "ename": "TimeoutError",
