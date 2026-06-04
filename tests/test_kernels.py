@@ -310,3 +310,106 @@ def test_subprocess_run_model_op_channel_roundtrip(subk):
     assert res["content"] is None and res["dashboard"] == {}
     assert "Error computing ROI" in res["error"]
     k.execute("del mmm", _ctx(wd))  # clean up the shared kernel
+
+
+# ── Phase 3 PR-E.1: env scrub (the kernel runs untrusted code — no secrets) ────
+
+_SECRETS = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "MMM_LLM_API_KEY",
+    "MMM_LLM_CREDENTIALS_PATH",
+    "AWS_SECRET_ACCESS_KEY",
+    "AZURE_CLIENT_SECRET",
+    "SOME_VENDOR_TOKEN",
+    "DB_PASSWORD",
+    "FOO_CREDENTIALS",
+)
+_BENIGN = {
+    "MMM_LLM_MODEL": "claude-benign",
+    "MMM_LLM_PROVIDER": "vertex_anthropic",
+    "MMM_AGENT_WORKSPACE": "/ws",
+    "GOOGLE_CLOUD_PROJECT": "my-proj",  # project id is not a credential
+    "PYTENSOR_FLAGS": "cxx=/usr/bin/clang++",
+    "OMP_NUM_THREADS": "4",
+    "MMM_KERNEL_RECV_TIMEOUT": "30",
+}
+
+
+def test_scrubbed_kernel_env_drops_secrets_keeps_benign(monkeypatch):
+    from mmm_framework.agents.kernels import _scrubbed_kernel_env
+
+    monkeypatch.setenv("MMM_KERNEL_SCRUB_ENV", "1")
+    monkeypatch.delenv("MMM_KERNEL_ENV_PASSTHROUGH", raising=False)
+    for s in _SECRETS:
+        monkeypatch.setenv(s, "SECRET-VALUE")
+    for k, v in _BENIGN.items():
+        monkeypatch.setenv(k, v)
+
+    env = _scrubbed_kernel_env()
+    assert env is not None
+    for s in _SECRETS:
+        assert s not in env, f"secret leaked: {s}"
+    for k, v in _BENIGN.items():
+        assert env.get(k) == v, f"benign dropped: {k}"
+    assert "PATH" in env  # needed to even boot the kernel
+
+
+def test_scrubbed_kernel_env_disabled_returns_none(monkeypatch):
+    """The opt-out (debug only) returns None so the caller omits env= and the
+    kernel inherits the full os.environ exactly as before."""
+    from mmm_framework.agents.kernels import _scrubbed_kernel_env
+
+    monkeypatch.setenv("MMM_KERNEL_SCRUB_ENV", "0")
+    assert _scrubbed_kernel_env() is None
+
+
+def test_scrubbed_kernel_env_passthrough_extends_but_deny_still_wins(monkeypatch):
+    from mmm_framework.agents.kernels import _scrubbed_kernel_env
+
+    monkeypatch.setenv("MMM_KERNEL_SCRUB_ENV", "1")
+    monkeypatch.setenv("WEIRD_NEEDED_VAR", "ok")  # not in any allowlist
+    monkeypatch.setenv("STILL_A_TOKEN", "nope")  # passthrough must NOT rescue a secret
+    monkeypatch.setenv("MMM_KERNEL_ENV_PASSTHROUGH", "WEIRD_NEEDED_VAR, STILL_A_TOKEN")
+    env = _scrubbed_kernel_env()
+    assert env.get("WEIRD_NEEDED_VAR") == "ok"
+    assert "STILL_A_TOKEN" not in env  # denylist wins over passthrough
+
+
+def test_subprocess_env_scrub_hides_secrets_from_cell(tmp_path, monkeypatch):
+    """End-to-end: a real subprocess kernel spawned while secrets are in the API
+    env cannot see them in its own os.environ; benign config still arrives."""
+    import json as _json
+
+    pytest.importorskip("jupyter_client")
+    pytest.importorskip("ipykernel")
+    from mmm_framework.agents.kernels import SubprocessKernel
+
+    monkeypatch.setenv("MMM_KERNEL_SCRUB_ENV", "1")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-SECRET-anthropic")
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/creds.json")
+    monkeypatch.setenv("MMM_LLM_API_KEY", "sk-SECRET-mmm")
+    monkeypatch.setenv("MMM_LLM_MODEL", "claude-benign")  # benign config kept
+
+    k = SubprocessKernel()
+    try:
+        r = k.execute(
+            "import os, json\n"
+            "print(json.dumps({"
+            "'anthropic': os.environ.get('ANTHROPIC_API_KEY'),"
+            "'adc': os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),"
+            "'mmm_key': os.environ.get('MMM_LLM_API_KEY'),"
+            "'mmm_model': os.environ.get('MMM_LLM_MODEL')}))",
+            _ctx(str(tmp_path)),
+        )
+        assert not r.is_error, r.stdout
+        data = _json.loads(r.stdout.strip().splitlines()[-1])
+        assert data["anthropic"] is None
+        assert data["adc"] is None
+        assert data["mmm_key"] is None
+        assert data["mmm_model"] == "claude-benign"
+    finally:
+        k.shutdown()

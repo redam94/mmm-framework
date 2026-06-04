@@ -199,6 +199,135 @@ def _truncate(s: str, limit: int = _MAX_OUTPUT_BYTES) -> str:
     return s[:limit] + f"\n...[output truncated at {limit} bytes]"
 
 
+# ── env scrub (Phase 3 PR-E.1) ────────────────────────────────────────────────
+#
+# The subprocess kernel runs untrusted, LLM-authored code; never hand it the API
+# process's credentials. A hostile cell would otherwise read every *_API_KEY +
+# the ADC path in one line (the framework reads them from os.environ — llm.py,
+# embeddings.py). The kernel NEVER calls the LLM or the embedder (those run in
+# the API process), so it needs no API keys / ADC at all.
+#
+# Strategy: a FAIL-CLOSED allowlist (drop everything not matched) generous enough
+# not to break the PyTensor/JAX compile stack, with a secret-pattern denylist
+# applied ON TOP (belt-and-suspenders — a secret can never pass even if a future
+# allow rule widens). jupyter_client adds its own required vars (JPY_PARENT_PID,
+# the interrupt event) on top of whatever base env we hand start_kernel, and an
+# absent `env=` inherits the full os.environ — so this only ever tightens, and
+# only for the subprocess kernel (the in-process kernel shares the API env and is
+# unaffected).
+#
+# NOTE (load-bearing): this does NOT stop the cloud metadata server
+# (169.254.169.254 / metadata.google.internal) — that is the real ADC-token-theft
+# vector and is closed by EGRESS deny (Phase 3 Tier 2 / PR-F.4), not by env scrub.
+
+_ENV_ALLOW_EXACT = frozenset(
+    {
+        # framework / kernel config the in-kernel code may resolve
+        "MMM_AGENT_WORKSPACE",
+        "MMM_AGENT_KERNEL",
+        "MMM_MAX_KERNELS",
+        "MMM_CELL_TIMEOUT",
+        "MMM_FIT_TIMEOUT",
+        "MMM_MODEL_CONFIG",
+        # non-secret LLM/embed config (no keys/creds — those are denied below)
+        "MMM_LLM_PROVIDER",
+        "MMM_LLM_MODEL",
+        "MMM_LLM_TEMPERATURE",
+        "MMM_LLM_MAX_TOKENS",
+        "MMM_LLM_PROJECT",
+        "MMM_LLM_LOCATION",
+        "MMM_LLM_BASE_URL",
+        "MMM_EMBED_PROVIDER",
+        "MMM_EMBED_MODEL",
+        "MMM_EMBED_LOCATION",
+        "GOOGLE_CLOUD_PROJECT",  # project identity (a string, not a credential)
+        # system
+        "PATH",
+        "HOME",
+        "TMPDIR",
+        "TMP",
+        "USER",
+        "LOGNAME",
+        "LANG",
+        "TZ",
+        "TERM",
+        "SHELL",
+        # toolchain (PyTensor/numpy compile + link)
+        "CC",
+        "CXX",
+        "CFLAGS",
+        "CXXFLAGS",
+        "CPATH",
+        "CPPFLAGS",
+        "LDFLAGS",
+        "LIBRARY_PATH",
+        "LD_LIBRARY_PATH",
+        "PKG_CONFIG_PATH",
+    }
+)
+
+_ENV_ALLOW_PREFIX = (
+    "MMM_KERNEL_",  # recv/ready/interrupt-grace knobs
+    "LC_",
+    "PYTHON",  # PYTHONPATH etc. (NOT a secret prefix)
+    "PYTENSOR",
+    "JAX",
+    "XLA",
+    "OMP",
+    "MKL",
+    "NUMBA",
+    "OPENBLAS",
+    "CONDA_",
+    "VIRTUAL_ENV",
+    "MPLCONFIGDIR",
+    "DYLD_",  # macOS dynamic linker (PyTensor clang link path)
+)
+
+# Matched against the FULL name (case-insensitive); a match drops the var even if
+# an allow rule would otherwise keep it.
+_ENV_DENY_RE = re.compile(
+    r"(_API_KEY|_APIKEY|_TOKEN|_SECRET|_CREDENTIALS?|_PASSWORD|_PRIVATE_KEY)$"
+    r"|^GOOGLE_APPLICATION_CREDENTIALS$"
+    r"|^MMM_LLM_API_KEY$"
+    r"|^MMM_LLM_CREDENTIALS_PATH$"
+    r"|^(AWS|AZURE|GCP)_",
+    re.IGNORECASE,
+)
+
+
+def _scrubbed_kernel_env() -> "dict[str, str] | None":
+    """The env to launch the subprocess kernel with: the API env minus secrets.
+
+    Returns ``None`` when scrubbing is disabled (``MMM_KERNEL_SCRUB_ENV=0``,
+    debug only) so the caller omits ``env=`` and the kernel inherits the full
+    ``os.environ`` exactly as before. Otherwise returns a fail-closed allowlisted
+    copy. ``MMM_KERNEL_ENV_PASSTHROUGH`` (comma-separated exact names) extends the
+    allowlist for the rare legitimately-needed var; the denylist still wins.
+    """
+    if os.environ.get("MMM_KERNEL_SCRUB_ENV", "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+    ):
+        return None
+    extra = {
+        n.strip()
+        for n in (os.environ.get("MMM_KERNEL_ENV_PASSTHROUGH", "") or "").split(",")
+        if n.strip()
+    }
+    out: dict[str, str] = {}
+    for name, value in os.environ.items():
+        if _ENV_DENY_RE.search(name):  # secret pattern — never passes
+            continue
+        if (
+            name in _ENV_ALLOW_EXACT
+            or name in extra
+            or name.startswith(_ENV_ALLOW_PREFIX)
+        ):
+            out[name] = value
+    return out
+
+
 def _build_startup_source() -> str:
     """The code run once per kernel: the framework surface (reused from the .py
     export so it stays in lock-step), the durable-result helpers, the dataset
@@ -394,7 +523,13 @@ class SubprocessKernel:
         from jupyter_client.manager import KernelManager as _JKM
 
         self._km = _JKM(kernel_name="python3")
-        self._km.start_kernel(cwd=self._work_dir() or None)
+        # Scrub secrets from the kernel's environment (Phase 3 PR-E.1). A None
+        # return (scrubbing disabled) means omit env= so the kernel inherits the
+        # full os.environ exactly as before.
+        _env = _scrubbed_kernel_env()
+        self._km.start_kernel(
+            cwd=self._work_dir() or None, **({} if _env is None else {"env": _env})
+        )
         self._kc = self._km.client()
         self._kc.start_channels()
         self._kc.wait_for_ready(timeout=self._ready_timeout)
