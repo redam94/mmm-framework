@@ -1003,6 +1003,7 @@ def execute_python(
 
     dashboard_data = dict(state.get("dashboard_data") or {})
 
+    dropped_plots = 0
     if captured_plots:
         # Content-address each figure into the plot store and keep only a
         # lightweight {id, title} ref in state. This stops the full (heavy)
@@ -1018,6 +1019,7 @@ def execute_python(
             except ValueError as exc:
                 # Rejected (oversize / not a figure) — drop it. Inlining would
                 # defeat the size cap and re-introduce the untrusted payload.
+                dropped_plots += 1
                 logging.getLogger("mmm_audit").warning(
                     "plot_rejected thread=%s reason=%s", thread_id, exc
                 )
@@ -1050,6 +1052,10 @@ def execute_python(
     content = f"### Python Execution Result\n```text\n{output}\n```"
     if captured_plots and plot_refs:
         content += f"\n\n*Generated {len(plot_refs)} Plotly interactive chart(s). View them in the Plots tab.*"
+    if dropped_plots:
+        content += (
+            f"\n\n*{dropped_plots} chart(s) omitted (too large or not a valid figure).*"
+        )
     if new_files:
         names = ", ".join(f"`{f['name']}`" for f in new_files[:8])
         more = "" if len(new_files) <= 8 else f" (+{len(new_files) - 8} more)"

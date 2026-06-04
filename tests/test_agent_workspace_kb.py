@@ -121,6 +121,24 @@ def test_execute_python_emits_plot_refs_not_inline_json(store):
     assert "id" in plots[0] and "data" not in plots[0]
 
 
+def test_execute_python_drops_oversize_plot_with_notice(store, monkeypatch):
+    """An oversize/invalid captured figure is dropped (not stored, not inlined),
+    and the user is told rather than silently losing a chart (PR-E.3)."""
+    from mmm_framework.agents import tools as T
+    from mmm_framework.agents import workspace as W
+
+    monkeypatch.setattr(W, "_PLOT_MAX_BYTES", 10)  # force rejection
+    proj = store.create_project("P")
+    sess = store.create_session(name="s", project_id=proj["project_id"])
+    cfg = {"configurable": {"thread_id": sess["thread_id"]}}
+    code = "import plotly.express as px; px.bar(x=['a'], y=[1]).show()"
+    cmd = T.execute_python.func(
+        state={"dashboard_data": {}}, code=code, tool_call_id="c", config=cfg
+    )
+    assert cmd.update["dashboard_data"].get("plots", []) == []  # dropped, not stored
+    assert "omitted" in cmd.update["messages"][0].content  # user is informed
+
+
 def test_execute_python_writes_downloadable_and_inputs_readable(
     store, tmp_path, monkeypatch
 ):

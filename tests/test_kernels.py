@@ -415,6 +415,30 @@ def test_subprocess_env_scrub_hides_secrets_from_cell(tmp_path, monkeypatch):
         k.shutdown()
 
 
+def test_subprocess_env_scrub_survives_reset(tmp_path, monkeypatch):
+    """The scrub must hold across reset_namespace too — reset() goes through
+    restart_kernel(), which reuses the cached scrubbed env= (NOT os.environ).
+    This is a user-reachable path, so pin it so a refactor can't regress it."""
+    pytest.importorskip("jupyter_client")
+    pytest.importorskip("ipykernel")
+    from mmm_framework.agents.kernels import SubprocessKernel
+
+    monkeypatch.setenv("MMM_KERNEL_SCRUB_ENV", "1")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-SECRET-reset")
+    k = SubprocessKernel()
+    try:
+        assert not k.execute("x = 1", _ctx(str(tmp_path))).is_error  # initial spawn
+        k.reset()  # restart_kernel path
+        r = k.execute(
+            "import os; print(repr(os.environ.get('ANTHROPIC_API_KEY')))",
+            _ctx(str(tmp_path)),
+        )
+        assert not r.is_error, r.stdout
+        assert "None" in r.stdout  # secret still absent after reset
+    finally:
+        k.shutdown()
+
+
 # ── Phase 3 PR-E.4: audit logging ─────────────────────────────────────────────
 
 

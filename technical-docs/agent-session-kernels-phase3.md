@@ -103,10 +103,16 @@ path in one line. jupyter_client 8.7.0 passes `env=` straight through `LocalProv
   import, so scrub can't break startup. (If that changes, move `_normalize_figure` to a leaf
   `agents/_plot_capture.py` per the Phase-1 doc.)
 
-### PR-E.2 — Path / TOCTOU hardening (zero container dependency; real holes today)
-- **Guard the unguarded file-servers with `is_within()`:** the 9 hardcoded report/slides endpoints
-  (`main.py:1630-1760`) and `routes/models.py:283-330` (`filepath` from Redis) call `FileResponse`
-  with no allow-root check. Route them through `_guarded_file_response`.
+### PR-E.2 — Path / TOCTOU hardening (zero container dependency; real holes today) — ✅ DONE
+- **Guard the unguarded file-servers with `is_within()`:** the 10 hardcoded report/slides endpoints
+  (`main.py`) call `FileResponse` with no allow-root check. Routed through the TOCTOU-safe
+  `_safe_serve`/`_guarded_file_response`.
+  - **DEFERRED follow-up (not kernel-isolation, so out of this PR):** the **Models API**
+    `routes/models.py:283-330` report download serves a `filepath` read from Redis with no
+    `is_within()` check. That path is written by *trusted* job code (not the kernel), and lives in a
+    different app/trust domain — so it's a generic web-hardening item, not part of the kernel
+    sandbox. The spec's §4 "every host-facing capability re-checked" still wants it eventually;
+    named here so it isn't lost.
 - **`safe_join` the upload filenames:** `/upload` (`main.py:~1496`) and the KB upload
   (`main.py:~1264`) build paths with raw `os.path.join`/`abspath` — traversal-able. Use
   `workspace.safe_join`.
