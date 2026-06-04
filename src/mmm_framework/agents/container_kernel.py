@@ -192,6 +192,14 @@ class ContainerKernel(SubprocessKernel):
         self._egress_posture = "denied:internal-net"
         return ["--network", self._ensure_egress_network()]
 
+    def _oci_runtime_args(self) -> list[str]:
+        # Phase 4c: a stronger OCI runtime (gVisor `runsc` / Kata) for the
+        # genuinely-hostile trust model (design §7.2), gated on MMM_KERNEL_OCI_RUNTIME.
+        # Default: the engine's default runtime (runc/crun). Its memory tax + spawn
+        # latency fold into the §2.1 density math at adoption.
+        rt = os.environ.get("MMM_KERNEL_OCI_RUNTIME")
+        return ["--runtime", rt] if rt else []
+
     def _resource_args(self) -> list[str]:
         # PR-F.3: cgroup mem + pids + cpu caps and fd/proc ulimits so a runaway or
         # hostile cell can't exhaust the host. mem==memory-swap disables extra swap.
@@ -312,6 +320,7 @@ class ContainerKernel(SubprocessKernel):
             "--rm",
             "--name",
             name,
+            *self._oci_runtime_args(),
             *self._net_args(),
             *net_pub,
             *env_args,

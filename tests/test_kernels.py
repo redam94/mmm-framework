@@ -780,3 +780,17 @@ def test_container_kernel_joint_exit_criteria(monkeypatch):
     finally:
         k.shutdown()
         shutil.rmtree(ws, ignore_errors=True)
+
+
+# ── Phase 4c: stronger OCI runtime (gVisor/Kata) knob ─────────────────────────
+
+
+def test_container_kernel_oci_runtime_knob(monkeypatch):
+    """The provisioner emits `--runtime <name>` when MMM_KERNEL_OCI_RUNTIME is set
+    (gVisor `runsc` / Kata), else nothing — asserted without gVisor installed."""
+    from mmm_framework.agents.container_kernel import ContainerKernel
+
+    monkeypatch.delenv("MMM_KERNEL_OCI_RUNTIME", raising=False)
+    assert ContainerKernel("t")._oci_runtime_args() == []
+    monkeypatch.setenv("MMM_KERNEL_OCI_RUNTIME", "runsc")
+    assert ContainerKernel("t")._oci_runtime_args() == ["--runtime", "runsc"]
