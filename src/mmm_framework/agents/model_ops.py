@@ -332,6 +332,23 @@ def leave_one_out(
     return res
 
 
+def save_model(mmm: Any, results: Any = None, *, name: str = "model") -> dict:
+    """Serialize the model to ``<cwd>/mmm_models/<name>``. The kernel runs in the
+    session work_dir, so for the subprocess this lands in the per-session
+    workspace (where the model lives); in-process it lands under the API cwd,
+    unchanged from before."""
+    try:
+        import os as _os
+        from mmm_framework.serialization import MMMSerializer
+
+        save_dir = _os.path.join("mmm_models", str(name))
+        _os.makedirs(save_dir, exist_ok=True)
+        MMMSerializer.save(mmm, save_dir)
+        return _ok(f"Model saved as **{name}** at `{save_dir}/`.", {})
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Save failed: {e}")
+
+
 # Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
 OPS = {
     "roi_metrics": roi_metrics,
@@ -343,4 +360,5 @@ OPS = {
     "marginal_analysis": marginal_analysis,
     "prior_predictive_check": prior_predictive_check,
     "leave_one_out": leave_one_out,
+    "save_model": save_model,
 }

@@ -1586,49 +1586,13 @@ def save_fitted_model(
     The name should be a short identifier like 'v1' or 'baseline_2024'.
     """
     _activate_thread(config)
-    fitted = _MODEL_CACHE.get("fitted_model")
-    if fitted is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model in session. Fit a model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    save_dir = os.path.join(_MODELS_DIR, name)
-    os.makedirs(save_dir, exist_ok=True)
-    try:
-        from mmm_framework.serialization import MMMSerializer
-
-        # save(model, path, ...) is a classmethod — the model carries its own
-        # trace; there is no `results` parameter (the prior call mis-bound
-        # `results` to `path` and always raised -> "Save failed").
-        MMMSerializer.save(fitted, save_dir)
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Model saved as **{name}** at `{save_dir}/`.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-    except Exception as exc:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Save failed: {exc}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+    # Save runs where the model lives — in-process from MODEL_CACHE (unchanged:
+    # API-cwd/mmm_models/<name>), or IN the subprocess kernel (work_dir/mmm_models/
+    # <name>, the per-session workspace). No-model comes back as the result error.
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "save_model", {"name": name}
+    )
+    return _modelop_command(res, {}, tool_call_id)
 
 
 @tool

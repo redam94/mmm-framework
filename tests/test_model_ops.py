@@ -20,6 +20,7 @@ def test_ops_registry_complete():
         "marginal_analysis",
         "prior_predictive_check",
         "leave_one_out",
+        "save_model",
     }
 
 
