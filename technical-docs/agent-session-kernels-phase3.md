@@ -151,10 +151,15 @@ Phase 4d.
 
 ## 4. Tier 2 — the Linux container sandbox PRs (Podman)
 
-> **PR-F.0 first (the blocker, §1.4): spike connectivity** — get the host `jupyter_client` talking
-> to an ipykernel inside a `podman run` container under the intended network posture. Decide
-> IPC-over-shared-unix-socket vs. egress-firewalled internal network vs. in-container proxy. Note
-> the virtiofs/socket-sharing caveat on the macOS podman-machine vs. prod Linux in the test.
+> **PR-F.0 (the blocker, §1.4): spike connectivity — ✅ DONE.** See
+> `deploy/kernel/F0-connectivity-findings.md`. **Decision:** two transports via
+> `MMM_KERNEL_TRANSPORT`, platform-defaulted. **`ipc` + `--network none`** is the prod posture
+> (no network ⇒ egress + metadata trivially denied; control over bind-mounted unix sockets;
+> Linux-validated — virtiofs breaks unix sockets on the macOS dev box, as predicted). **`tcp` +
+> per-port-forward** is the dev/macOS posture (proven `21*2→42` here); egress-deny over `tcp`
+> uses an `--internal` network on Linux (proven to block both the internet and
+> `169.254.169.254`), which rootless macOS can't combine with port-forward — so macOS-dev `tcp`
+> has open egress (accepted; the metadata-block matters on the GCP VM, which runs `ipc`).
 
 - **PR-F.1 — Container image:** pinned/hash-locked deps, non-root user, read-only rootfs + the
   framework + `ipykernel`; `tini` as PID 1 (so SIGINT/zombies behave — §3.4). Baked, no per-spawn
