@@ -215,8 +215,9 @@ class ContainerKernel(SubprocessKernel):
 
     def _security_args(self) -> list[str]:
         # PR-F.3: drop all caps, forbid privilege escalation, read-only rootfs.
-        # podman applies its default-deny seccomp profile automatically (unless a
-        # custom one is given via MMM_KERNEL_SECCOMP) and masks sensitive /proc//sys.
+        # podman applies its default seccomp profile automatically (an allowlist
+        # that blocks the dangerous syscalls; unless a custom one is given via
+        # MMM_KERNEL_SECCOMP) and masks sensitive /proc//sys.
         args = ["--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
         if os.environ.get("MMM_KERNEL_READONLY", "1") not in ("0", "false", "no"):
             args.append("--read-only")

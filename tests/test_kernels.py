@@ -767,6 +767,8 @@ def test_container_kernel_joint_exit_criteria(monkeypatch):
             "except OSError:\n"
             "    r['readonly_rootfs'] = True\n"
             "r['mem_capped'] = open('/sys/fs/cgroup/memory.max').read().strip() == '536870912'\n"
+            "r['seccomp_active'] = open('/proc/self/status').read()"
+            ".split('Seccomp:')[1].split()[0] == '2'\n"
             f"r['sibling_isolated'] = not os.path.exists({str(sibling)!r})\n"
             "print('JOINT', json.dumps(r))"
         )

@@ -68,6 +68,15 @@ _aiosqlite_conn: aiosqlite.Connection | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global memory, _aiosqlite_conn
+    # Fail-closed profile guard (PR-F.6): refuse to boot a HOSTED server on a
+    # non-sandboxed kernel — a process that behaves hosted (drops cwd, rejects
+    # guessable threads) while running untrusted code in-process is the §4
+    # partial-enablement trap, worse than an honest single-user deployment.
+    from mmm_framework.agents.profile import assert_hosted_sandbox
+    from mmm_framework.agents.tools import _KERNELS
+
+    assert_hosted_sandbox(_KERNELS.impl)
+
     _aiosqlite_conn = await aiosqlite.connect(str(DB_PATH))
     memory = AsyncSqliteSaver(_aiosqlite_conn)
     await memory.setup()

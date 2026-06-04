@@ -1069,11 +1069,16 @@ def test_hosted_profile_toggle_and_kernel_default(monkeypatch):
     monkeypatch.delenv("MMM_AGENT_KERNEL", raising=False)
     assert not profile.is_hosted()
     assert profile.default_kernel_impl() == "inprocess"
+    # non-hosted: an explicit impl wins
+    monkeypatch.setenv("MMM_AGENT_KERNEL", "subprocess")
+    assert profile.default_kernel_impl() == "subprocess"
+    # hosted: forced to the sandboxed container kernel REGARDLESS of an explicit
+    # non-sandboxed value (fail-closed — no behaves-hosted-but-unsandboxed state)
     monkeypatch.setenv("MMM_AGENT_HOSTED", "1")
     assert profile.is_hosted()
-    assert profile.default_kernel_impl() == "container"  # sandboxed by default
-    monkeypatch.setenv("MMM_AGENT_KERNEL", "subprocess")  # explicit wins
-    assert profile.default_kernel_impl() == "subprocess"
+    assert profile.default_kernel_impl() == "container"
+    monkeypatch.delenv("MMM_AGENT_KERNEL", raising=False)
+    assert profile.default_kernel_impl() == "container"
 
 
 def test_report_path_and_allowed_roots_drop_cwd_when_hosted(monkeypatch, tmp_path):
@@ -1116,3 +1121,22 @@ def test_chat_rejects_guessable_thread_when_hosted(client, store, monkeypatch):
         "thread_id"
     ]
     assert store.get_session(tid) is not None
+
+
+def test_hosted_forces_sandboxed_kernel_and_refuses_unsandboxed(monkeypatch):
+    """Fail-closed (PR-F.6 hardening): hosted force-upgrades a non-sandboxed
+    explicit kernel to `container`, and the startup guard refuses to run hosted
+    on a non-sandboxed impl — so a process can't behave hosted while running
+    untrusted code in-process (the §4 partial-enablement trap)."""
+    from mmm_framework.agents import profile
+
+    monkeypatch.setenv("MMM_AGENT_HOSTED", "1")
+    monkeypatch.setenv("MMM_AGENT_KERNEL", "inprocess")  # would be unsandboxed
+    assert profile.default_kernel_impl() == "container"  # force-upgraded
+    with pytest.raises(RuntimeError, match="sandbox"):
+        profile.assert_hosted_sandbox("inprocess")
+    with pytest.raises(RuntimeError, match="sandbox"):
+        profile.assert_hosted_sandbox("subprocess")
+    profile.assert_hosted_sandbox("container")  # the only accepted hosted impl
+    monkeypatch.setenv("MMM_AGENT_HOSTED", "0")
+    profile.assert_hosted_sandbox("inprocess")  # not hosted -> anything goes
