@@ -77,6 +77,14 @@ async def lifespan(app: FastAPI):
 
     assert_hosted_sandbox(_KERNELS.impl)
 
+    # Phase 4d: tamper-evident audit sink for the mmm_audit events.
+    try:
+        from mmm_framework.agents.audit_sink import install_audit_sink
+
+        install_audit_sink()
+    except Exception:
+        logger.exception("audit sink install failed")
+
     _aiosqlite_conn = await aiosqlite.connect(str(DB_PATH))
     memory = AsyncSqliteSaver(_aiosqlite_conn)
     await memory.setup()
@@ -1641,6 +1649,39 @@ async def upload_file(file: UploadFile = File(...), thread_id: str | None = None
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus metrics (Phase 4d): per-event audit counters, live kernel count,
+    and the active-fit gauge the autoscaler scales on (§5.1). Sourced from the
+    mmm_audit events so the audit log is the single source of truth."""
+    from mmm_framework.agents.audit_sink import event_counts
+    from mmm_framework.agents.tools import _KERNELS
+
+    counts = event_counts()
+    live = len(getattr(_KERNELS, "_instances", {}))
+    active_fits = max(
+        0, counts.get("kernel_fit_start", 0) - counts.get("kernel_fit_done", 0)
+    )
+    lines = [
+        "# HELP mmm_audit_events_total Count of mmm_audit events by type.",
+        "# TYPE mmm_audit_events_total counter",
+    ]
+    for ev, c in sorted(counts.items()):
+        ev_safe = ev.replace("\\", "").replace('"', "")
+        lines.append(f'mmm_audit_events_total{{event="{ev_safe}"}} {c}')
+    lines += [
+        "# HELP mmm_kernels_live Currently live per-session kernels.",
+        "# TYPE mmm_kernels_live gauge",
+        f"mmm_kernels_live {live}",
+        "# HELP mmm_active_fits In-flight model fits (autoscaling signal).",
+        "# TYPE mmm_active_fits gauge",
+        f"mmm_active_fits {active_fits}",
+    ]
+    return Response(
+        "\n".join(lines) + "\n", media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 @app.get("/model-config")

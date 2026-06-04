@@ -1140,3 +1140,76 @@ def test_hosted_forces_sandboxed_kernel_and_refuses_unsandboxed(monkeypatch):
     profile.assert_hosted_sandbox("container")  # the only accepted hosted impl
     monkeypatch.setenv("MMM_AGENT_HOSTED", "0")
     profile.assert_hosted_sandbox("inprocess")  # not hosted -> anything goes
+
+
+# ── Phase 4d: tamper-evident audit sink + metrics ─────────────────────────────
+
+
+def test_audit_hash_chain_detects_tampering(tmp_path):
+    """The mmm_audit hash chain detects edit, delete, and reorder of any record."""
+    import json as _json
+    import logging
+
+    from mmm_framework.agents import audit_sink as A
+
+    log = tmp_path / "audit.jsonl"
+    handler = A.HashChainAuditHandler(str(log))
+    logger = logging.getLogger("mmm_audit_test")
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    for i in range(5):
+        logger.info(
+            "kernel_spawn x=%d",
+            i,
+            extra={"audit_event": "kernel_spawn", "audit_fields": {"i": i}},
+        )
+    ok, err = A.verify(str(log))
+    assert ok, err
+
+    lines = log.read_text().splitlines()
+    # edit a field in the middle record -> hash mismatch
+    edited = list(lines)
+    rec = _json.loads(edited[2])
+    rec["fields"]["i"] = 999
+    edited[2] = _json.dumps(rec)
+    log.write_text("\n".join(edited) + "\n")
+    ok, err = A.verify(str(log))
+    assert not ok and "edited" in err
+
+    # delete a record -> chain break
+    log.write_text("\n".join(lines[:2] + lines[3:]) + "\n")
+    ok, err = A.verify(str(log))
+    assert not ok
+
+    # reorder -> chain break
+    log.write_text("\n".join([lines[0], lines[2], lines[1]] + lines[3:]) + "\n")
+    ok, err = A.verify(str(log))
+    assert not ok
+
+
+def test_audit_chain_resumes_across_restart(tmp_path):
+    """A new handler over an existing log continues the chain (append-only across
+    restarts), and verify() stays intact."""
+    import logging
+
+    from mmm_framework.agents import audit_sink as A
+
+    log = tmp_path / "audit.jsonl"
+    lg = logging.getLogger("mmm_audit_test2")
+    lg.setLevel(logging.INFO)
+    lg.handlers = [A.HashChainAuditHandler(str(log))]
+    lg.info("e", extra={"audit_event": "a", "audit_fields": {}})
+    lg.handlers = [A.HashChainAuditHandler(str(log))]  # "restart"
+    lg.info("e", extra={"audit_event": "b", "audit_fields": {}})
+    ok, err = A.verify(str(log))
+    assert ok, err
+    assert len(log.read_text().splitlines()) == 2
+
+
+def test_metrics_endpoint_exposes_counters(client):
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    body = r.text
+    assert "mmm_kernels_live" in body
+    assert "mmm_active_fits" in body
+    assert "mmm_audit_events_total" in body

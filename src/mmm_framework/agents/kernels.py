@@ -31,10 +31,18 @@ _audit_log = logging.getLogger("mmm_audit")
 
 
 def _audit(event: str, *, level: int = logging.INFO, **fields: Any) -> None:
-    """Emit one ``key=value`` audit line for ``event`` (never raises)."""
+    """Emit one audit event (never raises). Carries structured ``extra`` so the
+    tamper-evident sink (Phase 4d) records clean event/fields, and a human
+    ``key=value`` message for plain log readers."""
     try:
         parts = " ".join(f"{k}={v}" for k, v in fields.items() if v is not None)
-        _audit_log.log(level, "%s %s", event, parts)
+        _audit_log.log(
+            level,
+            "%s %s",
+            event,
+            parts,
+            extra={"audit_event": event, "audit_fields": dict(fields)},
+        )
     except Exception:
         pass
 
@@ -790,6 +798,9 @@ class SubprocessKernel:
         # execute_python then see it). The kernel runs in the session work_dir, so
         # the auto-save lands in <work_dir>/mmm_models — findable by a later
         # (cold) kernel for the same session to rehydrate from.
+        # fit_start/done bracket the expensive op -> feeds the active_fits metric
+        # (Phase 4d) the autoscaler scales on (§5.1).
+        _audit("kernel_fit_start", thread_id=self._thread_id)
         with self._lock:
             try:
                 self._ensure_started()
@@ -799,7 +810,9 @@ class SubprocessKernel:
                 )
             except Exception as e:  # noqa: BLE001
                 self._teardown()
+                _audit("kernel_fit_done", thread_id=self._thread_id)
                 return {"error": f"Error fitting model: {e}"}
+        _audit("kernel_fit_done", thread_id=self._thread_id)
         if err is not None:
             detail = err.get("evalue") or err.get("ename") or "error"
             return {"error": f"Error fitting model: {detail}"}
