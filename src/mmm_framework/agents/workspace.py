@@ -111,15 +111,30 @@ def plot_path(plot_id: str) -> Path | None:
     return p if p.exists() else None
 
 
+def report_path(name: str, thread_id: str | None = None) -> Path:
+    """Where an agent report HTML file lives (PR-F.6). Hosted: per-session under
+    the workspace (an allowed root, so it survives dropping ``Path.cwd()`` and is
+    tenant-scoped). Dev: the legacy CWD location, unchanged."""
+    from mmm_framework.agents.profile import is_hosted
+
+    leaf = Path(name).name
+    return (thread_dir(thread_id) / leaf) if is_hosted() else (Path.cwd() / leaf)
+
+
 def allowed_roots() -> list[Path]:
     """Directories a download/read is permitted to touch (resolved, absolute)."""
+    from mmm_framework.agents.profile import is_hosted
+
     roots = [
         workspace_root(),
         (Path.cwd() / "uploads").resolve(),
         (Path.cwd() / "mmm_models").resolve(),
         (Path.cwd() / "mmm_configs").resolve(),
-        Path.cwd().resolve(),  # legacy fixed-name reports written to CWD
     ]
+    if not is_hosted():
+        # Legacy fixed-name reports written to CWD. Dropped in the hosted profile
+        # (reports go per-session under the workspace via report_path()).
+        roots.append(Path.cwd().resolve())
     # de-dup while preserving order
     seen: set[str] = set()
     out: list[Path] = []

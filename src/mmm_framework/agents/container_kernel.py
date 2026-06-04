@@ -275,7 +275,10 @@ class ContainerKernel(SubprocessKernel):
         user = os.environ.get("MMM_KERNEL_USER", f"{uid}:{gid}")
         mount_args: list[str] = [f"--userns={userns}", "--user", user]
         if work_dir:
-            mount_args += ["-v", f"{work_dir}:{work_dir}"]
+            # Bind-mount + start in work_dir so the fit's relative report write and
+            # any bare-name outputs land in the host-visible workspace (the rootfs
+            # is read-only), matching the in-process kernel's cwd contract.
+            mount_args += ["-v", f"{work_dir}:{work_dir}", "--workdir", work_dir]
 
         if self._transport == "ipc":
             ip = os.path.join(ctrl, "k")  # sockets at <ctrl>/k-<port>
@@ -362,7 +365,12 @@ class ContainerKernel(SubprocessKernel):
         """Fail-closed gate (PR-F.5). When ``MMM_KERNEL_REQUIRE_SANDBOX`` is on
         (the hosted profile sets it), refuse to spawn unless every isolation
         control is present in the launch command + the egress posture is denied."""
-        if os.environ.get("MMM_KERNEL_REQUIRE_SANDBOX", "0") in ("0", "false", "no"):
+        from mmm_framework.agents.profile import is_hosted
+
+        require = is_hosted() or os.environ.get(
+            "MMM_KERNEL_REQUIRE_SANDBOX", "0"
+        ) not in ("0", "false", "no")
+        if not require:
             return
         problems = []
         if "--read-only" not in cmd:

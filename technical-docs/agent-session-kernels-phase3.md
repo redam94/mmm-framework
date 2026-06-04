@@ -207,11 +207,22 @@ Phase 4d.
   the launch command and the egress posture is `denied` (a bad podman flag already fails the run →
   no kernel). **Validated:** fail-closed refuses a read-only-off spawn (no podman needed); teardown
   wipes the control dir while the workspace probe survives (slow test).
-- **PR-F.6 — Hosted profile activation:** flip the (until-now inert) `hosted` switch on — forbid
-  guessable thread_ids (no `default_thread`, server-minted uuid4), drop `Path.cwd()` from
-  `allowed_roots`, move report output into the workspace mount (closes Phase-2 PR-D.4). **Exit
-  (must pass jointly, §6):** a hostile cell cannot read another session's workspace, host
-  secrets/metadata, or the network; OOM is contained; the plot channel can't cross tenants.
+- **PR-F.6 — Hosted profile activation — ✅ DONE** (`agents/profile.py`, `MMM_AGENT_HOSTED`):
+  the (until-now inert) switch is live. When hosted: the kernel defaults to the sandboxed
+  `container` impl and `_verify_isolation` **requires** a complete sandbox (fail-closed); egress is
+  denied; `allowed_roots()` **drops `Path.cwd()`**; reports are written **per-session under the
+  workspace** via `workspace.report_path()` (the container gets `--workdir work_dir` so the
+  in-kernel fit report lands there) and the `/report*` endpoints take an optional `thread_id`
+  (closing the write side of Phase-2 PR-D.4 — per-tenant reports); and `/chat` **refuses guessable
+  / client-invented `thread_id`s** (no `default_thread`, no silent auto-create — only server-minted
+  uuid4 sessions). **Joint exit (§6) — validated** under the container kernel (slow test): a cell
+  can't read host secrets (env scrub) or a sibling session's workspace (only its own thread_dir is
+  mounted), runs with `CapEff=0` on a read-only rootfs, is memory-capped (OOM contained), and the
+  plot channel can't cross tenants (PR-E.3 salted ids). Egress-deny is validated by the
+  `--network none` test + enforced via the `ipc` prod posture (macOS-`tcp` egress is open by
+  documented design — §1.4/PR-F.4). **Residual (PR-D.4):** `generate_client_report`/`_slides` still
+  read `_MODEL_CACHE`, so under the container kernel they need migrating to `run_model_op` to find
+  the in-kernel model (the fit report + `generate_project_report` already work).
 
 ## 5. What stays unchanged
 The default `inprocess` path (every PR is subprocess/endpoint-only); the portable `.py` export; the

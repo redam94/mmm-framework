@@ -931,8 +931,10 @@ class InProcessKernel:
         pass
 
 
+from mmm_framework.agents.profile import default_kernel_impl as _default_kernel_impl
+
 _KERNELS = KernelManager(
-    os.environ.get("MMM_AGENT_KERNEL", "inprocess"),
+    _default_kernel_impl(),  # hosted -> sandboxed `container`; else in-process
     {
         "inprocess": InProcessKernel,
         "subprocess": SubprocessKernel,
@@ -1806,8 +1808,9 @@ def generate_project_report(
         except Exception:
             pass
 
-    report_path = "agent_project_report.html"
-    slides_path = "agent_project_slides.html"
+    # Hosted: per-session under the workspace (allowed root); dev: legacy CWD.
+    report_path = str(_ws.report_path("agent_project_report.html", thread_id))
+    slides_path = str(_ws.report_path("agent_project_slides.html", thread_id))
     errors: list[str] = []
 
     try:
@@ -1887,7 +1890,7 @@ def generate_client_report(
         )
 
     title = report_title or "Marketing Mix Model Results"
-    report_path = "agent_client_report.html"
+    report_path = str(_ws.report_path("agent_client_report.html"))
 
     try:
         from mmm_framework.reporting.generator import ReportBuilder
@@ -1967,7 +1970,7 @@ def generate_client_slides(
     dashboard = dict((state or {}).get("dashboard_data") or {})
 
     title = report_title or "Marketing Mix Model Results"
-    slides_path = "agent_client_slides.html"
+    slides_path = str(_ws.report_path("agent_client_slides.html"))
 
     thread_id = None
     if config and hasattr(config, "get"):

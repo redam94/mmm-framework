@@ -1057,3 +1057,62 @@ def test_subprocess_cold_reload_after_eviction(store):
         assert "ROI" in (roi.get("content") or "")
     finally:
         mgr.shutdown_all()
+
+
+# ── Phase 3 PR-F.6: hosted profile activation ─────────────────────────────────
+
+
+def test_hosted_profile_toggle_and_kernel_default(monkeypatch):
+    from mmm_framework.agents import profile
+
+    monkeypatch.delenv("MMM_AGENT_HOSTED", raising=False)
+    monkeypatch.delenv("MMM_AGENT_KERNEL", raising=False)
+    assert not profile.is_hosted()
+    assert profile.default_kernel_impl() == "inprocess"
+    monkeypatch.setenv("MMM_AGENT_HOSTED", "1")
+    assert profile.is_hosted()
+    assert profile.default_kernel_impl() == "container"  # sandboxed by default
+    monkeypatch.setenv("MMM_AGENT_KERNEL", "subprocess")  # explicit wins
+    assert profile.default_kernel_impl() == "subprocess"
+
+
+def test_report_path_and_allowed_roots_drop_cwd_when_hosted(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from mmm_framework.agents import workspace as W
+
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("MMM_AGENT_HOSTED", raising=False)
+    # dev: legacy CWD report path; CWD is an allowed root
+    assert W.report_path("r.html").parent == Path.cwd()
+    assert Path.cwd().resolve() in W.allowed_roots()
+    # hosted: per-session under the workspace; CWD dropped from the allow-roots
+    monkeypatch.setenv("MMM_AGENT_HOSTED", "1")
+    rp = W.report_path("r.html", "sessA")
+    assert str(W.thread_dir("sessA")) in str(rp)
+    assert Path.cwd().resolve() not in W.allowed_roots()
+    assert W.workspace_root() in W.allowed_roots()
+
+
+def test_chat_rejects_guessable_thread_when_hosted(client, store, monkeypatch):
+    monkeypatch.setenv("MMM_AGENT_HOSTED", "1")
+    # the guessable default and any client-invented id are refused (403), with no
+    # silent auto-create
+    assert (
+        client.post(
+            "/chat", json={"message": "hi", "thread_id": "default_thread"}
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            "/chat", json={"message": "hi", "thread_id": "made-up-not-minted"}
+        ).status_code
+        == 403
+    )
+    # a server-minted session is NOT rejected by the guard (it exists in the store)
+    pid = client.post("/projects", json={"name": "P"}).json()["project_id"]
+    tid = client.post("/sessions", json={"name": "s", "project_id": pid}).json()[
+        "thread_id"
+    ]
+    assert store.get_session(tid) is not None

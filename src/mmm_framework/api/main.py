@@ -228,6 +228,23 @@ async def chat_endpoint(
     x_base_url: str | None = Header(None),
     x_provider: str | None = Header(None),
 ):
+    # Hosted (PR-F.6): thread_id is a bearer capability, so it must be a
+    # server-minted session — reject the guessable default and any client-invented
+    # id (no silent auto-create), so one tenant can't address another's session.
+    from mmm_framework.agents.profile import is_hosted
+
+    if is_hosted():
+        tid = request.thread_id
+        if (
+            not tid
+            or tid == "default_thread"
+            or sessions_store.get_session(tid) is None
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="hosted mode requires a server-minted session (POST /sessions)",
+            )
+
     config = {"configurable": {"thread_id": request.thread_id}}
     # Mark this session active so the thread-scoped model cache + workspace dir
     # resolve correctly for tools run during this request.
@@ -1706,132 +1723,131 @@ async def lmstudio_models_endpoint(base_url: str | None = None):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-# These reports are written CWD-relative by the agent tools; CWD is still an
-# allowed root in this profile, so _safe_serve passes — but it now blocks a
-# symlink swapped in by a kernel cell (TOCTOU, Phase 3 PR-E.2). Moving the output
-# into the workspace mount + dropping CWD from allowed_roots is Tier-2 (PR-F.6).
+# Report serving. In the hosted profile the agent writes reports per-session under
+# the workspace (an allowed root; CWD is dropped) — so these endpoints take an
+# optional `thread_id` and resolve via workspace.report_path(); in dev they serve
+# the legacy CWD files unchanged. Either way _safe_serve is TOCTOU-safe (PR-E.2).
+
+
+def _serve_report(
+    name: str,
+    *,
+    thread_id: str | None,
+    missing: str,
+    media_type: str = "text/html",
+    download_name: str | None = None,
+):
+    from mmm_framework.agents import workspace as _ws
+
+    p = str(_ws.report_path(name, thread_id))
+    if not os.path.exists(p):
+        return JSONResponse(status_code=404, content={"error": missing})
+    return _safe_serve(p, media_type, download_name=download_name)
 
 
 @app.get("/report")
-async def view_report():
+async def view_report(thread_id: str | None = None):
     """Serve the generated HTML report inline for embedding."""
-    report_path = "agent_mmm_report.html"
-    if not os.path.exists(report_path):
-        return JSONResponse(
-            status_code=404,
-            content={"error": "No report generated yet. Fit a model first."},
-        )
-    return _safe_serve(report_path, "text/html")
+    return _serve_report(
+        "agent_mmm_report.html",
+        thread_id=thread_id,
+        missing="No report generated yet. Fit a model first.",
+    )
 
 
 @app.get("/report/download")
-async def download_report():
+async def download_report(thread_id: str | None = None):
     """Download the generated HTML report."""
-    report_path = "agent_mmm_report.html"
-    if not os.path.exists(report_path):
-        return JSONResponse(
-            status_code=404, content={"error": "No report generated yet."}
-        )
-    return _safe_serve(
-        report_path, "application/octet-stream", download_name="mmm_report.html"
+    return _serve_report(
+        "agent_mmm_report.html",
+        thread_id=thread_id,
+        missing="No report generated yet.",
+        media_type="application/octet-stream",
+        download_name="mmm_report.html",
     )
 
 
 @app.get("/project-report")
-async def view_project_report():
+async def view_project_report(thread_id: str | None = None):
     """Serve the project findings HTML report."""
-    p = "agent_project_report.html"
-    if not os.path.exists(p):
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": "No project report yet. Ask the agent to generate_project_report."
-            },
-        )
-    return _safe_serve(p, "text/html")
+    return _serve_report(
+        "agent_project_report.html",
+        thread_id=thread_id,
+        missing="No project report yet. Ask the agent to generate_project_report.",
+    )
 
 
 @app.get("/project-report/download")
-async def download_project_report():
-    p = "agent_project_report.html"
-    if not os.path.exists(p):
-        return JSONResponse(
-            status_code=404, content={"error": "No project report yet."}
-        )
-    return _safe_serve(
-        p, "application/octet-stream", download_name="mmm_project_report.html"
+async def download_project_report(thread_id: str | None = None):
+    return _serve_report(
+        "agent_project_report.html",
+        thread_id=thread_id,
+        missing="No project report yet.",
+        media_type="application/octet-stream",
+        download_name="mmm_project_report.html",
     )
 
 
 @app.get("/project-slides")
-async def view_project_slides():
+async def view_project_slides(thread_id: str | None = None):
     """Serve the Reveal.js project slideshow."""
-    p = "agent_project_slides.html"
-    if not os.path.exists(p):
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": "No slideshow yet. Ask the agent to generate_project_report."
-            },
-        )
-    return _safe_serve(p, "text/html")
+    return _serve_report(
+        "agent_project_slides.html",
+        thread_id=thread_id,
+        missing="No slideshow yet. Ask the agent to generate_project_report.",
+    )
 
 
 @app.get("/project-slides/download")
-async def download_project_slides():
-    p = "agent_project_slides.html"
-    if not os.path.exists(p):
-        return JSONResponse(status_code=404, content={"error": "No slideshow yet."})
-    return _safe_serve(
-        p, "application/octet-stream", download_name="mmm_project_slides.html"
+async def download_project_slides(thread_id: str | None = None):
+    return _serve_report(
+        "agent_project_slides.html",
+        thread_id=thread_id,
+        missing="No slideshow yet.",
+        media_type="application/octet-stream",
+        download_name="mmm_project_slides.html",
     )
 
 
 @app.get("/client-report")
-async def view_client_report():
+async def view_client_report(thread_id: str | None = None):
     """Serve the client-ready HTML report (no diagnostics, with nav + confidentiality notice)."""
-    p = "agent_client_report.html"
-    if not os.path.exists(p):
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": "No client report yet. Ask the agent to generate_client_report."
-            },
-        )
-    return _safe_serve(p, "text/html")
+    return _serve_report(
+        "agent_client_report.html",
+        thread_id=thread_id,
+        missing="No client report yet. Ask the agent to generate_client_report.",
+    )
 
 
 @app.get("/client-report/download")
-async def download_client_report():
-    p = "agent_client_report.html"
-    if not os.path.exists(p):
-        return JSONResponse(status_code=404, content={"error": "No client report yet."})
-    return _safe_serve(
-        p, "application/octet-stream", download_name="mmm_client_report.html"
+async def download_client_report(thread_id: str | None = None):
+    return _serve_report(
+        "agent_client_report.html",
+        thread_id=thread_id,
+        missing="No client report yet.",
+        media_type="application/octet-stream",
+        download_name="mmm_client_report.html",
     )
 
 
 @app.get("/client-slides")
-async def view_client_slides():
+async def view_client_slides(thread_id: str | None = None):
     """Serve the client-ready Reveal.js slideshow (no MCMC stats, with confidentiality footer)."""
-    p = "agent_client_slides.html"
-    if not os.path.exists(p):
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": "No client slides yet. Ask the agent to generate_client_slides."
-            },
-        )
-    return _safe_serve(p, "text/html")
+    return _serve_report(
+        "agent_client_slides.html",
+        thread_id=thread_id,
+        missing="No client slides yet. Ask the agent to generate_client_slides.",
+    )
 
 
 @app.get("/client-slides/download")
-async def download_client_slides():
-    p = "agent_client_slides.html"
-    if not os.path.exists(p):
-        return JSONResponse(status_code=404, content={"error": "No client slides yet."})
-    return _safe_serve(
-        p, "application/octet-stream", download_name="mmm_client_slides.html"
+async def download_client_slides(thread_id: str | None = None):
+    return _serve_report(
+        "agent_client_slides.html",
+        thread_id=thread_id,
+        missing="No client slides yet.",
+        media_type="application/octet-stream",
+        download_name="mmm_client_slides.html",
     )
 
 

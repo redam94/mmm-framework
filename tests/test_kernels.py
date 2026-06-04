@@ -713,3 +713,68 @@ def test_container_kernel_teardown_wipes_ctrl_keeps_workspace(monkeypatch):
     assert ctrl is not None and not os.path.exists(ctrl)  # wiped (HMAC key gone)
     assert os.path.exists(os.path.join(wd, "keep.txt"))  # workspace survived
     shutil.rmtree(ws, ignore_errors=True)
+
+
+# ── Phase 3 PR-F.6: hosted joint-exit criteria (under the container kernel) ────
+
+
+@pytest.mark.slow
+def test_container_kernel_joint_exit_criteria(monkeypatch):
+    """The §6 joint exit, as far as the macOS dev box can exercise it: a hostile
+    cell in session A's container cannot read host secrets, cannot see another
+    session's workspace, runs with no capabilities on a read-only rootfs, and is
+    memory-capped. (Egress-deny is validated separately by
+    test_container_network_none_blocks_egress_and_metadata + enforced via the ipc
+    posture in prod; macOS tcp egress is open by documented design.)"""
+    import json
+    import os
+    import shutil
+    import uuid as _uuid
+
+    runtime = _container_runtime()
+    if not runtime:
+        pytest.skip("podman + mmm-kernel image not available")
+
+    ws = os.path.join(
+        os.path.expanduser("~"), ".cache", "mmm-ktest-" + _uuid.uuid4().hex[:8]
+    )
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", ws)
+    monkeypatch.setenv("MMM_KERNEL_RUNTIME_BIN", runtime)
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "tcp")
+    monkeypatch.setenv("MMM_KERNEL_READY_TIMEOUT", "120")
+    monkeypatch.setenv("MMM_KERNEL_MEM", "512m")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-SECRET-should-not-cross")
+
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.container_kernel import ContainerKernel
+
+    # A sibling tenant's workspace holds a secret on the host (NOT mounted into A).
+    sibling = W.thread_dir("sessB") / "tenantB_secret.txt"
+    sibling.write_text("tenant-B-data")
+    wdA = str(W.thread_dir("sessA"))
+
+    k = ContainerKernel("sessA")
+    try:
+        probe = (
+            "import os, json\n"
+            "r = {}\n"
+            "r['no_secret_env'] = (os.environ.get('ANTHROPIC_API_KEY') is None "
+            "and os.environ.get('GOOGLE_APPLICATION_CREDENTIALS') is None)\n"
+            "r['caps_dropped'] = open('/proc/self/status').read()"
+            ".split('CapEff:')[1].split()[0] == '0000000000000000'\n"
+            "try:\n"
+            "    open('/opt/mmm/evil','w').write('x'); r['readonly_rootfs'] = False\n"
+            "except OSError:\n"
+            "    r['readonly_rootfs'] = True\n"
+            "r['mem_capped'] = open('/sys/fs/cgroup/memory.max').read().strip() == '536870912'\n"
+            f"r['sibling_isolated'] = not os.path.exists({str(sibling)!r})\n"
+            "print('JOINT', json.dumps(r))"
+        )
+        res = k.execute(probe, _ctx(wdA))
+        assert not res.is_error, res.stdout
+        line = [l for l in res.stdout.splitlines() if l.startswith("JOINT")][0]
+        checks = json.loads(line[len("JOINT ") :])
+        assert all(checks.values()), checks
+    finally:
+        k.shutdown()
+        shutil.rmtree(ws, ignore_errors=True)
