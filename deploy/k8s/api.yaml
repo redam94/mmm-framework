@@ -1,0 +1,35 @@
+# 4a — the FastAPI agent API: the orchestrator that mints per-session kernel pods.
+# It runs hosted (MMM_AGENT_HOSTED=1); cloud creds live ONLY here (mounted as a
+# Secret), never in kernels.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mmm-api, namespace: mmm-system }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: mmm-api } }
+  template:
+    metadata: { labels: { app: mmm-api } }
+    spec:
+      serviceAccountName: mmm-api
+      containers:
+        - name: api
+          image: REGISTRY/mmm-api:PINNED_DIGEST
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: MMM_AGENT_HOSTED, value: "1" }       # hosted profile (PR-F.6)
+            - { name: MMM_AGENT_KERNEL, value: kubernetes } # the KubernetesKernel provisioner
+            - { name: MMM_KERNEL_IMAGE, value: REGISTRY/mmm-kernel:PINNED_DIGEST }
+          envFrom: [{ secretRef: { name: mmm-cloud-creds } }]  # creds ONLY on the API
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          readinessProbe: { httpGet: { path: /health, port: 8000 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mmm-api, namespace: mmm-system }
+spec:
+  selector: { app: mmm-api }
+  ports: [{ port: 80, targetPort: 8000 }]

@@ -1,0 +1,22 @@
+# 4a — the ARQ/redis dependency (job queue / rate limiting).
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis, namespace: mmm-system }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: docker.io/library/redis:7-alpine
+          ports: [{ containerPort: 6379 }]
+          securityContext: { runAsNonRoot: true, runAsUser: 999, readOnlyRootFilesystem: true }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: mmm-system }
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]

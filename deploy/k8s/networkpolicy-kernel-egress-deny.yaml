@@ -1,0 +1,15 @@
+# 4a/4b — default-deny egress for kernel pods + an explicit block of the cloud
+# metadata server (the k8s equivalent of `--network none`/`--internal`, the
+# control that stops ADC token theft). Allows only DNS + the in-cluster kernel
+# control channel; the chat-model API is deliberately NOT allowed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: kernel-egress-deny, namespace: mmm-tenant-TENANT }
+spec:
+  podSelector: { matchLabels: { app: mmm-kernel } }
+  policyTypes: ["Egress"]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]   # DNS only
+    # NB: link-local 169.254.169.254 (metadata) is NOT in any `to:` block, so it
+    # is denied by default. Pair with a CNI that enforces egress (Calico/Cilium).
