@@ -59,6 +59,8 @@ class Kernel(Protocol):
 
     def execute(self, code: str, ctx: KernelContext) -> ExecuteResult: ...
 
+    def run_model_op(self, op_name: str, kwargs: dict) -> dict: ...
+
     def reset(self) -> None: ...
 
     def shutdown(self) -> None: ...
@@ -156,6 +158,34 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 _NAME_RE = re.compile(r"name '([^']+)' is not defined")
 _MAX_OUTPUT_BYTES = 200_000
 
+# Dedicated display_data MIME for model-op results — kept OFF stdout (which
+# carries pymc/serializer prints + progress bars, and stderr is merged into it),
+# so a noisy compute can never corrupt the structured result.
+_MODELOP_MIME = "application/vnd.mmm-modelop+json"
+
+
+def _json_safe(o):
+    """Recursively coerce a value to strict-JSON-safe form: non-finite floats
+    (NaN/Inf, e.g. from an HDI on empty samples) -> None, numpy scalars ->
+    python. Applied to a model-op result so the dashboard payload is clean for
+    the frontend regardless of which kernel produced it."""
+    import math
+
+    if isinstance(o, bool):
+        return o
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: _json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe(v) for v in o]
+    if hasattr(o, "item") and not isinstance(o, (str, bytes, int)):  # numpy scalar
+        try:
+            return _json_safe(o.item())
+        except Exception:
+            return o
+    return o
+
 
 def _strip_ansi(s: str) -> str:
     return _ANSI_RE.sub("", s or "")
@@ -222,6 +252,25 @@ try:
 
     _pio.show = _mmm_capture_show
     _pbd.BaseFigure.show = _mmm_capture_show
+except Exception:
+    pass
+
+# ── model-op driver (Phase 2 PR-B): run a model_ops op on the in-kernel model ──
+try:
+    from mmm_framework.agents import model_ops as _mmm_mo
+    from IPython.display import publish_display_data as _mmm_pdd
+
+    def _mmm_run_op(_name, _kw):
+        _op = _mmm_mo.OPS.get(_name)
+        if _op is None:
+            return {"content": None, "dashboard": {}, "error": "Unknown model op: " + str(_name)}
+        _m = globals().get("mmm")
+        if _m is None:
+            return {"content": None, "dashboard": {}, "error": _mmm_mo.NO_MODEL_MSG}
+        return _op(_m, globals().get("results"), **(_kw or {}))
+
+    def _mmm_emit_op(_name, _kw):
+        _mmm_pdd({"application/vnd.mmm-modelop+json": _mmm_run_op(_name, _kw)})
 except Exception:
     pass
 
@@ -332,6 +381,7 @@ class SubprocessKernel:
         )
         out: list[str] = []
         plots: list = []
+        modelops: list = []
         err = None
         idle = died = False
         interrupted_at = None
@@ -381,9 +431,13 @@ class SubprocessKernel:
             elif mtype == "stream" and capture:
                 out.append(content.get("text", ""))
             elif mtype in ("display_data", "execute_result") and capture:
-                fig = content.get("data", {}).get("application/vnd.plotly.v1+json")
+                data = content.get("data", {})
+                fig = data.get("application/vnd.plotly.v1+json")
                 if fig is not None:
                     plots.append(fig)
+                mo = data.get(_MODELOP_MIME)
+                if mo is not None:
+                    modelops.append(mo)
             elif mtype == "error":
                 err = content
         # DONE = idle (iopub) AND the shell execute_reply. Skip when the kernel
@@ -397,7 +451,7 @@ class SubprocessKernel:
                     break
                 if reply.get("parent_header", {}).get("msg_id") == msg_id:
                     break
-        return "".join(out), plots, err
+        return "".join(out), plots, modelops, err
 
     def execute(self, code: str, ctx: "KernelContext") -> ExecuteResult:
         import traceback as _tb
@@ -411,10 +465,10 @@ class SubprocessKernel:
         with self._lock:
             try:
                 self._ensure_started(ctx)
-                _, _, h_err = self._run(
+                _, _, _, h_err = self._run(
                     _per_call_header(ctx), silent=True, capture=False
                 )
-                stdout, plots, err = self._run(
+                stdout, plots, _modelops, err = self._run(
                     code, silent=False, capture=True, cell_timeout=self._cell_timeout
                 )
             except Exception:
@@ -453,3 +507,40 @@ class SubprocessKernel:
         return ExecuteResult(
             stdout=warn + _truncate(stdout), plots=plots, is_error=False
         )
+
+    def run_model_op(self, op_name: str, kwargs: dict) -> dict:
+        from mmm_framework.agents.model_ops import NO_MODEL_MSG
+
+        with self._lock:
+            # A model op only has a model if the kernel is already live (the fit
+            # moves here in PR-C). A cold/unstarted kernel has no model -> no-model
+            # (don't spawn just to discover that). The op result rides the
+            # dedicated MIME channel, NOT stdout (which carries pymc/serializer
+            # prints + progress bars), so a noisy compute can't corrupt it.
+            if not (self._started and self._km is not None and self._km.is_alive()):
+                return {"content": None, "dashboard": {}, "error": NO_MODEL_MSG}
+            try:
+                code = f"_mmm_emit_op({op_name!r}, {dict(kwargs or {})!r})\n"
+                _, _, modelops, err = self._run(
+                    code, silent=False, capture=True, cell_timeout=self._cell_timeout
+                )
+            except Exception as e:  # noqa: BLE001
+                return {
+                    "content": None,
+                    "dashboard": {},
+                    "error": f"model op transport error: {e}",
+                }
+        if err is not None:
+            detail = err.get("evalue") or err.get("ename") or "error"
+            return {
+                "content": None,
+                "dashboard": {},
+                "error": f"model op error: {detail}",
+            }
+        if not modelops:
+            return {
+                "content": None,
+                "dashboard": {},
+                "error": "model op returned no result",
+            }
+        return _json_safe(modelops[0])

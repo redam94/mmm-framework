@@ -19,6 +19,10 @@ from __future__ import annotations
 
 from typing import Any
 
+# Returned (as the `error`) when an op runs but no fitted model is available —
+# shared so the in-process and subprocess kernels produce the identical message.
+NO_MODEL_MSG = "No fitted model found in state. Please fit the model first."
+
 
 def _ok(content: str, dashboard: dict) -> dict:
     return {"content": content, "dashboard": dashboard, "error": None}

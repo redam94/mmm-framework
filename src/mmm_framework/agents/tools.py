@@ -681,22 +681,13 @@ def fit_mmm_model(
         )
 
 
-# ── Model-op dispatch (Phase 2 PR-A) ──────────────────────────────────────────
-# The interpretation tools keep their guard + Command wrapping here (host/state
-# side) and delegate the model-touching compute to `model_ops` (relocatable into
-# the kernel in PR-B). For now the call is direct/in-process — zero behavior
-# change vs. the inline bodies these replaced.
-_NO_MODEL_MSG = "No fitted model found in state. Please fit the model first."
-
-
-def _no_model_command(tool_call_id) -> Command:
-    return Command(
-        update={
-            "messages": [ToolMessage(content=_NO_MODEL_MSG, tool_call_id=tool_call_id)]
-        }
-    )
-
-
+# ── Model-op dispatch (Phase 2) ───────────────────────────────────────────────
+# The interpretation tools keep their Command wrapping here (host/state side) and
+# delegate the model-touching compute to the active kernel's `run_model_op`
+# (PR-B). The kernel resolves the op from the `model_ops` registry and runs it
+# where the model lives — in-process today (MODEL_CACHE), in the subprocess kernel
+# once fits move there (PR-C). The no-model / unknown-op cases come back as the
+# result's `error`, rendered below.
 def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
     """Turn a model_ops result ``{content, dashboard, error}`` into a Command,
     merging any dashboard payload into ``dashboard_data``."""
@@ -730,10 +721,7 @@ def get_roi_metrics(
     Call this tool when the user asks about the efficiency, ROI, ROAS, or cost-effectiveness of their media channels.
     """
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return _no_model_command(tool_call_id)
-    res = _model_ops.roi_metrics(mmm, _MODEL_CACHE.get("fit_results"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op("roi_metrics", {})
     return _modelop_command(res, state, tool_call_id)
 
 
@@ -748,11 +736,9 @@ def get_component_decomposition(
     Call this tool when the user asks what drove their sales, what percentage of sales came from media, or wants a decomposition breakdown.
     """
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    results = _MODEL_CACHE.get("fit_results")
-    if mmm is None or results is None:
-        return _no_model_command(tool_call_id)
-    res = _model_ops.component_decomposition(mmm, results)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "component_decomposition", {}
+    )
     return _modelop_command(res, state, tool_call_id)
 
 
@@ -767,10 +753,9 @@ def get_model_diagnostics(
     Call this tool when the user asks about model convergence, divergences, R-hat, effective sample size, or diagnostic health.
     """
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return _no_model_command(tool_call_id)
-    res = _model_ops.model_diagnostics(mmm, _MODEL_CACHE.get("fit_results"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "model_diagnostics", {}
+    )
     return _modelop_command(res, state, tool_call_id)
 
 
@@ -785,10 +770,9 @@ def get_adstock_weights(
     Call this tool when the user asks about how long media effects last, decay rates, half-life, or carryover.
     """
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return _no_model_command(tool_call_id)
-    res = _model_ops.adstock_weights(mmm, _MODEL_CACHE.get("fit_results"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "adstock_weights", {}
+    )
     return _modelop_command(res, state, tool_call_id)
 
 
@@ -803,10 +787,9 @@ def get_saturation_curves(
     Call this tool when the user asks about diminishing returns, saturation, scaling, or which channel to invest more in.
     """
     _activate_thread(config)
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return _no_model_command(tool_call_id)
-    res = _model_ops.saturation_curves(mmm, _MODEL_CACHE.get("fit_results"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "saturation_curves", {}
+    )
     return _modelop_command(res, state, tool_call_id)
 
 
@@ -1205,6 +1188,25 @@ class InProcessKernel:
             plots=captured_plots,
             is_error="Error executing code" in output,
         )
+
+    def run_model_op(self, op_name, kwargs):
+        # In-process: the model lives in MODEL_CACHE; call the op directly (same
+        # as the PR-A inline call), JSON-sanitized for parity with the subprocess
+        # path. No-model + unknown-op are returned as data (error), never raised.
+        from mmm_framework.agents.kernels import _json_safe
+
+        op = _model_ops.OPS.get(op_name)
+        if op is None:
+            return {
+                "content": None,
+                "dashboard": {},
+                "error": f"Unknown model op: {op_name}",
+            }
+        mmm = _MODEL_CACHE.get("fitted_model")
+        if mmm is None:
+            return {"content": None, "dashboard": {}, "error": _model_ops.NO_MODEL_MSG}
+        res = op(mmm, _MODEL_CACHE.get("fit_results"), **(kwargs or {}))
+        return _json_safe(res)
 
     def reset(self):
         _NAMESPACE_CACHE.reset()

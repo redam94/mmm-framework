@@ -249,3 +249,56 @@ def test_subprocess_cell_timeout_interrupts_hung_cell(tmp_path):
         assert r.is_error and "Error executing code" in r.stdout
     finally:
         k.shutdown()
+
+
+# ── PR-B: run_model_op dispatch + the model-op MIME result channel ────────────
+
+
+def test_json_safe_sanitizes_nan_inf_numpy():
+    import numpy as np
+    from mmm_framework.agents.kernels import _json_safe
+
+    out = _json_safe(
+        {
+            "a": float("nan"),
+            "b": [1.0, float("inf"), -float("inf")],
+            "c": np.float64(0.5),
+            "d": "x",
+            "e": True,
+        }
+    )
+    assert out == {"a": None, "b": [1.0, None, None], "c": 0.5, "d": "x", "e": True}
+
+
+def test_inprocess_run_model_op_no_model_and_unknown():
+    from mmm_framework.agents import tools as T
+
+    k = T._KERNELS.get_or_spawn("t_rmo")  # shared in-process kernel
+    T._MODEL_CACHE.clear_thread("t_rmo")
+    T.set_current_thread("t_rmo")
+    assert "No fitted model" in k.run_model_op("roi_metrics", {})["error"]
+    assert "Unknown model op" in k.run_model_op("does_not_exist", {})["error"]
+    T.set_current_thread(None)
+
+
+def test_subprocess_run_model_op_no_model_when_cold():
+    from mmm_framework.agents.kernels import SubprocessKernel
+    from mmm_framework.agents.model_ops import NO_MODEL_MSG
+
+    k = (
+        SubprocessKernel()
+    )  # never started -> no model, and we don't spawn to learn that
+    assert k.run_model_op("roi_metrics", {})["error"] == NO_MODEL_MSG
+
+
+def test_subprocess_run_model_op_channel_roundtrip(subk):
+    """An op runs IN the kernel on the in-kernel model and its result crosses the
+    dedicated MIME channel (off stdout). A fake model makes the compute fail, so
+    we get the op's error-as-data back — proving in-kernel execution + transport
+    of a structured dict, uncorrupted by any stdout noise."""
+    k, wd = subk
+    k.execute("mmm = 'FAKE_MODEL'", _ctx(wd))  # inject a (non-real) model global
+    res = k.run_model_op("roi_metrics", {})
+    assert res["content"] is None and res["dashboard"] == {}
+    assert "Error computing ROI" in res["error"]
+    k.execute("del mmm", _ctx(wd))  # clean up the shared kernel
