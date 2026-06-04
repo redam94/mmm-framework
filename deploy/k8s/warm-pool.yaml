@@ -1,0 +1,29 @@
+# 4b — a small pool of pre-imported kernel pods so a session's first cell hits a
+# warm kernel (§5.1 cold-start mitigation; target p95 first-cell <3s warm). The
+# API claims an idle pod (relabels mmm/warm=true -> mmm/thread=<id>) on first use
+# and the Deployment replaces it. Pods are import-warmed but hold no session state.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mmm-kernel-warm-pool, namespace: mmm-system }
+spec:
+  replicas: 4
+  selector: { matchLabels: { app: mmm-kernel, mmm/warm: "true" } }
+  template:
+    metadata: { labels: { app: mmm-kernel, mmm/warm: "true" } }
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: kernel
+          image: REGISTRY/mmm-kernel:PINNED_DIGEST
+          # pre-import the heavy stack so the claim is warm (no first-cell import cost)
+          command: ["tini", "--", "python", "-c", "import mmm_framework.agents.tools; import time; time.sleep(1e9)"]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          resources: { requests: { cpu: "1", memory: 512Mi }, limits: { cpu: "4", memory: 2Gi } }
+          env: [{ name: HOME, value: /tmp }]
+          volumeMounts: [{ name: scratch, mountPath: /tmp }]
+      volumes: [{ name: scratch, emptyDir: { medium: Memory, sizeLimit: 1Gi } }]
