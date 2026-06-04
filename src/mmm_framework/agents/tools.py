@@ -22,6 +22,7 @@ from mmm_framework.agents.runtime import (
     get_current_thread,
 )
 from mmm_framework.agents import workspace as _ws
+from mmm_framework.agents import model_ops as _model_ops
 from mmm_framework.agents.kernels import (
     KernelContext,
     ExecuteResult,
@@ -100,8 +101,6 @@ from mmm_framework.reporting.helpers import (
     generate_model_summary,
     compute_roi_with_uncertainty,
     compute_component_decomposition,
-    _get_diagnostics,
-    compute_adstock_weights,
     compute_saturation_curves_with_uncertainty,
     compute_marginal_roi,
 )
@@ -682,6 +681,44 @@ def fit_mmm_model(
         )
 
 
+# ── Model-op dispatch (Phase 2 PR-A) ──────────────────────────────────────────
+# The interpretation tools keep their guard + Command wrapping here (host/state
+# side) and delegate the model-touching compute to `model_ops` (relocatable into
+# the kernel in PR-B). For now the call is direct/in-process — zero behavior
+# change vs. the inline bodies these replaced.
+_NO_MODEL_MSG = "No fitted model found in state. Please fit the model first."
+
+
+def _no_model_command(tool_call_id) -> Command:
+    return Command(
+        update={
+            "messages": [ToolMessage(content=_NO_MODEL_MSG, tool_call_id=tool_call_id)]
+        }
+    )
+
+
+def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
+    """Turn a model_ops result ``{content, dashboard, error}`` into a Command,
+    merging any dashboard payload into ``dashboard_data``."""
+    if res.get("error"):
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content=res["error"], tool_call_id=tool_call_id)
+                ]
+            }
+        )
+    update = {
+        "messages": [ToolMessage(content=res["content"], tool_call_id=tool_call_id)]
+    }
+    dash = res.get("dashboard") or {}
+    if dash:
+        dashboard_data = dict(state.get("dashboard_data") or {})
+        dashboard_data.update(dash)
+        update["dashboard_data"] = dashboard_data
+    return Command(update=update)
+
+
 @tool
 def get_roi_metrics(
     state: Annotated[dict, InjectedState],
@@ -695,48 +732,9 @@ def get_roi_metrics(
     _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model found in state. Please fit the model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    try:
-        roi_df = compute_roi_with_uncertainty(mmm, hdi_prob=0.94)
-
-        # Format as markdown table
-        content = "### ROI Analysis\n\n| Channel | Mean ROI | 94% HDI | Prob Profitable |\n|---|---|---|---|\n"
-        for _, row in roi_df.iterrows():
-            ci = f"[{row['roi_hdi_low']:.2f}, {row['roi_hdi_high']:.2f}]"
-            content += f"| {row['channel']} | {row['roi_mean']:.2f} | {ci} | {row['prob_profitable']:.1%} |\n"
-
-        dashboard_data = state.get("dashboard_data", {})
-        if dashboard_data is None:
-            dashboard_data = {}
-        dashboard_data["roi_metrics"] = roi_df.to_dict(orient="records")
-
-        return Command(
-            update={
-                "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
-                "dashboard_data": dashboard_data,
-            }
-        )
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Error computing ROI: {str(e)}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return _no_model_command(tool_call_id)
+    res = _model_ops.roi_metrics(mmm, _MODEL_CACHE.get("fit_results"))
+    return _modelop_command(res, state, tool_call_id)
 
 
 @tool
@@ -753,57 +751,9 @@ def get_component_decomposition(
     mmm = _MODEL_CACHE.get("fitted_model")
     results = _MODEL_CACHE.get("fit_results")
     if mmm is None or results is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model found in state. Please fit the model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    try:
-        # Don't pass results as second arg, it expects include_time_series bool
-        decomp_list = compute_component_decomposition(mmm, include_time_series=False)
-
-        content = "### Component Decomposition\n\n"
-        content += "| Component | Contribution | Percentage |\n|---|---|---|\n"
-
-        decomp_json = []
-        for d in decomp_list:
-            content += f"| {d.component} | {d.total_contribution:,.0f} | {d.pct_of_total:.1%} |\n"
-            decomp_json.append(
-                {
-                    "component": d.component,
-                    "total_contribution": d.total_contribution,
-                    "pct_of_total": d.pct_of_total,
-                }
-            )
-
-        dashboard_data = state.get("dashboard_data", {})
-        if dashboard_data is None:
-            dashboard_data = {}
-        dashboard_data["decomposition"] = decomp_json
-
-        return Command(
-            update={
-                "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
-                "dashboard_data": dashboard_data,
-            }
-        )
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Error computing decomposition: {str(e)}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return _no_model_command(tool_call_id)
+    res = _model_ops.component_decomposition(mmm, results)
+    return _modelop_command(res, state, tool_call_id)
 
 
 @tool
@@ -819,65 +769,9 @@ def get_model_diagnostics(
     _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model found in state. Please fit the model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    try:
-        diag = _get_diagnostics(mmm)
-
-        if not diag:
-            return Command(
-                update={
-                    "messages": [
-                        ToolMessage(
-                            content="Diagnostics could not be extracted. Make sure ArviZ is installed and the model sampled correctly.",
-                            tool_call_id=tool_call_id,
-                        )
-                    ]
-                }
-            )
-
-        content = "### Model Diagnostics\n\n"
-        content += f"**Converged:** {'✅ Yes' if diag.get('converged') else '⚠️ No'}\n"
-        content += f"**Divergences:** {diag.get('divergences', 0)} (Should be 0)\n"
-        content += f"**Max R-hat:** {diag.get('rhat_max', 'N/A')} (Should be < 1.01)\n"
-        content += (
-            f"**Min Bulk ESS:** {diag.get('ess_bulk_min', 'N/A')} (Should be > 400)\n"
-        )
-        content += (
-            f"**Min Tail ESS:** {diag.get('ess_tail_min', 'N/A')} (Should be > 400)\n"
-        )
-
-        dashboard_data = state.get("dashboard_data", {})
-        if dashboard_data is None:
-            dashboard_data = {}
-        dashboard_data["diagnostics"] = diag
-
-        return Command(
-            update={
-                "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
-                "dashboard_data": dashboard_data,
-            }
-        )
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Error computing diagnostics: {str(e)}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return _no_model_command(tool_call_id)
+    res = _model_ops.model_diagnostics(mmm, _MODEL_CACHE.get("fit_results"))
+    return _modelop_command(res, state, tool_call_id)
 
 
 @tool
@@ -893,54 +787,9 @@ def get_adstock_weights(
     _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model found in state. Please fit the model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    try:
-        adstock = compute_adstock_weights(mmm)
-
-        content = "### Adstock (Carryover) Effects\n\n"
-        content += "| Channel | Half-life (Periods) | Total Carryover % | Alpha (Decay Rate) |\n|---|---|---|---|\n"
-
-        adstock_json = {}
-        for ch, result in adstock.items():
-            content += f"| {ch} | {result.half_life:.1f} | {result.total_carryover:.1%} | {result.alpha_mean:.3f} |\n"
-            adstock_json[ch] = {
-                "half_life": result.half_life,
-                "total_carryover": result.total_carryover,
-                "alpha_mean": result.alpha_mean,
-            }
-
-        dashboard_data = state.get("dashboard_data", {})
-        if dashboard_data is None:
-            dashboard_data = {}
-        dashboard_data["adstock"] = adstock_json
-
-        return Command(
-            update={
-                "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
-                "dashboard_data": dashboard_data,
-            }
-        )
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Error computing adstock weights: {str(e)}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return _no_model_command(tool_call_id)
+    res = _model_ops.adstock_weights(mmm, _MODEL_CACHE.get("fit_results"))
+    return _modelop_command(res, state, tool_call_id)
 
 
 @tool
@@ -956,61 +805,9 @@ def get_saturation_curves(
     _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
     if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model found in state. Please fit the model first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    try:
-        curves = compute_saturation_curves_with_uncertainty(mmm)
-
-        content = "### Saturation (Diminishing Returns) Analysis\n\n"
-        content += "| Channel | Current Saturation Level | Marginal Response (Next $1) |\n|---|---|---|\n"
-
-        saturation_json = {}
-        for ch, curve in curves.items():
-            sat_pct = curve.saturation_level
-            # Determine if highly saturated
-            status = (
-                "🔴 High"
-                if sat_pct > 0.8
-                else "🟡 Medium" if sat_pct > 0.5 else "🟢 Low"
-            )
-            content += f"| {ch} | {sat_pct:.1%} ({status}) | {curve.marginal_response_at_current:.3f} |\n"
-            saturation_json[ch] = {
-                "saturation_level": sat_pct,
-                "marginal_response_at_current": curve.marginal_response_at_current,
-                "status": status.split(" ")[1],
-            }
-
-        dashboard_data = state.get("dashboard_data", {})
-        if dashboard_data is None:
-            dashboard_data = {}
-        dashboard_data["saturation"] = saturation_json
-
-        return Command(
-            update={
-                "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
-                "dashboard_data": dashboard_data,
-            }
-        )
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Error computing saturation: {str(e)}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return _no_model_command(tool_call_id)
+    res = _model_ops.saturation_curves(mmm, _MODEL_CACHE.get("fit_results"))
+    return _modelop_command(res, state, tool_call_id)
 
 
 # ── Plot normalization + error formatting (shared with the kernel impls) ──────
@@ -2074,7 +1871,6 @@ def save_fitted_model(
     """
     _activate_thread(config)
     fitted = _MODEL_CACHE.get("fitted_model")
-    results = _MODEL_CACHE.get("fit_results")
     if fitted is None:
         return Command(
             update={
@@ -2092,7 +1888,10 @@ def save_fitted_model(
     try:
         from mmm_framework.serialization import MMMSerializer
 
-        MMMSerializer().save(fitted, results, save_dir)
+        # save(model, path, ...) is a classmethod — the model carries its own
+        # trace; there is no `results` parameter (the prior call mis-bound
+        # `results` to `path` and always raised -> "Save failed").
+        MMMSerializer.save(fitted, save_dir)
         return Command(
             update={
                 "messages": [
