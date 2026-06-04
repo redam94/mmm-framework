@@ -20,6 +20,7 @@ Transport (decided in PR-F.0, ``deploy/kernel/F0-connectivity-findings.md``):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -125,6 +126,7 @@ class ContainerKernel(SubprocessKernel):
         )
         self._image = os.environ.get("MMM_KERNEL_IMAGE", "mmm-kernel:latest")
         self._transport = _default_transport()
+        self._egress_posture = "unknown"  # set by _net_args (PR-F.4)
         self._cname: str | None = None
         self._ctrl_dir: str | None = None  # per-kernel host dir for conn/sockets
         # podman needs a clean registry auth file when the host docker config has a
@@ -150,13 +152,45 @@ class ContainerKernel(SubprocessKernel):
         env["HOME"] = "/tmp"
         return env
 
+    def _ensure_egress_network(self) -> str:
+        """An ``--internal`` podman network (no external route → egress *and* the
+        cloud metadata server unreachable, proven in PR-F.0). Created on demand."""
+        name = os.environ.get("MMM_KERNEL_EGRESS_NET", "mmm-egress-deny")
+        exists = subprocess.run(
+            [self._runtime_bin, "network", "exists", name], env=self._podman_env
+        )
+        if exists.returncode != 0:
+            subprocess.run(
+                [self._runtime_bin, "network", "create", "--internal", name],
+                env=self._podman_env,
+                capture_output=True,
+            )
+        return name
+
     def _net_args(self) -> list[str]:
-        # PR-F.4 hardens this (internal/egress-deny network for tcp). For ipc there
-        # is no network at all.
+        # PR-F.4: deny egress by default. The chat-model API is deliberately NOT
+        # reachable (the kernel never calls it) and the metadata server is blocked.
+        egress_open = os.environ.get("MMM_KERNEL_EGRESS", "deny") == "open"
         if self._transport == "ipc":
+            # No network at all ⇒ egress + metadata fully denied (the prod posture).
+            self._egress_posture = "open" if egress_open else "denied:no-network"
+            if egress_open:  # rare debug override
+                net = os.environ.get("MMM_KERNEL_NET")
+                return ["--network", net] if net else []
             return ["--network", "none"]
-        net = os.environ.get("MMM_KERNEL_NET")
-        return ["--network", net] if net else []
+        # tcp: the control channel needs port-forward, which can't run on an
+        # --internal network rootless on macOS (PR-F.0). So enforce egress-deny via
+        # the internal net on Linux; on the macOS dev box it stays open (documented).
+        if egress_open:
+            self._egress_posture = "open"
+            net = os.environ.get("MMM_KERNEL_NET")
+            return ["--network", net] if net else []
+        if sys.platform == "darwin":
+            self._egress_posture = "open:unenforced-macos-dev"
+            net = os.environ.get("MMM_KERNEL_NET")
+            return ["--network", net] if net else []
+        self._egress_posture = "denied:internal-net"
+        return ["--network", self._ensure_egress_network()]
 
     def _resource_args(self) -> list[str]:
         # PR-F.3: cgroup mem + pids + cpu caps and fd/proc ulimits so a runaway or
@@ -304,6 +338,19 @@ class ContainerKernel(SubprocessKernel):
             thread_id=self._thread_id,
             kind="container",
             transport=self._transport,
+            egress=self._egress_posture,
+        )
+        # Surface the egress posture as its own audit line; warn loudly if a tcp
+        # kernel is running unenforced (macOS dev) so it can't be mistaken for prod.
+        _audit(
+            "kernel_egress",
+            level=(
+                logging.WARNING
+                if self._egress_posture.startswith("open")
+                else logging.INFO
+            ),
+            thread_id=self._thread_id,
+            posture=self._egress_posture,
         )
 
     def reset(self) -> None:

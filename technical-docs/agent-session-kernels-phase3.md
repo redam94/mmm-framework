@@ -186,10 +186,17 @@ Phase 4d.
   rootfs (write to `/opt` errors), and **pytensor compiles C under the sandbox** (fit stack intact).
   *Note:* podman exposes no tmpfs **inode** quota — size cap bounds it; per-tenant inode limits on
   the persistent workspace are a host-fs project-quota concern (prod).
-- **PR-F.4 — Egress deny-by-default + metadata block:** deny all egress; explicitly block
-  link-local/`169.254.169.254`/`metadata.google.internal`; the chat model API is **not**
-  allowlisted (the kernel has no reason to call it). **Log every drop** (`mmm_audit`
-  `denied_egress`). This is the control that actually stops ADC token theft.
+- **PR-F.4 — Egress deny-by-default + metadata block — ✅ DONE** (`_net_args`/
+  `_ensure_egress_network`): egress denied by default (`MMM_KERNEL_EGRESS=deny`). **ipc → no
+  network at all** (`--network none`) — internet, link-local `169.254.169.254`, and
+  `metadata.google.internal` all unreachable (validated against the real image); the chat-model
+  API is not reachable either. **tcp → an `--internal` podman network on Linux** (proven in PR-F.0
+  to block internet + metadata while port-forward works); on the **macOS dev box** rootless can't
+  combine port-forward + internal net, so the posture is honestly recorded as
+  `open:unenforced-macos-dev` and audited at **WARNING** so it can't be mistaken for prod. The
+  per-spawn `kernel_egress` audit line records the posture. *Note:* with deny-all there are no
+  per-packet "drops" to log (nothing escapes); per-drop logging is the allowlist-proxy model
+  (Phase 4d). This is the control that actually stops ADC token theft.
 - **PR-F.5 — Ephemeral overlay + teardown-wipe + fail-closed:** per-kernel ephemeral overlay
   separate from the persistent workspace mount; on evict/crash kill the cgroup, unmount and wipe
   the overlay before any reuse (never the persistent session dir — §1.3). **Fail-closed:** if any

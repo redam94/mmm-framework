@@ -600,3 +600,53 @@ def test_container_kernel_resource_caps_and_readonly(monkeypatch):
     finally:
         k.shutdown()
         shutil.rmtree(ws, ignore_errors=True)
+
+
+# ── Phase 3 PR-F.4: egress deny + metadata block ──────────────────────────────
+
+
+def test_container_kernel_egress_posture(monkeypatch):
+    """ipc denies egress with no network at all; the posture is recorded (and an
+    explicit open override is honoured for debug)."""
+    from mmm_framework.agents.container_kernel import ContainerKernel
+
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "ipc")
+    monkeypatch.setenv("MMM_KERNEL_EGRESS", "deny")
+    k = ContainerKernel("t")
+    assert k._net_args() == ["--network", "none"]
+    assert k._egress_posture == "denied:no-network"
+
+    monkeypatch.setenv("MMM_KERNEL_TRANSPORT", "tcp")
+    monkeypatch.setenv("MMM_KERNEL_EGRESS", "open")
+    k2 = ContainerKernel("t")
+    k2._net_args()
+    assert k2._egress_posture == "open"
+
+
+@pytest.mark.slow
+def test_container_network_none_blocks_egress_and_metadata():
+    """The prod egress posture (--network none, used by the ipc transport) makes
+    the cloud metadata server AND the public internet unreachable."""
+    import os
+    import subprocess
+
+    runtime = _container_runtime()
+    if not runtime:
+        pytest.skip("podman + mmm-kernel image not available")
+    image = os.environ.get("MMM_KERNEL_IMAGE", "mmm-kernel:latest")
+    code = (
+        "import socket; socket.setdefaulttimeout(4)\n"
+        "ok = True\n"
+        "for t in [('169.254.169.254', 80), ('1.1.1.1', 53)]:\n"
+        "    try:\n"
+        "        socket.create_connection(t); ok = False\n"
+        "    except Exception:\n"
+        "        pass\n"
+        "print('BLOCKED' if ok else 'REACHED')"
+    )
+    r = subprocess.run(
+        [runtime, "run", "--rm", "--network", "none", image, "python", "-c", code],
+        capture_output=True,
+        text=True,
+    )
+    assert "BLOCKED" in r.stdout, (r.stdout, r.stderr)
