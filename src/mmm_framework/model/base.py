@@ -386,6 +386,94 @@ class BayesianMMM:
                 sigmas[i] = _CONFOUNDER_PRIOR_SIGMA
         return sigmas
 
+    def _selection_active(self) -> bool:
+        """True when a variable-selection prior should be wired on controls.
+
+        Off by default and whenever there are fewer than two *selectable* (non-
+        confounder) controls -- confounders are never shrunk, so selection needs a
+        non-trivial selectable set to do anything.
+        """
+        method = getattr(self.model_config.control_selection, "method", "none")
+        if self.n_controls == 0 or method == "none":
+            return False
+        n_select = sum(
+            1 for r in self._control_causal_roles if r != CausalControlRole.CONFOUNDER
+        )
+        return n_select >= 2
+
+    def _build_control_betas(self, sigma: "pt.TensorVariable | None"):
+        """Control coefficients, honoring causal roles and optional selection.
+
+        **Off (default):** a single ``Normal('beta_controls', sigma=role_widths)``
+        -- *bit-identical* to the historical model.
+
+        **On** (``ModelConfig.control_selection.method != 'none'``): confounders
+        keep the wide, un-shrunk prior (shrinking a confounder re-opens the
+        back-door), while the remaining precision/irrelevant controls get a
+        horseshoe / spike-slab / LASSO prior so the model *selects* among them.
+        ``beta_controls`` is preserved (name, shape, ``control`` dim) so reporting
+        and validation are unaffected.
+        """
+        if not self._selection_active():
+            return pm.Normal(
+                "beta_controls", mu=0, sigma=self._control_prior_sigmas(),
+                shape=self.n_controls,
+            )
+
+        conf_mask = np.array(
+            [r == CausalControlRole.CONFOUNDER for r in self._control_causal_roles],
+            dtype=bool,
+        )
+        beta = pt.zeros(self.n_controls)
+        if conf_mask.any():
+            conf_idx = np.where(conf_mask)[0]
+            beta_conf = pm.Normal(
+                "beta_controls_confounder", mu=0,
+                sigma=_CONFOUNDER_PRIOR_SIGMA, shape=int(conf_mask.sum()),
+            )
+            beta = pt.set_subtensor(beta[conf_idx], beta_conf)
+        sel_idx = np.where(~conf_mask)[0]
+        beta = pt.set_subtensor(
+            beta[sel_idx], self._selection_prior(int((~conf_mask).sum()), sigma)
+        )
+        return pm.Deterministic("beta_controls", beta, dims="control")
+
+    def _selection_prior(self, n_select: int, sigma: "pt.TensorVariable | None"):
+        """Coefficients for the selectable controls under the configured method.
+
+        Reuses the tested ``mmm_extensions`` priors (lazy import: only when
+        selection is actually enabled). The horseshoe global scale uses the real
+        observation ``sigma`` (Piironen & Vehtari, 2017), so it shrinks correctly
+        on the standardized scale.
+        """
+        cfg = self.model_config.control_selection
+        from ..mmm_extensions.components.variable_selection import (
+            create_bayesian_lasso_prior,
+            create_regularized_horseshoe_prior,
+            create_spike_slab_prior,
+        )
+        from ..mmm_extensions.config import (
+            HorseshoeConfig,
+            LassoConfig,
+            SpikeSlabConfig,
+        )
+
+        name = "beta_controls_select"
+        if cfg.method in ("horseshoe", "finnish_horseshoe"):
+            hc = HorseshoeConfig(
+                expected_nonzero=max(1, min(cfg.expected_nonzero, n_select - 1))
+            )
+            return create_regularized_horseshoe_prior(
+                name, n_select, self.n_obs, sigma, hc
+            ).beta
+        if cfg.method == "spike_slab":
+            return create_spike_slab_prior(name, n_select, SpikeSlabConfig()).beta
+        if cfg.method == "lasso":
+            return create_bayesian_lasso_prior(
+                name, n_select, LassoConfig(regularization=cfg.regularization)
+            ).beta
+        raise ValueError(f"Unknown control_selection.method: {cfg.method!r}")
+
     def _get_group_indices(self, level_name: str) -> np.ndarray:
         """Get group indices for a hierarchical level."""
         cols = self.mff_config.columns
@@ -1005,19 +1093,17 @@ class BayesianMMM:
                 self._add_experiment_likelihoods(channel_handles)
 
             # CONTROL EFFECTS
-            # A single ``beta_controls`` vector (kept for reporting/validation
-            # which read it by name) but with a per-control prior width: a
-            # confounder gets a wide, un-shrunk prior so it is not biased toward
-            # zero, while precision controls keep the historical Normal(0, 0.5).
-            # Mediators/colliders were already refused in ``_prepare_data``.
+            # ``beta_controls`` (kept for reporting/validation which read it by
+            # name): a confounder gets a wide, un-shrunk prior so it is not biased
+            # toward zero, while precision controls keep the historical
+            # Normal(0, 0.5). When ``control_selection`` is enabled (off by
+            # default), the non-confounder controls instead get a horseshoe /
+            # spike-slab / LASSO prior so the model selects among them -- the
+            # horseshoe needs the observation ``sigma`` for its global scale, so
+            # create it here on the selection path (the off path is unchanged).
+            sigma = pm.HalfNormal("sigma", sigma=0.5) if self._selection_active() else None
             if self.n_controls > 0:
-                control_sigmas = self._control_prior_sigmas()
-                beta_controls = pm.Normal(
-                    "beta_controls",
-                    mu=0,
-                    sigma=control_sigmas,
-                    shape=self.n_controls,
-                )
+                beta_controls = self._build_control_betas(sigma)
                 control_contribution = pt.dot(X_controls_data, beta_controls)
                 # Per-control, per-obs contribution (column c = X[:, c] * beta_c).
                 pm.Deterministic(
@@ -1040,7 +1126,10 @@ class BayesianMMM:
                 + control_contribution
             )
 
-            sigma = pm.HalfNormal("sigma", sigma=0.5)
+            # Off path: create sigma here exactly as before (bit-identical). On
+            # the selection path it was already created above for the horseshoe.
+            if sigma is None:
+                sigma = pm.HalfNormal("sigma", sigma=0.5)
             y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
             pm.Deterministic(
                 "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
