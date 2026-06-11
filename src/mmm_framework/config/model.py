@@ -37,13 +37,34 @@ class HierarchicalConfig(BaseModel):
 
 
 class SeasonalityConfig(BaseModel):
-    """Configuration for seasonality components."""
+    """Configuration for seasonality components.
+
+    Amplitude scale note: the Fourier coefficients get ``Normal(0, prior_sigma)``
+    priors on **standardized** ``y``, so ``prior_sigma`` bounds how much of a
+    standard deviation each harmonic may swing the KPI — it is the seasonal
+    amplitude prior. The historic default (0.3) suits mild seasonality; raise it
+    (e.g. 0.5–1.0) for strongly seasonal categories, or the seasonal signal gets
+    squeezed into trend/media. Per-component overrides win over ``prior_sigma``.
+    """
 
     yearly: int | None = 2  # Fourier order for yearly seasonality
     monthly: int | None = None
     weekly: int | None = None
 
+    # Amplitude prior (sigma of the Normal prior on Fourier coefficients)
+    prior_sigma: float = 0.3
+    yearly_prior_sigma: float | None = None
+    monthly_prior_sigma: float | None = None
+    weekly_prior_sigma: float | None = None
+
     model_config = {"extra": "forbid"}
+
+    def prior_sigma_for(self, component: str) -> float:
+        """Amplitude prior sigma for ``component`` ('yearly'/'monthly'/'weekly'),
+        falling back to the shared ``prior_sigma``. getattr defaults keep
+        configs pickled before these fields existed loadable."""
+        override = getattr(self, f"{component}_prior_sigma", None)
+        return getattr(self, "prior_sigma", 0.3) if override is None else override
 
 
 class ControlSelectionConfig(BaseModel):

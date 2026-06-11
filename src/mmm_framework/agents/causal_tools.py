@@ -255,14 +255,19 @@ def propose_dag(
         cname = conf.get("name", "Confounder")
         affects = conf.get("affects", [])
         cid_pair = _normalize_node_ids([cname])[0]
-        if cid_pair[0] in {n.id for n in nodes}:
-            continue
-        nodes.append(
-            DAGNode(
-                id=cid_pair[0], variable_name=cid_pair[1], node_type=NodeType.CONTROL
+        # The confounder node may already exist (e.g. the same variable was also
+        # listed in `controls`). In that case keep the existing node, but still
+        # add its fan-out edges below — otherwise the confounder→target edges
+        # (the whole point of declaring a confounder) silently disappear.
+        if cid_pair[0] not in {n.id for n in nodes}:
+            nodes.append(
+                DAGNode(
+                    id=cid_pair[0],
+                    variable_name=cid_pair[1],
+                    node_type=NodeType.CONTROL,
+                )
             )
-        )
-        name_to_id[cid_pair[1]] = cid_pair[0]
+            name_to_id[cid_pair[1]] = cid_pair[0]
         for target_name in affects:
             tid_node = name_to_id.get(target_name)
             if tid_node is None:
@@ -307,6 +312,21 @@ def propose_dag(
             edges.append(
                 DAGEdge(source=src, target=tgt, edge_type=EdgeType.CROSS_EFFECT)
             )
+
+    # Dedup edges by (source, target), keeping the first occurrence so the
+    # original edge_type is preserved. A confounder whose `affects` includes the
+    # KPI (or a node already wired up as a control) would otherwise produce a
+    # duplicate edge, e.g. Distribution→Sales added by both the controls loop and
+    # the confounder fan-out.
+    seen_edges: set[tuple[str, str]] = set()
+    deduped_edges: list[DAGEdge] = []
+    for edge in edges:
+        key = (edge.source, edge.target)
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        deduped_edges.append(edge)
+    edges = deduped_edges
 
     spec = DAGSpec(nodes=nodes, edges=edges)
     validation = validate_dag(spec)
@@ -781,109 +801,29 @@ def prior_predictive_check(
     """Step 4 of the workflow. Sample from the prior predictive distribution
     and report whether implied outcomes are on a physically plausible scale.
 
-    LIMITATION: with the current `fit_mmm_model` pipeline, the PyMC model
-    object is only kept in cache AFTER fitting. So this tool effectively runs
-    a *retrospective* prior predictive check (priors are fixed, model
-    structure exists, but we're using the already-fit model). For a true
-    pre-fit check, do a short throwaway fit (draws=10, tune=10) first — it's
-    still faster than the real fit and gives us a model to draw from.
+    Runs PRE-FIT: the model graph is built from the active model_spec and
+    dataset without fitting, so call this BEFORE `fit_mmm_model` (no throwaway
+    fit needed). It always reflects the CURRENT spec/priors — re-run it after
+    any prior change. Requires a configured model and a loaded dataset.
     """
-    from mmm_framework.agents.tools import _MODEL_CACHE  # avoid circular import
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command, _normalized_spec
+    from mmm_framework.agents.runtime import set_current_thread, get_current_thread
 
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=(
-                            "Prior predictive check needs a built PyMC model object. "
-                            "Run a quick throwaway fit (draws=10, tune=10) first, then "
-                            "call this tool — the result reflects the priors, not the "
-                            "(barely-touched) posterior."
-                        ),
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-    try:
-        idata = mmm.sample_prior_predictive(samples=int(n_samples))
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Prior predictive sampling failed: {e}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    # Summary stats on the prior-predictive KPI
-    try:
-        import numpy as np
-
-        pp = idata.prior_predictive
-        var = list(pp.data_vars)[0]  # first observed-data variable
-        arr = pp[var].values.reshape(-1)
-        summary = {
-            "samples": int(arr.size),
-            "min": float(np.nanmin(arr)),
-            "p05": float(np.nanpercentile(arr, 5)),
-            "median": float(np.nanmedian(arr)),
-            "p95": float(np.nanpercentile(arr, 95)),
-            "max": float(np.nanmax(arr)),
-            "frac_negative": float(np.mean(arr < 0)),
-        }
-    except Exception as e:
-        summary = {"error": str(e)}
-
-    dashboard = state.get("dashboard_data", {}) if state else {}
-    dashboard["prior_predictive_summary"] = summary
-
-    tid = _thread_id_from(config)
-    flag_neg = summary.get("frac_negative", 0) > 0.05
-    if tid:
-        sessions_store.record_assumption(
-            thread_id=tid,
-            key="prior_predictive_check",
-            value=summary,
-            rationale=(
-                "Prior predictive sanity check. "
-                + (
-                    "⚠️ More than 5% of samples imply negative outcomes — consider tighter priors."
-                    if flag_neg
-                    else "Implied outcome range looks plausible."
-                )
-            ),
-            category="prior",
-            change_note=f"n_samples={n_samples}",
-        )
-
-    lines = ["### Prior Predictive Check", ""]
-    if "error" in summary:
-        lines.append(f"Could not summarize: {summary['error']}")
-    else:
-        lines.append(f"- Samples: {summary['samples']:,}")
-        lines.append(
-            f"- Implied KPI range (5–95%): [{summary['p05']:,.0f}, {summary['p95']:,.0f}]"
-        )
-        lines.append(f"- Median: {summary['median']:,.0f}")
-        lines.append(f"- Fraction negative: {summary['frac_negative']:.1%}")
-        if flag_neg:
-            lines.append(
-                "\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting."
-            )
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
-            ],
-            "dashboard_data": dashboard,
-        }
+    set_current_thread(_thread_id_from(config))
+    spec = _normalized_spec((state or {}).get("model_spec"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "prior_predictive_check",
+        {
+            "n_samples": int(n_samples),
+            "spec": spec if spec.get("kpi") else None,
+            "dataset_path": (state or {}).get("dataset_path"),
+        },
     )
+    _assumption = res.pop("assumption", None) if isinstance(res, dict) else None
+    tid = _thread_id_from(config)
+    if _assumption and tid and not res.get("error"):
+        sessions_store.record_assumption(thread_id=tid, **_assumption)
+    return _modelop_command(res, state or {}, tool_call_id)
 
 
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────
@@ -910,108 +850,18 @@ def leave_one_out_decomposition(
         component_to_drop: name of the component to zero out (case-insensitive).
             Must match a component in the existing decomposition.
     """
-    from mmm_framework.agents.tools import _MODEL_CACHE
-    from mmm_framework.reporting.helpers import compute_component_decomposition
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command
+    from mmm_framework.agents.runtime import set_current_thread, get_current_thread
 
-    mmm = _MODEL_CACHE.get("fitted_model")
-    if mmm is None:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No fitted model; fit one first.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-    try:
-        decomp = compute_component_decomposition(mmm, include_time_series=False)
-    except Exception as e:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Could not compute decomposition: {e}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    target = component_to_drop.strip().lower()
-    components = [(d.component, d.total_contribution) for d in decomp]
-    match_idx = next(
-        (i for i, (c, _) in enumerate(components) if c.lower() == target), -1
+    set_current_thread(_thread_id_from(config))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "leave_one_out", {"component_to_drop": component_to_drop}
     )
-    if match_idx < 0:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=(
-                            f"Component `{component_to_drop}` not found. Known: "
-                            + ", ".join(f"`{c}`" for c, _ in components)
-                        ),
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    total = sum(v for _, v in components)
-    dropped_name, dropped_val = components[match_idx]
-    remaining = [(c, v) for c, v in components if c != dropped_name]
-    remaining_total = sum(v for _, v in remaining)
-    new_pct = [
-        (c, v / remaining_total if remaining_total else 0.0) for c, v in remaining
-    ]
-    pct_loss = dropped_val / total if total else 0.0
-
-    dashboard = state.get("dashboard_data", {}) if state else {}
-    dashboard["sensitivity_loo"] = {
-        "dropped": dropped_name,
-        "fraction_dropped": pct_loss,
-        "remaining_decomposition": [
-            {"component": c, "pct_of_remaining": p} for c, p in new_pct
-        ],
-    }
-
+    _assumption = res.pop("assumption", None) if isinstance(res, dict) else None
     tid = _thread_id_from(config)
-    if tid:
-        sessions_store.record_assumption(
-            thread_id=tid,
-            key=f"sensitivity::loo::{dropped_name}",
-            value=dashboard["sensitivity_loo"],
-            rationale=(
-                f"Leave-one-out: dropping `{dropped_name}` removes {pct_loss:.1%} "
-                "of total fitted KPI (post-hoc reweighting; not a refit)."
-            ),
-            category="other",
-            change_note="leave-one-out decomposition",
-        )
-
-    lines = [
-        "⚠️ **This is NOT a sensitivity refit.** It only reweights the *existing* "
-        "posterior decomposition assuming the dropped channel contributed zero. "
-        "Use this for quick what-if framing only; for honest sensitivity to "
-        "the fit, re-run `fit_mmm_model` with the channel removed.",
-        "",
-        f"### Leave-one-out: drop `{dropped_name}`",
-        "",
-        f"- `{dropped_name}` accounts for **{pct_loss:.1%}** of fitted KPI.",
-        f"- Remaining components renormalize to:",
-    ]
-    for c, p in new_pct:
-        lines.append(f"  - `{c}`: {p:.1%}")
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
-            ],
-            "dashboard_data": dashboard,
-        }
-    )
+    if _assumption and tid and not res.get("error"):
+        sessions_store.record_assumption(thread_id=tid, **_assumption)
+    return _modelop_command(res, state or {}, tool_call_id)
 
 
 # ── Define (lock) an analysis plan ───────────────────────────────────────────
@@ -1171,10 +1021,186 @@ def check_spec_divergence(
     )
 
 
+@tool
+def build_model_from_dag(
+    state: Annotated[dict, InjectedState],
+    reason: str = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Derive the model specification from the session's causal DAG (built with
+    propose_dag or edited in the Causal tab): KPI node -> kpi, MEDIA nodes ->
+    media_channels, CONTROL nodes -> control_variables. Per-channel settings
+    (adstock/saturation/priors) already configured for surviving channels are
+    preserved; user-locked fields are honored (conflicts go to the pending
+    confirmation list, never silently applied).
+
+    Call this after the DAG is validated, instead of configure_model, so the
+    fitted model matches the pre-registered causal structure.
+    """
+    from mmm_framework.agents.tools import (
+        _activate_thread,
+        _commit_spec,
+        _dataset_variable_names,
+        _normalized_spec,
+        _partition_latent_controls,
+    )
+    from mmm_framework.dag_model_builder.model_type_resolver import (
+        describe_model_type,
+        resolve_model_type,
+    )
+
+    _activate_thread(config)
+
+    def _fail(msg: str) -> Command:
+        return Command(
+            update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+        )
+
+    dag_payload = (state.get("dashboard_data") or {}).get("dag") or {}
+    spec_dict = dag_payload.get("spec")
+    if not spec_dict:
+        return _fail(
+            "No causal DAG found for this session — build one first with "
+            "`propose_dag` (or in the Causal tab)."
+        )
+    validation = dag_payload.get("validation") or {}
+    if validation and validation.get("valid") is False:
+        errs = "; ".join(validation.get("errors") or []) or "unknown error"
+        return _fail(
+            f"The current DAG fails validation ({errs}). Fix it before deriving "
+            "a model spec from it."
+        )
+
+    try:
+        dag = DAGSpec.model_validate(spec_dict)
+    except Exception as exc:
+        return _fail(f"Could not parse the stored DAG spec: {exc}")
+
+    kpi_nodes = dag.get_nodes_by_type(NodeType.KPI) or dag.get_nodes_by_type(
+        NodeType.OUTCOME
+    )
+    if not kpi_nodes:
+        return _fail("The DAG has no KPI/outcome node — add one before building.")
+    media_nodes = dag.get_nodes_by_type(NodeType.MEDIA)
+    if not media_nodes:
+        return _fail("The DAG has no media nodes — add the treatments first.")
+    control_nodes = dag.get_nodes_by_type(NodeType.CONTROL)
+    mediator_nodes = dag.get_nodes_by_type(NodeType.MEDIATOR)
+    instrument_nodes = dag.get_nodes_by_type(NodeType.INSTRUMENT)
+
+    model_type = resolve_model_type(dag)
+    type_note = describe_model_type(dag)
+
+    import copy as _copy
+
+    current = _normalized_spec(state.get("model_spec"))
+    by_name_media = {
+        c.get("name"): c for c in (current.get("media_channels") or []) if c.get("name")
+    }
+    by_name_ctrl = {
+        c.get("name"): c
+        for c in (current.get("control_variables") or [])
+        if c.get("name")
+    }
+
+    # DAG proxies for latent baseline demand ("Trend", "Seasonality") are not
+    # dataset variables — divert them to the built-in trend/seasonality
+    # components instead of control regressors (where load_mff would fail with
+    # "Missing expected variables"). Anything else missing from the dataset is
+    # a hard error: silently dropping an adjustment-set member would break the
+    # identification the DAG was validated for.
+    ds_vars = _dataset_variable_names(state.get("dataset_path"))
+    real_controls, latent_controls, missing_controls = _partition_latent_controls(
+        [n.variable_name for n in control_nodes], ds_vars
+    )
+    if missing_controls:
+        return _fail(
+            "DAG control node(s) are not variables in the loaded dataset: "
+            f"{', '.join(missing_controls)}. They are part of the adjustment set, "
+            "so they cannot be silently dropped — add them to the dataset, or "
+            "revise the DAG (latent baseline proxies should be named "
+            "Trend/Seasonality to map onto the built-in components)."
+        )
+
+    candidate = _copy.deepcopy(current)
+    candidate["kpi"] = kpi_nodes[0].variable_name
+    candidate.setdefault("kpi_level", current.get("kpi_level") or "national")
+    # Preserve any per-channel config the user/LLM already set for channels that
+    # survive; new channels start with just their name.
+    candidate["media_channels"] = [
+        _copy.deepcopy(by_name_media.get(n.variable_name, {"name": n.variable_name}))
+        for n in media_nodes
+    ]
+    candidate["control_variables"] = [
+        _copy.deepcopy(by_name_ctrl.get(name, {"name": name})) for name in real_controls
+    ]
+    latent_lines = []
+    for name, comp in latent_controls:
+        if comp == "trend":
+            if not candidate.get("trend"):
+                candidate["trend"] = {"type": "linear"}
+            latent_lines.append(
+                f"- `{name}`: latent baseline proxy — modeled via the built-in "
+                f"trend component (type={candidate['trend'].get('type', 'linear')}), "
+                "not as a regressor."
+            )
+        else:
+            seas = candidate.get("seasonality") or {}
+            if not any(seas.get(k) for k in ("yearly", "monthly", "weekly")):
+                candidate["seasonality"] = {"yearly": 2}
+            latent_lines.append(
+                f"- `{name}`: latent baseline proxy — modeled via the built-in "
+                "seasonality component, not as a regressor."
+            )
+    candidate["dag_roles"] = {
+        "mediators": [n.variable_name for n in mediator_nodes],
+        "instruments": [n.variable_name for n in instrument_nodes],
+    }
+    candidate["dag_model_type"] = model_type.value
+
+    lines = [
+        "### Model spec derived from the causal DAG",
+        f"- KPI: `{candidate['kpi']}`",
+        f"- Media: {', '.join(f'`{n.variable_name}`' for n in media_nodes)}",
+        ("- Controls: " + (", ".join(f"`{n}`" for n in real_controls) or "(none)")),
+    ]
+    lines.extend(latent_lines)
+    if mediator_nodes:
+        lines.append(
+            "- Mediators (informational): "
+            + ", ".join(f"`{n.variable_name}`" for n in mediator_nodes)
+        )
+    if instrument_nodes:
+        lines.append(
+            "- Instruments (identification only, not regressors): "
+            + ", ".join(f"`{n.variable_name}`" for n in instrument_nodes)
+        )
+    lines.append(f"\n**Resolved model type:** {model_type.value} — {type_note}")
+    if model_type.value != "bayesian_mmm":
+        lines.append(
+            "\n⚠️ **Honest scope note:** `fit_mmm_model` fits the basic Bayesian "
+            "MMM only — mediators/multiple outcomes in the DAG are NOT modeled "
+            "by it. For a nested/multivariate/combined model, build it with "
+            "`DAGModelBuilder` via `execute_python` (see `library_reference`)."
+        )
+
+    return _commit_spec(
+        state,
+        candidate,
+        tool_call_id,
+        success_msg="\n".join(lines),
+        reason=reason or "derive model spec from validated DAG",
+        set_status="configured",
+    )
+
+
 CAUSAL_TOOLS = [
     define_research_question,
     propose_dag,
     validate_causal_identification,
+    build_model_from_dag,
     record_assumption,
     list_assumptions,
     mark_workflow_step,

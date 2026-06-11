@@ -7,7 +7,7 @@ import { ProtectedRoute } from './components/common';
 import {
   LoginPage,
   DashboardPage,
-  PlanningPage,
+  RunsPage,
   AgentPage,
 } from './pages';
 import './index.css';
@@ -76,7 +76,10 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/analysis-plan" element={<PlanningPage />} />
+                    <Route path="/runs" element={<RunsPage />} />
+                    {/* The standalone Planning page was folded into the agent
+                        workspace's Causal tab (CausalPlanner). */}
+                    <Route path="/analysis-plan" element={<Navigate to="/chat" replace />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </AppShell>

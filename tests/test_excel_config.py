@@ -407,7 +407,9 @@ class TestTemplateParser:
         for mc in mff_config.media_channels:
             assert mc.adstock.type == AdstockType.GEOMETRIC
             assert mc.adstock.l_max == 8
-            assert mc.saturation.type == SaturationType.HILL
+            # Template default is logistic: the core model's historical behavior,
+            # kept as the default now that saturation type is actually honored.
+            assert mc.saturation.type == SaturationType.LOGISTIC
 
     def test_round_trip_dimensions(self, sample_mff_df, tmp_dir):
         """Verify dimensions survive round-trip."""

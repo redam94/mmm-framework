@@ -46,9 +46,12 @@ class MediaChannelConfig(VariableConfig):
 
     role: VariableRole = VariableRole.MEDIA
 
-    # Transformation configs
+    # Transformation configs. The saturation default is LOGISTIC because that
+    # is what the core model has always fit -- it matches historical behavior
+    # now that ``BayesianMMM`` honors the configured saturation type per
+    # channel (set e.g. ``SaturationConfig.hill()`` to opt in to Hill).
     adstock: AdstockConfig = Field(default_factory=AdstockConfig.geometric)
-    saturation: SaturationConfig = Field(default_factory=SaturationConfig.hill)
+    saturation: SaturationConfig = Field(default_factory=SaturationConfig.logistic)
 
     # Coefficient prior (enforces positivity by default)
     coefficient_prior: PriorConfig = Field(

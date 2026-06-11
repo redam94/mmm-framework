@@ -103,7 +103,7 @@ def compute_saturation_curves_with_uncertainty(
             scale_factor = model._media_max[channel] + 1e-8
         else:
             scale_factor = 1.0
-            
+
         scaled_grid = spend_grid / scale_factor
 
         # Compute response curves
@@ -172,15 +172,16 @@ def _get_saturation_params(
             params["lam"] = _flatten_samples(posterior[name].values)
             return params
 
-    # Try Hill saturation (kappa, slope)
+    # Try Hill saturation (kappa, slope). ``sat_half_``/``sat_slope_`` are the
+    # core BayesianMMM's per-channel Hill RVs.
     kappa_name = None
     slope_name = None
-    for prefix in ["kappa_", "K_"]:
+    for prefix in ["sat_half_", "kappa_", "K_"]:
         name = f"{prefix}{channel}"
         if name in posterior:
             kappa_name = name
             break
-    for prefix in ["slope_", "S_", "n_"]:
+    for prefix in ["sat_slope_", "slope_", "S_", "n_"]:
         name = f"{prefix}{channel}"
         if name in posterior:
             slope_name = name
@@ -191,6 +192,26 @@ def _get_saturation_params(
         params["kappa"] = _flatten_samples(posterior[kappa_name].values)
         params["slope"] = _flatten_samples(posterior[slope_name].values)
         return params
+
+    # ``sat_half_`` without a slope: the core model's michaelis_menten or tanh
+    # saturation. The two are indistinguishable from RV names alone, so consult
+    # the model's per-channel config; if unavailable, skip rather than plot the
+    # wrong curve.
+    if kappa_name is not None:
+        sat_type = None
+        try:
+            sat_type = model._get_saturation_config(channel).type.value
+        except Exception:  # non-core model or missing config
+            sat_type = None
+        if sat_type in ("michaelis_menten", "tanh"):
+            params["type"] = sat_type
+            params["kappa"] = _flatten_samples(posterior[kappa_name].values)
+            return params
+        logger.warning(
+            f"Saturation params for {channel}: found {kappa_name} but cannot "
+            "determine the saturation form (michaelis_menten vs tanh); skipping."
+        )
+        return None
 
     # Try logistic saturation
     for prefix in ["logistic_lam_", "mu_"]:
@@ -230,7 +251,16 @@ def _apply_saturation(
     elif sat_type == "hill":
         kappa = params["kappa"]
         slope = params["slope"]
-        return x**slope / (kappa**slope + x**slope)
+        x_safe = np.clip(x, 1e-9, None)
+        return x_safe**slope / (kappa**slope + x_safe**slope)
+
+    elif sat_type == "michaelis_menten":
+        kappa = params["kappa"]
+        return x / (x + kappa)
+
+    elif sat_type == "tanh":
+        kappa = params["kappa"]
+        return np.tanh(x / kappa)
 
     elif sat_type == "logistic":
         lam = params["lam"]

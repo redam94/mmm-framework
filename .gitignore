@@ -27,3 +27,8 @@ node_modules/
 # Local LLM/model configuration (copy of config/model_config.example.yaml)
 config/model_config.yaml
 model_config.yaml
+
+*.pdf
+
+# Agent runtime output (per-session workspace; default MMM_AGENT_WORKSPACE root)
+agent_workspace/

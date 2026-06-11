@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dagre from '@dagrejs/dagre';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,19 +8,18 @@ import {
   type Node as RFNode,
   type Edge as RFEdge,
   MarkerType,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
   CheckCircle2, Circle, Clock, XCircle, ChevronDown, ChevronRight,
-  History, FileText, Database, Trash2, Network, BookOpen, Pencil, Save, X,
-  Plus,
+  History, FileText, Database, Trash2, Network, BookOpen,
 } from 'lucide-react';
+import { API_BASE_URL } from '../../api/client';
+import { NODE_STYLE, classifyNodes, computeDAGLayout } from './dagDisplay';
 
-const API_BASE = 'http://localhost:8000';
+// Same origin as the app: relative "/api" in dev (proxied via vite.config.ts),
+// or VITE_API_URL when set.
+const API_BASE = API_BASE_URL;
 
 // ── Shared types ────────────────────────────────────────────────────────────
 
@@ -78,7 +76,7 @@ export interface DagPayload {
 
 // ── Small reusable shell ────────────────────────────────────────────────────
 
-function PanelShell({ title, icon, color = 'gray', defaultOpen = true, children, right }: {
+export function PanelShell({ title, icon, color = 'gray', defaultOpen = true, children, right }: {
   title: React.ReactNode; icon: React.ReactNode; color?: string; defaultOpen?: boolean;
   children: React.ReactNode; right?: React.ReactNode;
 }) {
@@ -347,20 +345,13 @@ export function DataFilesWidget({ files, onDelete }: {
 
 // ── 4. DAG Viewer ──────────────────────────────────────────────────────────
 
-const NODE_STYLE: Record<string, { bg: string; border: string; text: string }> = {
-  kpi:       { bg: '#eef2ff', border: '#4f46e5', text: '#312e81' },
-  media:     { bg: '#ecfdf5', border: '#059669', text: '#064e3b' },
-  control:   { bg: '#fef3c7', border: '#d97706', text: '#78350f' },
-  mediator:  { bg: '#fce7f3', border: '#db2777', text: '#831843' },
-  outcome:   { bg: '#e0e7ff', border: '#6366f1', text: '#1e1b4b' },
-};
 
 const hStyle = (color: string, visible: boolean) => ({
   background: color, width: 8, height: 8, border: 'none',
   ...(visible ? {} : { opacity: 0, pointerEvents: 'none' as const }),
 });
 
-function MMMNode({ data }: { data: any }) {
+export function MMMNode({ data }: { data: any }) {
   const s = NODE_STYLE[data.nodeType] ?? NODE_STYLE.control;
   return (
     <div style={{
@@ -386,74 +377,7 @@ function MMMNode({ data }: { data: any }) {
 
 const MMM_NODE_TYPES = { mmmNode: MMMNode };
 
-const NODE_W = 148, NODE_H = 66;
-
-function classifyNodes(
-  rfNodes: Array<{ id: string; data: any }>,
-  rfEdges: Array<{ source: string; target: string }>,
-) {
-  const outOf = new Map<string, Set<string>>();
-  rfNodes.forEach(n => outOf.set(n.id, new Set()));
-  rfEdges.forEach(e => outOf.get(e.source)?.add(e.target));
-  const mediaSet = new Set(rfNodes.filter(n => n.data?.type === 'media').map(n => n.id));
-  const isConf = (n: { id: string; data: any }) =>
-    n.data?.type === 'control' && [...(outOf.get(n.id) ?? [])].some(t => mediaSet.has(t));
-  const isBiz = (n: { id: string; data: any }) =>
-    n.data?.type === 'control' && !isConf(n);
-  return { isConf, isBiz, mediaSet, outOf };
-}
-
-function computeDAGLayout(
-  rfNodes: Array<{ id: string; data: any }>,
-  rfEdges: Array<{ source: string; target: string }>,
-): Record<string, { x: number; y: number }> {
-  if (rfNodes.length === 0) return {};
-
-  const { isConf, isBiz } = classifyNodes(rfNodes, rfEdges);
-
-  // Assign dagre rank (column) manually so the semantic order is preserved:
-  // confounders → media → mediator → kpi; biz controls in kpi column but lower rank
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({
-    rankdir: 'LR',
-    ranksep: 160,   // wider rank gap forces more pronounced S-curves
-    nodesep: 44,
-    edgesep: 25,
-    marginx: 30,
-    marginy: 30,
-  });
-
-  // Assign explicit rank constraints via dummy "rank groups"
-  const rankOf = (n: { id: string; data: any }) => {
-    if (isConf(n)) return 0;
-    if (n.data?.type === 'media') return 1;
-    if (n.data?.type === 'mediator') return 2;
-    if (n.data?.type === 'kpi') return 3;
-    if (isBiz(n)) return 3;  // same rank as KPI so they sit beside/below it
-    return 2;
-  };
-
-  rfNodes.forEach(n => {
-    g.setNode(n.id, { width: NODE_W, height: NODE_H, rank: rankOf(n) });
-  });
-
-  rfEdges.forEach(e => g.setEdge(e.source, e.target));
-
-  dagre.layout(g);
-
-  const positions: Record<string, { x: number; y: number }> = {};
-  rfNodes.forEach(n => {
-    const nd = g.node(n.id);
-    if (nd) {
-      // dagre centers on (x,y); React Flow uses top-left corner
-      positions[n.id] = { x: nd.x - NODE_W / 2, y: nd.y - NODE_H / 2 };
-    }
-  });
-  return positions;
-}
-
-function SemanticCallouts({
+export function SemanticCallouts({
   rfNodes, rfEdges, identification,
 }: {
   rfNodes: Array<{ id: string; data: any }>;
@@ -668,268 +592,6 @@ export function DAGViewer({ dag }: { dag: DagPayload | null }) {
         </ReactFlow>
       </div>
       <SemanticCallouts rfNodes={rfNodes} rfEdges={rfEdges} identification={dag.identification} />
-    </PanelShell>
-  );
-}
-
-// ── EditableDAGViewer ────────────────────────────────────────────────────────
-
-const NODE_TYPES_LIST = [
-  { value: 'media',    label: 'Media' },
-  { value: 'kpi',      label: 'KPI / Outcome' },
-  { value: 'control',  label: 'Control' },
-  { value: 'mediator', label: 'Mediator' },
-];
-
-function dagToRFNodes(dag: DagPayload, posMap: Record<string, { x: number; y: number }>): RFNode[] {
-  const rfNodes = dag.react_flow?.nodes ?? [];
-  const { isConf, isBiz } = classifyNodes(rfNodes, dag.react_flow?.edges ?? []);
-  return rfNodes.map(n => {
-    const nt = n.data?.type ?? 'control';
-    const conf = isConf(n);
-    const biz  = isBiz(n);
-    return {
-      id: n.id,
-      position: posMap[n.id] ?? n.position ?? { x: 0, y: 0 },
-      type: 'mmmNode',
-      data: {
-        label:    n.data?.variableName ?? n.id,
-        nodeType: nt,
-        badge:    conf ? 'confounder' : biz ? 'control' : nt,
-        ...(NODE_STYLE[nt] ?? NODE_STYLE.control),
-      },
-    };
-  });
-}
-
-function dagToRFEdges(dag: DagPayload): RFEdge[] {
-  return (dag.react_flow?.edges ?? []).map(e => {
-    const et = e.data?.edgeType ?? 'direct';
-    const color = et === 'mediated' ? '#db2777' : et === 'crossEffect' ? '#6366f1' : '#64748b';
-    return {
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: 'default',
-      data: { edgeType: et },
-      style: { stroke: color, strokeWidth: 1.8 },
-      markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 },
-    };
-  });
-}
-
-export function EditableDAGViewer({
-  dag,
-  threadId,
-  onSaved,
-}: {
-  dag: DagPayload | null;
-  threadId: string | null;
-  onSaved: () => void;
-}) {
-  const [editMode, setEditMode] = useState(false);
-  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState('media');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-
-  // Sync from dag prop whenever we're not actively editing
-  useEffect(() => {
-    if (editMode) return;
-    if (!dag) { setNodes([]); setEdges([]); return; }
-    const rfNodes = dag.react_flow?.nodes ?? [];
-    const rfEdges = dag.react_flow?.edges ?? [];
-    const posMap = computeDAGLayout(rfNodes, rfEdges);
-    setNodes(dagToRFNodes(dag, posMap));
-    setEdges(dagToRFEdges(dag));
-  }, [dag, editMode, setNodes, setEdges]);
-
-  const onConnect = useCallback((params: Connection) => {
-    setEdges(eds => addEdge({
-      ...params,
-      data: { edgeType: 'direct' },
-      style: { stroke: '#64748b', strokeWidth: 1.8 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b', width: 14, height: 14 },
-    }, eds));
-  }, [setEdges]);
-
-  const handleAddNode = () => {
-    const name = newName.trim();
-    if (!name) return;
-    const id = `node_${Date.now()}`;
-    const s = NODE_STYLE[newType] ?? NODE_STYLE.control;
-    setNodes(prev => [...prev, {
-      id,
-      position: { x: 80 + Math.random() * 260, y: 60 + Math.random() * 200 },
-      type: 'mmmNode',
-      data: { label: name, nodeType: newType, badge: newType, ...s },
-    }]);
-    setNewName('');
-    nameInputRef.current?.focus();
-  };
-
-  const handleEnterEdit = () => {
-    setSaveError(null);
-    setEditMode(true);
-  };
-
-  const handleCancel = () => {
-    setEditMode(false);
-    setSaveError(null);
-    // Re-sync from prop
-    if (!dag) { setNodes([]); setEdges([]); return; }
-    const rfNodes = dag.react_flow?.nodes ?? [];
-    const rfEdges = dag.react_flow?.edges ?? [];
-    const posMap = computeDAGLayout(rfNodes, rfEdges);
-    setNodes(dagToRFNodes(dag, posMap));
-    setEdges(dagToRFEdges(dag));
-  };
-
-  const handleSave = async () => {
-    if (!threadId) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const payload = {
-        nodes: nodes.map(n => ({
-          id: n.id,
-          position: n.position,
-          data: {
-            label: n.data.label,
-            variableName: n.data.label,
-            type: n.data.nodeType,
-          },
-        })),
-        edges: edges.map(e => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          data: { edgeType: (e.data as any)?.edgeType ?? 'direct' },
-        })),
-      };
-      const res = await fetch(`${API_BASE}/dag/${threadId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSaveError(err.error ?? 'Save failed');
-      } else {
-        setEditMode(false);
-        onSaved();
-      }
-    } catch {
-      setSaveError('Network error — is the API running?');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const title = (
-    <div className="flex items-center gap-2 flex-1 min-w-0">
-      <span>Causal DAG</span>
-      {editMode && <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-600 bg-violet-50 rounded px-1.5 py-0.5">Editing</span>}
-    </div>
-  );
-
-  const headerActions = editMode ? (
-    <div className="flex items-center gap-1.5 shrink-0">
-      <button onClick={handleCancel} disabled={saving}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-40">
-        <X size={12} /> Cancel
-      </button>
-      <button onClick={handleSave} disabled={saving}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-600 text-white text-xs hover:bg-violet-700 disabled:opacity-50">
-        {saving ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save size={12} />}
-        Save
-      </button>
-    </div>
-  ) : (
-    <button onClick={handleEnterEdit}
-      className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 shrink-0">
-      <Pencil size={12} /> Edit
-    </button>
-  );
-
-  if (!dag && !editMode) {
-    return (
-      <PanelShell title="Causal DAG" icon={<Network size={16} className="text-violet-600" />} color="violet" right={headerActions}>
-        <p className="text-sm text-gray-400 italic">
-          No DAG yet. Ask the agent to <code className="text-xs bg-gray-100 px-1 rounded">propose_dag</code> after inspecting the data, or click <strong>Edit</strong> to build one manually.
-        </p>
-      </PanelShell>
-    );
-  }
-
-  return (
-    <PanelShell title={title} icon={<Network size={16} className="text-violet-600" />} color="violet" right={headerActions}>
-      {saveError && (
-        <p className="mb-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5">{saveError}</p>
-      )}
-
-      {editMode && (
-        <div className="mb-2 flex items-center gap-2 p-2 bg-violet-50 rounded-lg border border-violet-100">
-          <input
-            ref={nameInputRef}
-            type="text"
-            placeholder="Node name…"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddNode()}
-            className="flex-1 text-xs border border-violet-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
-          />
-          <select
-            value={newType}
-            onChange={e => setNewType(e.target.value)}
-            className="text-xs border border-violet-200 rounded px-2 py-1.5 bg-white focus:outline-none"
-          >
-            {NODE_TYPES_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <button
-            onClick={handleAddNode}
-            disabled={!newName.trim()}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-600 text-white text-xs rounded-lg hover:bg-violet-700 disabled:opacity-40"
-          >
-            <Plus size={12} /> Add
-          </button>
-          <span className="text-[10px] text-violet-400 hidden sm:block">Del to remove selected</span>
-        </div>
-      )}
-
-      <div style={{ height: editMode ? 380 : 400 }} className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50/50">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={editMode ? onNodesChange : undefined}
-          onEdgesChange={editMode ? onEdgesChange : undefined}
-          onConnect={editMode ? onConnect : undefined}
-          nodeTypes={MMM_NODE_TYPES}
-          fitView
-          fitViewOptions={{ padding: 0.18 }}
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable={editMode}
-          nodesConnectable={editMode}
-          elementsSelectable
-          deleteKeyCode={editMode ? 'Delete' : null}
-          minZoom={0.3}
-          maxZoom={2}
-        >
-          <Background gap={20} size={0.8} color="#e5e7eb" />
-          <Controls showInteractive={false} />
-        </ReactFlow>
-      </div>
-
-      {!editMode && dag && (
-        <SemanticCallouts
-          rfNodes={dag.react_flow?.nodes ?? []}
-          rfEdges={dag.react_flow?.edges ?? []}
-          identification={dag.identification}
-        />
-      )}
     </PanelShell>
   );
 }

@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math 00: The Generative Model | MMM Framework</title>
+    <meta name="description" content="The MMM as a generative model: the full additive linear predictor, the Normal likelihood, every default prior, the spend-to-contribution pipeline, and a live prior-predictive simulation you can re-draw in the browser.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-00-overview.html">
+    <meta property="og:title" content="Math 00: The Generative Model | MMM Framework">
+    <meta property="og:description" content="One equation to rule them all: the additive mean function, the Normal likelihood, the exact default priors, and one draw from the prior — simulated live in your browser.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-00-overview.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row .action-btn {
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 700;
+            padding: 0.5rem 1.4rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-primary-dark);
+            background: var(--color-primary);
+            color: #fff;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .action-btn:hover { background: var(--color-primary-dark); }
+        .controls-row .seed-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        /* The boxed master equations */
+        .master-eq {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1.25rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        /* Pipeline schematic (flow boxes) */
+        .pipeline {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .pipeline .flow-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            color: var(--color-text-muted);
+            margin: 0 0 0.5rem;
+        }
+        .pipeline .flow-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .pipeline .flow-box {
+            flex: 1 1 130px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: rgba(143, 168, 106, 0.08);
+            border: 1px solid var(--color-border);
+            border-top: 3px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 0.7rem 0.8rem;
+            text-align: center;
+            font-size: 0.92rem;
+        }
+        .pipeline .flow-box .fb-title { font-weight: 700; color: var(--color-text); }
+        .pipeline .flow-box .fb-sub { font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+        .pipeline .flow-box.baseline-box { border-top-color: #9aa79a; background: rgba(154, 167, 154, 0.10); }
+        .pipeline .flow-box.sum-box { border-top-color: #2d3a2d; background: rgba(45, 58, 45, 0.06); }
+        .pipeline .flow-box.noise-box { border-top-color: var(--color-danger); background: rgba(201, 112, 103, 0.07); }
+        .pipeline .flow-arrow {
+            align-self: center;
+            flex: 0 0 auto;
+            color: var(--color-text-muted);
+            font-size: 1.4rem;
+            line-height: 1;
+        }
+        .pipeline .flow-down {
+            text-align: center;
+            color: var(--color-text-muted);
+            font-size: 1.4rem;
+            line-height: 1;
+            margin: -0.4rem 0 0.6rem;
+        }
+
+        /* Live parameter readout for the prior draw */
+        .param-table-wrap { overflow-x: auto; margin: 1rem 0 0.5rem; }
+        .param-table-wrap table { width: 100%; }
+        .param-table-wrap td, .param-table-wrap th {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+        .param-table-wrap td:first-child { font-weight: 700; font-family: 'Source Sans 3', sans-serif; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#generative">The generative equation</a></li>
+                <li><a href="#symbols">Every symbol in &mu;<sub>t</sub></a></li>
+                <li><a href="#priors">The priors</a></li>
+                <li><a href="#pipeline">The pipeline, drawn</a></li>
+                <li><a href="#prior-draw">One draw from the prior</a></li>
+                <li><a href="#response-curves">Prior response curves</a></li>
+                <li><a href="#roadmap">Roadmap: math 01&ndash;06</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>The Math Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="math-00-overview.html" class="active">00 · The Generative Model</a></li>
+                <li><a href="math-01-adstock.html">01 · Adstock</a></li>
+                <li><a href="math-02-saturation.html">02 · Saturation</a></li>
+                <li><a href="math-03-seasonality-trend.html">03 · Seasonality &amp; Trend</a></li>
+                <li><a href="math-04-bayesian-model.html">04 · The Bayesian Model</a></li>
+                <li><a href="math-05-calibration.html">05 · Calibration</a></li>
+                <li><a href="math-06-extensions.html">06 · Extensions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="generative">Math 00: The MMM as a Generative Model</h1>
+            <p class="lead">
+                The framework's <code>BayesianMMM</code> is, at heart, a <strong>generative story</strong>
+                for the weekly KPI: a recipe that, given parameters \(\theta\), <em>generates</em> a
+                plausible sales series. Fitting the model is running that recipe backwards. This page —
+                the index of the math series — writes the recipe down: the full additive mean function
+                \(\mu_t\), the Normal likelihood, every default prior, and the spend-to-contribution
+                pipeline. Then it runs the recipe forward, live in your browser: one draw from the prior,
+                decomposed into its additive pieces, with a button to draw again. The six pages that follow
+                (<a href="math-01-adstock.html">01</a>&ndash;<a href="math-06-extensions.html">06</a>)
+                each make one term of this equation precise.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">7</div>
+                    <div class="stat-label">additive terms in the mean function \(\mu_t\)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">11</div>
+                    <div class="stat-label">priors in the default model, all tabulated below</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">104</div>
+                    <div class="stat-label">weeks of synthetic KPI in the live prior draw</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">model fits on this page — pure forward math</div>
+                </div>
+            </div>
+
+            <div class="definition">
+                <h4>Definition: Forward (generative) model</h4>
+                <p>
+                    A complete probabilistic recipe for the data: sample parameters \(\theta\) from the
+                    <strong>priors</strong>, compute the deterministic mean \(\mu_t(\theta)\), then draw
+                    the observation from the <strong>likelihood</strong>
+                    \(\tilde y_t \sim \mathrm{Normal}(\mu_t, \sigma)\). An MMM answers a causal-flavored
+                    question — <em>what did each channel cause, and what would another dollar buy?</em> —
+                    by inverting this recipe: NUTS explores the posterior
+                    \(p(\theta \mid y) \propto p(y \mid \theta)\, p(\theta)\)
+                    (<a href="math-04-bayesian-model.html">math 04</a>).
+                </p>
+            </div>
+
+            <h2>The generative equation</h2>
+            <p>
+                The framework first <strong>standardizes</strong> the KPI so all priors live on a common,
+                unit-free scale:
+            </p>
+            \[
+            \tilde y_t \;=\; \frac{y_t - \bar y}{s_y},
+            \qquad \bar y = \mathrm{mean}(y), \quad s_y = \mathrm{std}(y),
+            \]
+            <p>
+                and maps back at the end with \(y_t = s_y\,\tilde y_t + \bar y\). Everything downstream is
+                modeled on \(\tilde y_t\). The heart of the model is a single <strong>additive linear
+                predictor</strong> \(\mu_t\) — the model's noiseless expectation for the standardized KPI
+                in period \(t\):
+            </p>
+            <div class="master-eq">
+                \[
+                \mu_t \;=\; \underbrace{\text{intercept}}_{\text{baseline level}}
+                \;+\; \text{trend}_t
+                \;+\; \text{seasonality}_t
+                \;+\; \text{geo}_{[g]}
+                \;+\; \text{product}_{[p]}
+                \;+\; \underbrace{\text{media}_t}_{\text{the question}}
+                \;+\; \text{controls}_t
+                \]
+            </div>
+            <p>
+                The <strong>media</strong> term is where the marketing nonlinearity lives. It sums, over
+                channels \(c\), a coefficient \(\beta_c\) times a <strong>saturated, adstocked</strong>
+                version of that channel's spend:
+            </p>
+            \[
+            \text{media}_t \;=\; \sum_{c} \beta_c \cdot
+            \mathrm{sat}_c\!\big(\, \mathrm{adstock}_c(x_{c,t}) \,\big).
+            \]
+            <p>
+                <strong>Adstock</strong> spreads each week's spend forward in time — carryover
+                (<a href="math-01-adstock.html">math 01</a>). <strong>Saturation</strong> then imposes
+                diminishing returns. The framework's <em>core</em> saturation is the exponential curve
+                (this is <code>model/base.py</code>'s <code>_build_model</code> — <strong>not</strong> a
+                Hill curve; the Hill mention in the docstrings is a reference alternative only, a
+                distinction <a href="math-02-saturation.html">math 02</a> dissects and
+                <a href="stress-01-carryover-shape.html">stress 01</a> shows can cost +38% on total media):
+            </p>
+            \[
+            \mathrm{sat}_c(u) \;=\; 1 - \exp(-\lambda_c\, u), \qquad \lambda_c &gt; 0,
+            \]
+            <p>
+                clipped via \(\exp(\mathrm{clip}(-\lambda_c u, -20, 0))\) so it stays numerically in
+                \([0, 1)\). The <strong>controls</strong> term is plain linear:
+                \(\text{controls}_t = \sum_j \beta^{\text{ctrl}}_j z_{j,t}\). Finally the
+                <strong>likelihood</strong> — the generative step that adds irreducible noise:
+            </p>
+            <div class="master-eq">
+                \[
+                \tilde y_t \;\sim\; \mathrm{Normal}\big(\mu_t,\ \sigma\big).
+                \]
+            </div>
+            <p>
+                That is the entire forward model. To <em>generate</em> data: sample \(\theta\) from the
+                priors, compute \(\mu_t\), draw \(\tilde y_t\). We do exactly that
+                <a href="#prior-draw">below</a>.
+            </p>
+
+            <h2 id="symbols">Every symbol in \(\mu_t\)</h2>
+            <table>
+                <thead>
+                    <tr><th>Symbol</th><th>Name</th><th>Role</th><th>Deep dive</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>\(\tilde y_t\)</td><td>standardized KPI</td><td>the modeled response, \((y_t - \bar y)/s_y\)</td><td>00 / <a href="math-04-bayesian-model.html">04</a></td></tr>
+                    <tr><td>\(\mu_t\)</td><td>linear predictor</td><td>noiseless expectation of \(\tilde y_t\)</td><td>00</td></tr>
+                    <tr><td>\(\text{intercept}\)</td><td>baseline level</td><td>the KPI with zero media (standardized)</td><td><a href="math-04-bayesian-model.html">04</a></td></tr>
+                    <tr><td>\(\text{trend}_t\)</td><td>long-run drift</td><td>slow non-media movement (linear / piecewise / spline)</td><td><a href="math-03-seasonality-trend.html">03</a></td></tr>
+                    <tr><td>\(\text{seasonality}_t\)</td><td>periodic structure</td><td>Fourier features \(\times\) coefficients</td><td><a href="math-03-seasonality-trend.html">03</a></td></tr>
+                    <tr><td>\(\text{geo}_{[g]}\)</td><td>geo random effect</td><td>partial-pooled offset for region \(g\)</td><td><a href="math-04-bayesian-model.html">04</a></td></tr>
+                    <tr><td>\(\text{product}_{[p]}\)</td><td>product random effect</td><td>partial-pooled offset for product \(p\)</td><td><a href="math-04-bayesian-model.html">04</a></td></tr>
+                    <tr><td>\(x_{c,t}\)</td><td>raw spend</td><td>dollars on channel \(c\) in week \(t\)</td><td><a href="math-01-adstock.html">01</a></td></tr>
+                    <tr><td>\(\mathrm{adstock}_c(\cdot)\)</td><td>carryover</td><td>spreads spend forward in time</td><td><a href="math-01-adstock.html"><strong>01</strong></a></td></tr>
+                    <tr><td>\(\lambda_c\)</td><td>saturation rate</td><td>curvature of diminishing returns</td><td><a href="math-02-saturation.html"><strong>02</strong></a></td></tr>
+                    <tr><td>\(\mathrm{sat}_c(\cdot)\)</td><td>saturation</td><td>\(1 - e^{-\lambda_c u}\), bounded in \([0,1)\)</td><td><a href="math-02-saturation.html"><strong>02</strong></a></td></tr>
+                    <tr><td>\(\beta_c\)</td><td>channel coefficient</td><td>effect size / contribution magnitude</td><td><a href="math-04-bayesian-model.html">04</a> / <a href="math-05-calibration.html">05</a></td></tr>
+                    <tr><td>\(z_{j,t}\)</td><td>control variable</td><td>price, distribution, weather, &hellip;</td><td><a href="math-04-bayesian-model.html">04</a></td></tr>
+                    <tr><td>\(\beta^{\text{ctrl}}_j\)</td><td>control coefficient</td><td>linear effect of control \(j\)</td><td><a href="math-04-bayesian-model.html">04</a></td></tr>
+                    <tr><td>\(\sigma\)</td><td>noise scale</td><td>irreducible week-to-week variation</td><td><a href="math-04-bayesian-model.html">04</a></td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="priors">The priors — the model's beliefs before seeing data</h2>
+            <p>
+                A Bayesian model is its priors plus its likelihood. These are the <strong>exact</strong>
+                priors the framework places (verbatim from <code>_build_model</code> in
+                <code>src/mmm_framework/model/base.py</code>), each with a one-line intuition. They are
+                deliberately <em>weakly informative</em>: regularizing enough to keep the sampler
+                well-behaved, loose enough to let the data speak. (If priors are new to you,
+                <a href="workshop-01-priors.html">workshop 01</a> is the gentler on-ramp; this table is the
+                reference card.)
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Parameter</th><th>Prior</th><th>Intuition</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>\(\text{intercept}\)</td><td>\(\mathrm{Normal}(0,\,0.5)\)</td><td>baseline near the KPI mean (data are standardized)</td></tr>
+                    <tr><td>\(\beta_c\) (channel)</td><td>\(\mathrm{Gamma}(\mu{=}1.5,\,\sigma{=}1.0)\)</td><td><strong>positive</strong> effect, mass above 1 (encourages ROI &gt; 1&times;); or an experiment-calibrated prior (<a href="math-05-calibration.html">math 05</a>)</td></tr>
+                    <tr><td>\(\lambda_c\) (saturation rate)</td><td>\(\mathrm{Exponential}(0.5)\)</td><td>mostly gentle saturation; mean \(1/0.5 = 2\)</td></tr>
+                    <tr><td>\(m_c\) (adstock blend)</td><td>\(\mathrm{Beta}(2,\,2)\)</td><td><strong>mix weight</strong> between two fixed-\(\alpha\) geometric adstocks, centered at 0.5 — <em>not</em> a decay rate (<a href="math-01-adstock.html">math 01</a>)</td></tr>
+                    <tr><td>seasonality coefficients</td><td>\(\mathrm{Normal}(0,\,0.3)\)</td><td>small, symmetric Fourier amplitudes</td></tr>
+                    <tr><td>\(\beta^{\text{ctrl}}_j\)</td><td>\(\mathrm{Normal}(0,\,\sigma_{\text{ctrl}})\)</td><td>linear control; <em>wider</em> prior for a flagged confounder</td></tr>
+                    <tr><td>geo scale</td><td>\(\mathrm{HalfNormal}(0.3)\)</td><td>spread of geo offsets (hierarchical scale)</td></tr>
+                    <tr><td>geo offset</td><td>\(\mathrm{Normal}(0,\,1)\)</td><td>non-centered: effect = scale \(\times\) offset</td></tr>
+                    <tr><td>product scale / offset</td><td>\(\mathrm{HalfNormal}(0.3)\), \(\mathrm{Normal}(0,1)\)</td><td>same non-centered pattern as geo</td></tr>
+                    <tr><td>trend slope (linear)</td><td>\(\mathrm{Normal}(0,\,0.5)\)</td><td>modest long-run drift in either direction</td></tr>
+                    <tr><td>\(\sigma\)</td><td>\(\mathrm{HalfNormal}(0.5)\)</td><td>residual noise scale (standardized units)</td></tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <h4>💡 Two subtleties to leave with</h4>
+                <p>
+                    <strong>\(\beta_c\) is Gamma, hence strictly positive</strong> — the framework assumes
+                    media cannot <em>hurt</em> the KPI. This is a strong, deliberate modeling choice (and
+                    the lever experiment calibration tightens; <a href="math-05-calibration.html">math 05</a>,
+                    <a href="stress-05-gauntlet.html">stress 05</a>).
+                    <strong>\(m_c\) is a Beta <em>blend weight</em>, not a decay rate.</strong> By default
+                    the model precomputes geometric adstock at two fixed decay rates and learns how much to
+                    lean on each. <a href="math-01-adstock.html">Math 01</a> dissects this in full.
+                </p>
+            </div>
+
+            <p>
+                See the priors rather than just tabulating them. Each density below is built from
+                <strong>30,000 seeded draws</strong> with the analytic density overlaid; the dashed line
+                marks the sample mean.
+            </p>
+
+            <div class="controls-row">
+                <label>Prior:</label>
+                <button class="toggle-btn active" data-prior="beta">&beta; ~ Gamma(&mu;=1.5, &sigma;=1)</button>
+                <button class="toggle-btn" data-prior="lam">&lambda; ~ Exp(0.5)</button>
+                <button class="toggle-btn" data-prior="m">m ~ Beta(2,2)</button>
+                <button class="toggle-btn" data-prior="intercept">intercept ~ N(0, 0.5)</button>
+                <button class="toggle-btn" data-prior="season">season ~ N(0, 0.3)</button>
+                <button class="toggle-btn" data-prior="sigma">&sigma; ~ HalfN(0.5)</button>
+            </div>
+            <div class="chart-container" id="priorChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong> (30,000
+                seeded draws per prior; analytic density overlaid in dark green). Note how much mass the
+                \(\beta\) prior puts above 1, how \(\mathrm{Exp}(0.5)\) favors gentle saturation rates, and
+                how \(\mathrm{Beta}(2,2)\) is a symmetric hill centered at \(0.5\).
+            </p>
+
+            <h3>Deriving the \(\mathrm{Gamma}(\mu, \sigma) \to\) shape/scale conversion</h3>
+            <p>
+                The framework parameterizes the channel prior by its <strong>mean</strong> \(\mu\) and
+                <strong>standard deviation</strong> \(\sigma\), but samplers want the canonical shape/scale
+                pair \((k, \theta)\). For a Gamma,
+            </p>
+            \[
+            \mathbb{E}[\beta] = k\theta = \mu,
+            \qquad
+            \mathrm{Var}[\beta] = k\theta^2 = \sigma^2
+            \;\;\Longrightarrow\;\;
+            k = \frac{\mu^2}{\sigma^2}, \quad \theta = \frac{\sigma^2}{\mu}.
+            \]
+            <p>
+                For the framework's \(\mu = 1.5\), \(\sigma = 1.0\) this gives
+                \(k = 2.25\), \(\theta = 0.667\). The notebook <strong>asserts</strong> this conversion and
+                its round-trip: the 60,000 sampled draws recover mean <strong>1.502</strong> (target 1.5)
+                and standard deviation <strong>1.001</strong> (target 1.0); the
+                \(\mathrm{Exponential}(0.5)\) draws recover mean <strong>1.982</strong> (target 2.0); the
+                \(\mathrm{Beta}(2,2)\) draws recover mean <strong>0.501</strong> (target 0.5). That
+                assertion is what ties the plotted histogram to the stated prior.
+            </p>
+
+            <h2 id="pipeline">The pipeline, drawn</h2>
+            <p>
+                Before any numbers, the <em>shape</em> of the computation. Raw spend enters on the left;
+                each channel is pushed through <strong>carryover</strong> (adstock) and then
+                <strong>diminishing returns</strong> (saturation), scaled by its coefficient \(\beta_c\),
+                summed across channels, added to the <strong>baseline</strong>, and a Normal draw turns the
+                deterministic \(\mu_t\) into the observed KPI.
+            </p>
+
+            <div class="pipeline">
+                <p class="flow-label">MEDIA — per channel c</p>
+                <div class="flow-row">
+                    <div class="flow-box">
+                        <span class="fb-title">raw spend</span>
+                        <span class="fb-sub">\(x_{c,t}\) — dollars per week</span>
+                    </div>
+                    <div class="flow-arrow">&#8594;</div>
+                    <div class="flow-box">
+                        <span class="fb-title">adstock</span>
+                        <span class="fb-sub">carryover spreads spend forward (<a href="math-01-adstock.html">01</a>)</span>
+                    </div>
+                    <div class="flow-arrow">&#8594;</div>
+                    <div class="flow-box">
+                        <span class="fb-title">saturation</span>
+                        <span class="fb-sub">\(1 - e^{-\lambda_c u}\) — diminishing returns (<a href="math-02-saturation.html">02</a>)</span>
+                    </div>
+                    <div class="flow-arrow">&#8594;</div>
+                    <div class="flow-box">
+                        <span class="fb-title">\(\times\, \beta_c\)</span>
+                        <span class="fb-sub">channel contribution</span>
+                    </div>
+                </div>
+                <p class="flow-label">BASELINE — non-media structure</p>
+                <div class="flow-row">
+                    <div class="flow-box baseline-box">
+                        <span class="fb-title">intercept + trend\(_t\) + seasonality\(_t\) + controls\(_t\)</span>
+                        <span class="fb-sub">(+ geo / product offsets in panel models) — <a href="math-03-seasonality-trend.html">03</a>, <a href="math-04-bayesian-model.html">04</a></span>
+                    </div>
+                </div>
+                <div class="flow-down">&#8595;&nbsp;&nbsp;sum across channels, add baseline&nbsp;&nbsp;&#8595;</div>
+                <div class="flow-row">
+                    <div class="flow-box sum-box">
+                        <span class="fb-title">\(\mu_t = \text{baseline}_t + \sum_c \beta_c\, \mathrm{sat}_c(\mathrm{adstock}_c(x_{c,t}))\)</span>
+                        <span class="fb-sub">the noiseless mean</span>
+                    </div>
+                </div>
+                <div class="flow-down">&#8595;&nbsp;&nbsp;add irreducible noise&nbsp;&nbsp;&#8595;</div>
+                <div class="flow-row">
+                    <div class="flow-box noise-box">
+                        <span class="fb-title">\(\tilde y_t \sim \mathrm{Normal}(\mu_t, \sigma)\)</span>
+                        <span class="fb-sub">the observed (standardized) KPI</span>
+                    </div>
+                </div>
+            </div>
+            <p class="chart-note">
+                The generative pipeline: spend &#8594; carryover &#8594; diminishing returns &#8594;
+                \(\times\beta\) &#8594; sum + baseline &#8594; KPI. Fitting runs this diagram backwards.
+            </p>
+
+            <h2 id="prior-draw">Simulate one draw from the prior — live</h2>
+            <p>
+                The payoff of an overview: <em>run the generative model once</em>. Below, your browser
+                samples one value of every parameter from its exact framework prior —
+                \(\beta_c \sim \mathrm{Gamma}(\mu{=}1.5, \sigma{=}1.0)\),
+                \(\lambda_c \sim \mathrm{Exponential}(0.5)\), intercept, trend slope, two Fourier
+                coefficients, \(\sigma\) — plus an <em>illustrative</em> per-channel geometric decay
+                \(\alpha_c \sim \mathrm{Beta}(2,2)\) (the default model learns a blend weight instead;
+                <a href="math-01-adstock.html">math 01</a>). It then pushes a fixed two-year, four-channel
+                spend plan through adstock &#8594; saturation &#8594; \(\beta\), assembles \(\mu_t\), adds
+                \(\mathrm{Normal}(0, \sigma)\) noise, and decomposes the result. The spend plan never
+                changes between draws — only the parameters do, so what you are watching is pure
+                <strong>prior-predictive diversity</strong>.
+            </p>
+
+            <div class="controls-row">
+                <button class="action-btn" id="drawAgainBtn">&#127922; Draw again from the prior</button>
+                <span class="seed-label" id="drawSeedLabel"></span>
+            </div>
+
+            <div class="param-table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Channel</th><th>&beta; (Gamma)</th><th>&lambda; (Exp)</th><th>&alpha; (Beta, illustrative)</th><th>max saturation reached</th></tr>
+                    </thead>
+                    <tbody id="paramTableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="chart-container" id="drawChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same forward math as the notebook.</strong>
+                Dots are the observed draw \(\tilde y_t\); the line is the noiseless mean \(\mu_t\); the
+                band is \(\mu_t \pm \sigma\). The gap between dots and line <em>is</em> the likelihood. The
+                first draw uses a hand-picked seed so every channel's saturation lands mid-curve (the
+                notebook does the same with its seed 83) — it is one honest draw of the true priors, not a
+                re-shaped distribution. Re-draws are unfiltered: expect occasional wild worlds. That
+                diversity is the prior.
+            </p>
+
+            <div class="chart-container" id="stackChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser.</strong> The additive identity drawn as a stacked
+                area: baseline plus each channel's contribution stacks up exactly to \(\mu_t\); the white
+                dots add the noise back. <em>This</em> is the picture an MMM tries to recover from data —
+                except in real life only the dots are observed, and the colors must be inferred. (A small
+                constant display offset keeps the stack positive; it cancels from every identity.)
+            </p>
+
+            <div class="definition">
+                <h4>Identities the notebook asserts (machine-checked facts)</h4>
+                <p>Every claim below is encoded as an <code>assert</code> in
+                <code>math_00_overview.ipynb</code> — "executes clean" means "the math is right":</p>
+                <ul>
+                    <li>Saturation is bounded: \(0 \le \mathrm{sat}_c(u) &lt; 1\) for every channel and week (the clip at \(-20\) keeps it strictly below its asymptote).</li>
+                    <li>\(\mathrm{adstock}(x, \alpha{=}0) = x\) — zero carryover is the identity — and carryover never loses mass: \(\sum_t \mathrm{adstock}(x)_t \ge \sum_t x_t\).</li>
+                    <li>The decomposition is exact: \(\text{intercept} + \text{trend} + \text{seasonality} + \sum_c \text{contrib}_c + \text{noise} = \tilde y_t\) to <code>atol=1e-12</code>.</li>
+                    <li>\(\tilde y_t - \mu_t = \text{noise}_t\) exactly — \(\mu_t\) is the noiseless expectation.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 The notebook's reference draw (measured)</h4>
+                <p>
+                    For the record, the baked notebook's single seeded draw (NumPy seed 83) sampled:
+                    TV \(\beta{=}0.35, \lambda{=}1.77, \alpha{=}0.52\) (max sat 0.71);
+                    Search \(\beta{=}1.24, \lambda{=}1.60, \alpha{=}0.86\) (0.63);
+                    Social \(\beta{=}0.54, \lambda{=}2.70, \alpha{=}0.45\) (0.69);
+                    Display \(\beta{=}1.49, \lambda{=}3.22, \alpha{=}0.36\) (0.53);
+                    intercept 0.36, \(\sigma{=}0.17\). Your browser uses a different random stream, so the
+                    draws here are siblings of that one, not replicas — same priors, same pipeline.
+                </p>
+            </div>
+
+            <h2 id="response-curves">Many prior draws of a single channel's response curve</h2>
+            <p>
+                The same forward model, viewed as a <strong>response curve</strong>: for one channel, how
+                does contribution \(\beta \cdot \mathrm{sat}(x) = \beta\,(1 - e^{-\lambda x})\) rise with
+                adstocked spend \(x\)? Each light line below is a fresh draw of \((\beta, \lambda)\) from
+                the priors; together they are a <strong>prior-predictive envelope</strong> for the shape of
+                diminishing returns. Every curve is <strong>monotone increasing</strong> (because
+                \(\beta &gt; 0\)) and <strong>concave / saturating</strong> (because of the
+                \(1 - e^{-\lambda x}\) form) — the two structural commitments the priors bake in before any
+                data arrive. Both are notebook-asserted facts.
+            </p>
+
+            <div class="chart-container" id="curvesChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong> (60 seeded
+                prior draws). The dark line is the prior-mean curve (\(\beta{=}1.5\), \(\lambda{=}2\)).
+                Whether this concave-only family is the <em>right</em> commitment is exactly what
+                <a href="math-02-saturation.html">math 02</a> and
+                <a href="stress-01-carryover-shape.html">stress 01</a> interrogate.
+            </p>
+
+            <div class="chart-container short" id="margChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser.</strong> The marginal return at the prior-mean
+                parameters:
+                \(\frac{d}{dx}\,\beta(1 - e^{-\lambda x}) = \beta \lambda e^{-\lambda x}\) — another dollar
+                buys less and less. At \(x = 0\) the marginal return is \(\beta\lambda = 3.00\) (prior
+                means), decaying toward zero as spend grows. Average vs marginal return is the decision
+                lever <a href="workshop-05-from-draws-to-decisions.html">workshop 05</a> builds on.
+            </p>
+
+            <h2 id="roadmap">Roadmap — the rest of the series</h2>
+            <p>
+                Every term in \(\mu_t\) that we just sampled gets a dedicated page.
+                <a href="math-01-adstock.html"><strong>Math 01</strong></a> derives carryover: the
+                geometric IIR recurrence vs normalized FIR kernels, the \(1/(1-\alpha)\) multiplier, and
+                why the default adstock parameter is a Beta(2,2) <em>blend weight</em>.
+                <a href="math-02-saturation.html"><strong>Math 02</strong></a> owns diminishing returns:
+                \(1 - e^{-\lambda u}\) vs Hill, the half-saturation point \(\ln 2 / \lambda\), and marginal
+                ROAS. <a href="math-03-seasonality-trend.html"><strong>Math 03</strong></a> builds the
+                baseline: Fourier seasonality and three trend families (linear, piecewise/Prophet,
+                B-spline). <a href="math-04-bayesian-model.html"><strong>Math 04</strong></a> assembles the
+                full Bayesian machine: priors &#8594; prior predictive &#8594; NUTS &#8594; convergence
+                diagnostics &#8594; posterior intervals &#8594; decomposition.
+                <a href="math-05-calibration.html"><strong>Math 05</strong></a> confronts identifiability —
+                the decay/saturation/\(\beta\) equifinality trap — and shows how a randomized experiment
+                enters as a prior or directly in the likelihood
+                (see also <a href="stress-03-confounding-selection.html">stress 03</a> and the
+                <a href="stress-05-gauntlet.html">gauntlet</a>).
+                <a href="math-06-extensions.html"><strong>Math 06</strong></a> extends the equation itself:
+                NestedMMM mediation, MultivariateMMM cross-effects and correlated residuals, and CombinedMMM
+                as their synthesis. The full system-level reference lives in the
+                <a href="technical-guide.html">technical guide</a>.
+            </p>
+            <p>
+                <strong>The one idea to carry forward:</strong> an MMM is a <em>forward recipe</em> for the
+                KPI; fitting is running that recipe backwards. Everything else — carryover, saturation,
+                hierarchy, calibration — is detail on one term of the additive \(\mu_t\), and on the priors
+                that regularize it:
+            </p>
+            <div class="master-eq">
+                \[
+                \tilde y_t \sim \mathrm{Normal}\!\Big(
+                \underbrace{\text{intercept} + \text{trend}_t + \text{seasonality}_t + \text{geo} +
+                \text{product} + \textstyle\sum_c \beta_c\, \mathrm{sat}_c(\mathrm{adstock}_c(x_{c,t}))
+                + \text{controls}_t}_{\mu_t},\ \sigma\Big).
+                \]
+            </div>
+
+            <div class="definition" id="takeaway">
+                <h4>What to take away</h4>
+                <ul>
+                    <li>The MMM is one additive mean function \(\mu_t\) plus a Normal likelihood — a complete <strong>generative recipe</strong>. Fitting inverts it.</li>
+                    <li>The media term is \(\sum_c \beta_c\, \mathrm{sat}_c(\mathrm{adstock}_c(x_{c,t}))\): carryover, then diminishing returns (\(1 - e^{-\lambda u}\), <em>not</em> Hill), then a strictly positive coefficient.</li>
+                    <li>The default priors are weakly informative and exactly tabulated: \(\beta \sim \mathrm{Gamma}(\mu{=}1.5, \sigma{=}1)\), \(\lambda \sim \mathrm{Exp}(0.5)\), \(\sigma \sim \mathrm{HalfNormal}(0.5)\), and a \(\mathrm{Beta}(2,2)\) adstock <em>blend weight</em> — not a decay rate.</li>
+                    <li>One prior draw generates a plausible year of sales whose decomposition is <em>exactly</em> additive — the picture the fitted model must recover when only the dots are observed.</li>
+                    <li>The priors bake in two structural commitments before any data arrive: response curves are monotone increasing and concave. Math 01&ndash;06 make every term precise.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/math_00_overview.ipynb</code>, authored by
+                    <code>nbs/build_math_00_overview.py</code> — pure NumPy + matplotlib, bakes in seconds,
+                    and every identity above is an <code>assert</code> in the notebook. The series README is
+                    <code>nbs/README_math.md</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG (series-wide reference implementation).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Distribution samplers — the same math as numpy's parameterizations.
+        // ------------------------------------------------------------------
+        function randn(rng) {
+            let u = 0, v = 0;
+            while (u === 0) u = rng();
+            while (v === 0) v = rng();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+        // Marsaglia-Tsang Gamma(shape k >= 1, scale theta).
+        function rgamma(rng, k, theta) {
+            const d = k - 1 / 3, c = 1 / Math.sqrt(9 * d);
+            for (;;) {
+                let x, v;
+                do { x = randn(rng); v = 1 + c * x; } while (v <= 0);
+                v = v * v * v;
+                const u = rng();
+                if (u < 1 - 0.0331 * x * x * x * x) return d * v * theta;
+                if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v * theta;
+            }
+        }
+        // Gamma(mu, sigma) -> shape k = mu^2/sigma^2, scale theta = sigma^2/mu.
+        function rgammaMuSigma(rng, mu, sigma) {
+            return rgamma(rng, mu * mu / (sigma * sigma), sigma * sigma / mu);
+        }
+        function rexp(rng, scale) { return -Math.log(1 - rng()) * scale; }
+        function rbeta22(rng) {
+            const x = rgamma(rng, 2, 1), y = rgamma(rng, 2, 1);
+            return x / (x + y);
+        }
+
+        // Analytic densities for the overlay lines.
+        function lgamma(z) { // Lanczos approximation
+            const g = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
+                       -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+                       9.9843695780195716e-6, 1.5056327351493116e-7];
+            if (z < 0.5) {
+                return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+            }
+            z -= 1;
+            let x = 0.99999999999980993;
+            for (let i = 0; i < g.length; i++) x += g[i] / (z + i + 1);
+            const t = z + g.length - 0.5;
+            return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+        }
+        function gammaPdf(x, k, theta) {
+            if (x <= 0) return 0;
+            return Math.exp((k - 1) * Math.log(x) - x / theta - lgamma(k) - k * Math.log(theta));
+        }
+        function expPdf(x, rate) { return x < 0 ? 0 : rate * Math.exp(-rate * x); }
+        function beta22Pdf(x) { return (x < 0 || x > 1) ? 0 : 6 * x * (1 - x); }
+        function normPdf(x, mu, s) {
+            return Math.exp(-0.5 * Math.pow((x - mu) / s, 2)) / (s * Math.sqrt(2 * Math.PI));
+        }
+        function halfNormPdf(x, s) { return x < 0 ? 0 : 2 * normPdf(x, 0, s); }
+
+        // ------------------------------------------------------------------
+        // Framework transforms in JS: geometric adstock (IIR) + exp saturation.
+        // ------------------------------------------------------------------
+        function adstockGeo(x, alpha) {
+            const out = new Array(x.length);
+            let carry = 0;
+            for (let t = 0; t < x.length; t++) { carry = x[t] + alpha * carry; out[t] = carry; }
+            return out;
+        }
+        function satExp(u, lam) { return 1 - Math.exp(Math.max(-lam * u, -20)); }
+
+        function histDensity(samples, lo, hi, nBins) {
+            const counts = new Array(nBins).fill(0);
+            const w = (hi - lo) / nBins;
+            let inRange = 0;
+            for (let i = 0; i < samples.length; i++) {
+                const s = samples[i];
+                if (s < lo || s >= hi) continue;
+                counts[Math.floor((s - lo) / w)] += 1;
+                inRange += 1;
+            }
+            const centers = [], dens = [];
+            for (let b = 0; b < nBins; b++) {
+                centers.push(lo + (b + 0.5) * w);
+                dens.push(counts[b] / (samples.length * w));
+            }
+            return { centers: centers, dens: dens };
+        }
+        function mean(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+
+        // ==================================================================
+        // 1) Prior density explorer (toggle buttons)
+        // ==================================================================
+        const N_PRIOR = 30000;
+        const PRIORS = {};
+        (function buildPriorSamples() {
+            const defs = {
+                beta:      { lo: 0,    hi: 6,   color: PT.colors.tv,
+                             title: 'β_c ~ Gamma(μ=1.5, σ=1.0) — channel coefficient',
+                             sample: function(r) { return rgammaMuSigma(r, 1.5, 1.0); },
+                             pdf: function(x) { return gammaPdf(x, 2.25, 2 / 3); } },
+                lam:       { lo: 0,    hi: 12,  color: PT.colors.display,
+                             title: 'λ_c ~ Exponential(0.5) — saturation rate (mean 2)',
+                             sample: function(r) { return rexp(r, 2); },
+                             pdf: function(x) { return expPdf(x, 0.5); } },
+                m:         { lo: 0,    hi: 1,   color: PT.colors.search,
+                             title: 'm_c ~ Beta(2, 2) — adstock blend weight (NOT a decay rate)',
+                             sample: function(r) { return rbeta22(r); },
+                             pdf: function(x) { return beta22Pdf(x); } },
+                intercept: { lo: -2,   hi: 2,   color: PT.colors.social,
+                             title: 'intercept ~ Normal(0, 0.5) — baseline level',
+                             sample: function(r) { return 0.5 * randn(r); },
+                             pdf: function(x) { return normPdf(x, 0, 0.5); } },
+                season:    { lo: -1.2, hi: 1.2, color: PT.colors.social,
+                             title: 'seasonality coefficient ~ Normal(0, 0.3)',
+                             sample: function(r) { return 0.3 * randn(r); },
+                             pdf: function(x) { return normPdf(x, 0, 0.3); } },
+                sigma:     { lo: 0,    hi: 2,   color: PT.colors.truth,
+                             title: 'σ ~ HalfNormal(0.5) — noise scale',
+                             sample: function(r) { return Math.abs(0.5 * randn(r)); },
+                             pdf: function(x) { return halfNormPdf(x, 0.5); } }
+            };
+            Object.keys(defs).forEach(function(key, idx) {
+                const d = defs[key];
+                const r = mulberry32(20240601 + idx);
+                const samples = new Array(N_PRIOR);
+                for (let i = 0; i < N_PRIOR; i++) samples[i] = d.sample(r);
+                d.samples = samples;
+                d.mean = mean(samples);
+                PRIORS[key] = d;
+            });
+        })();
+
+        function drawPriorChart(key) {
+            const d = PRIORS[key];
+            const h = histDensity(d.samples, d.lo, d.hi, 80);
+            const pdfX = [], pdfY = [];
+            for (let i = 0; i <= 240; i++) {
+                const x = d.lo + (d.hi - d.lo) * i / 240;
+                pdfX.push(x); pdfY.push(d.pdf(x));
+            }
+            const traces = [
+                { type: 'bar', x: h.centers, y: h.dens, name: '30k seeded draws',
+                  marker: { color: PT.band(d.color, 0.55), line: { color: d.color, width: 0.5 } },
+                  hovertemplate: 'x %{x:.2f}<br>density %{y:.3f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: pdfX, y: pdfY, name: 'analytic density',
+                  line: { color: PT.colors.truth, width: 2.2 },
+                  hovertemplate: 'x %{x:.2f}<br>pdf %{y:.3f}<extra></extra>' }
+            ];
+            const layout = PT.layout({
+                bargap: 0,
+                title: { text: d.title, font: { size: 14 }, x: 0.02 },
+                xaxis: { title: 'parameter value', range: [d.lo, d.hi] },
+                yaxis: { title: 'density', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 50, b: 55 },
+                shapes: [{
+                    type: 'line', x0: d.mean, x1: d.mean, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: d.mean, y: 0.97, yref: 'paper', xanchor: 'left',
+                    text: ' sample mean ' + d.mean.toFixed(2), showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.react('priorChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn[data-prior]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn[data-prior]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawPriorChart(btn.dataset.prior);
+            });
+        });
+
+        // ==================================================================
+        // 2) One draw from the prior — the live forward simulation
+        // ==================================================================
+        const T = 104;
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLORS = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+        const WEEKS = [];
+        for (let t = 0; t < T; t++) WEEKS.push(t);
+
+        // Fixed bursty spend plan (mirrors the notebook's flight plans; seeded once,
+        // never re-drawn — only the parameters change between draws).
+        const SPEND = (function buildSpend() {
+            const srng = mulberry32(7001);
+            const X = CHANNELS.map(function() { return new Array(T).fill(0); });
+            const plans = {
+                TV:      [[5, 4, 0.9], [40, 5, 1.1], [78, 4, 0.8]],
+                Search:  [],
+                Social:  [[12, 3, 0.6], [30, 6, 0.7], [60, 4, 0.8], [90, 3, 0.6]],
+                Display: [[20, 8, 0.4], [55, 10, 0.45], [85, 8, 0.4]]
+            };
+            for (let t = 0; t < T; t += 3) plans.Search.push([t, 1, 0.5 + 0.3 * srng()]);
+            CHANNELS.forEach(function(ch, j) {
+                plans[ch].forEach(function(f) {
+                    const start = f[0], len = f[1], level = f[2];
+                    for (let t = start; t < Math.min(start + len, T); t++) {
+                        X[j][t] = level * (0.7 + 0.3 * srng());
+                    }
+                });
+                // Scale down so peak adstocked exposure keeps saturation mid-curve.
+                for (let t = 0; t < T; t++) X[j][t] *= 0.35;
+            });
+            return X;
+        })();
+
+        const BASE_OFFSET = 1.0; // display shift only — cancels from every identity
+        const FIRST_SEED = 185;  // hand-picked legible first draw (cf. notebook seed 83)
+        let drawCount = 0;
+
+        function simulateDraw(seed) {
+            const r = mulberry32(seed);
+            const beta = [], lam = [], alpha = [];
+            for (let j = 0; j < 4; j++) beta.push(rgammaMuSigma(r, 1.5, 1.0));
+            for (let j = 0; j < 4; j++) lam.push(rexp(r, 2));
+            for (let j = 0; j < 4; j++) alpha.push(rbeta22(r));
+            const interc = 0.5 * randn(r);
+            const slope = 0.5 * randn(r);
+            const sA = 0.3 * randn(r), sB = 0.3 * randn(r);
+            const sigma = Math.abs(0.5 * randn(r));
+
+            const contrib = [], satMax = [];
+            for (let j = 0; j < 4; j++) {
+                const ad = adstockGeo(SPEND[j], alpha[j]);
+                const cj = new Array(T);
+                let mx = 0;
+                for (let t = 0; t < T; t++) {
+                    const s = satExp(ad[t], lam[j]);
+                    cj[t] = beta[j] * s;
+                    if (s > mx) mx = s;
+                }
+                contrib.push(cj); satMax.push(mx);
+            }
+
+            const tMean = (T - 1) / 2;
+            const baseline = [], mu = [], y = [];
+            for (let t = 0; t < T; t++) {
+                const ts = (t - tMean) / (T - 1 - tMean); // centered, unit-scaled time
+                const base = BASE_OFFSET + interc + slope * ts
+                    + sA * Math.sin(2 * Math.PI * t / 52) + sB * Math.cos(2 * Math.PI * t / 52);
+                baseline.push(base);
+                let m = base;
+                for (let j = 0; j < 4; j++) m += contrib[j][t];
+                mu.push(m);
+                y.push(m + sigma * randn(r));
+            }
+            return { beta: beta, lam: lam, alpha: alpha, interc: interc, sigma: sigma,
+                     satMax: satMax, contrib: contrib, baseline: baseline, mu: mu, y: y };
+        }
+
+        function renderParamTable(d) {
+            const body = document.getElementById('paramTableBody');
+            let html = '';
+            for (let j = 0; j < 4; j++) {
+                html += '<tr><td style="color:' + CH_COLORS[j] + '">' + CHANNELS[j] + '</td>'
+                    + '<td>' + d.beta[j].toFixed(2) + '</td>'
+                    + '<td>' + d.lam[j].toFixed(2) + '</td>'
+                    + '<td>' + d.alpha[j].toFixed(2) + '</td>'
+                    + '<td>' + d.satMax[j].toFixed(2) + '</td></tr>';
+            }
+            html += '<tr><td>baseline / noise</td>'
+                + '<td colspan="2">intercept = ' + d.interc.toFixed(2) + '</td>'
+                + '<td colspan="2">σ = ' + d.sigma.toFixed(2) + '</td></tr>';
+            body.innerHTML = html;
+        }
+
+        function renderDrawCharts(d) {
+            // --- KPI draw vs noiseless mean -------------------------------
+            const upper = [], lower = [];
+            for (let t = 0; t < T; t++) { upper.push(d.mu[t] + d.sigma); lower.push(d.mu[t] - d.sigma); }
+            const drawTraces = [
+                { type: 'scatter', mode: 'lines', x: WEEKS, y: upper, name: 'μ ± σ',
+                  line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: WEEKS, y: lower, name: 'μ ± σ',
+                  fill: 'tonexty', fillcolor: PT.band(PT.colors.tv, 0.18),
+                  line: { width: 0 }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: WEEKS, y: d.mu, name: 'mean μ_t (noiseless)',
+                  line: { color: PT.colors.tv, width: 2.5 },
+                  hovertemplate: 'week %{x}<br>μ %{y:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: WEEKS, y: d.y, name: 'observed draw ỹ_t',
+                  marker: { color: '#9aa79a', size: 5, line: { color: PT.colors.truth, width: 0.5 } },
+                  hovertemplate: 'week %{x}<br>ỹ %{y:.2f}<extra></extra>' }
+            ];
+            const drawLayout = PT.layout({
+                title: { text: 'One prior draw of the KPI:  ỹ_t ~ Normal(μ_t, σ)',
+                         font: { size: 14 }, x: 0.02 },
+                xaxis: { title: 'week' },
+                yaxis: { title: 'standardized KPI (display-shifted)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 50, b: 55 }
+            });
+            Plotly.react('drawChart', drawTraces, drawLayout, PT.config);
+
+            // --- Stacked additive decomposition ---------------------------
+            const stackTraces = [
+                { type: 'scatter', mode: 'lines', x: WEEKS, y: d.baseline, name: 'baseline',
+                  stackgroup: 'mu', line: { width: 0.5, color: PT.colors.truth },
+                  fillcolor: PT.band('#5a6b5a', 0.45),
+                  hovertemplate: 'week %{x}<br>baseline %{y:.2f}<extra></extra>' }
+            ];
+            for (let j = 0; j < 4; j++) {
+                stackTraces.push({
+                    type: 'scatter', mode: 'lines', x: WEEKS, y: d.contrib[j], name: CHANNELS[j],
+                    stackgroup: 'mu', line: { width: 0.5, color: CH_COLORS[j] },
+                    fillcolor: PT.band(CH_COLORS[j], 0.65),
+                    hovertemplate: 'week %{x}<br>' + CHANNELS[j] + ' contribution %{y:.2f}<extra></extra>'
+                });
+            }
+            stackTraces.push({
+                type: 'scatter', mode: 'markers', x: WEEKS, y: d.y, name: 'observed ỹ_t',
+                marker: { color: '#ffffff', size: 5, line: { color: PT.colors.truth, width: 1 } },
+                hovertemplate: 'week %{x}<br>ỹ %{y:.2f}<extra></extra>'
+            });
+            const stackLayout = PT.layout({
+                title: { text: 'Additive decomposition: baseline + Σ contributions stacks up to μ_t',
+                         font: { size: 14 }, x: 0.02 },
+                xaxis: { title: 'week' },
+                yaxis: { title: 'standardized KPI (display-shifted)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 50, b: 55 }
+            });
+            Plotly.react('stackChart', stackTraces, stackLayout, PT.config);
+        }
+
+        function doDraw() {
+            const seed = FIRST_SEED + drawCount;
+            const d = simulateDraw(seed);
+            renderParamTable(d);
+            renderDrawCharts(d);
+            const label = document.getElementById('drawSeedLabel');
+            label.textContent = drawCount === 0
+                ? 'draw #1 · seed ' + seed + ' (hand-picked, legible)'
+                : 'draw #' + (drawCount + 1) + ' · seed ' + seed + ' (unfiltered prior draw)';
+            drawCount += 1;
+        }
+
+        document.getElementById('drawAgainBtn').addEventListener('click', doDraw);
+
+        // ==================================================================
+        // 3) Prior response-curve envelope + marginal returns
+        // ==================================================================
+        function drawCurvesChart() {
+            const r = mulberry32(2024);
+            const gx = [];
+            for (let i = 0; i <= 160; i++) gx.push(4 * i / 160);
+            const traces = [];
+            for (let k = 0; k < 60; k++) {
+                const b = rgammaMuSigma(r, 1.5, 1.0);
+                const l = rexp(r, 2);
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: gx,
+                    y: gx.map(function(x) { return b * satExp(x, l); }),
+                    line: { color: PT.band(PT.colors.tv, 0.30), width: 1.2 },
+                    showlegend: false, hoverinfo: 'skip'
+                });
+            }
+            traces.push({
+                type: 'scatter', mode: 'lines', x: gx,
+                y: gx.map(function(x) { return 1.5 * satExp(x, 2.0); }),
+                name: 'prior-mean curve (β=1.5, λ=2)',
+                line: { color: PT.colors.truth, width: 3 },
+                hovertemplate: 'x %{x:.2f}<br>contribution %{y:.2f}<extra></extra>'
+            });
+            const layout = PT.layout({
+                title: { text: '60 prior draws of the response  β(1 − e^{−λx})',
+                         font: { size: 14 }, x: 0.02 },
+                xaxis: { title: 'adstocked spend x' },
+                yaxis: { title: 'channel contribution', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 50, b: 55 }
+            });
+            Plotly.newPlot('curvesChart', traces, layout, PT.config);
+        }
+
+        function drawMargChart() {
+            const b0 = 1.5, l0 = 2.0;
+            const gx = [], marg = [];
+            for (let i = 0; i <= 160; i++) {
+                const x = 4 * i / 160;
+                gx.push(x);
+                marg.push(b0 * l0 * Math.exp(-l0 * x));
+            }
+            const traces = [{
+                type: 'scatter', mode: 'lines', x: gx, y: marg,
+                name: 'marginal return', fill: 'tozeroy',
+                fillcolor: PT.band(PT.colors.display, 0.15),
+                line: { color: PT.colors.display, width: 2.5 },
+                hovertemplate: 'x %{x:.2f}<br>marginal %{y:.2f}<extra></extra>'
+            }];
+            const layout = PT.layout({
+                title: { text: 'Marginal return  d/dx [β(1 − e^{−λx})] = βλe^{−λx}  (prior means)',
+                         font: { size: 14 }, x: 0.02 },
+                xaxis: { title: 'adstocked spend x' },
+                yaxis: { title: 'contribution per extra unit', rangemode: 'tozero' },
+                showlegend: false,
+                margin: { l: 70, r: 30, t: 50, b: 55 },
+                annotations: [{
+                    x: 0.05, y: 3.0, xanchor: 'left', yanchor: 'top',
+                    text: 'at x = 0: βλ = 3.00', showarrow: false,
+                    font: { size: 12, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('margChart', traces, layout, PT.config);
+        }
+
+        function init() {
+            drawPriorChart('beta');
+            doDraw();
+            drawCurvesChart();
+            drawMargChart();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

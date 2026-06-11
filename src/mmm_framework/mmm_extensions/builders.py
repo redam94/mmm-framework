@@ -712,6 +712,11 @@ class CombinedModelConfigBuilder:
         self._mv_builder.with_outcomes(*names)
         return self
 
+    def add_cross_effect(self, effect: CrossEffectConfig) -> Self:
+        """Add a cross-effect between outcomes."""
+        self._mv_builder.add_cross_effect(effect)
+        return self
+
     def with_cannibalization(self, source: str, target: str, **kwargs) -> Self:
         self._mv_builder.with_cannibalization(source, target, **kwargs)
         return self

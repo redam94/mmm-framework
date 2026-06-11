@@ -838,6 +838,11 @@ class ReportBuilder:
         self._config_kwargs["color_scheme"] = scheme
         return self
 
+    def with_channel_colors(self, channel_colors) -> ReportBuilder:
+        """Set per-channel chart colors (a ChannelColors instance)."""
+        self._config_kwargs["channel_colors"] = channel_colors
+        return self
+
     def with_credible_interval(self, prob: float) -> ReportBuilder:
         """Set default credible interval (e.g., 0.8 for 80% CI)."""
         self._config_kwargs["default_credible_interval"] = prob

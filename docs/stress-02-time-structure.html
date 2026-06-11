@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stress Test 02: Time Structure | MMM Framework</title>
+    <meta name="description" content="A trend break the brand reacted to sends TV to −63% under the default linear trend; evolving seasonality scrambles the channel split while totals stay right; effectiveness drift hides inside green totals. The measured failures and the pivots that fix them.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-02-time-structure.html">
+    <meta property="og:title" content="Stress Test 02: Time Structure | MMM Framework">
+    <meta property="og:description" content="Trend breaks, holiday spikes, and drifting effectiveness: where unmodeled time structure ends up (on media), which diagnostics catch it, and the measured pivots.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-02-time-structure.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Copied from pressure-testing.html so the series stays coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row input[type="range"] {
+            width: 220px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .live-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            color: var(--color-primary-dark);
+            min-width: 6.5rem;
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">One mechanic, three acts</a></li>
+                <li><a href="#act1">Act 1 · The break the brand reacted to</a></li>
+                <li><a href="#act1-pivots">Act 1 pivots · Bend the trend, or name the event</a></li>
+                <li><a href="#act2">Act 2 · Seasonality Fourier can't say</a></li>
+                <li><a href="#act3">Act 3 · Drift inside green totals</a></li>
+                <li><a href="#matrix">On the scorecard</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+                <li><a href="#run">Run it yourself</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html" class="active">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Stress Test 02: Time Structure</h1>
+            <p class="lead">
+                Three worlds whose <em>time structure</em> lies outside the model's hypothesis space —
+                a structural break the brand reacted to, seasonality no low-order Fourier basis can say,
+                and effectiveness that drifts under a constant coefficient. In every act the
+                un-representable structure has to land <em>somewhere</em>, and it lands on media exactly
+                when spend correlates with it. The punchline: under the default linear trend the
+                trend-break world reads TV at <strong>−63%</strong> of its true contribution; the holiday
+                world scrambles the channel split (<strong>TV +33%, Display −70%</strong> when first
+                measured) while the <em>total</em> stays roughly right — and convergence diagnostics were
+                green in every single fit.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">−63%</div>
+                    <div class="stat-label">TV's error under the default linear trend on the trend-break world (notebook fidelity)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+104%</div>
+                    <div class="stat-label">worst channel on the evolving-seasonality world (recorded matrix)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">9%</div>
+                    <div class="stat-label">median error after a one-column holiday dummy</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">12 / 12</div>
+                    <div class="stat-label">fits with green convergence (r-hat &le; 1.02, zero divergences)</div>
+                </div>
+            </div>
+
+            <p>
+                This guide mirrors <code>nbs/stress_02_time_structure.ipynb</code>. The series doctrine is set in
+                <a href="stress-00-rosy-picture.html">stress 00</a>: green diagnostics do not mean correct
+                attribution. This is the time-structure version of that failure. The model's default spec is a
+                linear trend, order-2 yearly Fourier seasonality, and constant positive betas; each act breaks
+                exactly one of those, and we grade every estimate against known causal ground truth from the
+                scenario harness in <code>tests/synth/</code>.
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>Act</th><th>World</th><th>The correlation that hurts</th><th>The pivot that works</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td><code>trend_break</code> — level shock + recovery slope mid-series</td>
+                        <td>the brand <strong>ramps TV/Display ~60% at the break</strong></td>
+                        <td>piecewise/spline trend; step + ramp event controls</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td><code>seasonality_misspec</code> — growing amplitude + sharp holiday spikes</td>
+                        <td><strong>Social concentrates 3× in Q4</strong>, right on the spikes</td>
+                        <td>holiday dummy as a <em>control</em> — not more Fourier</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td><code>time_varying_beta</code> — TV fatigues, Search jumps at a break</td>
+                        <td>nothing in spend at all — the drift is in the <em>response</em></td>
+                        <td>split-window refits (the diagnostic <em>is</em> the pivot)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="act1">Act 1 — A structural break the brand <em>reacted to</em></h2>
+            <p>
+                Mid-series the category takes a level shock — think COVID, a distribution loss, a PR
+                crisis: the baseline drops ~140 KPI units overnight, then claws most of it back along a
+                new recovery slope (+1.45/week). And the brand does what real brands do in a crisis: it
+                ramps TV and Display roughly 60% from the break onward to "win back" demand. So the spend
+                step and the baseline shock are <em>the same event</em> on the calendar.
+            </p>
+            <p>
+                The model's default trend is a single straight line. A line cannot drop 140 units in one
+                week, and whatever part of the shock-and-recovery the line cannot carry is available to
+                whichever regressor moves at the break — which is exactly the ramped media.
+            </p>
+
+            <div class="chart-container tall" id="act1WorldChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> (seeded) recreating the
+                <code>trend_break</code> world's shape: sales with the true baseline's level shock and
+                recovery slope (top), and TV/Display spend stepping up ~60% at exactly the break week
+                (bottom). <strong>Measured in the notebook (seeded run):</strong> under the naive linear
+                trend TV comes out around <strong>−63%</strong> vs its true contribution with the truth
+                <em>outside</em> its 90% interval; Display is similarly crushed; the two non-ramped
+                channels are recovered fine (Search within ~15%). The fitted straight line absorbed
+                little of the shock — even the <em>best possible</em> straight line through the true
+                trend-plus-shock captures barely a quarter of its swing.
+            </p>
+
+            <p>
+                Note the direction surprised the scenario's own designer. It was <em>designed</em>
+                expecting the post-break recovery to be mis-credited <strong>to</strong> the ramped
+                channels. The measured failure is the mirror image: the level shock dominates the
+                post-break window, so the model sees 60% more TV/Display buying visibly fewer sales —
+                and concludes the ramped channels barely work. Same disease either way: <strong>spend
+                moved in lockstep with unmodeled baseline structure, and the structure was billed to
+                media.</strong> Had the brand <em>cut</em> spend in the crisis, the bias would flip to
+                over-credit.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said</h4>
+                <p>
+                    Convergence: green (r-hat ≈ 1.02, zero divergences) — and it stays green in every fit
+                    on this page. The alarm that actually fires is the <strong>time-resolved residual
+                    plot</strong>: the naive fit's residuals crater by more than 40 KPI units right after
+                    the break — a cliff at a known calendar date. Plot residuals against the
+                    <em>calendar</em>, not just their histogram.
+                </p>
+            </div>
+
+            <h2 id="act1-pivots">Act 1 pivots — bend the trend, or name the event</h2>
+            <p>
+                Two families of fix. The first is a trend that can bend: <code>TrendType.PIECEWISE</code>,
+                the Prophet-style slope-change trend. A continuous piecewise-linear function can never
+                <em>jump</em>, but it can fake a cliff as two violent slope changes between adjacent
+                changepoints — <em>if the prior lets it dive</em>. When this notebook was first authored,
+                the default changepoint prior did not.
+            </p>
+
+            <div class="chart-container" id="act1TrendChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — stylized fitted-trend shapes
+                against the true trend-plus-shock. <strong>Measured in the notebook (seeded run):</strong>
+                at the <em>old</em> default changepoint prior (Laplace scale 0.05) the piecewise trend's
+                correlation with the true baseline path is <strong>0.33</strong> — no better than the
+                line, because a Laplace(0,&nbsp;0.05) prior on slope changes refuses to pay for a 140-unit
+                cliff. At the <em>current</em> default (0.5) the correlation is <strong>0.86</strong>: the
+                trend visibly tracks the shock-and-recovery, median channel error drops below 20%, and TV
+                claws back a large part of its credit (its error improves by 20+ points).
+            </p>
+
+            <div class="note">
+                <h4>💡 Framework fix surfaced by this notebook</h4>
+                <p>
+                    This stress test's first run found the then-default trend priors too stiff, and the
+                    framework defaults were changed (2026-06-10) as a direct result:
+                    <code>changepoint_prior_scale</code> <strong>0.05 → 0.5</strong> (the default piecewise
+                    trend now tracks a structural break: trend correlation <strong>0.33 → 0.86</strong> on
+                    this world), and the linear trend's growth prior sigma <strong>0.1 → 0.5</strong>
+                    (the fitted linear trend now reaches ~<strong>95%</strong> of a true trend's amplitude,
+                    vs <strong>43%</strong> before). A flexible trend <em>family</em> is not enough — the
+                    <em>prior</em> on its flexibility is part of the spec, and it remains a sensitivity
+                    knob worth auditing whenever the trend story carries the analysis.
+                </p>
+            </div>
+
+            <p>
+                The second family is more surgical: if you can date the break (you usually can — it was a
+                <em>crisis</em>), hand the model the event as <strong>control columns</strong> rather than
+                buying a more flexible trend. A step dummy \( \mathbf{1}[t \ge t_0] \) represents the
+                level shift; adding a ramp \( (t - t_0)_+ \) also represents the new recovery slope —
+                everything you know about the shock's shape, in two columns.
+            </p>
+
+            <p><strong>Measured pivot summary</strong> (seeded notebook run):</p>
+            <table>
+                <thead>
+                    <tr><th>Spec</th><th>Verdict</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Naive linear trend</td><td>TV ~−63%, truth outside the 90% CI; median error &gt; 20%</td></tr>
+                    <tr><td>Piecewise, <em>old</em> 0.05 prior (passed explicitly)</td><td>no better than the line — trend corr 0.33, channel errors essentially unchanged</td></tr>
+                    <tr><td>Piecewise, current default (0.5)</td><td>trend corr 0.86; median error &lt; 20%; TV improves by 20+ points</td></tr>
+                    <tr><td>Step dummy only</td><td>helps, but underperforms the trend pivots — the unrepresented <em>recovery slope</em> keeps leaking</td></tr>
+                    <tr><td>Step + ramp controls</td><td>matches the best trend-based fix; median error &lt; 20%</td></tr>
+                    <tr><td>B-spline trend (12 knots, no event knowledge)</td><td>lands in the same place; median error &lt; 20%</td></tr>
+                </tbody>
+            </table>
+
+            <p>
+                One honest residual: <strong>TV stays under-credited by roughly a fifth to a third in
+                every pivot.</strong> The flexible trends widen its interval enough to cover the truth;
+                the tighter event controls can leave it just outside. That is the identification limit,
+                not a spec bug — the brand changed TV at exactly the week the world changed, so the data
+                cannot fully split "ramped TV" from "recovering baseline". Only an experiment fully
+                separates them (see <a href="stress-03-confounding-selection.html">stress 03</a> for how
+                lift-test calibration closes exactly this kind of gap).
+            </p>
+
+            <h2 id="act2">Act 2 — Seasonality the Fourier basis cannot say</h2>
+            <p>
+                Three departures from the model's order-2 yearly Fourier
+                \( \sum_{k=1}^{2} a_k \sin\tfrac{2\pi k t}{52} + b_k \cos\tfrac{2\pi k t}{52} \),
+                all common in retail: the seasonal <strong>amplitude grows ~60%</strong> across the three
+                years (the brand scales); there are <strong>sharp holiday spikes</strong> — weeks 47–48
+                (Black Friday/Cyber) and 50–51 (Christmas), +160 KPI each, far too sharp for any low-order
+                Fourier; and <strong>Social's flighting is seasonal</strong> — its budget runs 3× in Q4,
+                sitting directly on the spikes.
+            </p>
+
+            <div class="chart-container" id="act2SeasonChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — the world's true seasonal
+                component (growing amplitude + spikes) against the <em>best possible</em> order-2 Fourier
+                approximation, computed by least squares right here in the page. The shaded gap is
+                baseline KPI with nowhere to live: a 1-week spike needs harmonics near order ~26, and the
+                amplitude growth is not periodic at all. In the notebook that unrepresentable gap sums to
+                a meaningful fraction of all media contribution — and it has to be billed to someone.
+            </p>
+
+            <p>
+                <strong>Measured</strong> — and another design surprise. The world was built so
+                <em>Social</em> would harvest the holiday lift. The split got scrambled instead of the
+                targeted channel inflated: when first measured (under the framework's old, stiffer trend
+                priors) the same world read <strong>TV +33% and Display −70%</strong>; re-run at the
+                current defaults the victim shifted — Display loses roughly two-thirds of its
+                contribution, Social comes out modestly <em>under</em>, TV lands close. In both runs
+                <em>total</em> media stays within ~15% of truth and convergence is green. The lesson is
+                sharper than the designed one: <strong>you cannot predict which channel pays for
+                misspecified seasonality</strong> — the misfit finds the accounting-cheapest victim, and
+                the totals stay plausible throughout.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said</h4>
+                <p>
+                    Convergence: green again. The decisive check is the <strong>holiday-week residual
+                    excess</strong>: holiday weeks stick out of the naive fit's residuals by 60+ KPI units
+                    — about two-thirds of the +160 spike survives in the residuals rather than being
+                    absorbed. Cheap, dated, and it names the missing column for you.
+                </p>
+            </div>
+
+            <h3>The pivot: events are <em>controls</em>, not seasonality</h3>
+            <p>
+                A holiday spike is not "seasonality" in the Fourier sense — it is a dated, recurring
+                <strong>event</strong>, and it belongs in the design matrix as a control column, exactly
+                like Act 1's step dummy. The tempting alternative — crank the Fourier order to 6 and stay
+                inside the seasonality block — is measured too.
+            </p>
+
+            <div class="controls-row">
+                <label>Show fit:</label>
+                <button class="toggle-btn active" data-spec="naive">Naive (order-2 Fourier)</button>
+                <button class="toggle-btn" data-spec="pivot">+ holiday dummy control</button>
+            </div>
+            <div class="chart-container" id="act2PivotChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — residuals (actual − fitted) by
+                calendar week for the static-Fourier fit vs the holiday-dummy pivot; holiday weeks marked.
+                <strong>Measured in the notebook (seeded run):</strong> the holiday <em>control</em> is
+                the clear winner — median channel error drops to ~<strong>9%</strong> and Social lands
+                almost exactly on its truth. Raising the Fourier order to 6 barely dents the damage: it
+                can sketch a Q4 hump but not 1-week spikes, the amplitude growth stays unrepresentable,
+                and Display remains more than 35% under truth. (The feared "flexible season eats media"
+                backfire did <em>not</em> materialize on totals here — order-6 simply fails to fix the
+                problem.) One blemish even in the winning pivot: with the spikes controlled, Display still
+                ends about a quarter under truth — the amplitude growth is still unmodeled and still has
+                to land somewhere.
+            </p>
+
+            <h2 id="act3">Act 3 — Effectiveness that drifts under a constant beta</h2>
+            <p>
+                In the <code>time_varying_beta</code> world, TV's effectiveness <strong>fatigues</strong>
+                from 1.4× to 0.6× over three years (creative wear-out); Search more than doubles at a
+                mid-series break (0.6× → 1.5×, an algorithm/creative refresh); Social wobbles seasonally;
+                Display is constant. The model fits one constant beta per channel.
+            </p>
+            <p>
+                The recorded matrix grades this world <span class="verdict-pill ok">recovers</span> —
+                median error ~13%, full coverage — at the harness's fitting budget. The notebook's faster
+                budget tells a less comfortable story: TV's 3-year total comes out ~40% under-credited and
+                <em>outside</em> its 90% interval. A verdict that flips between "green" and "badly wrong"
+                with the fitting budget is itself a finding — totals-level green under drifting
+                effectiveness is <em>fragile</em>, not robust. And the deeper point survives in Search,
+                which is green on totals in <em>both</em> configurations — and still gives you the wrong
+                forward-looking answer.
+            </p>
+
+            <h3>The diagnostic that is also the pivot: split-window refits</h3>
+            <p>
+                You will never have the true effectiveness curves. What you <em>can</em> always do:
+                <strong>fit the halves separately and compare</strong>. If the per-window betas agree with
+                the full fit, constancy was fine; if they diverge, the full fit is an average over
+                different regimes — and your next-quarter decision should not be based on it. Try it: the
+                slider sets how hard effectiveness drifts, and the page refits all three windows by least
+                squares on each move.
+            </p>
+
+            <div class="controls-row">
+                <label for="driftSlider">Drift magnitude:</label>
+                <input type="range" id="driftSlider" min="0" max="0.8" step="0.05" value="0.4">
+                <span class="live-value" id="driftReadout">d = 0.40</span>
+                <span class="live-value" id="r2Readout">full-fit R² = –</span>
+            </div>
+            <div class="chart-container" id="act3DriftChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — true effectiveness slides from
+                (1+d)× down to (1−d)× while the page refits a constant-coefficient model on the full
+                window and on each half. The full-window estimate sits <em>between</em> the two half-window
+                estimates — it is a time-average over different regimes — yet the full fit's R² barely
+                moves as you push the drift up. <strong>Measured in the notebook (seeded run):</strong>
+                Search's split-window betas disagree by more than <strong>1.7×</strong> (true effectiveness
+                jump: 2.5×) while constant Display's halves agree, correctly clearing it; the full fit's
+                <em>late-window</em> Search credit is 25%+ below truth (and its early-window TV slice 35%+
+                below) while the dedicated half fits land close. That disagreement is computable on any
+                real dataset — no truth needed — and it is precisely the forward-looking error: a budget
+                set from the full fit prices Search at a fraction of its <em>current</em> effectiveness
+                and TV above its current, fatigued one.
+            </p>
+
+            <div class="note">
+                <h4>💡 The pre-fit EDA check (and its limit)</h4>
+                <p>
+                    Acts 1 and 2 are visible <em>before fitting</em>: correlate each channel's spend with
+                    the calendar features you suspect. In the notebook, TV/Display load on the post-break
+                    dummy and Social loads on Q4 (corr &gt; 0.3) — both flagged in seconds. Act 3 is the
+                    exception: the drift lives in the <em>response</em>, not in spend (every spend-vs-time
+                    correlation is under 0.15), so no spend-side screen can see it. Only split-window
+                    refits catch it.
+                </p>
+            </div>
+
+            <h2 id="matrix">On the scorecard</h2>
+            <p>
+                Both new worlds this notebook introduced to the harness are recorded in
+                <code>tests/synth/results/stress_matrix.md</code> as
+                <span class="verdict-pill silent">SILENT FAILURE</span>:
+                <code>trend_break</code> at median error <strong>27%</strong>, worst channel
+                <strong>41%</strong> (with 100% coverage — the wide intervals are doing honest work), and
+                <code>seasonality_misspec</code> at median <strong>37%</strong>, worst
+                <strong>104%</strong> (Social, with truth outside its interval). Both sampled with r-hat
+                1.02 and zero divergences. (<code>time_varying_beta</code> grades green at the harness
+                budget — see Act 3 for why that verdict is fragile.)
+            </p>
+
+            <div class="chart-container" id="matrixRowsChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — per-channel relative error on total contribution from the
+                recorded matrix (re-recorded 2026-06-10, harness fidelity: PyMC 500×500, parametric
+                adstock, seeded). Trend break: TV −37%, Search −17%, Social +6%, Display −41%. Evolving
+                seasonality: TV −17%, Search −24%, Social +104%, Display +50%. Notebook-fidelity runs
+                (NumPyro 300×2) push the trend-break TV error to −63% — the magnitude moves with the
+                fitting budget; the failure mode doesn't.
+            </p>
+
+            <h2 id="takeaway">What to take away</h2>
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>The model will spend your unmodeled time structure somewhere.</strong>
+                        With correlated spend it lands on media — and the <em>sign</em> depends on the
+                        geometry, not your intuition: both Act 1 and Act 2 surprised their own designer.</li>
+                    <li><strong>Convergence stayed green in all twelve fits.</strong> The checks that fired
+                        were time-resolved: the residual cliff at a calendar date (Act 1) and the
+                        holiday-week residual excess (Act 2). Plot residuals against the calendar.</li>
+                    <li><strong>Cheap, dated knowledge beats flexible machinery.</strong> A two-column
+                        event control (step + ramp) matched the best trend family in Act 1; a one-column
+                        holiday dummy won Act 2 outright (median error → 9%). Raising the Fourier order is
+                        a half-fix at best.</li>
+                    <li><strong>Flexibility has a prior.</strong> The piecewise trend failed this world at
+                        its old default changepoint scale (0.05) and the framework default was raised to
+                        0.5 as a result. Audit that knob whenever the trend story carries the analysis.</li>
+                    <li><strong>A green 3-year total can still price next quarter wrong by 2×.</strong>
+                        Split-window refits are cheap, need no ground truth, and are simultaneously the
+                        drift diagnostic and the pivot: use the recent window for forward decisions.</li>
+                </ul>
+            </div>
+
+            <h2 id="run">Run it yourself</h2>
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    Everything on this page is measured in
+                    <code>nbs/stress_02_time_structure.ipynb</code> (authored by
+                    <code>nbs/build_stress_02_time_structure.py</code>), backed by the scenario harness in
+                    <code>tests/synth/</code> — the <code>trend_break</code> and
+                    <code>seasonality_misspec</code> worlds were added to <code>tests/synth/dgp.py</code>
+                    for this notebook, and it validates their internals before fitting anything. Every
+                    computational cell ends in a seeded assert encoding the claim it demonstrates, so if
+                    the notebook executes clean, the story on this page is still true. Continue with
+                    <a href="stress-03-confounding-selection.html">stress 03 — Confounding &amp;
+                    Selection</a>: the failure modes no residual plot catches. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series
+        // (copied verbatim from pressure-testing.html).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gaussPair(rng) {
+            // Box-Muller; return one standard normal per call via closure-free pairing.
+            const u = Math.max(rng(), 1e-12), v = rng();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+        function range(n) { const a = new Array(n); for (let i = 0; i < n; i++) a[i] = i; return a; }
+        function mean(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+        function demean(a) { const m = mean(a); return a.map(function(v) { return v - m; }); }
+        function movAvg(a, w) {
+            const half = Math.floor(w / 2), out = new Array(a.length);
+            for (let i = 0; i < a.length; i++) {
+                let s = 0, c = 0;
+                for (let j = Math.max(0, i - half); j <= Math.min(a.length - 1, i + half); j++) { s += a[j]; c++; }
+                out[i] = s / c;
+            }
+            return out;
+        }
+        // OLS slope+intercept of y on x over index window [a, b).
+        function olsFit(x, y, a, b) {
+            let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+            for (let i = a; i < b; i++) { n++; sx += x[i]; sy += y[i]; sxx += x[i] * x[i]; sxy += x[i] * y[i]; }
+            const denom = n * sxx - sx * sx;
+            const slope = (n * sxy - sx * sy) / denom;
+            const icpt = (sy - slope * sx) / n;
+            return { slope: slope, intercept: icpt };
+        }
+        // Least-squares solve (X'X) beta = X'y for a small column basis. Gaussian elimination.
+        function lstsq(cols, y) {
+            const p = cols.length, n = y.length;
+            const A = [], b = [];
+            for (let i = 0; i < p; i++) {
+                A.push(new Array(p).fill(0));
+                let s = 0;
+                for (let k = 0; k < n; k++) s += cols[i][k] * y[k];
+                b.push(s);
+                for (let j = 0; j < p; j++) {
+                    let q = 0;
+                    for (let k = 0; k < n; k++) q += cols[i][k] * cols[j][k];
+                    A[i][j] = q;
+                }
+            }
+            // solve A x = b
+            for (let i = 0; i < p; i++) {
+                let piv = i;
+                for (let r = i + 1; r < p; r++) if (Math.abs(A[r][i]) > Math.abs(A[piv][i])) piv = r;
+                const tmp = A[i]; A[i] = A[piv]; A[piv] = tmp;
+                const tb = b[i]; b[i] = b[piv]; b[piv] = tb;
+                for (let r = i + 1; r < p; r++) {
+                    const f = A[r][i] / A[i][i];
+                    for (let c = i; c < p; c++) A[r][c] -= f * A[i][c];
+                    b[r] -= f * b[i];
+                }
+            }
+            const x = new Array(p).fill(0);
+            for (let i = p - 1; i >= 0; i--) {
+                let s = b[i];
+                for (let c = i + 1; c < p; c++) s -= A[i][c] * x[c];
+                x[i] = s / A[i][i];
+            }
+            return x;
+        }
+        function fitted(cols, beta) {
+            const n = cols[0].length, out = new Array(n).fill(0);
+            for (let i = 0; i < cols.length; i++)
+                for (let k = 0; k < n; k++) out[k] += beta[i] * cols[i][k];
+            return out;
+        }
+
+        // ------------------------------------------------------------------
+        // Shared world dimensions (3 years of weekly data, break mid-series)
+        // ------------------------------------------------------------------
+        const N = 156, BRK = 78;
+        const T = range(N);
+        const weekLabels = T.map(function(i) { return 'wk ' + (i + 1); });
+
+        // ==================================================================
+        // ACT 1 — trend-break world (illustrative seeded recreation)
+        // ==================================================================
+        function buildAct1() {
+            const rng = mulberry32(11);
+            const baseline = T.map(function(i) {
+                return 620 + 60 * i / N
+                     + 30 * Math.sin(2 * Math.PI * i / 52)
+                     + 18 * Math.cos(2 * Math.PI * i / 52);
+            });
+            const shock = T.map(function(i) { return i >= BRK ? -140 + 1.45 * (i - BRK) : 0; });
+
+            // Spend: TV & Display ramp ~60% at the break; Search stays flat.
+            const tvSpend = T.map(function(i) {
+                const lvl = i >= BRK ? 160 : 100;
+                return lvl * (0.78 + 0.44 * rng());
+            });
+            const dispSpend = T.map(function(i) {
+                const lvl = i >= BRK ? 96 : 60;
+                return lvl * (0.78 + 0.44 * rng());
+            });
+            const searchSpend = T.map(function() { return 90 * (0.78 + 0.44 * rng()); });
+
+            // Simple saturating media response on normalized spend.
+            function media(spend, amp) {
+                const mx = Math.max.apply(null, spend);
+                return spend.map(function(s) { return amp * (1 - Math.exp(-2.2 * s / mx)); });
+            }
+            const mTV = media(tvSpend, 95), mDisp = media(dispSpend, 55), mSearch = media(searchSpend, 70);
+
+            const y = T.map(function(i) {
+                return baseline[i] + shock[i] + mTV[i] + mDisp[i] + mSearch[i] + 22 * gaussPair(rng);
+            });
+            const trueBase = T.map(function(i) { return baseline[i] + shock[i]; });
+            return { y: y, trueBase: trueBase, tvSpend: tvSpend, dispSpend: dispSpend, shock: shock };
+        }
+
+        function drawAct1World(w) {
+            const traces = [
+                {
+                    x: weekLabels, y: w.y, type: 'scatter', mode: 'lines',
+                    name: 'sales (observed)', line: { color: PT.colors.truth, width: 1.2 },
+                    xaxis: 'x', yaxis: 'y'
+                },
+                {
+                    x: weekLabels, y: w.trueBase, type: 'scatter', mode: 'lines',
+                    name: 'true baseline (level shock + recovery slope)',
+                    line: { color: PT.colors.display, width: 2.4 },
+                    xaxis: 'x', yaxis: 'y'
+                },
+                {
+                    x: weekLabels, y: movAvg(w.tvSpend, 8), type: 'scatter', mode: 'lines',
+                    name: 'TV spend (8-wk avg)', line: { color: PT.colors.tv, width: 2.2 },
+                    xaxis: 'x', yaxis: 'y2'
+                },
+                {
+                    x: weekLabels, y: movAvg(w.dispSpend, 8), type: 'scatter', mode: 'lines',
+                    name: 'Display spend (8-wk avg)', line: { color: PT.colors.display, width: 2.2, dash: 'dot' },
+                    xaxis: 'x', yaxis: 'y2'
+                }
+            ];
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 30, b: 50 },
+                legend: { orientation: 'h', y: 1.12 },
+                xaxis: { gridcolor: PT.colors.grid, tickmode: 'array',
+                         tickvals: ['wk 1', 'wk 52', 'wk 79', 'wk 104', 'wk 156'] },
+                yaxis: { title: 'sales', domain: [0.56, 1], gridcolor: PT.colors.grid },
+                yaxis2: { title: 'spend', domain: [0, 0.42], gridcolor: PT.colors.grid, zerolinecolor: '#d4ddd4' },
+                shapes: [{
+                    type: 'line', x0: 'wk 79', x1: 'wk 79', y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PT.colors.display, width: 1.5, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 'wk 79', y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'the break — and the spend ramp', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('act1WorldChart', traces, layout, PT.config);
+        }
+
+        function drawAct1Trend(w) {
+            // True trend + shock, and three stylized "fitted trend" shapes.
+            const trueTS = T.map(function(i) { return 60 * i / N + w.shock[i]; });
+            const lineFit = olsFit(T, trueTS, 0, N);
+            const line = T.map(function(i) { return lineFit.intercept + lineFit.slope * i; });
+            const smoothWide = movAvg(trueTS, 31);
+            const oldPrior = T.map(function(i) { return line[i] + 0.3 * (smoothWide[i] - line[i]); });
+            const newDefault = movAvg(trueTS, 7);
+
+            const traces = [
+                { x: weekLabels, y: demean(trueTS), type: 'scatter', mode: 'lines',
+                  name: 'true trend + shock',
+                  line: { color: PT.colors.truth, width: 2.6 } },
+                { x: weekLabels, y: demean(line), type: 'scatter', mode: 'lines',
+                  name: 'linear trend (naive default)',
+                  line: { color: PT.colors.expected, width: 1.8 } },
+                { x: weekLabels, y: demean(oldPrior), type: 'scatter', mode: 'lines',
+                  name: 'piecewise, old 0.05 prior (measured corr 0.33)',
+                  line: { color: PT.colors.social, width: 1.8, dash: 'dash' } },
+                { x: weekLabels, y: demean(newDefault), type: 'scatter', mode: 'lines',
+                  name: 'piecewise, current 0.5 default (measured corr 0.86)',
+                  line: { color: PT.colors.tv, width: 2.2 } }
+            ];
+            const layout = PT.layout({
+                legend: { orientation: 'h', y: 1.16 },
+                xaxis: { tickmode: 'array', tickvals: ['wk 1', 'wk 52', 'wk 79', 'wk 104', 'wk 156'] },
+                yaxis: { title: 'KPI units (demeaned)' },
+                shapes: [{
+                    type: 'line', x0: 'wk 79', x1: 'wk 79', y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PT.colors.display, width: 1.5, dash: 'dot' }
+                }]
+            });
+            Plotly.newPlot('act1TrendChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // ACT 2 — seasonality world (illustrative; Fourier fit computed live)
+        // ==================================================================
+        function buildAct2() {
+            const staticSeason = T.map(function(i) {
+                return 35 * Math.sin(2 * Math.PI * i / 52) + 22 * Math.cos(2 * Math.PI * i / 52);
+            });
+            const hol = T.map(function(i) {
+                const woy = i % 52;
+                return (woy === 46 || woy === 47 || woy === 49 || woy === 50) ? 1 : 0;
+            });
+            const seasonTrue = T.map(function(i) {
+                return (1 + 0.6 * i / N) * staticSeason[i] + 160 * hol[i];
+            });
+            // Best order-2 Fourier approximation (least squares, 5 columns).
+            const cols = [
+                T.map(function() { return 1; }),
+                T.map(function(i) { return Math.sin(2 * Math.PI * i / 52); }),
+                T.map(function(i) { return Math.cos(2 * Math.PI * i / 52); }),
+                T.map(function(i) { return Math.sin(4 * Math.PI * i / 52); }),
+                T.map(function(i) { return Math.cos(4 * Math.PI * i / 52); })
+            ];
+            const approx = fitted(cols, lstsq(cols, seasonTrue));
+            // Growth-only part and its own best Fourier fit (for the pivot residuals).
+            const growOnly = T.map(function(i) { return (1 + 0.6 * i / N) * staticSeason[i]; });
+            const growApprox = fitted(cols, lstsq(cols, growOnly));
+            return { hol: hol, seasonTrue: seasonTrue, approx: approx,
+                     growOnly: growOnly, growApprox: growApprox };
+        }
+
+        function drawAct2Season(s) {
+            const traces = [
+                { x: weekLabels, y: s.approx, type: 'scatter', mode: 'lines',
+                  name: 'best possible order-2 Fourier (least squares)',
+                  line: { color: PT.colors.search, width: 2 } },
+                { x: weekLabels, y: s.seasonTrue, type: 'scatter', mode: 'lines',
+                  name: 'true season (grows + spikes)',
+                  line: { color: PT.colors.truth, width: 2 },
+                  fill: 'tonexty', fillcolor: PT.band(PT.colors.display, 0.22) }
+            ];
+            const layout = PT.layout({
+                legend: { orientation: 'h', y: 1.12 },
+                xaxis: { tickmode: 'array', tickvals: ['wk 1', 'wk 52', 'wk 104', 'wk 156'] },
+                yaxis: { title: 'seasonal KPI component' },
+                annotations: [{
+                    x: 'wk 100', y: 175, text: 'shaded = the unrepresentable gap',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('act2SeasonChart', traces, layout, PT.config);
+        }
+
+        function drawAct2Pivot(s, spec) {
+            const rng = mulberry32(12);
+            const noise = T.map(function() { return 12 * gaussPair(rng); });
+            let resid, name, color;
+            if (spec === 'naive') {
+                // The unabsorbed gap: ~2/3 of the spike + the growth misfit survives.
+                resid = T.map(function(i) { return 0.7 * (s.seasonTrue[i] - s.approx[i]) + noise[i]; });
+                name = 'residuals — naive (order-2 Fourier)';
+                color = PT.colors.display;
+            } else {
+                // Holiday dummy soaks up the spikes; a sliver of growth misfit remains.
+                resid = T.map(function(i) { return 0.35 * (s.growOnly[i] - s.growApprox[i]) + noise[i]; });
+                name = 'residuals — + holiday dummy control';
+                color = PT.colors.tv;
+            }
+            const traces = [{
+                x: weekLabels, y: resid, type: 'scatter', mode: 'lines',
+                name: name, line: { color: color, width: 1.4 }
+            }];
+            const shapes = [];
+            for (let i = 0; i < N; i++) {
+                if (s.hol[i] === 1) {
+                    shapes.push({
+                        type: 'line', x0: weekLabels[i], x1: weekLabels[i],
+                        y0: 0, y1: 1, yref: 'paper', layer: 'below',
+                        line: { color: PT.band(PT.colors.display, 0.35), width: 3 }
+                    });
+                }
+            }
+            const layout = PT.layout({
+                legend: { orientation: 'h', y: 1.12 },
+                xaxis: { tickmode: 'array', tickvals: ['wk 1', 'wk 52', 'wk 104', 'wk 156'] },
+                yaxis: { title: 'y − fitted', range: [-90, 150] },
+                shapes: shapes,
+                annotations: [{
+                    x: 'wk 152', y: 135, xanchor: 'right', showarrow: false,
+                    text: spec === 'naive'
+                        ? 'holiday weeks (red) stick out — the missing column names itself'
+                        : 'spikes absorbed by the control; only the growth misfit lingers',
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.react('act2PivotChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // ACT 3 — drift simulator (interactive)
+        // ==================================================================
+        const act3 = (function precompute() {
+            const rng = mulberry32(7);
+            const spend = T.map(function() { return 80 * (0.15 + 1.45 * rng()); });
+            const mx = Math.max.apply(null, spend);
+            const sat = spend.map(function(s) { return 1 - Math.exp(-2.2 * s / mx); });
+            const noise = T.map(function() { return 8 * gaussPair(rng); });
+            return { sat: sat, noise: noise };
+        })();
+
+        // Constant-beta model with a trend term (like the MMM's): y ~ 1 + sat + t.
+        // Returns the media coefficient + the window's R².
+        function fitWindow(y, a, b) {
+            const idx = [];
+            for (let i = a; i < b; i++) idx.push(i);
+            const cols = [
+                idx.map(function() { return 1; }),
+                idx.map(function(i) { return act3.sat[i]; }),
+                idx.map(function(i) { return i / (N - 1); })
+            ];
+            const yw = idx.map(function(i) { return y[i]; });
+            const beta = lstsq(cols, yw);
+            const fit = fitted(cols, beta);
+            let ssr = 0, sst = 0;
+            const ym = mean(yw);
+            for (let k = 0; k < yw.length; k++) {
+                ssr += (yw[k] - fit[k]) * (yw[k] - fit[k]);
+                sst += (yw[k] - ym) * (yw[k] - ym);
+            }
+            return { mediaCoef: beta[1], r2: 1 - ssr / sst };
+        }
+
+        function simulateDrift(d) {
+            const beta0 = 140;
+            const betaPath = T.map(function(i) { return 1 + d - 2 * d * i / (N - 1); });
+            const y = T.map(function(i) {
+                return 300 + 50 * i / (N - 1)                       // genuine baseline trend
+                     + beta0 * betaPath[i] * act3.sat[i] + act3.noise[i];
+            });
+
+            const full = fitWindow(y, 0, N);
+            const h1 = fitWindow(y, 0, BRK);
+            const h2 = fitWindow(y, BRK, N);
+
+            return {
+                betaPath: betaPath,
+                effFull: full.mediaCoef / beta0,
+                effH1: h1.mediaCoef / beta0,
+                effH2: h2.mediaCoef / beta0,
+                r2: full.r2
+            };
+        }
+
+        function drawAct3(d) {
+            const sim = simulateDrift(d);
+            const traces = [
+                { x: weekLabels, y: sim.betaPath, type: 'scatter', mode: 'lines',
+                  name: 'true effectiveness path',
+                  line: { color: PT.colors.truth, width: 2.4, dash: 'dash' } },
+                { x: [weekLabels[0], weekLabels[N - 1]], y: [sim.effFull, sim.effFull],
+                  type: 'scatter', mode: 'lines', name: 'full-window estimate',
+                  line: { color: PT.colors.social, width: 3 } },
+                { x: [weekLabels[0], weekLabels[BRK - 1]], y: [sim.effH1, sim.effH1],
+                  type: 'scatter', mode: 'lines', name: 'first-half refit',
+                  line: { color: PT.colors.search, width: 3 } },
+                { x: [weekLabels[BRK], weekLabels[N - 1]], y: [sim.effH2, sim.effH2],
+                  type: 'scatter', mode: 'lines', name: 'second-half refit',
+                  line: { color: PT.colors.display, width: 3 } }
+            ];
+            const layout = PT.layout({
+                legend: { orientation: 'h', y: 1.16 },
+                xaxis: { tickmode: 'array', tickvals: ['wk 1', 'wk 52', 'wk 79', 'wk 104', 'wk 156'] },
+                yaxis: { title: 'effectiveness multiplier', range: [0, 2.05] },
+                shapes: [{
+                    type: 'line', x0: 'wk 79', x1: 'wk 79', y0: 0, y1: 1, yref: 'paper',
+                    line: { color: '#9aa79a', width: 1.2, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 'wk 152', y: 1.95, xanchor: 'right', showarrow: false,
+                    text: 'half-window refits disagree ⇒ the full fit is an average over regimes',
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.react('act3DriftChart', traces, layout, PT.config);
+            document.getElementById('driftReadout').textContent = 'd = ' + d.toFixed(2);
+            document.getElementById('r2Readout').textContent = 'full-fit R² = ' + sim.r2.toFixed(2);
+        }
+
+        // ==================================================================
+        // Matrix rows — MEASURED per-channel errors (stress_matrix.md)
+        // ==================================================================
+        function drawMatrixRows() {
+            const channels = ['TV', 'Search', 'Social', 'Display'];
+            const traces = [
+                {
+                    type: 'bar', name: 'trend_break (med 27%, worst 41%)',
+                    x: channels, y: [-37, -17, 6, -41],
+                    marker: { color: PT.colors.silent, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '<b>%{x}</b> · trend_break<br>rel. error %{y}%<extra></extra>'
+                },
+                {
+                    type: 'bar', name: 'seasonality_misspec (med 37%, worst 104%)',
+                    x: channels, y: [-17, -24, 104, 50],
+                    marker: { color: PT.colors.social, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '<b>%{x}</b> · seasonality_misspec<br>rel. error %{y}%<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                barmode: 'group',
+                legend: { orientation: 'h', y: 1.14 },
+                yaxis: { title: 'relative error on total contribution (%)', zerolinecolor: '#2d3a2d' },
+                annotations: [{
+                    x: 'Social', y: 104, yanchor: 'bottom', showarrow: false,
+                    text: 'truth outside the 90% CI', font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('matrixRowsChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Wiring
+        // ==================================================================
+        function init() {
+            const w1 = buildAct1();
+            drawAct1World(w1);
+            drawAct1Trend(w1);
+
+            const s2 = buildAct2();
+            drawAct2Season(s2);
+            drawAct2Pivot(s2, 'naive');
+            document.querySelectorAll('.controls-row .toggle-btn[data-spec]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.controls-row .toggle-btn[data-spec]').forEach(function(b) {
+                        b.classList.remove('active');
+                    });
+                    btn.classList.add('active');
+                    drawAct2Pivot(s2, btn.dataset.spec);
+                });
+            });
+
+            drawAct3(0.4);
+            document.getElementById('driftSlider').addEventListener('input', function(e) {
+                drawAct3(parseFloat(e.target.value));
+            });
+
+            drawMatrixRows();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

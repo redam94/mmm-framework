@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -48,9 +48,21 @@ Provider = Literal[
     "anthropic",
     "openai",
     "google_genai",
+    "lmstudio",
 ]
 
 _VERTEX_PROVIDERS: frozenset[str] = frozenset({"vertex_anthropic", "vertex_gemini"})
+
+# All valid provider strings (for validating a client X-Provider override).
+_VALID_PROVIDERS: frozenset[str] = frozenset(get_args(Provider))
+
+# OpenAI-compatible local/self-hosted endpoints. For these the model name is
+# arbitrary (whatever the user loaded), so a per-request model override must NOT
+# re-infer a different cloud provider — it just swaps the model on this endpoint.
+_ENDPOINT_PROVIDERS: frozenset[str] = frozenset({"lmstudio"})
+
+# Default base URL for LM Studio's OpenAI-compatible server.
+_DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
 
 # Default config-file search locations, relative to the current working directory.
 _DEFAULT_CONFIG_PATHS: tuple[str, ...] = (
@@ -79,6 +91,7 @@ _ENV_OVERRIDABLE: frozenset[str] = frozenset(
         "location",
         "credentials_path",
         "api_key",
+        "base_url",
     }
 )
 
@@ -141,6 +154,10 @@ class ModelConfig(BaseModel):
 
     # --- Direct provider settings (ignored by Vertex providers) ---
     api_key: str | None = None
+
+    # --- OpenAI-compatible endpoint settings (lmstudio / self-hosted) ---
+    # Base URL of the local server, e.g. LM Studio's http://localhost:1234/v1.
+    base_url: str | None = None
 
     # Optional convenience model ids surfaced in the Vertex model picker in
     # addition to live-discovered models (e.g. Claude/Model-Garden ids, which
@@ -361,14 +378,34 @@ def _build_from_config(cfg: ModelConfig):
         kwargs.update(extra)
         return ChatGoogleGenerativeAI(**kwargs)
 
+    if cfg.provider == "lmstudio":
+        # LM Studio exposes an OpenAI-compatible server, so we drive it through
+        # ChatOpenAI pointed at its base URL. The api_key is unused by LM Studio
+        # but the OpenAI client requires a non-empty string. Tool calling works
+        # for models that support it.
+        from langchain_openai import ChatOpenAI
+
+        kwargs = {
+            "model": cfg.model,
+            "temperature": cfg.temperature,
+            "base_url": cfg.base_url or _DEFAULT_LMSTUDIO_BASE_URL,
+            "api_key": cfg.api_key or "lm-studio",
+        }
+        if cfg.max_tokens is not None:
+            kwargs["max_tokens"] = cfg.max_tokens
+        kwargs.update(extra)
+        return ChatOpenAI(**kwargs)
+
     raise ValueError(f"Unknown provider: {cfg.provider!r}")
 
 
 def build_llm(
     config: ModelConfig | None = None,
     *,
+    provider: str | None = None,
     model_name: str | None = None,
     api_key: str | None = None,
+    base_url: str | None = None,
 ):
     """Construct a LangChain chat model from configuration + per-request overrides.
 
@@ -416,6 +453,40 @@ def build_llm(
             # Unknown family (e.g. an OpenAI id) is ignored: keep server config.
         return _build_from_config(cfg)
 
+    # Non-Vertex server: a client may switch the provider entirely (X-Provider),
+    # e.g. to reach LM Studio or OpenAI from a default-Anthropic deployment. The
+    # Vertex branch above runs first, so a Vertex/ADC deployment ignores this and
+    # stays locked (preserving its ADC-only credential property). An invalid
+    # provider string falls through to the existing inference behaviour.
+    client_provider = (provider or "").strip().lower() or None
+    if client_provider and client_provider in _VALID_PROVIDERS:
+        update = {"provider": client_provider}
+        if model_name:
+            update["model"] = model_name
+        if api_key:
+            update["api_key"] = api_key
+        if base_url:
+            update["base_url"] = base_url
+        cfg = cfg.model_copy(update=update)
+        return _build_from_config(cfg)
+
+    if cfg.provider in _ENDPOINT_PROVIDERS:
+        # OpenAI-compatible local endpoint (LM Studio): a model_name override
+        # just swaps the loaded model on the SAME endpoint — never re-route to a
+        # cloud provider. A client api_key is honored only if the endpoint needs
+        # one (LM Studio ignores it). A client base_url override is honored ONLY
+        # here (an endpoint provider) so it can't redirect a cloud deployment.
+        update: dict[str, Any] = {}
+        if model_name:
+            update["model"] = model_name
+        if api_key:
+            update["api_key"] = api_key
+        if base_url:
+            update["base_url"] = base_url
+        if update:
+            cfg = cfg.model_copy(update=update)
+        return _build_from_config(cfg)
+
     # Direct provider: honor per-request UI overrides.
     if api_key or model_name:
         effective_model = model_name or cfg.model
@@ -445,8 +516,11 @@ def describe_active_config(config: ModelConfig | None = None) -> dict[str, Any]:
     a config-file key, or a provider environment variable.
     """
     cfg = config or load_model_config()
+    # Local OpenAI-compatible endpoints (LM Studio) need no key.
+    is_local_endpoint = cfg.provider in _ENDPOINT_PROVIDERS
     requires_api_key = (
         not cfg.uses_vertex
+        and not is_local_endpoint
         and not cfg.api_key
         and not _provider_env_key_present(cfg.provider)
     )
@@ -455,6 +529,10 @@ def describe_active_config(config: ModelConfig | None = None) -> dict[str, Any]:
         "model": cfg.model,
         "uses_vertex": cfg.uses_vertex,
         "uses_adc": cfg.uses_adc,
+        "is_local_endpoint": is_local_endpoint,
+        "base_url": (
+            (cfg.base_url or _DEFAULT_LMSTUDIO_BASE_URL) if is_local_endpoint else None
+        ),
         "project": cfg.project,
         "location": cfg.location,
         "temperature": cfg.temperature,
@@ -624,3 +702,49 @@ def list_vertex_models(
             )
 
     return _dedupe_models(models)
+
+
+def lmstudio_base_url(config: ModelConfig | None = None) -> str:
+    """The LM Studio base URL: config/env override, else the default port."""
+    cfg = config or load_model_config()
+    return (
+        cfg.base_url or os.environ.get("MMM_LLM_BASE_URL") or _DEFAULT_LMSTUDIO_BASE_URL
+    )
+
+
+def list_lmstudio_models(
+    config: ModelConfig | None = None, *, base_url: str | None = None
+) -> list[dict[str, Any]]:
+    """List the models currently loaded in LM Studio via its OpenAI-compatible
+    ``GET /v1/models`` endpoint. Returns ``[]`` if the server is unreachable so
+    the caller degrades gracefully to manual model entry. Never raises.
+    """
+    import json as _json
+    import urllib.request
+
+    cfg = config or load_model_config()
+    url = (base_url or cfg.base_url or _DEFAULT_LMSTUDIO_BASE_URL).rstrip(
+        "/"
+    ) + "/models"
+    try:
+        with urllib.request.urlopen(url, timeout=4) as resp:  # noqa: S310 (local URL)
+            payload = _json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        logger.debug("LM Studio model discovery failed (%s): %s", url, exc)
+        return []
+
+    out: list[dict[str, Any]] = []
+    for m in payload.get("data", []) or []:
+        mid = m.get("id") if isinstance(m, dict) else None
+        if not mid:
+            continue
+        out.append(
+            {
+                "id": mid,
+                "provider": "lmstudio",
+                "family": "lmstudio",
+                "display_name": mid,
+                "source": "live",
+            }
+        )
+    return out

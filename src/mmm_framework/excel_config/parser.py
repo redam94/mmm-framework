@@ -186,12 +186,14 @@ def _parse_variables_sheet(ws: Any) -> list[dict[str, Any]]:
         if role.lower() == "exclude":
             continue  # Skip excluded variables
 
-        variables.append({
-            "name": name,
-            "role": role.lower(),
-            "display_name": display_name or name,
-            "dimensions": dimensions,
-        })
+        variables.append(
+            {
+                "name": name,
+                "role": role.lower(),
+                "display_name": display_name or name,
+                "dimensions": dimensions,
+            }
+        )
 
     return variables
 
@@ -225,7 +227,7 @@ def _parse_media_settings_sheet(ws: Any) -> dict[str, dict[str, Any]]:
         settings[name] = {
             "adstock_type": _to_str(row[1].value, "geometric"),
             "max_lag": _to_int(row[2].value, 8),
-            "saturation_type": _to_str(row[3].value, "hill"),
+            "saturation_type": _to_str(row[3].value, "logistic"),
             "parent_channel": _to_str(row[4].value) or None,
             "effect_direction": _to_str(row[5].value, "positive"),
         }
@@ -321,11 +323,15 @@ def _parse_advanced_sheet(ws: Any) -> tuple[dict[str, dict], dict[str, dict]]:
         elif current_section == "control":
             name = first_val
             control_priors[name] = {
-                "allow_negative": _to_bool(row[1].value) if row[1].value is not None else True,
+                "allow_negative": (
+                    _to_bool(row[1].value) if row[1].value is not None else True
+                ),
                 "coefficient_dist": _to_str(row[2].value, "normal"),
                 "coefficient_mu": _to_float(row[3].value, 0.0),
                 "coefficient_sigma": _to_float(row[4].value, 1.0),
-                "use_shrinkage": _to_bool(row[5].value) if row[5].value is not None else False,
+                "use_shrinkage": (
+                    _to_bool(row[5].value) if row[5].value is not None else False
+                ),
             }
 
     return media_priors, control_priors
@@ -350,7 +356,7 @@ def _build_media_channel_config(
     ms = media_settings or {}
     adstock_type_str = ms.get("adstock_type", "geometric")
     max_lag = ms.get("max_lag", 8)
-    saturation_type_str = ms.get("saturation_type", "hill")
+    saturation_type_str = ms.get("saturation_type", "logistic")
     parent_channel = ms.get("parent_channel")
     effect_direction = ms.get("effect_direction", "positive")
 
@@ -397,7 +403,9 @@ def _build_media_channel_config(
             {"sigma": mp.get("coefficient_sigma", 2.0)},
         )
     else:
-        coeff_prior = _build_prior("normal", {"mu": 0.0, "sigma": mp.get("coefficient_sigma", 2.0)})
+        coeff_prior = _build_prior(
+            "normal", {"mu": 0.0, "sigma": mp.get("coefficient_sigma", 2.0)}
+        )
 
     return MediaChannelConfig(
         name=name,
@@ -426,7 +434,10 @@ def _build_control_config(
     if allow_negative:
         coeff_prior = _build_prior(
             cp.get("coefficient_dist", "normal"),
-            {"mu": cp.get("coefficient_mu", 0.0), "sigma": cp.get("coefficient_sigma", 1.0)},
+            {
+                "mu": cp.get("coefficient_mu", 0.0),
+                "sigma": cp.get("coefficient_sigma", 1.0),
+            },
         )
     else:
         coeff_prior = _build_prior(
@@ -452,7 +463,10 @@ def _build_kpi_config(
 
     name = var_info["name"]
     dimensions = _parse_dimensions(var_info["dimensions"])
-    log_transform = _to_str(model_settings.get("Model Type", "additive")).lower() == "multiplicative"
+    log_transform = (
+        _to_str(model_settings.get("Model Type", "additive")).lower()
+        == "multiplicative"
+    )
 
     return KPIConfig(
         name=name,
@@ -474,7 +488,9 @@ def _build_model_config(model_settings: dict[str, Any]) -> ModelConfig:
     )
 
     # Inference method
-    inf_str = _to_str(model_settings.get("Inference Method", "bayesian_numpyro")).lower()
+    inf_str = _to_str(
+        model_settings.get("Inference Method", "bayesian_numpyro")
+    ).lower()
     inf_map = {
         "bayesian_numpyro": InferenceMethod.BAYESIAN_NUMPYRO,
         "bayesian_pymc": InferenceMethod.BAYESIAN_PYMC,
@@ -536,10 +552,16 @@ def _build_trend_config(model_settings: dict[str, Any]) -> TrendConfig:
     return TrendConfig(type=trend_type)
 
 
-def _build_dimension_alignment(model_settings: dict[str, Any]) -> DimensionAlignmentConfig:
+def _build_dimension_alignment(
+    model_settings: dict[str, Any],
+) -> DimensionAlignmentConfig:
     """Build DimensionAlignmentConfig from Model Settings."""
-    geo_alloc_str = _to_str(model_settings.get("Geo Allocation Method", "sales")).lower()
-    prod_alloc_str = _to_str(model_settings.get("Product Allocation Method", "sales")).lower()
+    geo_alloc_str = _to_str(
+        model_settings.get("Geo Allocation Method", "sales")
+    ).lower()
+    prod_alloc_str = _to_str(
+        model_settings.get("Product Allocation Method", "sales")
+    ).lower()
 
     alloc_map = {
         "equal": AllocationMethod.EQUAL,

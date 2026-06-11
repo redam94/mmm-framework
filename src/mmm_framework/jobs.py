@@ -332,7 +332,7 @@ def _worker_process(
             if "growth_prior_mu" in trend_settings:
                 trend_builder.with_growth_prior(
                     mu=trend_settings.get("growth_prior_mu", 0.0),
-                    sigma=trend_settings.get("growth_prior_sigma", 0.1),
+                    sigma=trend_settings.get("growth_prior_sigma", 0.5),
                 )
         elif config.trend_type == "piecewise":
             trend_builder.piecewise()

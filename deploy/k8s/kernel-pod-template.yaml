@@ -1,0 +1,45 @@
+# 4a — the per-session kernel POD the API creates (the k8s analogue of
+# `podman run`). securityContext is the k8s expression of Phase-3 PR-F.3; the
+# NetworkPolicy (separate file) denies egress; runtimeClassName selects gVisor (4c).
+apiVersion: v1
+kind: Pod
+metadata:
+  generateName: mmm-kernel-
+  namespace: mmm-tenant-TENANT
+  labels: { app: mmm-kernel, mmm/thread: "THREAD_ID" }
+spec:
+  serviceAccountName: mmm-kernel
+  automountServiceAccountToken: false
+  runtimeClassName: gvisor            # 4c — strong isolation tier (optional/gated)
+  restartPolicy: Never
+  enableServiceLinks: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: { type: RuntimeDefault }
+  containers:
+    - name: kernel
+      image: REGISTRY/mmm-kernel:PINNED_DIGEST   # hash-locked (supply chain, §4)
+      command: ["tini", "--", "python", "-m", "ipykernel_launcher", "-f", "/conn/conn.json"]
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities: { drop: ["ALL"] }
+      resources:
+        requests: { cpu: "1", memory: 512Mi }
+        limits: { cpu: "4", memory: 2Gi }        # cgroup mem/cpu cap (PR-F.3)
+      env:
+        - { name: MMM_AGENT_KERNEL, value: inprocess }   # never recurse
+        - { name: HOME, value: /tmp }
+        - { name: PYTENSOR_FLAGS, value: base_compiledir=/tmp/pytensor }
+      volumeMounts:
+        - { name: scratch, mountPath: /tmp }              # exec tmpfs (pytensor)
+        - { name: workspace, mountPath: /workspace/THREAD_ID }
+        - { name: conn, mountPath: /conn, readOnly: true }
+  volumes:
+    - name: scratch
+      emptyDir: { medium: Memory, sizeLimit: 1Gi }        # ephemeral, capped
+    - name: workspace
+      persistentVolumeClaim: { claimName: mmm-workspace-THREAD_ID }
+    - name: conn
+      secret: { secretName: mmm-kernel-conn-THREAD_ID }    # ZMQ connection file + HMAC key

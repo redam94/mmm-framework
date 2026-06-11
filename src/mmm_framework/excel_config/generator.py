@@ -94,7 +94,9 @@ def _read_data(data: pd.DataFrame | str | Path) -> pd.DataFrame:
     elif suffix in (".xlsx", ".xls"):
         return pd.read_excel(path)
     else:
-        raise ValueError(f"Unsupported file format: {suffix}. Use CSV, Parquet, or Excel.")
+        raise ValueError(
+            f"Unsupported file format: {suffix}. Use CSV, Parquet, or Excel."
+        )
 
 
 def _detect_column_config(df: pd.DataFrame) -> MFFColumnConfig:
@@ -174,7 +176,8 @@ def _detect_dimensions(
             unique_vals = var_data[col].dropna().unique()
             # Filter out empty strings and "Total"/"All" placeholders
             meaningful = [
-                str(v) for v in unique_vals
+                str(v)
+                for v in unique_vals
                 if str(v).strip() not in ("", "Total", "All", "National", "nan")
             ]
             if len(meaningful) > 1:
@@ -289,17 +292,23 @@ def discover_mff(
 
     if cols.geography in df.columns:
         geo_vals = df[cols.geography].dropna().unique()
-        geographies = sorted([
-            str(v) for v in geo_vals
-            if str(v).strip() not in ("", "Total", "All", "National", "nan")
-        ])
+        geographies = sorted(
+            [
+                str(v)
+                for v in geo_vals
+                if str(v).strip() not in ("", "Total", "All", "National", "nan")
+            ]
+        )
 
     if cols.product in df.columns:
         prod_vals = df[cols.product].dropna().unique()
-        products = sorted([
-            str(v) for v in prod_vals
-            if str(v).strip() not in ("", "Total", "All", "nan")
-        ])
+        products = sorted(
+            [
+                str(v)
+                for v in prod_vals
+                if str(v).strip() not in ("", "Total", "All", "nan")
+            ]
+        )
 
     frequency_guess = _guess_frequency(df, cols)
 
@@ -314,14 +323,16 @@ def discover_mff(
         role = classify_variable(var_name, stats)
         display = generate_display_name(var_name)
 
-        variables.append(DiscoveredVariable(
-            name=var_name,
-            role=role,
-            display_name=display,
-            dimensions=dimensions,
-            stats=stats,
-            dimension_levels=levels,
-        ))
+        variables.append(
+            DiscoveredVariable(
+                name=var_name,
+                role=role,
+                display_name=display,
+                dimensions=dimensions,
+                stats=stats,
+                dimension_levels=levels,
+            )
+        )
 
     return MFFDiscovery(
         variables=variables,
@@ -400,7 +411,9 @@ class TemplateGenerator:
 
         # Sheet 4: Advanced
         ws_advanced = wb.create_sheet("Advanced")
-        control_vars = [v for v in discovery.variables if v.role == VariableRole.CONTROL]
+        control_vars = [
+            v for v in discovery.variables if v.role == VariableRole.CONTROL
+        ]
         cls._write_advanced_sheet(ws_advanced, media_vars, control_vars)
 
         # Save
@@ -437,7 +450,9 @@ class TemplateGenerator:
         cls._write_model_settings_sheet(ws_model, discovery)
 
         ws_advanced = wb.create_sheet("Advanced")
-        control_vars = [v for v in discovery.variables if v.role == VariableRole.CONTROL]
+        control_vars = [
+            v for v in discovery.variables if v.role == VariableRole.CONTROL
+        ]
         cls._write_advanced_sheet(ws_advanced, media_vars, control_vars)
 
         wb.save(str(output_path))
@@ -504,7 +519,11 @@ class TemplateGenerator:
             ws.cell(row=row, column=3, value=var.display_name)
             ws.cell(row=row, column=4, value=", ".join(var.dimensions))
             ws.cell(row=row, column=5, value=f"{var.stats.coverage_pct:.1f}%")
-            ws.cell(row=row, column=6, value=round(var.stats.mean, 2) if var.stats.mean != 0 else 0)
+            ws.cell(
+                row=row,
+                column=6,
+                value=round(var.stats.mean, 2) if var.stats.mean != 0 else 0,
+            )
             ws.cell(row=row, column=7, value="")  # Notes
 
             # Apply role validation to the role cell
@@ -519,7 +538,9 @@ class TemplateGenerator:
 
             # Mark read-only cells (stats columns)
             for col in [1, 4, 5, 6]:
-                ws.cell(row=row, column=col).fill = Fills.LOCKED if role_display != "Exclude" else Fills.EXCLUDE
+                ws.cell(row=row, column=col).fill = (
+                    Fills.LOCKED if role_display != "Exclude" else Fills.EXCLUDE
+                )
 
         auto_fit_columns(ws)
         # Ensure Role column is wide enough
@@ -570,7 +591,7 @@ class TemplateGenerator:
             ws.cell(row=row, column=1, value=var.name).font = Fonts.BOLD
             adstock_cell = ws.cell(row=row, column=2, value="geometric")
             ws.cell(row=row, column=3, value=8)
-            sat_cell = ws.cell(row=row, column=4, value="hill")
+            sat_cell = ws.cell(row=row, column=4, value="logistic")
             ws.cell(row=row, column=5, value="")  # Parent channel
             dir_cell = ws.cell(row=row, column=6, value="positive")
 
@@ -585,7 +606,8 @@ class TemplateGenerator:
 
         if not media_vars:
             write_instruction_row(
-                ws, header_row + 1,
+                ws,
+                header_row + 1,
                 "No media variables detected. Set variable roles on the Variables sheet first, "
                 "then add rows here manually.",
                 num_cols,
@@ -622,21 +644,76 @@ class TemplateGenerator:
 
         settings: list[tuple[str, Any, str, Any]] = [
             # (key, default_value, description, validation_or_None)
-            ("Model Type", "additive", "additive or multiplicative (log-transformed)", create_model_type_validation()),
-            ("Inference Method", "bayesian_numpyro", "Sampling backend (numpyro is faster)", create_inference_validation()),
+            (
+                "Model Type",
+                "additive",
+                "additive or multiplicative (log-transformed)",
+                create_model_type_validation(),
+            ),
+            (
+                "Inference Method",
+                "bayesian_numpyro",
+                "Sampling backend (numpyro is faster)",
+                create_inference_validation(),
+            ),
             ("Chains", 4, "Number of MCMC chains (≥2 recommended)", None),
             ("Draws", 1000, "Samples per chain after tuning", None),
             ("Tune", 1000, "Warmup/tuning samples per chain", None),
             ("Target Accept", 0.9, "Target acceptance rate (0.8-0.95)", None),
-            ("Trend Type", "linear", "Baseline trend: none, linear, piecewise, spline", create_trend_validation()),
-            ("Yearly Seasonality Order", 2, "Fourier order for yearly seasonality (0 = disabled)", None),
-            ("Hierarchical Pooling (Geo)", has_geo, "Pool coefficients across geographies", create_boolean_validation()),
-            ("Hierarchical Pooling (Product)", has_product, "Pool coefficients across products", create_boolean_validation()),
-            ("Use Non-Centered", True, "Non-centered parameterization (better for sparse data)", create_boolean_validation()),
-            ("Geo Allocation Method", "sales", "How to disaggregate national data to geos", create_allocation_validation()),
-            ("Product Allocation Method", "sales", "How to disaggregate data to products", create_product_allocation_validation()),
-            ("Data Frequency", discovery.frequency_guess, "Data granularity: W(eekly), D(aily), M(onthly)", create_frequency_validation()),
-            ("Control Selection", "none", "Automatic variable selection: none, horseshoe, spike_slab", create_control_selection_validation()),
+            (
+                "Trend Type",
+                "linear",
+                "Baseline trend: none, linear, piecewise, spline",
+                create_trend_validation(),
+            ),
+            (
+                "Yearly Seasonality Order",
+                2,
+                "Fourier order for yearly seasonality (0 = disabled)",
+                None,
+            ),
+            (
+                "Hierarchical Pooling (Geo)",
+                has_geo,
+                "Pool coefficients across geographies",
+                create_boolean_validation(),
+            ),
+            (
+                "Hierarchical Pooling (Product)",
+                has_product,
+                "Pool coefficients across products",
+                create_boolean_validation(),
+            ),
+            (
+                "Use Non-Centered",
+                True,
+                "Non-centered parameterization (better for sparse data)",
+                create_boolean_validation(),
+            ),
+            (
+                "Geo Allocation Method",
+                "sales",
+                "How to disaggregate national data to geos",
+                create_allocation_validation(),
+            ),
+            (
+                "Product Allocation Method",
+                "sales",
+                "How to disaggregate data to products",
+                create_product_allocation_validation(),
+            ),
+            (
+                "Data Frequency",
+                discovery.frequency_guess,
+                "Data granularity: W(eekly), D(aily), M(onthly)",
+                create_frequency_validation(),
+            ),
+            (
+                "Control Selection",
+                "none",
+                "Automatic variable selection: none, horseshoe, spike_slab",
+                create_control_selection_validation(),
+            ),
         ]
 
         for i, (key, default, description, dv) in enumerate(settings):
@@ -655,7 +732,12 @@ class TemplateGenerator:
 
         # Add data summary section
         summary_row = header_row + len(settings) + 2
-        ws.merge_cells(start_row=summary_row, start_column=1, end_row=summary_row, end_column=num_cols)
+        ws.merge_cells(
+            start_row=summary_row,
+            start_column=1,
+            end_row=summary_row,
+            end_column=num_cols,
+        )
         cell = ws.cell(row=summary_row, column=1, value="DATA SUMMARY (Read-Only)")
         cell.font = Fonts.BOLD
         cell.fill = Fills.LOCKED
@@ -663,8 +745,22 @@ class TemplateGenerator:
         summary_items = [
             ("Date Range", f"{discovery.date_range[0]} to {discovery.date_range[1]}"),
             ("Number of Periods", discovery.n_periods),
-            ("Geographies", ", ".join(discovery.geographies) if discovery.geographies else "None (national)"),
-            ("Products", ", ".join(discovery.products) if discovery.products else "None (single product)"),
+            (
+                "Geographies",
+                (
+                    ", ".join(discovery.geographies)
+                    if discovery.geographies
+                    else "None (national)"
+                ),
+            ),
+            (
+                "Products",
+                (
+                    ", ".join(discovery.products)
+                    if discovery.products
+                    else "None (single product)"
+                ),
+            ),
             ("Detected Frequency", discovery.frequency_guess),
         ]
 
@@ -702,7 +798,12 @@ class TemplateGenerator:
 
         # -- Section A: Media Priors --
         section_a_row = 3
-        ws.merge_cells(start_row=section_a_row, start_column=1, end_row=section_a_row, end_column=num_cols)
+        ws.merge_cells(
+            start_row=section_a_row,
+            start_column=1,
+            end_row=section_a_row,
+            end_column=num_cols,
+        )
         cell = ws.cell(row=section_a_row, column=1, value="MEDIA CHANNEL PRIORS")
         cell.font = Fonts.BOLD
         cell.fill = Fills.MEDIA
@@ -755,7 +856,12 @@ class TemplateGenerator:
 
         # -- Section B: Control Priors --
         section_b_row = media_header_row + len(media_vars) + 3
-        ws.merge_cells(start_row=section_b_row, start_column=1, end_row=section_b_row, end_column=num_cols)
+        ws.merge_cells(
+            start_row=section_b_row,
+            start_column=1,
+            end_row=section_b_row,
+            end_column=num_cols,
+        )
         cell = ws.cell(row=section_b_row, column=1, value="CONTROL VARIABLE PRIORS")
         cell.font = Fonts.BOLD
         cell.fill = Fills.CONTROL
@@ -784,7 +890,9 @@ class TemplateGenerator:
             name_lower = var.name.lower()
             if any(kw in name_lower for kw in ("price", "discount", "promo")):
                 allow_neg = "TRUE"  # Price can go up or down
-            elif any(kw in name_lower for kw in ("distribution", "store", "temperature")):
+            elif any(
+                kw in name_lower for kw in ("distribution", "store", "temperature")
+            ):
                 allow_neg = "TRUE"
 
             ws.cell(row=row, column=1, value=var.name).font = Fonts.BOLD

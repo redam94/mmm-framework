@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math 02: Saturation | MMM Framework</title>
+    <meta name="description" content="The mathematics of diminishing returns in the MMM Framework: the core exponential curve 1 − e^(−λx) and its half-saturation point ln2/λ, why it is strictly concave (not S-shaped), the Hill alternative with genuine thresholds, normalization, and the β·f contribution ceiling — with a live curve explorer.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-02-saturation.html">
+    <meta property="og:title" content="Math 02: Saturation | MMM Framework">
+    <meta property="og:description" content="Derive both saturation families the framework ships — the strictly concave exponential default and the genuinely S-shaped Hill curve — and explore their marginal returns live in your browser.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-02-saturation.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Copied from the pressure-testing exemplar so the pages stay
+           visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row input[type="range"] {
+            width: 140px;
+            accent-color: var(--color-primary-dark);
+        }
+        .controls-row select {
+            font-family: inherit;
+            font-size: 0.9rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+        }
+        .ctrl-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#core">The core curve</a></li>
+                <li><a href="#concave">Concave, not S-shaped</a></li>
+                <li><a href="#hill">The Hill alternative</a></li>
+                <li><a href="#explorer">Curve explorer</a></li>
+                <li><a href="#normalize">Why normalize first</a></li>
+                <li><a href="#beta">The β ceiling &amp; pipeline</a></li>
+                <li><a href="#framework">In the framework today</a></li>
+                <li><a href="#recap">Recap</a></li>
+            </ul>
+
+            <h3>The Math Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="math-00-overview.html">00 · The Generative Model</a></li>
+                <li><a href="math-01-adstock.html">01 · Adstock</a></li>
+                <li><a href="math-02-saturation.html" class="active">02 · Saturation</a></li>
+                <li><a href="math-03-seasonality-trend.html">03 · Seasonality &amp; Trend</a></li>
+                <li><a href="math-04-bayesian-model.html">04 · The Bayesian Model</a></li>
+                <li><a href="math-05-calibration.html">05 · Calibration</a></li>
+                <li><a href="math-06-extensions.html">06 · Extensions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>The Mathematics of Saturation &amp; Diminishing Returns</h1>
+            <p class="lead">
+                <a href="math-01-adstock.html">Adstock</a> answered <em>when</em> spend acts. Saturation
+                answers <em>how much each additional dollar buys</em>. The first $10k of search spend
+                captures the high-intent shoppers; the next $10k reaches people who were going to convert
+                anyway, or no one at all. Formally, the response is a nonlinear, increasing function of
+                (adstocked) spend whose <strong>slope — the value of the next dollar — falls as spend
+                rises</strong>. That falling slope is the whole point: it is what makes a finite optimal
+                budget exist. This page derives both saturation families the framework ships, corrects a
+                docstring myth about which one is "S-shaped," and lets you bend every curve live. It
+                mirrors <code>nbs/math_02_saturation.ipynb</code>, where each claim ends in an
+                <code>assert</code>.
+            </p>
+
+            <p>The two families have <em>different shapes</em> — getting that distinction right is the spine of this page:</p>
+
+            <table>
+                <thead>
+                    <tr><th></th><th>Form</th><th>Equation</th><th>Shape on \(x \ge 0\)</th><th>Where in the framework</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Core</strong></td>
+                        <td>logistic / "exponential"</td>
+                        <td>\( f(x) = 1 - e^{-\lambda x} \)</td>
+                        <td>strictly <strong>concave</strong> (no S)</td>
+                        <td><code>transforms.logistic_saturation</code>; the default <code>BayesianMMM</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Alternative</strong></td>
+                        <td><strong>Hill</strong></td>
+                        <td>\( f(x) = \dfrac{x^{n}}{x^{n} + \kappa^{n}} \)</td>
+                        <td>\(n=1\) hyperbolic · \(n&gt;1\) <strong>S-shaped</strong></td>
+                        <td>per-channel <code>SaturationConfig.hill()</code>; <code>mmm_extensions</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning">
+                <h4>⚠️ A naming trap, corrected head-on</h4>
+                <p>
+                    The framework's docstring calls \(1 - e^{-\lambda x}\) "S-shaped." It is <strong>not</strong> —
+                    on \(x \ge 0\) it is strictly <em>concave</em>, steepest at the origin, with
+                    <strong>no inflection point</strong>. The genuine S (slow start, then acceleration, then a
+                    ceiling) belongs only to the <strong>Hill curve with \(n &gt; 1\)</strong>. The notebook makes
+                    this concrete and <code>assert</code>s it; <a href="#concave">section&nbsp;2</a> derives it.
+                </p>
+            </div>
+
+            <h2 id="core">1 · The core curve: \( f(x) = 1 - e^{-\lambda x} \)</h2>
+            <p>
+                This is what the default <code>BayesianMMM</code> actually builds, per channel
+                (<code>model/base.py</code>):
+            </p>
+<pre><code>sat_lam     = pm.Exponential(f"sat_lam_{channel}", lam=0.5)   # rate prior, mean = 2
+exponent    = pt.clip(-sat_lam * x_adstocked, -20, 0)         # numerical clamp only
+x_saturated = 1 - pt.exp(exponent)                            # == 1 - exp(-sat_lam * x)</code></pre>
+            <p>
+                The curve acts on the <strong>adstocked</strong> spend, and the single parameter
+                \(\lambda\) (<code>sat_lam</code>) gets an \(\mathrm{Exponential}(0.5)\) prior (mean 2). The
+                <code>pt.clip(..., -20, 0)</code> only guards <code>exp</code> from underflow at huge spend;
+                mathematically the function is
+            </p>
+            \[
+                f(x) \;=\; 1 - e^{-\lambda x}, \qquad x \ge 0 \;\;(\text{negatives clipped to } 0), \qquad \lambda > 0.
+            \]
+
+            <h3>Properties, derived</h3>
+            <p>
+                <strong>Anchored at the origin.</strong> \(f(0) = 1 - e^{0} = 0\). No spend, no response.
+            </p>
+            <p>
+                <strong>Bounded above by 1, never reached.</strong> Since \(e^{-\lambda x} &gt; 0\) for all
+                finite \(x\), \(f(x) &lt; 1\) strictly and \(f(x) \to 1\) as \(x \to \infty\): the range is
+                \([0, 1)\). This is the <em>ceiling</em> — an intrinsic maximum effect the channel can
+                deliver no matter how much you spend.
+            </p>
+            <p>
+                <strong>Strictly increasing, with falling marginal returns from the very first dollar.</strong>
+                Differentiate twice:
+            </p>
+            \[
+                f'(x) \;=\; \lambda\, e^{-\lambda x} \;&gt;\; 0,
+                \qquad
+                f''(x) \;=\; -\lambda^{2}\, e^{-\lambda x} \;&lt;\; 0
+                \quad \text{for all } x \ge 0.
+            \]
+            <p>
+                The marginal response \(f'(x)\) is <em>maximal at the origin</em> — \(f'(0) = \lambda\) —
+                and strictly decreasing thereafter: the first dollar is the most valuable and every dollar
+                after is worth less. <em>Always</em> diminishing, from the start.
+            </p>
+            <p>
+                <strong>Half-saturation point.</strong> Solve \(f(x_{1/2}) = \tfrac12\):
+            </p>
+            \[
+                1 - e^{-\lambda x_{1/2}} = \tfrac12
+                \;\Longrightarrow\;
+                e^{-\lambda x_{1/2}} = \tfrac12
+                \;\Longrightarrow\;
+                x_{1/2} = \frac{\ln 2}{\lambda}.
+            \]
+            <p>
+                Larger \(\lambda\) ⇒ smaller \(x_{1/2}\) ⇒ the channel saturates <em>sooner</em>. The slope
+                <em>at</em> the half-saturation point is a clean number:
+                \(f'(x_{1/2}) = \lambda e^{-\ln 2} = \lambda/2\).
+            </p>
+
+            <div class="definition">
+                <h4>Assert-encoded identities (notebook cell, verified on every run)</h4>
+                <p>
+                    The notebook calls the framework's real <code>logistic_saturation</code> — not a
+                    re-implementation — and asserts: it matches
+                    \(1 - e^{-\lambda\,\mathrm{clip}(x,0)}\) to \(10^{-12}\); \(f(0)=0\) and negatives map
+                    to 0; the output is strictly increasing and strictly below 1; the curve is strictly
+                    concave everywhere (every successive slope smaller than the last — no inflection); and
+                    <strong>\(f(\ln 2/\lambda) = \tfrac12\)</strong> exactly, giving half-saturation points
+                    \(x_{1/2}\) = <strong>1.386, 0.693, 0.347, 0.173</strong> for
+                    \(\lambda\) = 0.5, 1, 2, 4. Sanity row at \(\lambda = 1\):
+                    \(f(0, 0.5, 1, 2, 5)\) = (0, 0.393, 0.632, 0.865, 0.993).
+                </p>
+            </div>
+
+            <div class="chart-container" id="coreCurveChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                \(f(x) = 1 - e^{-\lambda x}\) for four saturation rates. Each dotted dropline lands exactly
+                on \(x_{1/2} = \ln 2 / \lambda\), where the curve crosses ½; the dashed line at 1 is the
+                ceiling, approached but never reached. Larger λ saturates sooner.
+            </p>
+
+            <div class="chart-container" id="coreMarginalChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> The marginal
+                response \(f'(x) = \lambda e^{-\lambda x}\): each curve starts at its maximum
+                \(f'(0) = \lambda\) (dots) and only falls. The squares mark \(f'(x_{1/2}) = \lambda/2\) — the
+                slope at half-saturation. Diminishing returns from dollar one, with no warm-up region.
+            </p>
+
+            <h2 id="concave">2 · The correction: concave, not S-shaped</h2>
+            <p>
+                Because \(f''(x) = -\lambda^2 e^{-\lambda x} &lt; 0\) <em>everywhere</em> on \(x \ge 0\),
+                the core curve has <strong>no inflection point</strong>. It is the classic
+                diminishing-returns silhouette, not a sigmoid. (Algebraically, \(1 - e^{-\lambda x}\) is the
+                CDF of an \(\mathrm{Exponential}(\lambda)\) random variable; an exponential CDF is concave,
+                unlike the S-shaped normal or logistic CDFs.) The notebook encodes this as
+                <code>np.diff(slope) &lt; 0</code> on a dense grid — the machine-checked statement that
+                <em>the curve never stops bending downward</em>.
+            </p>
+            <p>
+                Where does a genuine S come from? Take the Hill function
+                \(f(x) = x^n / (x^n + \kappa^n)\) and differentiate twice. The first derivative is
+                (derived in <a href="#hill">section&nbsp;3</a>)
+                \( f'(x) = n \kappa^n x^{n-1} / (x^n + \kappa^n)^2 \), and its sign change works out to
+            </p>
+            \[
+                f''(x) = 0
+                \;\Longleftrightarrow\;
+                x^{n} = \kappa^{n}\,\frac{n-1}{n+1}
+                \;\Longleftrightarrow\;
+                x^{\star} = \kappa \left( \frac{n-1}{n+1} \right)^{1/n}.
+            \]
+            <p>
+                For \(n \le 1\) there is no positive root — the curve is concave throughout, just like the
+                exponential. For \(n &gt; 1\) the root \(x^{\star}\) is a real inflection point:
+                <strong>convex below it (slow start), concave above it (bend to the ceiling)</strong>. That
+                — and only that — is an S-curve. The two shapes are not cosmetically different: below the
+                inflection the truth says "spend does almost nothing," while every concave curve is at its
+                <em>steepest</em> there.
+            </p>
+
+            <div class="chart-container" id="shapeChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> Both curves
+                are calibrated to hit half-saturation at the same spend (0.45 of max): the core exponential
+                with \(\lambda = \ln 2 / 0.45 \approx 1.54\) versus Hill with \(\kappa = 0.45,\ n = 3\)
+                (dark dashed — the series' "truth" styling, because this is exactly the true curve in the
+                stress-test world below). The triangle marks the Hill inflection
+                \(x^{\star} = \kappa\,(2/4)^{1/3} \approx 0.357\). The green curve has no such point
+                anywhere: steepest at zero, bending down forever.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Why this distinction costs real money</h4>
+                <p>
+                    In the stress-test world <code>saturation_misspec</code>
+                    (<a href="stress-01-carryover-shape.html">stress&nbsp;01, act&nbsp;2</a>), the true
+                    response is Hill with \(n \approx 3\) and roughly three-quarters of spend weeks sitting
+                    <em>below</em> the threshold. Fitting it with the concave default over-credited total
+                    media by <strong>+38%</strong> with <strong>25% coverage</strong> — while r-hat, divergences,
+                    the posterior-predictive check, <em>and</em> the refutation suite all passed. The purest
+                    silent failure in the catalog: the posterior was exactly where it should be,
+                    <em>given the wrong curve</em>.
+                </p>
+            </div>
+
+            <h2 id="hill">3 · The Hill alternative: the real S-curve</h2>
+            <p>
+                The other family — selectable per channel via <code>SaturationConfig.hill()</code> and used
+                throughout the <code>mmm_extensions</code> path — is the <strong>Hill</strong> function:
+            </p>
+            \[
+                f_{\text{Hill}}(x) \;=\; \frac{x^{n}}{x^{n} + \kappa^{n}},
+                \qquad x \ge 0,\; \kappa &gt; 0,\; n &gt; 0.
+            \]
+            <p>It has two interpretable knobs:</p>
+            <ul>
+                <li>
+                    <strong>\(\kappa\) — the half-saturation point ("EC50").</strong> Plug in \(x = \kappa\):
+                    \( f_{\text{Hill}}(\kappa) = \dfrac{\kappa^n}{\kappa^n + \kappa^n} = \tfrac12 \).
+                    So \(\kappa\) is, <em>exactly and for every \(n\)</em>, the spend at which the channel
+                    hits half its ceiling. Unlike the exponential's \(\ln 2/\lambda\), here the half-sat
+                    location <em>is</em> the parameter (the notebook asserts \(f(\kappa) = \tfrac12\) at
+                    \(10^{-12}\) tolerance for every \((\kappa, n)\) pair it sweeps).
+                </li>
+                <li>
+                    <strong>\(n\) — the shape (Hill coefficient).</strong> \(n = 1\) gives a
+                    <strong>hyperbolic</strong>, concave curve — the <strong>Michaelis–Menten</strong>
+                    special case \(f(x) = x/(x + \kappa)\), diminishing from the first dollar with
+                    \(f'(0) = 1/\kappa\). \(n &gt; 1\) gives the genuine <strong>S</strong>: slow start,
+                    inflection at \(x^\star\), then the bend to the ceiling. \(n &lt; 1\) saturates
+                    extremely fast (infinitely steep at the origin).
+                </li>
+            </ul>
+            <p>
+                Like the core curve, \(f_{\text{Hill}}(0) = 0\) and \(f_{\text{Hill}} \to 1\) as
+                \(x \to \infty\) — range \([0, 1)\), and \(f\) itself is monotone increasing for
+                <em>every</em> \(n\), S-shapes included.
+            </p>
+
+            <h3>Marginal returns: where the two families part ways</h3>
+            <p>Differentiate Hill with the quotient rule:</p>
+            \[
+                f_{\text{Hill}}'(x)
+                = \frac{n x^{n-1}(x^n + \kappa^n) - x^n \cdot n x^{n-1}}{(x^n + \kappa^n)^2}
+                = \frac{n\,\kappa^{n}\,x^{\,n-1}}{\left(x^{n} + \kappa^{n}\right)^{2}}.
+            \]
+            <p>Behaviour at the origin splits on \(n\):</p>
+            <ul>
+                <li>\(n &lt; 1\): \(f'(x) \to \infty\) as \(x \to 0^{+}\) — infinitely steep start, then collapse.</li>
+                <li>\(n = 1\): \(f'(0) = 1/\kappa\), finite, then strictly decreasing — hyperbolic, like the exponential in spirit.</li>
+                <li>
+                    \(n &gt; 1\): \(f'(0) = 0\). The next dollar is worth <em>almost nothing</em> at low
+                    spend; the marginal curve <strong>rises</strong> to a peak at the inflection
+                    \(x^{\star} = \kappa\left(\frac{n-1}{n+1}\right)^{1/n}\), then falls. This is the
+                    "you must clear a threshold before the channel works" story.
+                </li>
+            </ul>
+            <p>
+                A clean checkpoint the notebook asserts <em>exactly</em>: the slope at half-saturation is
+            </p>
+            \[
+                f_{\text{Hill}}'(\kappa)
+                = \frac{n\,\kappa^{n}\,\kappa^{\,n-1}}{(2\kappa^{n})^{2}}
+                = \frac{n\,\kappa^{2n-1}}{4\,\kappa^{2n}}
+                = \frac{n}{4\kappa},
+            \]
+            <p>
+                against the exponential's \(f'(\ln 2/\lambda) = \lambda/2\) at <em>its</em> half-sat. The
+                notebook also checks both analytic derivatives against finite differences of the actual
+                curve functions, and that the Hill marginal for \(n &gt; 1\) is genuinely non-monotone with
+                its peak at the predicted \(x^\star\).
+            </p>
+            <p>
+                <strong>When do thresholds matter?</strong> Whenever a channel needs critical mass before it
+                works — awareness media that must hit reach thresholds, channels with auction dynamics, or
+                any case where low weekly spend is genuinely wasted. Under a threshold, small budgets can be
+                <em>worse than none</em>, and the optimal move is concentrate-or-exit — a qualitatively
+                different optimization problem from "every dollar worth less than the last." Picking the
+                saturation family is a real modeling decision, not a cosmetic one. One caution from
+                <a href="math-01-adstock.html">math&nbsp;01</a>'s equifinality theme: \(\kappa\) is only weakly
+                identified from observational data (it trades off against adstock decay and \(\beta\)), so
+                <code>SaturationConfig.compute_kappa_bounds_from_data(x, percentiles=(0.1, 0.9))</code>
+                anchors \(\kappa\)'s prior to observed-spend percentiles, keeping the curve's elbow inside
+                the region the data actually cover.
+            </p>
+
+            <h3 id="explorer">Curve explorer: response and marginal returns, live</h3>
+            <p>
+                Pick a family and drag its parameters. The left panel is the response \(f(x)\); the right
+                panel is the marginal return \(f'(x)\) — the value of the next dollar. Watch what happens to
+                the marginal curve the moment Hill's \(n\) crosses 1.
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>family</label>
+                    <select id="exFamily">
+                        <option value="logistic" selected>logistic 1 − e^(−λx) (core default)</option>
+                        <option value="hill">Hill x^n / (x^n + κ^n)</option>
+                    </select>
+                </div>
+                <div class="ctrl-group" id="exLamGroup">
+                    <label>λ</label>
+                    <input type="range" id="exLam" min="0.25" max="8" step="0.25" value="2">
+                    <span class="ctrl-val" id="exLamVal">2.00</span>
+                </div>
+                <div class="ctrl-group" id="exKGroup" style="display:none">
+                    <label>half-sat κ</label>
+                    <input type="range" id="exK" min="0.1" max="2" step="0.05" value="0.45">
+                    <span class="ctrl-val" id="exKVal">0.45</span>
+                </div>
+                <div class="ctrl-group" id="exNGroup" style="display:none">
+                    <label>shape n</label>
+                    <input type="range" id="exN" min="0.5" max="6" step="0.1" value="3.0">
+                    <span class="ctrl-val" id="exNVal">3.0</span>
+                </div>
+            </div>
+            <div class="chart-container tall" id="explorerChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> The dot
+                marks the half-saturation point (\(\ln 2/\lambda\) for logistic, exactly \(\kappa\) for Hill
+                at every \(n\)); the square on the marginal panel marks the slope there (\(\lambda/2\),
+                resp. \(n/4\kappa\)). With logistic selected, the marginal curve starts at its peak
+                \(f'(0) = \lambda\) and only falls — no λ produces a slow start. Switch to Hill and push
+                \(n\) above 1: \(f'(0)\) pins to zero and the marginal curve humps at the inflection
+                \(x^\star\) (triangle) before diminishing. At \(n = 1\) (Michaelis–Menten) the hump
+                vanishes and \(f'(0) = 1/\kappa\).
+            </p>
+
+            <h2 id="normalize">4 · Why normalize the input before saturating</h2>
+            <p>
+                \(\lambda\) is a <strong>rate with units of 1/spend</strong>: the product \(\lambda x\) in
+                \(e^{-\lambda x}\) must be dimensionless. If channel A spends in the thousands and channel B
+                in the millions, the <em>same</em> numeric \(\lambda\) means completely different saturation
+                behaviour — and a shared prior on \(\lambda\) would be incoherent across channels. The fix is
+                to <strong>normalize</strong> each channel's (adstocked) spend to a common scale: divide by
+                its own maximum, so \(x \in [0, 1]\). Then:
+            </p>
+            <ul>
+                <li>
+                    \(\lambda\) is <strong>comparable across channels</strong> — it measures saturation
+                    <em>relative to that channel's own observed range</em>, so one prior fits all.
+                </li>
+                <li>
+                    The half-saturation point \(x_{1/2} = \ln 2/\lambda\) lands at a <em>fraction of the
+                    channel's max spend</em> — an interpretable quantity ("this channel half-saturates at
+                    35% of its peak weekly spend").
+                </li>
+            </ul>
+            <p>
+                This is why the prior \(\lambda \sim \mathrm{Exponential}(0.5)\) (mean 2) is sensible
+                <strong>only</strong> on normalized input: at \(\lambda = 2\) on \(x \in [0,1]\), the elbow
+                \(x_{1/2} = \ln 2/2 \approx 0.347\) sits comfortably <em>inside</em> the observed range,
+                where the data can actually inform the curve (asserted in the notebook). On raw spend it
+                would be nonsense.
+            </p>
+
+            <div class="chart-container" id="normChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook's normalization
+                argument.</strong> Left: one shared λ applied to two channels' <em>raw</em> spend — A in
+                the thousands, B near millions. A rate that bends B sensibly leaves A trapped in its
+                linear toe (\(f &lt; 0.005\) over A's entire range — no curvature the data could ever
+                identify); tune λ for A instead and B saturates within the first pixel. One number cannot
+                serve two scales. Right: after dividing each channel by its own max, the two curves at
+                \(\lambda = 2\) <em>coincide exactly</em> (the notebook asserts identity), and the shared
+                half-saturation point sits at 0.347 of max spend.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ The flip side: max-normalization has a single point of failure</h4>
+                <p>
+                    Dividing by the <em>maximum</em> makes the whole transform hostage to one cell of the
+                    spreadsheet. In the stress-test world <code>spend_outliers</code>
+                    (<a href="stress-01-carryover-shape.html">stress&nbsp;01, act&nbsp;3</a>), a single ~15×
+                    data-entry spike per channel rescaled the normalizer so that <strong>the largest real
+                    week sat below ~0.07 of max</strong> — the saturation curve was only ever evaluated in
+                    its near-linear toe, the channel could not exhibit curvature, and recorded coverage fell
+                    to <strong>0%</strong> with r-hat 1.01 and zero divergences. A 30-second max/median
+                    screen catches it before fitting; the sampler never will.
+                </p>
+            </div>
+
+            <h2 id="beta">5 · Saturation × coefficient: the contribution ceiling</h2>
+            <p>
+                A channel's contribution to the outcome is the saturated response scaled by its coefficient
+                \(\beta\) (<code>model/base.py</code>: <code>channel_contrib = beta * x_saturated</code>):
+            </p>
+            \[
+                \text{contribution}(x) \;=\; \beta \cdot f\big(\text{adstock}(x)\big).
+            \]
+            <p>Two consequences fall straight out of \(f \in [0, 1)\):</p>
+            <ol>
+                <li>
+                    <strong>\(\beta\) is a pure vertical scale.</strong> It stretches the whole curve; the
+                    <em>shape</em> (where the elbow is, how fast it bends) is owned entirely by \(\lambda\)
+                    (or \(\kappa, n\)). Timing/shape and size are cleanly separated — which is also
+                    <em>why</em> they can trade off against adstock (the identifiability theme of
+                    <a href="math-01-adstock.html">math&nbsp;01</a>: long-carryover + weak-saturation ≈
+                    short-carryover + strong-saturation).
+                </li>
+                <li>
+                    <strong>A hard ceiling at \(\beta\).</strong> Since \(f(x) &lt; 1\) strictly and
+                    \(f \to 1\), we get \(\beta f(x) &lt; \beta\) for all finite \(x\), approaching \(\beta\)
+                    as \(x \to \infty\). So \(\beta\) <em>is</em> the channel's maximum achievable
+                    contribution — the most outcome you could ever buy from it at any budget. That cap is
+                    what makes "throw money at the best channel" a bounded, not unbounded, strategy.
+                </li>
+            </ol>
+
+            <div class="chart-container" id="betaChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                \(\beta \cdot f(x)\) at \(\lambda = 2\) for four coefficients: every curve is the same shape
+                stretched vertically (the notebook asserts contribution/β is identical across β), and each
+                approaches — never reaches — its own dotted ceiling at \(\beta\).
+            </p>
+
+            <h3>End to end: spend → adstock → saturation → ×β</h3>
+            <p>The full single-channel media response, composed exactly as the model does, in order:</p>
+            \[
+                \underbrace{x_t}_{\text{spend}}
+                \;\xrightarrow{\;\text{adstock}\;}\;
+                \underbrace{a_t = \textstyle\sum_{k \ge 0} \alpha^{k} x_{t-k}}_{\text{carryover (math 01)}}
+                \;\xrightarrow{\;\text{saturation}\;}\;
+                \underbrace{f(a_t) = 1 - e^{-\lambda a_t}}_{\text{diminishing returns}}
+                \;\xrightarrow{\;\times\,\beta\;}\;
+                \underbrace{\beta\, f(a_t)}_{\text{contribution}_t}.
+            \]
+            <p>
+                One subtlety carried over from <a href="math-01-adstock.html">math&nbsp;01</a>: the framework's
+                <code>geometric_adstock</code> is the <em>un-normalized</em> recurrence whose impulse weights
+                sum to \(1/(1-\alpha) &gt; 1\), so a steady per-period spend \(s\) settles to the amplified
+                level \(s/(1-\alpha)\) before saturation sees it (the notebook asserts the steady state:
+                \(s/(1-\alpha) = 2.50\) at \(s = 1, \alpha = 0.6\)). Pushing that steady level through the
+                curve gives the <strong>static response curve</strong> a planner reads to choose a budget —
+                contribution as a function of steady weekly spend. Its half-response level solves
+                \(s_{1/2}/(1-\alpha) = \ln 2/\lambda\), i.e.
+                \(s_{1/2} = (1-\alpha)\ln 2/\lambda\) — <strong>0.139</strong> at the notebook's defaults
+                (\(\alpha = 0.6, \lambda = 2\)), and the notebook asserts the composed curve is monotone
+                increasing, concave, and bounded by \(\beta\).
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>adstock α</label>
+                    <input type="range" id="plAlpha" min="0.05" max="0.9" step="0.05" value="0.6">
+                    <span class="ctrl-val" id="plAlphaVal">0.60</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>saturation λ</label>
+                    <input type="range" id="plLam" min="0.5" max="6" step="0.25" value="2">
+                    <span class="ctrl-val" id="plLamVal">2.00</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>coefficient β</label>
+                    <input type="range" id="plBeta" min="0.5" max="5" step="0.25" value="3">
+                    <span class="ctrl-val" id="plBetaVal">3.00</span>
+                </div>
+            </div>
+            <div class="chart-container" id="pipelineChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> The
+                planner's diminishing-returns view: steady contribution
+                \(\beta\,f\!\left(\frac{s}{1-\alpha}\right)\) against steady weekly spend \(s\). The dot
+                marks the half-response spend \(s_{1/2} = (1-\alpha)\ln 2/\lambda\) (0.139 at the
+                defaults); the dashed line is the \(\beta\) ceiling. Raising α makes the channel reach its
+                ceiling at <em>lower</em> weekly spend — carryover amplifies the level saturation sees —
+                while β only stretches the axis. Adstock, saturation and β each bend this curve in a way
+                the others can partly imitate: that is the identifiability trade-off experiments are for
+                (<a href="math-05-calibration.html">math&nbsp;05</a>).
+            </p>
+
+            <h2 id="framework">6 · What the framework supports today</h2>
+            <p>
+                As of <strong>2026-06-10</strong>, the core <code>BayesianMMM</code> honors a per-channel
+                <code>SaturationConfig</code> <em>in-graph</em>:
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th><code>SaturationConfig</code> type</th><th>Curve</th><th>Free RVs per channel</th><th>Shape</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>logistic</code> <strong>(default)</strong></td>
+                        <td>\(1 - e^{-\lambda x}\)</td>
+                        <td><code>sat_lam_&lt;ch&gt;</code> (\(\mathrm{Exponential}(0.5)\) unless overridden)</td>
+                        <td>strictly concave</td>
+                    </tr>
+                    <tr>
+                        <td><code>hill</code></td>
+                        <td>\(x^{n}/(x^{n} + \kappa^{n})\)</td>
+                        <td><code>sat_half_&lt;ch&gt;</code>, <code>sat_slope_&lt;ch&gt;</code></td>
+                        <td>hyperbolic (\(n=1\)) or S (\(n&gt;1\))</td>
+                    </tr>
+                    <tr>
+                        <td><code>michaelis_menten</code></td>
+                        <td>\(x/(x + \kappa)\)</td>
+                        <td><code>sat_half_&lt;ch&gt;</code></td>
+                        <td>concave (Hill with \(n\) fixed at 1)</td>
+                    </tr>
+                    <tr>
+                        <td><code>tanh</code></td>
+                        <td>\(\tanh(x/\kappa)\)</td>
+                        <td><code>sat_half_&lt;ch&gt;</code></td>
+                        <td>concave</td>
+                    </tr>
+                    <tr>
+                        <td><code>none</code></td>
+                        <td>identity</td>
+                        <td>—</td>
+                        <td>linear (no ceiling)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <h4>🔧 This was a fix surfaced by the stress series</h4>
+                <p>
+                    <strong>Before:</strong> the core model <em>silently ignored</em> per-channel
+                    <code>MediaChannelConfig.saturation</code> — the config could say <code>hill</code> while
+                    the model fit \(1 - e^{-\lambda x}\) anyway; Hill existed only as
+                    <code>mmm_extensions</code> components you had to assemble by hand.
+                    <strong>After (fixed 2026-06-10):</strong> the declared type is honored in-graph —
+                    <code>SaturationConfig.hill()</code> creates real <code>sat_half_*</code>/<code>sat_slope_*</code>
+                    random variables — and the default flipped to an <em>explicit</em>
+                    <code>SaturationConfig.logistic()</code> so default configs build a graph bit-identical
+                    to models from before the fix. On the Hill-truth stress world, the one-line pivot cut
+                    total-media bias from ≈ +40% to ≈ +15%. Full story and measured before/after:
+                    <a href="stress-01-carryover-shape.html">stress&nbsp;01 · Carryover &amp; Shape</a>.
+                    One open edge remains: the holdout-validation path still falls back to a logistic curve
+                    for non-logistic channels, so holdout predictions for Hill-fit models are wrong without
+                    crashing (tracked on <a href="pressure-testing.html">the pressure-testing scorecard</a>).
+                </p>
+            </div>
+
+            <h2 id="recap">Recap</h2>
+            <p>The two saturation families, side by side:</p>
+            <table>
+                <thead>
+                    <tr><th></th><th>\(f(x)\)</th><th>\(f'(x)\)</th><th>Half-sat</th><th>Shape on \(x \ge 0\)</th><th>Marginal at \(x = 0\)</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Core (exp)</td>
+                        <td>\(1 - e^{-\lambda x}\)</td>
+                        <td>\(\lambda e^{-\lambda x}\)</td>
+                        <td>\(\ln 2/\lambda\)</td>
+                        <td>strictly <strong>concave</strong></td>
+                        <td>\(\lambda\) (max, then ↓)</td>
+                    </tr>
+                    <tr>
+                        <td>Hill, \(n = 1\)</td>
+                        <td>\(\frac{x}{x + \kappa}\)</td>
+                        <td>\(\frac{\kappa}{(x + \kappa)^2}\)</td>
+                        <td>\(\kappa\)</td>
+                        <td>concave (hyperbolic)</td>
+                        <td>\(1/\kappa\) (then ↓)</td>
+                    </tr>
+                    <tr>
+                        <td>Hill, \(n &gt; 1\)</td>
+                        <td>\(\frac{x^n}{x^n + \kappa^n}\)</td>
+                        <td>\(\frac{n \kappa^n x^{n-1}}{(x^n + \kappa^n)^2}\)</td>
+                        <td>\(\kappa\)</td>
+                        <td><strong>S-shape</strong> (inflection)</td>
+                        <td>\(0\) (rises, then ↓)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                Next in the series: <a href="math-03-seasonality-trend.html">math&nbsp;03</a> builds the
+                baseline these media curves sit on top of (Fourier seasonality and the trend families). To
+                see these defaults fitted to data for the first time, take the beginner route through
+                <a href="workshop-03-first-mmm.html">workshop&nbsp;03 · Your First MMM</a>.
+            </p>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <p>
+                    1 · The core saturation \(f(x) = 1 - e^{-\lambda x}\) is <strong>strictly concave</strong>
+                    (\(f'' &lt; 0\), no inflection) — the docstring's "S-shaped" is a misnomer the notebook
+                    corrects and asserts. The genuine S belongs only to <strong>Hill with \(n &gt; 1\)</strong>,
+                    whose marginal return starts at zero and humps at
+                    \(x^\star = \kappa((n-1)/(n+1))^{1/n}\) before diminishing.<br>
+                    2 · Half-saturation is \(\ln 2/\lambda\) for the core curve
+                    (assert-encoded: \(f(\ln 2/\lambda) = \tfrac12\)) and exactly \(\kappa\) for Hill at
+                    every \(n\); the slopes there are \(\lambda/2\) and \(n/4\kappa\).<br>
+                    3 · <strong>Normalize spend before saturating</strong> so \(\lambda\) is comparable
+                    across channels and the \(\mathrm{Exponential}(0.5)\) prior puts the elbow (≈ 0.35 of
+                    max at the prior mean) inside the observed range — but remember max-normalization is
+                    hostage to a single outlier week.<br>
+                    4 · With \(f \in [0,1)\), contribution \(\beta f\) has a <strong>hard ceiling at
+                    \(\beta\)</strong> — the channel's maximum achievable effect, and the reason an optimal
+                    budget is finite.<br>
+                    5 · Saturation family is a per-channel config choice the model now honors in-graph
+                    (default logistic); choosing wrong is a measured <strong>+38% silent failure</strong>,
+                    and a one-line Hill pivot is the measured fix.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/math_02_saturation.ipynb</code>, authored by
+                    <code>nbs/build_math_02_saturation.py</code> — every claim above ends in an
+                    <code>assert</code> against the framework's real <code>logistic_saturation</code> and
+                    <code>geometric_adstock</code>, so "the notebook runs clean" means "the math is right."
+                    Series guide: <code>nbs/README_math.md</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series (exemplar-identical).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG — series-wide reference implementation (unused here:
+        // every figure on this page is deterministic math).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Pure curve math — identical to the notebook's formulas.
+        // ------------------------------------------------------------------
+        function linspace(a, b, n) {
+            const out = new Array(n);
+            const step = (b - a) / (n - 1);
+            for (let i = 0; i < n; i++) out[i] = a + i * step;
+            return out;
+        }
+        function fexp(x, lam) {                       // 1 - exp(-lam * clip(x, 0))
+            return 1 - Math.exp(-lam * Math.max(x, 0));
+        }
+        function fexpPrime(x, lam) {                  // lam * exp(-lam * x)
+            return lam * Math.exp(-lam * Math.max(x, 0));
+        }
+        function hill(x, kappa, n) {                  // x^n / (x^n + kappa^n)
+            const xc = Math.max(x, 0);
+            const xn = Math.pow(xc, n);
+            return xn / (xn + Math.pow(kappa, n));
+        }
+        function hillPrime(x, kappa, n) {             // n kappa^n x^(n-1) / (x^n + kappa^n)^2
+            const xc = Math.max(x, 1e-12);
+            const kn = Math.pow(kappa, n);
+            return n * kn * Math.pow(xc, n - 1) / Math.pow(Math.pow(xc, n) + kn, 2);
+        }
+        function hillInflection(kappa, n) {           // kappa * ((n-1)/(n+1))^(1/n), n > 1
+            return kappa * Math.pow((n - 1) / (n + 1), 1 / n);
+        }
+
+        const LAMS = [0.5, 1.0, 2.0, 4.0];
+        const LAM_COLORS = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+        const LN2 = Math.log(2);
+
+        // ------------------------------------------------------------------
+        // 1a. Core curve family with half-saturation droplines
+        // ------------------------------------------------------------------
+        function drawCoreCurves() {
+            const x = linspace(0, 3, 300);
+            const traces = [];
+            LAMS.forEach(function(lam, i) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: x, y: x.map(function(v) { return fexp(v, lam); }),
+                    name: 'λ = ' + lam, line: { color: LAM_COLORS[i], width: 2.5 },
+                    hovertemplate: 'λ=' + lam + '<br>x=%{x:.2f}<br>f=%{y:.3f}<extra></extra>'
+                });
+                const xh = LN2 / lam;
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: [xh, xh], y: [0, 0.5],
+                    showlegend: false, hoverinfo: 'skip',
+                    line: { color: LAM_COLORS[i], width: 1, dash: 'dot' }
+                });
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: [xh], y: [0.5], showlegend: false,
+                    marker: { color: LAM_COLORS[i], size: 8 },
+                    hovertemplate: 'half-sat: x = ln2/' + lam + ' = ' + xh.toFixed(3) + '<extra></extra>'
+                });
+            });
+
+            const layout = PT.layout({
+                xaxis: { title: '(adstocked, normalized) spend x' },
+                yaxis: { title: 'saturated response f(x)', range: [0, 1.1] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 3, y0: 1, y1: 1, line: { color: '#2d3a2d', width: 1, dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: 3, y0: 0.5, y1: 0.5, line: { color: '#9aa79a', width: 1, dash: 'dash' } }
+                ],
+                annotations: [
+                    { x: 2.96, y: 1.0, xanchor: 'right', yanchor: 'bottom', text: 'ceiling f → 1', showarrow: false, font: { size: 11, color: '#5a6b5a' } },
+                    { x: 2.96, y: 0.5, xanchor: 'right', yanchor: 'bottom', text: 'half-saturation', showarrow: false, font: { size: 11, color: '#5a6b5a' } }
+                ]
+            });
+            Plotly.newPlot('coreCurveChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 1b. Core marginal returns
+        // ------------------------------------------------------------------
+        function drawCoreMarginal() {
+            const x = linspace(0, 3, 300);
+            const traces = [];
+            LAMS.forEach(function(lam, i) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: x, y: x.map(function(v) { return fexpPrime(v, lam); }),
+                    name: 'λ = ' + lam, line: { color: LAM_COLORS[i], width: 2.5 },
+                    hovertemplate: 'λ=' + lam + "<br>x=%{x:.2f}<br>f'=%{y:.3f}<extra></extra>"
+                });
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: [0], y: [lam], showlegend: false,
+                    marker: { color: LAM_COLORS[i], size: 8 },
+                    hovertemplate: "f'(0) = λ = " + lam + '<extra></extra>'
+                });
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: [LN2 / lam], y: [lam / 2], showlegend: false,
+                    marker: { color: LAM_COLORS[i], size: 8, symbol: 'square' },
+                    hovertemplate: "f'(x½) = λ/2 = " + (lam / 2).toFixed(2) + '<extra></extra>'
+                });
+            });
+
+            const layout = PT.layout({
+                xaxis: { title: 'spend x' },
+                yaxis: { title: "marginal response f'(x)", rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: [{
+                    x: 0.12, y: 4.0, xanchor: 'left',
+                    text: "● f'(0) = λ (the max)  ·  ■ f'(x½) = λ/2",
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('coreMarginalChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2. Concave vs S: matched half-saturation comparison
+        // ------------------------------------------------------------------
+        function drawShapeChart() {
+            const x = linspace(0, 1.5, 300);
+            const HALF = 0.45;                       // shared half-sat point
+            const lamMatched = LN2 / HALF;           // exp curve through (0.45, 0.5)
+            const K = 0.45, N = 3;                   // the stress-01 "truth" Hill
+            const xStar = hillInflection(K, N);
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines',
+                    x: x, y: x.map(function(v) { return fexp(v, lamMatched); }),
+                    name: 'core 1 − e^(−λx), λ ≈ ' + lamMatched.toFixed(2),
+                    line: { color: PT.colors.tv, width: 2.5 },
+                    hovertemplate: 'concave: f=%{y:.3f} at x=%{x:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    x: x, y: x.map(function(v) { return hill(v, K, N); }),
+                    name: 'Hill κ = 0.45, n = 3 (the S)',
+                    line: { color: PT.colors.truth, width: 2.5, dash: 'dash' },
+                    hovertemplate: 'Hill: f=%{y:.3f} at x=%{x:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    x: [HALF], y: [0.5], showlegend: false,
+                    marker: { color: PT.colors.display, size: 9 },
+                    hovertemplate: 'shared half-sat: both curves cross ½ at x = 0.45<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    x: [xStar], y: [hill(xStar, K, N)], showlegend: false,
+                    marker: { color: PT.colors.truth, size: 11, symbol: 'triangle-up' },
+                    hovertemplate: 'Hill inflection x* = κ((n−1)/(n+1))^(1/n) ≈ ' + xStar.toFixed(3) + '<extra></extra>'
+                }
+            ];
+
+            const layout = PT.layout({
+                xaxis: { title: 'spend x (fraction of max)' },
+                yaxis: { title: 'f(x)', range: [0, 1.05] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: [
+                    {
+                        x: xStar, y: hill(xStar, K, N), ax: 55, ay: 45,
+                        text: 'inflection: convex below,<br>concave above (n > 1 only)',
+                        showarrow: true, arrowcolor: '#5a6b5a', font: { size: 11, color: '#5a6b5a' }
+                    },
+                    {
+                        x: 0.12, y: fexp(0.12, lamMatched), ax: -10, ay: -45,
+                        text: 'steepest at zero —<br>no inflection anywhere',
+                        showarrow: true, arrowcolor: '#5a6b5a', font: { size: 11, color: '#5a6b5a' }
+                    }
+                ]
+            });
+            Plotly.newPlot('shapeChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 3. Interactive explorer: response + marginal-returns subplot
+        // ------------------------------------------------------------------
+        const exEls = {
+            family: document.getElementById('exFamily'),
+            lam: document.getElementById('exLam'),    lamVal: document.getElementById('exLamVal'),
+            k: document.getElementById('exK'),        kVal: document.getElementById('exKVal'),
+            n: document.getElementById('exN'),        nVal: document.getElementById('exNVal'),
+            lamGroup: document.getElementById('exLamGroup'),
+            kGroup: document.getElementById('exKGroup'),
+            nGroup: document.getElementById('exNGroup')
+        };
+
+        function drawExplorer() {
+            const family = exEls.family.value;
+            const lam = parseFloat(exEls.lam.value);
+            const K = parseFloat(exEls.k.value);
+            const N = parseFloat(exEls.n.value);
+            exEls.lamVal.textContent = lam.toFixed(2);
+            exEls.kVal.textContent = K.toFixed(2);
+            exEls.nVal.textContent = N.toFixed(1);
+            exEls.lamGroup.style.display = (family === 'logistic') ? 'flex' : 'none';
+            exEls.kGroup.style.display = (family === 'hill') ? 'flex' : 'none';
+            exEls.nGroup.style.display = (family === 'hill') ? 'flex' : 'none';
+
+            const x = linspace(0.0005, 3, 400);
+            let f, fp, xHalf, slopeAtHalf, label, color;
+            if (family === 'logistic') {
+                f = x.map(function(v) { return fexp(v, lam); });
+                fp = x.map(function(v) { return fexpPrime(v, lam); });
+                xHalf = LN2 / lam;
+                slopeAtHalf = lam / 2;
+                label = '1 − e^(−λx), λ = ' + lam.toFixed(2);
+                color = PT.colors.tv;
+            } else {
+                f = x.map(function(v) { return hill(v, K, N); });
+                fp = x.map(function(v) { return hillPrime(v, K, N); });
+                xHalf = K;
+                slopeAtHalf = N / (4 * K);
+                label = 'Hill, κ = ' + K.toFixed(2) + ', n = ' + N.toFixed(1);
+                color = PT.colors.search;
+            }
+
+            const traces = [
+                {   // response curve (left subplot)
+                    type: 'scatter', mode: 'lines', x: x, y: f,
+                    name: label, line: { color: color, width: 2.6 },
+                    xaxis: 'x', yaxis: 'y',
+                    hovertemplate: 'x=%{x:.2f}<br>f=%{y:.3f}<extra></extra>'
+                },
+                {   // half-sat marker on response
+                    type: 'scatter', mode: 'markers', x: [xHalf], y: [0.5],
+                    showlegend: false, xaxis: 'x', yaxis: 'y',
+                    marker: { color: PT.colors.display, size: 10 },
+                    hovertemplate: 'half-saturation at x = ' + xHalf.toFixed(3) + '<extra></extra>'
+                },
+                {   // marginal curve (right subplot)
+                    type: 'scatter', mode: 'lines', x: x, y: fp,
+                    name: "marginal f'(x)", line: { color: color, width: 2.6, dash: 'dot' },
+                    xaxis: 'x2', yaxis: 'y2',
+                    hovertemplate: "x=%{x:.2f}<br>f'=%{y:.3f}<extra></extra>"
+                },
+                {   // slope-at-half-sat marker on marginal
+                    type: 'scatter', mode: 'markers', x: [xHalf], y: [slopeAtHalf],
+                    showlegend: false, xaxis: 'x2', yaxis: 'y2',
+                    marker: { color: PT.colors.display, size: 10, symbol: 'square' },
+                    hovertemplate: "slope at half-sat = " + slopeAtHalf.toFixed(3) +
+                        (family === 'logistic' ? ' (= λ/2)' : ' (= n/4κ)') + '<extra></extra>'
+                }
+            ];
+
+            const annotations = [
+                { xref: 'paper', yref: 'paper', x: 0.18, y: 1.08, text: '<b>response f(x)</b>', showarrow: false, font: { size: 13 } },
+                { xref: 'paper', yref: 'paper', x: 0.82, y: 1.08, text: "<b>marginal returns f'(x)</b>", showarrow: false, font: { size: 13 } }
+            ];
+
+            if (family === 'hill' && N > 1) {
+                const xStar = hillInflection(K, N);
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: [xStar], y: [hillPrime(xStar, K, N)],
+                    showlegend: false, xaxis: 'x2', yaxis: 'y2',
+                    marker: { color: PT.colors.truth, size: 12, symbol: 'triangle-up' },
+                    hovertemplate: 'marginal peak at the inflection x* = ' + xStar.toFixed(3) + '<extra></extra>'
+                });
+                annotations.push({
+                    xref: 'x2', yref: 'y2', x: 0.02, y: 0, xanchor: 'left', yanchor: 'bottom',
+                    text: "n > 1: f'(0) = 0 — a true threshold", showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                });
+            }
+
+            const axStyle = { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' };
+            const layout = PT.layout({
+                xaxis: Object.assign({ domain: [0, 0.45], title: 'spend x' }, axStyle),
+                yaxis: Object.assign({ title: 'f(x)', range: [0, 1.05] }, axStyle),
+                xaxis2: Object.assign({ domain: [0.55, 1], title: 'spend x', anchor: 'y2' }, axStyle),
+                yaxis2: Object.assign({ title: "f'(x)", rangemode: 'tozero', anchor: 'x2' }, axStyle),
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.22 },
+                margin: { l: 70, r: 30, t: 50, b: 60 },
+                annotations: annotations
+            });
+            Plotly.react('explorerChart', traces, layout, PT.config);
+        }
+
+        ['change', 'input'].forEach(function(evt) {
+            exEls.family.addEventListener(evt, drawExplorer);
+            exEls.lam.addEventListener(evt, drawExplorer);
+            exEls.k.addEventListener(evt, drawExplorer);
+            exEls.n.addEventListener(evt, drawExplorer);
+        });
+
+        // ------------------------------------------------------------------
+        // 4. Normalization: raw scales vs fraction-of-max
+        // ------------------------------------------------------------------
+        function drawNormChart() {
+            const lam = 2.0;                                     // prior-mean rate, for NORMALIZED input
+            // Channel A spends in the thousands; channel B near millions
+            // (deterministic stand-ins for the notebook's gamma draws).
+            const maxA = 1.5e4, maxB = 6.4e6;
+            // On RAW spend a single rate can suit at most one scale. Tune it to
+            // put B's elbow at ~0.35 of B's range (what lam = 2 does on [0,1]):
+            const lamRaw = LN2 / (0.35 * maxB);
+            const rawGrid = linspace(0, maxB, 400);              // shared raw axis (B's scale)
+            const fracs = linspace(0, 1, 200);
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines',
+                    x: rawGrid, y: rawGrid.map(function(v) { return fexp(v, lamRaw); }),
+                    name: 'channel B raw (×10⁶)',
+                    line: { color: PT.colors.search, width: 2.5 },
+                    xaxis: 'x', yaxis: 'y',
+                    hovertemplate: 'B raw: f=%{y:.4f}<extra></extra>'
+                },
+                {   // raw, channel A — same lamRaw: trapped in the linear toe
+                    type: 'scatter', mode: 'lines',
+                    x: linspace(0, maxA, 100),
+                    y: linspace(0, maxA, 100).map(function(v) { return fexp(v, lamRaw); }),
+                    name: 'channel A raw (×10³), same λ',
+                    line: { color: PT.colors.tv, width: 3.0 },
+                    xaxis: 'x', yaxis: 'y',
+                    hovertemplate: 'A raw: f=%{y:.5f} — its entire range stays below 0.005<extra></extra>'
+                },
+                {   // normalized: curves coincide
+                    type: 'scatter', mode: 'lines',
+                    x: fracs, y: fracs.map(function(v) { return fexp(v, lam); }),
+                    name: 'channel A / its max',
+                    line: { color: PT.colors.tv, width: 3.2 },
+                    xaxis: 'x2', yaxis: 'y2',
+                    hovertemplate: 'normalized: f=%{y:.3f} at %{x:.2f} of max<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    x: fracs, y: fracs.map(function(v) { return fexp(v, lam); }),
+                    name: 'channel B / its max (identical)',
+                    line: { color: PT.colors.search, width: 1.4, dash: 'dash' },
+                    xaxis: 'x2', yaxis: 'y2',
+                    hovertemplate: 'normalized: identical curve<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    x: [LN2 / lam], y: [0.5], showlegend: false,
+                    xaxis: 'x2', yaxis: 'y2',
+                    marker: { color: PT.colors.display, size: 10 },
+                    hovertemplate: 'half-sat at ln2/2 = 0.347 of max spend<extra></extra>'
+                }
+            ];
+
+            const axStyle = { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' };
+            const layout = PT.layout({
+                xaxis: Object.assign({ domain: [0, 0.45], title: 'raw spend (shared axis)' }, axStyle),
+                yaxis: Object.assign({ title: 'f(x)', range: [0, 1.1] }, axStyle),
+                xaxis2: Object.assign({ domain: [0.55, 1], title: 'spend / max spend', anchor: 'y2' }, axStyle),
+                yaxis2: Object.assign({ range: [0, 1.1], anchor: 'x2' }, axStyle),
+                legend: { orientation: 'h', y: -0.25 },
+                margin: { l: 70, r: 30, t: 50, b: 60 },
+                annotations: [
+                    { xref: 'paper', yref: 'paper', x: 0.16, y: 1.08, text: '<b>RAW spend, one shared λ</b>', showarrow: false, font: { size: 13 } },
+                    { xref: 'paper', yref: 'paper', x: 0.86, y: 1.08, text: '<b>NORMALIZED to [0, 1], same λ = 2</b>', showarrow: false, font: { size: 13 } },
+                    {
+                        xref: 'x', yref: 'y', x: maxA, y: fexp(maxA, lamRaw), ax: 45, ay: -55,
+                        text: 'A: trapped in the linear toe —<br>f stays below 0.005 over its whole range',
+                        showarrow: true, arrowcolor: '#5a6b5a', font: { size: 11, color: '#5a6b5a' }
+                    },
+                    {
+                        xref: 'x2', yref: 'y2', x: LN2 / lam + 0.03, y: 0.42, xanchor: 'left',
+                        text: 'x½ = ln2/λ ≈ 0.347 of max',
+                        showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                    }
+                ]
+            });
+            Plotly.newPlot('normChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 5a. Beta scaling: contribution ceiling at beta
+        // ------------------------------------------------------------------
+        function drawBetaChart() {
+            const lam = 2.0;
+            const x = linspace(0, 3, 300);
+            const betas = [0.5, 1.0, 2.0, 3.5];
+            const traces = [];
+            betas.forEach(function(b, i) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: x, y: x.map(function(v) { return b * fexp(v, lam); }),
+                    name: 'β = ' + b, line: { color: LAM_COLORS[i], width: 2.5 },
+                    hovertemplate: 'β=' + b + '<br>contribution=%{y:.3f}<extra></extra>'
+                });
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: [0, 3], y: [b, b], showlegend: false, hoverinfo: 'skip',
+                    line: { color: LAM_COLORS[i], width: 1, dash: 'dot' }
+                });
+            });
+            const layout = PT.layout({
+                xaxis: { title: '(adstocked) spend x' },
+                yaxis: { title: 'contribution β · f(x)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: [{
+                    x: 2.95, y: 3.5, xanchor: 'right', yanchor: 'bottom',
+                    text: 'dotted: each channel’s hard ceiling = β',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('betaChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 5b. Interactive end-to-end response curve
+        // ------------------------------------------------------------------
+        const plEls = {
+            alpha: document.getElementById('plAlpha'), alphaVal: document.getElementById('plAlphaVal'),
+            lam: document.getElementById('plLam'),     lamVal: document.getElementById('plLamVal'),
+            beta: document.getElementById('plBeta'),   betaVal: document.getElementById('plBetaVal')
+        };
+
+        function drawPipeline() {
+            const alpha = parseFloat(plEls.alpha.value);
+            const lam = parseFloat(plEls.lam.value);
+            const beta = parseFloat(plEls.beta.value);
+            plEls.alphaVal.textContent = alpha.toFixed(2);
+            plEls.lamVal.textContent = lam.toFixed(2);
+            plEls.betaVal.textContent = beta.toFixed(2);
+
+            const s = linspace(0, 2.5, 400);
+            // Steady state of the un-normalized geometric adstock: s / (1 - alpha),
+            // then saturation, then × beta — the notebook's composition, exactly.
+            const resp = s.map(function(v) { return beta * fexp(v / (1 - alpha), lam); });
+            const sHalf = (1 - alpha) * LN2 / lam;
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: s, y: resp,
+                    name: 'β · f(s / (1 − α))',
+                    line: { color: PT.colors.display, width: 2.8 },
+                    hovertemplate: 'steady spend s=%{x:.2f}<br>steady contribution=%{y:.3f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [sHalf], y: [beta / 2],
+                    showlegend: false,
+                    marker: { color: PT.colors.truth, size: 10 },
+                    hovertemplate: 'half-response at s = (1−α)·ln2/λ = ' + sHalf.toFixed(3) + '<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: [sHalf, sHalf], y: [0, beta / 2],
+                    showlegend: false, hoverinfo: 'skip',
+                    line: { color: PT.colors.truth, width: 1, dash: 'dot' }
+                }
+            ];
+
+            const layout = PT.layout({
+                xaxis: { title: 'steady per-period spend s' },
+                yaxis: { title: 'steady contribution', range: [0, Math.max(beta * 1.12, 0.6)] },
+                showlegend: false,
+                margin: { l: 70, r: 30, t: 30, b: 60 },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 2.5, y0: beta, y1: beta,
+                    line: { color: '#2d3a2d', width: 1, dash: 'dash' }
+                }],
+                annotations: [
+                    {
+                        x: 2.45, y: beta, xanchor: 'right', yanchor: 'bottom',
+                        text: 'ceiling = β', showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                    },
+                    {
+                        x: sHalf, y: beta / 2, ax: 60, ay: -25,
+                        text: 'half-response s = ' + sHalf.toFixed(3),
+                        showarrow: true, arrowcolor: '#5a6b5a', font: { size: 11, color: '#5a6b5a' }
+                    }
+                ]
+            });
+            Plotly.react('pipelineChart', traces, layout, PT.config);
+        }
+
+        ['input', 'change'].forEach(function(evt) {
+            plEls.alpha.addEventListener(evt, drawPipeline);
+            plEls.lam.addEventListener(evt, drawPipeline);
+            plEls.beta.addEventListener(evt, drawPipeline);
+        });
+
+        // ------------------------------------------------------------------
+        function init() {
+            drawCoreCurves();
+            drawCoreMarginal();
+            drawShapeChart();
+            drawExplorer();
+            drawNormChart();
+            drawBetaChart();
+            drawPipeline();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
