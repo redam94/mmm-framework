@@ -342,10 +342,11 @@ def to_markdown(results: list[ScenarioResult]) -> str:
         "worst channel > 50%, or coverage < 75%) yet **the checks an analyst acts "
         "on are green**: MCMC convergence (r-hat < 1.05, no divergences) and the "
         "unobserved-confounding robustness value. `ppc` and `refut` are reported "
-        "but **excluded from the gate** — both refit/resample at low fidelity and "
-        "fire on the clean control (false positives), so they are not a reliable "
-        "all-clear. (Where `ppc`=✗ on a flagged row, the failure is silent only to "
-        "an analyst who has learned to ignore PPC's crying-wolf.)",
+        "but **excluded from the gate** — both are fit-level checks whose verdicts "
+        "have proven config-sensitive across recordings (under the pre-2026-06-10 "
+        "trend prior both false-alarmed on the clean control; under current "
+        "defaults they pass on clean and on several wrong-attribution worlds), so "
+        "neither is a reliable all-clear for the *causal* claim.",
         "",
         "| scenario | assumption broken | med\\|err\\| | max\\|err\\| | total-media err "
         "| cover | rhat | div | ppc | refut | fragile | verdict |",

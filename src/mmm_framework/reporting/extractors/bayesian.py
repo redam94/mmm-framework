@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from loguru import logger
 
-from ..helpers import _safe_get_column, _safe_to_numpy
+from ..helpers import _safe_get_column
 from .base import DataExtractor
 from .bundle import MMMDataBundle
 from .mixins import AggregationMixin, GeoExtractionMixin, ProductExtractionMixin
 
 if TYPE_CHECKING:
-    import pandas as pd
+    pass
 
 
 class BayesianMMMExtractor(
@@ -1796,16 +1796,30 @@ class BayesianMMMExtractor(
 
                 spend_range = np.linspace(0, max_spend, 100)
 
-                # Try Hill saturation parameters
-                kappa_names = [f"kappa_{ch}", f"K_{ch}", f"sat_K_{ch}"]
-                slope_names = [f"slope_{ch}", f"S_{ch}", f"sat_S_{ch}", f"n_{ch}"]
+                # Try Hill saturation parameters (sat_half_/sat_slope_ are the
+                # core BayesianMMM's per-channel Hill RVs)
+                kappa_names = [
+                    f"sat_half_{ch}",
+                    f"kappa_{ch}",
+                    f"K_{ch}",
+                    f"sat_K_{ch}",
+                ]
+                slope_names = [
+                    f"sat_slope_{ch}",
+                    f"slope_{ch}",
+                    f"S_{ch}",
+                    f"sat_S_{ch}",
+                    f"n_{ch}",
+                ]
 
                 kappa_val = None
                 slope_val = None
+                kappa_matched = None
 
                 for k_name in kappa_names:
                     if k_name in posterior:
                         kappa_val = float(posterior[k_name].values.mean())
+                        kappa_matched = k_name
                         break
 
                 for s_name in slope_names:
@@ -1814,9 +1828,20 @@ class BayesianMMMExtractor(
                         break
 
                 if kappa_val is not None and slope_val is not None:
+                    # The core model's sat_half_ is on the normalized (~[0, 1])
+                    # spend scale, so evaluate the curve on normalized spend
+                    # (mirroring the exponential branch below). Other naming
+                    # conventions keep the raw-spend evaluation.
+                    if kappa_matched is not None and kappa_matched.startswith(
+                        "sat_half_"
+                    ):
+                        x_grid = spend_range / max(spend_range.max(), 1)
+                    else:
+                        x_grid = spend_range
+                    x_grid = np.clip(x_grid, 1e-9, None)
                     # Hill function
-                    response = spend_range**slope_val / (
-                        kappa_val**slope_val + spend_range**slope_val
+                    response = x_grid**slope_val / (
+                        kappa_val**slope_val + x_grid**slope_val
                     )
 
                     # Scale by beta if available
@@ -2008,6 +2033,7 @@ class BayesianMMMExtractor(
                     "alpha",
                     "adstock",
                     "sat_lam",
+                    "sat_half",
                     "kappa",
                     "slope",
                 ]
@@ -2145,6 +2171,14 @@ class BayesianMMMExtractor(
                 elif param.startswith("alpha_") or param.startswith("adstock_"):
                     # Adstock decay: Beta(1, 3) - favors lower values
                     prior_samples[param] = np.random.beta(1, 3, n_samples)
+
+                elif param.startswith("sat_half_"):
+                    # Core-model half-saturation: Beta(2, 2)
+                    prior_samples[param] = np.random.beta(2, 2, n_samples)
+
+                elif param.startswith("sat_slope_"):
+                    # Core-model Hill slope: HalfNormal(sigma=1.5)
+                    prior_samples[param] = np.abs(np.random.normal(0, 1.5, n_samples))
 
                 elif param.startswith("sat_lam_") or param.startswith("saturation_"):
                     # Saturation rate: Gamma(2, 1)

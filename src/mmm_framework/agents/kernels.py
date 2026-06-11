@@ -73,6 +73,7 @@ class ExecuteResult:
 
     stdout: str
     plots: list = field(default_factory=list)
+    tables: list = field(default_factory=list)
     is_error: bool = False
 
 
@@ -188,6 +189,10 @@ _MAX_OUTPUT_BYTES = 200_000
 # carries pymc/serializer prints + progress bars, and stderr is merged into it),
 # so a noisy compute can never corrupt the structured result.
 _MODELOP_MIME = "application/vnd.mmm-modelop+json"
+
+# Dedicated display_data MIME for structured tables published via the
+# `show_table(df)` kernel binding — same rationale as the plot/model-op MIMEs.
+_TABLE_MIME = "application/vnd.mmm-table+json"
 
 
 def _json_safe(o):
@@ -410,6 +415,24 @@ try:
 except Exception:
     pass
 
+# ── table capture: show_table(df) -> display_data(structured table json) ──
+try:
+    from IPython.display import publish_display_data as _mmm_tbl_pdd
+    from mmm_framework.agents.tables import df_to_table_json as _mmm_df_to_table
+
+    def show_table(df, title=None, group="repl"):
+        \"\"\"Render a DataFrame as a formatted, sortable table in the dashboard
+        (instead of printing it). Returns None.\"\"\"
+        _payload = _mmm_df_to_table(
+            df,
+            title=str(title or "Table"),
+            source="execute_python",
+            group=str(group or "repl"),
+        )
+        _mmm_tbl_pdd({"application/vnd.mmm-table+json": _payload})
+except Exception:
+    pass
+
 # ── model-op driver (Phase 2 PR-B): run a model_ops op on the in-kernel model ──
 try:
     from mmm_framework.agents import model_ops as _mmm_mo
@@ -454,7 +477,7 @@ try:
         _m = globals().get("mmm")
         if _m is None:
             _m = _mmm_rehydrate()  # cold kernel -> try loading the last fit from disk
-        if _m is None:
+        if _m is None and not getattr(_op, "allow_unfitted", False):
             return {"content": None, "dashboard": {}, "error": _mmm_mo.NO_MODEL_MSG}
         return _op(_m, globals().get("results"), **(_kw or {}))
 
@@ -615,6 +638,7 @@ class SubprocessKernel:
         out: list[str] = []
         plots: list = []
         modelops: list = []
+        tables: list = []
         err = None
         idle = died = False
         interrupted_at = None
@@ -686,6 +710,9 @@ class SubprocessKernel:
                 mo = data.get(_MODELOP_MIME)
                 if mo is not None:
                     modelops.append(mo)
+                tb = data.get(_TABLE_MIME)
+                if tb is not None:
+                    tables.append(tb)
             elif mtype == "error":
                 err = content
         # DONE = idle (iopub) AND the shell execute_reply. Skip when the kernel
@@ -699,7 +726,7 @@ class SubprocessKernel:
                     break
                 if reply.get("parent_header", {}).get("msg_id") == msg_id:
                     break
-        return "".join(out), plots, modelops, err
+        return "".join(out), plots, modelops, tables, err
 
     def execute(self, code: str, ctx: "KernelContext") -> ExecuteResult:
         import traceback as _tb
@@ -713,10 +740,10 @@ class SubprocessKernel:
         with self._lock:
             try:
                 self._ensure_started()
-                _, _, _, h_err = self._run(
+                _, _, _, _, h_err = self._run(
                     _per_call_header(ctx), silent=True, capture=False
                 )
-                stdout, plots, _modelops, err = self._run(
+                stdout, plots, _modelops, tables, err = self._run(
                     code, silent=False, capture=True, cell_timeout=self._cell_timeout
                 )
             except Exception:
@@ -747,13 +774,13 @@ class SubprocessKernel:
             # load-bearing "Error executing code" marker + hint) survives intact.
             prefix = (_truncate(stdout) + "\n") if stdout else ""
             return ExecuteResult(
-                stdout=warn + prefix + body, plots=plots, is_error=True
+                stdout=warn + prefix + body, plots=plots, tables=tables, is_error=True
             )
 
         if not stdout:
             stdout = "Code executed successfully with no output."
         return ExecuteResult(
-            stdout=warn + _truncate(stdout), plots=plots, is_error=False
+            stdout=warn + _truncate(stdout), plots=plots, tables=tables, is_error=False
         )
 
     def run_model_op(self, op_name: str, kwargs: dict) -> dict:
@@ -769,7 +796,7 @@ class SubprocessKernel:
             try:
                 self._ensure_started()
                 code = f"_mmm_emit_op({op_name!r}, {dict(kwargs or {})!r})\n"
-                _, _, modelops, err = self._run(
+                _, _, modelops, _, err = self._run(
                     code, silent=False, capture=True, cell_timeout=self._cell_timeout
                 )
             except Exception as e:  # noqa: BLE001
@@ -805,7 +832,7 @@ class SubprocessKernel:
             try:
                 self._ensure_started()
                 code = f"_mmm_emit_fit({model_spec!r}, {dataset_path!r})\n"
-                _, _, modelops, err = self._run(
+                _, _, modelops, _, err = self._run(
                     code, silent=False, capture=True, cell_timeout=self._fit_timeout
                 )
             except Exception as e:  # noqa: BLE001

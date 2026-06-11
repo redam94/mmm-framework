@@ -118,6 +118,17 @@ def list_saved_results():
     if not d.exists():
         return []
     return sorted({p.stem for p in d.glob("*") if p.suffix in (".parquet", ".pkl")})
+
+
+def show_table(df, title=None, group="repl"):
+    """Standalone stand-in for the kernel's dashboard table renderer: print a
+    preview instead (the dashboard only exists inside the agent session)."""
+    if title:
+        print(f"== {title} ==")
+    try:
+        print(df.head(20).to_string())
+    except Exception:
+        print(df)
 '''
 
 

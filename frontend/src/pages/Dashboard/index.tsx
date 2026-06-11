@@ -26,6 +26,8 @@ import type { BudgetPlanInfo } from '../../api/hooks/useBudgetPlans';
 import { useProjectStore } from '../../stores/projectStore';
 import type { ProjectResponse } from '../../api/services/projectService';
 import type { SessionInfo } from '../../api/services/sessionService';
+import { NextActionsPanel } from './NextActionsPanel';
+import { ExperimentsPanel } from './ExperimentsPanel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -448,7 +450,9 @@ export function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Your MMM sessions, models, and plans</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Your MMM results, experiments, and what to do next
+          </p>
         </div>
         <ProjectSwitcher
           projects={projects}
@@ -458,10 +462,14 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Four panel grid */}
+      {/* What needs attention: calibrate / refresh / next experiment */}
+      <NextActionsPanel projectId={currentProjectId} />
+
+      {/* Panel grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SessionsPanel projectId={currentProjectId} />
         <ModelsPanel projectId={currentProjectId} />
+        <ExperimentsPanel projectId={currentProjectId} />
         <AnalysisPlansPanel />
         <BudgetPlansPanel projectId={currentProjectId} />
       </div>

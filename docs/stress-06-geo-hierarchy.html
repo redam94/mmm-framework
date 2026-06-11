@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stress Test 06: Geography &amp; Hierarchy | MMM Framework</title>
+    <meta name="description" content="Panel worlds with per-geography ground truth: the cross-geo adstock-bleed bug this notebook found and fixed, a national-green model whose per-geo errors hit +330%, TV's regional ROI ranking fully inverted (Spearman rho = -1), and the split-fit pivot that repairs the regional readout.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-06-geo-hierarchy.html">
+    <meta property="og:title" content="Stress Test 06: Geography &amp; Hierarchy | MMM Framework">
+    <meta property="og:description" content="Right nationally, backwards regionally: per-geo errors hit +330% and TV's regional ROI ranking comes out fully inverted while every diagnostic stays green — plus the adstock-bleed bug this notebook found and fixed.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-06-geo-hierarchy.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Copied from pressure-testing.html so the series stays coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] { accent-color: var(--color-primary); }
+        .controls-row .live-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+            min-width: 7.5rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        /* "What the diagnostics said" strip used on every failure exhibit. */
+        .diag-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.5rem;
+            background: rgba(106, 191, 138, 0.08);
+            border: 1px solid rgba(106, 191, 138, 0.45);
+            border-radius: var(--radius-md);
+            padding: 0.8rem 1.2rem;
+            margin: 1.25rem 0;
+            font-size: 0.9rem;
+        }
+        .diag-strip .diag-title {
+            font-weight: 700;
+            color: #3f7a58;
+            width: 100%;
+        }
+        .diag-strip code { background: transparent; padding: 0; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Panels change the game</a></li>
+                <li><a href="#act0">Act 0 · The bug the panel surfaced</a></li>
+                <li><a href="#worlds">The panel worlds</a></li>
+                <li><a href="#act1">Act 1 · Panel positive control</a></li>
+                <li><a href="#act2">Act 2 · The cost of aggregating</a></li>
+                <li><a href="#act3">Act 3 · The regional ROI trap</a></li>
+                <li><a href="#pivot">The pivot: split per geography</a></li>
+                <li><a href="#playground">Heterogeneity playground</a></li>
+                <li><a href="#act4">Act 4 · Geography × product</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html" class="active">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Stress Test 06: Geography &amp; Hierarchy</h1>
+            <p class="lead">
+                Notebooks 00–05 stress-tested the model on <em>national</em> time series. Real
+                engagements increasingly arrive as <em>panels</em> — KPI by geography, often by
+                geography × product — and panels change the stress surface three ways at once.
+                This notebook found (and fixed) a structural bug in how adstock treated stacked
+                panel data; then it built worlds with <strong>per-geography ground truth</strong>
+                and discovered the headline failure of the series' panel chapter: a model that is
+                green and accurate <em>nationally</em> while its per-geo errors reach
+                <strong>+330%</strong>, per-geo coverage collapses to <strong>31%</strong>, and
+                TV's regional ROI ranking comes out <strong>fully inverted</strong>
+                (Spearman \(\rho = -1\)). Same posterior, same clean diagnostics — it depends
+                entirely on the level at which you grade it.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">5%</div>
+                    <div class="stat-label">national median error on the heterogeneous world — green and shippable</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+330%</div>
+                    <div class="stat-label">worst per-geo readout (West / TV) from the same posterior</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">&rho; = &minus;1</div>
+                    <div class="stat-label">TV's regional ROI ranking vs truth — perfectly upside down</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.02</div>
+                    <div class="stat-label">max r-hat on that fit, 0 divergences — nothing flagged</div>
+                </div>
+            </div>
+
+            <p>
+                What a panel adds, and what can go wrong with each addition:
+            </p>
+            <table>
+                <thead>
+                    <tr><th></th><th>What a panel adds</th><th>What can go wrong</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Mechanics</strong></td>
+                        <td>Observations are <em>stacked</em> (week, geo[, product]) cells</td>
+                        <td>Any transform that treats the observation axis as time silently mixes
+                            geographies — <a href="#act0">Act 0</a>, a real bug found and fixed by
+                            this notebook's build</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Resolution</strong></td>
+                        <td>Stakeholders read <em>regional</em> ROI, not just national</td>
+                        <td>The hierarchy gives each geo an <em>intercept</em> offset while every
+                            response parameter is global — per-geo readouts can fail while the
+                            national view stays green (<a href="#act3">Act 3</a>)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Identification</strong></td>
+                        <td>Cross-sectional replication: every week observed in every geo</td>
+                        <td>Aggregate it away and you pay in interval width and drifting
+                            estimates (<a href="#act2">Act 2</a>)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="act0">Act 0 — The bug the panel surfaced: carryover across the geo boundary</h2>
+            <p>
+                A panel model receives its observations as <strong>one stacked vector</strong>.
+                The MFF loader orders them period-major:
+                <code>(week&nbsp;1, North), (week&nbsp;1, South), &hellip;, (week&nbsp;2, North), &hellip;</code>
+                Adstock is a convolution over <em>time</em>:
+            </p>
+            <p>
+                \[ a_t \;=\; \sum_{\ell=0}^{L-1} w_\ell \, x_{t-\ell} \]
+            </p>
+            <p>
+                where \(t\) must index <em>weeks within one geography</em>. Before this notebook's
+                build, <strong>both</strong> adstock paths — the parametric in-graph convolution
+                and the legacy two-point blend — convolved straight down the stacked observation
+                vector. On a geo panel, an observation's "lag 1" was therefore
+                <em>a different geography at the same week</em>: TV aired in the North adstocked
+                into the South's Tuesday. A geography with <strong>zero spend in every week</strong>
+                still received media contributions.
+            </p>
+            <p>
+                Nothing crashed. Sampling converged. The model simply estimated kernels and
+                contributions for a physically meaningless quantity — the series' definition of a
+                silent failure, this time <em>structural</em> rather than statistical. The notebook
+                demonstrates it with the simplest possible probe: one impulse of TV spend in the
+                North at week 5, zero everywhere else.
+            </p>
+
+            <div class="controls-row">
+                <label>Adstock arithmetic:</label>
+                <button class="toggle-btn active" data-impulse="old">Pre-fix: convolve the stacked vector</button>
+                <button class="toggle-btn" data-impulse="new">Post-fix: convolve per geography</button>
+            </div>
+            <div class="chart-container" id="impulseChart"></div>
+            <p class="chart-note">
+                <strong>Faithful pure-JS recreation</strong> of the notebook's pure-NumPy
+                demonstration (geometric kernel \(w_\ell \propto 0.6^\ell\), \(L=8\), 16 weeks,
+                two geos, impulse at week 5 in the North) — same arithmetic, computed live in your
+                browser. Pre-fix, the stacked convolution hands the South
+                <strong>38% of the total carryover weight</strong> — a geography that never spent a
+                dollar — and chops the North's tail in half. Post-fix the South is
+                <strong>exactly 0</strong>. The notebook then runs the same impulse through the
+                <em>shipped model</em>: across 50 prior draws, the dark geo's largest absolute
+                contribution is 0.000000 (measured in the notebook, seeded run).
+            </p>
+
+            <div class="note">
+                <h4>🔧 Framework fix surfaced by this notebook</h4>
+                <p>
+                    <strong>Before:</strong> both adstock paths (parametric in-graph and the legacy
+                    two-point blend) convolved the stacked period-major observation vector, bleeding
+                    carryover across geographies on any geo or geo×product panel.
+                    <strong>After (fixed 2026-06-10):</strong> per-cell convolution — observations
+                    are scattered into a (weeks × cells) matrix, convolved along time only, and
+                    gathered back (<code>transforms/adstock_pt.py::apply_adstock_panel_pt</code>
+                    plus a per-cell legacy path). National 1-D model graphs are
+                    <strong>bit-identical</strong> (the 1-D path is untouched when
+                    <code>n_cells == 1</code>). Regression-tested by impulse isolation in
+                    <code>tests/test_panel_adstock.py</code> — geometric, delayed, Weibull, the
+                    legacy path, and geo×product.
+                </p>
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ Why years of tests never caught it</h4>
+                <p>
+                    The smoke tests that existed fit geo panels on <em>random</em> data and asserted
+                    shapes; random data has no story to contradict, so the bleed survived until a
+                    world with known per-geo truth demanded recovery. The audit is a five-minute
+                    <strong>impulse test</strong>: one unit of spend in one cell, zero everywhere
+                    else — anything nonzero outside that cell is a structural bug no convergence
+                    diagnostic will ever flag. <em>Positive controls are bug detectors, not
+                    formalities.</em>
+                </p>
+            </div>
+
+            <h2 id="worlds">The panel worlds</h2>
+            <p>
+                Worlds come from <code>tests/synth/dgp_geo.py</code> — balanced panels with the
+                same estimand discipline as the rest of the series (see the
+                <a href="pressure-testing.html">hub page</a>), except the counterfactual ground
+                truth is recorded <strong>per geography / per cell</strong>
+                (<code>true_contribution_by_geo</code>), so the model can be graded at the level
+                the budget decisions actually happen. Helpers <code>national_scenario()</code>
+                (the aggregated view) and <code>geo_scenario(g)</code> (per-geo slices) power
+                Acts 2 and the split-fit pivot.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>World</th><th>Design</th><th>Role</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>geo_clean</code></td>
+                        <td>4 geographies × 130 weeks (520 obs). Shared response parameters;
+                            geos differ in baseline level and budget scale only — exactly the
+                            model's intercept hierarchy.</td>
+                        <td><span class="verdict-pill ok">panel positive control</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>geo_heterogeneous</code></td>
+                        <td>Same skeleton, but channel effectiveness differs by geography
+                            (multipliers 0.3–1.8×) and budgets <em>chase performance</em> the way
+                            real regional allocation does.</td>
+                        <td><span class="verdict-pill silent">outside the global-beta hypothesis space</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>geo_product</code></td>
+                        <td>3 geographies × 2 products × 104 weeks (624 obs). Additive geo +
+                            product offsets; product lines tilt their channel mix.</td>
+                        <td><span class="verdict-pill ok">cross-classified positive control</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="act1">Act 1 — The panel positive control: four geographies, one truth each</h2>
+            <p>
+                <code>geo_clean</code> is the model's exact hypothesis space, panel edition: four
+                geographies share every response parameter (betas, adstock, saturation, trend,
+                seasonality) and differ in baseline offset and market size. Each geo flights on
+                its own calendar, so the panel carries genuine cross-sectional variation. If the
+                panel machinery is sound, recovery should be clean at the national level
+                <em>and</em> inside every geography — and it is:
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">6%</div>
+                    <div class="stat-label">national median |error|, 100% coverage (total media +3%)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">7%</div>
+                    <div class="stat-label">per-geo median |error| across 16 geo×channel cells</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">per-geo 90% coverage — truth inside the interval in every cell</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.71–0.82</div>
+                    <div class="stat-label">per-geo R² from the one pooled fit (North .82, South .74, East .81, West .71)</div>
+                </div>
+            </div>
+
+            <p>
+                The notebook also slices the <a href="stress-00-rosy-picture.html">stress&nbsp;00</a>
+                uncertainty lenses by geography: per-geo posterior-predictive fit bands (the
+                national R² of a panel fit can hide a geo it systematically misses) and per-geo
+                <em>contribution-path</em> bands graded against each geo's true weekly path — the
+                truth sits inside the 90% band in every spot-checked geo×channel pair. Inside a
+                representable world, the per-geo bands are honest.
+            </p>
+
+            <div class="note">
+                <h4>💡 Why this act matters</h4>
+                <p>
+                    Every later failure on this page is the <em>broken assumption</em>, not the
+                    panel plumbing. That claim is only available because the positive control
+                    passed at both levels — and, per Act 0, it is also <em>how the adstock bug was
+                    found</em>: the first world with per-geo truth contradicted the bleed.
+                </p>
+            </div>
+
+            <h2 id="act2">Act 2 — What aggregation throws away</h2>
+            <p>
+                Most teams <em>have</em> geo-level data and model nationally anyway. The notebook
+                sums the <code>geo_clean</code> world across its four geographies — same weeks,
+                same total spend, same causal truth — and refits. Two structural things are lost:
+                <strong>replication</strong> (520 observations become 130; four independent
+                flighting calendars blur into one smoother national curve) and
+                <strong>the curve itself</strong> — each geo responds at its own saturation
+                operating point, and a sum of four saturation curves evaluated at four different
+                points is <em>not</em> a saturation curve of the summed spend (Jensen's
+                inequality). The aggregated world is, strictly, outside the model's family even
+                though every geo individually was inside it.
+            </p>
+
+            <div class="chart-container" id="aggChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — 90% interval width ratio,
+                national fit ÷ panel fit, per channel: TV 1.06×, Search 2.53×, Social 2.33×,
+                Display 1.97× — about <strong>2.1× wider on the median channel</strong>. The
+                aggregate fit stays green (median error 8%, full coverage), but its worst-channel
+                point error is 21% vs the panel's 9%.
+            </p>
+
+            <p>
+                Aggregation here doesn't <em>break</em> the model — coverage survives because the
+                intervals widen to admit what was lost — but you pay twice: materially wider
+                intervals on most channels, and the largest point errors drifting to the channels
+                whose geo-level operating points differed most. If geo data exists, the panel fit
+                is not a luxury; it is the cheaper way to buy precision you would otherwise need
+                more years of history for. And note the quiet doctrine point: <em>both</em> fits
+                are green; only the known truth reveals which numbers drifted.
+            </p>
+
+            <h2 id="act3">Act 3 — The regional ROI trap: one beta, four markets</h2>
+            <p>
+                <code>geo_heterogeneous</code> keeps Act 1's skeleton and changes what the model
+                cannot see: <strong>channel effectiveness now differs by geography</strong> —
+                multipliers from 0.3× to 1.8× on the shared response. TV is a powerhouse in the
+                North (1.8×) and nearly dead in the West (0.3×); Search inverts (0.6× North,
+                1.7× West). And budgets <strong>chase performance</strong> the way real regional
+                allocation does: geos where a channel works get a larger share of its budget, so
+                spend and response heterogeneity are coupled by construction.
+            </p>
+            <p>
+                The model's hierarchy is an <em>intercept</em> per geo and <strong>one global beta
+                per channel</strong>. Per-geo effectiveness is structurally outside its hypothesis
+                space — the pooled beta lands near a spend-weighted average, and <em>every geo's
+                readout inherits it</em>.
+            </p>
+
+            <div class="diag-strip">
+                <span class="diag-title">What the diagnostics said (pooled fit, measured)</span>
+                <span>r-hat max <strong>1.02</strong></span>
+                <span>divergences <strong>0</strong></span>
+                <span>min bulk ESS <strong>225</strong></span>
+                <span>national grade: median |error| <strong>5%</strong>, coverage <strong>100%</strong>, total media <strong>−0%</strong></span>
+            </div>
+
+            <p>
+                Read that strip again: nationally this model is <em>excellent</em> — small errors,
+                full coverage, clean sampler. An analyst grading it nationally would ship it.
+                Now grade the same posterior at the level the budget meeting actually uses.
+                The centerpiece: regional ROI <em>ranking</em>, the one-number summary regional
+                teams are judged on.
+            </p>
+
+            <div class="chart-container" id="slopeChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — TV's per-geo ROI ranking,
+                true vs estimated under the pooled fit: Spearman \(\rho = -1.0\), a perfect
+                inversion. True TV ROI (from the DGP): North 0.25, East 0.16, South 0.15,
+                West 0.05 per unit spend. The model ranks them exactly backwards. Across channels
+                (measured): TV \(\rho = -1.0\), Search \(+0.8\), Social \(-0.8\), Display
+                \(0.0\) — the channel with the widest true heterogeneity gets the most
+                confidently wrong regional ranking.
+            </p>
+
+            <div class="chart-container" id="geoErrChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative reconstruction in your browser</strong> of the pooled-beta
+                mechanism: each geo's error is the spend-weighted pooled effectiveness divided by
+                its own true multiplier, minus one — computed live from the DGP's published
+                multipliers and budget rule. The notebook's <strong>measured</strong> anchors
+                match this pattern: per-geo median |error| <strong>25%</strong>, per-geo coverage
+                <strong>31%</strong>, worst cell West/TV at <strong>+330%</strong>, and
+                corr(true multiplier, per-geo error) of −0.87 to −0.97 across all four channels.
+                National totals (black diamonds) stay essentially exact throughout.
+            </p>
+
+            <p>
+                <strong>Why the sign is the worst possible sign.</strong> The pooled beta is a
+                compromise: above the truth in weak geos, below it in strong ones. So the per-geo
+                table <strong>over-credits exactly the markets where the channel works least</strong> —
+                a budget optimizer reading it would move money <em>toward</em> the geos the channel
+                is failing in and <em>away</em> from where it prints. The readout isn't merely
+                noisy; it argues for the value-destroying reallocation. The notebook's
+                contribution-path band makes it visceral: in the West (true TV multiplier 0.3×),
+                the pooled 90% band floats <em>entirely above</em> the true path — truth below the
+                band <strong>100% of weeks</strong> (measured).
+            </p>
+
+            <h2 id="pivot">The pivot: grade at the decision level, then split per geography</h2>
+            <p>
+                Two moves, both measured. First, <strong>grade at the decision level</strong>: the
+                national table is an average over the readouts people actually use. If regional
+                tables drive money, the per-geo grade is the grade. Second, the structural pivot
+                available today: the framework has no per-geo response coefficients
+                (<code>beta_&lt;ch&gt;</code> is global; the hierarchy pools intercepts only), so
+                the fix is to <strong>refit per geography</strong> — four small models, each free
+                to find its own beta, at the price of 4× fewer observations per fit.
+            </p>
+
+            <div class="chart-container" id="splitChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — pooled panel fit vs four
+                split per-geo refits, graded against the same per-geo truth: median |error|
+                <strong>25% → 13%</strong>, 90% coverage <strong>31% → 88%</strong>, worst cell
+                <strong>+330% → 44%</strong>. TV's regional ROI ranking goes from
+                \(\rho = -1.0\) to \(\rho = +0.8\). Four small honest models beat one large
+                confidently-wrong one — <em>for the regional question</em>.
+            </p>
+
+            <div class="note">
+                <h4>💡 The tells, in order of availability</h4>
+                <p>
+                    (1) <strong>Design knowledge</strong> — if budgets are allocated on
+                    performance, heterogeneity is coupled to spend by construction; assume you are
+                    in Act 3's world, not Act 1's. (2) The <strong>split-sample check</strong> —
+                    refit per geo (or region group) and compare against the pooled per-geo table,
+                    exactly as above. (3) <strong>Per-geo lift tests</strong> where the money
+                    justifies them (see <a href="stress-05-gauntlet.html">stress&nbsp;05</a> on
+                    calibration). The durable fix is hierarchical <em>response</em> pooling —
+                    per-geo betas with shrinkage — which the framework's intercept-only hierarchy
+                    does not yet offer; this act is the design case for it. The per-geo uncertainty
+                    lenses (fit bands, contribution-path bands vs truth) are what made the failure
+                    visible at a glance.
+                </p>
+            </div>
+
+            <h2 id="playground">Heterogeneity playground: how much spread breaks the regional readout?</h2>
+            <p>
+                The mechanism is general, so you can drive it yourself. The simulation below pools
+                one global beta across four geos whose true effectiveness spreads around 1× by the
+                slider amount (at full spread it reproduces the TV pattern of the notebook's world:
+                1.8× / 0.9× / 1.0× / 0.3×). Toggle whether budgets chase performance. Watch the
+                per-geo readout errors grow with spread — while the national total stays accurate
+                at <em>every</em> setting, because the pooled beta is precisely the spend-weighted
+                compromise that gets the national sum right.
+            </p>
+
+            <div class="controls-row">
+                <label for="spreadSlider">Heterogeneity spread:</label>
+                <input type="range" id="spreadSlider" min="0" max="1" step="0.05" value="1">
+                <span class="live-value" id="spreadValue"></span>
+                <button class="toggle-btn active" data-chase="on">Budgets chase performance</button>
+                <button class="toggle-btn" data-chase="off">Proportional budgets</button>
+            </div>
+            <div class="chart-container" id="playChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — pooled-beta arithmetic
+                on four geos (market sizes 1.30 / 0.70 / 1.00 / 0.55, the DGP's), no sampling.
+                Two things to notice: the weakest geo's over-credit explodes as spread grows
+                (at full spread with chasing budgets it reaches roughly +340%, the same order as
+                the notebook's measured +330% for West/TV); and performance-chasing budgets make
+                it <em>worse</em> — they pull the pooled beta toward the strong geos, pushing the
+                weak-geo readout further from its truth. The national bar never moves.
+            </p>
+
+            <h2 id="act4">Act 4 — Geography × product: six cells, end to end</h2>
+            <p>
+                <code>geo_product</code> is the positive control at the full cross-classification:
+                3 geographies × 2 products, two years weekly (624 observations). Baseline level is
+                geo offset <em>plus</em> product offset — exactly the model's additive geo +
+                product hierarchy — response parameters are shared, and each product line flights
+                independently with its own channel tilt (Core is TV-heavy, Premium is
+                Search/Social-heavy). Truth is recorded per cell.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">7%</div>
+                    <div class="stat-label">national median |error|, 100% coverage (total media +1%)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">6%</div>
+                    <div class="stat-label">per-cell median |error| across 24 cell×channel readouts</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">per-cell 90% coverage — the cross-classified hierarchy holds</div>
+                </div>
+            </div>
+
+            <div class="chart-container short" id="corrChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — posterior correlation of
+                channel <em>totals</em> on the geo×product fit (the
+                <a href="stress-00-rosy-picture.html">stress&nbsp;00</a> separability lens, panel
+                edition): every pairwise correlation sits within ±0.08. Six independent cell
+                calendars keep the channels cleanly separable — contrast the collinear seesaw in
+                <a href="stress-03-confounding-selection.html">stress&nbsp;03</a>, where every
+                pairwise correlation is negative (min ≈ −0.5).
+            </p>
+
+            <p>
+                The closing scorecard line, asserted in the notebook: <em>the panel machinery is
+                sound; the regional claim is only as good as the pooling assumption behind it.</em>
+                Acts 1 and 4 recover per cell because their worlds match the intercept-only
+                hierarchy; Act 3 fails regionally because its world doesn't — and nothing in the
+                data volunteers which world you are in.
+            </p>
+
+            <h2 id="takeaway">What to take away</h2>
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Impulse-test every time-structured transform on panel data.</strong>
+                        Stacked observations are not a time axis. The cross-geo adstock bleed
+                        survived years of shape-checking smoke tests and fell to a five-minute
+                        impulse test the first time a world had per-geo truth to contradict it.</li>
+                    <li><strong>Grade panels at the level the decisions are made.</strong> Act 3's
+                        model was excellent nationally (5% median error, full coverage) and
+                        inverted regionally (+330% worst cell, \(\rho = -1\) on TV's ROI ranking)
+                        — same posterior, same green diagnostics.</li>
+                    <li><strong>Know what your hierarchy pools.</strong> This framework pools
+                        geo/product <em>intercepts</em>; response parameters are global. That is
+                        right for level-shift heterogeneity and structurally wrong for
+                        effectiveness heterogeneity — and performance-chased budgets make the
+                        wrong case the <em>expected</em> case.</li>
+                    <li><strong>The heterogeneity bias points the worst possible way.</strong> The
+                        pooled beta over-credits channels exactly where they are weakest. If
+                        regional tables drive money, run the split-fit check (25% → 13% median
+                        error, 31% → 88% coverage here) before anyone reads them.</li>
+                    <li><strong>Geo data buys identification — don't aggregate it away.</strong>
+                        Same world, same weeks: aggregating to national roughly doubled interval
+                        widths (≈2.1× on the median channel). Cross-sectional replication is the
+                        cheapest sample size you will ever get.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This guide mirrors <code>nbs/stress_06_geography_and_hierarchy.ipynb</code>
+                    (authored by <code>nbs/build_stress_06_geo_hierarchy.py</code>), backed by the
+                    panel scenario harness in <code>tests/synth/dgp_geo.py</code> and the adstock
+                    isolation regression tests in <code>tests/test_panel_adstock.py</code>. Every
+                    computational cell ends in a seeded assert encoding the claim it demonstrates —
+                    if the notebook executes clean, the story on this page is still true. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series (copied
+        // verbatim from pressure-testing.html so charts stay consistent).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Geography palette for this page (mirrors the notebook's GPAL,
+        // mapped onto the site's tokens).
+        const GEO = {
+            North: '#6a8fa8',   // sky
+            South: '#d4a86a',   // amber
+            East:  '#8fa86a',   // leaf
+            West:  '#c97067'    // berry
+        };
+        const GEOS = ['North', 'South', 'East', 'West'];
+        const CH = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLOR = { TV: PT.colors.tv, Search: PT.colors.search,
+                           Social: PT.colors.social, Display: PT.colors.display };
+
+        // ------------------------------------------------------------------
+        // DGP constants published in tests/synth/dgp_geo.py — these are the
+        // ground-truth design of the geo_heterogeneous world, not estimates.
+        // ------------------------------------------------------------------
+        const HET_MULT = {
+            North: { TV: 1.8, Search: 0.6, Social: 1.3, Display: 1.0 },
+            South: { TV: 0.9, Search: 1.5, Social: 0.6, Display: 1.4 },
+            East:  { TV: 1.0, Search: 1.2, Social: 1.2, Display: 0.5 },
+            West:  { TV: 0.3, Search: 1.7, Social: 0.9, Display: 1.1 }
+        };
+        const GEO_SHARE = { North: 1.30, South: 0.70, East: 1.00, West: 0.55 };
+
+        // ==================================================================
+        // Act 0 — the impulse-isolation test, faithful pure-JS recreation of
+        // the notebook's pure-NumPy demonstration.
+        // ==================================================================
+        const L_MAX = 8, N_WK = 16, N_GEO = 2;
+
+        function geometricKernel(alpha, lMax) {
+            const w = [];
+            let s = 0;
+            for (let l = 0; l < lMax; l++) { const v = Math.pow(alpha, l); w.push(v); s += v; }
+            return w.map(function(v) { return v / s; });
+        }
+
+        // Convolve a 1-D series with the kernel (causal, zero-padded) —
+        // identical to the notebook's conv1d.
+        function conv1d(x, w) {
+            const L = w.length, out = [];
+            for (let t = 0; t < x.length; t++) {
+                let acc = 0;
+                for (let l = 0; l < L; l++) {
+                    const idx = t - l;
+                    if (idx >= 0) acc += w[l] * x[idx];
+                }
+                out.push(acc);
+            }
+            return out;
+        }
+
+        function impulseData(mode) {
+            const w = geometricKernel(0.6, L_MAX);
+            // Period-major stack: (week0,North),(week0,South),(week1,North)...
+            const stacked = new Array(N_WK * N_GEO).fill(0);
+            stacked[5 * N_GEO + 0] = 1.0;                  // (week 5, North)
+            let res;
+            if (mode === 'old') {
+                res = conv1d(stacked, w);                  // the pre-fix arithmetic
+            } else {
+                res = new Array(N_WK * N_GEO).fill(0);     // the per-cell fix
+                for (let g = 0; g < N_GEO; g++) {
+                    const series = [];
+                    for (let t = 0; t < N_WK; t++) series.push(stacked[t * N_GEO + g]);
+                    const conv = conv1d(series, w);
+                    for (let t = 0; t < N_WK; t++) res[t * N_GEO + g] = conv[t];
+                }
+            }
+            const north = [], south = [];
+            for (let t = 0; t < N_WK; t++) {
+                north.push(res[t * N_GEO + 0]);
+                south.push(res[t * N_GEO + 1]);
+            }
+            return { north: north, south: south };
+        }
+
+        function drawImpulse(mode) {
+            const d = impulseData(mode);
+            const weeks = [];
+            for (let t = 0; t < N_WK; t++) weeks.push(t);
+            const totN = d.north.reduce(function(a, b) { return a + b; }, 0);
+            const totS = d.south.reduce(function(a, b) { return a + b; }, 0);
+            const southShare = totS / (totN + totS);
+
+            const traces = [
+                { type: 'bar', name: 'North (the impulse geo)', x: weeks, y: d.north,
+                  marker: { color: GEO.North },
+                  hovertemplate: 'North · week %{x}<br>adstocked spend %{y:.3f}<extra></extra>' },
+                { type: 'bar', name: 'South (never spends)', x: weeks, y: d.south,
+                  marker: { color: GEO.West },
+                  hovertemplate: 'South · week %{x}<br>adstocked spend %{y:.3f}<extra></extra>' }
+            ];
+
+            const headline = (mode === 'old')
+                ? 'Pre-fix: the South receives ' + Math.round(southShare * 100) +
+                  '% of the carryover — and never spent a dollar'
+                : 'Post-fix: the South receives exactly 0 — carryover stays in its geography';
+
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: 'week', dtick: 1 },
+                yaxis: { title: 'adstocked spend', range: [0, 0.45] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 50, b: 60 },
+                annotations: [{
+                    x: 0.99, y: 0.97, xref: 'paper', yref: 'paper',
+                    xanchor: 'right', yanchor: 'top', showarrow: false,
+                    text: headline,
+                    font: { size: 12.5, color: (mode === 'old') ? '#a44c43' : '#3f7a58' },
+                    bgcolor: 'rgba(255,255,255,0.85)'
+                }]
+            });
+            Plotly.react('impulseChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('[data-impulse]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('[data-impulse]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawImpulse(btn.dataset.impulse);
+            });
+        });
+
+        // ==================================================================
+        // Act 2 — the precision bill for aggregating (measured).
+        // 90% interval width ratio, national / panel, geo_clean world.
+        // ==================================================================
+        function drawAgg() {
+            const ratio = { TV: 1.06, Search: 2.53, Social: 2.33, Display: 1.97 };
+            const traces = [{
+                type: 'bar',
+                x: CH,
+                y: CH.map(function(c) { return ratio[c]; }),
+                marker: {
+                    color: CH.map(function(c) { return CH_COLOR[c]; }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                text: CH.map(function(c) { return ratio[c].toFixed(2) + '×'; }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>interval width ratio %{y:.2f}×<extra></extra>'
+            }];
+            const layout = PT.layout({
+                yaxis: { title: 'interval width ratio  (national ÷ panel)', range: [0, 3.0] },
+                xaxis: { title: '' },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 3.45, y: 1, xanchor: 'right', yanchor: 'bottom',
+                    text: 'parity: no precision lost', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('aggChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Act 3 centerpiece — slopegraph: TV per-geo ROI rank, true vs
+        // estimated under the pooled fit. Measured: Spearman rho = -1.0, so
+        // the estimated ranking is the exact reverse of the true one. True
+        // TV ROI per geo from the DGP: North .252, East .156, South .147,
+        // West .052 — true ranks N1, E2, S3, W4.
+        // ==================================================================
+        function drawSlope() {
+            const trueRank = { North: 1, East: 2, South: 3, West: 4 };
+            const estRank  = { North: 4, East: 3, South: 2, West: 1 };  // rho = -1
+            const trueRoi  = { North: 0.25, East: 0.16, South: 0.15, West: 0.05 };
+
+            const traces = GEOS.map(function(g) {
+                return {
+                    type: 'scatter',
+                    mode: 'lines+markers+text',
+                    name: g,
+                    x: [0, 1],
+                    y: [trueRank[g], estRank[g]],
+                    line: { color: GEO[g], width: 3 },
+                    marker: { size: 11, color: GEO[g],
+                              line: { color: 'rgba(45,58,45,0.4)', width: 1 } },
+                    text: [g + '  (true ROI ' + trueRoi[g].toFixed(2) + ')', g],
+                    textposition: ['middle left', 'middle right'],
+                    textfont: { size: 11.5, color: GEO[g] },
+                    hovertemplate: '<b>' + g + '</b><br>true ROI rank ' + trueRank[g] +
+                                   ' → model rank ' + estRank[g] + '<extra></extra>'
+                };
+            });
+
+            const layout = PT.layout({
+                showlegend: false,
+                xaxis: {
+                    tickvals: [0, 1],
+                    ticktext: ['TRUE ROI rank', 'MODEL ROI rank'],
+                    range: [-0.65, 1.45],
+                    gridcolor: 'rgba(0,0,0,0)'
+                },
+                yaxis: {
+                    title: 'rank (1 = best regional ROI)',
+                    autorange: 'reversed',
+                    tickvals: [1, 2, 3, 4],
+                    gridcolor: 'rgba(0,0,0,0)'
+                },
+                margin: { l: 70, r: 40, t: 45, b: 60 },
+                annotations: [{
+                    x: 0.5, y: 1.07, xref: 'paper', yref: 'paper',
+                    xanchor: 'center', showarrow: false,
+                    text: 'TV regional ROI ranking under the pooled fit: ρ = −1.0 (fully inverted)',
+                    font: { size: 13, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('slopeChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Act 3 — per-geo contribution error by channel, national overlaid.
+        // Illustrative reconstruction of the pooled-beta mechanism from the
+        // DGP's published multipliers + budget rule (chasing weights
+        // share * (0.45 + 0.75 * mult)); the notebook's measured anchors
+        // (med 25%, coverage 31%, West/TV +330%) match this pattern.
+        // ==================================================================
+        function pooledMultiplier(channel, mults, chase) {
+            let num = 0, den = 0;
+            GEOS.forEach(function(g) {
+                const m = mults[g][channel];
+                const w = GEO_SHARE[g] * (chase ? (0.45 + 0.75 * m) : 1.0);
+                num += w * m;
+                den += w;
+            });
+            return num / den;
+        }
+
+        function drawGeoErr() {
+            const traces = GEOS.map(function(g) {
+                return {
+                    type: 'bar',
+                    name: g,
+                    x: CH,
+                    y: CH.map(function(c) {
+                        const pooled = pooledMultiplier(c, HET_MULT, true);
+                        return 100 * (pooled / HET_MULT[g][c] - 1);
+                    }),
+                    marker: { color: GEO[g],
+                              line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '<b>' + g + '</b> · %{x}<br>per-geo readout error %{y:.0f}%<extra></extra>'
+                };
+            });
+            // National totals are essentially exact (measured: med 5%, total -0%).
+            traces.push({
+                type: 'scatter',
+                mode: 'markers',
+                name: 'national total (measured ≈ 0%)',
+                x: CH,
+                y: [0, 0, 0, 0],
+                marker: { symbol: 'diamond', size: 13, color: PT.colors.truth },
+                hovertemplate: '<b>national</b> · %{x}<br>total error ≈ 0% (measured −0%)<extra></extra>'
+            });
+
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'per-geo contribution error (%)', range: [-90, 430] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 55, b: 60 },
+                annotations: [{
+                    x: 'TV', y: 350, yanchor: 'bottom', showarrow: false,
+                    text: 'West/TV: measured +330% in the notebook',
+                    font: { size: 11.5, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('geoErrChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // The pivot — split per-geo refits, measured before/after.
+        // ==================================================================
+        function drawSplit() {
+            const metrics = ['median |error|', '90% coverage', 'worst cell |error|'];
+            const pooled = [25, 31, 330];
+            const split  = [13, 88, 44];
+
+            const traces = [
+                { type: 'bar', name: 'pooled panel fit', orientation: 'h',
+                  y: metrics, x: pooled,
+                  marker: { color: PT.colors.silent,
+                            line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                  text: pooled.map(function(v) { return v + '%'; }),
+                  textposition: 'outside',
+                  hovertemplate: 'pooled · %{y}: %{x}%<extra></extra>' },
+                { type: 'bar', name: 'split per-geo refits', orientation: 'h',
+                  y: metrics, x: split,
+                  marker: { color: PT.colors.ok,
+                            line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                  text: split.map(function(v) { return v + '%'; }),
+                  textposition: 'outside',
+                  hovertemplate: 'split · %{y}: %{x}%<extra></extra>' }
+            ];
+
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: '%  (same cells, same per-geo truth)', range: [0, 380] },
+                yaxis: { automargin: true, autorange: 'reversed' },
+                legend: { orientation: 'h', y: 1.16 },
+                margin: { l: 150, r: 40, t: 50, b: 60 },
+                annotations: [{
+                    x: 0.99, y: 0.02, xref: 'paper', yref: 'paper',
+                    xanchor: 'right', yanchor: 'bottom', showarrow: false,
+                    text: 'coverage is the only "higher is better" row — 31% → 88%',
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('splitChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Interactive playground — pooled vs per-geo readout error as
+        // heterogeneity spread grows. Illustrative, deterministic.
+        // At spread = 1 with chasing budgets this reproduces the TV pattern
+        // of the geo_heterogeneous world (1.8 / 0.9 / 1.0 / 0.3).
+        // ==================================================================
+        const PATTERN = { North: 0.8, South: -0.1, East: 0.0, West: -0.7 };
+        let playState = { spread: 1.0, chase: true };
+
+        function drawPlay() {
+            const s = playState.spread, chase = playState.chase;
+            const mults = {};
+            GEOS.forEach(function(g) {
+                mults[g] = { X: Math.max(0.05, 1 + s * PATTERN[g]) };
+            });
+            const pooled = pooledMultiplier('X', mults, chase);
+
+            const errs = GEOS.map(function(g) {
+                return 100 * (pooled / mults[g].X - 1);
+            });
+            let worst = 0;
+            errs.forEach(function(e) { if (Math.abs(e) > Math.abs(worst)) worst = e; });
+
+            const traces = [{
+                type: 'bar',
+                x: GEOS,
+                y: errs,
+                marker: {
+                    color: GEOS.map(function(g) { return GEO[g]; }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                text: errs.map(function(e) { return (e >= 0 ? '+' : '') + e.toFixed(0) + '%'; }),
+                textposition: 'outside',
+                customdata: GEOS.map(function(g) { return mults[g].X.toFixed(2); }),
+                hovertemplate: '<b>%{x}</b><br>true effectiveness %{customdata}×<br>' +
+                               'per-geo readout error %{y:.0f}%<extra></extra>',
+                name: 'per-geo readout error'
+            }, {
+                type: 'scatter',
+                mode: 'lines',
+                x: [-0.5, 3.5],
+                y: [0, 0],
+                line: { color: PT.colors.truth, width: 2, dash: 'dash' },
+                name: 'national total error (always ≈ 0%)',
+                hovertemplate: 'national total error ≈ 0%<extra></extra>'
+            }];
+
+            const lo = Math.min(1 + s * PATTERN.West, 1 + s * PATTERN.South).toFixed(2);
+            const hi = (1 + s * PATTERN.North).toFixed(2);
+            const layout = PT.layout({
+                yaxis: { title: 'per-geo contribution error (%)', range: [-80, 420] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 55, b: 55 },
+                annotations: [{
+                    x: 0.01, y: 0.97, xref: 'paper', yref: 'paper',
+                    xanchor: 'left', yanchor: 'top', showarrow: false,
+                    text: 'true effectiveness ' + lo + '× – ' + hi + '× · pooled beta lands at ' +
+                          pooled.toFixed(2) + '× · worst readout ' +
+                          (worst >= 0 ? '+' : '') + worst.toFixed(0) + '%',
+                    font: { size: 12, color: '#5a6b5a' },
+                    bgcolor: 'rgba(255,255,255,0.85)'
+                }]
+            });
+            Plotly.react('playChart', traces, layout, PT.config);
+
+            const lbl = document.getElementById('spreadValue');
+            if (lbl) lbl.textContent = 'spread = ' + s.toFixed(2);
+        }
+
+        const slider = document.getElementById('spreadSlider');
+        if (slider) {
+            slider.addEventListener('input', function() {
+                playState.spread = parseFloat(slider.value);
+                drawPlay();
+            });
+        }
+        document.querySelectorAll('[data-chase]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('[data-chase]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                playState.chase = (btn.dataset.chase === 'on');
+                drawPlay();
+            });
+        });
+
+        // ==================================================================
+        // Act 4 — posterior correlation of channel totals (measured),
+        // the separability lens on the geo x product fit.
+        // ==================================================================
+        function drawCorr() {
+            // np.triu_indices order: (TV,Se),(TV,So),(TV,Di),(Se,So),(Se,Di),(So,Di)
+            const pairs = ['TV–Search', 'TV–Social', 'TV–Display',
+                           'Search–Social', 'Search–Display', 'Social–Display'];
+            const vals = [-0.02, -0.08, -0.02, -0.01, 0.04, -0.06];
+
+            const traces = [{
+                type: 'bar',
+                x: pairs,
+                y: vals,
+                marker: {
+                    color: vals.map(function(v) { return v < 0 ? PT.colors.search : PT.colors.tv; }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                text: vals.map(function(v) { return (v >= 0 ? '+' : '') + v.toFixed(2); }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>posterior corr of totals %{y:+.2f}<extra></extra>'
+            }];
+
+            const layout = PT.layout({
+                yaxis: { title: 'posterior corr of channel totals', range: [-0.6, 0.25] },
+                margin: { l: 70, r: 30, t: 30, b: 70 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 5.5, y0: -0.5, y1: -0.5,
+                    line: { color: PT.colors.silent, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 5.45, y: -0.5, xanchor: 'right', yanchor: 'top',
+                    text: 'stress 03’s collinear seesaw reaches ≈ −0.5',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('corrChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        function init() {
+            drawImpulse('old');
+            drawAgg();
+            drawSlope();
+            drawGeoErr();
+            drawSplit();
+            drawPlay();
+            drawCorr();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

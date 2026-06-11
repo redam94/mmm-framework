@@ -193,7 +193,11 @@ def test_generate_synthetic_data_writes_to_workspace(store):
     cfg = {"configurable": {"thread_id": tid}}
 
     cmd = T.generate_synthetic_data.func(
-        state={"dashboard_data": {}}, n_weeks=8, tool_call_id="g", config=cfg
+        state={"dashboard_data": {}},
+        n_weeks=52,
+        scenario="clean",
+        tool_call_id="g",
+        config=cfg,
     )
     dp = cmd.update["dataset_path"]
     assert os.path.isabs(dp) and dp.endswith("synthetic_mff_data.csv")
@@ -913,8 +917,6 @@ def test_fit_save_load_roundtrip(store, tmp_path, monkeypatch):
     """End-to-end proof of the Phase 2 PR-C bug fixes: a real fit now actually
     auto-saves to disk (the auto-save call was broken), and the saved model
     loads back and serves an interpretation tool."""
-    import json
-
     from mmm_framework.agents import tools as T
     from mmm_framework.agents import workspace as W
 
@@ -925,23 +927,25 @@ def test_fit_save_load_roundtrip(store, tmp_path, monkeypatch):
     cfg = {"configurable": {"thread_id": tid}}
 
     T.generate_synthetic_data.func(
-        state={"dashboard_data": {}}, n_weeks=30, tool_call_id="g", config=cfg
+        state={"dashboard_data": {}},
+        n_weeks=52,
+        scenario="clean",
+        tool_call_id="g",
+        config=cfg,
     )
     ds = str(W.thread_dir(tid) / "synthetic_mff_data.csv")
     spec = {
         "kpi": "Sales",
-        "media_channels": [
-            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
-        ],
-        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "media_channels": [{"name": n} for n in ("TV", "Search", "Social", "Display")],
+        "control_variables": [{"name": "Price"}],
         "time_granularity": "weekly",
         "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
     }
 
+    # fit_mmm_model now reads the spec + dataset from state (server-authoritative)
+    # rather than taking an LLM-supplied JSON string.
     fit = T.fit_mmm_model.func(
-        state={"dashboard_data": {}},
-        dataset_path=ds,
-        model_spec=json.dumps(spec),
+        state={"model_spec": spec, "dataset_path": ds, "dashboard_data": {}},
         tool_call_id="f",
         config=cfg,
     )
@@ -983,15 +987,17 @@ def test_subprocess_fit_then_interpret_removes_boundary(store):
     tid = sess["thread_id"]
     cfg = {"configurable": {"thread_id": tid}}
     T.generate_synthetic_data.func(
-        state={"dashboard_data": {}}, n_weeks=30, tool_call_id="g", config=cfg
+        state={"dashboard_data": {}},
+        n_weeks=52,
+        scenario="clean",
+        tool_call_id="g",
+        config=cfg,
     )
     ds = str(W.thread_dir(tid) / "synthetic_mff_data.csv")
     spec = {
         "kpi": "Sales",
-        "media_channels": [
-            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
-        ],
-        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "media_channels": [{"name": n} for n in ("TV", "Search", "Social", "Display")],
+        "control_variables": [{"name": "Price"}],
         "time_granularity": "weekly",
         "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
     }
@@ -1026,17 +1032,16 @@ def test_subprocess_cold_reload_after_eviction(store):
     sB = store.create_session(name="b", project_id=proj["project_id"])["thread_id"]
     T.generate_synthetic_data.func(
         state={"dashboard_data": {}},
-        n_weeks=30,
+        n_weeks=52,
+        scenario="clean",
         tool_call_id="g",
         config={"configurable": {"thread_id": sA}},
     )
     ds = str(W.thread_dir(sA) / "synthetic_mff_data.csv")
     spec = {
         "kpi": "Sales",
-        "media_channels": [
-            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
-        ],
-        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "media_channels": [{"name": n} for n in ("TV", "Search", "Social", "Display")],
+        "control_variables": [{"name": "Price"}],
         "time_granularity": "weekly",
         "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
     }
@@ -1107,17 +1112,16 @@ def test_container_kernel_fit_interpret_and_cold_reload(tmp_path, monkeypatch):
     sB = ss.create_session(name="b", project_id=proj["project_id"])["thread_id"]
     T.generate_synthetic_data.func(
         state={"dashboard_data": {}},
-        n_weeks=30,
+        n_weeks=52,
+        scenario="clean",
         tool_call_id="g",
         config={"configurable": {"thread_id": sA}},
     )
     ds = str(W.thread_dir(sA) / "synthetic_mff_data.csv")
     spec = {
         "kpi": "Sales",
-        "media_channels": [
-            {"name": n} for n in ("TV", "Digital", "Paid_Social", "Radio")
-        ],
-        "control_variables": [{"name": "Price_Index"}, {"name": "Distribution"}],
+        "media_channels": [{"name": n} for n in ("TV", "Search", "Social", "Display")],
+        "control_variables": [{"name": "Price"}],
         "time_granularity": "weekly",
         "inference": {"chains": 1, "draws": 50, "tune": 50, "target_accept": 0.8},
     }

@@ -49,7 +49,37 @@
         'workflow-channel-effectiveness.html',
         'workflow-forecasting.html',
         'workflow-calibration-decisions.html',
-        'mmm-example-report.html'
+        'mmm-example-report.html',
+        // Notebook guide series (pressure testing / aurora / workshop / math)
+        'pressure-testing.html',
+        'stress-00-rosy-picture.html',
+        'stress-01-carryover-shape.html',
+        'stress-02-time-structure.html',
+        'stress-03-confounding-selection.html',
+        'stress-04-extension-traps.html',
+        'stress-05-gauntlet.html',
+        'stress-06-geo-hierarchy.html',
+        'mmm-walkthrough.html',
+        'aurora-00-overview.html',
+        'aurora-01-causality.html',
+        'aurora-02-base-mmm.html',
+        'aurora-03-extended-mmm.html',
+        'aurora-04-reporting.html',
+        'aurora-05-unified-workflow.html',
+        'causal-features-showcase.html',
+        'workshop-00-thinking-in-distributions.html',
+        'workshop-01-priors.html',
+        'workshop-02-sampling.html',
+        'workshop-03-first-mmm.html',
+        'workshop-04-reading-the-posterior.html',
+        'workshop-05-from-draws-to-decisions.html',
+        'math-00-overview.html',
+        'math-01-adstock.html',
+        'math-02-saturation.html',
+        'math-03-seasonality-trend.html',
+        'math-04-bayesian-model.html',
+        'math-05-calibration.html',
+        'math-06-extensions.html'
     ];
 
     function isActive(href) {

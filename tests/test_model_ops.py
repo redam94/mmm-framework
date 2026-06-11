@@ -21,6 +21,8 @@ def test_ops_registry_complete():
         "prior_predictive_check",
         "leave_one_out",
         "save_model",
+        "optimize_budget",
+        "experiment_design",
     }
 
 
@@ -184,8 +186,10 @@ def test_load_fitted_model_passes_panel_and_sets_cache(monkeypatch, tmp_path):
 
 
 def test_causal_tools_no_model_message():
-    """prior_predictive_check / leave_one_out_decomposition now dispatch through
-    the kernel; with no model they return no-model and record no assumption."""
+    """prior_predictive_check / leave_one_out_decomposition dispatch through the
+    kernel. leave_one_out needs a fitted model; prior_predictive_check runs
+    pre-fit from spec+dataset, so with NEITHER a model NOR a configured spec it
+    returns its own actionable error (not the fit-first message)."""
     from mmm_framework.agents import causal_tools as C
     from mmm_framework.agents import tools as T
 
@@ -194,8 +198,209 @@ def test_causal_tools_no_model_message():
     p = C.prior_predictive_check.func(
         n_samples=10, config=cfg, state={}, tool_call_id="t"
     )
-    assert "No fitted model" in p.update["messages"][0].content
+    msg = p.update["messages"][0].content
+    assert "Configure a model and load a dataset first" in msg
+    assert "fit the model first" not in msg  # must NOT tell the agent to fit
     lo = C.leave_one_out_decomposition.func(
         component_to_drop="TV", config=cfg, state={}, tool_call_id="t"
     )
     assert "No fitted model" in lo.update["messages"][0].content
+
+
+def _write_synth_mff(tmp_path):
+    import sys
+    import os
+
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples"))
+    )
+    from ex_model_workflow import generate_synthetic_mff
+
+    df = generate_synthetic_mff(n_weeks=30)
+    path = str(tmp_path / "mff.csv")
+    df.to_csv(path, index=False)
+    return path
+
+
+def test_prior_predictive_check_runs_prefit_from_spec(tmp_path):
+    """The whole point of the check: it must work BEFORE any fit, building an
+    unfitted model graph from the active spec + dataset."""
+    path = _write_synth_mff(tmp_path)
+    spec = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "time_granularity": "weekly",
+        "media_channels": [{"name": "TV"}, {"name": "Digital"}],
+        "control_variables": [],
+    }
+    res = M.prior_predictive_check(
+        None, None, n_samples=20, spec=spec, dataset_path=path
+    )
+    assert not res.get("error"), res.get("error")
+    assert "pre-fit" in res["content"]
+    assert res["assumption"]["key"] == "prior_predictive_check"
+    summary = res["dashboard"]["prior_predictive_summary"]
+    assert summary["samples"] > 0
+
+
+# ── Latent controls (Trend/Seasonality listed as control variables) ───────────
+
+
+def test_partition_latent_controls():
+    from mmm_framework.agents.tools import _partition_latent_controls
+
+    ds = {"Sales", "TV", "Price_Index", "Trend"}
+    # "Trend" exists in THIS dataset -> stays a real control; "Seasonality"
+    # doesn't -> diverted; "Bogus" -> missing
+    real, latent, missing = _partition_latent_controls(
+        ["Price_Index", "Trend", "Seasonality", "Bogus"], ds
+    )
+    assert real == ["Price_Index", "Trend"]
+    assert latent == [("Seasonality", "seasonality")]
+    assert missing == ["Bogus"]
+    # no dataset to check: latent diverted by name, unknown assumed real
+    real, latent, missing = _partition_latent_controls(["trend", "X"], None)
+    assert real == ["X"] and latent == [("trend", "trend")] and missing == []
+
+
+def test_configure_model_diverts_latent_controls_and_rejects_missing(tmp_path):
+    """'Trend'/'Seasonality' are not dataset variables — configure_model maps
+    them onto the built-in components instead of letting load_mff fail later;
+    genuinely missing variables are rejected up front."""
+    from mmm_framework.agents import tools as T
+
+    path = _write_synth_mff(tmp_path)
+    state = {"dataset_path": path, "locked_fields": [], "dashboard_data": {}}
+
+    cmd = T.configure_model.func(
+        state=state,
+        kpi="Sales",
+        kpi_level="national",
+        media_channels=["TV"],
+        control_variables=["Price_Index", "Trend", "Seasonality"],
+        tool_call_id="t",
+    )
+    spec = cmd.update["model_spec"]
+    assert [c["name"] for c in spec["control_variables"]] == ["Price_Index"]
+    assert spec["trend"] == {"type": "linear"}
+    assert spec["seasonality"] == {"yearly": 2}
+    assert "diverted" in cmd.update["messages"][0].content
+
+    bad = T.configure_model.func(
+        state=state,
+        kpi="Sales",
+        kpi_level="national",
+        media_channels=["TV"],
+        control_variables=["Bogus"],
+        tool_call_id="t",
+    )
+    assert "model_spec" not in bad.update
+    assert "not found in the dataset" in bad.update["messages"][0].content
+
+    bad_kpi = T.configure_model.func(
+        state=state,
+        kpi="Revenue",
+        kpi_level="national",
+        media_channels=["TV"],
+        control_variables=[],
+        tool_call_id="t",
+    )
+    assert "model_spec" not in bad_kpi.update
+
+
+def test_build_model_hints_on_latent_controls(tmp_path):
+    """A stale spec that still lists Trend/Seasonality as controls fails the
+    build with an actionable hint, not just the raw loader error."""
+    import pytest
+
+    from mmm_framework.agents.fitting import build_model
+
+    path = _write_synth_mff(tmp_path)
+    spec = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "time_granularity": "weekly",
+        "media_channels": [{"name": "TV"}],
+        "control_variables": [{"name": "Trend"}, {"name": "Seasonality"}],
+    }
+    with pytest.raises(ValueError, match="built-in `trend` / `seasonality`"):
+        build_model(spec, path)
+
+
+def test_seasonality_amplitude_and_trend_priors_wire_into_graph(tmp_path):
+    """spec.priors.seasonality controls the Fourier-coefficient prior sigma
+    (the seasonal amplitude prior, previously hardcoded 0.3), per-component
+    overrides win, and piecewise now honors the base-slope growth prior."""
+    path = _write_synth_mff(tmp_path)
+    from mmm_framework.agents.fitting import build_model
+
+    spec = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "time_granularity": "weekly",
+        "media_channels": [{"name": "TV"}],
+        "control_variables": [],
+        "trend": {"type": "piecewise", "n_changepoints": 5},
+        "seasonality": {"yearly": 4, "monthly": 2},
+        "priors": {
+            "trend": {"growth_prior_mu": 0.1, "growth_prior_sigma": 0.3},
+            "seasonality": {"prior_sigma": 0.5, "yearly_prior_sigma": 0.8},
+        },
+    }
+    mmm = build_model(spec, path)
+    sc = mmm.seasonality_config
+    assert sc.prior_sigma_for("yearly") == 0.8
+    assert sc.prior_sigma_for("monthly") == 0.5  # falls back to shared sigma
+    assert mmm.trend_config.growth_prior_mu == 0.1  # piecewise base slope
+    # the sigmas actually land on the PyMC RVs
+    model = mmm.model
+    assert abs(float(model["season_yearly"].owner.inputs[-1].eval()) - 0.8) < 1e-9
+    assert abs(float(model["season_monthly"].owner.inputs[-1].eval()) - 0.5) < 1e-9
+
+
+def test_seasonality_components_respect_spec_and_frequency(tmp_path):
+    """monthly/weekly were previously ignored entirely, and a monthly-only spec
+    silently enabled the builder's yearly=2 default. Weekly seasonality is not
+    representable in weekly data -> warned and skipped, never silently built."""
+    import warnings as _w
+
+    path = _write_synth_mff(tmp_path)
+    from mmm_framework.agents.fitting import build_model
+
+    base = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "time_granularity": "weekly",
+        "media_channels": [{"name": "TV"}],
+        "control_variables": [],
+    }
+    monthly_only = build_model(dict(base, seasonality={"monthly": 2}), path)
+    assert set(monthly_only.seasonality_features) == {"monthly"}
+
+    with _w.catch_warnings(record=True) as rec:
+        _w.simplefilter("always")
+        weekly_on_weekly = build_model(dict(base, seasonality={"weekly": 3}), path)
+    assert weekly_on_weekly.seasonality_features == {}
+    assert any("cannot be represented" in str(x.message) for x in rec)
+
+    # Nyquist clamp: monthly order 4 at period ~4.33 -> clamped to 2 (4 columns)
+    with _w.catch_warnings(record=True) as rec2:
+        _w.simplefilter("always")
+        clamped = build_model(dict(base, seasonality={"monthly": 4}), path)
+    assert clamped.seasonality_features["monthly"].shape[1] == 4
+    assert any("clamping" in str(x.message) for x in rec2)
+
+
+def test_bayesian_workflow_reference_tool():
+    """The agent's methodology reference: registered, complete, topic-filterable."""
+    from mmm_framework.agents.tools import TOOLS, bayesian_workflow_reference
+
+    assert any(t.name == "bayesian_workflow_reference" for t in TOOLS)
+    full = bayesian_workflow_reference.func()
+    # the gates the agent must enforce are stated with their thresholds
+    for needle in ("R-hat < 1.01", "ESS > 400", "5%", "marginal ROAS"):
+        assert needle in full, needle
+    # topic filter narrows to matching sections; unmatched falls back to full
+    filtered = bayesian_workflow_reference.func(topic="diagnostics")
+    assert "R-hat < 1.01" in filtered and len(filtered) < len(full)
+    assert bayesian_workflow_reference.func(topic="zzz") == full

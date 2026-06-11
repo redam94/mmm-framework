@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math 06: Extensions | MMM Framework</title>
+    <meta name="description" content="The mathematics of the MMM Framework's extension models: NestedMMM mediation (direct vs indirect effects, proportion mediated), MultivariateMMM cross-effects (the psi matrix vs correlated residuals), and CombinedMMM as their routed synthesis — with the measured Aurora results.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-06-extensions.html">
+    <meta property="og:title" content="Math 06: Extensions | MMM Framework">
+    <meta property="og:description" content="Mediation, cannibalization and synthesis: the structural equations behind NestedMMM, MultivariateMMM and CombinedMMM, graded against Aurora's known ground truth.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-06-extensions.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] { width: 240px; accent-color: var(--color-primary); }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            color: var(--color-primary-dark);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 0.25rem 0.6rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .dag-figure {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .dag-figure svg { width: 100%; height: auto; display: block; }
+
+        .model-table td:first-child { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Three extensions, one transform</a></li>
+                <li><a href="#structures">The three causal structures</a></li>
+                <li><a href="#nested">1 · NestedMMM: mediation</a></li>
+                <li><a href="#toy">The latent-split toy (interactive)</a></li>
+                <li><a href="#multivariate">2 · MultivariateMMM: ψ vs ρ</a></li>
+                <li><a href="#learning">ψ: informative ≠ important</a></li>
+                <li><a href="#combined">3 · CombinedMMM: the synthesis</a></li>
+                <li><a href="#identification">The identification warning</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>The Math Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="math-00-overview.html">00 · The Generative Model</a></li>
+                <li><a href="math-01-adstock.html">01 · Adstock</a></li>
+                <li><a href="math-02-saturation.html">02 · Saturation</a></li>
+                <li><a href="math-03-seasonality-trend.html">03 · Seasonality &amp; Trend</a></li>
+                <li><a href="math-04-bayesian-model.html">04 · The Bayesian Model</a></li>
+                <li><a href="math-05-calibration.html">05 · Calibration</a></li>
+                <li><a href="math-06-extensions.html" class="active">06 · Extensions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Mathematics of Extension Models</h1>
+            <p class="lead">
+                The base MMM of <a href="math-04-bayesian-model.html">notebook 04</a> is a single linear
+                map: every channel feeds <em>one</em> outcome through its adstock·saturation·\(\beta\)
+                response. Real marketing systems break that twice — channels build <em>intermediate</em>
+                metrics like awareness (mediation), and products interact with <em>each other</em>
+                (cannibalization, shared demand). This page derives the three extension models that handle
+                those structures, fits two of them on the Aurora world whose generative truth is known,
+                and ends with the warning the whole exercise earns: <strong>extension structure adds
+                parameters faster than data adds moments</strong>.
+            </p>
+
+            <p>
+                The three models are a separate class hierarchy (<code>BaseExtendedMMM</code>), not
+                <code>BayesianMMM</code> subclasses. They fit the raw outcome, a single national time
+                series, and they all share <strong>one media transform</strong>. Writing
+                \(s_c = \max_t x_{c,t}\) for the per-channel spend scale and using the normalized geometric
+                adstock from <a href="math-01-adstock.html">notebook 01</a>:
+            </p>
+
+            \[
+            u_{c,t} \;=\; f_{\mathrm{sat}}\!\Big(\mathrm{adstock}_{\alpha_c}\!\big(x_{c,t}/s_c\big)\Big),
+            \qquad
+            f_{\mathrm{sat}}(z) = \frac{1}{1+e^{-\lambda_c z}}\ \ (\text{logistic}),
+            \]
+
+            <p>
+                with \(\alpha_c \sim \mathrm{Beta}(2,2)\) and \(\lambda_c \sim \mathrm{Gamma}(3,1)\)
+                learned per channel. The output \(u_{c,t}\) is the channel's <strong>saturated effective
+                exposure</strong> — the thing every downstream coefficient (\(\beta\), \(\delta\),
+                \(\gamma\), \(\psi\)) multiplies. Holding this transform fixed across the three models is
+                what makes them comparable: they differ <em>only</em> in how \(u_{c,t}\) is wired to the
+                outcome(s).
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">104</div>
+                    <div class="stat-label">weeks of Aurora data: 4 channels, 2 products, known truth</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">≈ 1.0</div>
+                    <div class="stat-label">proportion mediated recovered for TV &amp; Display (truth 0.988 / 0.967)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+0.41</div>
+                    <div class="stat-label">residual correlation between products (the shared demand wave)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">15 / 19</div>
+                    <div class="stat-label">MV free parameters the data barely narrowed (contraction &lt; 0.1)</div>
+                </div>
+            </div>
+
+            <h2 id="structures">Three causal structures, side by side</h2>
+            <p>
+                Before the equations, the shapes. The base model wires every channel straight to the
+                outcome. <code>NestedMMM</code> inserts a <strong>mediator</strong> \(m\) — some channels
+                reach the outcome <em>through</em> it, optionally plus a direct shortcut.
+                <code>MultivariateMMM</code> keeps direct wiring but models two outcomes jointly with a
+                cross-effect \(\psi\) between them. <code>CombinedMMM</code> (§3) is the middle and right
+                panels fused.
+            </p>
+
+            <div class="dag-figure">
+                <svg viewBox="0 0 940 250" xmlns="http://www.w3.org/2000/svg" role="img"
+                     aria-label="Three DAGs: base model, NestedMMM with a mediator, MultivariateMMM with two outcomes and a cross-effect">
+                    <defs>
+                        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6b5a"/>
+                        </marker>
+                        <marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#c97067"/>
+                        </marker>
+                    </defs>
+                    <!-- panel (a): base -->
+                    <text x="150" y="22" text-anchor="middle" font-size="14" font-weight="700" fill="#2d3a2d">(a) base model</text>
+                    <rect x="30" y="100" width="110" height="44" rx="8" fill="#6a8fa8"/>
+                    <text x="85" y="127" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">channels x&#8347;</text>
+                    <rect x="180" y="100" width="110" height="44" rx="8" fill="#2d3a2d"/>
+                    <text x="235" y="127" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">outcome y</text>
+                    <line x1="142" y1="122" x2="176" y2="122" stroke="#5a6b5a" stroke-width="2.2" marker-end="url(#arr)"/>
+                    <text x="159" y="112" text-anchor="middle" font-size="12" fill="#5a6b5a" font-style="italic">&#946;&#8347;</text>
+
+                    <!-- panel (b): nested -->
+                    <text x="470" y="22" text-anchor="middle" font-size="14" font-weight="700" fill="#2d3a2d">(b) NestedMMM (mediation)</text>
+                    <rect x="350" y="160" width="110" height="44" rx="8" fill="#6a8fa8"/>
+                    <text x="405" y="187" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">channels x&#8347;</text>
+                    <rect x="415" y="48" width="130" height="44" rx="8" fill="#d4a86a"/>
+                    <text x="480" y="69" text-anchor="middle" font-size="12" fill="#2d3a2d" font-weight="700">mediator m</text>
+                    <text x="480" y="84" text-anchor="middle" font-size="11" fill="#2d3a2d">(awareness)</text>
+                    <rect x="500" y="160" width="110" height="44" rx="8" fill="#2d3a2d"/>
+                    <text x="555" y="187" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">outcome y</text>
+                    <line x1="425" y1="158" x2="455" y2="96" stroke="#5a6b5a" stroke-width="2.2" marker-end="url(#arr)"/>
+                    <text x="412" y="120" text-anchor="end" font-size="12" fill="#5a6b5a" font-style="italic">&#946;&#8347;&#8594;&#8344;</text>
+                    <line x1="505" y1="96" x2="538" y2="158" stroke="#5a6b5a" stroke-width="2.2" marker-end="url(#arr)"/>
+                    <text x="548" y="120" font-size="12" fill="#5a6b5a" font-style="italic">&#947;&#8344;</text>
+                    <line x1="462" y1="190" x2="496" y2="190" stroke="#9aa79a" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+                    <text x="479" y="222" text-anchor="middle" font-size="12" fill="#9aa79a" font-style="italic">&#948;&#8347; (direct)</text>
+
+                    <!-- panel (c): multivariate -->
+                    <text x="790" y="22" text-anchor="middle" font-size="14" font-weight="700" fill="#2d3a2d">(c) MultivariateMMM (cross-effects)</text>
+                    <rect x="660" y="100" width="110" height="44" rx="8" fill="#6a8fa8"/>
+                    <text x="715" y="127" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">channels x&#8347;</text>
+                    <rect x="810" y="48" width="118" height="44" rx="8" fill="#8fa86a"/>
+                    <text x="869" y="75" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">Original y&#8321;</text>
+                    <rect x="810" y="160" width="118" height="44" rx="8" fill="#6a8fa8"/>
+                    <text x="869" y="187" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">Cold Brew y&#8322;</text>
+                    <line x1="772" y1="112" x2="806" y2="80" stroke="#5a6b5a" stroke-width="2.2" marker-end="url(#arr)"/>
+                    <line x1="772" y1="132" x2="806" y2="172" stroke="#5a6b5a" stroke-width="2.2" marker-end="url(#arr)"/>
+                    <text x="775" y="100" text-anchor="end" font-size="12" fill="#5a6b5a" font-style="italic">&#946;&#8321;&#8347;</text>
+                    <text x="775" y="160" text-anchor="end" font-size="12" fill="#5a6b5a" font-style="italic">&#946;&#8322;&#8347;</text>
+                    <line x1="869" y1="156" x2="869" y2="96" stroke="#c97067" stroke-width="2.4" marker-end="url(#arrRed)"/>
+                    <text x="879" y="130" font-size="12" fill="#c97067" font-style="italic" font-weight="600">&#968; (cannibalization)</text>
+                </svg>
+            </div>
+            <p class="chart-note">
+                The mediator carries the <em>product-of-coefficients</em> path
+                \(\beta_{c\to m}\gamma_m\); the cross-effect \(\psi\) is a directed arrow between
+                <em>observed outcomes</em>. They are different objects, and each comes with its own
+                identification trap (§4).
+            </p>
+
+            <h2 id="nested">1 · <code>NestedMMM</code> — mediation: direct vs indirect effects</h2>
+            <p>
+                In Aurora, TV and Display barely sell anything directly — they build <strong>brand
+                awareness</strong>, and awareness drives sales. A base model sees only the tiny direct
+                slice and calls them weak (the stress series measures exactly this:
+                <a href="stress-04-extension-traps.html">TV ROAS 0.22 vs true 2.14</a>). Mediation
+                analysis recovers their real, mostly indirect value.
+            </p>
+
+            <h3>The two structural equations</h3>
+            <p>
+                A nested model is two stacked regressions. With \(u_{c,t}\) the shared saturated exposure,
+                a mediator \(m\) (awareness), the set \(C(m)\) of channels routed to it, and a mediator
+                intercept \(a_m\):
+            </p>
+
+            \[
+            \textbf{(mediator)}\qquad
+            m_t \;=\; a_m \;+\; \sum_{c \in C(m)} \beta_{c\to m}\, u_{c,t},
+            \]
+            \[
+            \textbf{(outcome)}\qquad
+            y_t \;=\; a_y
+            \;+\; \underbrace{\sum_{m} \gamma_m\, m_t}_{\text{mediated paths}}
+            \;+\; \underbrace{\sum_{c} \delta_c\, u_{c,t}}_{\text{direct paths}}
+            \;+\; \varepsilon_t,
+            \qquad \varepsilon_t \sim \mathrm{Normal}(0,\sigma_y).
+            \]
+
+            <p>
+                \(\beta_{c\to m}\) is the channel → mediator effect (positive-constrained: media builds
+                awareness), \(\gamma_m\) the mediator → outcome effect, \(\delta_c\) the direct shortcut.
+                Aurora's awareness is only observed in a sparse <em>monthly survey</em>: the model treats
+                \(m_t\) as a latent series and anchors it with a partial-observation likelihood
+                \(\text{survey}_t \sim \mathrm{Normal}(m_t, \sigma_{\text{obs}})\) on the observed weeks only.
+            </p>
+
+            <h3>The effect decomposition</h3>
+            <p>
+                Substitute the mediator equation into the outcome equation. The coefficient on channel
+                \(c\)'s exposure becomes a sum over every path from \(c\) to \(y\):
+            </p>
+
+            \[
+            \text{coef}_c
+            \;=\;
+            \underbrace{\sum_{m} \beta_{c\to m}\,\gamma_m}_{\text{indirect (mediated)}}
+            \;+\;
+            \underbrace{\delta_c}_{\text{direct}} ,
+            \]
+
+            <p>
+                each mediated path contributing the <em>product</em> of its two edges — the classic
+                product-of-coefficients mediation effect (stored as the Deterministic
+                <code>indirect_&lt;channel&gt;_via_&lt;mediator&gt;</code>). Defining
+                \(\text{indirect}_c = \sum_m \beta_{c\to m}\gamma_m\) and
+                \(\text{total}_c = \text{indirect}_c + \delta_c\):
+            </p>
+
+            \[
+            \boxed{\;\text{proportion mediated}_c
+            \;=\; \frac{\text{indirect}_c}{\text{total}_c}\;}
+            \]
+
+            <p>
+                A proportion mediated near 1 means the channel works almost entirely <em>through</em> the
+                mediator. The decomposition only applies to channels routed to a mediator — Aurora maps
+                <strong>TV and Display</strong> to awareness and leaves Search and Social as pure
+                direct-response (their <code>proportion_mediated</code> is <code>NaN</code> by design).
+            </p>
+
+            <div class="chart-container" id="mediationSplitChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the baked notebook's <code>get_mediation_effects()</code>
+                table (500 draws, seed 0). The direct slice is <em>literally invisible</em> at this scale:
+                TV's effect is 0.053 direct vs <strong>151.08</strong> indirect; Display's is 0.117 vs
+                <strong>185.99</strong>. That invisibility is the finding — these channels are brand
+                engines, not closers. Hover for exact values.
+            </p>
+
+            <div class="chart-container" id="propMediatedChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — proportion mediated, model vs Aurora's generative truth:
+                TV <strong>1.000</strong> vs true 0.988; Display <strong>0.999</strong> vs true 0.967.
+                Both clear the notebook's 0.7 assert threshold by a mile — the model recovers near-full
+                mediation, matching the known truth. The latent awareness series itself is reconstructed
+                from the sparse monthly survey with corr(recovered, true hidden series) = 0.492.
+            </p>
+
+            <div class="note">
+                <h4>💡 Why ≥ 2 channels per mediator</h4>
+                <p>
+                    The indirect decomposition is only interesting when a mediator aggregates several
+                    channels — with one channel per mediator, \(\beta_{c\to m}\gamma_m\) is just a
+                    re-parameterized direct effect. Aurora routes both brand channels through awareness,
+                    so the mediator equation is genuinely shared structure.
+                </p>
+            </div>
+
+            <h2 id="toy">The latent-split toy: what the survey buys you</h2>
+            <p>
+                Here is the identification problem in its purest form. Suppose the mediator is
+                <em>fully latent</em> — no survey at all. Collapse the two equations:
+                \(y_t = (a_y + \gamma a_m) + \sum_c \big(\gamma\beta_{c\to m} + \delta_c\big) u_{c,t} + \varepsilon_t\).
+                Only the <em>sums</em> \(\gamma\beta_{c\to m} + \delta_c\) touch the likelihood. Slide the
+                split between indirect and direct any way you like — the fitted outcome is
+                <strong>identical</strong>. The slider below holds each channel's total coefficient fixed
+                and reallocates a share \(\theta\) of it to the mediated path. Watch the top panel
+                (the outcome) refuse to move while the bottom panel (the implied awareness series) swings —
+                and only the sparse survey points can break the tie.
+            </p>
+
+            <div class="controls-row">
+                <label for="thetaSlider">mediated share \(\theta\):</label>
+                <input type="range" id="thetaSlider" min="0" max="100" step="2" value="50">
+                <span class="readout" id="thetaReadout">θ = 0.50</span>
+                <span class="readout" id="rmseReadout">survey RMSE: —</span>
+            </div>
+            <div class="chart-container tall" id="mediationToyChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> Two
+                channels' exposures \(u_{c,t}\) are built with the §0 transform (seeded spend →
+                normalized geometric adstock → logistic saturation); the outcome is
+                \(y_t = a_y + \sum_c \text{total}_c\, u_{c,t} + \varepsilon_t\), which does not depend on
+                \(\theta\) at all. The implied awareness
+                \(m_t = a_m + \theta \sum_c \text{total}_c u_{c,t} / \gamma\) only matches the survey dots
+                (drawn at the true \(\theta = 0.98\)) when the slider is near 0.98 — the survey RMSE
+                bottoms out there. <strong>Without the survey, every \(\theta\) has the same
+                likelihood</strong>: the direct/indirect split would be decided by the priors, not the data.
+            </p>
+
+            <h2 id="multivariate">2 · <code>MultivariateMMM</code> — cross-effects: ψ in the mean, ρ in the noise</h2>
+            <p>
+                Aurora sells two products, Original and Cold Brew. In summer Cold Brew steals from
+                Original — a negative cross-effect — and both products ride the same demand wave, so even
+                after media is accounted for their residuals move together. The multivariate model
+                captures both at once, and the two mechanisms live in <em>different parts of the model</em>.
+                Keeping them distinct is the whole point.
+            </p>
+
+            <h3>The MvNormal likelihood</h3>
+            <p>
+                Stack the \(K\) outcomes into \(\mathbf{y}_t = (y_{1,t}, \dots, y_{K,t})\):
+            </p>
+
+            \[
+            \mathbf{y}_t \;\sim\; \mathrm{MvNormal}(\boldsymbol\mu_t,\, \Sigma),
+            \qquad
+            \mu_{k,t}
+            \;=\;
+            a_k
+            \;+\; \sum_{c} \beta_{k,c}\, u_{c,t}
+            \;+\; \sum_{j \neq k} \psi_{j\to k}\, y_{j,t}.
+            \]
+
+            <p>Two distinct objects link the outcomes:</p>
+            <ul>
+                <li>
+                    <strong>\(\psi_{j\to k}\) — the cross-effect, in the mean structure.</strong> It
+                    multiplies the <em>observed</em> outcome of the source product into the target's
+                    expected level: a directed causal arrow. A negative \(\psi\) is cannibalization
+                    (more Cold Brew sales ⇒ fewer expected Original sales). The framework builds the
+                    cannibalization arrow as \(\psi = -\,\mathrm{HalfNormal}(\sigma_\psi)\) — structurally
+                    \(\le 0\) by construction; the data decides only <em>how</em> negative.
+                </li>
+                <li>
+                    <strong>\(\Sigma\) — the residual covariance, in the noise structure.</strong> It
+                    captures a common shock lifting (or dropping) <em>both</em> products in the same week
+                    with nothing causal flowing between them. The framework puts an LKJ prior on the
+                    correlation and samples the Cholesky factor (\(\Sigma = LL^\top\) via
+                    <code>LKJCholeskyCov</code>), exposing the posterior correlation as the Deterministic
+                    <code>Y_obs_correlation</code>.
+                </li>
+            </ul>
+            <p>
+                Why the split matters mathematically: both mechanisms generate co-movement. Conditioning
+                the joint Normal, the regression of \(y_1\) on \(y_2\) picks up <em>both</em> the mean-structure
+                term \(\psi\) <em>and</em> the noise-structure term \(\rho\,\sigma_1/\sigma_2\) — the
+                joint distribution of two outcomes offers only <strong>one</strong> contemporaneous
+                cross-moment, \(\mathrm{cov}(y_1, y_2)\), to pin down <strong>both</strong> parameters.
+                What \(\psi\) does in the mean, residual correlation can largely absorb in the noise, and
+                vice versa. The model tells "Cold Brew eats Original" apart from "the category was hot"
+                only with the help of the prior's sign constraint and the media terms — which is why §4
+                treats this split as prior-determined, and why the stress series can make
+                <a href="stress-04-extension-traps.html">ψ flip sign just by changing its prior</a>.
+            </p>
+
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn active" data-view="full" id="psiFullBtn">Prior vs posterior (full scale)</button>
+                <button class="toggle-btn" data-view="zoom" id="psiZoomBtn">Zoom to the posterior</button>
+            </div>
+            <div class="chart-container" id="psiChart"></div>
+            <p class="chart-note">
+                <strong>Measured summaries, curves recreated from them</strong> — the baked run's
+                \(\psi_{\text{Cold Brew}\to\text{Original}}\): posterior mean <strong>−0.00028</strong>,
+                sd 0.00027, 94% HDI <strong>(−0.00094, −0.00001)</strong>, \(P(\psi&lt;0) = 1.000\) — the
+                entire posterior sits below zero. The prior (negated half-Normal, sd 0.1764) smears over
+                the whole negative half-line; the posterior is a spike <strong>646× narrower</strong>.
+                Curves are drawn from those measured parameters (unit-peak scaling so both are visible).
+                Zoom in to see that the spike sits essentially <em>at zero</em> — hold that thought for §2.3.
+            </p>
+
+            <div class="chart-container short" id="residCorrChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the posterior-mean residual correlation matrix
+                (<code>get_correlation_matrix()</code>): off-diagonal
+                <strong>+0.407</strong>. The <em>causal</em> cross-effect came out negative while the
+                <em>residual</em> correlation came out positive — the model correctly separating
+                cannibalization (mean structure) from the shared demand wave (noise structure).
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Never chart the multivariate μ as a prediction</h4>
+                <p>
+                    The extension models carry <strong>no trend or seasonality</strong>, so the
+                    multivariate \(\boldsymbol\mu_t\) is not a usable predicted-vs-observed trajectory —
+                    it is near-flat. This is the notebook's hard-won lesson: <code>MultivariateMMM</code>
+                    estimates <strong>cross-effects, not trajectories</strong>. Its value is the two
+                    estimands charted above — \(\psi\) and the residual correlation — and that is all this
+                    page charts. (Practical footnote: the MvNormal model requires <code>cores=1</code> on
+                    macOS; <code>chains=2, cores=1</code> is fine.)
+                </p>
+            </div>
+
+            <h2 id="learning">2.3 · Did the data actually <em>learn</em> ψ? Informative ≠ important</h2>
+            <p>
+                We just verified the entire posterior of \(\psi\) sits below zero and called it
+                cannibalization. But look at how \(\psi\) is built:
+                \(\psi = -\,\mathrm{HalfNormal}(\sigma_\psi)\). Every <em>prior</em> draw is already
+                negative — "\(P(\psi&lt;0)\approx 1\)" is true before seeing any data. Under a one-sided
+                prior, the sign statement is nearly <strong>vacuous</strong>. The honest replacement asks:
+                how much did the data move and narrow the parameter <em>beyond the prior</em>? The
+                framework's <code>compute_parameter_learning</code> diagnostic compares prior draws to
+                posterior draws with three quantities:
+            </p>
+
+            \[
+            \underbrace{c \;=\; 1 - \frac{\sigma^2_{\text{post}}}{\sigma^2_{\text{prior}}}}_{\textbf{contraction}}
+            \qquad
+            \underbrace{\mathrm{OVL} \;=\; \sum_i \min(p_i,\, q_i)}_{\textbf{overlap}\ \in [0,1]}
+            \qquad
+            \underbrace{z \;=\; \frac{\mu_{\text{post}} - \mu_{\text{prior}}}{\sigma_{\text{prior}}}}_{\textbf{shift}}
+            \]
+
+            <p>
+                Contraction \(c \to 1\): the data <em>pinned</em> the parameter. \(c \approx 0\): the data
+                was uninformative (prior-dominated). \(c &lt; 0\): the posterior is <em>wider</em> than
+                the prior — prior–data tension or weak identifiability. Overlap is the shared histogram
+                mass of prior and posterior (bins, not a KDE, so the hard half-Normal edge at 0 is not
+                smeared); shift counts prior standard deviations of pure location learning.
+            </p>
+
+            <div class="chart-container tall" id="contractionChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — per-parameter contraction from the baked
+                <code>compute_parameter_learning(prior_samples=2000, random_seed=0)</code> run.
+                ψ is the outlier: contraction <strong>1.000</strong>, overlap 0.052, the data did the
+                work. But <strong>15 of the model's 19 free parameters sit below the 0.1 line</strong>
+                (the three not shown in the notebook's tail table fall in between), and 9 of those are
+                <em>negative</em> — posterior wider than prior, i.e. prior–data tension, not mere
+                prior-domination (worst: <code>Y_obs_chol_cov[1]</code> at −0.656 with shift 56 prior
+                sds). The diagnostic discriminates: the data spoke about ψ; about most of the
+                multivariate machinery it did not.
+            </p>
+
+            <p>
+                And here is the punchline the sign test hid. Contraction ≈ 1 means the data was
+                <em>informative</em> about \(\psi\) — but informative about <em>what</em>? Read the
+                posterior location: the data pinned \(\psi\) to <strong>−0.00028</strong>, an effect worth
+                <strong>0.072 ($000s)/week — 0.012% of Original's weekly sales</strong>. The data is
+                confident there is <em>essentially no direct cannibalization</em>. The products do move
+                together — through the <em>positive</em> residual correlation (+0.41, the demand wave),
+                not a causal arrow. The sign-only verdict ("cannibalization confirmed, \(P(\psi&lt;0)=1\)!")
+                dressed up a structurally-guaranteed sign on a negligible magnitude.
+            </p>
+
+            <div class="definition">
+                <h4>Guardrail: contraction measures informativeness, not importance</h4>
+                <p>
+                    High contraction means the data <em>spoke</em> — including when what it said is "this
+                    effect is zero". Always read the posterior mean and interval next to the learning
+                    diagnostic: contraction says the data spoke; the posterior location says what it said.
+                    Whether a true substitution exists in the data-generating process is a question this
+                    weakly-identified cross-effect parameterization cannot settle on its own (§4).
+                </p>
+            </div>
+
+            <h2 id="combined">3 · <code>CombinedMMM</code> — the routed synthesis</h2>
+            <p>
+                <code>CombinedMMM</code> is Models 1 and 2 fused: several outcomes with cross-effects and
+                an MvNormal likelihood, <em>and</em> mediators routing media to those outcomes. For
+                outcome \(k\), with direct media coefficients \(\beta^{\text{direct}}_{k,c}\), each
+                mediator \(m\) routed to a subset \(O(m)\) of outcomes, and cross-effects \(\psi_{j\to k}\):
+            </p>
+
+            \[
+            \mu_{k,t}
+            \;=\;
+            a_k
+            \;+\; \sum_{c}\beta^{\text{direct}}_{k,c}\, u_{c,t}
+            \;+\!\!\sum_{m:\,k\in O(m)}\!\! \gamma_{k,m}\, m_t
+            \;+\; \sum_{j \neq k} \psi_{j\to k}\, y_{j,t},
+            \qquad
+            m_t = a_m + \sum_{c\in C(m)} \beta_{c\to m}\, u_{c,t}.
+            \]
+
+            <p>
+                Collapsing the mediator into the outcome equation gives the per-outcome total coefficient
+                on channel \(c\) — the mediation product-of-coefficients carried across multiple outcomes:
+            </p>
+
+            \[
+            \boxed{\;
+            \text{coef}_{k,c}
+            \;=\;
+            \beta^{\text{direct}}_{k,c}
+            \;+\!\!\sum_{m:\,k\in O(m)}\!\! \beta_{c\to m}\,\gamma_{k,m}
+            \;}
+            \]
+
+            <p>
+                The correctness point is the <strong>routing</strong>: a mediator's contribution to
+                outcome \(k\) counts <em>only when</em> \(k \in O(m)\) (the model gates indirect paths by
+                <code>_get_affected_outcomes</code>, and the
+                <code>total_&lt;channel&gt;_&lt;outcome&gt;</code> Deterministic is built as
+                direct + the routed indirect sum). When decomposing a Combined model's per-outcome channel
+                effect, reason from the boxed formula — it makes the routing explicit.
+            </p>
+
+            <div class="note">
+                <h4>💡 Framework fix (2026-06-10): one sign-constrained RV per configured direction</h4>
+                <p>
+                    <code>CombinedMMM</code>'s first edition declared a free ψ for <em>every</em> ordered
+                    outcome pair plus never-used diagonal entries — a duplicate-dims
+                    <code>pm.Normal("psi", dims=("outcome","outcome"))</code> that ignored the configured
+                    arrow's direction and sign, crashed PyMC's post-sampling convergence checks, and threw
+                    divergences by the hundred. Rebuilt to share <code>MultivariateMMM</code>'s machinery —
+                    one sign-constrained RV per configured cross-effect direction, structural zeros
+                    elsewhere — the same fit went from <strong>357 → 0 divergences</strong> (of 600
+                    draws), max r-hat 2.91 → 1.02, free parameters 31 → 28. The full before/after is
+                    measured in <a href="stress-04-extension-traps.html">Stress 04 · Extension Traps</a>.
+                    And the sequel matters just as much: on the <em>repaired</em> model, the same
+                    cannibalization arrow on the same data landed at ψ = −1.25 (contraction 0.97) where
+                    the multivariate fit pinned it ≈ 0 — adding the mediator block changed the mean
+                    structure, and the unidentified ψ/ρ split simply landed somewhere else, each model
+                    "confident". <strong>A bugfix is not identification.</strong>
+                </p>
+            </div>
+
+            <h2 id="identification">4 · The identification warning: count the parameters</h2>
+            <p>
+                Everything above worked — proportion mediated matched truth, ψ and ρ separated cleanly.
+                So end on the warning the math has been whispering throughout:
+                <strong>extension structure adds parameters faster than data adds moments.</strong>
+                Count them for Aurora's 104 weeks:
+            </p>
+
+            <table class="model-table">
+                <thead>
+                    <tr><th>Structure added</th><th>New parameters</th><th>New data moments to pay for them</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Second outcome, joint likelihood</td>
+                        <td>+1 intercept, +4 media betas, +1 residual scale</td>
+                        <td>104 new observations — fine, this part is paid for</td>
+                    </tr>
+                    <tr>
+                        <td>Cross-effect ψ + residual correlation ρ</td>
+                        <td><strong>+2</strong> (up to \(K(K-1) + \tfrac{K(K-1)}{2}\) for \(K\) outcomes)</td>
+                        <td><strong>+1</strong>: a single contemporaneous cross-moment \(\mathrm{cov}(y_1,y_2)\). Two parameters, one moment — the split is prior-determined.</td>
+                    </tr>
+                    <tr>
+                        <td>Latent mediator (no survey)</td>
+                        <td>+\(a_m\), +\(\beta_{c\to m}\) per routed channel, +\(\gamma\), +\(\sigma_{\text{obs}}\)</td>
+                        <td><strong>+0</strong>: only the sums \(\gamma\beta_{c\to m} + \delta_c\) enter the likelihood (the §<a href="#toy">toy</a> above). The ~24 monthly survey points are the <em>only</em> anchor for the split.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                The measured fits confirm the count. The multivariate model's learning audit left
+                <strong>15 of 19 free parameters at contraction &lt; 0.1</strong> — the data could not
+                narrow most of the machinery it bought. The ψ/ρ split resolved the way the priors said it
+                should (sign-constrained arrow → boundary spike at 0; LKJ correlation → +0.41); the
+                shared-mediator allocation resolved because the survey anchored it. Change those priors or
+                drop the survey and the <em>same data</em> tells a different story with the same
+                confidence — that is precisely what
+                <a href="stress-04-extension-traps.html"><strong>Stress 04 · Extension Traps</strong></a>
+                pressure-tests: the ψ that flips sign with its prior, the sibling channel over-credited
+                2.6×, the <em>wrong</em> mediator that fits perfectly. Read it as the adversarial
+                companion to this page.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Extensions are cure and disease</h4>
+                <p>
+                    Use <code>NestedMMM</code> when a base model is structurally blind to a brand channel;
+                    use <code>MultivariateMMM</code> when products genuinely interact. But every added
+                    arrow is an <em>assumption wearing a posterior</em>. The defenses are the ones this
+                    series keeps measuring: anchor latent structure with data (surveys, lift tests —
+                    <a href="math-05-calibration.html">notebook 05's calibration machinery applies to the
+                    extension models' estimands too</a>), audit prior-vs-posterior learning for every new
+                    parameter, and never read a sign constraint back as evidence of the sign.
+                </p>
+            </div>
+
+            <h2 id="takeaway">What to take away</h2>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li>
+                        All three extensions share one media transform
+                        \(u_{c,t} = f_{\text{sat}}(\mathrm{adstock}_{\alpha_c}(x_{c,t}/s_c))\) and differ
+                        only in how \(u\) is wired to the outcome(s): mediator paths
+                        (\(\beta_{c\to m}\gamma_m + \delta_c\)), cross-effects (\(\psi\) in the mean,
+                        \(\Sigma\) in the noise), or both with routing
+                        (\(\text{coef}_{k,c} = \beta^{\text{direct}}_{k,c} + \sum_{m: k\in O(m)} \beta_{c\to m}\gamma_{k,m}\)).
+                    </li>
+                    <li>
+                        Mediation recovers what the base model is blind to: Aurora's TV and Display come
+                        out ~fully mediated (proportion mediated 1.000 / 0.999 vs truth 0.988 / 0.967),
+                        with the latent awareness reconstructed from a sparse monthly survey.
+                    </li>
+                    <li>
+                        A directed cross-effect (mean) and shared demand (residual correlation) are
+                        different links: Aurora's fit pins the direct ψ at −0.00028 (≈ 0, 0.012% of weekly
+                        sales) while the residuals share a +0.41 demand wave.
+                    </li>
+                    <li>
+                        Under a one-sided prior, \(P(\psi&lt;0)\approx 1\) restates the prior. Report
+                        contraction/overlap instead — and read contraction as <em>informativeness, not
+                        importance</em>: the data confidently said "no direct cannibalization".
+                    </li>
+                    <li>
+                        Count parameters against moments before trusting an extension: ψ and ρ split one
+                        cross-moment; a fully latent mediator's direct/indirect split has likelihood
+                        weight zero. Those splits are prior-determined —
+                        <a href="stress-04-extension-traps.html">Stress 04</a> is the measured
+                        demonstration.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/math_06_extensions.ipynb</code>, authored by
+                    <code>nbs/build_math_06_extensions.py</code> and documented in
+                    <code>nbs/README_math.md</code>. The notebook fits both models (500 draws / 500 tune,
+                    2 chains, <code>cores=1</code>, <code>random_seed=0</code>) and every claim above ends
+                    in a seeded <code>assert</code> — if the notebook executes clean, this page is still
+                    true. The story-first companion is
+                    <a href="aurora-03-extended-mmm.html">Aurora 03 · Extended Models</a>; the adversarial
+                    companion is <a href="stress-04-extension-traps.html">Stress 04 · Extension Traps</a>.
+                    Source: <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers (series-wide reference implementation).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for the live-math toy.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ==================================================================
+        // MEASURED numbers — baked nbs/math_06_extensions.ipynb (seed 0,
+        // 500 draws / 500 tune, 2 chains, cores=1).
+        // ==================================================================
+        const MED = {                     // get_mediation_effects()
+            channels: ['TV', 'Display'],
+            direct:   [0.053, 0.117],
+            indirect: [151.080, 185.991],
+            total:    [151.134, 186.108],
+            propModel: [1.000, 0.999],
+            propTrue:  [0.988, 0.967]    // aurora.true_mediated_share
+        };
+        const PSI = {                     // cross-effect + learning audit
+            mean: -0.00028, sd: 0.00027,
+            hdiLo: -0.00094, hdiHi: -0.00001,
+            priorSd: 0.1764,             // sd of the negated HalfNormal prior
+            contraction: 1.000, overlap: 0.052, shiftZ: -1.338
+        };
+        const RESID_CORR = 0.407;         // Y_obs_correlation off-diagonal
+        // Per-parameter contraction (psi + the measured c < 0.1 tail; the 3
+        // remaining free params fall between and are not tabled in the notebook).
+        const LEARNING = [
+            { p: 'psi_1_0_raw',       c:  1.000 },
+            { p: 'alpha[1]',          c:  0.070 },
+            { p: 'beta_media[1,1]',   c:  0.052 },
+            { p: 'beta_media[1,0]',   c:  0.035 },
+            { p: 'lambda_Display',    c:  0.032 },
+            { p: 'beta_media[0,0]',   c:  0.028 },
+            { p: 'beta_media[0,2]',   c:  0.028 },
+            { p: 'lambda_TV',         c: -0.014 },
+            { p: 'beta_media[1,2]',   c: -0.018 },
+            { p: 'beta_media[0,3]',   c: -0.046 },
+            { p: 'beta_media[1,3]',   c: -0.049 },
+            { p: 'beta_media[0,1]',   c: -0.072 },
+            { p: 'alpha[0]',          c: -0.086 },
+            { p: 'lambda_Search',     c: -0.200 },
+            { p: 'lambda_Social',     c: -0.269 },
+            { p: 'Y_obs_chol_cov[1]', c: -0.656 }
+        ];
+
+        // ==================================================================
+        // Chart 1 — mediation split (measured stacked bars)
+        // ==================================================================
+        function drawMediationSplit() {
+            const traces = [
+                {
+                    type: 'bar', name: 'direct  δ_c',
+                    x: MED.channels, y: MED.direct,
+                    marker: { color: '#d4a86a', line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '<b>%{x}</b><br>direct effect: %{y:.3f}<extra></extra>'
+                },
+                {
+                    type: 'bar', name: 'indirect via awareness  Σ β·γ',
+                    x: MED.channels, y: MED.indirect,
+                    marker: { color: '#8fa86a', line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '<b>%{x}</b><br>indirect effect: %{y:.2f}<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                barmode: 'stack',
+                yaxis: { title: 'effect coefficient on y' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 50 },
+                annotations: [
+                    { x: 'TV', y: MED.total[0], yanchor: 'bottom', text: 'direct: 0.053', showarrow: false, font: { size: 11, color: '#5a6b5a' } },
+                    { x: 'Display', y: MED.total[1], yanchor: 'bottom', text: 'direct: 0.117', showarrow: false, font: { size: 11, color: '#5a6b5a' } }
+                ]
+            });
+            Plotly.newPlot('mediationSplitChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Chart 2 — proportion mediated: model vs truth (measured)
+        // ==================================================================
+        function drawPropMediated() {
+            const traces = [
+                {
+                    type: 'bar', name: 'model',
+                    x: MED.channels, y: MED.propModel,
+                    marker: { color: '#8fa86a', line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    text: MED.propModel.map(function(v) { return v.toFixed(3); }),
+                    textposition: 'outside',
+                    hovertemplate: '<b>%{x}</b><br>model: %{y:.3f}<extra></extra>'
+                },
+                {
+                    type: 'bar', name: 'true (generative)',
+                    x: MED.channels, y: MED.propTrue,
+                    marker: { color: '#2d3a2d', line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    text: MED.propTrue.map(function(v) { return v.toFixed(3); }),
+                    textposition: 'outside',
+                    hovertemplate: '<b>%{x}</b><br>true: %{y:.3f}<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'proportion mediated', range: [0, 1.12] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 50 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 1.5, y0: 0.7, y1: 0.7,
+                    line: { color: '#2d3a2d', width: 1.5, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 1.45, y: 0.7, xanchor: 'right', yanchor: 'bottom',
+                    text: "the notebook's 0.7 assert threshold", showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('propMediatedChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Chart 3 — the latent-split toy (live math, interactive)
+        // ==================================================================
+        // Build the two channels' exposures with the §0 transform.
+        const N = 104;
+        function buildExposure(base, amp, period, phase, noiseAmp, alpha, lam, seed) {
+            const rng = mulberry32(seed);
+            const spend = [];
+            for (let t = 0; t < N; t++) {
+                spend.push(base + amp * Math.sin(2 * Math.PI * t / period + phase) + noiseAmp * rng());
+            }
+            const mx = Math.max.apply(null, spend);
+            // normalized geometric adstock: weights (1-alpha)*alpha^l
+            const u = [];
+            let carry = 0;
+            for (let t = 0; t < N; t++) {
+                carry = spend[t] / mx + alpha * carry;
+                const ad = (1 - alpha) * carry;
+                u.push(1 / (1 + Math.exp(-lam * ad)));     // logistic saturation
+            }
+            return u;
+        }
+        const uTV = buildExposure(60, 25, 52, 0.6, 18, 0.6, 4, 11);
+        const uDS = buildExposure(40, 15, 26, 1.9, 12, 0.4, 4, 23);
+
+        const TOY = {
+            totalTV: 150, totalDS: 185,   // echo the measured total effects
+            aY: 600, aM: 20, gamma: 4.2,
+            thetaTrue: 0.98
+        };
+
+        // Outcome y_t — independent of theta by construction.
+        const yObs = [];
+        (function() {
+            const rng = mulberry32(37);
+            for (let t = 0; t < N; t++) {
+                const noise = 18 * ((rng() + rng() + rng()) * 2 - 3); // approx gaussian
+                yObs.push(TOY.aY + TOY.totalTV * uTV[t] + TOY.totalDS * uDS[t] + noise);
+            }
+        })();
+
+        function impliedM(theta) {
+            const m = [];
+            for (let t = 0; t < N; t++) {
+                m.push(TOY.aM + theta * (TOY.totalTV * uTV[t] + TOY.totalDS * uDS[t]) / TOY.gamma);
+            }
+            return m;
+        }
+
+        // Sparse monthly survey drawn at the TRUE theta.
+        const surveyX = [], surveyY = [];
+        (function() {
+            const mTrue = impliedM(TOY.thetaTrue);
+            const rng = mulberry32(53);
+            for (let t = 2; t < N; t += 4) {
+                surveyX.push(t);
+                surveyY.push(mTrue[t] + 2.0 * ((rng() + rng() + rng()) * 2 - 3));
+            }
+        })();
+
+        const weeksIdx = [];
+        for (let t = 0; t < N; t++) weeksIdx.push(t);
+
+        function drawToy(theta) {
+            const m = impliedM(theta);
+            // survey RMSE at this theta
+            let se = 0;
+            for (let i = 0; i < surveyX.length; i++) {
+                const d = m[surveyX[i]] - surveyY[i];
+                se += d * d;
+            }
+            const rmse = Math.sqrt(se / surveyX.length);
+
+            document.getElementById('thetaReadout').textContent = 'θ = ' + theta.toFixed(2);
+            document.getElementById('rmseReadout').textContent = 'survey RMSE: ' + rmse.toFixed(1);
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines', name: 'outcome y (does not move)',
+                    x: weeksIdx, y: yObs,
+                    line: { color: PT.colors.truth, width: 2 },
+                    hovertemplate: 'week %{x}<br>y = %{y:.0f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'implied awareness m(θ)',
+                    x: weeksIdx, y: m, yaxis: 'y2',
+                    line: { color: '#8fa86a', width: 2.5, dash: 'dash' },
+                    hovertemplate: 'week %{x}<br>m = %{y:.1f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'monthly survey (truth: θ = 0.98)',
+                    x: surveyX, y: surveyY, yaxis: 'y2',
+                    marker: { color: '#c97067', size: 7, line: { color: 'rgba(45,58,45,0.4)', width: 1 } },
+                    hovertemplate: 'week %{x}<br>survey = %{y:.1f}<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 30, b: 50 },
+                xaxis: { title: 'week' },
+                yaxis: { title: 'sales', domain: [0.58, 1.0] },
+                legend: { orientation: 'h', y: 1.12 },
+                grid: undefined
+            });
+            layout.yaxis2 = {
+                title: 'awareness (0–100)', domain: [0, 0.44],
+                gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4',
+                range: [0, 110]
+            };
+            Plotly.react('mediationToyChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Chart 4 — psi prior vs posterior (measured summaries)
+        // ==================================================================
+        // Prior: psi = -HalfNormal(sigma) with sd = 0.1764 => sigma = 0.1764/sqrt(1-2/pi)
+        const PSI_SIGMA = PSI.priorSd / Math.sqrt(1 - 2 / Math.PI);
+
+        function psiPriorCurve(xs) {
+            return xs.map(function(x) {
+                return x <= 0 ? Math.exp(-x * x / (2 * PSI_SIGMA * PSI_SIGMA)) : 0; // unit peak
+            });
+        }
+        function psiPostCurve(xs) {
+            return xs.map(function(x) {
+                const z = (x - PSI.mean) / PSI.sd;
+                return Math.exp(-0.5 * z * z); // unit peak
+            });
+        }
+        function linspace(a, b, n) {
+            const out = [];
+            for (let i = 0; i < n; i++) out.push(a + (b - a) * i / (n - 1));
+            return out;
+        }
+
+        function drawPsi(view) {
+            let traces, layout;
+            if (view === 'full') {
+                const xs = linspace(-0.9, 0.06, 400);
+                traces = [
+                    {
+                        type: 'scatter', mode: 'lines', name: 'prior  −HalfNormal (sd 0.1764)',
+                        x: xs, y: psiPriorCurve(xs),
+                        line: { color: '#9aa79a', width: 2 },
+                        fill: 'tozeroy', fillcolor: PT.band('#9aa79a', 0.18),
+                        hovertemplate: 'ψ = %{x:.3f}<extra>prior</extra>'
+                    },
+                    {
+                        type: 'scatter', mode: 'lines', name: 'posterior (mean −0.00028, sd 0.00027)',
+                        x: [PSI.mean, PSI.mean], y: [0, 1],
+                        line: { color: '#c97067', width: 3 },
+                        hovertemplate: 'posterior spike at ψ ≈ −0.0003<extra></extra>'
+                    }
+                ];
+                layout = PT.layout({
+                    xaxis: { title: 'ψ  (Cold Brew → Original cross-effect)' },
+                    yaxis: { title: 'density (unit-peak scaled)', range: [0, 1.12] },
+                    legend: { orientation: 'h', y: 1.12 },
+                    margin: { l: 70, r: 30, t: 40, b: 60 },
+                    annotations: [{
+                        x: PSI.mean, y: 1.0, xanchor: 'left', yanchor: 'bottom',
+                        text: ' posterior: 646× narrower than the prior',
+                        showarrow: false, font: { size: 11, color: '#a44c43' }
+                    }]
+                });
+            } else {
+                const xs = linspace(-0.0014, 0.0004, 400);
+                traces = [
+                    {
+                        type: 'scatter', mode: 'lines', name: 'prior (locally flat at this scale)',
+                        x: xs, y: psiPriorCurve(xs),
+                        line: { color: '#9aa79a', width: 2 },
+                        hovertemplate: 'ψ = %{x:.4f}<extra>prior</extra>'
+                    },
+                    {
+                        type: 'scatter', mode: 'lines', name: 'posterior',
+                        x: xs, y: psiPostCurve(xs),
+                        line: { color: '#c97067', width: 2.5 },
+                        fill: 'tozeroy', fillcolor: PT.band('#c97067', 0.18),
+                        hovertemplate: 'ψ = %{x:.5f}<extra>posterior</extra>'
+                    }
+                ];
+                layout = PT.layout({
+                    xaxis: { title: 'ψ  (zoomed ~600×)', tickformat: '.4f' },
+                    yaxis: { title: 'density (unit-peak scaled)', range: [0, 1.12] },
+                    legend: { orientation: 'h', y: 1.12 },
+                    margin: { l: 70, r: 30, t: 40, b: 60 },
+                    shapes: [
+                        { type: 'line', x0: PSI.hdiLo, x1: PSI.hdiLo, y0: 0, y1: 1.0, line: { color: '#a44c43', width: 1.2, dash: 'dot' } },
+                        { type: 'line', x0: PSI.hdiHi, x1: PSI.hdiHi, y0: 0, y1: 1.0, line: { color: '#a44c43', width: 1.2, dash: 'dot' } },
+                        { type: 'line', x0: 0, x1: 0, y0: 0, y1: 1.05, line: { color: '#2d3a2d', width: 1.5, dash: 'dash' } }
+                    ],
+                    annotations: [
+                        { x: PSI.hdiLo, y: 1.0, yanchor: 'bottom', text: '94% HDI', showarrow: false, font: { size: 11, color: '#a44c43' } },
+                        { x: 0, y: 1.05, yanchor: 'bottom', xanchor: 'left', text: ' ψ = 0', showarrow: false, font: { size: 11, color: '#5a6b5a' } }
+                    ]
+                });
+            }
+            Plotly.react('psiChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Chart 5 — residual correlation heatmap (measured)
+        // ==================================================================
+        function drawResidCorr() {
+            const labels = ['Original', 'Cold Brew'];
+            const z = [[1.0, RESID_CORR], [RESID_CORR, 1.0]];
+            const trace = {
+                type: 'heatmap',
+                x: labels, y: labels, z: z,
+                zmin: -1, zmax: 1,
+                colorscale: [
+                    [0, '#8c5e3c'], [0.5, '#f6f3ee'], [1, '#3f7a58']
+                ],
+                colorbar: { title: { text: 'residual corr', side: 'right' }, thickness: 14 },
+                hovertemplate: '%{y} × %{x}: %{z:.3f}<extra></extra>'
+            };
+            const annotations = [];
+            for (let i = 0; i < 2; i++) {
+                for (let j = 0; j < 2; j++) {
+                    annotations.push({
+                        x: labels[j], y: labels[i], text: z[i][j].toFixed(2),
+                        showarrow: false,
+                        font: { size: 16, color: '#2d3a2d', family: "'JetBrains Mono', monospace" }
+                    });
+                }
+            }
+            const layout = PT.layout({
+                margin: { l: 90, r: 30, t: 20, b: 50 },
+                yaxis: { autorange: 'reversed' },
+                annotations: annotations
+            });
+            Plotly.newPlot('residCorrChart', [trace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // Chart 6 — per-parameter contraction (measured learning audit)
+        // ==================================================================
+        function drawContraction() {
+            const sorted = LEARNING.slice().sort(function(a, b) { return a.c - b.c; });
+            const colors = sorted.map(function(r) {
+                if (r.p === 'psi_1_0_raw') return '#8fa86a';        // pinned by the data
+                return r.c < 0 ? '#c97067' : '#d4a86a';             // tension vs prior-dominated
+            });
+            const trace = {
+                type: 'bar', orientation: 'h',
+                y: sorted.map(function(r) { return r.p; }),
+                x: sorted.map(function(r) { return r.c; }),
+                marker: { color: colors, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                hovertemplate: '<b>%{y}</b><br>contraction = %{x:.3f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 160, r: 30, t: 10, b: 55 },
+                xaxis: { title: 'contraction  c = 1 − σ²_post / σ²_prior', range: [-0.75, 1.1] },
+                yaxis: { automargin: true },
+                shapes: [
+                    { type: 'line', x0: 0.1, x1: 0.1, y0: -0.5, y1: sorted.length - 0.5, line: { color: '#2d3a2d', width: 1.5, dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: 0, y0: -0.5, y1: sorted.length - 0.5, line: { color: '#9aa79a', width: 1 } }
+                ],
+                annotations: [{
+                    x: 0.1, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'c = 0.1 "weakly identified" line', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 1.0, y: sorted.length - 1, xanchor: 'right',
+                    text: 'the one parameter the data pinned ', showarrow: false,
+                    font: { size: 11, color: '#3f7a58' }
+                }]
+            });
+            Plotly.newPlot('contractionChart', [trace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // Wiring
+        // ==================================================================
+        function init() {
+            drawMediationSplit();
+            drawPropMediated();
+            drawToy(0.5);
+            drawPsi('full');
+            drawResidCorr();
+            drawContraction();
+
+            document.getElementById('thetaSlider').addEventListener('input', function(e) {
+                drawToy(parseFloat(e.target.value) / 100);
+            });
+
+            const psiButtons = [document.getElementById('psiFullBtn'), document.getElementById('psiZoomBtn')];
+            psiButtons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    psiButtons.forEach(function(b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    drawPsi(btn.dataset.view);
+                });
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

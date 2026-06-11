@@ -42,7 +42,7 @@ class MediaNodeConfig(BaseModel):
     adstock_normalize: bool = True
     adstock_alpha_prior_alpha: float = Field(default=1.0, gt=0)
     adstock_alpha_prior_beta: float = Field(default=3.0, gt=0)
-    saturation_type: SaturationType = SaturationType.HILL
+    saturation_type: SaturationType = SaturationType.LOGISTIC
     saturation_kappa_prior_alpha: float = Field(default=2.0, gt=0)
     saturation_kappa_prior_beta: float = Field(default=2.0, gt=0)
     saturation_slope_prior_sigma: float = Field(default=1.5, gt=0)

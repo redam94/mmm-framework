@@ -1,3 +1,4 @@
+import copy
 import json
 import math
 import asyncio
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import aiosqlite
-from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
+from fastapi import FastAPI, Form, Request, UploadFile, File, Header, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,6 +22,15 @@ from mmm_framework.api import sessions as sessions_store
 
 logger = logging.getLogger("mmm_api")
 logging.basicConfig(level=logging.INFO)
+
+
+def _payload_hash(p: dict) -> str:
+    """Stable content hash for artifact dedup across chat turns."""
+    import hashlib
+
+    return hashlib.md5(json.dumps(p, sort_keys=True, default=str).encode()).hexdigest()[
+        :16
+    ]
 
 
 def safe_json_dumps(obj: dict) -> str:
@@ -57,6 +67,20 @@ def safe_json_dumps(obj: dict) -> str:
         raise TypeError(f"Object of type {type(o)} is not JSON serializable")
 
     return json.dumps(obj, default=_default)
+
+
+# Ref-list dashboard keys are stripped from per-message SSE events (the full
+# dashboard is re-sent on every message; the accumulated ref lists go out once
+# per turn in the dedicated dashboard_update event instead).
+_REF_LIST_DASHBOARD_KEYS = ("plots", "tables")
+
+
+def _message_dashboard(combined_dashboard: dict) -> dict:
+    return {
+        k: v
+        for k, v in (combined_dashboard or {}).items()
+        if k not in _REF_LIST_DASHBOARD_KEYS
+    }
 
 
 # ── Persistent checkpointer ───────────────────────────────────────────────────
@@ -318,6 +342,8 @@ async def chat_endpoint(
                 captured_artifact_keys.add(f"client_slides::{_p.get('path', '')}")
             elif _k == "code_snippet":
                 captured_artifact_keys.add(f"code::{_p.get('call_id', '')}")
+            elif _k in ("experiment_design", "budget_optimization"):
+                captured_artifact_keys.add(f"{_k}::{_payload_hash(_p)}")
             elif _k == "text_output":
                 captured_artifact_keys.add(f"text_output::{_p.get('call_id', '')}")
 
@@ -411,9 +437,7 @@ async def chat_endpoint(
                                     },
                                 )
 
-                        msg_dashboard = {
-                            k: v for k, v in combined_dashboard.items() if k != "plots"
-                        }
+                        msg_dashboard = _message_dashboard(combined_dashboard)
                         data = {
                             "node": node_name,
                             "type": msg_type,
@@ -444,15 +468,24 @@ async def chat_endpoint(
                                 pass
                         await asyncio.sleep(0.01)
 
-                    if combined_dashboard.get("plots"):
+                    if combined_dashboard.get("plots") or combined_dashboard.get(
+                        "tables"
+                    ):
+                        refs_payload = {}
+                        if combined_dashboard.get("plots"):
+                            refs_payload["plots"] = combined_dashboard["plots"]
+                        if combined_dashboard.get("tables"):
+                            refs_payload["tables"] = combined_dashboard["tables"]
                         plots_event = {
                             "type": "dashboard_update",
-                            "dashboard_data": {"plots": combined_dashboard["plots"]},
+                            "dashboard_data": refs_payload,
                         }
                         try:
                             yield f"data: {safe_json_dumps(plots_event)}\n\n"
                             logger.info(
-                                f"Sent {len(combined_dashboard['plots'])} plot(s) to frontend"
+                                "Sent %d plot(s) / %d table(s) to frontend",
+                                len(refs_payload.get("plots") or []),
+                                len(refs_payload.get("tables") or []),
                             )
                         except Exception as e:
                             logger.error(f"Failed to serialize plots: {e}")
@@ -494,6 +527,20 @@ async def chat_endpoint(
                             sessions_store.add_artifact(
                                 request.thread_id, "model_run", model_run
                             )
+
+                    # Persist decision-layer payloads (budget optimizer /
+                    # experiment design) so the home page can surface the
+                    # latest recommendation; deduped by content hash since the
+                    # dashboard persists across turns.
+                    for _plan_kind in ("experiment_design", "budget_optimization"):
+                        _plan = combined_dashboard.get(_plan_kind)
+                        if _plan:
+                            _pkey = f"{_plan_kind}::{_payload_hash(_plan)}"
+                            if _pkey not in captured_artifact_keys:
+                                captured_artifact_keys.add(_pkey)
+                                sessions_store.add_artifact(
+                                    request.thread_id, _plan_kind, _plan
+                                )
 
         except asyncio.CancelledError:
             logger.info("Stream cancelled for %s", request.thread_id)
@@ -976,12 +1023,360 @@ async def delete_project_endpoint(project_id: str):
     return JSONResponse(content={"success": True})
 
 
+# ── Preferences & client branding ────────────────────────────────────────────
+
+
+class PreferenceUpdateRequest(BaseModel):
+    key: str | None = None
+    value: Any = None
+    preferences: dict[str, Any] | None = None  # bulk form
+
+
+@app.get("/preferences")
+async def get_preferences_endpoint():
+    """Global (deployment-wide) user preference defaults."""
+    return JSONResponse(
+        content={"preferences": sessions_store.list_preferences("global")}
+    )
+
+
+@app.put("/preferences")
+async def put_preferences_endpoint(body: PreferenceUpdateRequest):
+    """Set global preference(s). 403 in the hosted multi-tenant profile —
+    there is no per-user identity, so 'global' would leak across tenants
+    (project-scoped branding remains available: project ids are capabilities)."""
+    from mmm_framework.agents.profile import is_hosted
+
+    if is_hosted():
+        raise HTTPException(
+            status_code=403,
+            detail="Global preferences are disabled in the hosted profile; "
+            "use per-project branding instead.",
+        )
+    updated: dict[str, Any] = {}
+    if body.preferences:
+        for k, v in body.preferences.items():
+            sessions_store.set_preference("global", k, v)
+            updated[k] = v
+    if body.key:
+        sessions_store.set_preference("global", body.key, body.value)
+        updated[body.key] = body.value
+    if not updated:
+        raise HTTPException(status_code=422, detail="Provide key/value or preferences.")
+    return JSONResponse(
+        content={"preferences": sessions_store.list_preferences("global")}
+    )
+
+
+@app.get("/projects/{project_id}/branding")
+async def get_branding_endpoint(project_id: str):
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(content=sessions_store.get_project_branding(project_id) or {})
+
+
+@app.put("/projects/{project_id}/branding")
+async def put_branding_endpoint(project_id: str, body: dict):
+    """Validate + save project branding. A manual PUT counts as confirmation
+    unless the payload explicitly says otherwise."""
+    from mmm_framework.agents.branding import Branding
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    payload = dict(body or {})
+    payload.setdefault("source", "manual")
+    payload.setdefault("confirmed", True)
+    try:
+        branding = Branding.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid branding: {exc}")
+    saved = branding.model_dump()
+    sessions_store.set_project_branding(project_id, saved)
+    return JSONResponse(content=saved)
+
+
+class BrandingExtractRequest(BaseModel):
+    url: str
+    save: bool = True
+
+
+@app.post("/projects/{project_id}/branding/extract")
+async def extract_branding_endpoint(project_id: str, body: BrandingExtractRequest):
+    """Extract a branding proposal from a client website (SSRF-guarded,
+    server-side). Saved with confirmed=false — the UI/user must confirm
+    before it styles any output."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.agents.brand_extract import (
+        BrandExtractError,
+        extract_brand_from_url,
+    )
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    try:
+        proposal = await run_in_threadpool(extract_brand_from_url, body.url)
+    except BrandExtractError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("Brand extraction failed")
+        raise HTTPException(status_code=502, detail="Brand extraction failed.")
+    if body.save:
+        sessions_store.set_project_branding(project_id, proposal)
+    return JSONResponse(content=proposal)
+
+
 # ── Budget Plans (stub — agent API has no budget plan management) ──────────────
 
 
 @app.get("/budget-plans")
 async def list_budget_plans_endpoint():
     return JSONResponse(content={"plans": [], "total": 0})
+
+
+# ── Experiments (lift-test registry) ──────────────────────────────────────────
+
+
+class ExperimentUpsertRequest(BaseModel):
+    id: str | None = None
+    project_id: str | None = None
+    thread_id: str | None = None
+    channel: str | None = None
+    design_type: str | None = None
+    status: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    estimand: str | None = None
+    value: float | None = None
+    se: float | None = None
+    notes: str | None = None
+
+
+@app.get("/experiments")
+async def list_experiments_endpoint(
+    project_id: str | None = None, status: str | None = None
+):
+    exps = sessions_store.list_experiments(project_id=project_id, status=status)
+    return JSONResponse(content={"experiments": exps, "total": len(exps)})
+
+
+@app.post("/experiments")
+async def upsert_experiment_endpoint(body: ExperimentUpsertRequest):
+    try:
+        exp = sessions_store.upsert_experiment(
+            experiment_id=body.id,
+            project_id=body.project_id,
+            thread_id=body.thread_id,
+            channel=body.channel,
+            design_type=body.design_type,
+            status=body.status,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            estimand=body.estimand,
+            value=body.value,
+            se=body.se,
+            notes=body.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=exp)
+
+
+@app.delete("/experiments/{experiment_id}")
+async def delete_experiment_endpoint(experiment_id: str):
+    if not sessions_store.delete_experiment(experiment_id):
+        raise HTTPException(status_code=404, detail="experiment not found")
+    return JSONResponse(content={"status": "ok"})
+
+
+# ── Direct model load (UI button — no LLM round-trip) ────────────────────────
+
+
+class LoadModelRequest(BaseModel):
+    name: str
+
+
+@app.post("/sessions/{thread_id}/load-model")
+async def load_model_endpoint(thread_id: str, body: LoadModelRequest):
+    """Load a saved fitted model into the session directly. UI buttons call
+    this instead of asking the agent to run the load_fitted_model tool."""
+    from mmm_framework.agents.tools import load_model_core
+
+    g = _admin_graph()
+    cfg = {"configurable": {"thread_id": thread_id}}
+    snap = await g.aget_state(cfg)
+    values = snap.values or {}
+    res = load_model_core(
+        thread_id,
+        body.name,
+        values.get("model_spec"),
+        values.get("dataset_path"),
+    )
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail=res["message"])
+
+    dashboard = dict(values.get("dashboard_data") or {})
+    dashboard["model_status"] = "completed"
+    dashboard["summary"] = res["message"]
+    # Attributed to the agent node (terminal write, same as the /spec endpoints);
+    # the next agent turn sees model_status=completed in CURRENT STATE.
+    await g.aupdate_state(
+        cfg,
+        {"model_status": "completed", "dashboard_data": dashboard},
+        as_node="agent",
+    )
+    return JSONResponse(content={"status": "ok", "message": res["message"]})
+
+
+# ── Run lineage (MLflow-style tracking) ───────────────────────────────────────
+
+
+@app.get("/runs")
+async def list_runs_endpoint(project_id: str | None = None):
+    """The model-run lineage timeline: every fit with dataset fingerprint,
+    spec diff vs the previous run, and the assumptions added/revised (the
+    versioned data + model + rationale record)."""
+    from mmm_framework.api.runs import build_run_timeline
+
+    runs = build_run_timeline(project_id)
+    return JSONResponse(
+        content=safe_json_dumps_load({"runs": runs, "total": len(runs)})
+    )
+
+
+# ── Portfolio (home page aggregation) ─────────────────────────────────────────
+
+
+@app.get("/portfolio")
+async def portfolio_endpoint(project_id: str | None = None, stale_after_days: int = 90):
+    """Everything the home page tracks in one call: model-run history, the
+    experiment log, the latest budget/experiment-design recommendations, and
+    computed next actions (calibrate completed experiments / refresh a stale
+    model / run the recommended next experiment)."""
+    import time as _time
+
+    sessions = sessions_store.list_sessions(project_id=project_id)
+    model_runs: list[dict] = []
+    latest_design: dict | None = None
+    latest_budget: dict | None = None
+    for s in sessions:
+        tid = s["thread_id"]
+        for art in sessions_store.list_artifacts(tid):
+            kind, p = art.get("kind"), art.get("payload", {})
+            if kind == "model_run":
+                model_runs.append(
+                    {
+                        "model_id": art["id"],
+                        "thread_id": tid,
+                        "project_id": s.get("project_id"),
+                        "run_name": p.get("run_name") or p.get("run_id"),
+                        "kpi": p.get("kpi"),
+                        "channels": p.get("channels", []),
+                        "trend": p.get("trend"),
+                        "n_obs": p.get("n_obs"),
+                        "summary": (p.get("summary") or "")[:300],
+                        "report_path": p.get("report_path"),
+                        "created_at": art.get("created_at"),
+                    }
+                )
+            elif kind == "experiment_design":
+                if latest_design is None or art["created_at"] > latest_design.get(
+                    "created_at", 0
+                ):
+                    latest_design = {
+                        "created_at": art["created_at"],
+                        "thread_id": tid,
+                        **p,
+                    }
+            elif kind == "budget_optimization":
+                if latest_budget is None or art["created_at"] > latest_budget.get(
+                    "created_at", 0
+                ):
+                    latest_budget = {
+                        "created_at": art["created_at"],
+                        "thread_id": tid,
+                        **p,
+                    }
+    model_runs.sort(key=lambda m: m.get("created_at") or 0, reverse=True)
+    experiments = sessions_store.list_experiments(project_id=project_id)
+
+    now = _time.time()
+    last_fit_at = model_runs[0]["created_at"] if model_runs else None
+    next_actions: list[dict] = []
+
+    # 1. Completed-but-uncalibrated experiments are the highest-value refresh
+    completed = [e for e in experiments if e["status"] == "completed"]
+    if completed:
+        chs = sorted({e["channel"] for e in completed})
+        next_actions.append(
+            {
+                "type": "calibrate",
+                "urgency": "high",
+                "title": f"Calibrate the model with {len(completed)} completed experiment(s)",
+                "detail": (
+                    f"Measured results for {', '.join(chs)} are not folded into a "
+                    "fit yet. Refit with the experiment(s) as calibration "
+                    "likelihoods so ROI estimates reflect the causal evidence."
+                ),
+            }
+        )
+
+    # 2. Model staleness
+    if last_fit_at is None:
+        next_actions.append(
+            {
+                "type": "fit",
+                "urgency": "medium",
+                "title": "No model fitted yet",
+                "detail": "Start an agent session to configure and fit the first MMM.",
+            }
+        )
+    elif (now - last_fit_at) > stale_after_days * 86400:
+        age_days = int((now - last_fit_at) / 86400)
+        next_actions.append(
+            {
+                "type": "refresh",
+                "urgency": "medium",
+                "title": f"Latest model is {age_days} days old",
+                "detail": (
+                    f"Older than the {stale_after_days}-day refresh window — "
+                    "refit on current data (and fold in any new experiments)."
+                ),
+            }
+        )
+
+    # 3. Next recommended experiment (skip channels already being tested)
+    if latest_design:
+        active = {
+            e["channel"] for e in experiments if e["status"] in ("planned", "running")
+        }
+        pick = next(
+            (d for d in latest_design.get("designs", []) if d["channel"] not in active),
+            None,
+        )
+        if pick:
+            next_actions.append(
+                {
+                    "type": "experiment",
+                    "urgency": "medium",
+                    "title": f"Plan the next experiment: {pick['channel']}",
+                    "detail": pick.get("why", ""),
+                    "design": pick,
+                }
+            )
+
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {
+                "model_runs": model_runs,
+                "experiments": experiments,
+                "latest_experiment_design": latest_design,
+                "latest_budget_optimization": latest_budget,
+                "last_fit_at": last_fit_at,
+                "next_actions": next_actions,
+            }
+        )
+    )
 
 
 # ── Artifacts ─────────────────────────────────────────────────────────────────
@@ -1310,6 +1705,22 @@ async def get_plot_endpoint(plot_id: str):
     )
 
 
+@app.get("/tables/{table_id}")
+async def get_table_endpoint(table_id: str):
+    """Serve a content-addressed structured table payload (same immutable-cache
+    contract as /plots/{id} — refs stream, rows are fetched once)."""
+    from mmm_framework.agents import workspace as _ws
+
+    path = _ws.table_path(table_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"Table not found: {table_id}")
+    return FileResponse(
+        str(path),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 @app.get("/workspace/{thread_id}/files")
 async def workspace_files_endpoint(thread_id: str):
     """List the session's registered files (uploads + generated), each with a
@@ -1360,9 +1771,14 @@ async def download_artifact_endpoint(artifact_id: str):
 
 
 @app.post("/projects/{project_id}/kb")
-async def kb_upload_endpoint(project_id: str, file: UploadFile = File(...)):
+async def kb_upload_endpoint(
+    project_id: str,
+    file: UploadFile = File(...),
+    template: bool = Form(False),
+):
     """Add a document to a project's knowledge base: store it, then chunk +
-    embed it (in a threadpool) so it becomes searchable."""
+    embed it (in a threadpool) so it becomes searchable. Pass template=true to
+    tag it as a template document (surfaced by the agent's list_templates)."""
     from fastapi.concurrency import run_in_threadpool
     from mmm_framework.agents import workspace as _ws
     from mmm_framework.agents import knowledge_base as kb
@@ -1387,7 +1803,7 @@ async def kb_upload_endpoint(project_id: str, file: UploadFile = File(...)):
         kind=kind,
         size_bytes=size_bytes,
         status="pending",
-        meta={"content_type": file.content_type},
+        meta={"content_type": file.content_type, "template": bool(template)},
     )
     # Ingest synchronously-in-threadpool so the response reflects final status.
     doc = await run_in_threadpool(kb.ingest_document, doc["id"])
@@ -1499,6 +1915,232 @@ async def update_dag(thread_id: str, body: DAGUpdateRequest):
         return JSONResponse(content=dag_payload)
     except Exception as e:
         logger.exception("DAG update failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+class OutlierApplyRequest(BaseModel):
+    action_ids: list[str]
+    reason: str | None = None
+
+
+@app.post("/outliers/{thread_id}/apply")
+async def apply_outliers_endpoint(thread_id: str, body: OutlierApplyRequest):
+    """Apply confirmed outlier-treatment actions from the UI (EDA tab confirm
+    buttons), without a chat round-trip.
+
+    Applies a STATE-ONLY update via aupdate_state (same pattern as PUT /dag):
+    no ToolMessage/AIMessage is appended — an orphan tool message injected
+    outside a real tool call corrupts Anthropic message threads."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.agents.eda_tools import _apply_outlier_treatment_core
+
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        agent_graph = _admin_graph()
+        snap = await agent_graph.aget_state(config)
+        values = (snap.values or {}) if snap else {}
+        error, summary, update = await run_in_threadpool(
+            _apply_outlier_treatment_core,
+            values,
+            thread_id,
+            list(body.action_ids or []),
+            body.reason,
+        )
+        if error:
+            return JSONResponse(status_code=400, content={"error": error})
+        if update:
+            await agent_graph.aupdate_state(config, update)
+        return JSONResponse(
+            content={
+                "summary": summary,
+                "applied": list(body.action_ids or []),
+                "dataset_path": update.get("dataset_path"),
+                "eda": (update.get("dashboard_data") or {}).get("eda"),
+            }
+        )
+    except Exception as e:
+        logger.exception("Outlier apply failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ── Model spec: manual edits + lock confirmation ──────────────────────────────
+
+
+class SpecUpdateRequest(BaseModel):
+    model_spec: dict
+    # Explicit leaf paths the user changed (computed client-side against the
+    # defaulted baseline the editor showed). When provided these are locked
+    # verbatim; otherwise the server falls back to diffing the full spec, which
+    # over-locks materialized defaults — so the client always sends them.
+    lock_paths: list[str] | None = None
+    unlock_paths: list[str] | None = None
+
+
+class SpecResolveRequest(BaseModel):
+    path: str
+    action: str  # "approve" | "reject"
+
+
+def _mirror_spec_dashboard(
+    dashboard: dict, spec: dict, locked: list[str], pending: list[dict]
+) -> dict:
+    dashboard = dict(dashboard or {})
+    dashboard["model_spec"] = spec
+    dashboard["locked_fields"] = locked
+    dashboard["pending_spec_changes"] = pending
+    return dashboard
+
+
+@app.patch("/spec/{thread_id}")
+async def update_spec(thread_id: str, body: SpecUpdateRequest):
+    """Server-authoritative manual edit of the model configuration.
+
+    Writes the edited ``model_spec`` directly into the agent state and locks the
+    leaf fields the user actually changed (diffed server-side) so the LLM can no
+    longer silently overwrite them. ``unlock_paths`` hands fields back to the LLM.
+    """
+    from mmm_framework.agents.spec_locks import diff_locked
+
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        agent_graph = _admin_graph()
+        snap = await agent_graph.aget_state(config)
+        values = (snap.values or {}) if snap else {}
+
+        current_spec = values.get("model_spec") or {}
+        new_spec = body.model_spec or {}
+
+        # Prefer the client's precise touched-path list; fall back to a server
+        # diff only when it isn't supplied (e.g. a programmatic caller).
+        if body.lock_paths is not None:
+            newly_locked = list(body.lock_paths)
+        else:
+            newly_locked = diff_locked(current_spec, new_spec)
+        unlock = set(body.unlock_paths or [])
+        locked = [p for p in (values.get("locked_fields") or []) if p not in unlock]
+        for p in newly_locked:
+            if p not in locked:
+                locked.append(p)
+
+        # Drop any stale pending proposals for fields the user just decided.
+        decided = set(newly_locked) | unlock
+        pending = [
+            p
+            for p in (values.get("pending_spec_changes") or [])
+            if p.get("path") not in decided
+        ]
+
+        dashboard = _mirror_spec_dashboard(
+            values.get("dashboard_data") or {}, new_spec, locked, pending
+        )
+
+        update = {
+            "model_spec": new_spec,
+            "locked_fields": locked,
+            "pending_spec_changes": pending,
+            "dashboard_data": dashboard,
+        }
+        status = values.get("model_status")
+        if new_spec.get("kpi") and status in (None, "", "unconfigured"):
+            update["model_status"] = "configured"
+
+        # Attribute the write to the agent node so the update is unambiguous on
+        # the two-node graph; with no tool-call message appended it routes to END.
+        await agent_graph.aupdate_state(config, update, as_node="agent")
+        return JSONResponse(
+            content=safe_json_dumps_load(
+                {
+                    "model_spec": new_spec,
+                    "locked_fields": locked,
+                    "pending_spec_changes": pending,
+                }
+            )
+        )
+    except Exception as e:
+        logger.exception("Spec update failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/spec/{thread_id}/resolve")
+async def resolve_spec_change(thread_id: str, body: SpecResolveRequest):
+    """Confirm or decline an LLM-proposed change to a user-locked field.
+
+    ``approve`` applies the proposed value (and keeps the field locked at the new
+    value). ``reject`` keeps the user's value and writes a note into the thread so
+    the LLM has decline-memory and won't re-propose the same change next turn.
+    """
+    from mmm_framework.agents.spec_locks import set_at, get_at
+
+    config = {"configurable": {"thread_id": thread_id}}
+    action = (body.action or "").lower()
+    if action not in ("approve", "reject"):
+        return JSONResponse(
+            status_code=400, content={"error": "action must be approve or reject"}
+        )
+    try:
+        agent_graph = _admin_graph()
+        snap = await agent_graph.aget_state(config)
+        values = (snap.values or {}) if snap else {}
+
+        pending = list(values.get("pending_spec_changes") or [])
+        entry = next((p for p in pending if p.get("path") == body.path), None)
+        if entry is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"no pending change for '{body.path}'"},
+            )
+
+        spec = copy.deepcopy(values.get("model_spec") or {})
+        locked = list(values.get("locked_fields") or [])
+        remaining = [p for p in pending if p.get("path") != body.path]
+        path = entry["path"]
+
+        if action == "approve":
+            set_at(spec, path, entry["proposed"])
+            if path not in locked:
+                locked.append(path)
+            note = (
+                f"[system] The user APPROVED changing `{path}` "
+                f"from `{entry.get('current')}` to `{entry.get('proposed')}`. "
+                "It is now applied and remains user-locked at the new value."
+            )
+        else:  # reject
+            note = (
+                f"[system] The user DECLINED changing `{path}` "
+                f"(it stays `{get_at(spec, path)}`; you had proposed "
+                f"`{entry.get('proposed')}`). Do not propose this change again "
+                "unless the user explicitly asks."
+            )
+
+        dashboard = _mirror_spec_dashboard(
+            values.get("dashboard_data") or {}, spec, locked, remaining
+        )
+        await agent_graph.aupdate_state(
+            config,
+            {
+                "model_spec": spec,
+                "locked_fields": locked,
+                "pending_spec_changes": remaining,
+                "dashboard_data": dashboard,
+                "messages": [HumanMessage(content=note)],
+            },
+            # Append the decline/approve note as the agent node; the trailing
+            # HumanMessage has no tool_calls so the graph settles at END.
+            as_node="agent",
+        )
+        return JSONResponse(
+            content=safe_json_dumps_load(
+                {
+                    "action": action,
+                    "model_spec": spec,
+                    "locked_fields": locked,
+                    "pending_spec_changes": remaining,
+                }
+            )
+        )
+    except Exception as e:
+        logger.exception("Spec resolve failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

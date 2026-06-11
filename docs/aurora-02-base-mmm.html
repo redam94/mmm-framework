@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora 02: The Base MMM | MMM Framework</title>
+    <meta name="description" content="Chapter 2 of the Aurora Coffee Co. showcase: fitting the core Bayesian MMM, gating on diagnostics, reading contributions and ROAS with credible intervals, marginal ROAS, what-if scenarios — and the honest residual the base model cannot see.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-02-base-mmm.html">
+    <meta property="og:title" content="Aurora 02: The Base MMM | MMM Framework">
+    <meta property="og:description" content="What is each channel worth? Contributions and ROAS with honest uncertainty, marginal ROAS, a what-if — and the gap the base model can't close: TV ROAS 0.21 vs a true 2.14.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-02-base-mmm.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            flex: 1;
+            min-width: 180px;
+            max-width: 340px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .slider-readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            min-width: 9.5rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#question">What is each channel worth?</a></li>
+                <li><a href="#config">Configuring the model</a></li>
+                <li><a href="#diagnostics">The diagnostics gate</a></li>
+                <li><a href="#learning">Data or prior?</a></li>
+                <li><a href="#contributions">Contributions &amp; ROAS</a></li>
+                <li><a href="#marginal">Marginal vs average ROAS</a></li>
+                <li><a href="#whatif">The what-if</a></li>
+                <li><a href="#honest">The honest residual</a></li>
+                <li><a href="#takeaways">Takeaways</a></li>
+            </ul>
+
+            <h3>Aurora Showcase</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="aurora-00-overview.html">00 · The Trap</a></li>
+                <li><a href="aurora-01-causality.html">01 · Causality</a></li>
+                <li><a href="aurora-02-base-mmm.html" class="active">02 · The Base MMM</a></li>
+                <li><a href="aurora-03-extended-mmm.html">03 · Extended Models</a></li>
+                <li><a href="aurora-04-reporting.html">04 · Reporting</a></li>
+                <li><a href="aurora-05-unified-workflow.html">05 · Unified Workflow</a></li>
+                <li><a href="causal-features-showcase.html">Causal Features Showcase</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="question">Aurora 02: The Base MMM</h1>
+            <p class="lead">
+                <strong>Chapter 2 of the Aurora Coffee Co. story.</strong> The causal groundwork is laid
+                (<a href="aurora-01-causality.html">Chapter 1</a> drew the DAG and identified demand as the
+                back-door to close), so now we fit <code>mmm_framework</code>'s core Bayesian MMM and read it
+                the way an analyst would: channel contributions and ROAS <em>with honest uncertainty</em>,
+                where the next dollar goes, and a what-if. Because Aurora is a synthetic world with a known
+                ground truth, every claim gets graded — including the ones the base model gets wrong. It
+                will get two channels badly wrong, and that failure is the cliffhanger.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">104</div>
+                    <div class="stat-label">weeks of Aurora panel data, 4 media channels + demand control</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.012</div>
+                    <div class="stat-label">max R̂ on the demo fit (2 chains × 600 draws)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.21</div>
+                    <div class="stat-label">estimated TV ROAS — the truth is 2.14</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">−1.49%</div>
+                    <div class="stat-label">the model's verdict on a budget move that is actually good</div>
+                </div>
+            </div>
+
+            <h2 id="config">One model, demand-controlled</h2>
+            <p>
+                The configuration is deliberately boring: the MFF-style Aurora panel with the
+                <strong>demand control included</strong> (the back-door from Chapter 1), geometric adstock and
+                saturation per channel (the framework's defaults — both learned), yearly seasonality, and a
+                linear trend. Bayesian sampling returns a full posterior, not a point estimate. The builder
+                makes the whole specification one readable expression:
+            </p>
+            <pre><code>from mmm_framework import BayesianMMM, ModelConfigBuilder, SeasonalityConfigBuilder, TrendConfig, TrendType
+from mmm_framework.analysis import MMMAnalyzer
+
+panel = aurora.base_panel(control_demand=True)          # the back-door, closed
+model_config = (ModelConfigBuilder().bayesian_pymc()
+                .with_chains(2).with_draws(600).with_tune(600).with_target_accept(0.9)
+                .with_seasonality_builder(SeasonalityConfigBuilder().with_yearly(order=2))
+                .build())
+
+mmm = BayesianMMM(panel, model_config, TrendConfig(type=TrendType.LINEAR))
+results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
+# fitted: 4 channels · 104 weeks</code></pre>
+            <div class="note">
+                <h4>💡 Why control_demand=True matters</h4>
+                <p>
+                    Without it, Search — whose spend <em>chases</em> demand — soaks up the demand signal and
+                    looks like a hero (naive ROI ≈ 2.8 against a true ROAS of 0.66). The control closes the
+                    back-door the DAG identified. <a href="stress-03-confounding-selection.html">Stress 03</a>
+                    shows what happens when you can only control for a noisy proxy: the bias survives.
+                </p>
+            </div>
+
+            <h2 id="diagnostics">The diagnostics gate — honest uncertainty starts here</h2>
+            <p>
+                Before trusting any number, check that the <em>computation</em> worked: \(\hat{R} \approx 1\)
+                and healthy effective sample size mean the chains agree; divergences flag geometry problems.
+                The demo run reports (measured):
+            </p>
+            <table>
+                <thead><tr><th>Check</th><th>Measured</th><th>Gate</th><th>Verdict</th></tr></thead>
+                <tbody>
+                    <tr><td>R̂ max</td><td>1.012</td><td>&lt; 1.01</td><td>marginally over — small-draw demo run</td></tr>
+                    <tr><td>ESS bulk min</td><td>461</td><td>&gt; 400</td><td>passes</td></tr>
+                    <tr><td>Divergences</td><td>10</td><td>0</td><td>flagged — raise target_accept / draws in production</td></tr>
+                </tbody>
+            </table>
+            <p>
+                The notebook is explicit that these 2-chain, 600-draw fits trade rigor for speed; real
+                analyses use ≥4 chains and ≥1000 draws/tune. The deeper doctrine — established in
+                <a href="stress-00-rosy-picture.html">Stress 00</a> — is that this gate validates the
+                <em>sampler</em>, never the <em>causal claim</em>. We will pass (most of) the gate and still
+                end this page with two channels off by a factor of ten.
+            </p>
+            <p>
+                Every ROAS number below is a summary of these posterior coefficient distributions. Wide
+                intervals are honest uncertainty, not indecision:
+            </p>
+            <div class="chart-container short" id="betaForestChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — posterior mean and 94% HDI for each channel coefficient \(\beta_c\),
+                from the baked notebook's <code>results.summary()</code>. Search is the only coefficient pinned
+                clearly away from zero; TV, Social and Display all have HDIs reaching nearly to 0 — the model
+                genuinely isn't sure they do much. Hold that thought.
+            </p>
+
+            <h2 id="learning">How much came from the data vs the priors?</h2>
+            <p>
+                A posterior interval tells you what to believe <em>after</em> the fit — not how much of that
+                belief is the <strong>data</strong> talking versus the <strong>prior</strong>. The framework's
+                <code>compute_parameter_learning</code> reports, per parameter, the
+                <strong>contraction</strong>
+                \( c = 1 - \mathrm{Var}_{\text{post}}/\mathrm{Var}_{\text{prior}} \)
+                (\(c \to 1\): the data pinned it; \(c \approx 0\): prior-dominated) plus prior↔posterior
+                overlap and a standardized shift.
+            </p>
+            <div class="chart-container tall" id="learningChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — contraction per parameter from the baked notebook's learning table.
+                Read the bars honestly: the <strong>adstock blend weights</strong> sit at ≈0 contraction with
+                ~0.87 prior overlap — observational data barely moves <em>carryover</em> (the
+                carryover/saturation equifinality; see <a href="stress-01-carryover-shape.html">Stress 01</a>).
+                But the pieces that drive ROI — saturation rates, intercept, controls, seasonality,
+                \(\sigma\) — are strongly learned (\(c\) up to 0.99). And <code>beta_Search</code> shows
+                <em>negative</em> contraction with a large standardized shift (1.78): a genuine prior↔data
+                tension flag on exactly the demand-confounded channel Chapter 1 warned about.
+            </p>
+
+            <h3>Does the model track revenue?</h3>
+            <p>
+                The last gate before reading contributions: posterior-predictive fit. The notebook overlays
+                observed weekly revenue on the prediction with its 90% credible band; the fit hugs the data.
+            </p>
+            <div class="chart-container short" id="fitChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — the shape of the notebook's
+                actual-vs-fitted chart (trend + yearly seasonality + media bumps, 104 weeks), not the real
+                Aurora panel values. The point survives the recreation: a model can track revenue this well
+                and still misattribute it — fit quality is necessary, nowhere near sufficient.
+            </p>
+
+            <h2 id="contributions">Contributions &amp; ROAS — with credible intervals</h2>
+            <p>
+                The estimand is counterfactual: a channel's contribution is the revenue that disappears if
+                you turn it off. <code>compute_counterfactual_contributions(compute_uncertainty=True)</code>
+                attaches a posterior interval to every number, and <code>MMMAnalyzer</code> turns
+                contributions into ROAS — revenue per $1 of spend:
+            </p>
+            \[ \mathrm{ROAS}_c \;=\; \frac{\text{counterfactual contribution}_c}{\text{spend}_c} \]
+            <table>
+                <thead><tr><th>Channel</th><th>Total spend ($k)</th><th>Total contribution ($k)</th><th>ROAS (est.)</th><th>True ROAS</th></tr></thead>
+                <tbody>
+                    <tr><td>TV</td><td>6,053.78</td><td>1,265.88</td><td>0.21</td><td><strong>2.14</strong></td></tr>
+                    <tr><td>Search</td><td>3,312.38</td><td>9,353.67</td><td>2.82</td><td><strong>0.66</strong></td></tr>
+                    <tr><td>Social</td><td>3,095.75</td><td>2,629.10</td><td>0.85</td><td><strong>0.49</strong></td></tr>
+                    <tr><td>Display</td><td>2,853.73</td><td>1,322.09</td><td>0.46</td><td><strong>2.11</strong></td></tr>
+                </tbody>
+            </table>
+            <p>
+                The same table as the centerpiece picture — estimated ROAS with its credible interval, and
+                the <strong>true</strong> ROAS (known, because Aurora is synthetic) as a diamond:
+            </p>
+            <div class="chart-container" id="roasChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> bar heights and truth diamonds (baked ROI table vs
+                <code>aurora.true_roas</code>); whisker widths are approximated by scaling each channel's
+                measured 94% β-posterior HDI onto its ROAS (contribution is near-proportional to β) — the
+                notebook computes them exactly from contribution draws. What to see: the intervals are doing
+                honest work (Search's wide band straddles its truth at the low end; Social's covers 0.49),
+                but the truth diamonds for <strong>TV and Display sit far above even the top whisker</strong>.
+                That is not sampling noise. It is structure the model cannot see — section
+                <a href="#honest">below</a>.
+            </p>
+
+            <h2 id="marginal">Where does the <em>next</em> dollar go? Marginal vs average ROAS</h2>
+            <p>
+                Total ROAS prices the <em>average</em> dollar already spent. Budgeting needs the
+                <em>marginal</em> dollar — what a +10% bump returns — because saturation means channels don't
+                scale forever. <code>compute_marginal_contributions(spend_increase_pct=10)</code> measures it:
+            </p>
+            <table>
+                <thead><tr><th>Channel</th><th>Current spend ($k)</th><th>Marginal contribution ($k)</th><th>Marginal ROAS</th><th>Average ROAS</th></tr></thead>
+                <tbody>
+                    <tr><td>TV</td><td>6,053.78</td><td>100.16</td><td>0.17</td><td>0.21</td></tr>
+                    <tr><td>Search</td><td>3,312.38</td><td>687.59</td><td>2.08</td><td>2.82</td></tr>
+                    <tr><td>Social</td><td>3,095.75</td><td>203.03</td><td>0.66</td><td>0.85</td></tr>
+                    <tr><td>Display</td><td>2,853.73</td><td>102.42</td><td>0.36</td><td>0.46</td></tr>
+                </tbody>
+            </table>
+            <div class="chart-container" id="marginalChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — average vs marginal ROAS from the baked tables. Every channel's
+                next dollar earns less than its average dollar (Search: 2.82 → 2.08): all four are on the
+                concave part of their saturation curves. The gap between the pair of bars is the budgeting
+                signal — and it is why "Search has the best ROAS, give it everything" is wrong even when
+                you believe the model.
+            </p>
+            <p>
+                The geometry behind that gap: average ROAS is the slope of the <em>chord</em> from zero to
+                the current operating point on the channel's response curve; marginal ROAS is the slope of
+                the <em>tangent</em> there. On a saturating curve the tangent is always flatter than the chord.
+            </p>
+            <div class="controls-row">
+                <label>Channel:</label>
+                <button class="toggle-btn active" data-channel="TV">TV</button>
+                <button class="toggle-btn" data-channel="Search">Search</button>
+                <button class="toggle-btn" data-channel="Social">Social</button>
+                <button class="toggle-btn" data-channel="Display">Display</button>
+            </div>
+            <div class="chart-container" id="responseChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative</strong> — a saturating response curve
+                \(R(s) = A\,(1 - e^{-k s})\) computed live in your browser, with \(A\) and \(k\) calibrated per
+                channel so that the chord and tangent at current spend equal the <em>measured</em> average and
+                marginal ROAS above. The marked point is the channel's actual two-year spend. The notebook
+                derives the same picture from the fitted saturation posteriors.
+            </p>
+
+            <h2 id="whatif">A what-if: move 20% of Search into TV</h2>
+            <p>
+                The scenario API answers the planner's question directly:
+                <code>mmm.what_if_scenario({"Search": 0.8, "TV": 1.2})</code> re-runs the fitted model under
+                the new spend path. Measured result:
+            </p>
+            <table>
+                <thead><tr><th></th><th>Revenue</th></tr></thead>
+                <tbody>
+                    <tr><td>Baseline</td><td>$87,310k</td></tr>
+                    <tr><td>Scenario (Search −20%, TV +20%)</td><td>$86,011k</td></tr>
+                    <tr><td><strong>Change</strong></td><td><strong>−1.49% (−$1,298k)</strong></td></tr>
+                </tbody>
+            </table>
+            <div class="warning">
+                <h4>⚠️ Watch the sign</h4>
+                <p>
+                    The base model judges this move a <strong>loss</strong>. In Aurora's ground truth it is a
+                    <em>good</em> move — TV's true ROAS (2.14) is more than three times Search's (0.66). The
+                    model is internally consistent and wrong, because it undervalues TV for a structural
+                    reason the next section names. Acting on this number would steer the budget exactly the
+                    wrong way.
+                </p>
+            </div>
+            <p>
+                Try the move yourself. The slider shifts a share of budget between Search and TV (the
+                notebook's multiplier convention: Search × (1 − x), TV × (1 + x)) and re-prices the scenario
+                on the response curves calibrated above — i.e. <em>this is the base model's worldview</em>,
+                mirage included:
+            </p>
+            <div class="controls-row">
+                <label for="whatifSlider">Shift:</label>
+                <input type="range" id="whatifSlider" min="-30" max="30" step="1" value="20">
+                <span class="slider-readout" id="whatifReadout"></span>
+            </div>
+            <div class="chart-container short" id="whatifChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative</strong> — computed live from the calibrated response-curve approximation,
+                anchored to measured numbers (baseline revenue $87,310k; per-channel average and marginal
+                ROAS). At the notebook's setting (+20%) the approximation gives ≈ −1.45% against the measured
+                −1.49% — close enough to trust the shape. Every point on this curve inherits the base model's
+                blind spot: it prices TV at 0.21, not 2.14.
+            </p>
+
+            <h2 id="honest">The honest residual — what the base model gets wrong here</h2>
+            <p>
+                Grade the model against the oracle. The measured gap, channel by channel:
+            </p>
+            <div class="chart-container short" id="gapChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — estimated minus true ROAS per channel (baked
+                <code>chk</code> table): TV −1.93, Search +2.16, Social +0.36, Display −1.65. Two failure
+                modes, opposite signs, one fit.
+            </p>
+            <p>
+                Two distinct things are happening, and neither is noise:
+            </p>
+            <ul>
+                <li>
+                    <strong>Search is still overstated (2.82 vs 0.66).</strong> The demand control closes most
+                    of the back-door, but Search spend chases demand so tightly that residual confounding
+                    survives — the learning diagnostic flagged it (<code>beta_Search</code>: negative
+                    contraction, shift 1.78). Observational control alone cannot finish the job; the fix is a
+                    <em>geo-lift experiment folded into the likelihood</em>, which
+                    <a href="aurora-01-causality.html">Chapter 1</a> demonstrates pulling Search's naive ~2.8
+                    down to ~0.68 against the truth of 0.66.
+                </li>
+                <li>
+                    <strong>TV and Display are undervalued (0.21 vs 2.14; 0.46 vs 2.11).</strong> They work
+                    almost entirely through <em>brand awareness</em> — a mediated pathway
+                    (TV → awareness → sales) the base model has no node for, so it can only credit the tiny
+                    direct slice. To value a brand channel you must model the mediation:
+                    that is <a href="aurora-03-extended-mmm.html">Chapter 3</a>'s NestedMMM (and
+                    <a href="stress-04-extension-traps.html">Stress 04</a> covers where extensions themselves
+                    can mislead).
+                </li>
+            </ul>
+            <div class="note">
+                <h4>💡 Bonus: fitted models are serializable</h4>
+                <p>
+                    The expensive fit round-trips to disk —
+                    <code>MMMSerializer.save(mmm, "artifacts/aurora_base")</code> /
+                    <code>MMMSerializer.load(...)</code> restores the trace (2 chains × 600 draws, verified in
+                    the baked run) — so Chapters 3–5 reuse this model instead of re-sampling.
+                </p>
+            </div>
+
+            <h2 id="takeaways">Takeaways</h2>
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li>The base Bayesian MMM delivers <strong>contributions, ROAS, and marginal ROAS — all
+                        with credible intervals</strong> — from one demand-controlled, builder-configured fit.</li>
+                    <li><strong>Gate on diagnostics first</strong> (R̂, ESS, divergences, PPC), then check
+                        <strong>what the data actually learned</strong>: here the ROI-driving parameters
+                        contracted strongly while adstock stayed prior-dominated and
+                        <code>beta_Search</code> flagged prior↔data tension.</li>
+                    <li><strong>Marginal ≠ average</strong>: every Aurora channel's next dollar earns less
+                        than its average dollar (Search 2.08 vs 2.82) — the saturation gap is the budgeting
+                        signal, not the ROAS ranking.</li>
+                    <li>The model is honest about <em>statistical</em> uncertainty yet still
+                        <strong>structurally wrong twice</strong>: Search overstated by residual demand-chasing
+                        (+2.16 ROAS), TV/Display gutted by unmodeled mediation (−1.93 / −1.65).</li>
+                    <li>Hence the what-if's wrong sign (−1.49% on a truly good move): a base MMM is a
+                        <em>starting point</em> for <a href="interpreting-results.html">interpretation</a>,
+                        not the final word — experiments and mediation models finish the story.</li>
+                </ul>
+            </div>
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/02_base_mmm.ipynb</code> (committed with baked outputs),
+                    regenerated by <code>nbs/build_aurora_notebooks.py</code> on the shared synthetic world in
+                    <code>nbs/aurora.py</code>. The series README is <code>nbs/README_aurora.md</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series (copied verbatim).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // MEASURED numbers from the baked nbs/02_base_mmm.ipynb outputs.
+        // ------------------------------------------------------------------
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CKEY = { TV: 'tv', Search: 'search', Social: 'social', Display: 'display' };
+
+        // results.summary(): posterior mean / hdi_3% / hdi_97% of beta_c (94% HDI).
+        const BETA = {
+            TV:      { mean: 1.045, lo: 0.029, hi: 2.453 },
+            Search:  { mean: 3.305, lo: 1.229, hi: 5.534 },
+            Social:  { mean: 1.451, lo: 0.036, hi: 3.399 },
+            Display: { mean: 1.067, lo: 0.021, hi: 2.666 }
+        };
+
+        // MMMAnalyzer ROI table + aurora.true_roas + marginal contributions table.
+        const ROI = {
+            TV:      { spend: 6053.78, contrib: 1265.88, roas: 0.21, truth: 2.14, mroas: 0.17, mcontrib: 100.16 },
+            Search:  { spend: 3312.38, contrib: 9353.67, roas: 2.82, truth: 0.66, mroas: 2.08, mcontrib: 687.59 },
+            Social:  { spend: 3095.75, contrib: 2629.10, roas: 0.85, truth: 0.49, mroas: 0.66, mcontrib: 203.03 },
+            Display: { spend: 2853.73, contrib: 1322.09, roas: 0.46, truth: 2.11, mroas: 0.36, mcontrib: 102.42 }
+        };
+
+        const BASELINE_REVENUE = 87310;   // what_if_scenario baseline_outcome ($k)
+
+        // compute_parameter_learning(): contraction per parameter (sorted ascending).
+        const LEARNING = [
+            { p: 'beta_Search',      c: -0.326 },
+            { p: 'beta_Social',      c: -0.127 },
+            { p: 'adstock_TV',       c: -0.014 },
+            { p: 'adstock_Display',  c:  0.002 },
+            { p: 'trend_slope',      c:  0.091 },
+            { p: 'adstock_Social',   c:  0.181 },
+            { p: 'beta_TV',          c:  0.369 },
+            { p: 'beta_Display',     c:  0.390 },
+            { p: 'adstock_Search',   c:  0.444 },
+            { p: 'sat_lam_Social',   c:  0.704 },
+            { p: 'sat_lam_TV',       c:  0.705 },
+            { p: 'sat_lam_Display',  c:  0.738 },
+            { p: 'intercept',        c:  0.817 },
+            { p: 'season_yearly[1]', c:  0.905 },
+            { p: 'sat_lam_Search',   c:  0.927 },
+            { p: 'season_yearly[0]', c:  0.970 },
+            { p: 'season_yearly[3]', c:  0.976 },
+            { p: 'season_yearly[2]', c:  0.977 },
+            { p: 'beta_controls[1]', c:  0.983 },
+            { p: 'beta_controls[0]', c:  0.992 },
+            { p: 'sigma',            c:  0.994 }
+        ];
+
+        // ------------------------------------------------------------------
+        // Calibrated response curves: R(s) = A (1 - exp(-k s)) per channel,
+        // solved so R(s0) = measured contribution and R'(s0) = measured mROAS.
+        // ------------------------------------------------------------------
+        function calibrate(ch) {
+            const d = ROI[ch];
+            const target = d.mroas * d.spend / d.contrib;  // u e^-u / (1 - e^-u) = target
+            let lo = 1e-6, hi = 20;
+            for (let i = 0; i < 80; i++) {
+                const u = 0.5 * (lo + hi);
+                const g = u * Math.exp(-u) / (1 - Math.exp(-u));
+                if (g > target) { lo = u; } else { hi = u; }   // g is decreasing in u
+            }
+            const u = 0.5 * (lo + hi);
+            const k = u / d.spend;
+            const A = d.contrib / (1 - Math.exp(-u));
+            return { A: A, k: k };
+        }
+        const CURVES = {};
+        CHANNELS.forEach(function(ch) { CURVES[ch] = calibrate(ch); });
+        function respond(ch, s) {
+            const c = CURVES[ch];
+            return c.A * (1 - Math.exp(-c.k * s));
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 1: beta posterior forest (measured)
+        // ------------------------------------------------------------------
+        function drawBetaForest() {
+            const chs = CHANNELS.slice().reverse();
+            const trace = {
+                type: 'scatter',
+                mode: 'markers',
+                y: chs,
+                x: chs.map(function(c) { return BETA[c].mean; }),
+                error_x: {
+                    type: 'data', symmetric: false,
+                    array: chs.map(function(c) { return BETA[c].hi - BETA[c].mean; }),
+                    arrayminus: chs.map(function(c) { return BETA[c].mean - BETA[c].lo; }),
+                    color: 'rgba(45,58,45,0.55)', thickness: 2, width: 6
+                },
+                marker: {
+                    size: 12,
+                    color: chs.map(function(c) { return PT.colors[CKEY[c]]; }),
+                    line: { color: 'rgba(45,58,45,0.4)', width: 1 }
+                },
+                hovertemplate: '<b>beta_%{y}</b><br>mean %{x:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 90, r: 30, t: 10, b: 50 },
+                xaxis: { title: 'channel coefficient β (posterior mean, 94% HDI)', zeroline: true },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 0, y0: -0.5, y1: 3.5,
+                    line: { color: '#9aa79a', width: 1.5, dash: 'dash' }
+                }]
+            });
+            Plotly.newPlot('betaForestChart', [trace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2: prior -> posterior contraction (measured)
+        // ------------------------------------------------------------------
+        function drawLearning() {
+            const rows = LEARNING;
+            const colors = rows.map(function(r) {
+                if (r.c < 0.1) return PT.colors.silent;        // prior-dominated / tension
+                if (r.c < 0.5) return PT.colors.social;        // weakly learned
+                return PT.colors.ok;                           // strongly learned
+            });
+            const trace = {
+                type: 'bar', orientation: 'h',
+                y: rows.map(function(r) { return r.p; }),
+                x: rows.map(function(r) { return r.c; }),
+                marker: { color: colors, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                hovertemplate: '<b>%{y}</b><br>contraction %{x:.3f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 150, r: 30, t: 10, b: 55 },
+                xaxis: { title: 'contraction  c = 1 − Var(post)/Var(prior)', range: [-0.45, 1.05] },
+                yaxis: { automargin: true },
+                shapes: [{
+                    type: 'line', x0: 0.1, x1: 0.1, y0: -0.5, y1: rows.length - 0.5,
+                    line: { color: '#2d3a2d', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 0.1, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'prior-dominated below 0.1', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('learningChart', [trace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3: actual vs fitted (illustrative recreation, seeded)
+        // ------------------------------------------------------------------
+        function drawFit() {
+            const rand = mulberry32(20260610);
+            const n = 104;
+            const weeks = [], signal = [], actual = [], lo = [], hi = [];
+            for (let t = 0; t < n; t++) {
+                weeks.push(t + 1);
+                const trend = 760 + 1.1 * t;
+                const season = 70 * Math.sin(2 * Math.PI * (t + 8) / 52) + 24 * Math.sin(4 * Math.PI * t / 52);
+                const media = 36 * Math.exp(-Math.pow(((t % 26) - 9) / 5, 2));
+                const mu = trend + season + media;
+                signal.push(mu);
+                actual.push(mu + 38 * (rand() + rand() + rand() - 1.5));
+                lo.push(mu - 62); hi.push(mu + 62);
+            }
+            const traces = [
+                { x: weeks, y: hi, type: 'scatter', mode: 'lines', line: { width: 0 },
+                  hoverinfo: 'skip', showlegend: false },
+                { x: weeks, y: lo, type: 'scatter', mode: 'lines', line: { width: 0 },
+                  fill: 'tonexty', fillcolor: PT.band('#8fa86a', 0.22),
+                  name: '90% credible band', hoverinfo: 'skip' },
+                { x: weeks, y: signal, type: 'scatter', mode: 'lines',
+                  line: { color: '#8fa86a', width: 2.2 }, name: 'posterior mean' },
+                { x: weeks, y: actual, type: 'scatter', mode: 'lines',
+                  line: { color: PT.colors.truth, width: 1.2, dash: 'dot' }, name: 'observed revenue' }
+            ];
+            const layout = PT.layout({
+                margin: { l: 70, r: 20, t: 10, b: 50 },
+                xaxis: { title: 'week' },
+                yaxis: { title: 'weekly revenue ($k)' },
+                legend: { orientation: 'h', y: 1.14 }
+            });
+            Plotly.newPlot('fitChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 4 (centerpiece): ROAS with HDI whiskers vs truth diamonds
+        // ------------------------------------------------------------------
+        function drawRoas() {
+            // Whiskers: scale the measured beta 94% HDI onto ROAS
+            // (contribution ~ proportional to beta at fixed transforms).
+            const up = CHANNELS.map(function(c) {
+                return ROI[c].roas * (BETA[c].hi / BETA[c].mean) - ROI[c].roas;
+            });
+            const down = CHANNELS.map(function(c) {
+                return ROI[c].roas - ROI[c].roas * (BETA[c].lo / BETA[c].mean);
+            });
+            const bars = {
+                type: 'bar',
+                x: CHANNELS,
+                y: CHANNELS.map(function(c) { return ROI[c].roas; }),
+                name: 'estimated ROAS',
+                marker: {
+                    color: CHANNELS.map(function(c) { return PT.colors[CKEY[c]]; }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                error_y: {
+                    type: 'data', symmetric: false, array: up, arrayminus: down,
+                    color: 'rgba(45,58,45,0.6)', thickness: 2, width: 7
+                },
+                hovertemplate: '<b>%{x}</b><br>estimated ROAS %{y:.2f}<extra></extra>'
+            };
+            const truth = {
+                type: 'scatter', mode: 'markers',
+                x: CHANNELS,
+                y: CHANNELS.map(function(c) { return ROI[c].truth; }),
+                name: 'true ROAS (oracle)',
+                marker: { symbol: 'diamond', size: 13, color: PT.colors.truth,
+                          line: { color: '#fff', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>true ROAS %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 10, b: 50 },
+                yaxis: { title: 'ROAS (revenue per $1 spend)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: '#9aa79a', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 3.42, y: 1, yanchor: 'bottom', xanchor: 'right',
+                    text: 'breakeven', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('roasChart', [bars, truth], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 5: average vs marginal ROAS (measured)
+        // ------------------------------------------------------------------
+        function drawMarginal() {
+            const avg = {
+                type: 'bar', name: 'average ROAS (dollar already spent)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return ROI[c].roas; }),
+                marker: { color: CHANNELS.map(function(c) { return PT.band(PT.colors[CKEY[c]], 0.45); }),
+                          line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>average ROAS %{y:.2f}<extra></extra>'
+            };
+            const marg = {
+                type: 'bar', name: 'marginal ROAS (+10% spend)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return ROI[c].mroas; }),
+                marker: { color: CHANNELS.map(function(c) { return PT.colors[CKEY[c]]; }),
+                          line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>marginal ROAS %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                margin: { l: 70, r: 30, t: 10, b: 50 },
+                yaxis: { title: 'ROAS (revenue per $1)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: '#9aa79a', width: 1.5, dash: 'dash' }
+                }]
+            });
+            Plotly.newPlot('marginalChart', [avg, marg], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 6 (interactive): response curve with chord vs tangent
+        // ------------------------------------------------------------------
+        function drawResponse(ch) {
+            const d = ROI[ch], col = PT.colors[CKEY[ch]];
+            const s0 = d.spend, sMax = 2 * s0;
+            const xs = [], ys = [];
+            for (let i = 0; i <= 120; i++) {
+                const s = sMax * i / 120;
+                xs.push(s); ys.push(respond(ch, s));
+            }
+            const curve = {
+                x: xs, y: ys, type: 'scatter', mode: 'lines',
+                name: 'response curve', line: { color: col, width: 3 },
+                hovertemplate: 'spend %{x:,.0f}k → contribution %{y:,.0f}k<extra></extra>'
+            };
+            const chord = {
+                x: [0, s0], y: [0, d.contrib], type: 'scatter', mode: 'lines',
+                name: 'chord: average ROAS ' + d.roas.toFixed(2),
+                line: { color: '#9aa79a', width: 2, dash: 'dash' },
+                hoverinfo: 'skip'
+            };
+            const dt = 0.45 * s0;
+            const tangent = {
+                x: [s0 - dt, s0 + dt],
+                y: [d.contrib - d.mroas * dt, d.contrib + d.mroas * dt],
+                type: 'scatter', mode: 'lines',
+                name: 'tangent: marginal ROAS ' + d.mroas.toFixed(2),
+                line: { color: PT.colors.truth, width: 2, dash: 'dot' },
+                hoverinfo: 'skip'
+            };
+            const pt = {
+                x: [s0], y: [d.contrib], type: 'scatter', mode: 'markers+text',
+                name: 'current spend', showlegend: false,
+                text: ['current'], textposition: 'bottom right',
+                textfont: { size: 11, color: '#5a6b5a' },
+                marker: { size: 12, color: col, line: { color: '#fff', width: 2 } },
+                hovertemplate: '<b>' + ch + ' today</b><br>spend %{x:,.0f}k<br>contribution %{y:,.0f}k<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 80, r: 30, t: 10, b: 55 },
+                xaxis: { title: ch + ' spend ($k, 2 years)', rangemode: 'tozero' },
+                yaxis: { title: 'contribution ($k)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 }
+            });
+            Plotly.react('responseChart', [curve, chord, tangent, pt], layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawResponse(btn.dataset.channel);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // Chart 7 (interactive): what-if budget slider (Search <-> TV)
+        // ------------------------------------------------------------------
+        function scenarioDelta(xPct) {
+            const x = xPct / 100;
+            const dSearch = respond('Search', ROI.Search.spend * (1 - x)) - ROI.Search.contrib;
+            const dTV = respond('TV', ROI.TV.spend * (1 + x)) - ROI.TV.contrib;
+            return dSearch + dTV;
+        }
+
+        function drawWhatif(xPct) {
+            const delta = scenarioDelta(xPct);
+            const scen = BASELINE_REVENUE + delta;
+            const pct = 100 * delta / BASELINE_REVENUE;
+
+            const readout = document.getElementById('whatifReadout');
+            readout.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%  (' +
+                (delta >= 0 ? '+$' : '−$') + Math.abs(delta).toFixed(0) + 'k)';
+
+            const dirText = xPct >= 0
+                ? 'Search −' + xPct + '%, TV +' + xPct + '%'
+                : 'Search +' + (-xPct) + '%, TV −' + (-xPct) + '%';
+            const bars = {
+                type: 'bar',
+                x: ['baseline', 'scenario'],
+                y: [BASELINE_REVENUE, scen],
+                marker: { color: ['#9aa79a', delta >= 0 ? PT.colors.ok : PT.colors.silent],
+                          line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                text: ['$' + BASELINE_REVENUE.toLocaleString() + 'k',
+                       '$' + Math.round(scen).toLocaleString() + 'k'],
+                textposition: 'outside',
+                hovertemplate: '%{x}: %{y:,.0f}k<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 80, r: 30, t: 32, b: 45 },
+                title: { text: dirText + ' → ' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '% revenue (base-model view)',
+                         font: { size: 14 }, x: 0.5 },
+                yaxis: { title: 'total 2-year revenue ($k)',
+                         range: [84000, 89500] }
+            });
+            Plotly.react('whatifChart', [bars], layout, PT.config);
+        }
+
+        const slider = document.getElementById('whatifSlider');
+        slider.addEventListener('input', function() {
+            drawWhatif(parseInt(slider.value, 10));
+        });
+
+        // ------------------------------------------------------------------
+        // Chart 8: the honest residual — estimated minus true ROAS (measured)
+        // ------------------------------------------------------------------
+        function drawGap() {
+            const gaps = { TV: -1.93, Search: 2.16, Social: 0.36, Display: -1.65 };  // chk table
+            const trace = {
+                type: 'bar',
+                x: CHANNELS,
+                y: CHANNELS.map(function(c) { return gaps[c]; }),
+                marker: {
+                    color: CHANNELS.map(function(c) {
+                        return Math.abs(gaps[c]) > 1 ? PT.colors.silent : PT.colors.social;
+                    }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                text: CHANNELS.map(function(c) {
+                    return (gaps[c] >= 0 ? '+' : '') + gaps[c].toFixed(2);
+                }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>estimated − true ROAS: %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 24, b: 50 },
+                yaxis: { title: 'estimated − true ROAS', range: [-2.6, 2.9], zeroline: true },
+                annotations: [
+                    { x: 'Search', y: 2.45, text: 'demand-chasing residual',
+                      showarrow: false, font: { size: 11, color: '#a44c43' } },
+                    { x: 'TV', y: -2.25, text: 'unmodeled mediation',
+                      showarrow: false, font: { size: 11, color: '#a44c43' } }
+                ]
+            });
+            Plotly.newPlot('gapChart', [trace], layout, PT.config);
+        }
+
+        function init() {
+            drawBetaForest();
+            drawLearning();
+            drawFit();
+            drawRoas();
+            drawMarginal();
+            drawResponse('TV');
+            drawWhatif(20);
+            drawGap();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

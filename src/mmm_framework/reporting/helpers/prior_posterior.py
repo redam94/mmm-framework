@@ -163,13 +163,20 @@ def _select_key_parameters(posterior: Any, model: Any) -> list[str]:
                 params.append(name)
                 break
 
-    # Saturation parameters
+    # Saturation parameters. Hill channels expose both sat_half_ and
+    # sat_slope_, so collect every match rather than the first.
     for ch in channels:
-        for prefix in ["sat_lam_", "saturation_", "kappa_", "slope_"]:
+        for prefix in [
+            "sat_lam_",
+            "sat_half_",
+            "sat_slope_",
+            "saturation_",
+            "kappa_",
+            "slope_",
+        ]:
             name = f"{prefix}{ch}"
             if name in posterior:
                 params.append(name)
-                break
 
     # Global parameters
     for name in ["sigma", "intercept", "trend_slope"]:

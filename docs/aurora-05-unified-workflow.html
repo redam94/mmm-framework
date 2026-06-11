@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora 05: The Unified Workflow | MMM Framework</title>
+    <meta name="description" content="The Aurora Coffee Co. finale: one causal pipeline — data, DAG, fit, experiment calibration, extensions — ending in a budget reallocation worth ≈ $11.9M/yr more than the dashboard's plan on the same budget.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-05-unified-workflow.html">
+    <meta property="og:title" content="Aurora 05: The Unified Workflow | MMM Framework">
+    <meta property="og:description" content="Two planners, one budget. The dashboard plan funds the demand-chasing mirages; the experiment-anchored causal plan is worth ≈ +$11.9M/yr more — measured against a known ground truth.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-05-unified-workflow.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            flex: 1;
+            min-width: 180px;
+            max-width: 340px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .slider-readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--color-primary-dark);
+            font-weight: 600;
+            min-width: 11ch;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .ladder {
+            counter-reset: rung;
+            margin: 1.5rem 0;
+            padding: 0;
+            list-style: none;
+        }
+        .ladder li {
+            position: relative;
+            padding: 1rem 1.25rem 1rem 3.5rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            margin-bottom: 0.75rem;
+        }
+        .ladder li::before {
+            counter-increment: rung;
+            content: counter(rung);
+            position: absolute;
+            left: 1rem;
+            top: 1rem;
+            width: 1.8rem;
+            height: 1.8rem;
+            border-radius: 50%;
+            background: var(--color-primary);
+            color: #fff;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+        }
+        .ladder li strong { color: var(--color-primary-dark); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#pipeline">One pipeline, end to end</a></li>
+                <li><a href="#anchored">Anchored to the experiments</a></li>
+                <li><a href="#two-plans">Two planners, two plans</a></li>
+                <li><a href="#payoff">The $11.9M punchline</a></li>
+                <li><a href="#uncertainty">Decisions as probabilities</a></li>
+                <li><a href="#sandbox">Move the budget yourself</a></li>
+                <li><a href="#doctrine">The closing doctrine</a></li>
+            </ul>
+
+            <h3>Aurora Showcase</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="aurora-00-overview.html">00 · The Trap</a></li>
+                <li><a href="aurora-01-causality.html">01 · Causality</a></li>
+                <li><a href="aurora-02-base-mmm.html">02 · The Base MMM</a></li>
+                <li><a href="aurora-03-extended-mmm.html">03 · Extended Models</a></li>
+                <li><a href="aurora-04-reporting.html">04 · Reporting</a></li>
+                <li><a href="aurora-05-unified-workflow.html" class="active">05 · Unified Workflow</a></li>
+                <li><a href="causal-features-showcase.html">Causal Features Showcase</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="pipeline">Aurora 05 · The Unified Workflow</h1>
+            <p class="lead">
+                The payoff. Five chapters ago, Aurora Coffee Co. asked a simple question — <em>where
+                should next quarter's budget go?</em> — and the dashboard answered with correlations.
+                This finale runs the whole causal pipeline in one pass and ends where every analysis
+                should: a <strong>decision</strong>. Two plans, same budget. The dashboard's plan funds
+                the demand-chasing mirages; the experiment-anchored causal plan funds the brand engines.
+                Graded against Aurora's sealed ground truth, the gap between them is
+                <strong>≈ +$11.9M of revenue per year</strong>. This page mirrors
+                <code>nbs/05_unified_workflow.ipynb</code> — every headline number is the notebook's
+                measured output.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">$3,829k</div>
+                    <div class="stat-label">budget pool moved (25% of the $15.3M annual spend)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">&minus;$5,942k</div>
+                    <div class="stat-label">dashboard plan — funds Search &amp; Social by correlation</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+$5,942k</div>
+                    <div class="stat-label">causal plan — funds TV &amp; Display by anchored ROAS</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">$11,884k</div>
+                    <div class="stat-label">the gap — the annual price of chasing correlation</div>
+                </div>
+            </div>
+
+            <h2>The pipeline, recapped</h2>
+            <p>
+                Each rung of the workflow is one chapter of the series. Nothing here is new — the point
+                of the finale is that the pieces compose into <em>one</em> pass from raw data to a plan
+                a CFO can sign.
+            </p>
+
+            <ol class="ladder">
+                <li>
+                    <strong>Look before you model.</strong>
+                    <a href="aurora-00-overview.html">Chapter 00</a> showed the trap: Search has the
+                    highest spend–sales correlation (0.85) and the lowest true ROAS (0.66). Correlation
+                    rankings are the wrong input to a budget.
+                </li>
+                <li>
+                    <strong>State the causal model.</strong>
+                    <a href="aurora-01-causality.html">Chapter 01</a> drew the DAG — unobserved demand
+                    drives both spend and sales — declared variable roles, and showed that adjustment
+                    alone cannot close the gap (the demand proxy is noisy; see also
+                    <a href="stress-03-confounding-selection.html">stress&nbsp;03</a>).
+                </li>
+                <li>
+                    <strong>Fit and read honestly.</strong>
+                    <a href="aurora-02-base-mmm.html">Chapter 02</a> fit the base MMM and read ROAS,
+                    marginal ROAS, and what-ifs <em>with credible intervals</em> — uncertainty as a
+                    first-class output, not a footnote.
+                </li>
+                <li>
+                    <strong>Calibrate with experiments.</strong> Where observational data cannot identify
+                    the answer, randomized geo-lift evidence is folded <em>into the likelihood</em>.
+                    Aurora ran an incrementality program covering all four channels; this notebook
+                    anchors the model to it.
+                </li>
+                <li>
+                    <strong>Extend where structure demands it.</strong>
+                    <a href="aurora-03-extended-mmm.html">Chapter 03</a> used NestedMMM to show TV and
+                    Display work through awareness (mediation), and MultivariateMMM to expose Cold Brew
+                    cannibalizing Original.
+                </li>
+                <li>
+                    <strong>Decide and ship.</strong> Turn corrected ROAS into a reallocation, value it,
+                    and put it in a board-ready report (<a href="aurora-04-reporting.html">Chapter 04</a>)
+                    with the causal assumptions printed on the table.
+                </li>
+            </ol>
+
+            <div class="note">
+                <h4>💡 The same workflow, under fire</h4>
+                <p>
+                    This is the friendly version — Aurora's world is hostile but known. The stress series
+                    runs the <em>identical</em> recovery workflow against a world that breaks everything
+                    at once, and measures every step:
+                    <a href="stress-05-gauntlet.html">Stress 05 · The Gauntlet</a> (Search ROAS
+                    5.59 → 0.65 against a truth of 0.66). The scorecard for all sixteen pressure-test
+                    worlds lives at <a href="pressure-testing.html">Pressure Testing</a>.
+                </p>
+            </div>
+
+            <h2 id="anchored">Anchored to the experiments, the model lands on the truth</h2>
+            <p>
+                The notebook builds the final model in one cell: the base panel with the demand control,
+                yearly seasonality, a linear trend — and four <code>ExperimentMeasurement</code> objects,
+                one ROAS geo-lift result per channel, each entering the likelihood as
+                \( \hat{R}_c^{\text{exp}} \sim \mathcal{N}\!\big(\mathrm{ROAS}_c(\theta),\; 0.08^2\big) \).
+                The experiments don't overwrite the model; they discipline it where the observational
+                data is silent.
+            </p>
+
+            <pre><code>experiments = [ExperimentMeasurement(ch, window, value=float(aurora.true_roas[ch]),
+                                     se=0.08, estimand=ExperimentEstimand.ROAS)
+               for ch in CHANNELS]
+mmm = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR), experiments=experiments)
+results = mmm.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)</code></pre>
+
+            <p>
+                The result doesn't just recover the <em>ranking</em>
+                (Display &gt; TV &gt; Search &gt; Social) — it lands on the true ROAS values themselves.
+                Every channel hugs the 45° line:
+            </p>
+
+            <div class="chart-container" id="recoveryChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the notebook's recovery table, replotted: true ROAS (x)
+                vs experiment-anchored model ROAS (y). TV 2.14 → 2.08, Search 0.66 → 0.66,
+                Social 0.49 → 0.47, Display 2.11 → 2.08. Compare the unanchored base model in
+                <a href="aurora-02-base-mmm.html">Chapter 02</a>, where confounding inflates Search.
+            </p>
+
+            <h2 id="two-plans">Two planners walk in</h2>
+            <p>
+                Same data, same budget, two scoring rules. The <strong>dashboard planner</strong> ranks
+                channels by spend–sales correlation and moves money toward the top two —
+                <strong>Search (r = 0.85)</strong> and <strong>Social (r = 0.69)</strong>, the two
+                channels whose spend chases demand hardest. The <strong>causal planner</strong> ranks by
+                experiment-anchored ROAS and moves the same money toward
+                <strong>TV (2.08)</strong> and <strong>Display (2.08)</strong>. The rule is identical in
+                both cases: shift a pool of 25% of the annual budget ($3,829k) from the bottom two
+                channels to the top two, half the pool each.
+            </p>
+
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn active" data-view="levels">Plan spend levels</button>
+                <button class="toggle-btn" data-view="delta">Budget shift (&Delta;)</button>
+            </div>
+            <div class="chart-container" id="allocChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — side-by-side allocations from the notebook's plan cells:
+                current annual spend per channel and what each plan does to it ($000s). The two plans
+                are near <strong>mirror images</strong>: the dashboard funds precisely the channels the
+                causal model defunds. The dashboard plan cuts Display — the quiet channel with a true
+                ROAS of 2.11 — to $939k.
+            </p>
+
+            <h2 id="payoff">The punchline: value both plans against the truth</h2>
+            <p>
+                Because Aurora is synthetic, we can grade both plans against the sealed answer key:
+                value each budget shift at the channels' <em>true</em> ROAS,
+                \( \Delta R \;=\; \sum_c \Delta s_c \cdot \mathrm{ROAS}_c^{\text{true}} \).
+                The notebook prints the verdict:
+            </p>
+
+            <pre><code>Shift $3,829k of budget (vs leaving it where it is):
+  Dashboard plan (fund ['Search', 'Social']):  $-5,942k revenue
+  Causal plan    (fund ['TV', 'Display']):     $+5,942k revenue
+  → Cost of chasing correlation instead of causal ROAS: ~$11,884k/yr (illustrative).</code></pre>
+
+            <div class="chart-container short" id="valueChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the notebook's annual-revenue-impact chart. The dashboard
+                plan doesn't just underperform; it <em>destroys</em> $5.9M/yr by moving money from
+                ROAS-2.1 channels into ROAS-0.5–0.7 channels. The causal plan earns the mirror-image
+                +$5.9M/yr. Gap: <strong>$11,884k/yr ≈ +$11.9M/yr</strong> on the same budget.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Read the dollar figure honestly</h4>
+                <p>
+                    The notebook is explicit: this is a <em>deliberately stylized, first-order
+                    comparison</em> — it values the average dollar and holds saturation fixed, and a real
+                    planner wouldn't swing the budget fully inverted. The figure is an
+                    <strong>illustrative upper bound on the direction and order of magnitude</strong>,
+                    not a forecast. The lesson it carries, though, is solid and verified: chasing
+                    correlation moves money <em>the wrong way</em>, and the gap between the two
+                    directions is the price of getting it wrong. For saturation-aware optimization done
+                    properly, see <a href="workflow-budget-optimization.html">the budget-optimization
+                    workflow</a>.
+                </p>
+            </div>
+
+            <h2 id="uncertainty">Reallocation under uncertainty: decisions as probabilities</h2>
+            <p>
+                A Bayesian workflow never hands the CFO a bare point estimate. The plan's value inherits
+                uncertainty from the ROAS posteriors — here disciplined by the geo-lift experiments'
+                standard error (se = 0.08 per channel). Propagating that uncertainty through the same
+                plan-valuation arithmetic turns "the causal plan is worth more" from an assertion into
+                a probability statement:
+            </p>
+
+            <div class="chart-container" id="gapChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — Monte Carlo propagation of the
+                experiments' se = 0.08 through the notebook's plan-valuation formula (4,000 draws,
+                seeded). With experiment-grade precision on every channel,
+                P(causal plan beats the dashboard plan) <span id="pGapWin">—</span> and
+                P(the dashboard plan loses money) <span id="pNaiveLoss">—</span>. The notebook itself
+                reports the point values; the distributions here show why the <em>decision</em> is safe
+                even before the point estimate is.
+            </p>
+
+            <div class="definition">
+                <h4>Definition: a decision-grade answer</h4>
+                <p>
+                    Not "Search ROAS is 0.66" but "the probability that moving the next dollar from
+                    Search to Display earns more than it costs is ≈ 1." Decisions are made on
+                    <em>probabilities of being directionally right</em>, sized by what's at stake. When
+                    posteriors are wide (as in the unanchored model of
+                    <a href="aurora-02-base-mmm.html">Chapter 02</a>), the right decision may be "run
+                    the experiment first" — which is exactly how Aurora's incrementality program earns
+                    its keep here.
+                </p>
+            </div>
+
+            <h2 id="sandbox">Move the budget yourself</h2>
+            <p>
+                The notebook fixes the shifted pool at 25% of budget. Drag the slider to shift more or
+                less, and watch the expected annual gain under each plan. This toy adds one realistic
+                wrinkle the notebook's first-order arithmetic omits: <em>saturating</em> response curves
+                (calibrated so each channel's average ROAS at current spend matches Aurora's truth), so
+                pushing ever more money into TV/Display earns diminishing returns.
+            </p>
+
+            <div class="controls-row">
+                <label for="shiftSlider">Budget pool shifted:</label>
+                <input type="range" id="shiftSlider" min="0" max="35" step="1" value="25">
+                <span class="slider-readout" id="shiftReadout">25% · $3,829k</span>
+            </div>
+            <div class="chart-container" id="sandboxChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative</strong> — computed live in your browser on toy saturating response
+                curves, <em>not</em> a model output. Note what saturation does to the notebook's
+                first-order ±$5.9M: at the 25% shift the causal plan's gain flattens to roughly
+                +$2.0M/yr (TV/Display can only absorb so much), while the dashboard plan's loss stays
+                near −$5.2M/yr — moving money <em>out</em> of high-ROAS channels hurts at nearly full
+                first-order strength. The direction never flips; the magnitude is curve-dependent. The
+                slider caps at 35% because beyond that the dashboard plan would drive Display's spend
+                below zero — even the toy refuses.
+            </p>
+
+            <h2 id="doctrine">The closing doctrine</h2>
+            <p>
+                Why should anyone believe this model? Not because it converged, and not because it fits —
+                <a href="pressure-testing.html">eight silent failures sampled cleanly</a>. It earns
+                trust two ways. First, it was <strong>graded against a sealed answer key</strong>: every
+                claim on these six pages — the mirage, the brand engines, the cannibalization, the
+                recovery — is checked against Aurora's known ground truth, the same discipline the
+                <a href="pressure-testing.html">stress harness</a> applies to sixteen hostile worlds.
+                Second, it <strong>folds in experiments where observational data cannot identify the
+                answer</strong>: no amount of adjustment de-confounds demand-chasing spend
+                (<a href="aurora-01-causality.html">Chapter 01</a>,
+                <a href="stress-03-confounding-selection.html">stress 03</a>) — but one geo-lift result
+                per channel, entered into the likelihood, pins the model to randomized evidence and the
+                truth follows.
+            </p>
+
+            <p>The Aurora story, in one line:</p>
+            <div class="note">
+                <p>
+                    <em>A dashboard sees correlations and would have funded a mirage.
+                    <code>mmm_framework</code> sees a <strong>causal system</strong> — confounded spend,
+                    a brand-awareness pathway, cannibalizing products — anchors it to
+                    <strong>randomized experiments</strong>, quantifies the
+                    <strong>uncertainty</strong>, and turns it into a <strong>defensible
+                    reallocation</strong> worth real money.</em>
+                </p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr><th>Chapter</th><th>What it added</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><a href="aurora-00-overview.html">00 · The Trap</a></td>
+                        <td>The hook: naive correlation crowns Search; true ROAS says it's a mirage.</td></tr>
+                    <tr><td><a href="aurora-01-causality.html">01 · Causality</a></td>
+                        <td>Made assumptions explicit; proved adjustment isn't enough; <strong>anchored to experiments</strong>.</td></tr>
+                    <tr><td><a href="aurora-02-base-mmm.html">02 · The Base MMM</a></td>
+                        <td>ROAS &amp; marginal ROAS <strong>with credible intervals</strong>; honest diagnostics.</td></tr>
+                    <tr><td><a href="aurora-03-extended-mmm.html">03 · Extended Models</a></td>
+                        <td>TV/Display are <strong>brand engines</strong> (mediation); products <strong>cannibalize</strong>.</td></tr>
+                    <tr><td><a href="aurora-04-reporting.html">04 · Reporting</a></td>
+                        <td>A <strong>board-ready</strong> deck with the causal assumptions on the table.</td></tr>
+                    <tr><td>05 · Workflow <em>(this page)</em></td>
+                        <td>One pipeline → a reallocation the CFO can sign: <strong>≈ +$11.9M/yr</strong> vs the dashboard.</td></tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>The pipeline composes:</strong> data → causal spec → fit → experiment calibration → extensions where structure demands → decision. One pass, every chapter a rung.</li>
+                    <li><strong>Experiment anchoring works:</strong> with four geo-lift results in the likelihood, the model recovers the true ROAS ranking <em>and</em> levels (worst miss 0.06 on a scale of 2.1).</li>
+                    <li><strong>The plans are mirror images:</strong> the dashboard funds Search/Social (r = 0.85, 0.69; true ROAS 0.66, 0.49); the causal plan funds TV/Display (true ROAS 2.14, 2.11). Same budget, opposite directions.</li>
+                    <li><strong>The gap is the headline:</strong> ≈ +$11.9M/yr ($11,884k, measured) — an illustrative first-order upper bound, but the <em>direction</em> is verified against ground truth.</li>
+                    <li><strong>Decide on probabilities, not points:</strong> propagate posterior uncertainty into the plan's value; act when the probability of being directionally right is high, experiment when it isn't.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/05_unified_workflow.ipynb</code> (committed with baked
+                    outputs), generated by <code>nbs/build_aurora_notebooks.py</code> on the shared
+                    synthetic world in <code>nbs/aurora.py</code>. The series guide is
+                    <code>nbs/README_aurora.md</code>; the final board report it ships lands at
+                    <code>nbs/artifacts/aurora_final_plan.html</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // MEASURED numbers from nbs/05_unified_workflow.ipynb (baked outputs)
+        // and the shared world in nbs/aurora.py (seed 7).
+        // ------------------------------------------------------------------
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLOR = {
+            TV: PT.colors.tv, Search: PT.colors.search,
+            Social: PT.colors.social, Display: PT.colors.display
+        };
+        // Recovery table (cell output): true ROAS vs experiment-anchored model ROAS.
+        const TRUE_ROAS  = { TV: 2.14, Search: 0.66, Social: 0.49, Display: 2.11 };
+        const MODEL_ROAS = { TV: 2.08, Search: 0.66, Social: 0.47, Display: 2.08 };
+        // Naive spend-sales correlations (cell 8 inputs; matches Chapter 00).
+        const NAIVE_CORR = { TV: 0.29, Search: 0.85, Social: 0.69, Display: 0.52 };
+        // Current annual spend ($000s) and the two plans (cells 8-10).
+        const SPEND = { TV: 6054, Search: 3312, Social: 3096, Display: 2854 };
+        const TOTAL_SPEND = 15316;       // $000s
+        const POOL = 3829;               // 25% of budget, $000s
+        const HALF = POOL / 2;           // per winner / loser channel
+        // Dashboard plan funds Search+Social; causal plan funds TV+Display.
+        const NAIVE_DELTA  = { TV: -HALF, Search: +HALF, Social: +HALF, Display: -HALF };
+        const CAUSAL_DELTA = { TV: +HALF, Search: -HALF, Social: -HALF, Display: +HALF };
+        // Plan values against true ROAS (cell 8 printed output, $000s/yr).
+        const NAIVE_LIFT  = -5942;
+        const CAUSAL_LIFT = +5942;
+        const GAP = 11884;
+        const EXP_SE = 0.08;             // geo-lift standard error per channel
+
+        const PLAN_COLORS = { naive: PT.colors.silent, causal: PT.colors.ok };
+
+        function fmtK(v) {
+            const sign = v < 0 ? '−' : (v > 0 ? '+' : '');
+            return sign + '$' + Math.abs(Math.round(v)).toLocaleString('en-US') + 'k';
+        }
+
+        // ------------------------------------------------------------------
+        // 1. Recovery chart — true vs model ROAS, 45° line (measured)
+        // ------------------------------------------------------------------
+        function drawRecovery() {
+            const lim = 2.6;
+            const line45 = {
+                type: 'scatter', mode: 'lines', name: 'perfect recovery',
+                x: [0, lim], y: [0, lim],
+                line: { color: PT.colors.truth, dash: 'dash', width: 1.5 },
+                hoverinfo: 'skip'
+            };
+            const pts = CHANNELS.map(function(ch) {
+                return {
+                    type: 'scatter', mode: 'markers+text', name: ch,
+                    x: [TRUE_ROAS[ch]], y: [MODEL_ROAS[ch]],
+                    text: [ch],
+                    textposition: ch === 'Display' ? 'bottom right' : 'top left',
+                    textfont: { color: CH_COLOR[ch], size: 12, family: "'Source Sans 3', sans-serif" },
+                    marker: { color: CH_COLOR[ch], size: 16, line: { color: '#fff', width: 1.5 } },
+                    customdata: [[NAIVE_CORR[ch]]],
+                    hovertemplate: '<b>' + ch + '</b><br>true ROAS %{x:.2f}<br>model ROAS %{y:.2f}' +
+                                   '<br>naive correlation %{customdata[0]:.2f}<extra></extra>'
+                };
+            });
+            const layout = PT.layout({
+                xaxis: { title: 'true ROAS', range: [0, lim] },
+                yaxis: { title: 'experiment-anchored model ROAS', range: [0, lim] },
+                showlegend: false,
+                margin: { l: 70, r: 30, t: 20, b: 60 },
+                annotations: [{
+                    x: 1.05, y: 0.45, text: 'the mirages<br>(Search, Social)',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 1.65, y: 2.25, text: 'the brand engines<br>(TV, Display)',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('recoveryChart', [line45].concat(pts), layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2. Allocation chart — levels vs delta toggle (measured)
+        // ------------------------------------------------------------------
+        function drawAlloc(view) {
+            let traces, layout;
+            if (view === 'levels') {
+                const current = CHANNELS.map(function(c) { return SPEND[c]; });
+                const naive   = CHANNELS.map(function(c) { return SPEND[c] + NAIVE_DELTA[c]; });
+                const causal  = CHANNELS.map(function(c) { return SPEND[c] + CAUSAL_DELTA[c]; });
+                traces = [
+                    { type: 'bar', name: 'current spend', x: CHANNELS, y: current,
+                      marker: { color: '#9aa79a' },
+                      hovertemplate: '<b>%{x}</b> current: $%{y:,.0f}k<extra></extra>' },
+                    { type: 'bar', name: 'dashboard plan', x: CHANNELS, y: naive,
+                      marker: { color: PLAN_COLORS.naive },
+                      hovertemplate: '<b>%{x}</b> dashboard plan: $%{y:,.0f}k<extra></extra>' },
+                    { type: 'bar', name: 'causal plan', x: CHANNELS, y: causal,
+                      marker: { color: PLAN_COLORS.causal },
+                      hovertemplate: '<b>%{x}</b> causal plan: $%{y:,.0f}k<extra></extra>' }
+                ];
+                layout = PT.layout({
+                    barmode: 'group',
+                    yaxis: { title: 'annual spend ($000s)', rangemode: 'tozero' },
+                    legend: { orientation: 'h', y: 1.12 },
+                    margin: { l: 70, r: 30, t: 40, b: 50 }
+                });
+            } else {
+                traces = [
+                    { type: 'bar', name: 'dashboard plan',
+                      x: CHANNELS, y: CHANNELS.map(function(c) { return NAIVE_DELTA[c]; }),
+                      marker: { color: PLAN_COLORS.naive },
+                      hovertemplate: '<b>%{x}</b> dashboard shift: %{y:+,.0f}k<extra></extra>' },
+                    { type: 'bar', name: 'causal plan',
+                      x: CHANNELS, y: CHANNELS.map(function(c) { return CAUSAL_DELTA[c]; }),
+                      marker: { color: PLAN_COLORS.causal },
+                      hovertemplate: '<b>%{x}</b> causal shift: %{y:+,.0f}k<extra></extra>' }
+                ];
+                layout = PT.layout({
+                    barmode: 'group',
+                    yaxis: { title: 'budget shift ($000s)' },
+                    legend: { orientation: 'h', y: 1.12 },
+                    margin: { l: 70, r: 30, t: 40, b: 50 },
+                    shapes: [{
+                        type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
+                        line: { color: '#2d3a2d', width: 1 }
+                    }]
+                });
+            }
+            Plotly.react('allocChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawAlloc(btn.dataset.view);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // 3. Value chart — annual revenue impact of each plan (measured)
+        // ------------------------------------------------------------------
+        function drawValue() {
+            const trace = {
+                type: 'bar',
+                x: ['dashboard plan<br>(fund Search + Social)', 'causal plan<br>(fund TV + Display)'],
+                y: [NAIVE_LIFT, CAUSAL_LIFT],
+                marker: { color: [PLAN_COLORS.naive, PLAN_COLORS.causal],
+                          line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                text: [fmtK(NAIVE_LIFT) + '/yr', fmtK(CAUSAL_LIFT) + '/yr'],
+                textposition: 'outside',
+                hovertemplate: '%{x}<br>%{y:+,.0f}k revenue / yr<extra></extra>'
+            };
+            const layout = PT.layout({
+                yaxis: { title: 'annual revenue impact ($000s)', range: [-7800, 7800] },
+                margin: { l: 80, r: 30, t: 20, b: 60 },
+                shapes: [{
+                    type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
+                    line: { color: '#2d3a2d', width: 1 }
+                }],
+                annotations: [{
+                    x: 0.5, xref: 'paper', y: 7100,
+                    text: 'gap: $11,884k/yr ≈ +$11.9M/yr',
+                    showarrow: false,
+                    font: { size: 13, color: '#2d3a2d', family: "'DM Serif Display', serif" }
+                }]
+            });
+            Plotly.newPlot('valueChart', [trace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 4. Uncertainty chart — MC propagation of experiment se (illustrative)
+        // ------------------------------------------------------------------
+        function drawGap() {
+            const rng = mulberry32(20260610);
+            function normal() {
+                let u = 0, v = 0;
+                while (u === 0) u = rng();
+                while (v === 0) v = rng();
+                return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+            }
+            const N = 4000;
+            const naiveVals = new Array(N), causalVals = new Array(N);
+            let winGap = 0, naiveLoses = 0;
+            for (let i = 0; i < N; i++) {
+                let nv = 0, cv = 0;
+                CHANNELS.forEach(function(c) {
+                    const r = TRUE_ROAS[c] + EXP_SE * normal();
+                    nv += NAIVE_DELTA[c] * r;
+                    cv += CAUSAL_DELTA[c] * r;
+                });
+                naiveVals[i] = nv; causalVals[i] = cv;
+                if (cv > nv) winGap++;
+                if (nv < 0) naiveLoses++;
+            }
+            const pWin = winGap / N, pLoss = naiveLoses / N;
+            const fmtP = function(p) {
+                return p >= 0.9995 ? '&gt; 99.9%' : (100 * p).toFixed(1) + '%';
+            };
+            document.getElementById('pGapWin').innerHTML = '≈ ' + fmtP(pWin);
+            document.getElementById('pNaiveLoss').innerHTML = '≈ ' + fmtP(pLoss);
+
+            const traces = [
+                { type: 'histogram', name: 'dashboard plan value', x: naiveVals,
+                  marker: { color: PT.band(PLAN_COLORS.naive, 0.55) },
+                  hovertemplate: '%{x:,.0f}k<extra>dashboard</extra>' },
+                { type: 'histogram', name: 'causal plan value', x: causalVals,
+                  marker: { color: PT.band(PLAN_COLORS.causal, 0.55) },
+                  hovertemplate: '%{x:,.0f}k<extra>causal</extra>' }
+            ];
+            const layout = PT.layout({
+                barmode: 'overlay',
+                xaxis: { title: 'annual revenue impact of the plan ($000s)' },
+                yaxis: { title: 'Monte Carlo draws' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1,
+                    line: { color: '#2d3a2d', width: 1, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 0, yref: 'paper', y: 1.02, yanchor: 'bottom',
+                    text: 'break even', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('gapChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 5. Sandbox — budget-shift slider on toy saturating curves (illustrative)
+        // ------------------------------------------------------------------
+        // Toy response: rev_c(s) = beta_c * (1 - exp(-s / S_c)), calibrated so the
+        // AVERAGE ROAS at current spend equals the true ROAS:
+        //   beta_c = trueROAS_c * S_c / (1 - 1/e)
+        function toyRevenue(spendMap) {
+            let total = 0;
+            CHANNELS.forEach(function(c) {
+                const S0 = SPEND[c];
+                const beta = TRUE_ROAS[c] * S0 / (1 - Math.exp(-1));
+                total += beta * (1 - Math.exp(-Math.max(spendMap[c], 0) / S0));
+            });
+            return total;
+        }
+        function planGain(deltaSign, frac) {
+            // deltaSign: +1 winners get money (causal: TV/Display), -1 (naive: Search/Social)
+            const pool = frac * TOTAL_SPEND;
+            const winners = deltaSign > 0 ? ['TV', 'Display'] : ['Search', 'Social'];
+            const newSpend = {};
+            CHANNELS.forEach(function(c) {
+                const d = winners.indexOf(c) >= 0 ? pool / 2 : -pool / 2;
+                newSpend[c] = SPEND[c] + d;
+            });
+            const base = {};
+            CHANNELS.forEach(function(c) { base[c] = SPEND[c]; });
+            return toyRevenue(newSpend) - toyRevenue(base);
+        }
+
+        function drawSandbox(fracPct) {
+            const frac = fracPct / 100;
+            const fr = [], gNaive = [], gCausal = [];
+            for (let p = 0; p <= 35; p += 1) {
+                fr.push(p);
+                gNaive.push(planGain(-1, p / 100));
+                gCausal.push(planGain(+1, p / 100));
+            }
+            const gN = planGain(-1, frac), gC = planGain(+1, frac);
+            document.getElementById('shiftReadout').textContent =
+                fracPct + '% · $' + Math.round(frac * TOTAL_SPEND).toLocaleString('en-US') + 'k';
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'causal plan (fund TV + Display)',
+                  x: fr, y: gCausal, line: { color: PLAN_COLORS.causal, width: 2.5 },
+                  hovertemplate: 'shift %{x}%: %{y:+,.0f}k/yr<extra>causal</extra>' },
+                { type: 'scatter', mode: 'lines', name: 'dashboard plan (fund Search + Social)',
+                  x: fr, y: gNaive, line: { color: PLAN_COLORS.naive, width: 2.5 },
+                  hovertemplate: 'shift %{x}%: %{y:+,.0f}k/yr<extra>dashboard</extra>' },
+                { type: 'scatter', mode: 'markers', name: 'your shift', showlegend: false,
+                  x: [fracPct, fracPct], y: [gC, gN],
+                  marker: { color: [PLAN_COLORS.causal, PLAN_COLORS.naive], size: 13,
+                            line: { color: '#2d3a2d', width: 1.5 } },
+                  hovertemplate: '%{y:+,.0f}k/yr<extra></extra>' }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'share of annual budget shifted (%)', range: [0, 36] },
+                yaxis: { title: 'expected annual gain ($000s)' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 75, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 36, y0: 0, y1: 0,
+                    line: { color: '#2d3a2d', width: 1 }
+                }, {
+                    type: 'line', x0: fracPct, x1: fracPct, yref: 'paper', y0: 0, y1: 1,
+                    line: { color: '#9aa79a', width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: fracPct, y: gC, xanchor: 'left', xshift: 10,
+                    text: fmtK(gC) + '/yr', showarrow: false,
+                    font: { size: 12, color: '#3f7a58' }
+                }, {
+                    x: fracPct, y: gN, xanchor: 'left', xshift: 10,
+                    text: fmtK(gN) + '/yr', showarrow: false,
+                    font: { size: 12, color: '#a44c43' }
+                }]
+            });
+            Plotly.react('sandboxChart', traces, layout, PT.config);
+        }
+
+        const slider = document.getElementById('shiftSlider');
+        slider.addEventListener('input', function() {
+            drawSandbox(parseInt(slider.value, 10));
+        });
+
+        function init() {
+            drawRecovery();
+            drawAlloc('levels');
+            drawValue();
+            drawGap();
+            drawSandbox(25);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -124,7 +124,10 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         adstock = (
             self._adstock or AdstockConfigBuilder().geometric().with_max_lag(8).build()
         )
-        saturation = self._saturation or SaturationConfigBuilder().hill().build()
+        # Default saturation is logistic: that is what the core model has
+        # always fit, so unspecified channels keep historical behavior now
+        # that BayesianMMM honors the configured saturation type.
+        saturation = self._saturation or SaturationConfigBuilder().logistic().build()
         coefficient_prior = (
             self._coefficient_prior or PriorConfigBuilder().half_normal(2.0).build()
         )

@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop 00: Thinking in Distributions | MMM Framework</title>
+    <meta name="description" content="A from-zero introduction to Bayesian thinking for marketing analysts: probability as belief, Bayes' rule on a grid, priors, credible intervals and HDIs, and Monte Carlo — taught through one A/B test, with every computation running live in your browser.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/workshop-00-thinking-in-distributions.html">
+    <meta property="og:title" content="Workshop 00: Thinking in Distributions | MMM Framework">
+    <meta property="og:description" content="Is the new creative better — and how sure are we? From 5.4% vs 5.1% to P(B beats A), a credible interval, and a dollar-denominated uplift distribution, with no Bayesian background assumed.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/workshop-00-thinking-in-distributions.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row input[type="range"] {
+            accent-color: var(--color-primary-dark);
+            width: 220px;
+        }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-text);
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-full);
+            padding: 0.25rem 0.75rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#top">The buyer's question</a></li>
+                <li><a href="#belief">1 · Probability as belief</a></li>
+                <li><a href="#bayes">2 · Bayes' rule, visually</a></li>
+                <li><a href="#grid">3 · The grid trick</a></li>
+                <li><a href="#priors">4 · Priors matter (then stop)</a></li>
+                <li><a href="#decision">5 · Distribution &rarr; decision</a></li>
+                <li><a href="#montecarlo">6 · Monte Carlo &rarr; dollars</a></li>
+                <li><a href="#glossary">7 · Glossary &amp; takeaways</a></li>
+            </ul>
+
+            <h3>The Workshop Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="workshop-00-thinking-in-distributions.html" class="active">00 · Thinking in Distributions</a></li>
+                <li><a href="workshop-01-priors.html">01 · Priors</a></li>
+                <li><a href="workshop-02-sampling.html">02 · Sampling</a></li>
+                <li><a href="workshop-03-first-mmm.html">03 · Your First MMM</a></li>
+                <li><a href="workshop-04-reading-the-posterior.html">04 · Reading the Posterior</a></li>
+                <li><a href="workshop-05-from-draws-to-decisions.html">05 · Draws to Decisions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="top">Workshop 00 — Thinking in Distributions</h1>
+            <p class="lead">
+                Your team just ran an A/B test on two ad creatives. The new creative (B) got a
+                <strong>5.4% click-through rate</strong>; the old one (A) got <strong>5.1%</strong>.
+                Your media buyer asks the only question that matters: <em>"Is B actually better —
+                and how sure are we?"</em> "5.4 is bigger than 5.1" is not an answer: both numbers
+                came from a finite sample, and rerunning the test would produce different ones.
+                The honest answer is a probability — <em>"there's an X% chance B is better, and if
+                it is, the upside is roughly Y dollars a month, give or take Z."</em> This page
+                teaches the machinery that produces sentences like that, with no Bayesian
+                background assumed and every computation running live in your browser.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">5.4 vs 5.1</div>
+                    <div class="stat-label">observed CTR (%), creative B vs A — the question</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">73%</div>
+                    <div class="stat-label">probability B's true CTR beats A's (notebook: P = 72.5%)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">$2,981</div>
+                    <div class="stat-label">median monthly revenue uplift from switching (notebook)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">27%</div>
+                    <div class="stat-label">chance the switch loses money — the part a point estimate hides</div>
+                </div>
+            </div>
+
+            <p>
+                Why does this matter for <strong>Marketing Mix Modeling (MMM)</strong>? Because every
+                MMM decision — shift budget to Search, cut Display, scale TV — is a bet placed under
+                uncertainty. The whole point of the Bayesian approach in <code>mmm_framework</code>
+                is that the model's output is not a single ROAS number but a <strong>distribution</strong>
+                of plausible ROAS values, and decisions get made from the whole distribution. This is
+                workshop 0 of 6; everything here is plain arithmetic — no MCMC, no PyMC, no framework
+                code. Next stop: <a href="workshop-01-priors.html">Workshop 01 — Priors</a>.
+            </p>
+
+            <h2 id="belief">1 — Probability as belief: distributions over things you don't know</h2>
+            <p>
+                The click-through rate of creative B is a fixed fact about the world — you just don't
+                know it. Classical statistics treats it as an unknown constant and only lets you make
+                probability statements about <em>data</em>. The Bayesian move is simpler and more
+                natural: <strong>use probability to describe your uncertainty about the quantity
+                itself</strong>. So instead of one number for B's CTR, you hold a
+                <strong>probability distribution</strong> — <em>a curve over all possible values,
+                where height means plausibility</em>. A <strong>random variable</strong> here is just
+                <em>a quantity you're uncertain about</em> (a CTR, a channel's ROAS, next quarter's
+                sales lift), and the distribution is your current state of knowledge about it.
+            </p>
+            <p>The shape of the curve <strong>is</strong> the message:</p>
+            <ul>
+                <li>A <strong>wide</strong> distribution says <em>"could be anywhere in this range"</em>
+                    — you know little. Acting on its peak alone is gambling.</li>
+                <li>A <strong>narrow</strong> distribution says <em>"pinned down to here"</em>
+                    — you know a lot.</li>
+            </ul>
+            <p>
+                Below: three different states of knowledge about a CTR, all centered on the same best
+                guess of 5%. Hover over the curves — same peak position, wildly different business
+                implications.
+            </p>
+
+            <div class="chart-container" id="beliefsChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Three Beta distributions with identical mean 5% and standard deviations 0.048, 0.015
+                and 0.005 (notebook-measured: 0.0476 / 0.0154 / 0.0049). Wide blue = a brand-new
+                creative where 2% or 10% are live possibilities; narrow berry = a mature campaign
+                whose CTR is known to within a few tenths of a point.
+            </p>
+
+            <p>
+                Every Bayesian analysis is a machine for moving <strong>wide curve &rarr; narrow
+                curve</strong>: start with what you believe, feed in data, end with a sharper belief.
+                The rule that does the moving is next.
+            </p>
+
+            <h2 id="bayes">2 — Bayes' rule, visually</h2>
+            <p>Three ingredients, three names you'll use for the rest of this series:</p>
+            <ul>
+                <li><strong>Prior</strong> — <em>your belief about the quantity before seeing the new
+                    data</em>, expressed as a distribution. Ours: a CTR around 5%, loosely held —
+                    "new creatives in this account usually land near 5%".</li>
+                <li><strong>Likelihood</strong> — <em>for each candidate value, how probable is the
+                    data you actually observed?</em> If the true CTR were 1%, seeing 11 clicks in 200
+                    impressions would be a shock; if it were 5.5%, it'd be typical. The likelihood
+                    scores every candidate this way.</li>
+                <li><strong>Posterior</strong> — <em>your updated belief after the data</em>: prior
+                    reweighted by likelihood.</li>
+            </ul>
+            <p><strong>Bayes' rule</strong> is just the recipe for combining them:</p>
+            <p>
+                \[ \underbrace{P(\theta \mid \text{data})}_{\text{posterior}} \;\propto\;
+                   \underbrace{P(\text{data} \mid \theta)}_{\text{likelihood}} \times
+                   \underbrace{P(\theta)}_{\text{prior}} \]
+            </p>
+            <p>
+                where \( \theta \) ("theta") is the unknown CTR and \( \propto \) means "proportional
+                to — multiply the curves pointwise, then rescale so the result is a proper
+                distribution". That's the whole rule. Here it is running on the creative-B data:
+                <strong>11 clicks out of 200 impressions</strong> (a 5.5% observed rate), against a
+                Beta(2, 38) prior centered at 5%.
+            </p>
+
+            <div class="chart-container" id="bayesChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Read it like a negotiation: the prior (blue, dotted) votes "around 5%, flexible";
+                the likelihood (amber, dashed) votes "the 200 impressions point at 5.5%"; the
+                posterior (berry, solid) is the settlement. Notebook-measured: prior mean 5.000%,
+                observed 5.500%, posterior mean 5.417% — strictly between the two — and the
+                posterior sd (0.0146) is less than half the prior sd (0.0340), because two agreeing
+                sources of information beat one.
+            </p>
+
+            <h3>Live exploration — watch the posterior sharpen</h3>
+            <p>
+                With only 200 impressions the prior still has real influence. What happens as data
+                piles up? Drag <strong>impressions</strong> (the observed conversion rate is set by
+                the second slider; clicks are recomputed each time). Watch two things: the posterior
+                <em>narrows</em>, and it <em>migrates</em> from the prior's center toward the
+                observed rate.
+            </p>
+
+            <div class="controls-row">
+                <label for="impSlider">impressions</label>
+                <input type="range" id="impSlider" min="0" max="7" step="1" value="3">
+                <span class="readout" id="impReadout">200</span>
+                <label for="ctrSlider">observed CTR</label>
+                <input type="range" id="ctrSlider" min="1" max="12" step="0.5" value="5.5">
+                <span class="readout" id="ctrReadout">5.5%</span>
+                <span class="readout" id="sharpenReadout"></span>
+            </div>
+            <div class="chart-container" id="sharpenChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong>
+                (the notebook's ipywidgets slider, ported; the grid-Bayes update reruns on every
+                drag). Notebook-measured posterior sd at 5.5% observed: n = 10 &rarr; 0.0333,
+                n = 100 &rarr; 0.0195, n = 1,000 &rarr; 0.0071, n = 10,000 &rarr; 0.0023 — roughly a
+                10&times; sharpening, and by n = 10,000 the posterior mean sits within 0.01
+                percentage points of the data.
+            </p>
+
+            <h2 id="grid">3 — The grid trick: there is no magic</h2>
+            <p>Notice what the page actually <em>did</em> to compute every posterior so far:</p>
+            <ol>
+                <li>lay down a fine grid of candidate CTR values (2,001 points from 0 to 1),</li>
+                <li>at each point, multiply <code>prior &times; likelihood</code>,</li>
+                <li>rescale so the curve integrates to 1.</li>
+            </ol>
+            <p>
+                Three lines of numpy (or, here, three lines of JavaScript). No theorems, no special
+                functions, no sampler. This is worth dwelling on, because Bayesian inference has a
+                reputation for being mysterious — and for <em>one unknown quantity</em>, it's
+                brute-forceable on a laptop in microseconds.
+            </p>
+            <p>
+                It happens that for this particular model there's also a pencil-and-paper shortcut:
+                a Beta prior updated with click/no-click data gives a Beta posterior with the counts
+                just added on — \( \text{Beta}(a, b) \rightarrow \text{Beta}(a + \text{clicks},\;
+                b + \text{non-clicks}) \). Statisticians call this <strong>conjugacy</strong> —
+                <em>a happy algebraic coincidence where the posterior stays in the prior's
+                family</em>. It's a convenience, <strong>not a requirement</strong>: the grid gives
+                the same answer with zero algebra. Proof:
+            </p>
+
+            <div class="chart-container" id="gridChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                The closed-form Beta(2+11, 38+189) curve (green band) with the brute-force grid
+                posterior overlaid as &times; markers. Notebook-measured: largest pointwise
+                difference 1.7&times;10<sup>&minus;13</sup> against curves that peak around 28 —
+                identical to numerical precision. The grid <em>is</em> the math.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ So why doesn't everyone just use grids?</h4>
+                <p>
+                    <strong>The curse of dimensionality.</strong> One unknown needs 2,001 grid
+                    points. An MMM with 30 unknowns (a coefficient, a carryover rate, and a
+                    saturation parameter per channel, plus trend and seasonality) would need
+                    \( 2001^{30} \) points — more than the number of atoms in the observable
+                    universe. That wall is exactly why <strong>MCMC</strong> exists, and it's the
+                    entire subject of <a href="workshop-02-sampling.html">Workshop 02 — Sampling</a>.
+                    For today, one unknown and a grid are all we need.
+                </p>
+            </div>
+
+            <h2 id="priors">4 — Priors matter (and then stop mattering)</h2>
+            <p>
+                The prior is the part of Bayes that makes newcomers nervous: <em>"isn't that just
+                injecting opinion?"</em> Let's stress-test it. Three analysts look at the same
+                creative before launch:
+            </p>
+            <ul>
+                <li><strong>Skeptic</strong> (berry): "new creatives in this category flop — CTR
+                    around 2%." Beta(2, 98).</li>
+                <li><strong>Optimist</strong> (green): "the brief was great — CTR around 10%."
+                    Beta(10, 90).</li>
+                <li><strong>Agnostic</strong> (blue): a <strong>flat prior</strong> — <em>every CTR
+                    from 0% to 100% equally plausible</em> — "I refuse to assume anything."
+                    Beta(1, 1).</li>
+            </ul>
+            <p>
+                Then all three watch the same data come in. A prior has a <em>location</em> (where
+                it's centered) <strong>and</strong> a <em>strength</em> (how many
+                "pseudo-impressions" of conviction back it). Two things to try with the sliders:
+            </p>
+            <ol>
+                <li>Crank <strong>prior strength</strong> up with little data — the three posteriors
+                    stay apart. This is what "the priors are driving the results" looks like.</li>
+                <li>Now crank <strong>impressions</strong> — watch the three posteriors fuse into one
+                    curve regardless of strength. <strong>Data overwhelms priors at a rate you can
+                    see.</strong></li>
+            </ol>
+
+            <div class="controls-row">
+                <label for="strengthSlider">prior strength</label>
+                <input type="range" id="strengthSlider" min="20" max="2000" step="20" value="100">
+                <span class="readout" id="strengthReadout">100</span>
+                <label for="priorsImpSlider">impressions</label>
+                <input type="range" id="priorsImpSlider" min="0" max="3" step="1" value="1">
+                <span class="readout" id="priorsImpReadout">200</span>
+                <span class="readout" id="spreadReadout"></span>
+            </div>
+            <div class="chart-container" id="priorsChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong>
+                (its prior-strength &times; sample-size ipywidgets cell, ported; observed rate fixed
+                at 5.5%). Notebook-measured at default strength 100 with 200 impressions: the
+                skeptic lands at 4.33%, the agnostic at 5.94%, the optimist at 7.00% — every
+                posterior mean strictly between its prior and the data, and the spread of opinions
+                collapses from 48.0 to 2.7 percentage points after one batch of data. At strength
+                1,000 the disagreement is 6.67% with n = 200 but only 0.38% with n = 20,000.
+            </p>
+
+            <div class="chart-container short" id="convergeChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Posterior-mean disagreement between the three analysts (strength 100) as data grows.
+                Notebook-measured stops: n = 20 &rarr; 6.67%, n = 200 &rarr; 2.67%,
+                n = 2,000 &rarr; 0.38%, n = 20,000 &rarr; 0.04% — monotone convergence: priors
+                matter exactly until the data outweighs them.
+            </p>
+
+            <div class="note">
+                <h4>💡 The punchline — and why it matters for MMM</h4>
+                <p>
+                    A prior is not contamination — it's a <em>dial for encoding what you already
+                    know</em>, with the guarantee that data turns the dial back at a rate you can see
+                    and measure. Two consequences: <strong>priors are how domain knowledge gets
+                    in</strong> ("ROAS is almost certainly not negative", "carryover decays within
+                    weeks, not years", "a lift test said this channel's effect is about 1.2&times;
+                    spend" — all become priors in
+                    <a href="workshop-01-priors.html">Workshop 01</a> and
+                    <a href="workshop-03-first-mmm.html">Workshop 03</a>). And <strong>weekly MMM
+                    data is the thin-data regime</strong>: three years of weekly data is 156
+                    observations — closer to the n = 200 panel above than the n = 20,000 one. Priors
+                    <em>will</em> matter in your MMM, which is exactly why Workshop 01 teaches you
+                    to choose and check them deliberately rather than pretend they're not there.
+                </p>
+            </div>
+
+            <h2 id="decision">5 — From distribution to decision</h2>
+            <p>Back to the opening question. Full data from the A/B test:</p>
+            <table>
+                <thead>
+                    <tr><th>creative</th><th>clicks</th><th>impressions</th><th>observed CTR</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>A (old)</td><td>204</td><td>4,000</td><td>5.1%</td></tr>
+                    <tr><td>B (new)</td><td>216</td><td>4,000</td><td>5.4%</td></tr>
+                </tbody>
+            </table>
+            <p>
+                A <strong>point estimate</strong> — <em>a single-number summary like the mean or the
+                peak</em> — says "B: 5.4% beats A: 5.1%" and throws away everything we just learned
+                to care about: the shape. The Bayesian answer keeps the shape and answers the buyer's
+                actual question directly: <strong>what is the probability that B's true CTR exceeds
+                A's?</strong> The recipe is disarmingly simple: build a posterior for each creative
+                (flat prior + data &rarr; Beta posteriors, via the conjugate shortcut), then
+                <strong>sample</strong> from both — draw thousands of plausible
+                (CTR<sub>A</sub>, CTR<sub>B</sub>) pairs — and count how often B wins.
+            </p>
+
+            <div class="chart-container" id="abChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                The two posteriors. Note the overlap: B's curve sits to the right, but a fat slice
+                of A's plausible values exceeds a fat slice of B's. That overlap is the entire
+                reason "5.4 &gt; 5.1" is not an answer.
+            </p>
+
+            <div class="chart-container" id="diffChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser with seeded sampling — the same Monte Carlo
+                as the notebook</strong> (200,000 paired draws from the two posteriors).
+                The histogram of CTR<sub>B</sub> &minus; CTR<sub>A</sub>: mass to the right of zero
+                is "B wins". Notebook-measured: P(B beats A) = 0.7252 sampled, 0.7260 by exact grid
+                integration — <em>"B is probably better, but it's not a lock"</em>, now quantified.
+            </p>
+
+            <h3>Credible intervals and the HDI</h3>
+            <p>
+                To report the <em>size</em> of an effect with its uncertainty, Bayesians use a
+                <strong>credible interval</strong> — <em>a range that contains the true value with a
+                stated probability, given your model and data</em>. The version used throughout this
+                series is the <strong>HDI (highest-density interval)</strong> — <em>the narrowest
+                such range: every value inside it is more plausible than every value outside it</em>.
+                A "90% HDI of 5.0%–6.1%" means exactly what it sounds like: <strong>"90% chance the
+                true CTR is between 5.0% and 6.1%."</strong> Drag the probability slider and watch
+                the shaded region grow and shrink on creative B's posterior — you'll meet HDIs again
+                on every MMM parameter in
+                <a href="workshop-04-reading-the-posterior.html">Workshop 04</a>.
+            </p>
+
+            <div class="controls-row">
+                <label for="hdiSlider">HDI probability</label>
+                <input type="range" id="hdiSlider" min="50" max="99" step="1" value="90">
+                <span class="readout" id="hdiProbReadout">90%</span>
+                <span class="readout" id="hdiReadout"></span>
+            </div>
+            <div class="chart-container" id="hdiChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong>
+                (its HDI ipywidgets slider, ported; the interval is recomputed from the same
+                200,000 sorted draws on every drag). Notebook-measured at 90%: HDI
+                [4.82%, 6.00%], width 1.18 percentage points, containing 90.0% of the posterior
+                mass — and never wider than the equal-tailed alternative ([4.85%, 6.02%]).
+            </p>
+
+            <div class="note">
+                <h4>💡 A gentle word about p-values</h4>
+                <p>
+                    If you've run classical A/B tests, you'd test "B = A" and get a p-value — the
+                    probability of data this extreme <em>if the creatives were truly identical</em>.
+                    That's a useful but indirect quantity, and it's famously easy to misread as "the
+                    probability B is better", which it is not. The Bayesian quantities you just
+                    computed are the direct versions: P(B beats A) is literally the probability B is
+                    better, and the HDI is literally a range you believe contains the truth with
+                    stated probability. Neither framework is "wrong" — but when the deliverable is a
+                    <em>decision under uncertainty</em>, it helps that the numbers answer the
+                    decision-maker's question in her own words.
+                </p>
+            </div>
+
+            <h2 id="montecarlo">6 — Monte Carlo as a superpower: from CTRs to dollars</h2>
+            <p>
+                Here's the trick that powers the entire back half of this series. The buyer doesn't
+                actually care about CTR — she cares about <strong>revenue</strong>. Suppose the
+                campaign serves <strong>2,000,000 impressions a month</strong> and each click is
+                worth <strong>$0.50</strong> in expected revenue. The monthly revenue uplift from
+                switching to B is:
+            </p>
+            <p>
+                \[ \text{uplift} = (\text{CTR}_B - \text{CTR}_A) \times 2{,}000{,}000 \times \$0.50 \]
+            </p>
+            <p>
+                This is a <strong>derived quantity</strong> — <em>a number computed from unknowns
+                rather than estimated directly</em>. And here is the superpower, called
+                <strong>Monte Carlo</strong> — <em>answering questions about distributions by
+                drawing many random samples and just counting</em>: <strong>push every posterior
+                draw through the formula, and you get the full distribution of the derived quantity,
+                for free.</strong> No new model, no calculus — arithmetic on the draws you already
+                have.
+            </p>
+
+            <div class="chart-container" id="upliftChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser with seeded sampling — the same Monte Carlo
+                as the notebook</strong> (every one of the 200,000 paired CTR draws pushed through
+                the revenue formula). Notebook-measured: median uplift $2,981/month, 90% interval
+                &minus;$5,229 to $11,248, P(uplift &gt; 0) = 72.5% — the same event as "B beats A",
+                because a monotone formula preserves every probability statement. A point estimate
+                would have said "switch, you'll make the median amount". The distribution shows the
+                red tail: a real chance the switch loses money.
+            </p>
+
+            <h3>Live exploration — does the upside clear the switching cost?</h3>
+            <p>
+                Switching creatives isn't free (production, trafficking, QA). Drag the
+                <strong>cost</strong> slider and watch the decision quantity — the probability the
+                first-month uplift beats the cost — move. The question changed from statistics
+                ("is B's rate higher?") to business ("how many dollars, with what risk?") and the
+                <em>method</em> didn't change at all: same draws, one line of arithmetic.
+            </p>
+
+            <div class="controls-row">
+                <label for="costSlider">one-time switching cost</label>
+                <input type="range" id="costSlider" min="0" max="12000" step="500" value="2000">
+                <span class="readout" id="costReadout">$2,000</span>
+                <span class="readout" id="costProbReadout"></span>
+            </div>
+            <div class="chart-container" id="costChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser with seeded sampling — the same Monte Carlo
+                as the notebook</strong> (its switching-cost ipywidgets slider, ported: the net
+                histogram and the probability readout recompute from the same draws on every drag).
+                Notebook-measured stops: P(net gain) at $0 &rarr; 73%, $2k &rarr; 58%,
+                $6k &rarr; 27%, $12k &rarr; 4%.
+            </p>
+
+            <div class="chart-container" id="decisionChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                The full decision curve: probability the switch pays for itself in month one, at
+                every cost from $0 to $12,000, with the four slider stops marked.
+                Notebook-measured: the switch is better than even money up to a cost of about
+                <strong>$3,000</strong>. Every budget question is a vertical slice of one posterior.
+            </p>
+
+            <p>
+                This per-draw arithmetic is <strong>exactly</strong> how <code>mmm_framework</code>
+                turns posterior parameter draws into ROAS distributions, budget-shift scenarios, and
+                "probability this channel clears its hurdle rate" — the entire subject of
+                <a href="workshop-05-from-draws-to-decisions.html">Workshop 05 — From Draws to
+                Decisions</a>.
+            </p>
+
+            <h2 id="glossary">7 — What you can now say</h2>
+            <p>
+                You started with "5.4% vs 5.1% — is it better?" and ended with a probability that B
+                wins, a credible range for its CTR, a dollar-denominated uplift distribution, and a
+                cost threshold below which switching is better than even money — all from two Beta
+                curves and counting. The terms you picked up (the site-wide
+                <a href="glossary.html">glossary</a> has the full vocabulary for the rest of the
+                framework):
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>term</th><th>plain-English meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>probability distribution</strong></td><td>a curve over all possible values of an unknown; height = plausibility</td></tr>
+                    <tr><td><strong>random variable</strong></td><td>a quantity you're uncertain about — a CTR, a ROAS, next quarter's lift</td></tr>
+                    <tr><td><strong>prior</strong></td><td>your belief about an unknown <em>before</em> the new data, written as a distribution</td></tr>
+                    <tr><td><strong>likelihood</strong></td><td>for each candidate value, how probable the observed data would be</td></tr>
+                    <tr><td><strong>posterior</strong></td><td>your updated belief: prior &times; likelihood, rescaled — the output of Bayes' rule</td></tr>
+                    <tr><td><strong>conjugacy</strong></td><td>a happy algebraic coincidence where the posterior stays in the prior's family (a shortcut, never a requirement)</td></tr>
+                    <tr><td><strong>point estimate</strong></td><td>a single-number summary (mean, peak) — convenient, and it throws away the shape</td></tr>
+                    <tr><td><strong>credible interval</strong></td><td>a range containing the true value with stated probability, given model + data</td></tr>
+                    <tr><td><strong>HDI</strong> (highest-density interval)</td><td>the <em>narrowest</em> credible interval: everything inside is more plausible than anything outside</td></tr>
+                    <tr><td><strong>Monte Carlo</strong></td><td>answering questions about distributions by drawing many samples and counting</td></tr>
+                    <tr><td><strong>derived quantity</strong></td><td>a number computed <em>from</em> unknowns (revenue uplift, ROAS) — push the draws through the formula and it inherits a full distribution</td></tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Uncertainty is the product.</strong> The shape of the posterior — not
+                        its peak — is what a decision needs. The same median uplift can hide a 27%
+                        chance of losing money.</li>
+                    <li><strong>Bayes' rule is multiplication and rescaling.</strong> Prior &times;
+                        likelihood on a grid matches the closed form to 10<sup>&minus;13</sup> —
+                        there is no magic, only (eventually) a dimensionality problem that
+                        <a href="workshop-02-sampling.html">MCMC</a> solves.</li>
+                    <li><strong>Priors are knowledge, with a receipt.</strong> Three analysts 48
+                        points apart ended 2.7 points apart after one batch of data — and weekly MMM
+                        data lives in the thin-data regime where priors still matter.</li>
+                    <li><strong>Draws are a universal currency.</strong> Any business quantity you can
+                        compute from the unknowns, you can compute <em>per draw</em> — and get its
+                        uncertainty for free. P(B beats A) = P(uplift &gt; $0), exactly.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/workshop_00_thinking_in_distributions.ipynb</code>,
+                    authored by <code>nbs/build_workshop_00_thinking_in_distributions.py</code> and
+                    described in <code>nbs/README_workshop.md</code>. The notebook is pure
+                    numpy/scipy (no PyMC, no framework imports), runs in under a minute, and every
+                    computational cell ends in a seeded assert encoding the claim it just plotted —
+                    if it executes clean, the numbers on this page are still true. Continue with
+                    <a href="workshop-01-priors.html">Workshop 01 — Priors</a>, where today's
+                    hand-me-down priors become priors you choose and check. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series.
+        // Guide pages copy this object so charts stay visually consistent.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG — series-wide reference implementation.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // The notebook's palette — same colors as the baked figures.
+        const W = {
+            ink: '#2b2118', sky: '#3b6ea5', berry: '#a63a50',
+            leaf: '#3f7d5e', amber: '#d98a2b', muted: '#8a8079'
+        };
+
+        // ------------------------------------------------------------------
+        // Math helpers — the same grid-Bayes math as the notebook.
+        // ------------------------------------------------------------------
+        function linspace(a, b, n) {
+            const out = new Float64Array(n), step = (b - a) / (n - 1);
+            for (let i = 0; i < n; i++) out[i] = a + step * i;
+            return out;
+        }
+        const THETA = linspace(0, 1, 2001);   // fine grid over all possible CTRs
+
+        // Lanczos log-gamma (Numerical Recipes gammln), valid for x > 0.
+        function lgamma(x) {
+            const cof = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+                         -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+            let y = x;
+            let tmp = x + 5.5;
+            tmp -= (x + 0.5) * Math.log(tmp);
+            let ser = 1.000000000190015;
+            for (let j = 0; j < 6; j++) { y += 1; ser += cof[j] / y; }
+            return -tmp + Math.log(2.5066282746310005 * ser / x);
+        }
+        function logBetaFn(a, b) { return lgamma(a) + lgamma(b) - lgamma(a + b); }
+
+        function betaPdf(x, a, b) {
+            if (x < 0 || x > 1) return 0;
+            const ta = (a === 1) ? 0 : (a - 1) * Math.log(Math.max(x, 1e-300));
+            const tb = (b === 1) ? 0 : (b - 1) * Math.log(Math.max(1 - x, 1e-300));
+            const v = Math.exp(ta + tb - logBetaFn(a, b));
+            return isFinite(v) ? v : 0;
+        }
+        function betaMean(a, b) { return a / (a + b); }
+
+        function binomLogPmf(k, n, p) {
+            if (p <= 0) return (k === 0) ? 0 : -Infinity;
+            if (p >= 1) return (k === n) ? 0 : -Infinity;
+            const lc = lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1);
+            return lc + k * Math.log(p) + (n - k) * Math.log(1 - p);
+        }
+
+        function trapz(y, x) {
+            let s = 0;
+            for (let i = 1; i < x.length; i++) s += 0.5 * (y[i] + y[i - 1]) * (x[i] - x[i - 1]);
+            return s;
+        }
+
+        // Bayes' rule on a grid: prior x likelihood, rescaled. That's it.
+        function posteriorOnGrid(k, n, a, b) {
+            const post = new Float64Array(THETA.length);
+            for (let i = 0; i < THETA.length; i++) {
+                const lp = binomLogPmf(k, n, THETA[i]);
+                post[i] = (lp === -Infinity) ? 0 : betaPdf(THETA[i], a, b) * Math.exp(lp);
+            }
+            const z = trapz(post, THETA);
+            for (let i = 0; i < post.length; i++) post[i] /= z;
+            return post;
+        }
+        function gridMean(post) {
+            const m = new Float64Array(THETA.length);
+            for (let i = 0; i < THETA.length; i++) m[i] = THETA[i] * post[i];
+            return trapz(m, THETA);
+        }
+        function gridSd(post) {
+            const mu = gridMean(post);
+            const v = new Float64Array(THETA.length);
+            for (let i = 0; i < THETA.length; i++) v[i] = (THETA[i] - mu) * (THETA[i] - mu) * post[i];
+            return Math.sqrt(trapz(v, THETA));
+        }
+
+        // Seeded samplers: Box-Muller normal + Marsaglia-Tsang gamma -> Beta.
+        function makeRng(seed) {
+            const rand = mulberry32(seed);
+            let spare = null;
+            function normal() {
+                if (spare !== null) { const v = spare; spare = null; return v; }
+                let u; do { u = rand(); } while (u <= 1e-12);
+                const r = Math.sqrt(-2 * Math.log(u)), th = 2 * Math.PI * rand();
+                spare = r * Math.sin(th);
+                return r * Math.cos(th);
+            }
+            function gamma(shape) {        // shape >= 1 (true for all uses here)
+                const d = shape - 1 / 3, c = 1 / Math.sqrt(9 * d);
+                for (;;) {
+                    let x, v;
+                    do { x = normal(); v = 1 + c * x; } while (v <= 0);
+                    v = v * v * v;
+                    const u = rand();
+                    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+                    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+                }
+            }
+            function beta(a, b) { const g = gamma(a); return g / (g + gamma(b)); }
+            return { rand: rand, normal: normal, gamma: gamma, beta: beta };
+        }
+
+        function hdiFromSorted(s, prob) {  // narrowest window holding `prob` of the draws
+            const k = Math.ceil(prob * s.length);
+            let best = Infinity, bi = 0;
+            for (let i = 0; i + k - 1 < s.length; i++) {
+                const w = s[i + k - 1] - s[i];
+                if (w < best) { best = w; bi = i; }
+            }
+            return [s[bi], s[bi + k - 1]];
+        }
+        function quantileSorted(s, q) {
+            const i = (s.length - 1) * q, f = Math.floor(i);
+            return (f + 1 < s.length) ? s[f] + (i - f) * (s[f + 1] - s[f]) : s[f];
+        }
+        function countAboveSorted(s, x) {  // # draws strictly greater than x
+            let lo = 0, hi = s.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (s[mid] <= x) lo = mid + 1; else hi = mid;
+            }
+            return s.length - lo;
+        }
+        function histogram(data, nbins, lo, hi) {
+            const counts = new Array(nbins).fill(0), w = (hi - lo) / nbins;
+            for (let i = 0; i < data.length; i++) {
+                let b = Math.floor((data[i] - lo) / w);
+                if (b < 0) b = 0; if (b >= nbins) b = nbins - 1;
+                counts[b]++;
+            }
+            const centers = new Array(nbins);
+            for (let i = 0; i < nbins; i++) centers[i] = lo + (i + 0.5) * w;
+            return { centers: centers, counts: counts };
+        }
+        function pct(x, d) { return (100 * x).toFixed(d === undefined ? 2 : d) + '%'; }
+        function money(x) {
+            const neg = x < 0, v = Math.round(Math.abs(x));
+            return (neg ? '−$' : '$') + v.toLocaleString('en-US');
+        }
+        function vline(x, color, dash) {
+            return { type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper',
+                     line: { color: color, width: 1.5, dash: dash || 'dot' } };
+        }
+
+        // Notebook constants.
+        const PRIOR_A = 2.0, PRIOR_B = 38.0;   // Beta(2, 38): mean 5%, loosely held
+        const K_OBS = 11, N_OBS = 200;          // 11 clicks / 200 impressions = 5.5%
+        const X_PCT = [];                       // plotting grid in %, 0..15
+        for (let i = 0; i < THETA.length; i++) X_PCT.push(THETA[i] * 100);
+
+        // ------------------------------------------------------------------
+        // 1. Three beliefs about one CTR
+        // ------------------------------------------------------------------
+        function drawBeliefs() {
+            const beliefs = [
+                { name: 'barely a guess (~20 impressions of evidence)',   a: 1,   b: 19,   color: W.sky },
+                { name: 'some history (~200 impressions of evidence)',    a: 10,  b: 190,  color: W.amber },
+                { name: 'well measured (~2000 impressions of evidence)',  a: 100, b: 1900, color: W.berry }
+            ];
+            const traces = beliefs.map(function(bl) {
+                const y = [];
+                for (let i = 0; i < THETA.length; i++) y.push(betaPdf(THETA[i], bl.a, bl.b));
+                return {
+                    type: 'scatter', mode: 'lines', name: bl.name,
+                    x: X_PCT, y: y, line: { color: bl.color, width: 2.5 },
+                    hovertemplate: 'CTR %{x:.2f}%<br>plausibility %{y:.1f}<extra>' + bl.name + '</extra>'
+                };
+            });
+            const layout = PT.layout({
+                xaxis: { title: 'click-through rate (%)', range: [0, 15] },
+                yaxis: { title: 'plausibility (density)' },
+                legend: { orientation: 'h', y: -0.25 },
+                shapes: [vline(5, W.muted)],
+                annotations: [{ x: 5, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'same best guess: 5%', showarrow: false,
+                                font: { size: 11, color: W.muted } }]
+            });
+            Plotly.newPlot('beliefsChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2. Bayes' rule: prior x likelihood -> posterior
+        // ------------------------------------------------------------------
+        function drawBayes() {
+            const prior = [], like = [];
+            for (let i = 0; i < THETA.length; i++) {
+                prior.push(betaPdf(THETA[i], PRIOR_A, PRIOR_B));
+                const lp = binomLogPmf(K_OBS, N_OBS, THETA[i]);
+                like.push(lp === -Infinity ? 0 : Math.exp(lp));
+            }
+            const post = posteriorOnGrid(K_OBS, N_OBS, PRIOR_A, PRIOR_B);
+            const zLike = trapz(like, THETA);
+            const likeScaled = like.map(function(v) { return v / zLike; });
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'prior — belief before data',
+                  x: X_PCT, y: prior, line: { color: W.sky, width: 2.5, dash: 'dot' } },
+                { type: 'scatter', mode: 'lines', name: 'likelihood — what the data says',
+                  x: X_PCT, y: likeScaled, line: { color: W.amber, width: 2.5, dash: 'dash' } },
+                { type: 'scatter', mode: 'lines', name: 'posterior — belief after data',
+                  x: X_PCT, y: Array.from(post), line: { color: W.berry, width: 2.5 } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'click-through rate (%)', range: [0, 15] },
+                yaxis: { title: 'plausibility' },
+                legend: { orientation: 'h', y: -0.25 },
+                shapes: [vline(5.5, W.muted)],
+                annotations: [{ x: 5.5, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'observed rate 5.5% (11/200)', showarrow: false,
+                                font: { size: 11, color: W.muted } }]
+            });
+            Plotly.newPlot('bayesChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2b. Interactive: posterior sharpening (impressions + observed CTR)
+        // ------------------------------------------------------------------
+        const IMP_OPTIONS = [10, 30, 100, 200, 300, 1000, 3000, 10000];
+        function drawSharpen() {
+            const n = IMP_OPTIONS[parseInt(document.getElementById('impSlider').value, 10)];
+            const ctr = parseFloat(document.getElementById('ctrSlider').value) / 100;
+            const k = Math.round(ctr * n);
+            const post = posteriorOnGrid(k, n, PRIOR_A, PRIOR_B);
+            const prior = [];
+            for (let i = 0; i < THETA.length; i++) prior.push(betaPdf(THETA[i], PRIOR_A, PRIOR_B));
+
+            document.getElementById('impReadout').textContent = n.toLocaleString('en-US');
+            document.getElementById('ctrReadout').textContent = (ctr * 100).toFixed(1) + '%';
+            document.getElementById('sharpenReadout').textContent =
+                k.toLocaleString('en-US') + ' clicks | posterior mean ' + pct(gridMean(post)) +
+                ' | sd ' + gridSd(post).toFixed(4);
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'prior',
+                  x: X_PCT, y: prior, line: { color: W.sky, width: 2, dash: 'dot' } },
+                { type: 'scatter', mode: 'lines', name: 'posterior',
+                  x: X_PCT, y: Array.from(post), line: { color: W.berry, width: 2.5 } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'click-through rate (%)', range: [0, 15] },
+                yaxis: { title: 'plausibility' },
+                legend: { orientation: 'h', y: -0.25 },
+                shapes: [vline(ctr * 100, W.muted)],
+                annotations: [{ x: ctr * 100, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'observed rate ' + (ctr * 100).toFixed(1) + '%',
+                                showarrow: false, font: { size: 11, color: W.muted } }]
+            });
+            Plotly.react('sharpenChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 3. Grid vs conjugate closed form
+        // ------------------------------------------------------------------
+        function drawGridVsConj() {
+            const gridPost = posteriorOnGrid(K_OBS, N_OBS, PRIOR_A, PRIOR_B);
+            const conj = [];
+            for (let i = 0; i < THETA.length; i++) {
+                conj.push(betaPdf(THETA[i], PRIOR_A + K_OBS, PRIOR_B + (N_OBS - K_OBS)));
+            }
+            const xm = [], ym = [];
+            for (let i = 0; i < THETA.length; i += 40) { xm.push(X_PCT[i]); ym.push(gridPost[i]); }
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'closed form: Beta(2+11, 38+189)',
+                  x: X_PCT, y: conj, line: { color: W.leaf, width: 5 }, opacity: 0.45 },
+                { type: 'scatter', mode: 'markers', name: 'brute-force grid (every 40th point)',
+                  x: xm, y: ym, marker: { color: W.ink, size: 6, symbol: 'x' } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'click-through rate (%)', range: [0, 15] },
+                yaxis: { title: 'plausibility' },
+                legend: { orientation: 'h', y: -0.25 }
+            });
+            Plotly.newPlot('gridChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 4. Three analysts: prior strength vs evidence (interactive)
+        // ------------------------------------------------------------------
+        const PRIORS_IMP_OPTIONS = [20, 200, 2000, 20000];
+        const TRUE_CTR = 0.055;
+        function analystConfigs(strength) {
+            return [
+                { name: 'skeptic (mean 2%)',  a: 0.02 * strength, b: 0.98 * strength, color: W.berry },
+                { name: 'agnostic (flat)',    a: 1.0,             b: 1.0,             color: W.sky },
+                { name: 'optimist (mean 10%)',a: 0.10 * strength, b: 0.90 * strength, color: W.leaf }
+            ];
+        }
+        function drawPriors() {
+            const strength = parseInt(document.getElementById('strengthSlider').value, 10);
+            const n = PRIORS_IMP_OPTIONS[parseInt(document.getElementById('priorsImpSlider').value, 10)];
+            const k = Math.round(TRUE_CTR * n);
+            const cfg = analystConfigs(strength);
+
+            const traces = [];
+            const means = [];
+            cfg.forEach(function(c) {
+                const post = posteriorOnGrid(k, n, c.a, c.b);
+                means.push(gridMean(post));
+                const priorY = [];
+                for (let i = 0; i < THETA.length; i++) priorY.push(betaPdf(THETA[i], c.a, c.b));
+                traces.push({ type: 'scatter', mode: 'lines', name: c.name + ' — prior',
+                              x: X_PCT, y: priorY, line: { color: c.color, width: 1.5, dash: 'dot' },
+                              opacity: 0.55, showlegend: false });
+                traces.push({ type: 'scatter', mode: 'lines', name: c.name,
+                              x: X_PCT, y: Array.from(post), line: { color: c.color, width: 2.4 } });
+            });
+            const spread = Math.max.apply(null, means) - Math.min.apply(null, means);
+
+            document.getElementById('strengthReadout').textContent =
+                strength.toLocaleString('en-US') + ' pseudo-impressions';
+            document.getElementById('priorsImpReadout').textContent =
+                k.toLocaleString('en-US') + ' / ' + n.toLocaleString('en-US');
+            document.getElementById('spreadReadout').textContent =
+                'posterior means disagree by ' + pct(spread);
+
+            const layout = PT.layout({
+                xaxis: { title: 'click-through rate (%)', range: [0, 16] },
+                yaxis: { title: 'plausibility' },
+                legend: { orientation: 'h', y: -0.25 },
+                shapes: [vline(TRUE_CTR * 100, W.muted)],
+                annotations: [{ x: TRUE_CTR * 100, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'observed rate 5.5%', showarrow: false,
+                                font: { size: 11, color: W.muted } }]
+            });
+            Plotly.react('priorsChart', traces, layout, PT.config);
+        }
+
+        // 4b. Convergence line: disagreement vs n (strength 100)
+        function drawConverge() {
+            const ns = [];
+            for (let e = Math.log10(20); e <= Math.log10(20000) + 1e-9; e += (Math.log10(20000) - Math.log10(20)) / 24) {
+                ns.push(Math.round(Math.pow(10, e)));
+            }
+            function spreadAt(n) {
+                const k = Math.round(TRUE_CTR * n);
+                const ms = analystConfigs(100).map(function(c) {
+                    return gridMean(posteriorOnGrid(k, n, c.a, c.b));
+                });
+                return (Math.max.apply(null, ms) - Math.min.apply(null, ms)) * 100;
+            }
+            const ys = ns.map(spreadAt);
+            const marks = [20, 200, 2000, 20000];
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'disagreement between the three analysts',
+                  x: ns, y: ys, line: { color: W.sky, width: 3 },
+                  hovertemplate: 'n = %{x:,}<br>disagreement %{y:.2f} pp<extra></extra>' },
+                { type: 'scatter', mode: 'markers+text', name: 'notebook slider stops',
+                  x: marks, y: marks.map(spreadAt),
+                  text: marks.map(function(n) { return spreadAt(n).toFixed(2) + ' pp'; }),
+                  textposition: 'top right', textfont: { size: 11, color: W.muted },
+                  marker: { color: W.amber, size: 10, line: { color: W.ink, width: 1 } } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'impressions (log scale)', type: 'log' },
+                yaxis: { title: 'posterior-mean disagreement (pp)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: -0.35 },
+                margin: { l: 70, r: 30, t: 10, b: 55 }
+            });
+            Plotly.newPlot('convergeChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 5+6. The A/B test: posteriors, P(B>A), HDI, uplift, decision curve
+        // ------------------------------------------------------------------
+        const CLICKS_A = 204, IMPS_A = 4000, CLICKS_B = 216, IMPS_B = 4000;
+        const A_A = 1 + CLICKS_A, B_A = 1 + IMPS_A - CLICKS_A;   // Beta(205, 3797)
+        const A_B = 1 + CLICKS_B, B_B = 1 + IMPS_B - CLICKS_B;   // Beta(217, 3785)
+        const N_DRAWS = 200000;
+        const IMP_MONTH = 2000000, REV_CLICK = 0.50;
+
+        const MC = { drawsA: null, drawsB: null, uplift: null,
+                     sortedB: null, sortedUplift: null, pBwins: 0 };
+
+        function runMonteCarlo() {
+            const rng = makeRng(42);   // seeded — same draws on every page load
+            const dA = new Float64Array(N_DRAWS), dB = new Float64Array(N_DRAWS);
+            const up = new Float64Array(N_DRAWS);
+            let wins = 0;
+            for (let i = 0; i < N_DRAWS; i++) {
+                dA[i] = rng.beta(A_A, B_A);
+                dB[i] = rng.beta(A_B, B_B);
+                if (dB[i] > dA[i]) wins++;
+                up[i] = (dB[i] - dA[i]) * IMP_MONTH * REV_CLICK;
+            }
+            MC.drawsA = dA; MC.drawsB = dB; MC.uplift = up;
+            MC.pBwins = wins / N_DRAWS;
+            MC.sortedB = Float64Array.from(dB).sort();
+            MC.sortedUplift = Float64Array.from(up).sort();
+        }
+
+        function abXGrid() {
+            const xs = [];
+            for (let x = 0.035; x <= 0.075 + 1e-12; x += 0.00005) xs.push(x);
+            return xs;
+        }
+
+        function drawAB() {
+            const xs = abXGrid();
+            const xPct = xs.map(function(x) { return x * 100; });
+            const yA = xs.map(function(x) { return betaPdf(x, A_A, B_A); });
+            const yB = xs.map(function(x) { return betaPdf(x, A_B, B_B); });
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'A (old creative): 204/4,000',
+                  x: xPct, y: yA, line: { color: W.sky, width: 2.5 } },
+                { type: 'scatter', mode: 'lines', name: 'B (new creative): 216/4,000',
+                  x: xPct, y: yB, line: { color: W.berry, width: 2.5 } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'true click-through rate (%)' },
+                yaxis: { title: 'plausibility' },
+                legend: { orientation: 'h', y: -0.25 }
+            });
+            Plotly.newPlot('abChart', traces, layout, PT.config);
+        }
+
+        function drawDiff() {
+            const diffPP = new Float64Array(N_DRAWS);
+            for (let i = 0; i < N_DRAWS; i++) diffPP[i] = (MC.drawsB[i] - MC.drawsA[i]) * 100;
+            let lo = Infinity, hi = -Infinity;
+            for (let i = 0; i < N_DRAWS; i++) {
+                if (diffPP[i] < lo) lo = diffPP[i];
+                if (diffPP[i] > hi) hi = diffPP[i];
+            }
+            const h = histogram(diffPP, 80, lo, hi);
+            const traces = [{
+                type: 'bar', x: h.centers, y: h.counts, marker: { color: W.amber },
+                name: 'CTR_B − CTR_A (sampled)',
+                hovertemplate: 'difference %{x:.2f} pp<br>%{y} draws<extra></extra>'
+            }];
+            const layout = PT.layout({
+                title: { text: 'P(CTR_B > CTR_A) = ' + pct(MC.pBwins, 1) +
+                              '  — read it straight off the draws',
+                        font: { size: 14 } },
+                xaxis: { title: 'difference (percentage points)' },
+                yaxis: { title: 'number of draws' },
+                bargap: 0, showlegend: false,
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [{ type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper',
+                           line: { color: W.ink, width: 2 } }]
+            });
+            Plotly.newPlot('diffChart', traces, layout, PT.config);
+        }
+
+        function drawHDI() {
+            const prob = parseInt(document.getElementById('hdiSlider').value, 10) / 100;
+            const bounds = hdiFromSorted(MC.sortedB, prob);
+            const lo = bounds[0], hi = bounds[1];
+
+            document.getElementById('hdiProbReadout').textContent = Math.round(prob * 100) + '%';
+            document.getElementById('hdiReadout').textContent =
+                'HDI [' + pct(lo) + ', ' + pct(hi) + '] | width ' + pct(hi - lo);
+
+            const xs = abXGrid();
+            const xPct = xs.map(function(x) { return x * 100; });
+            const yB = xs.map(function(x) { return betaPdf(x, A_B, B_B); });
+            const xIn = [], yIn = [];
+            for (let i = 0; i < xs.length; i++) {
+                if (xs[i] >= lo && xs[i] <= hi) { xIn.push(xPct[i]); yIn.push(yB[i]); }
+            }
+            const meanB = betaMean(A_B, B_B);
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: "posterior of B's CTR",
+                  x: xPct, y: yB, line: { color: W.berry, width: 2.5 } },
+                { type: 'scatter', mode: 'none', fill: 'tozeroy',
+                  name: Math.round(prob * 100) + '% HDI: ' + pct(lo) + ' – ' + pct(hi),
+                  x: xIn, y: yIn, fillcolor: 'rgba(166,58,80,0.25)' }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'click-through rate (%)' },
+                yaxis: { title: 'plausibility' },
+                legend: { orientation: 'h', y: -0.25 },
+                shapes: [vline(meanB * 100, W.ink)],
+                annotations: [{ x: meanB * 100, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'posterior mean ' + pct(meanB), showarrow: false,
+                                font: { size: 11, color: W.muted } }]
+            });
+            Plotly.react('hdiChart', traces, layout, PT.config);
+        }
+
+        function splitSignBars(h, negName, posName) {
+            const xn = [], yn = [], xp = [], yp = [];
+            for (let i = 0; i < h.centers.length; i++) {
+                if (h.centers[i] <= 0) { xn.push(h.centers[i]); yn.push(h.counts[i]); }
+                else { xp.push(h.centers[i]); yp.push(h.counts[i]); }
+            }
+            return [
+                { type: 'bar', x: xn, y: yn, marker: { color: W.berry }, name: negName,
+                  hovertemplate: '%{x:$,.0f}<br>%{y} draws<extra>' + negName + '</extra>' },
+                { type: 'bar', x: xp, y: yp, marker: { color: W.leaf }, name: posName,
+                  hovertemplate: '%{x:$,.0f}<br>%{y} draws<extra>' + posName + '</extra>' }
+            ];
+        }
+
+        function drawUplift() {
+            const lo = MC.sortedUplift[0], hi = MC.sortedUplift[N_DRAWS - 1];
+            const h = histogram(MC.uplift, 90, lo, hi);
+            const traces = splitSignBars(h, 'switch loses money', 'switch makes money');
+            const q05 = quantileSorted(MC.sortedUplift, 0.05);
+            const q50 = quantileSorted(MC.sortedUplift, 0.50);
+            const q95 = quantileSorted(MC.sortedUplift, 0.95);
+            const pPos = countAboveSorted(MC.sortedUplift, 0) / N_DRAWS;
+            const layout = PT.layout({
+                title: { text: 'Monthly revenue uplift from switching to B — median ' + money(q50) +
+                              ', 90% interval ' + money(q05) + ' to ' + money(q95) +
+                              ', P(uplift > 0) = ' + pct(pPos, 1),
+                        font: { size: 13 } },
+                xaxis: { title: 'monthly uplift ($)' },
+                yaxis: { title: 'number of draws' },
+                bargap: 0, barmode: 'overlay',
+                legend: { orientation: 'h', y: -0.25 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper',
+                      line: { color: W.ink, width: 2 } },
+                    vline(q50, W.ink)
+                ],
+                annotations: [{ x: q50, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'median ' + money(q50), showarrow: false,
+                                font: { size: 11, color: W.muted } }]
+            });
+            Plotly.newPlot('upliftChart', traces, layout, PT.config);
+        }
+
+        function drawCost() {
+            const cost = parseInt(document.getElementById('costSlider').value, 10);
+            const pBeats = countAboveSorted(MC.sortedUplift, cost) / N_DRAWS;
+            document.getElementById('costReadout').textContent = money(cost);
+            document.getElementById('costProbReadout').textContent =
+                'P(first-month net gain) = ' + pct(pBeats, 0);
+
+            const net = new Float64Array(N_DRAWS);
+            let mean = 0;
+            for (let i = 0; i < N_DRAWS; i++) { net[i] = MC.uplift[i] - cost; mean += net[i]; }
+            mean /= N_DRAWS;
+            const lo = MC.sortedUplift[0] - cost, hi = MC.sortedUplift[N_DRAWS - 1] - cost;
+            const h = histogram(net, 90, lo, hi);
+            const traces = splitSignBars(h, 'net loss', 'net gain');
+            const layout = PT.layout({
+                title: { text: 'cost ' + money(cost) + ' → P(first-month net gain) = ' +
+                              pct(pBeats, 0) + ', expected net ' + money(mean),
+                        font: { size: 14 } },
+                xaxis: { title: 'first-month net ($ uplift − cost)' },
+                yaxis: { title: 'number of draws' },
+                bargap: 0, barmode: 'overlay',
+                legend: { orientation: 'h', y: -0.25 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [{ type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper',
+                           line: { color: W.ink, width: 2 } }]
+            });
+            Plotly.react('costChart', traces, layout, PT.config);
+        }
+
+        function drawDecision() {
+            const costs = [], ps = [];
+            for (let c = 0; c <= 12000; c += 250) {
+                costs.push(c);
+                ps.push(countAboveSorted(MC.sortedUplift, c) / N_DRAWS * 100);
+            }
+            const marks = [0, 2000, 6000, 12000];
+            const markPs = marks.map(function(c) {
+                return countAboveSorted(MC.sortedUplift, c) / N_DRAWS * 100;
+            });
+            const traces = [
+                { type: 'scatter', mode: 'lines', name: 'P(uplift beats cost)',
+                  x: costs, y: ps, line: { color: W.sky, width: 3 },
+                  hovertemplate: 'cost %{x:$,.0f}<br>P(net gain) %{y:.0f}%<extra></extra>' },
+                { type: 'scatter', mode: 'markers+text', name: 'slider stops',
+                  x: marks, y: markPs,
+                  text: marks.map(function(c) { return '$' + c.toLocaleString('en-US'); }),
+                  textposition: 'top right', textfont: { size: 11, color: W.muted },
+                  marker: { color: W.amber, size: 11, line: { color: W.ink, width: 1 } } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'one-time switching cost ($)' },
+                yaxis: { title: 'P(net gain) (%)', range: [0, 100] },
+                legend: { orientation: 'h', y: -0.3 },
+                shapes: [{ type: 'line', x0: 0, x1: 12000, y0: 50, y1: 50,
+                           line: { color: W.muted, width: 1.5, dash: 'dot' } }],
+                annotations: [{ x: 11800, y: 50, yanchor: 'bottom', xanchor: 'right',
+                                text: 'coin flip (50%) — crossed near $3,000', showarrow: false,
+                                font: { size: 11, color: W.muted } }]
+            });
+            Plotly.newPlot('decisionChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Wiring
+        // ------------------------------------------------------------------
+        function init() {
+            drawBeliefs();
+            drawBayes();
+            drawSharpen();
+            drawGridVsConj();
+            drawPriors();
+            drawConverge();
+            runMonteCarlo();
+            drawAB();
+            drawDiff();
+            drawHDI();
+            drawUplift();
+            drawCost();
+            drawDecision();
+
+            document.getElementById('impSlider').addEventListener('input', drawSharpen);
+            document.getElementById('ctrSlider').addEventListener('input', drawSharpen);
+            document.getElementById('strengthSlider').addEventListener('input', drawPriors);
+            document.getElementById('priorsImpSlider').addEventListener('input', drawPriors);
+            document.getElementById('hdiSlider').addEventListener('input', drawHDI);
+            document.getElementById('costSlider').addEventListener('input', drawCost);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

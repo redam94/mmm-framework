@@ -150,6 +150,36 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_plans_thread ON analysis_plans(thread_id, locked_at)"
         )
 
+        # Lift-experiment registry: the project-level log of planned / running /
+        # completed / calibrated experiments that the home page tracks and the
+        # agent reads when deciding whether a model refresh should fold new
+        # results in. status='completed' = measured but NOT yet calibrated into
+        # a fit; 'calibrated' closes the loop.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS experiments (
+                id          TEXT PRIMARY KEY,
+                project_id  TEXT,
+                thread_id   TEXT,
+                channel     TEXT NOT NULL,
+                design_type TEXT,
+                status      TEXT NOT NULL DEFAULT 'planned',
+                start_date  TEXT,
+                end_date    TEXT,
+                estimand    TEXT,
+                value       REAL,
+                se          REAL,
+                notes       TEXT,
+                created_at  REAL NOT NULL,
+                updated_at  REAL NOT NULL
+            )
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_experiments_project"
+            " ON experiments(project_id, updated_at)"
+        )
+
         # Projects: group sessions and own a knowledge base. A session belongs
         # to a project via sessions.project_id.
         c.execute(
@@ -210,6 +240,21 @@ def init_db() -> None:
         )
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_kb_chunks_doc ON kb_chunks(document_id)"
+        )
+
+        # User/project preferences: small JSON values keyed by (scope, key).
+        # scope is 'global' (deployment-wide defaults: favorite palette, number
+        # formats) or a project_id (per-client branding, report preferences).
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS preferences (
+                scope      TEXT NOT NULL,
+                key        TEXT NOT NULL,
+                value_json TEXT NOT NULL,
+                updated_at REAL NOT NULL,
+                PRIMARY KEY (scope, key)
+            )
+            """
         )
 
 
@@ -795,6 +840,143 @@ def delete_analysis_plan(plan_id: str) -> bool:
         return cur.rowcount > 0
 
 
+# ── Experiments (lift-test registry) ─────────────────────────────────────────
+
+EXPERIMENT_STATUSES = ("planned", "running", "completed", "calibrated", "cancelled")
+
+
+def _experiment_row_to_dict(r) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "project_id": r["project_id"],
+        "thread_id": r["thread_id"],
+        "channel": r["channel"],
+        "design_type": r["design_type"],
+        "status": r["status"],
+        "start_date": r["start_date"],
+        "end_date": r["end_date"],
+        "estimand": r["estimand"],
+        "value": r["value"],
+        "se": r["se"],
+        "notes": r["notes"],
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def upsert_experiment(
+    *,
+    experiment_id: str | None = None,
+    project_id: str | None = None,
+    thread_id: str | None = None,
+    channel: str | None = None,
+    design_type: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    estimand: str | None = None,
+    value: float | None = None,
+    se: float | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    """Create (no ``experiment_id``) or partially update an experiment record.
+
+    On update, only the non-None fields change. Raises ValueError for an
+    unknown id, a missing channel on create, or an invalid status.
+    """
+    if status is not None and status not in EXPERIMENT_STATUSES:
+        raise ValueError(
+            f"Invalid status '{status}'. Valid: {', '.join(EXPERIMENT_STATUSES)}"
+        )
+    now = _now()
+    with _conn() as c:
+        if experiment_id is None:
+            if not channel:
+                raise ValueError("channel is required to create an experiment")
+            experiment_id = uuid.uuid4().hex
+            c.execute(
+                "INSERT INTO experiments (id, project_id, thread_id, channel,"
+                " design_type, status, start_date, end_date, estimand, value, se,"
+                " notes, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    experiment_id,
+                    project_id,
+                    thread_id,
+                    channel,
+                    design_type,
+                    status or "planned",
+                    start_date,
+                    end_date,
+                    estimand,
+                    value,
+                    se,
+                    notes,
+                    now,
+                    now,
+                ),
+            )
+        else:
+            row = c.execute(
+                "SELECT * FROM experiments WHERE id = ?", (experiment_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown experiment id '{experiment_id}'")
+            updates = {
+                k: v
+                for k, v in {
+                    "project_id": project_id,
+                    "thread_id": thread_id,
+                    "channel": channel,
+                    "design_type": design_type,
+                    "status": status,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "estimand": estimand,
+                    "value": value,
+                    "se": se,
+                    "notes": notes,
+                }.items()
+                if v is not None
+            }
+            updates["updated_at"] = now
+            sets = ", ".join(f"{k} = ?" for k in updates)
+            c.execute(
+                f"UPDATE experiments SET {sets} WHERE id = ?",
+                (*updates.values(), experiment_id),
+            )
+        row = c.execute(
+            "SELECT * FROM experiments WHERE id = ?", (experiment_id,)
+        ).fetchone()
+    return _experiment_row_to_dict(row)
+
+
+def list_experiments(
+    project_id: str | None = None, status: str | None = None
+) -> list[dict[str, Any]]:
+    """Experiments, newest-updated first; optionally filtered."""
+    q = "SELECT * FROM experiments"
+    clauses, params = [], []
+    if project_id is not None:
+        clauses.append("project_id = ?")
+        params.append(project_id)
+    if status is not None:
+        clauses.append("status = ?")
+        params.append(status)
+    if clauses:
+        q += " WHERE " + " AND ".join(clauses)
+    q += " ORDER BY updated_at DESC"
+    with _conn() as c:
+        rows = c.execute(q, params).fetchall()
+    return [_experiment_row_to_dict(r) for r in rows]
+
+
+def delete_experiment(experiment_id: str) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM experiments WHERE id = ?", (experiment_id,))
+        return cur.rowcount > 0
+
+
 # ── Projects ────────────────────────────────────────────────────────────────
 
 _DEFAULT_PROJECT_ID = "default"
@@ -928,6 +1110,68 @@ def resolve_project_id(thread_id: str | None) -> str:
     if row and row["project_id"]:
         return row["project_id"]
     return _DEFAULT_PROJECT_ID
+
+
+# ── Preferences (global defaults + per-project branding) ────────────────────
+
+
+def set_preference(scope: str, key: str, value: Any) -> dict[str, Any]:
+    """Upsert one preference value (stored as JSON) under (scope, key)."""
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO preferences (scope, key, value_json, updated_at)"
+            " VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(scope, key) DO UPDATE SET value_json = excluded.value_json,"
+            " updated_at = excluded.updated_at",
+            (scope, key, json.dumps(value), now),
+        )
+    return {"scope": scope, "key": key, "value": value, "updated_at": now}
+
+
+def get_preference(scope: str, key: str) -> Any | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT value_json FROM preferences WHERE scope = ? AND key = ?",
+            (scope, key),
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        return json.loads(row["value_json"])
+    except Exception:
+        return None
+
+
+def list_preferences(scope: str) -> dict[str, Any]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT key, value_json FROM preferences WHERE scope = ?", (scope,)
+        ).fetchall()
+    out: dict[str, Any] = {}
+    for r in rows:
+        try:
+            out[r["key"]] = json.loads(r["value_json"])
+        except Exception:
+            continue
+    return out
+
+
+def delete_preference(scope: str, key: str) -> bool:
+    with _conn() as c:
+        cur = c.execute(
+            "DELETE FROM preferences WHERE scope = ? AND key = ?", (scope, key)
+        )
+        return cur.rowcount > 0
+
+
+def get_project_branding(project_id: str) -> dict[str, Any] | None:
+    val = get_preference(project_id, "branding")
+    return val if isinstance(val, dict) else None
+
+
+def set_project_branding(project_id: str, branding: dict[str, Any]) -> dict[str, Any]:
+    return set_preference(project_id, "branding", branding)
 
 
 # ── Knowledge-base documents + chunks ───────────────────────────────────────

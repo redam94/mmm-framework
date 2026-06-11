@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The MMM Walkthrough | MMM Framework</title>
+    <meta name="description" content="The full analyst workflow on a realistic — but not adversarial — synthetic world: EDA pre-flight, a pre-specified model, the naive-fit failure, the causal-structure recovery, experiment calibration, and decision outputs, every step graded against known truth.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/mmm-walkthrough.html">
+    <meta property="og:title" content="The MMM Walkthrough | MMM Framework">
+    <meta property="og:description" content="What the MMM workflow looks like when the world is kind: naive fit 109% wrong on Search with green diagnostics, the DAG-driven revision pulls it to +9%, and lift tests pin what the data cannot. Every number measured against known truth.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/mmm-walkthrough.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        /* Page-specific: compact grade tables */
+        .grade-table { font-size: 0.9rem; }
+        .grade-table td, .grade-table th { padding: 0.4rem 0.7rem; }
+        .grade-table .num { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; white-space: nowrap; }
+        .grade-table .bad { color: var(--color-danger); font-weight: 700; }
+        .grade-table .good { color: #3f7a58; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The kind world</a></li>
+                <li><a href="#eda">Part 1 — EDA pre-flight</a></li>
+                <li><a href="#difficulty">How hard is this world?</a></li>
+                <li><a href="#model">The pre-specified model</a></li>
+                <li><a href="#v1">v1 — the naive fit</a></li>
+                <li><a href="#v2">v2 — causal structure</a></li>
+                <li><a href="#v3">v3 — experiments</a></li>
+                <li><a href="#decisions">Decision outputs</a></li>
+                <li><a href="#compute">Compute budget</a></li>
+                <li><a href="#reference">Failure-mode reference</a></li>
+                <li><a href="#takeaways">What to take away</a></li>
+            </ul>
+
+            <h3>Pressure Testing</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="mmm-walkthrough.html" class="active">The Walkthrough</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The MMM Walkthrough</h1>
+            <p class="lead">
+                This is what the full analyst workflow looks like <strong>when the world is kind</strong> —
+                realistic, messy, low signal-to-noise, but not engineered to break the model. We run the
+                whole arc on a synthetic world with known causal ground truth: EDA before any fitting, a
+                pre-specified model, a naive first fit that fails (with green diagnostics), a DAG-driven
+                revision that recovers, lift-test calibration for what the data cannot identify, and a
+                final recommendation with honest confidence labels. Every number is measured.
+                For the same arc on a world built to be hostile, see
+                <a href="stress-05-gauntlet.html">stress&nbsp;05 · The Gauntlet</a>; for the doctrine and
+                scorecard behind both, see <a href="pressure-testing.html">Pressure Testing</a>.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">20</div>
+                    <div class="stat-label">candidate factors: 7 media channels + 13 controls (6 pure noise)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">~26%</div>
+                    <div class="stat-label">media's true share of sales — a small, confounded slice</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+109%</div>
+                    <div class="stat-label">the naive fit's error on Search — with r-hat 1.004</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+9%</div>
+                    <div class="stat-label">the same channel after the causal revision</div>
+                </div>
+            </div>
+
+            <p>
+                The world is <code>tests/synth/dgp.make_realistic(seed=42)</code>: 156 weekly observations,
+                7 media channels (TV, Search, Social, Display, Video, Radio, Print) and 13 candidate
+                controls. Because the data is synthetic, every channel's <em>true</em> counterfactual
+                contribution is recorded — so each modeling iteration gets graded, not guessed at.
+                New to MMM entirely? Start with
+                <a href="workshop-03-first-mmm.html">Workshop&nbsp;03 · Your First MMM</a> and
+                <a href="getting-started.html">Getting Started</a>; this page assumes you know what a fit
+                looks like and shows you the <em>workflow around it</em>.
+            </p>
+
+            <h2 id="eda">Part 1 — EDA before you model</h2>
+            <p>
+                For MMM, EDA is not mainly about the KPI. It is about two questions that decide whether the
+                model can possibly succeed: <strong>is each channel identifiable</strong> (does its spend
+                vary enough, independently enough, to estimate an effect?) and <strong>are the controls
+                causally valid</strong> (which are confounders you must keep, which are post-treatment
+                "bad controls" you must drop?). Six checks answer those.
+            </p>
+
+            <h3>1.1 — Look at the KPI</h3>
+            <p>
+                Orient first: scale, trend, seasonality, anomalies. These decide your trend/seasonality
+                spec and warn of structural breaks a constant-coefficient MMM won't handle (a sharp break
+                needs a dummy or piecewise trend, or it leaks into media — measured in
+                <a href="stress-02-time-structure.html">stress&nbsp;02</a>). Here: mild upward trend,
+                yearly seasonality, no breaks. Measured stats: mean 814, sd 137, range 544–1145.
+            </p>
+
+            <div class="chart-container" id="kpiChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — a weekly KPI series with the same
+                structure the notebook plots (mild trend + annual cycle + noise), anchored to the
+                notebook's <strong>measured</strong> stats: mean 814, sd 137, min 544, max 1145 over
+                156 weeks. Look for: trend (yes, mild), seasonality (yes, annual), level shifts (none).
+            </p>
+
+            <h3>1.2 — Spend variation = identifiability</h3>
+            <p>
+                A coefficient can only be estimated if its driver <strong>varies</strong>. An always-on
+                channel with near-constant spend is confounded with the intercept — no amount of data
+                separates its effect from the baseline. The screen is the coefficient of variation
+                (CoV = sd/mean), with ~0.3 as the rule-of-thumb floor. Measured here: every channel
+                passes comfortably (Radio and Print lowest at 0.93; Search highest at 1.34) — flighting
+                is bursty, which is good news for identification.
+            </p>
+
+            <h3>1.3 — Collinearity: which channels can't be separated</h3>
+            <p>
+                If two channels always move together, the data identifies their <em>combined</em> effect
+                but not the split. The measured screen finds exactly one problem — and it's severe:
+            </p>
+            <table class="grade-table">
+                <thead><tr><th>Channel</th><th>VIF</th><th>Verdict (&gt;10 is problematic)</th></tr></thead>
+                <tbody>
+                    <tr><td>TV / Search / Social</td><td class="num">1.1</td><td class="good">fine</td></tr>
+                    <tr><td>Display / Video</td><td class="num">1.0</td><td class="good">fine</td></tr>
+                    <tr><td><strong>Radio</strong></td><td class="num bad">124.7</td><td class="bad">collinear with Print (corr = 1.00)</td></tr>
+                    <tr><td><strong>Print</strong></td><td class="num bad">123.7</td><td class="bad">collinear with Radio (corr = 1.00)</td></tr>
+                </tbody>
+            </table>
+            <p>
+                Radio and Print are bought together — a perfectly collinear pair. The data can estimate
+                their sum, never their split. Options: model them as one grouped channel, or anchor one
+                with an experiment (we do the latter in v3). Reporting separate point ROIs for a collinear
+                pair is a trap — <a href="stress-03-confounding-selection.html">stress&nbsp;03</a> shows
+                the posterior "seesaw" this produces.
+            </p>
+
+            <h3>1.4 — Outliers and the normalization trap</h3>
+            <p>
+                The model normalizes each channel by its training <em>max</em>; one mega-spike compresses
+                every normal week into a sliver of the response curve. The 30-second screen is
+                max&nbsp;÷&nbsp;median. Measured here: TV 12.9×, Search 16.7×, Social 10.3×, Display 9.6×,
+                Video 10.7×. These exceed the ~8–10× alarm line — but inspection shows they are genuine
+                bursty flighting (the same heavy-tailed pattern that gave us healthy CoV in §1.2), not
+                one-week data-entry spikes. The screen's job is to make you <em>check</em>. Contrast
+                <a href="stress-01-carryover-shape.html">stress&nbsp;01</a>, where genuine 15× one-week
+                spikes crush interval coverage to 0% until winsorized.
+            </p>
+
+            <h3>1.5 — Exogeneity: is spend driven by demand?</h3>
+            <p>
+                The deadliest MMM bias: a hidden demand signal drives <em>both</em> spend (teams bid harder
+                when demand is high) <em>and</em> sales — then corr(spend,&nbsp;sales) is mostly demand, not
+                media effect. Screen every channel against any demand proxy you have.
+            </p>
+
+            <div class="chart-container" id="exogChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — each channel's correlation with the latent demand index
+                (solid) next to its naive correlation with sales (hatched). TV (0.53) and Search (0.48)
+                chase demand: their sales correlations (0.57, 0.46) are mostly demand, not effect.
+                <strong>Never read corr(spend,&nbsp;sales) as ROI</strong> — the second bar is the trap.
+            </p>
+
+            <h3>1.6 — Classify the controls: build the DAG</h3>
+            <p>
+                The single highest-leverage EDA step. For each candidate control, ask how it relates to
+                <strong>spend</strong> and to the <strong>KPI</strong>:
+            </p>
+            <table>
+                <thead><tr><th>Pattern</th><th>Role</th><th>Treatment</th></tr></thead>
+                <tbody>
+                    <tr><td>correlates with <strong>both</strong> spend &amp; KPI</td><td><strong>confounder</strong></td><td><strong>must include, do NOT shrink</strong></td></tr>
+                    <tr><td>correlates with KPI, not spend</td><td>precision control</td><td>include (regularize)</td></tr>
+                    <tr><td>is <strong>downstream of media</strong></td><td><strong>mediator / bad control</strong></td><td><strong>must EXCLUDE</strong></td></tr>
+                    <tr><td>correlates with neither</td><td>irrelevant</td><td>harmless; the prior shrinks it</td></tr>
+                </tbody>
+            </table>
+
+            <div class="chart-container" id="controlRolesChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — all 13 candidate controls placed by their measured
+                correlations: max |corr with any channel's spend| (x) vs |corr with KPI| (y), colored by
+                the world's <em>answer-key</em> role. <code>category_demand</code> and
+                <code>distribution</code> sit high on both axes — confounders, keep with a wide prior.
+                <code>brand_awareness</code> is strongly predicted by TV/Video (corr 0.56) — the tell of
+                a <strong>mediator</strong> (media → awareness → sales): including it blocks the path and
+                under-counts those channels. The <code>noise_*</code> cluster hugs the origin.
+            </p>
+
+            <p>This classification <em>is</em> the model spec — the DAG in five lines:</p>
+            <pre><code>category_demand / distribution ──► spend AND sales   (confounders: keep, wide prior)
+TV, Search ──────────────────────► sales             (but chase demand)
+TV, Video ──► brand_awareness ────► sales            (MEDIATOR: exclude — bad control)
+price, competitor, weather, holiday ► sales          (precision: keep, regularized)
+noise_1..6 ──╴(no edge)╶──────────  sales            (irrelevant: prior shrinks them)
+Radio ≈ Print (collinear)                            (needs an experiment to split)</code></pre>
+
+            <h3 id="difficulty">1.7 — How hard is this world? (it is not "simple synthetic data")</h3>
+            <p>
+                It's easy to make synthetic data the model nails — draw it from the model's own assumptions
+                and recovery is near-perfect (the positive control on
+                <a href="pressure-testing.html">the scorecard</a> recovers at ~7% median error, 100%
+                coverage). This world is deliberately the opposite. Measured difficulty:
+                <strong>20 candidate factors</strong> to sort out (6 of them pure noise); media is only
+                <strong>~26%</strong> of total sales; the worst spend–demand confounding correlation is
+                <strong>0.53</strong> (exogeneity violated); the worst channel collinearity is
+                <strong>1.00</strong> (a pair the data cannot split). The structure the model must fight
+                is in the <em>data</em>, not the sampler — which is why a simple recovery test tells you
+                only that the sampler works.
+            </p>
+
+            <div class="definition">
+                <h4>Pre-modeling checklist</h4>
+                <p>
+                    Before fitting anything: KPI trend/seasonality/breaks understood · every channel's CoV
+                    high enough · no |corr|&nbsp;&gt;&nbsp;0.9 / VIF&nbsp;&gt;&nbsp;10 pairs unhandled · no
+                    spend spike distorting normalization · spend not driven by demand (if it is, the demand
+                    proxy is mandatory) · every control classified (confounder / precision / mediator /
+                    irrelevant) · adstock, saturation, priors, trend/seasonality
+                    <strong>pre-specified now</strong>, before seeing results.
+                </p>
+            </div>
+
+            <h2 id="model">Part 2 — The pre-specified model and the prior gate</h2>
+            <p>
+                <strong>Question:</strong> each channel's incremental contribution, with honest uncertainty,
+                to defend a budget reallocation. <strong>Story:</strong> the DAG from §1.6.
+                <strong>Model (pre-specified, before any fit):</strong> additive, geometric adstock
+                (estimated per channel), saturating response, Fourier seasonality, linear trend, positive
+                coefficients, and per-control prior widths assigned by causal role — confounders wide
+                (never shrunk), the rest regularized:
+            </p>
+            <p>
+                \[ y_t \;=\; \alpha \;+\; \mathrm{trend}_t \;+\; \mathrm{season}_t \;+\;
+                   \sum_{c} \beta_c \left(1 - e^{-\lambda_c \tilde{x}_{c,t}}\right) \;+\;
+                   \gamma^{\top} z_t \;+\; \varepsilon_t \]
+            </p>
+            <p>
+                where \( \tilde{x}_{c,t} \) is adstocked, max-normalized spend and \( z_t \) the retained
+                controls. Fits use NumPyro NUTS, 1000 draws × 4 chains (as executed in the baked notebook).
+            </p>
+            <p>
+                <strong>The prior predictive gate:</strong> do the priors generate plausible sales before
+                seeing the likelihood? Measured: the prior-predictive 90% KPI range is
+                <strong>[687, 1751]</strong> against an observed range of <strong>[544, 1145]</strong> —
+                the observed mean (814) sits comfortably inside the prior band, which is neither absurdly
+                wide nor too tight to contain the data. Priors pass; proceed.
+            </p>
+
+            <h2 id="v1">Iteration 1 — v1, the naive fit (failure)</h2>
+            <p>
+                A first pass <strong>without the DAG</strong>: include the obvious controls and the
+                tempting <code>brand_awareness</code>, but omit the demand confounders — their back-door
+                is invisible until you draw the story. The diagnostics gate
+                <strong>passes</strong>: r-hat&nbsp;=&nbsp;1.004, one post-tuning divergence, 20.7&nbsp;s
+                wall-clock. And the answer is badly wrong.
+            </p>
+
+            <div class="controls-row" id="gradeControls">
+                <label>Iteration:</label>
+                <button class="toggle-btn active" data-version="v1">v1 · naive</button>
+                <button class="toggle-btn" data-version="v2">v2 · causal structure</button>
+                <button class="toggle-btn" data-version="v3">v3 · + experiments</button>
+            </div>
+            <div class="chart-container tall" id="gradeChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — estimated total contribution per channel (bars) against the
+                recorded ground truth (dark ticks), for each of the three iterations. Hover for the full
+                grade row: relative error, whether truth landed in the 90% interval, the relative interval
+                width, and the prior→posterior learning verdict. v1: Search +109% and TV −42% with truth
+                <em>outside</em> their intervals. v2: every confounded channel snaps back (Search +9%,
+                TV −18%). v3: lift tests pin Radio/Print/TV/Search coefficients — and expose TV's residual
+                bias (−19%, truth now outside the narrowed interval).
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Failure mode #1 — confident &amp; wrong</h4>
+                <p>
+                    Computational diagnostics check the <em>sampler</em>, not the <em>causal structure</em>.
+                    v1 converged cleanly (r-hat 1.004) and would pass a posterior-predictive check — yet
+                    Search is +109% and TV −42%, both with truth outside the 90% interval. Two causal
+                    errors at work: omitting the demand proxies leaves the back-door open (TV, Search
+                    inflate or distort), and including the <code>brand_awareness</code> mediator absorbs
+                    part of TV's and Video's effect. This is the silent-failure mode that
+                    <a href="pressure-testing.html">the scorecard</a> records eight times across sixteen
+                    worlds.
+                </p>
+            </div>
+
+            <h2 id="v2">Iteration 2 — v2, apply the causal structure (recovery)</h2>
+            <p>
+                Revise using the DAG: <strong>add the confounders</strong>
+                (<code>category_demand</code>, <code>distribution</code>) with a wide, un-shrunk prior via
+                <code>CausalControlRole.CONFOUNDER</code>; <strong>drop the mediator</strong>; keep the
+                precision controls. Measured result (r-hat 1.004, zero divergences, 20.0&nbsp;s): the large
+                confounded/mediated errors collapse — TV −42%&nbsp;→&nbsp;−18%, Search
+                +109%&nbsp;→&nbsp;+9%, Video −29%&nbsp;→&nbsp;+9% — and <strong>every channel's truth is
+                inside its 90% interval</strong>. Toggle the chart above to v2 and compare.
+            </p>
+            <p>
+                Two confirmations that the structure is doing its job, both measured from the posterior:
+                the demand confounder is now the largest-credited control
+                (coefficient 0.306, distribution 0.189), and the six <code>noise_*</code> controls are
+                shrunk to ≈ 0 (between −0.09 and +0.10) by the regularizing prior — automatic soft
+                variable selection, no extra step.
+            </p>
+
+            <h3>Variable selection with a horseshoe prior</h3>
+            <p>
+                With many candidate controls you can replace the soft Normal regularizer with an explicit
+                <strong>horseshoe</strong> selection prior
+                (<code>ControlSelectionConfig(method="horseshoe")</code>) — which, by construction here,
+                <strong>never shrinks the confounders</strong> (shrinking a confounder re-opens the
+                back-door). Refit and compare:
+            </p>
+
+            <div class="chart-container tall" id="shrinkChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — posterior mean |coefficient| for every control under the
+                Normal prior vs the horseshoe, grouped by true role. The horseshoe drives the irrelevant
+                noise controls markedly closer to zero (e.g. noise_3: 0.104&nbsp;→&nbsp;0.043, noise_2:
+                0.024&nbsp;→&nbsp;0.002) while the confounders keep — or grow — their full coefficients
+                (category_demand 0.306&nbsp;→&nbsp;0.311). Honest caveat: in this low-SNR world it also
+                shrinks the genuinely-weak precision controls, which is why the framework keeps selection
+                <strong>off by default</strong>. The horseshoe fit sampled clean (0 divergences) but
+                slower (22.5&nbsp;s vs 20.0&nbsp;s) — it adds a per-control tau/lambda/c2/z hierarchy.
+                More on this trade in <a href="variable-selection.html">Variable Selection</a> and
+                <a href="stress-03-confounding-selection.html">stress&nbsp;03</a>.
+            </p>
+
+            <p>
+                But v2 isn't done — and the model <strong>tells you about one remaining problem and hides
+                the other</strong>:
+            </p>
+            <ul>
+                <li><strong>Radio and Print are unidentified, and the model says so:</strong> their
+                    contribution intervals are ~1.9× and ~2.2× wider than the estimates themselves — the
+                    honest signal of the collinear pair EDA flagged in §1.3. A wide interval is the model
+                    routing you to an experiment.</li>
+                <li><strong>TV is still ~18% low, and nothing flags it:</strong> residual confounding from
+                    a <em>noisy</em> demand proxy that the control only partly removes. In this run TV's
+                    truth sits just inside its 90% interval, so even the coverage column looks clean — no
+                    observational diagnostic catches a noisy-proxy bias
+                    (<a href="stress-03-confounding-selection.html">stress&nbsp;03</a> measures this trap
+                    in isolation: ~+35% residual bias with green checks).</li>
+            </ul>
+            <p>Both need randomized evidence.</p>
+
+            <h2 id="v3">Iteration 3 — v3, bring in experiments</h2>
+            <p>
+                You can't fix the above with more observational modeling. The notebook calibrates with
+                geo-lift experiments on the channels the model flagged as unidentified
+                (<strong>Radio, Print</strong>) plus — as standard practice — the biggest spenders
+                (<strong>TV, Search</strong>), since a confident-but-wrong estimate is invisible to every
+                observational check. Each lift test is well-powered (SE = 12% of the true lift) and fed to
+                <code>ExperimentCalibrator(...).calibrate(lifts, refit=True)</code>.
+            </p>
+
+            <div class="chart-container" id="calibChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — posterior SD of each channel's coefficient before (v2) and
+                after (v3) calibration. The four anchored channels contract sharply: TV
+                0.93&nbsp;→&nbsp;0.36, Search 0.46&nbsp;→&nbsp;0.10, Radio 0.71&nbsp;→&nbsp;0.10, Print
+                0.68&nbsp;→&nbsp;0.06. The three un-anchored channels barely move (Social
+                0.61&nbsp;→&nbsp;0.60, Display 0.70&nbsp;→&nbsp;0.69, Video 0.67&nbsp;→&nbsp;0.68) —
+                calibration is surgical, not contagious.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ The honest limit — what survives even calibration</h4>
+                <p>
+                    Toggle the grade chart to v3: TV's <em>contribution</em> barely improves (−19%, and
+                    truth now sits <em>outside</em> the narrowed interval; learning verdict:
+                    <strong>prior-dominated</strong>). Pinning a coefficient is not enough when the channel
+                    is heavily confounded through a noisy proxy — the lift-to-coefficient conversion
+                    inherits the residual bias. TV needs a better demand proxy or a cleaner, TV-specific
+                    experiment; until then its number is <strong>provisional</strong>. A single lift test
+                    pins a <em>slope</em>; it does not launder residual confounding out of a
+                    <em>contribution</em>. See <a href="measurement-calibration.html">Measurement &amp;
+                    Calibration</a> for how to design the test around the estimand.
+                </p>
+            </div>
+
+            <h2 id="decisions">Step 9 — Decision outputs: communicate with honest uncertainty</h2>
+            <p>
+                The deliverable is never a bare point estimate. It states what we know, how well, and on
+                what evidence — measured final table:
+            </p>
+            <table class="grade-table">
+                <thead>
+                    <tr><th>Channel</th><th>True</th><th>Est (v3)</th><th>Err</th><th>In 90% CI</th><th>Evidence</th><th>Confidence</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>TV</td><td class="num">8948</td><td class="num">7217</td><td class="num bad">−19%</td><td class="bad">✗</td><td>lift-anchored</td><td class="bad">PROVISIONAL (residual bias)</td></tr>
+                    <tr><td>Search</td><td class="num">3978</td><td class="num">4482</td><td class="num">+13%</td><td class="good">✓</td><td>lift-anchored</td><td class="good">usable</td></tr>
+                    <tr><td>Social</td><td class="num">3948</td><td class="num">4608</td><td class="num">+17%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
+                    <tr><td>Display</td><td class="num">3090</td><td class="num">3601</td><td class="num">+17%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
+                    <tr><td>Video</td><td class="num">8286</td><td class="num">8895</td><td class="num">+7%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
+                    <tr><td>Radio</td><td class="num">3301</td><td class="num">1731</td><td class="num">−48%</td><td class="good">✓</td><td>lift-anchored</td><td>wide — report as a pair</td></tr>
+                    <tr><td>Print</td><td class="num">2097</td><td class="num">2091</td><td class="num">−0%</td><td class="good">✓</td><td>lift-anchored</td><td>wide — report as a pair</td></tr>
+                </tbody>
+            </table>
+            <p>
+                <strong>Budget guidance (the notebook's closing line):</strong> shift toward
+                well-identified winners (Search, Video); treat the collinear Radio/Print pair as one line
+                item; <strong>HOLD</strong> provisional channels (TV) pending a cleaner experiment. Note
+                Radio's −48% point error sits inside an interval ~2× the estimate — the pair's individual
+                numbers are honestly wide, which is exactly why they're reported as one line item.
+            </p>
+
+            <h2 id="compute">How much compute did this take?</h2>
+            <p>
+                Measured wall-clock from the baked run (156 obs, 7 channels, 1000 draws × 4 chains,
+                NumPyro): v1 naive <strong>20.7&nbsp;s</strong>, v2 causal <strong>20.0&nbsp;s</strong>,
+                v2 + horseshoe <strong>22.5&nbsp;s</strong>, v3 calibration refit
+                <strong>19.6&nbsp;s</strong> — <strong>83&nbsp;s total across 4 fits</strong>. Cost
+                drivers from the robustness study: time scales with observations and draws, super-linearly
+                in channels (the adstock kernel sits inside every gradient step); NumPyro runs ~2× faster
+                than the PyMC sampler at equal draws; the horseshoe's per-control hierarchy costs extra;
+                and the refutation suite (skipped in the notebook for speed) refits the whole model ~4×.
+            </p>
+
+            <h2 id="reference">Part 3 — Failure-mode quick reference</h2>
+            <table>
+                <thead>
+                    <tr><th>Failure mode</th><th>EDA signal (Part 1)</th><th>What catches it in modeling</th><th>Recovery</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Unobserved confounding</strong></td><td>spend correlates with demand (§1.5)</td><td><em>nothing</em> observational — converges &amp; passes PPC</td><td>include the confounder (don't shrink); anchor with a lift test</td></tr>
+                    <tr><td><strong>Bad control (mediator)</strong></td><td>a control is downstream of media (§1.6)</td><td>contribution drops vs expectation; DAG review</td><td><strong>drop</strong> the post-treatment variable</td></tr>
+                    <tr><td><strong>Collinearity</strong></td><td>|corr| &gt; 0.9 / VIF &gt; 10 (§1.3)</td><td>huge contribution CIs; sometimes divergences</td><td>group the channels, or anchor one with an experiment</td></tr>
+                    <tr><td><strong>Always-on / weak</strong></td><td>low CoV (§1.2)</td><td>prior-dominated / wide CI</td><td>experiment, or report a wide interval honestly</td></tr>
+                    <tr><td><strong>Spend outliers</strong></td><td>max ≫ median (§1.4)</td><td>attenuated effects; 0% CI coverage</td><td>cap/winsorize; normalize by a percentile</td></tr>
+                    <tr><td><strong>Structural break</strong></td><td>level shift in KPI (§1.1)</td><td>poor PPC on the break window</td><td>dummy or piecewise trend (<a href="stress-02-time-structure.html">stress 02</a>)</td></tr>
+                    <tr><td><strong>Functional-form misspec</strong></td><td>(not visible in EDA)</td><td>wrong-shape PPC; see <a href="stress-01-carryover-shape.html">stress 01</a></td><td>richer adstock/saturation; experiments</td></tr>
+                </tbody>
+            </table>
+            <p>
+                <strong>Meta-lessons.</strong> (1)&nbsp;Modeling is iterative — the DAG drove v2, the
+                model's own uncertainty drove v3. (2)&nbsp;Diagnostics check the sampler, not the truth.
+                (3)&nbsp;Causal structure is the spec. (4)&nbsp;Let the model tell you what it can't do —
+                wide intervals route you to the right experiment. (5)&nbsp;Experiments identify, but must
+                be designed for the channel you're trying to rescue.
+            </p>
+            <p>
+                When the world is <em>not</em> kind — confounding plus mediation plus the wrong saturation
+                form, all at once — the same arc still works, but every step gets harder and the naive fit
+                gets <em>much</em> worse (ranking fully inverted, Search 8× overstated).
+                That is <a href="stress-05-gauntlet.html">stress&nbsp;05 · The Gauntlet</a>.
+            </p>
+
+            <div class="definition" id="takeaways">
+                <h4>What to take away</h4>
+                <p>
+                    <strong>1.</strong> EDA decides identifiability before any fit: CoV, VIF, the
+                    max/median screen, spend-vs-demand correlation, and control classification each take
+                    seconds and catch what sampling never will.<br>
+                    <strong>2.</strong> The naive fit was +109% wrong on Search with r-hat 1.004 — green
+                    diagnostics are a statement about the sampler, never about attribution.<br>
+                    <strong>3.</strong> The single biggest improvement (Search +109% → +9%, TV −42% → −18%)
+                    came from classifying controls — adding confounders un-shrunk, dropping the mediator —
+                    not from more data or tuning.<br>
+                    <strong>4.</strong> Calibration is surgical: anchored coefficient SDs contract
+                    several-fold (Print 0.68 → 0.06) while un-anchored channels don't move — but a lift
+                    test pins a slope, and TV's −19% residual bias survives it.<br>
+                    <strong>5.</strong> The deliverable carries confidence labels: usable / wide — report
+                    as a pair / PROVISIONAL. Never a bare point estimate.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/mmm_walkthrough.ipynb</code>, generated by
+                    <code>nbs/build_mmm_walkthrough.py</code> and executed end-to-end against the scenario
+                    harness in <code>tests/synth/</code> (the world is
+                    <code>dgp.make_realistic(seed=42)</code>). The stress-series README
+                    (<code>nbs/README_stress.md</code>) positions it as the same workflow arc as the
+                    <a href="stress-05-gauntlet.html">Gauntlet capstone</a>, run on the tamer
+                    <code>realistic</code> world. Companions:
+                    <code>technical-docs/mmm-modeling-walkthrough.md</code> and
+                    <code>technical-docs/mmm-robustness-report.md</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // Channel colors — series-fixed for TV/Search/Social/Display + truth;
+        // walkthrough-only channels get page-stable extras.
+        const CH_COLORS = {
+            TV: '#8fa86a', Search: '#6a8fa8', Social: '#d4a86a', Display: '#c97067',
+            Video: '#8a7ba8', Radio: '#9aa79a', Print: '#c8a26a'
+        };
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display', 'Video', 'Radio', 'Print'];
+
+        // ------------------------------------------------------------------
+        // MEASURED DATA — extracted from the baked nbs/mmm_walkthrough.ipynb
+        // outputs (seeded run; dgp.make_realistic(seed=42); 1000 draws x 4
+        // chains, NumPyro). Do not edit without re-running the notebook.
+        // ------------------------------------------------------------------
+
+        // §1.5 exogeneity screen
+        const EXOG = {
+            demand: { TV: 0.53, Search: 0.48, Social: 0.02, Display: 0.04, Video: -0.07, Radio: 0.17, Print: 0.16 },
+            sales:  { TV: 0.57, Search: 0.46, Social: 0.17, Display: 0.12, Video: 0.14,  Radio: 0.25, Print: 0.24 }
+        };
+
+        // §1.6 control classification: [name, max|corr spend|, |corr KPI|, answer-key role]
+        const CONTROLS = [
+            ['category_demand',  0.51, 0.78, 'confounder'],
+            ['distribution',     0.29, 0.69, 'confounder'],
+            ['brand_awareness',  0.56, 0.57, 'mediator'],
+            ['price',            0.24, 0.42, 'precision'],
+            ['weather',          0.08, 0.39, 'precision'],
+            ['competitor_promo', 0.07, 0.22, 'precision'],
+            ['holiday',          0.17, 0.02, 'precision'],
+            ['noise_6',          0.14, 0.43, 'irrelevant'],
+            ['noise_5',          0.10, 0.37, 'irrelevant'],
+            ['noise_3',          0.16, 0.31, 'irrelevant'],
+            ['noise_4',          0.05, 0.19, 'irrelevant'],
+            ['noise_1',          0.08, 0.12, 'irrelevant'],
+            ['noise_2',          0.07, 0.09, 'irrelevant']
+        ];
+        const ROLE_COLORS = {
+            confounder: '#c97067', mediator: '#d4a86a',
+            precision: '#6a8fa8', irrelevant: '#9aa79a'
+        };
+
+        // Grade tables: true / est / err% / in-90%-CI / relative CI width /
+        // beta posterior SD / learning verdict — per iteration.
+        const TRUE_CONTRIB = { TV: 8948, Search: 3978, Social: 3948, Display: 3090, Video: 8286, Radio: 3301, Print: 2097 };
+        const GRADES = {
+            v1: {
+                label: 'v1 · naive (no DAG)', rhat: '1.004', div: 1, secs: 20.7,
+                rows: {
+                    TV:      { est: 5161, err: '-42%',  inCI: false, relCI: 0.7, sd: 0.90, learn: 'weak' },
+                    Search:  { est: 8311, err: '+109%', inCI: false, relCI: 0.7, sd: 0.37, learn: 'strong' },
+                    Social:  { est: 4028, err: '+2%',   inCI: true,  relCI: 0.6, sd: 0.78, learn: 'moderate' },
+                    Display: { est: 4060, err: '+31%',  inCI: true,  relCI: 1.2, sd: 0.72, learn: 'strong' },
+                    Video:   { est: 5870, err: '-29%',  inCI: true,  relCI: 1.7, sd: 0.80, learn: 'moderate' },
+                    Radio:   { est: 2416, err: '-27%',  inCI: true,  relCI: 1.9, sd: 0.71, learn: 'moderate' },
+                    Print:   { est: 2131, err: '+2%',   inCI: true,  relCI: 2.2, sd: 0.65, learn: 'strong' }
+                }
+            },
+            v2: {
+                label: 'v2 · causal structure', rhat: '1.004', div: 0, secs: 20.0,
+                rows: {
+                    TV:      { est: 7314, err: '-18%', inCI: true, relCI: 0.4, sd: 0.93, learn: 'moderate' },
+                    Search:  { est: 4324, err: '+9%',  inCI: true, relCI: 0.7, sd: 0.46, learn: 'strong' },
+                    Social:  { est: 4604, err: '+17%', inCI: true, relCI: 0.8, sd: 0.61, learn: 'strong' },
+                    Display: { est: 3548, err: '+15%', inCI: true, relCI: 1.1, sd: 0.70, learn: 'strong' },
+                    Video:   { est: 9007, err: '+9%',  inCI: true, relCI: 0.5, sd: 0.67, learn: 'strong' },
+                    Radio:   { est: 2081, err: '-37%', inCI: true, relCI: 1.9, sd: 0.71, learn: 'strong' },
+                    Print:   { est: 1800, err: '-14%', inCI: true, relCI: 2.2, sd: 0.68, learn: 'strong' }
+                }
+            },
+            v3: {
+                label: 'v3 · + lift-test calibration', rhat: '1.004', div: 0, secs: 19.6,
+                rows: {
+                    TV:      { est: 7217, err: '-19%', inCI: false, relCI: 0.4, sd: 0.36, learn: 'prior-dominated' },
+                    Search:  { est: 4482, err: '+13%', inCI: true,  relCI: 0.6, sd: 0.10, learn: 'moderate' },
+                    Social:  { est: 4608, err: '+17%', inCI: true,  relCI: 0.8, sd: 0.60, learn: 'strong' },
+                    Display: { est: 3601, err: '+17%', inCI: true,  relCI: 1.1, sd: 0.69, learn: 'strong' },
+                    Video:   { est: 8895, err: '+7%',  inCI: true,  relCI: 0.5, sd: 0.68, learn: 'strong' },
+                    Radio:   { est: 1731, err: '-48%', inCI: true,  relCI: 2.0, sd: 0.10, learn: 'weak' },
+                    Print:   { est: 2091, err: '-0%',  inCI: true,  relCI: 2.4, sd: 0.06, learn: 'weak' }
+                }
+            }
+        };
+        const ANCHORED = ['Radio', 'Print', 'TV', 'Search'];
+
+        // Control |coefficient|: Normal prior vs horseshoe (posterior means).
+        const SHRINK = [
+            // [name, role, normal, horseshoe]
+            ['category_demand',  'confounder', 0.306, 0.311],
+            ['distribution',     'confounder', 0.189, 0.251],
+            ['price',            'precision',  0.094, 0.059],
+            ['holiday',          'precision',  0.060, 0.051],
+            ['competitor_promo', 'precision',  0.046, 0.026],
+            ['weather',          'precision',  0.013, 0.001],
+            ['noise_3',          'irrelevant', 0.104, 0.043],
+            ['noise_5',          'irrelevant', 0.086, 0.047],
+            ['noise_4',          'irrelevant', 0.036, 0.017],
+            ['noise_2',          'irrelevant', 0.024, 0.002],
+            ['noise_1',          'irrelevant', 0.015, 0.003],
+            ['noise_6',          'irrelevant', 0.003, 0.006]
+        ];
+
+        // ------------------------------------------------------------------
+        // 1) KPI orientation — illustrative recreation (seeded), anchored to
+        //    measured stats: 156 weeks, mean 814, sd 137, min 544, max 1145.
+        // ------------------------------------------------------------------
+        function drawKpi() {
+            const rng = mulberry32(42);
+            const n = 156;
+            const t = [], y = [];
+            for (let i = 0; i < n; i++) {
+                const trend = 0.6 * i;
+                const season = 85 * Math.sin(2 * Math.PI * (i + 8) / 52);
+                const noise = (rng() + rng() + rng() + rng() - 2) * 95;
+                t.push(i + 1);
+                y.push(765 + trend + season + noise);
+            }
+
+            const traces = [{
+                type: 'scatter', mode: 'lines', x: t, y: y,
+                line: { color: '#2d3a2d', width: 1.6 },
+                name: 'weekly KPI',
+                hovertemplate: 'week %{x}<br>sales %{y:.0f}<extra></extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: [1, n], y: [814, 814],
+                line: { color: '#8fa86a', width: 1.5, dash: 'dash' },
+                name: 'measured mean (814)', hoverinfo: 'skip'
+            }];
+
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'sales' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 55 }
+            });
+            Plotly.newPlot('kpiChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2) Exogeneity screen — measured corr(spend, demand) vs corr(spend, sales)
+        // ------------------------------------------------------------------
+        function drawExog() {
+            const traces = [{
+                type: 'bar', name: 'corr(spend, demand)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return EXOG.demand[c]; }),
+                marker: { color: CHANNELS.map(function(c) { return CH_COLORS[c]; }),
+                          line: { color: 'rgba(45,58,45,0.35)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>corr with demand: %{y:.2f}<extra></extra>'
+            }, {
+                type: 'bar', name: 'corr(spend, sales) — NOT roi',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return EXOG.sales[c]; }),
+                marker: { color: CHANNELS.map(function(c) { return PT.band(CH_COLORS[c], 0.45); }),
+                          line: { color: 'rgba(45,58,45,0.35)', width: 1 },
+                          pattern: { shape: '/', fgcolor: 'rgba(45,58,45,0.35)', size: 5 } },
+                hovertemplate: '<b>%{x}</b><br>naive corr with sales: %{y:.2f}<extra></extra>'
+            }];
+
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: 'channel' },
+                yaxis: { title: 'correlation', range: [-0.15, 0.65] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 40, b: 55 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 6.5, y0: 0.3, y1: 0.3,
+                    line: { color: '#c97067', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 6.4, y: 0.3, xanchor: 'right', yanchor: 'bottom',
+                    text: 'demand-chasing worry zone', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('exogChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 3) Control classification scatter — measured correlations, true roles
+        // ------------------------------------------------------------------
+        function drawControlRoles() {
+            const roles = ['confounder', 'mediator', 'precision', 'irrelevant'];
+            const labelled = { category_demand: true, distribution: true, brand_awareness: true };
+
+            const traces = roles.map(function(role) {
+                const rows = CONTROLS.filter(function(r) { return r[3] === role; });
+                return {
+                    type: 'scatter',
+                    mode: 'markers+text',
+                    name: role,
+                    x: rows.map(function(r) { return r[1]; }),
+                    y: rows.map(function(r) { return r[2]; }),
+                    text: rows.map(function(r) { return labelled[r[0]] ? r[0] : ''; }),
+                    textposition: 'top center',
+                    textfont: { size: 11, color: '#5a6b5a' },
+                    customdata: rows.map(function(r) { return r[0]; }),
+                    marker: {
+                        color: ROLE_COLORS[role], size: 13,
+                        symbol: role === 'mediator' ? 'diamond' : 'circle',
+                        line: { color: 'rgba(45,58,45,0.4)', width: 1 }
+                    },
+                    hovertemplate: '<b>%{customdata}</b> (' + role + ')<br>' +
+                        'max |corr spend|: %{x:.2f}<br>|corr KPI|: %{y:.2f}<extra></extra>'
+                };
+            });
+
+            const layout = PT.layout({
+                xaxis: { title: 'max |corr with any channel’s spend|', range: [-0.02, 0.65] },
+                yaxis: { title: '|corr with KPI|', range: [-0.04, 0.9] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: [{
+                    x: 0.55, y: 0.84, text: 'both axes high →<br>confounder or mediator:<br>the DAG decides which',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }, xanchor: 'right', align: 'right'
+                }, {
+                    x: 0.07, y: 0.02, text: 'noise cluster', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }, yanchor: 'top'
+                }]
+            });
+            Plotly.newPlot('controlRolesChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 4) Grade chart — measured est vs truth per iteration (interactive)
+        // ------------------------------------------------------------------
+        function drawGrade(version) {
+            const g = GRADES[version];
+            const rev = CHANNELS.slice().reverse();   // horizontal bars read top-down
+
+            const barTrace = {
+                type: 'bar', orientation: 'h', name: 'estimated contribution',
+                y: rev,
+                x: rev.map(function(c) { return g.rows[c].est; }),
+                marker: {
+                    color: rev.map(function(c) {
+                        return g.rows[c].inCI ? CH_COLORS[c] : PT.colors.silent;
+                    }),
+                    line: { color: 'rgba(45,58,45,0.35)', width: 1 }
+                },
+                customdata: rev.map(function(c) {
+                    const r = g.rows[c];
+                    return [TRUE_CONTRIB[c], r.err, r.inCI ? 'yes' : 'NO', r.relCI, r.sd, r.learn];
+                }),
+                hovertemplate:
+                    '<b>%{y}</b> — ' + g.label + '<br>' +
+                    'estimate: %{x:.0f} · truth: %{customdata[0]}<br>' +
+                    'error: %{customdata[1]} · truth in 90% CI: %{customdata[2]}<br>' +
+                    'relative CI width: %{customdata[3]} · beta SD: %{customdata[4]}<br>' +
+                    'learning verdict: %{customdata[5]}<extra></extra>'
+            };
+
+            const truthTrace = {
+                type: 'scatter', mode: 'markers', name: 'recorded truth',
+                y: rev,
+                x: rev.map(function(c) { return TRUE_CONTRIB[c]; }),
+                marker: {
+                    symbol: 'line-ns-open', size: 22,
+                    color: PT.colors.truth, line: { width: 3, color: PT.colors.truth }
+                },
+                hovertemplate: '<b>%{y}</b><br>true contribution: %{x:.0f}<extra></extra>'
+            };
+
+            const layout = PT.layout({
+                barmode: 'overlay',
+                xaxis: { title: 'total contribution (sales units) — ' + g.label +
+                                '  ·  r-hat ' + g.rhat + ' · divergences ' + g.div,
+                         rangemode: 'tozero', range: [0, 10200] },
+                yaxis: { automargin: true },
+                legend: { orientation: 'h', y: 1.09 },
+                margin: { l: 90, r: 30, t: 30, b: 70 }
+            });
+
+            Plotly.react('gradeChart', [barTrace, truthTrace], layout, PT.config);
+        }
+
+        document.querySelectorAll('#gradeControls .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#gradeControls .toggle-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawGrade(btn.dataset.version);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // 5) Normal vs horseshoe control shrinkage — measured |coef|
+        // ------------------------------------------------------------------
+        function drawShrink() {
+            const names = SHRINK.map(function(r) { return r[0]; }).reverse();
+            const rolesRev = SHRINK.map(function(r) { return r[1]; }).reverse();
+            const normal = SHRINK.map(function(r) { return r[2]; }).reverse();
+            const hs = SHRINK.map(function(r) { return r[3]; }).reverse();
+
+            const traces = [{
+                type: 'bar', orientation: 'h', name: 'Normal prior (default)',
+                y: names, x: normal,
+                marker: { color: rolesRev.map(function(role) { return PT.band(ROLE_COLORS[role], 0.5); }),
+                          line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                customdata: rolesRev,
+                hovertemplate: '<b>%{y}</b> (%{customdata})<br>Normal |coef|: %{x:.3f}<extra></extra>'
+            }, {
+                type: 'bar', orientation: 'h', name: 'horseshoe selection prior',
+                y: names, x: hs,
+                marker: { color: rolesRev.map(function(role) { return ROLE_COLORS[role]; }),
+                          line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                customdata: rolesRev,
+                hovertemplate: '<b>%{y}</b> (%{customdata})<br>horseshoe |coef|: %{x:.3f}<extra></extra>'
+            }];
+
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: 'posterior mean |coefficient| (standardized)', rangemode: 'tozero' },
+                yaxis: { automargin: true },
+                legend: { orientation: 'h', y: 1.08 },
+                margin: { l: 130, r: 30, t: 30, b: 60 },
+                annotations: [{
+                    x: 0.31, y: 'category_demand', xanchor: 'left',
+                    text: 'confounders exempt from shrinkage', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('shrinkChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 6) Calibration contraction — measured beta SD, v2 vs v3
+        // ------------------------------------------------------------------
+        function drawCalib() {
+            const traces = [{
+                type: 'bar', name: 'v2 (observational)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return GRADES.v2.rows[c].sd; }),
+                marker: { color: CHANNELS.map(function(c) { return PT.band(CH_COLORS[c], 0.45); }),
+                          line: { color: 'rgba(45,58,45,0.35)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>v2 beta SD: %{y:.2f}<extra></extra>'
+            }, {
+                type: 'bar', name: 'v3 (after lift-test calibration)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return GRADES.v3.rows[c].sd; }),
+                marker: { color: CHANNELS.map(function(c) { return CH_COLORS[c]; }),
+                          line: { color: 'rgba(45,58,45,0.35)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>v3 beta SD: %{y:.2f}<extra></extra>'
+            }];
+
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: 'channel (anchored: TV, Search, Radio, Print)' },
+                yaxis: { title: 'posterior SD of beta', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: ANCHORED.map(function(c) {
+                    return {
+                        x: c, y: GRADES.v2.rows[c].sd, yanchor: 'bottom',
+                        text: 'anchored', showarrow: false,
+                        font: { size: 10, color: '#5a6b5a' }, yshift: 4
+                    };
+                })
+            });
+            Plotly.newPlot('calibChart', traces, layout, PT.config);
+        }
+
+        function init() {
+            drawKpi();
+            drawExog();
+            drawControlRoles();
+            drawGrade('v1');
+            drawShrink();
+            drawCalib();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -127,7 +127,8 @@ class SeasonalityConfigBuilder:
     --------
     >>> seasonality = (SeasonalityConfigBuilder()
     ...     .with_yearly(order=2)
-    ...     .with_weekly(order=3)
+    ...     .with_weekly(order=3, prior_sigma=0.2)
+    ...     .with_prior_sigma(0.5)  # shared amplitude prior
     ...     .build())
     """
 
@@ -135,20 +136,38 @@ class SeasonalityConfigBuilder:
         self._yearly: int | None = 2
         self._monthly: int | None = None
         self._weekly: int | None = None
+        self._prior_sigma: float = 0.3
+        self._yearly_prior_sigma: float | None = None
+        self._monthly_prior_sigma: float | None = None
+        self._weekly_prior_sigma: float | None = None
 
-    def with_yearly(self, order: int = 2) -> Self:
-        """Add yearly seasonality with given Fourier order."""
+    def with_yearly(self, order: int = 2, prior_sigma: float | None = None) -> Self:
+        """Add yearly seasonality with given Fourier order (and optionally a
+        component-specific amplitude prior sigma)."""
         self._yearly = order
+        if prior_sigma is not None:
+            self._yearly_prior_sigma = prior_sigma
         return self
 
-    def with_monthly(self, order: int = 2) -> Self:
+    def with_monthly(self, order: int = 2, prior_sigma: float | None = None) -> Self:
         """Add monthly seasonality."""
         self._monthly = order
+        if prior_sigma is not None:
+            self._monthly_prior_sigma = prior_sigma
         return self
 
-    def with_weekly(self, order: int = 3) -> Self:
+    def with_weekly(self, order: int = 3, prior_sigma: float | None = None) -> Self:
         """Add weekly seasonality."""
         self._weekly = order
+        if prior_sigma is not None:
+            self._weekly_prior_sigma = prior_sigma
+        return self
+
+    def with_prior_sigma(self, sigma: float) -> Self:
+        """Set the shared seasonal amplitude prior: Fourier coefficients get
+        ``Normal(0, sigma)`` on standardized y. Per-component sigmas (passed to
+        ``with_yearly(..., prior_sigma=)`` etc.) override this."""
+        self._prior_sigma = sigma
         return self
 
     def no_yearly(self) -> Self:
@@ -169,6 +188,10 @@ class SeasonalityConfigBuilder:
             yearly=self._yearly,
             monthly=self._monthly,
             weekly=self._weekly,
+            prior_sigma=self._prior_sigma,
+            yearly_prior_sigma=self._yearly_prior_sigma,
+            monthly_prior_sigma=self._monthly_prior_sigma,
+            weekly_prior_sigma=self._weekly_prior_sigma,
         )
 
 
@@ -441,7 +464,7 @@ class TrendConfigBuilder:
         # Piecewise parameters
         self._n_changepoints: int = 10
         self._changepoint_range: float = 0.8
-        self._changepoint_prior_scale: float = 0.05
+        self._changepoint_prior_scale: float = 0.5
 
         # Spline parameters
         self._n_knots: int = 10
@@ -457,7 +480,7 @@ class TrendConfigBuilder:
 
         # Linear parameters
         self._growth_prior_mu: float = 0.0
-        self._growth_prior_sigma: float = 0.1
+        self._growth_prior_sigma: float = 0.5
 
     # =========================================================================
     # Trend Type Selection
@@ -582,7 +605,7 @@ class TrendConfigBuilder:
     # Linear Trend Parameters
     # =========================================================================
 
-    def with_growth_prior(self, mu: float = 0.0, sigma: float = 0.1) -> Self:
+    def with_growth_prior(self, mu: float = 0.0, sigma: float = 0.5) -> Self:
         """Set prior for linear growth rate."""
         self._growth_prior_mu = mu
         self._growth_prior_sigma = sigma
@@ -613,7 +636,7 @@ class TrendConfigBuilder:
         self._type = self._TrendType.PIECEWISE
         self._n_changepoints = 15
         self._changepoint_range = 0.9
-        self._changepoint_prior_scale = 0.1
+        self._changepoint_prior_scale = 0.5
         return self
 
     # =========================================================================

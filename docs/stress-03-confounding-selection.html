@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stress Test 03: Confounding &amp; Selection | MMM Framework</title>
+    <meta name="description" content="The causal core of the stress series: demand-chasing spend inflates a channel +110% with every diagnostic green, a noisy proxy control leaves +35% residual bias, near-perfect collinearity makes the split a posterior seesaw, and one lift test does what no prior can.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-03-confounding-selection.html">
+    <meta property="og:title" content="Stress Test 03: Confounding &amp; Selection | MMM Framework">
+    <meta property="og:description" content="Demand-chasing spend (+110% on Search, all green), the noisy-proxy trap, the collinear seesaw, 25 candidate controls — and the one lift test that closes the gap.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-03-confounding-selection.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Copied from pressure-testing.html so the series stays coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            width: 260px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .live-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        /* Diagnostics dashboard mini-table used in "What the diagnostics said" */
+        .diag-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 0; font-size: 0.9rem; }
+        .diag-table td, .diag-table th { padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--color-border); text-align: left; }
+        .diag-table td:first-child { font-weight: 600; white-space: nowrap; }
+        .diag-pass { color: #3f7a58; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The causal core</a></li>
+                <li><a href="#act1">Act 1 · Demand-chasing</a></li>
+                <li><a href="#act2">Act 2 · The noisy proxy</a></li>
+                <li><a href="#act3">Act 3 · The collinear seesaw</a></li>
+                <li><a href="#act4">Act 4 · 25 controls &amp; selection</a></li>
+                <li><a href="#act5">Act 5 · Experiment calibration</a></li>
+                <li><a href="#takeaways">What to take away</a></li>
+                <li><a href="#run">Run it yourself</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html" class="active">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Stress Test 03: Confounding &amp; Selection</h1>
+            <p class="lead">
+                Where <a href="stress-01-carryover-shape.html">stress 01</a> and
+                <a href="stress-02-time-structure.html">stress 02</a> attacked the model's
+                <em>functional form</em>, this notebook attacks its <strong>causal structure</strong> —
+                the assumptions no amount of curve flexibility can rescue. Budgets that chase latent
+                demand inflate the chasing channel by roughly <strong>+110%</strong> while every
+                diagnostic stays green. "We controlled for it" with a noisy proxy still leaves
+                <strong>~+35%</strong> residual bias. Near-perfectly collinear spend turns the channel
+                split into a posterior seesaw. And the only thing that fully repairs a confounded
+                channel is a number bought from <em>outside</em> the dataset: one lift test pulls
+                Search from <strong>+110% to +14%</strong>. This page mirrors
+                <code>nbs/stress_03_confounding_and_selection.ipynb</code>.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">+110%</div>
+                    <div class="stat-label">Search overstatement under demand-chasing — every diagnostic green</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+35%</div>
+                    <div class="stat-label">residual bias after "controlling for it" with a noisy proxy</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">&minus;0.5</div>
+                    <div class="stat-label">worst pairwise posterior contribution correlation on the collinear world</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+14%</div>
+                    <div class="stat-label">Search after one ROAS lift test — calibration is surgical</div>
+                </div>
+            </div>
+
+            <p>
+                Every world below comes from <code>tests/synth/dgp.py</code>: a clean core world drawn
+                from the model's exact structural family plus exactly one causal violation, with the
+                true counterfactual contribution of every channel recorded. The arc per act is the
+                series template — <em>world → naive fit → truth gap → diagnostics → pivot → measured
+                improvement</em>. The doctrine was set in
+                <a href="stress-00-rosy-picture.html">stress 00</a>: green diagnostics validate the
+                computation, never the causal claim.
+            </p>
+
+            <h2 id="act1">Act 1 — Demand-chasing: the #1 silent failure</h2>
+            <p>
+                <strong>The world.</strong> <code>unobserved_confounding</code> is the clean control
+                world with one change: a latent demand signal (seasonal + growth + AR(1)) pushes
+                <em>both</em> the baseline <em>and</em> the budgets of the demand-chasing channels
+                (Search and Social). Marketers do this on purpose — bid harder when the category is
+                hot. The model never sees the demand series; it only sees spend and sales moving
+                together, and it pays demand's credit to the channels that chased it.
+            </p>
+            <p>
+                The spend-vs-demand correlations look <em>modest</em> in EDA — nothing a screen would
+                scream about. The bias is large anyway, because confounding strength is the
+                <strong>product of both paths</strong>:
+                \( \text{bias} \propto \mathrm{corr}(\text{spend}, D) \times \gamma_{D \to \text{sales}} \) —
+                the same demand also drives the baseline hard, so the spend-side correlation alone
+                understates the damage.
+            </p>
+
+            <div class="chart-container" id="confoundedBars"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — per-channel recording from
+                <code>tests/synth/results/stress_matrix.md</code> (re-recorded 2026-06-10, seeded
+                NumPyro at matrix fidelity): Search reads <strong>+69%</strong> with the truth outside
+                its 90% interval; the non-chasers are fine. The magnitude is fidelity- and
+                defaults-dependent — the notebook's original seeded run logged
+                <strong>~+110%</strong> on Search (the series punchline), earlier matrix recordings
+                reached +153%, and the 2026-06-10 trend-prior loosening roughly halved the bias at
+                notebook fidelity (~+40%). What never changes is the <em>shape</em>: the bias lands
+                surgically on the demand-chasers, same model, same data quality, same priors.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said</h4>
+                <p>
+                    This is what makes it the #1 <em>silent</em> failure. The full dashboard an analyst
+                    would run — including the unobserved-confounding sensitivity screen that exists
+                    precisely to catch this — comes back clean:
+                </p>
+                <table class="diag-table">
+                    <tr><td>r-hat (max)</td><td>1.01</td><td class="diag-pass">PASS</td></tr>
+                    <tr><td>divergences</td><td>0</td><td class="diag-pass">PASS</td></tr>
+                    <tr><td>posterior predictive</td><td>pass</td><td class="diag-pass">PASS — confounding is not a fit problem</td></tr>
+                    <tr><td>robustness values (RV)</td><td>0.15&ndash;0.22 across channels</td><td class="diag-pass">fragile channels flagged: <strong>NONE</strong></td></tr>
+                </table>
+                <p style="margin-top:0.75rem;">
+                    The bias is carried by a <em>plausible</em> posterior, not a strained one.
+                    Exogeneity is an assumption <strong>about the world</strong>, and no within-model
+                    diagnostic can audit the world.
+                </p>
+            </div>
+
+            <div class="definition">
+                <h4>Doctrine: causal roles are model specification</h4>
+                <p>
+                    Declaring what a variable <em>is</em> — confounder, mediator, or nuisance
+                    precision control — is not bookkeeping; it is part of the model spec, with
+                    consequences wired into the graph. In this framework a control marked
+                    <code>CONFOUNDER</code> gets the wide, un-shrunk prior
+                    (<code>sigma=2.0</code>) instead of the regularizing precision prior
+                    (<code>sigma=0.5</code>), mediators are refused outright, and selection priors
+                    never touch a confounder. Shrinking a confounder re-opens the very back-door you
+                    are closing. No correlation screen can make these calls for you — act 4's decoys
+                    correlate with everything and cause nothing.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>💡 A framework fix that moved this page's numbers</h4>
+                <p>
+                    The 2026-06-10 trend-prior loosening (surfaced by
+                    <a href="stress-02-time-structure.html">stress 02</a>; linear growth sigma
+                    0.1 → 0.5) lets the trend absorb part of the demand growth and roughly
+                    <strong>halved</strong> this world's bias at notebook fidelity (~+110% → ~+40%).
+                    It also taught the series a maintenance lesson: when a framework default changes,
+                    re-probe <em>every</em> notebook's seeded asserts — stress 03's margins went stale
+                    and failed on the next rebake. The asserts now carry the magnitude history in
+                    comments, and this page labels each number's recording honestly.
+                </p>
+            </div>
+
+            <h2 id="act2">Act 2 — The noisy proxy: "we controlled for it" is not a fix</h2>
+            <p>
+                In real life you never observe demand itself; you observe a <strong>proxy</strong> —
+                a category index, a search-trends panel, distribution data. The
+                <code>confounding_controlled</code> twin of act 1's world adds exactly that: the same
+                latent demand, observed as <code>CategoryDemand = 100·demand + noise</code>, included
+                as a control and marked <code>CONFOUNDER</code> so it keeps its wide prior.
+            </p>
+            <p>
+                It helps a lot — and not enough. In the notebook's seeded run the worst chaser goes
+                from <strong>~+110% naive to ~+35% controlled</strong>, with the truth still outside
+                its interval; the 2026-06-10 matrix recording has the same pair at +69% → +50%. The
+                reason is mechanical: a proxy measures the confounder with error, and measurement
+                error only <em>partially</em> closes the back-door. With proxy reliability
+                \( \lambda = \sigma_D^2 / (\sigma_D^2 + \sigma_\epsilon^2) \), the residual
+                confounding bias scales roughly with \( (1 - \lambda) \) of the naive bias. Drag the
+                slider to see how proxy quality sets the floor:
+            </p>
+
+            <div class="controls-row">
+                <label for="proxySlider">Proxy noise (&sigma;<sub>noise</sub>/&sigma;<sub>demand</sub>):</label>
+                <input type="range" id="proxySlider" min="0" max="3" step="0.05" value="0.7">
+                <span class="live-value" id="proxyReadout"></span>
+            </div>
+            <div class="chart-container" id="proxyChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — a seeded 156-week
+                omitted-variable simulation (40 replicates per noise level) of regressing the KPI on
+                spend plus a noisy proxy of the confounder; the dashed curve is the closed-form
+                attenuation rule, residual bias &asymp; (1 &minus; reliability) &times; naive bias.
+                The anchors are <strong>measured</strong>: the naive ceiling is the notebook's
+                <strong>+110%</strong> Search overstatement, and the marked operating point is the
+                notebook's own proxy world, which leaves <strong>~+35%</strong> residual bias with
+                truth outside the HDI (matrix recording: +69% → +50%, still flagged a silent failure).
+                Nothing in the data tells you where your proxy sits on this curve.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said (proxy-controlled fit)</h4>
+                <p>
+                    r-hat 1.02, 0 divergences, posterior predictive passes. The dashboard cannot
+                    distinguish "controlled" from "partially controlled" — proxy <strong>quality</strong>
+                    is part of the spec, and the data cannot measure it for you. Two spec decisions did
+                    the work that <em>was</em> done: including the proxy at all, and assigning it the
+                    <code>CONFOUNDER</code> role so it isn't shrunk. Hold the residual for act 5.
+                </p>
+            </div>
+
+            <h2 id="act3">Act 3 — Collinearity: the model can't split what the buy didn't split</h2>
+            <p>
+                <strong>The world.</strong> <code>multicollinearity</code> keeps the clean world's deep
+                flighting pulses — total media is just as identifiable — but drives every channel from
+                <strong>one shared burst calendar</strong> (channels bought together, one trafficking
+                plan; mean pairwise spend correlation &gt; 0.85). Each channel keeps its own true
+                effect; only the <em>separability</em> is gone.
+            </p>
+            <p>
+                The recorded result (matrix fidelity, 2026-06-10): the point estimates shuffle real
+                credit between channels — median error <strong>39%</strong>, worst channel
+                <strong>+60%</strong> — while the combined-media total lands within
+                <strong>&minus;5%</strong> of truth and <strong>every</strong> channel's truth stays
+                inside its (very wide) 90% interval: <strong>100% coverage</strong>. The intervals
+                widen honestly — in the notebook every channel's interval is wider than its own
+                estimate.
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>channel</th><th>true</th><th>est</th><th>rel err</th><th>truth in 90% CI</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>TV</td><td>8,828</td><td>5,498</td><td>&minus;38%</td><td>✓</td></tr>
+                    <tr><td>Search</td><td>5,573</td><td>3,660</td><td>&minus;34%</td><td>✓</td></tr>
+                    <tr><td>Social</td><td>5,147</td><td>7,252</td><td>+41%</td><td>✓</td></tr>
+                    <tr><td>Display</td><td>3,485</td><td>5,580</td><td>+60%</td><td>✓</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note" style="margin-top:0.5rem;">
+                <strong>Measured</strong> — <code>multicollinearity</code> per-channel table,
+                <code>tests/synth/results/stress_matrix.md</code> (2026-06-10). r-hat 1.01,
+                0 divergences. <span class="verdict-pill silent">silent failure</span> on the split —
+                but listen to the intervals.
+            </p>
+
+            <h3>The posterior seesaw: the joint posterior's own confession</h3>
+            <p>
+                Wide per-channel intervals are only half of what the posterior is telling you. The
+                other half lives in the <strong>joint</strong> distribution: sum each channel's
+                contribution over time <em>per posterior draw</em> and correlate the totals across
+                channels. On the clean control (<a href="stress-00-rosy-picture.html">stress 00</a>
+                §3.1, distinct flighting calendars) those correlations sit near zero. Here, every
+                channel was bought on one calendar, and the posterior says so in its own language:
+                <strong>every pairwise correlation is negative</strong> (worst pair &asymp; &minus;0.5)
+                — draws where one channel takes more credit are draws where its shelf-mates take less.
+                The split is a seesaw: conserved in total, arbitrary in allocation.
+            </p>
+
+            <div class="controls-row">
+                <label>World:</label>
+                <button class="toggle-btn active" data-world="collinear" id="btnCollinear">collinear (one calendar)</button>
+                <button class="toggle-btn" data-world="clean" id="btnClean">clean control (stress 00)</button>
+            </div>
+            <div class="chart-container" id="seesawHeat"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation</strong> of the notebook's posterior-correlation
+                heatmap (channel contribution totals, per draw). The <strong>measured</strong>
+                punchlines it is built to match (seeded asserts in the notebook): on the collinear
+                world every off-diagonal is negative — no pair above +0.05, the worst pair below
+                &minus;0.35 (&asymp; &minus;0.5), at least three pairs below &minus;0.20; on the clean
+                control all pairs sit near 0. This check needs <strong>no ground truth</strong> —
+                it is available in every real engagement.
+            </p>
+
+            <div class="chart-container" id="seesawScatter"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation</strong> of the seesaw drawn as draws: the worst pair's
+                per-draw contribution totals, a cloud with correlation &asymp; &minus;0.5. The cloud's
+                centers are the <strong>measured</strong> point estimates (Social 7,252; Display
+                5,580) and the diamond is the <strong>measured</strong> truth (5,147; 3,485) — inside
+                the joint cloud, as the 100% coverage says. Conditioning on one coordinate pins the
+                other: that is why one lift test on either member collapses the seesaw.
+            </p>
+
+            <div class="note">
+                <h4>💡 Reading the seesaw in practice</h4>
+                <p>
+                    Two uses, both available without ground truth. <strong>(1) Grouping:</strong>
+                    channels whose contribution totals correlate below &asymp; &minus;0.3 should be
+                    reported as a group until an experiment splits them. <strong>(2) Experiment
+                    design:</strong> the scatter shows that one lift test on either member pins the
+                    other by subtraction — exactly what act 5 does. The wrong move is tightening
+                    priors until the intervals look presentable: that manufactures a split the data
+                    does not contain, and whoever sets the prior sets the ROI.
+                </p>
+            </div>
+
+            <h2 id="act4">Act 4 — 25 candidate controls: selection without re-opening the back-door</h2>
+            <p>
+                Acts 1&ndash;3 had one or two controls. Real briefs arrive with a <em>spreadsheet</em>:
+                macro indices, weather, pricing, category trackers, competitor pulls — some causal,
+                most not, several suspiciously co-moving with your own media. Including everything
+                costs precision (25 coefficients on 156 weeks); dropping the wrong one re-opens act 1.
+                <strong>Which controls you keep is a causal decision; how you regularize the keepers
+                is a statistical one.</strong> The <code>dense_controls</code> world tests the
+                machinery for splitting that difference. Its 25 candidates, each group a designed trap:
+            </p>
+            <ul>
+                <li><code>demand_proxy</code> — a genuine <strong>confounder</strong>: latent demand drives sales <em>and</em> the TV/Search budgets chase it (act 1's mechanism, buried in the pile);</li>
+                <li><code>price</code>, <code>weather</code> — genuine <strong>precision controls</strong> (real, modest effects);</li>
+                <li><code>noise_1..18</code> — pure-noise random walks, true effect zero — but random walks <em>will</em> spuriously correlate with a trending KPI on 156 weeks;</li>
+                <li><code>decoy_tv/search/social/display</code> — <strong>media-tracking decoys</strong>: noisy copies of each channel's spend (corr &asymp; 0.9) with <strong>no causal effect</strong> — designed bait for any selector that picks controls by correlation.</li>
+            </ul>
+
+            <p><strong>The contest.</strong> Four fits, identical except for how the controls enter:</p>
+            <table>
+                <thead>
+                    <tr><th>variant</th><th>controls</th><th>coefficient prior on controls</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>(a) kitchen sink</td><td>all 25</td><td>role widths only (confounder wide, rest <code>sigma=0.5</code>) — no selection</td></tr>
+                    <tr><td>(b) horseshoe</td><td>all 25</td><td>regularized horseshoe on the 24 <em>non-confounder</em> controls, <code>expected_nonzero=4</code>; <strong>confounder exempt</strong></td></tr>
+                    <tr><td>(c) oracle</td><td>the 3 truly-causal only</td><td>role widths — the benchmark you can't run in real life</td></tr>
+                    <tr><td>(d) spike-and-slab</td><td>all 25</td><td>as (b) with a spike-slab selector (sensitivity row)</td></tr>
+                </tbody>
+            </table>
+            <p>
+                The roles are <strong>asserted spec</strong>, not learned
+                (<code>ControlVariableConfig.causal_role</code>). The selection machinery's contract
+                (<code>model/base.py:_build_control_betas</code>): confounder-role controls keep the
+                wide un-shrunk Normal <em>no matter what</em> — act 2 showed what even a noisy proxy
+                costs; a shrunk one is a half-open back-door.
+            </p>
+
+            <h3>Who survives selection? The shrinkage profile</h3>
+            <div class="chart-container tall" id="shrinkageChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation</strong> of the notebook's <code>beta_controls</code>
+                shrinkage profile (|posterior mean| on a log scale, grouped by true role). The
+                <strong>measured</strong> mechanics it encodes (seeded asserts): the horseshoe shrinks
+                the noise pile and the decoys at least <strong>2&times;</strong> harder than the plain
+                Normal (in the run, several-fold), the exempt confounder keeps its coefficient
+                essentially untouched (|&beta;| &gt; 0.3, not shrunk vs the no-selection fit), and
+                <code>demand_proxy</code> is the <strong>lone survivor</strong> of the 90%-HDI-excludes-zero
+                test. The known cost, also measured: the horseshoe <strong>over-shrinks the genuine
+                precision controls</strong> (<code>price</code>/<code>weather</code> land well below
+                their no-selection estimates).
+            </p>
+
+            <p><strong>Honest findings — including the one the world wasn't designed to show:</strong></p>
+            <ul>
+                <li><strong>The decoys did not steal media's credit — under <em>any</em> prior.</strong>
+                    Built as the trap (corr &asymp; 0.9 with spend, zero effect), they get near-zero
+                    coefficients even with no selection. Why: the decoys track <em>raw spend</em>, but
+                    the regressor the likelihood sees is the <strong>adstocked, saturated transform</strong>
+                    of spend — a linear shadow of a channel is not collinear with the channel's
+                    transformed effect. A genuine robustness property, with a boundary: a decoy that
+                    mirrored your flighting <em>and</em> carryover would not be separated this way.</li>
+                <li><strong>The real cost of the kitchen sink is precision, not theft.</strong>
+                    Twenty-two junk coefficients don't <em>bias</em> a role-correct model much — they
+                    <em>blur</em> it: the weakest channel's interval roughly doubles versus the oracle.</li>
+                <li><strong>Selection bought the oracle's accuracy without the oracle's knowledge.</strong>
+                    Horseshoe (and spike-slab, nearly identically) matches or beats the oracle's media
+                    recovery while restoring most of the lost interval width.
+                    <code>expected_nonzero&asymp;4</code> encodes a prior belief, not a discovery.</li>
+                <li><strong>One channel stays under-credited in every variant, oracle included</strong>
+                    (matrix recording: Display &minus;52%, outside its CI — the row that flags
+                    <code>dense_controls</code> as a silent failure, med 16% / worst 52% / coverage 75%).
+                    Its bias is a property of this world's low SNR for that channel, not of the control
+                    strategy. Selection fixes the control problem; it does not manufacture
+                    identification that isn't there.</li>
+            </ul>
+
+            <div class="definition">
+                <h4>Doctrine: roles are spec; selection is statistics; keep them in that order</h4>
+                <p>
+                    Classify first — the confounder gets the wide prior, mediators are excluded
+                    outright — then let a selection prior tidy the nuisance pile you couldn't classify.
+                    The same shrinkage that crushes 18 noise walks and 4 decoys would, applied to
+                    <code>demand_proxy</code>, reintroduce act 1's confounding bias: what it does to
+                    <code>weather</code> it would do to your back-door. A selector that can shrink a
+                    confounder, or a workflow that picks controls by correlation with the KPI, is
+                    act 1 with extra steps.
+                </p>
+            </div>
+
+            <h2 id="act5">Act 5 — The real fix: experiment calibration</h2>
+            <p>
+                Act 2 ended with an uncomfortable residue: even with the proxy controlled, the worst
+                channel keeps a double-digit bias, and nothing in the data can locate the floor proxy
+                noise sets. Act 3 ended with an honest shrug. Both point the same way:
+                <strong>the information that identifies a confounded or collinear channel is not in
+                the observational data — you have to buy it.</strong>
+            </p>
+            <p>
+                A geo lift test measures a channel's incremental effect by randomization, immune to
+                demand-chasing by design. The framework folds it into the model as an
+                <strong>in-graph likelihood term</strong> (<code>add_experiment_calibration</code>,
+                called before <code>fit</code>): the measured ROAS becomes a data point whose model
+                expectation is the channel's own estimand, expressed through the same beta,
+                saturation, and adstock parameters the time series informs. Experiment and time series
+                <em>negotiate</em> in one posterior. The notebook simulates a well-powered test the
+                way a real one works: it measures the truth with a 10% standard error.
+            </p>
+
+            <div class="chart-container" id="calibChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — the series punchline: one
+                ROAS lift test on Search pulls its overstatement from <strong>+110%</strong> to
+                <strong>+14%</strong>, with the truth back inside a sharply tighter interval (the
+                seeded assert pins the contraction at &lt; 0.7&times; the naive width). The dashed
+                line is zero error — the truth.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Calibration is surgical, not systemic</h4>
+                <p>
+                    The <em>other</em> demand-chasing channel (Social) — same confounding mechanism,
+                    no experiment — barely moves: the seeded assert keeps it <strong>&gt; 20%</strong>
+                    off after calibration. One experiment repairs one identification problem. Run lift
+                    tests where the money and the failure modes live: the biggest spenders, the
+                    demand-chasers, and one member of every collinear group. The capstone
+                    (<a href="stress-05-gauntlet.html">stress 05</a>) runs the same move on the
+                    kitchen-sink world: Search ROAS 5.59 → 0.65 against a truth of 0.66 — and
+                    untested channels stay wrong there too.
+                </p>
+            </div>
+
+            <h2 id="takeaways">What to take away</h2>
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Confounding is silent.</strong> Convergence, PPC, even the targeted RV
+                        screen — all quiet while a demand-chasing channel reports roughly double its
+                        true effect. Exogeneity lives in the world, not the trace; the only EDA tell is
+                        spend-vs-demand-proxy correlation, and even a modest one is enough.</li>
+                    <li><strong>"Controlled for" is a spectrum, not a checkbox.</strong> A noisy proxy
+                        closes most of the back-door; the residual (~+35% here) is a bias whose size the
+                        data cannot tell you. Proxy quality is part of the spec.</li>
+                    <li><strong>Causal roles are SPEC.</strong> Confounders get the wide un-shrunk
+                        prior, mediators are refused, precision controls may be regularized — and no
+                        correlation screen makes these calls: the decoys correlate with everything and
+                        cause nothing.</li>
+                    <li><strong>Selection is for the nuisance pile only.</strong> Role-exempt horseshoe
+                        matched the oracle control set; the same machinery pointed at a confounder
+                        would reintroduce act 1. Its known cost: real-but-weak controls get attenuated.</li>
+                    <li><strong>Collinear channels need experiments, not priors.</strong> Wide intervals
+                        around a well-identified total are the model being honest; all-negative
+                        contribution correlations are the plot that says "buy a lift test, not a
+                        tighter prior."</li>
+                </ul>
+            </div>
+
+            <div class="note" id="run">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/stress_03_confounding_and_selection.ipynb</code>
+                    (authored by <code>nbs/build_stress_03_confounding_selection.py</code>), backed by
+                    the scenario harness in <code>tests/synth/</code> — the worlds are
+                    <code>unobserved_confounding</code>, <code>confounding_controlled</code>,
+                    <code>multicollinearity</code>, and <code>dense_controls</code>, with the recorded
+                    scorecard at <code>tests/synth/results/stress_matrix.md</code>. Every computational
+                    cell ends in a seeded assert encoding the claim it demonstrates — if the notebook
+                    executes clean, the story on this page is still true. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                    Next in the series: <a href="stress-04-extension-traps.html">04 · Extension Traps</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series
+        // (copied verbatim from pressure-testing.html).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gauss(rnd) {
+            let u = 0;
+            do { u = rnd(); } while (u === 0);
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd());
+        }
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLOR = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+
+        // ==================================================================
+        // Act 1 — true vs estimated contributions (MEASURED:
+        // stress_matrix.md unobserved_confounding per-channel table).
+        // ==================================================================
+        const ACT1 = [
+            { ch: 'TV',      truth: 5584, est: 4368, err: '−22%', inCI: true  },
+            { ch: 'Search',  truth: 1750, est: 2960, err: '+69%',      inCI: false },
+            { ch: 'Social',  truth: 2751, est: 3396, err: '+23%',      inCI: true  },
+            { ch: 'Display', truth: 2617, est: 2487, err: '−5%',  inCI: true  }
+        ];
+
+        function drawConfoundedBars() {
+            const truthTrace = {
+                type: 'bar', name: 'true contribution',
+                x: ACT1.map(function(d) { return d.ch; }),
+                y: ACT1.map(function(d) { return d.truth; }),
+                marker: { color: PT.band(PT.colors.truth, 0.55), line: { color: PT.colors.truth, width: 1.5 } },
+                hovertemplate: '<b>%{x}</b><br>true: %{y:,}<extra></extra>'
+            };
+            const estTrace = {
+                type: 'bar', name: 'estimated (naive fit)',
+                x: ACT1.map(function(d) { return d.ch; }),
+                y: ACT1.map(function(d) { return d.est; }),
+                marker: {
+                    color: ACT1.map(function(d, i) { return CH_COLOR[i]; }),
+                    line: { color: 'rgba(45,58,45,0.35)', width: 1 }
+                },
+                customdata: ACT1.map(function(d) { return [d.err, d.inCI ? 'yes' : 'NO']; }),
+                hovertemplate: '<b>%{x}</b><br>estimate: %{y:,}<br>rel err: %{customdata[0]}<br>truth in 90% CI: %{customdata[1]}<extra></extra>'
+            };
+            const annotations = ACT1.map(function(d) {
+                return {
+                    x: d.ch, y: Math.max(d.truth, d.est), yanchor: 'bottom', yshift: 6,
+                    text: d.err + (d.inCI ? '' : '<br><b>truth outside 90% CI ✗</b>'),
+                    showarrow: false,
+                    font: { size: 12, color: d.inCI ? '#5a6b5a' : '#a44c43' }
+                };
+            });
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'total incremental KPI', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 50, b: 50 },
+                annotations: annotations
+            });
+            Plotly.newPlot('confoundedBars', [truthTrace, estTrace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // Act 2 — proxy-noise slider -> residual-bias curve.
+        // ILLUSTRATIVE seeded simulation anchored to MEASURED endpoints:
+        // naive +110% (notebook), residual ~+35% at the notebook's proxy.
+        // ==================================================================
+        const NAIVE_BIAS = 110;            // measured notebook punchline (%)
+        const NOTEBOOK_S = 0.68;           // operating point implied by +35% residual
+        const PROXY_GRID = [];
+        for (let s = 0; s <= 3.0001; s += 0.125) PROXY_GRID.push(Math.round(s * 1000) / 1000);
+
+        // Seeded finite-sample simulation: y = x + g*D + eps, x = a*D + u,
+        // proxy P = D + s*e; OLS of y on (x, P); bias of the x coefficient.
+        // a, g chosen so the no-control omitted-variable bias is +110%.
+        function simResidual(s, rnd) {
+            const n = 156, reps = 40, a = 0.3, g = 4.0;
+            let acc = 0;
+            for (let r = 0; r < reps; r++) {
+                let Sxx = 0, Sxp = 0, Spp = 0, Sxy = 0, Spy = 0;
+                for (let i = 0; i < n; i++) {
+                    const D = gauss(rnd), u = gauss(rnd), e = gauss(rnd), eps = 0.5 * gauss(rnd);
+                    const x = a * D + u, P = D + s * e, y = x + g * D + eps;
+                    Sxx += x * x; Sxp += x * P; Spp += P * P; Sxy += x * y; Spy += P * y;
+                }
+                const det = Sxx * Spp - Sxp * Sxp;
+                const bx = (Spp * Sxy - Sxp * Spy) / det;
+                acc += (bx - 1);
+            }
+            return 100 * acc / reps;
+        }
+
+        const simCurve = (function() {
+            const rnd = mulberry32(20260610);
+            return PROXY_GRID.map(function(s) { return simResidual(s, rnd); });
+        })();
+
+        function ruleResidual(s) { return NAIVE_BIAS * s * s / (1 + s * s); }
+        function interpSim(s) {
+            if (s <= 0) return simCurve[0];
+            for (let i = 1; i < PROXY_GRID.length; i++) {
+                if (s <= PROXY_GRID[i]) {
+                    const t = (s - PROXY_GRID[i - 1]) / (PROXY_GRID[i] - PROXY_GRID[i - 1]);
+                    return simCurve[i - 1] + t * (simCurve[i] - simCurve[i - 1]);
+                }
+            }
+            return simCurve[simCurve.length - 1];
+        }
+
+        function drawProxy(s) {
+            const lam = 1 / (1 + s * s);
+            const simVal = interpSim(s), ruleVal = ruleResidual(s);
+            document.getElementById('proxyReadout').textContent =
+                'noise/signal = ' + s.toFixed(2) +
+                ' → reliability λ = ' + lam.toFixed(2) +
+                ' → residual bias ≈ +' + Math.max(0, simVal).toFixed(0) + '%';
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines', name: 'simulated residual bias (seeded)',
+                    x: PROXY_GRID, y: simCurve,
+                    line: { color: PT.colors.search, width: 2.5 },
+                    hovertemplate: 'noise/signal %{x:.2f}<br>residual bias +%{y:.0f}%<extra>simulation</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'closed-form rule: (1−λ) × naive',
+                    x: PROXY_GRID, y: PROXY_GRID.map(ruleResidual),
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dot' },
+                    hovertemplate: 'noise/signal %{x:.2f}<br>rule +%{y:.0f}%<extra>1−reliability</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'notebook’s world (measured)',
+                    x: [NOTEBOOK_S], y: [35],
+                    marker: { symbol: 'diamond', size: 13, color: PT.colors.silent,
+                              line: { color: PT.colors.truth, width: 1.5 } },
+                    hovertemplate: 'the notebook’s proxy<br>measured residual: +35%<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'your slider',
+                    x: [s], y: [simVal],
+                    marker: { size: 12, color: PT.colors.social,
+                              line: { color: PT.colors.truth, width: 1.5 } },
+                    hovertemplate: 'noise/signal %{x:.2f}<br>residual +%{y:.0f}%<extra></extra>'
+                }
+            ];
+
+            const layout = PT.layout({
+                xaxis: { title: 'proxy noise (σ noise / σ demand)', range: [-0.05, 3.05] },
+                yaxis: { title: 'residual confounding bias (%)', range: [-8, 125] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 45, b: 55 },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 3, y0: NAIVE_BIAS, y1: NAIVE_BIAS,
+                    line: { color: PT.colors.silent, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 2.95, y: NAIVE_BIAS, xanchor: 'right', yanchor: 'bottom',
+                    text: 'no control at all: naive bias +110% (measured)',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }, {
+                    x: 0.02, y: 0, xanchor: 'left', yanchor: 'bottom',
+                    text: 'perfect proxy: back-door closed',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.react('proxyChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Act 3 — posterior seesaw: correlation heatmap (ILLUSTRATIVE,
+        // matching the measured asserts) + per-draw scatter.
+        // ==================================================================
+        const CORR_COLLINEAR = [
+            [ 1.00, -0.31, -0.22, -0.18],
+            [-0.31,  1.00, -0.27, -0.21],
+            [-0.22, -0.27,  1.00, -0.50],
+            [-0.18, -0.21, -0.50,  1.00]
+        ];
+        const CORR_CLEAN = [
+            [ 1.00,  0.02, -0.04,  0.01],
+            [ 0.02,  1.00, -0.03,  0.02],
+            [-0.04, -0.03,  1.00, -0.05],
+            [ 0.01,  0.02, -0.05,  1.00]
+        ];
+
+        function drawSeesawHeat(world) {
+            const z = world === 'clean' ? CORR_CLEAN : CORR_COLLINEAR;
+            const title = world === 'clean'
+                ? 'clean control: separable channels, |corr| ≈ 0'
+                : 'collinear world: every off-diagonal negative (worst ≈ −0.5)';
+
+            const annotations = [];
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    annotations.push({
+                        x: CHANNELS[j], y: CHANNELS[i],
+                        text: (z[i][j] > 0 ? '+' : '') + z[i][j].toFixed(2),
+                        showarrow: false,
+                        font: { size: 12, color: Math.abs(z[i][j]) > 0.45 ? '#fff' : '#2d3a2d' }
+                    });
+                }
+            }
+            annotations.push({
+                x: 0.5, y: 1.12, xref: 'paper', yref: 'paper',
+                text: title, showarrow: false,
+                font: { size: 13, color: '#2d3a2d' }
+            });
+
+            const trace = {
+                type: 'heatmap',
+                x: CHANNELS, y: CHANNELS, z: z,
+                zmin: -1, zmax: 1, colorscale: 'RdBu',
+                colorbar: { title: 'corr', thickness: 12 },
+                hovertemplate: '%{y} vs %{x}<br>posterior corr of totals: %{z:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                margin: { l: 80, r: 30, t: 45, b: 50 },
+                xaxis: { gridcolor: 'rgba(0,0,0,0)' },
+                yaxis: { gridcolor: 'rgba(0,0,0,0)', autorange: 'reversed' },
+                annotations: annotations
+            });
+            Plotly.react('seesawHeat', [trace], layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn[data-world]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn[data-world]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawSeesawHeat(btn.dataset.world);
+            });
+        });
+
+        function drawSeesawScatter() {
+            // Worst pair: Social vs Display. Centers = MEASURED estimates;
+            // truth diamond = MEASURED truth; the cloud (corr -0.5, widths
+            // consistent with "interval wider than estimate") is illustrative.
+            const rnd = mulberry32(33);
+            const muA = 7252, sdA = 2300, muB = 5580, sdB = 1850, rho = -0.5;
+            const xs = [], ys = [];
+            for (let i = 0; i < 600; i++) {
+                const z1 = gauss(rnd), z2 = gauss(rnd);
+                xs.push(muA + sdA * z1);
+                ys.push(muB + sdB * (rho * z1 + Math.sqrt(1 - rho * rho) * z2));
+            }
+            const traces = [
+                {
+                    type: 'scatter', mode: 'markers', name: 'posterior draws (per-draw totals)',
+                    x: xs, y: ys,
+                    marker: { color: PT.band(PT.colors.display, 0.45), size: 5 },
+                    hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'truth (measured)',
+                    x: [5147], y: [3485],
+                    marker: { symbol: 'diamond', size: 14, color: PT.colors.truth },
+                    hovertemplate: 'truth<br>Social 5,147 · Display 3,485<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'Social total contribution (per draw)' },
+                yaxis: { title: 'Display total contribution (per draw)' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 80, r: 30, t: 45, b: 55 },
+                annotations: [{
+                    x: 0.98, y: 0.96, xref: 'paper', yref: 'paper', xanchor: 'right',
+                    text: 'the seesaw: corr ≈ −0.5 — credit is traded, not pinned',
+                    showarrow: false, font: { size: 12, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('seesawScatter', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Act 4 — shrinkage profile (ILLUSTRATIVE recreation matching the
+        // measured selection mechanics).
+        // ==================================================================
+        function drawShrinkage() {
+            const rnd = mulberry32(404);
+            const labels = ['demand_proxy', 'price', 'weather'];
+            const roles  = ['confounder', 'precision', 'precision'];
+            for (let i = 1; i <= 18; i++) { labels.push('noise_' + i); roles.push('noise'); }
+            ['decoy_tv', 'decoy_search', 'decoy_social', 'decoy_display'].forEach(function(d) {
+                labels.push(d); roles.push('decoy');
+            });
+
+            const roleColor = {
+                confounder: PT.colors.display,  // red family
+                precision:  PT.colors.search,   // blue
+                noise:      PT.colors.expected, // grey
+                decoy:      PT.colors.social    // amber
+            };
+
+            const none = [], hs = [];
+            labels.forEach(function(lab, i) {
+                if (roles[i] === 'confounder') { none.push(0.55); hs.push(0.56); }
+                else if (lab === 'price')      { none.push(0.16); hs.push(0.05); }
+                else if (lab === 'weather')    { none.push(0.11); hs.push(0.025); }
+                else if (roles[i] === 'noise') {
+                    const v = 0.015 + 0.075 * rnd();
+                    none.push(v); hs.push(v * (0.08 + 0.08 * rnd()));
+                } else { // decoy
+                    const v = 0.03 + 0.04 * rnd();
+                    none.push(v); hs.push(v * (0.10 + 0.08 * rnd()));
+                }
+            });
+
+            const x = labels.map(function(_, i) { return i; });
+            function mk(name, ys, symbol) {
+                return {
+                    type: 'scatter', mode: 'markers', name: name,
+                    x: x, y: ys,
+                    text: labels.map(function(lab, i) { return lab + ' (' + roles[i] + ')'; }),
+                    marker: {
+                        symbol: symbol, size: 9,
+                        color: roles.map(function(r) { return roleColor[r]; }),
+                        line: { color: 'rgba(45,58,45,0.5)', width: symbol === 'diamond' ? 1.2 : 0.5 }
+                    },
+                    hovertemplate: '<b>%{text}</b><br>' + name + ': |β| = %{y:.3f}<extra></extra>'
+                };
+            }
+
+            const layout = PT.layout({
+                xaxis: {
+                    title: 'confounder · precision · noise ×18 · decoys ×4',
+                    tickvals: [0, 1.5, 11.5, 22.5],
+                    ticktext: ['confounder', 'precision', 'noise random walks', 'media decoys'],
+                    range: [-0.8, 24.8]
+                },
+                yaxis: { title: '|posterior mean β| (log scale)', type: 'log', range: [-3, 0.15] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 30, t: 45, b: 65 },
+                shapes: [0.5, 2.5, 20.5].map(function(b) {
+                    return { type: 'line', x0: b, x1: b, y0: 0, y1: 1, yref: 'paper',
+                             line: { color: '#d4ddd4', width: 1, dash: 'dot' } };
+                }),
+                annotations: [{
+                    x: 0, y: Math.log10(0.56), yanchor: 'bottom', yshift: 8,
+                    text: 'exempt by role:<br>never shrunk',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }, {
+                    x: 1.5, y: Math.log10(0.035), yanchor: 'top', yshift: -6,
+                    text: 'the known cost: real-but-weak<br>controls get over-shrunk',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.newPlot('shrinkageChart',
+                [mk('(a) no selection — role widths only', none, 'circle'),
+                 mk('(b) horseshoe, confounder exempt', hs, 'diamond')],
+                layout, PT.config);
+        }
+
+        // ==================================================================
+        // Act 5 — calibration before/after (MEASURED: +110% -> +14%).
+        // ==================================================================
+        function drawCalib() {
+            const trace = {
+                type: 'bar',
+                x: ['naive fit', 'after one ROAS lift test'],
+                y: [110, 14],
+                width: [0.5, 0.5],
+                marker: {
+                    color: [PT.colors.silent, PT.colors.ok],
+                    line: { color: 'rgba(45,58,45,0.35)', width: 1 }
+                },
+                text: ['+110%', '+14%'],
+                textposition: 'outside',
+                textfont: { size: 15 },
+                hovertemplate: '<b>%{x}</b><br>Search overstatement: %{text}<extra></extra>'
+            };
+            const layout = PT.layout({
+                yaxis: { title: 'Search contribution error vs truth (%)', range: [-12, 130] },
+                margin: { l: 70, r: 30, t: 30, b: 55 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 1.5, y0: 0, y1: 0,
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 1.45, y: 0, xanchor: 'right', yanchor: 'bottom',
+                    text: 'truth (0% error)', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 1, y: 50,
+                    text: 'truth back inside a sharply<br>tighter interval (&lt;0.7× naive width)',
+                    showarrow: false, font: { size: 11, color: '#3f7a58' }
+                }]
+            });
+            Plotly.newPlot('calibChart', [trace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Wire up + init
+        // ------------------------------------------------------------------
+        const slider = document.getElementById('proxySlider');
+        slider.addEventListener('input', function() { drawProxy(parseFloat(slider.value)); });
+
+        function init() {
+            drawConfoundedBars();
+            drawProxy(parseFloat(slider.value));
+            drawSeesawHeat('collinear');
+            drawSeesawScatter();
+            drawShrinkage();
+            drawCalib();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -20,7 +20,69 @@ from .results import (
 )
 
 if TYPE_CHECKING:
-    import arviz as az
+    pass
+
+
+def detect_collinear_clusters(
+    correlation_matrix: pd.DataFrame,
+    names: list[str],
+    threshold: float,
+) -> list[CollinearCluster]:
+    """Group variables into clusters that cannot be separately identified.
+
+    Two variables are linked when their absolute correlation exceeds
+    ``threshold``; clusters are the connected components of that graph. A
+    cluster of size >= 2 is weakly identified: the data sees their combined
+    movement, not the per-variable split.
+    """
+    n = len(names)
+    # Union-find over variables.
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if abs(float(correlation_matrix.iloc[i, j])) > threshold:
+                union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    clusters: list[CollinearCluster] = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        chans = [names[m] for m in members]
+        max_corr = max(
+            abs(float(correlation_matrix.iloc[a, b]))
+            for a in members
+            for b in members
+            if a < b
+        )
+        clusters.append(
+            CollinearCluster(
+                channels=chans,
+                max_correlation=max_corr,
+                explanation=(
+                    f"Channels {chans} move together (|r| up to {max_corr:.2f}); "
+                    "their individual effects are weakly identified and should "
+                    "be interpreted as a group, anchored by an experiment, or "
+                    "fit with a grouped prior."
+                ),
+            )
+        )
+    return clusters
 
 
 class VIFCalculator:
@@ -345,62 +407,10 @@ class ChannelDiagnostics:
         correlation_matrix: pd.DataFrame,
         channel_names: list[str],
     ) -> list[CollinearCluster]:
-        """Group channels into clusters that cannot be separately identified.
-
-        Two channels are linked when their absolute correlation exceeds the
-        configured threshold; clusters are the connected components of that
-        graph. A cluster of size >= 2 is weakly identified: the data sees their
-        combined movement, not the per-channel split.
-        """
-        threshold = self.config.correlation_threshold
-        n = len(channel_names)
-        # Union-find over channels.
-        parent = list(range(n))
-
-        def find(x: int) -> int:
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-
-        def union(a: int, b: int) -> None:
-            ra, rb = find(a), find(b)
-            if ra != rb:
-                parent[ra] = rb
-
-        for i in range(n):
-            for j in range(i + 1, n):
-                if abs(float(correlation_matrix.iloc[i, j])) > threshold:
-                    union(i, j)
-
-        groups: dict[int, list[int]] = {}
-        for i in range(n):
-            groups.setdefault(find(i), []).append(i)
-
-        clusters: list[CollinearCluster] = []
-        for members in groups.values():
-            if len(members) < 2:
-                continue
-            chans = [channel_names[m] for m in members]
-            max_corr = max(
-                abs(float(correlation_matrix.iloc[a, b]))
-                for a in members
-                for b in members
-                if a < b
-            )
-            clusters.append(
-                CollinearCluster(
-                    channels=chans,
-                    max_correlation=max_corr,
-                    explanation=(
-                        f"Channels {chans} move together (|r| up to {max_corr:.2f}); "
-                        "their individual effects are weakly identified and should "
-                        "be interpreted as a group, anchored by an experiment, or "
-                        "fit with a grouped prior."
-                    ),
-                )
-            )
-        return clusters
+        """Group channels into clusters that cannot be separately identified."""
+        return detect_collinear_clusters(
+            correlation_matrix, channel_names, self.config.correlation_threshold
+        )
 
     @staticmethod
     def _condition_number(correlation_matrix: pd.DataFrame) -> float | None:
@@ -483,4 +493,5 @@ __all__ = [
     "VIFCalculator",
     "ChannelConvergenceChecker",
     "ChannelDiagnostics",
+    "detect_collinear_clusters",
 ]

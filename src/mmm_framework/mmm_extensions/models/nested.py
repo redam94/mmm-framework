@@ -18,9 +18,8 @@ from .base import BaseExtendedMMM
 from ..results import MediationEffects
 
 if TYPE_CHECKING:
-    import arviz as az
 
-    from ..config import NestedModelConfig, MediatorConfig, MediatorType
+    from ..config import NestedModelConfig, MediatorConfig
 
 
 class NestedMMM(BaseExtendedMMM):
@@ -114,20 +113,25 @@ class NestedMMM(BaseExtendedMMM):
 
         # Media → Mediator effects
         constraint = med_config.media_effect.constraint.value
-        beta = create_effect_prior(
-            f"beta_media_to_{med_name}",
-            constrained=constraint,
-            sigma=med_config.media_effect.sigma,
-            dims=None,
-        )
 
         # Handle single vs multiple channels. Record each channel's media->
         # mediator coefficient RV *by reference* (keyed by the actual channel
         # name, robust to the single- vs multi-channel naming split) so the
         # experiment likelihood can reconstruct the mediated channel effect.
+        # The aggregate ``beta_media_to_<med>`` RV is created only on the
+        # single-channel path where it is actually used; the multi-channel
+        # path creates per-channel ``beta_<channel>_to_<med>`` RVs instead
+        # (previously the aggregate RV was created unconditionally and left
+        # as a dead, never-informed parameter in the multi-channel graph).
         med_betas: dict[str, pt.TensorVariable] = {}
         if len(channel_indices) == 1:
             idx0 = channel_indices[0]
+            beta = create_effect_prior(
+                f"beta_media_to_{med_name}",
+                constrained=constraint,
+                sigma=med_config.media_effect.sigma,
+                dims=None,
+            )
             media_effect = beta * media_transformed[:, idx0]
             med_betas[self.channel_names[idx0]] = beta
         else:

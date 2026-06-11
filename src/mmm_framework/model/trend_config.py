@@ -25,6 +25,17 @@ class TrendType(str, Enum):
 class TrendConfig:
     """Configuration for trend component.
 
+    Scale notes:
+        Trends enter the model on **standardized** ``y`` (z-scored) against
+        time scaled to ``t in [0, 1]``, so a slope of 1.0 means the trend
+        moves ``y`` by one standard deviation over the whole series. Default
+        prior widths are chosen so that a realistic trend spanning ~1-2 sd
+        of ``y`` sits within ~1-2 prior sd: ``growth_prior_sigma=0.5`` for
+        the linear slope, and ``changepoint_prior_scale=0.5`` (Laplace scale
+        of each Prophet-style slope *change*) for piecewise. The old, much
+        tighter defaults (0.1 / 0.05) effectively pinned the trend near zero
+        and pushed real trend/structural breaks into media and intercept.
+
     Attributes:
         type: Type of trend to use.
         n_changepoints: Number of potential changepoints for piecewise trend
@@ -49,7 +60,7 @@ class TrendConfig:
     # Piecewise trend parameters
     n_changepoints: int = 10
     changepoint_range: float = 0.8
-    changepoint_prior_scale: float = 0.05
+    changepoint_prior_scale: float = 0.5
 
     # Spline trend parameters
     n_knots: int = 10
@@ -65,7 +76,7 @@ class TrendConfig:
 
     # Linear trend parameters
     growth_prior_mu: float = 0.0
-    growth_prior_sigma: float = 0.1
+    growth_prior_sigma: float = 0.5
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""

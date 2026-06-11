@@ -149,16 +149,41 @@ def _mff_config_from_spec(spec: dict):
     return mff_builder.build()
 
 
-def build_and_fit(spec: dict, dataset_path: str):
-    """Build + fit + serialize. Returns ``(mmm, results, info)``. Raises on
-    failure. ``spec`` must be normalized (bare-string vars already coerced)."""
-    import json as _json
-    import os as _os
-    from datetime import datetime, timezone
+def _canonical_trend_type(trend_spec: dict) -> str:
+    """Normalize the spec's trend type to the canonical TrendType name,
+    tolerating common LLM aliases (``piecewise_linear``, ``gp``)."""
+    trend_type = str(trend_spec.get("type", "linear")).strip().lower().replace("-", "_")
+    return {"piecewise_linear": "piecewise", "gp": "gaussian_process"}.get(
+        trend_type, trend_type
+    )
 
+
+def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
+    """Build an UNFITTED ``BayesianMMM`` from a normalized spec + dataset —
+    the panel/config/trend stages of ``build_and_fit`` without any sampling.
+    The PyMC graph builds lazily on first use, so this is cheap enough for
+    pre-fit prior predictive checks. Raises on failure."""
     # 1. MFFConfig + panel
     mff_config = _mff_config_from_spec(spec)
-    panel = load_mff(dataset_path, mff_config)
+    try:
+        panel = load_mff(dataset_path, mff_config)
+    except Exception as e:
+        msg = str(e)
+        latent = [
+            c.get("name")
+            for c in spec.get("control_variables", [])
+            if str(c.get("name", "")).strip().lower()
+            in ("trend", "seasonality", "season")
+        ]
+        if "Missing expected variables" in msg and latent:
+            raise ValueError(
+                f"{msg} — Hint: {', '.join(repr(n) for n in latent)} in "
+                "control_variables look like latent baseline components, not "
+                "dataset variables. Remove them from control_variables and use "
+                "the built-in `trend` / `seasonality` settings instead "
+                "(e.g. update_model_setting('seasonality.yearly', 4))."
+            ) from e
+        raise
 
     # 2. Inference + model config
     inf = spec.get("inference", {})
@@ -166,7 +191,6 @@ def build_and_fit(spec: dict, dataset_path: str):
     draws = int(inf.get("draws", 1000))
     tune = int(inf.get("tune", 1000))
     target_accept = float(inf.get("target_accept", 0.85))
-    random_seed = int(inf.get("random_seed", 42))
 
     model_config_builder = (
         ModelConfigBuilder()
@@ -181,20 +205,41 @@ def build_and_fit(spec: dict, dataset_path: str):
     monthly = int(season.get("monthly", 0))
     weekly = int(season.get("weekly", 0))
     if yearly > 0 or monthly > 0 or weekly > 0:
+        seas_prior = spec.get("priors", {}).get("seasonality", {})
+
+        def _seas_sigma(component: str) -> float | None:
+            v = seas_prior.get(f"{component}_prior_sigma")
+            return None if v is None else float(v)
+
         sb = SeasonalityConfigBuilder()
+        sb.no_seasonality()  # builder defaults yearly=2; only the spec decides
+        if "prior_sigma" in seas_prior:
+            sb.with_prior_sigma(float(seas_prior["prior_sigma"]))
         if yearly > 0:
-            sb.with_yearly(order=yearly)
+            sb.with_yearly(order=yearly, prior_sigma=_seas_sigma("yearly"))
         if monthly > 0:
-            sb.with_monthly(order=monthly)
+            sb.with_monthly(order=monthly, prior_sigma=_seas_sigma("monthly"))
         if weekly > 0:
-            sb.with_weekly(order=weekly)
+            sb.with_weekly(order=weekly, prior_sigma=_seas_sigma("weekly"))
         model_config_builder.with_seasonality_builder(sb)
     model_config = model_config_builder.build()
 
     # 3. Trend config
     trend_spec = spec.get("trend", {})
-    trend_type = trend_spec.get("type", "linear").lower()
+    trend_type = _canonical_trend_type(trend_spec)
     trend_prior_cfg = spec.get("priors", {}).get("trend", {})
+
+    def _wire_growth_prior(tb_):
+        # The base slope (linear `growth`, piecewise `trend_k`) reads these.
+        if (
+            "growth_prior_mu" in trend_prior_cfg
+            or "growth_prior_sigma" in trend_prior_cfg
+        ):
+            tb_.with_growth_prior(
+                mu=float(trend_prior_cfg.get("growth_prior_mu", 0.0)),
+                sigma=float(trend_prior_cfg.get("growth_prior_sigma", 0.5)),
+            )
+
     tb = TrendConfigBuilder()
     if trend_type == "piecewise":
         tb.piecewise()
@@ -206,6 +251,7 @@ def build_and_fit(spec: dict, dataset_path: str):
             tb.with_changepoint_prior_scale(
                 float(trend_prior_cfg["changepoint_prior_scale"])
             )
+        _wire_growth_prior(tb)
     elif trend_type == "spline":
         tb.spline()
         if "n_knots" in trend_spec:
@@ -227,20 +273,42 @@ def build_and_fit(spec: dict, dataset_path: str):
             )
     elif trend_type == "none":
         pass
-    else:  # linear
+    elif trend_type == "linear":
         tb.linear()
-        if (
-            "growth_prior_mu" in trend_prior_cfg
-            or "growth_prior_sigma" in trend_prior_cfg
-        ):
-            tb.with_growth_prior(
-                mu=float(trend_prior_cfg.get("growth_prior_mu", 0.0)),
-                sigma=float(trend_prior_cfg.get("growth_prior_sigma", 0.1)),
-            )
+        _wire_growth_prior(tb)
+    else:
+        # Refuse rather than silently fitting a linear trend the user didn't ask for
+        raise ValueError(
+            f"Unknown trend type '{trend_spec.get('type')}'. "
+            "Valid types: none, linear, piecewise, spline, gaussian_process."
+        )
     trend_config = tb.build()
 
+    return BayesianMMM(panel, model_config, trend_config)
+
+
+def build_and_fit(spec: dict, dataset_path: str):
+    """Build + fit + serialize. Returns ``(mmm, results, info)``. Raises on
+    failure. ``spec`` must be normalized (bare-string vars already coerced)."""
+    import json as _json
+    import os as _os
+    from datetime import datetime, timezone
+
+    mmm = build_model(spec, dataset_path)
+
+    inf = spec.get("inference", {})
+    chains = int(inf.get("chains", 4))
+    draws = int(inf.get("draws", 1000))
+    tune = int(inf.get("tune", 1000))
+    target_accept = float(inf.get("target_accept", 0.85))
+    random_seed = int(inf.get("random_seed", 42))
+    season = spec.get("seasonality", {})
+    yearly = int(season.get("yearly", 0))
+    monthly = int(season.get("monthly", 0))
+    weekly = int(season.get("weekly", 0))
+    trend_type = _canonical_trend_type(spec.get("trend", {}))
+
     # 4. Fit
-    mmm = BayesianMMM(panel, model_config, trend_config)
     results = mmm.fit(random_seed=random_seed)
 
     # 5. Summary

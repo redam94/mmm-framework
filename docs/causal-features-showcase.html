@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Features Showcase | MMM Framework</title>
+    <meta name="description" content="A guided tour of the MMM Framework's causal feature stack: DAG role typing, identification checks, confounding sensitivity, experiment-calibrated priors and likelihoods, the refutation suite, and causal-assumptions reporting — with measured outputs and honest limits.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-features-showcase.html">
+    <meta property="og:title" content="Causal Features Showcase | MMM Framework">
+    <meta property="og:description" content="Thirteen causal features, one demo world: what each feature answers, the actual API call, the measured verdict, and where its limits are.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-features-showcase.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] { accent-color: var(--color-primary); }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            color: var(--color-primary-dark);
+            min-width: 6.5rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        .tier-pill {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.08rem 0.55rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .tier-pill.p0 { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .tier-pill.p1 { background: rgba(212, 168, 106, 0.2);  color: #8a6a2f; }
+        .tier-pill.p2 { background: rgba(106, 143, 168, 0.16); color: #3f617a; }
+
+        .feature-block {
+            border-left: 3px solid var(--color-border);
+            padding-left: 1.1rem;
+            margin: 2rem 0;
+        }
+        .feature-block .verdict-line {
+            font-size: 0.95rem;
+            margin: 0.75rem 0 0.25rem;
+        }
+        .feature-block .verdict-line strong { color: var(--color-primary-dark); }
+        .feature-block .limit-line {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.4rem 0 0;
+        }
+        .feature-block .limit-line strong { color: #a44c43; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#feature-map">The feature map</a></li>
+                <li><a href="#world">The demo world</a></li>
+                <li><a href="#scaffolding">§1–3 · Roles &amp; identification</a></li>
+                <li><a href="#fit-uncertainty">§4–5 · Fit &amp; honest ROAS</a></li>
+                <li><a href="#fragility">§6–9 · What the number rests on</a></li>
+                <li><a href="#prespec">§10 · Pre-spec lock + diff</a></li>
+                <li><a href="#calibration">§11 · Experiment calibration</a></li>
+                <li><a href="#refutation">§12–13 · Refutation &amp; reporting</a></li>
+                <li><a href="#limits">Honest limits</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>Aurora Showcase</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="aurora-00-overview.html">00 · The Trap</a></li>
+                <li><a href="aurora-01-causality.html">01 · Causality</a></li>
+                <li><a href="aurora-02-base-mmm.html">02 · The Base MMM</a></li>
+                <li><a href="aurora-03-extended-mmm.html">03 · Extended Models</a></li>
+                <li><a href="aurora-04-reporting.html">04 · Reporting</a></li>
+                <li><a href="aurora-05-unified-workflow.html">05 · Unified Workflow</a></li>
+                <li><a href="causal-features-showcase.html" class="active">Causal Features Showcase</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Causal Features Showcase</h1>
+            <p class="lead">
+                An MMM is only <em>causal</em> under assumptions plus experimental calibration. This page is a
+                feature catalog, not a story: thirteen causal capabilities from the framework's
+                P0&nbsp;&rarr;&nbsp;P1&nbsp;&rarr;&nbsp;P2 roadmap, each demonstrated on one small synthetic world
+                with a deliberately planted confounder and a collinear channel pair. For every feature you get the
+                problem it solves, the actual API call, the measured output from the baked run of
+                <code>nbs/causal_features_showcase.ipynb</code>, and — honestly — where its limits are. For the
+                story version of the same ideas, see <a href="aurora-01-causality.html">Aurora&nbsp;01 ·&nbsp;Causality</a>;
+                for the doctrine, <a href="causal-inference.html">Causal Inference</a> and
+                <a href="measurement-calibration.html">Measurement Calibration</a>.
+            </p>
+
+            <div class="note">
+                <h4>Scale of the demo</h4>
+                <p>The notebook runs on small MCMC settings (60 weekly observations, 1,000 draws) so it executes in
+                minutes. All numbers quoted here are <strong>measured from that baked run</strong> but are
+                illustrative of the mechanics, not production-grade estimates.</p>
+            </div>
+
+            <h2 id="feature-map">The feature map</h2>
+            <p>
+                Every feature answers one question an analyst (or a stakeholder) should be asking about an MMM
+                number. The tier is the roadmap wave: <span class="tier-pill p0">P0</span> features attack
+                unobserved-demand confounding directly, <span class="tier-pill p1">P1</span> features quantify and
+                guard, <span class="tier-pill p2">P2</span> features check and document.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Feature</th><th>Question it answers</th><th>Tier</th><th>§</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Causal role typing + DAG auto-classification</td><td>Is this control safe, required, or actively harmful?</td><td><span class="tier-pill p1">P1</span></td><td><a href="#scaffolding">§1</a></td></tr>
+                    <tr><td>Front-door &amp; IV identification checks</td><td>Can the effect be identified at all, given my graph?</td><td><span class="tier-pill p2">P2</span></td><td><a href="#scaffolding">§2</a></td></tr>
+                    <tr><td>Graph-engine cross-check vs networkx</td><td>Can I trust the d-separation engine those checks rest on?</td><td><span class="tier-pill p2">P2</span></td><td><a href="#scaffolding">§3</a></td></tr>
+                    <tr><td>Baseline Bayesian MMM fit</td><td>(The shared fit every demo below reuses.)</td><td>—</td><td><a href="#fit-uncertainty">§4</a></td></tr>
+                    <tr><td>Marginal ROAS <em>with uncertainty</em></td><td>How sure are we about the return on the next dollar?</td><td><span class="tier-pill p1">P1</span></td><td><a href="#fit-uncertainty">§5</a></td></tr>
+                    <tr><td>Sensitivity to unobserved confounding</td><td>How strong a hidden confounder would overturn this number?</td><td><span class="tier-pill p0">P0</span></td><td><a href="#fragility">§6</a></td></tr>
+                    <tr><td>Weak-identification detection</td><td>Can the data even separate these channels' ROIs?</td><td><span class="tier-pill p2">P2</span></td><td><a href="#fragility">§7</a></td></tr>
+                    <tr><td>Geo-based identification diagnostic</td><td>Is there enough cross-geo variation to lean on?</td><td><span class="tier-pill p2">P2</span></td><td><a href="#fragility">§8</a></td></tr>
+                    <tr><td>Equifinality guardrails (data-anchored κ)</td><td>Is the saturation curve extrapolating beyond my data?</td><td><span class="tier-pill p1">P1</span></td><td><a href="#fragility">§9</a></td></tr>
+                    <tr><td>Pre-specification lock + diff</td><td>Did the spec drift after we registered it?</td><td><span class="tier-pill p2">P2</span></td><td><a href="#prespec">§10</a></td></tr>
+                    <tr><td><strong>Experiment-calibrated priors</strong></td><td>How do I fold a lift test into the model? (headline)</td><td><span class="tier-pill p0">P0</span></td><td><a href="#calibration">§11</a></td></tr>
+                    <tr><td><strong>Experiment likelihood calibration</strong></td><td>Can the experiment update β, the s-curve, and adstock jointly — on ROAS or mROAS?</td><td><span class="tier-pill p0">P0</span></td><td><a href="#calibration">§11b</a></td></tr>
+                    <tr><td>Causal refutation suite</td><td>Does the model react correctly when the data is perturbed?</td><td><span class="tier-pill p0">P0</span></td><td><a href="#refutation">§12</a></td></tr>
+                    <tr><td>Causal-assumptions reporting</td><td>What assumptions does this number rest on, in the report itself?</td><td><span class="tier-pill p0">P0</span>/<span class="tier-pill p2">P2</span></td><td><a href="#refutation">§13</a></td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="world">The demo world</h2>
+            <p>
+                One synthetic dataset with deliberate causal structure, reused by every model-dependent demo:
+                60 weekly observations, three channels, and two planted traps. A latent <strong>Demand</strong>
+                series drives both TV spend and Sales (the classic unobserved-demand confounder — marketers spend
+                more on TV when demand is high), and <strong>Digital/Search</strong> move together
+                (|r| up to 0.93) so their individual ROIs are barely separable.
+            </p>
+            <pre><code># Latent demand confounds TV: spend more on TV when demand is high.
+demand = np.sin(2 * np.pi * t / 52) + rng.normal(0, 0.3, n)
+tv      = np.abs(40 + 18 * demand + rng.normal(0, 8, n))   # confounded
+search  = np.abs(0.92 * digital + rng.normal(0, 4, n))     # collinear
+
+controls=[ControlVariableConfig(
+    name="Demand", dimensions=[DimensionType.PERIOD],
+    causal_role=CausalControlRole.CONFOUNDER)]   # typed as a confounder (P1)</code></pre>
+            <p>
+                Note the last line: the control variable carries a declared <em>causal role</em>. That declaration
+                is what powers §1's enforcement and §13's reporting.
+            </p>
+
+            <h2 id="scaffolding">§1–3 · Causal roles &amp; identification</h2>
+
+            <div class="feature-block">
+                <h3>§1 — Causal role typing &amp; DAG auto-classification <span class="tier-pill p1">P1</span></h3>
+                <p>
+                    <strong>Problem:</strong> non-experts shouldn't need causal-inference training to avoid
+                    <em>bad controls</em>. Given a DAG, <code>classify_dag_roles</code> auto-detects each
+                    control's role using the back-door criterion: <strong>confounder</strong> (keep, un-shrunk),
+                    <strong>mediator/collider</strong> (refuse), <strong>precision control</strong> (safe).
+                </p>
+                <pre><code>from mmm_framework.dag_model_builder.identification import classify_dag_roles
+cls = classify_dag_roles(dag, treatment_ids=["tv"], outcome_id="sales",
+                         control_ids=["demand", "price", "instore"])</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> Demand &rarr; <code>confounder</code> ("common cause of media and the
+                    KPI"), Price &rarr; <code>precision_control</code>, InStore &rarr; <code>mediator</code>
+                    ("a consequence of media 'tv' — post-treatment"). And the model <em>refuses to fit</em> when a
+                    mediator is passed as a control:
+                </p>
+                <pre><code>ValueError: Refusing to condition on post-treatment / collider variables
+used as controls: 'InStore' [mediator]. Conditioning on a mediator blocks
+part of the media effect ... either biases a total-effect estimate.</code></pre>
+                <p class="limit-line">
+                    <strong>Limit:</strong> the classification is only as good as the DAG you drew. Declare the
+                    mediator as a plain control in your graph and nothing fires — the stress series measured
+                    exactly this in the mediation worlds (<a href="stress-04-extension-traps.html">stress-04</a>:
+                    a wrong-mediator probe produced <code>proportion_mediated = 1.000</code> with clean sampling).
+                    Mediator validity is external knowledge.
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§2 — Front-door &amp; instrumental-variable identification <span class="tier-pill p2">P2</span></h3>
+                <p>
+                    <strong>Problem:</strong> back-door adjustment isn't the only identification strategy. The
+                    identification layer checks Pearl's <strong>front-door</strong> criterion (mediation models)
+                    and the <strong>IV</strong> criterion (declared instruments). These are identification
+                    <em>checks</em> for reasoning and reporting — they do not change the likelihood.
+                </p>
+                <pre><code>from mmm_framework.dag_model_builder.identification import frontdoor_criterion, iv_criterion
+fd    = frontdoor_criterion(dag, "tv", ["aware"], "sales")
+iv_ok = iv_criterion(dag_iv, "z", "tv", "sales")</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> front-door identified for TV &rarr; Awareness &rarr; Sales despite an
+                    unobserved U: <code>True</code>. IV valid for Z &rarr; TV &rarr; Sales: <code>True</code>. IV with
+                    the exclusion restriction violated (Z also &rarr; Sales): <code>False</code> — the check
+                    correctly rejects it.
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> a passing check certifies the <em>graph</em>, not the world. Full
+                    Tian–Pearl identification is deliberately deferred
+                    (<code>technical-docs/deferred-causal-features.md</code>).
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§3 — Cross-checking the graph engine <span class="tier-pill p2">P2</span></h3>
+                <p>
+                    <strong>Problem:</strong> the back-door/front-door/IV checks all rest on a hand-rolled
+                    d-separation engine. If it's wrong, everything above is wrong. So it is validated against
+                    <code>networkx</code> for <em>every</em> conditioning set on a battery of DAGs.
+                </p>
+                <pre><code>agree = all(ours_dsep(mbias, "t", "y", set(zz)) ==
+            nx.is_d_separator(g, {"t"}, {"y"}, set(zz))
+            for zz in all_subsets(["a", "b", "c"]))   # M-bias DAG, all 8 sets</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> on the classic M-bias DAG, our d-separation matches networkx for
+                    <strong>all conditioning sets</strong>: <code>True</code>.
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> agreement on test DAGs is evidence, not proof — but it is the right
+                    kind of paranoia for code that gates model fitting.
+                </p>
+            </div>
+
+            <h2 id="fit-uncertainty">§4–5 · The baseline fit, and ROAS that carries its uncertainty</h2>
+
+            <div class="feature-block">
+                <h3>§4 — One small Bayesian fit, reused everywhere</h3>
+                <pre><code>model = BayesianMMM(panel,
+    ModelConfig(inference_method=InferenceMethod.BAYESIAN_PYMC,
+                n_chains=4, n_draws=1000, n_tune=500, target_accept=0.92),
+    TrendConfig(type=TrendType.LINEAR))
+results = model.fit(random_seed=0)</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> 4 chains &times; 1,000 draws in 21 seconds; in-sample
+                    R&sup2; &asymp; <strong>0.924</strong> (with 29 post-tuning divergences at these small
+                    settings — the notebook flags them honestly).
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> a 0.92 R&sup2; proves nothing about attribution.
+                    <a href="stress-00-rosy-picture.html">Stress-00</a> measured a confounded fit at +111% bias on
+                    one channel with <em>identical</em> green diagnostics to the clean fit. Everything below
+                    exists because fit quality is not causal validity.
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§5 — Marginal ROAS with uncertainty <span class="tier-pill p1">P1</span></h3>
+                <p>
+                    <strong>Problem:</strong> the headline efficiency number — the return on the <em>next</em>
+                    10% of spend — used to be a bare point estimate. It is now propagated per-draw through the
+                    posterior and reported with a credible interval.
+                </p>
+                <pre><code>mc = model.compute_marginal_contributions(
+    spend_increase_pct=10.0, hdi_prob=0.9, random_seed=0)</code></pre>
+                <div class="chart-container" id="mroasChart"></div>
+                <p class="chart-note">
+                    <strong>Measured</strong> from the baked run: marginal ROAS with 90% HDI per channel.
+                    Digital's interval (0.90–6.58) and Search's (0.21–5.86) both straddle huge ranges — exactly
+                    the honesty the point estimate alone would have hidden. TV's interval (0.02–1.31) barely
+                    crosses break-even: the model is telling you it cannot promise the next TV dollar pays back.
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> the interval quantifies <em>posterior</em> uncertainty under the
+                    model's assumptions. It does not widen for unobserved confounding or a wrong saturation form —
+                    that is what §6 and §9 are for.
+                </p>
+            </div>
+
+            <h2 id="fragility">§6–9 · Quantifying what the number rests on</h2>
+
+            <div class="feature-block">
+                <h3>§6 — Sensitivity to unobserved confounding <span class="tier-pill p0">P0</span></h3>
+                <p>
+                    <strong>Problem:</strong> no adjustment set can remove an <em>unobserved</em> confounder
+                    (e.g. latent demand the analyst never measured). The <strong>robustness value</strong> (RV) is
+                    the share of variance a hidden confounder would need to explain in <em>both</em> a channel's
+                    spend and the KPI to nullify its effect. Low RV = fragile estimate.
+                </p>
+                <pre><code>from mmm_framework.validation import UnobservedConfoundingAnalysis
+sens = UnobservedConfoundingAnalysis(model).run()
+sens.fragile_channels   # channels a weak confounder could overturn</code></pre>
+                <div class="chart-container short" id="rvChart"></div>
+                <p class="chart-note">
+                    <strong>Measured:</strong> RV to nullify each channel's effect, against the 0.10 fragile
+                    threshold. TV 0.170, Digital 0.258, Search 0.182 — no channel flagged fragile
+                    (<code>fragile_channels = []</code>), so overturning any estimate would take a confounder
+                    explaining 17–26% of residual variance on both sides.
+                </p>
+                <p class="limit-line">
+                    <strong>Limit — this is NOT an all-clear:</strong> the stress series measured that the RV is
+                    <em>indistinguishable between a clean world and a confounded one</em>
+                    (<a href="stress-00-rosy-picture.html">stress-00</a>). A comfortable RV tells you how strong a
+                    confounder would have to be; it cannot tell you whether one exists. The demo world here
+                    <em>has</em> a planted demand confounder on TV, and the RV still reads "No" on fragile —
+                    because the analysis is conditional on the fitted model. Treat RV as a fragility ruler, never
+                    as evidence of cleanliness. See <a href="pressure-testing.html">the pressure-testing scorecard</a>.
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§7 — Weak-identification detection <span class="tier-pill p2">P2</span></h3>
+                <p>
+                    <strong>Problem:</strong> Digital and Search move together, so the data cannot separate their
+                    individual ROIs <em>regardless</em> of confounding. The diagnostic detects collinear clusters
+                    and the ill-conditioned design — reporting only, it never silently changes the model.
+                </p>
+                <pre><code>from mmm_framework.validation.channel_diagnostics import ChannelDiagnostics
+cd = ChannelDiagnostics(model).run_all()</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> collinear cluster <code>['Digital', 'Search']</code> with |r| up to
+                    <strong>0.93</strong>; design condition number <strong>33.0</strong>; recommendation: "consider
+                    a grouped prior (shared group-level scale) or report their combined effect rather than
+                    overconfident per-channel ROIs."
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> detection only — grouped-prior <em>fitting</em> is deliberately
+                    deferred until validated against held-out experiments.
+                    <a href="stress-00-rosy-picture.html">Stress-00</a> measured multicollinearity as a silent
+                    failure mode (median error 39%) when the recommendation is ignored.
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§8 — Geo-based identification diagnostic <span class="tier-pill p2">P2</span></h3>
+                <p>
+                    <strong>Problem:</strong> cross-geo spend variation is quasi-experimental signal — but only if
+                    it exists <em>and</em> is exogenous. This <em>necessary-not-sufficient</em> diagnostic reports
+                    whether each channel has enough cross-geo variation to support geo-level inference.
+                </p>
+                <pre><code>from mmm_framework.validation import geo_spend_variation_diagnostic
+diag = geo_spend_variation_diagnostic(geo_model)
+diag.weak_channels</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured</strong> (on a constructed 3-geo example where TV varies across geos and
+                    Radio is uniform): weak channels = <code>['Radio']</code>. The diagnostic ships its own
+                    caveat: "Where spend follows local demand, geo variation does NOT remove unobserved-demand
+                    confounding; anchor geo-level claims with a randomized geo-lift experiment."
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> necessary, not sufficient — and geo hierarchies bring their own traps
+                    (<a href="stress-06-geo-hierarchy.html">stress-06</a> measured a regional ROI inversion).
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§9 — Equifinality guardrails: data-anchored saturation <span class="tier-pill p1">P1</span></h3>
+                <p>
+                    <strong>Problem:</strong> adstock decay, saturation shape, and the coefficient trade off
+                    against one another — many parameter combinations produce the same fit (equifinality). One
+                    mitigation: anchor the Hill half-saturation \( \kappa \) to the data's own spend percentiles
+                    so the curve can't park its bend where there is no data.
+                </p>
+                <pre><code>from mmm_framework.config import SaturationConfig
+lo, hi = SaturationConfig.compute_kappa_bounds_from_data(tv, percentiles=(0.1, 0.9))
+# pass as kappa_lower / kappa_upper to bound the Hill prior</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> data-anchored \( \kappa \) bounds for TV (10th–90th percentile of
+                    spend): <strong>[19.8, 58.8]</strong>.
+                </p>
+                <div class="controls-row">
+                    <label for="kappaSlider">Half-saturation &kappa;</label>
+                    <input type="range" id="kappaSlider" min="5" max="90" step="1" value="39">
+                    <span class="readout" id="kappaReadout">&kappa; = 39</span>
+                </div>
+                <div class="chart-container" id="kappaChart"></div>
+                <p class="chart-note">
+                    <strong>Computed live in your browser — the same math as the notebook:</strong> the Hill curve
+                    \( f(x) = x^2 / (x^2 + \kappa^2) \) as you drag &kappa;. The shaded band is the
+                    <strong>measured</strong> data-anchored bound [19.8, 58.8]; the tick rug along the bottom is an
+                    <em>illustrative recreation (seeded)</em> of the TV spend distribution. Drag &kappa; outside
+                    the band and watch the curve's bend leave the region where the data lives — that is the
+                    extrapolation the guardrail forbids.
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> anchoring &kappa; constrains <em>where</em> the curve bends, not
+                    <em>whether</em> Hill is the right family. A wrong saturation form is one of the measured
+                    silent failures (<a href="stress-01-carryover-shape.html">stress-01</a>: Hill truth fit with
+                    the wrong form gave +40% total bias, all diagnostics green).
+                </p>
+            </div>
+
+            <h2 id="prespec">§10 · Pre-specification lock + diff</h2>
+            <div class="feature-block">
+                <p>
+                    <strong>Problem:</strong> pre-registration is only meaningful if divergences are
+                    <em>detected</em>. <code>diff_spec</code> compares a locked spec to the current one,
+                    identity-keyed — reordering channels is not a false alarm, but a re-labelled confounder or an
+                    added channel is caught.
+                </p>
+                <pre><code>from mmm_framework.config import diff_spec, summarize_spec_diff
+print(summarize_spec_diff(diff_spec(frozen, current)))</code></pre>
+                <p class="verdict-line"><strong>Measured output:</strong></p>
+                <pre><code>3 divergence(s) from the pre-registered specification:
+  ~ controls[name=Demand].causal_role: 'confounder' &rarr; 'precision_control'
+  + media_channels[name=Search].name = 'Search' (added)
+  ~ media_channels[name=TV].adstock.l_max: 8 &rarr; 13</code></pre>
+                <p class="limit-line">
+                    <strong>Limit:</strong> the diff catches drift in the <em>declared</em> spec, not in the
+                    analyst's unstated choices (which dataset vintage, which holdout). It narrows researcher
+                    degrees of freedom; it does not eliminate them.
+                </p>
+            </div>
+
+            <h2 id="calibration">§11 / §11b · Anchoring to experiments — the headline</h2>
+            <p>
+                The single most important lever for causal validity: fold a randomized lift / incrementality
+                result into the model, so the observational MMM is <em>anchored</em> to evidence that estimates
+                the causal effect despite unobserved demand. The framework offers <strong>two routes</strong> to
+                the same goal.
+            </p>
+            <table>
+                <thead><tr><th></th><th>Prior route (§11)</th><th>Likelihood route (§11b)</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>how</strong></td><td>derive a Gamma prior on &beta;, <strong>refit</strong></td><td>add an in-graph likelihood term, <strong>one fit</strong></td></tr>
+                    <tr><td><strong>estimands</strong></td><td>contribution only</td><td>contribution · ROAS · mROAS</td></tr>
+                    <tr><td><strong>updates</strong></td><td>&beta; (shape held fixed)</td><td>&beta; + saturation + adstock, jointly</td></tr>
+                    <tr><td><strong>models</strong></td><td>core</td><td>core · nested · multivariate · combined</td></tr>
+                </tbody>
+            </table>
+
+            <div class="feature-block">
+                <h3>§11 — Experiment-calibrated priors <span class="tier-pill p0">P0</span></h3>
+                <p>
+                    <strong>Problem:</strong> the baseline fit attributes TV's effect under confounded data. A
+                    geo-lift experiment measured TV as ~1.6&times; as effective as the baseline fit implies.
+                    Two-stage flow: fit &rarr; derive prior &rarr; refit.
+                </p>
+                <pre><code>from mmm_framework.calibration import calibrate_with_experiments
+from mmm_framework.validation import LiftTestResult
+
+lift = LiftTestResult("TV", period, measured_lift, lift_se)
+outcome = calibrate_with_experiments(model, [lift], refit=True,
+                                     draws=1000, tune=1000, chains=4)</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> baseline-fit &beta;(TV) mean <strong>1.162</strong> &rarr;
+                    experiment-implied &beta; target <strong>1.460</strong>; TV total contribution
+                    <strong>1,389</strong> (baseline) &rarr; <strong>2,223</strong> (experiment target) &rarr;
+                    <strong>1,693</strong> (calibrated refit). The refit moves toward the experiment but does not
+                    snap to it — the prior and the data negotiate, as they should.
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§11b — Experiment <em>likelihood</em> calibration: ROAS, mROAS &amp; joint anchoring <span class="tier-pill p0">P0</span></h3>
+                <p>
+                    <strong>Problem:</strong> the prior route inverts a measured contribution to a target on
+                    &beta; and holds the saturation/adstock shape fixed. The likelihood route folds the experiment
+                    <strong>into the graph</strong>: the measured value becomes a data point whose model
+                    expectation is the channel's <em>estimand</em>, so one fit updates &beta;, the s-curve,
+                    <em>and</em> the adstock kernel jointly — and it generalizes to <strong>ROAS</strong> and
+                    <strong>marginal ROAS</strong>, which a coefficient prior cannot express.
+                </p>
+                <pre><code>from mmm_framework.calibration import ExperimentMeasurement, ExperimentEstimand
+
+roas_exp = ExperimentMeasurement("TV", period, value=measured_roas,
+                                 se=0.10 * measured_roas,
+                                 estimand=ExperimentEstimand.ROAS)
+model_lik = BayesianMMM(panel, model_cfg, trend_cfg,
+                        experiments=[roas_exp])   # the only change vs §4
+model_lik.fit(draws=1000, tune=1000, chains=4)</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> the graph now carries
+                    <code>experiment_TV_roas_0_model_estimand</code> — "what the model thinks the experiment
+                    should have measured." TV's model-implied ROAS: uncalibrated &asymp; <strong>0.59</strong>
+                    &rarr; calibrated <strong>0.93</strong>, against a measured <strong>0.95</strong>. TV
+                    contribution 1,389 &rarr; <strong>2,181</strong>, nearly on the 2,223 target — closer than
+                    the prior route's 1,693 because the whole media transform moved jointly.
+                </p>
+                <div class="controls-row">
+                    <label>View:</label>
+                    <button type="button" class="toggle-btn calib-btn active" data-view="contribution">Contribution (both routes)</button>
+                    <button type="button" class="toggle-btn calib-btn" data-view="roas">ROAS estimand (likelihood route)</button>
+                </div>
+                <div class="chart-container" id="calibChart"></div>
+                <p class="chart-note">
+                    <strong>Measured</strong> from the baked run, both views.
+                    <strong>Contribution view:</strong> baseline 1,389 vs the prior route's 1,693 and the
+                    likelihood route's 2,181, against the dashed experiment target of 2,223.
+                    <strong>ROAS view:</strong> the model-implied TV ROAS jumps from 0.59 to 0.93 once the
+                    experiment enters the likelihood; the shaded band is the experiment's &plusmn;1 SE
+                    (0.95 &plusmn; 0.095).
+                </p>
+                <p>
+                    The same one-line API reaches further — both <strong>measured</strong> from the baked run:
+                    an mROAS experiment wires in as <code>experiment_TV_mroas_0_model_estimand</code>, and a
+                    <a href="aurora-03-extended-mmm.html">MultivariateMMM</a> accepts
+                    <code>outcome="Premium"</code> to target one outcome of a multi-outcome model
+                    (observed RV <code>experiment_TV_Premium_roas_0</code>).
+                </p>
+                <pre><code>mroas_exp = ExperimentMeasurement("TV", period, value=..., se=0.10,
+    estimand=ExperimentEstimand.MROAS, spend_lift_pct=10.0)
+
+mv.add_experiment_calibration([ExperimentMeasurement("TV", period,
+    value=measured_roas, se=0.10, outcome="Premium",   # multi-outcome
+    estimand=ExperimentEstimand.ROAS)])</code></pre>
+                <p class="limit-line">
+                    <strong>Limit — calibration is not contagious:</strong>
+                    <a href="stress-05-gauntlet.html">stress-05</a> measured that calibrating one channel lands
+                    <em>that channel</em> on truth (Search 5.59 &rarr; 0.65 vs true 0.66) while an uncalibrated
+                    sibling stayed at &minus;74% bias. One lift test fixes one channel. And
+                    <a href="stress-03-confounding-selection.html">stress-03</a> measured a single ROAS lift test
+                    cutting a confounded channel's bias from +110% to +14% — powerful, but the experiment itself
+                    must be trustworthy. See <a href="measurement-calibration.html">Measurement Calibration</a>
+                    for the full decision guide.
+                </p>
+            </div>
+
+            <h2 id="refutation">§12–13 · Refutation &amp; reporting</h2>
+
+            <div class="feature-block">
+                <h3>§12 — Causal refutation suite <span class="tier-pill p0">P0</span></h3>
+                <p>
+                    <strong>Problem:</strong> good fit can coexist with severe bias. The suite perturbs the data
+                    and checks the model reacts correctly. The clearest test is the <strong>negative
+                    control</strong>: scramble the KPI and the model must become <em>unfittable</em>.
+                </p>
+                <pre><code>cfg = (ValidationConfigBuilder().silent()
+       .with_causal_refutation(placebo=True, negative_control=True,
+                               draws=120, tune=120, chains=2).build())
+summary = ModelValidator(model).validate(cfg)</code></pre>
+                <div class="stat-row">
+                    <div class="stat-callout">
+                        <div class="stat-value">0.88</div>
+                        <div class="stat-label">R&sup2; fitting the real KPI (measured)</div>
+                    </div>
+                    <div class="stat-callout">
+                        <div class="stat-value">0.03</div>
+                        <div class="stat-label">R&sup2; fitting the scrambled KPI — collapses, as it must</div>
+                    </div>
+                    <div class="stat-callout danger">
+                        <div class="stat-value">FLAGGED</div>
+                        <div class="stat-label">placebo-treatment test on this run (small draws; a flag is the suite <em>working</em>)</div>
+                    </div>
+                </div>
+                <p class="verdict-line">
+                    <strong>Measured:</strong> <code>negative_control_outcome &rarr; ok</code> (R&sup2;
+                    0.88 &rarr; 0.03), <code>placebo_treatment &rarr; FLAGGED</code>. The notebook is explicit
+                    that a flagged test is the suite surfacing a problem loudly rather than letting it pass
+                    silently.
+                </p>
+                <p class="limit-line">
+                    <strong>Limit — also NOT an all-clear:</strong> the stress series measured the refutation
+                    suite's placebo test with <em>poor specificity</em> — it fails on confounded worlds AND on
+                    some perfectly fine ones (<a href="stress-00-rosy-picture.html">stress-00</a>). A pass does
+                    not certify the model and a flag does not condemn it; the suite is a tripwire, not a verdict.
+                    Use it alongside §6's sensitivity analysis and §11's calibration, never instead of them.
+                </p>
+            </div>
+
+            <div class="feature-block">
+                <h3>§13 — Causal-assumptions reporting <span class="tier-pill p0">P0</span> <span class="tier-pill p2">P2</span></h3>
+                <p>
+                    <strong>Problem:</strong> stakeholders see a credible interval and assume the assumptions are
+                    handled. Reports now carry a <strong>Causal Assumptions</strong> section the extractor
+                    auto-populates from the model: the confounders adjusted for, an identification-strategy
+                    statement, and the robustness-value table.
+                </p>
+                <pre><code>from mmm_framework.reporting.extractors.bayesian import BayesianMMMExtractor
+bundle = BayesianMMMExtractor(model).extract()
+bundle.causal_assumptions["identification_strategy"]</code></pre>
+                <p class="verdict-line">
+                    <strong>Measured output:</strong> "Effects are identified by back-door adjustment for the
+                    designated confounder(s): Demand. SUTVA and <em>no unobserved</em> confounding are assumed;
+                    the estimate is causal only if every common cause of …" — with designated confounders
+                    <code>['Demand']</code> and the §6 robustness table rendered into the HTML report
+                    (see <a href="aurora-04-reporting.html">Aurora&nbsp;04 ·&nbsp;Reporting</a> and the
+                    <a href="mmm-example-report.html">example report</a>).
+                </p>
+                <p class="limit-line">
+                    <strong>Limit:</strong> stating assumptions doesn't validate them — but it converts an
+                    implicit leap of faith into an explicit, reviewable claim. That is the point.
+                </p>
+            </div>
+
+            <h2 id="limits">Honest limits: what this stack does and does not buy you</h2>
+            <p>
+                The <a href="pressure-testing.html">pressure-testing series</a> graded these features against
+                synthetic worlds with known ground truth. The blunt summary:
+            </p>
+            <ul>
+                <li><span class="verdict-pill silent">not an all-clear</span> &nbsp;The <strong>robustness value
+                    (§6)</strong> reads the same in clean and confounded worlds
+                    (<a href="stress-00-rosy-picture.html">stress-00</a>). It measures fragility, not cleanliness.</li>
+                <li><span class="verdict-pill silent">not an all-clear</span> &nbsp;The <strong>refutation suite
+                    (§12)</strong>'s placebo test has poor specificity — flags on fine worlds, passes are not
+                    certification (<a href="stress-00-rosy-picture.html">stress-00</a>).</li>
+                <li><span class="verdict-pill ok">measured win</span> &nbsp;<strong>Experiment calibration
+                    (§11/§11b)</strong> is the lever that actually attacks unobserved-demand confounding:
+                    +110% &rarr; +14% bias from one ROAS lift test
+                    (<a href="stress-03-confounding-selection.html">stress-03</a>); 5.59 &rarr; 0.65 vs true 0.66
+                    in the <a href="stress-05-gauntlet.html">gauntlet</a>. But it is per-channel: it is not
+                    contagious to uncalibrated siblings.</li>
+                <li><span class="verdict-pill expected">scope</span> &nbsp;<strong>Role typing and identification
+                    checks (§1–3)</strong> are only as good as the DAG you declare; <strong>guardrails
+                    (§7–9)</strong> detect and constrain but deliberately do not auto-fix. Geo-heterogeneous
+                    coefficients, grouped-prior fitting, and full Tian–Pearl identification are deferred until
+                    validated against held-out experiments.</li>
+            </ul>
+            <div class="warning">
+                <h4>The doctrine in one line</h4>
+                <p>Diagnostics quantify <em>how wrong you could be</em>; only experiments tell you <em>how wrong
+                you are</em>. Every feature on this page either makes an assumption explicit, prices its
+                violation, or buys experimental evidence into the model — none of them replaces running the
+                experiment.</p>
+            </div>
+
+            <h2 id="takeaway">Wrap-up</h2>
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Make assumptions explicit and enforce them</strong> — role typing refuses to fit
+                        with a mediator as a control (§1); identification checks certify the graph (§2–3); the
+                        report states the assumptions out loud (§13).</li>
+                    <li><strong>Quantify what the number rests on</strong> — robustness values (§6), collinearity
+                        and geo diagnostics (§7–8), data-anchored saturation (§9), and HDIs on marginal ROAS (§5)
+                        all price the fragility of the estimate.</li>
+                    <li><strong>Anchor to experiments</strong> — the prior route is simple and robust; the
+                        likelihood route updates &beta; + saturation + adstock jointly, speaks ROAS/mROAS, and
+                        works on every model class. Measured: ROAS 0.59 &rarr; 0.93 against a 0.95 experiment.</li>
+                    <li><strong>No green light is an all-clear</strong> — the RV and the refutation suite are
+                        tripwires, not verdicts; the stress series measured both failing to distinguish clean
+                        from confounded worlds.</li>
+                    <li><strong>Make the process honest</strong> — lock the spec, diff against it, and catch the
+                        re-labelled confounder before it catches you (§10).</li>
+                </ul>
+            </div>
+            <div class="note">
+                <h4>Run it yourself</h4>
+                <p>
+                    The notebook is <code>nbs/causal_features_showcase.ipynb</code> (no build script — it is
+                    authored directly and ships with baked outputs). The siblings:
+                    <a href="aurora-01-causality.html">Aurora&nbsp;01</a> tells the story version,
+                    <a href="measurement-calibration.html">Measurement Calibration</a> covers the lift-test
+                    decision guide, <a href="causal-inference.html">Causal Inference</a> the theory, and the
+                    <a href="pressure-testing.html">stress series</a> the measured failure modes. Source:
+                    <a href="https://github.com/redam94/mmm-framework">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series (copied verbatim).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for the illustrative spend rug in the kappa exhibit.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // MEASURED data from the baked run of nbs/causal_features_showcase.ipynb
+        // ------------------------------------------------------------------
+
+        // Section 5: compute_marginal_contributions(spend_increase_pct=10, hdi_prob=0.9)
+        const MROAS = [
+            { channel: 'TV',      color: PT.colors.tv,      roas: 0.474, lo: 0.024, hi: 1.308 },
+            { channel: 'Search',  color: PT.colors.search,  roas: 2.494, lo: 0.206, hi: 5.863 },
+            { channel: 'Digital', color: PT.colors.social,  roas: 3.972, lo: 0.899, hi: 6.583 }
+        ];
+
+        // Section 6: UnobservedConfoundingAnalysis(model).run().summary()
+        const RV = [
+            { channel: 'TV',      color: PT.colors.tv,     rv: 0.170, pr2: 0.033 },
+            { channel: 'Search',  color: PT.colors.search, rv: 0.182, pr2: 0.039 },
+            { channel: 'Digital', color: PT.colors.social, rv: 0.258, pr2: 0.082 }
+        ];
+
+        // Sections 11 / 11b: calibration outcomes (TV contribution, KPI units; ROAS, ratio)
+        const CALIB = {
+            contribution: {
+                labels: ['baseline fit (§4)', 'prior route (§11)', 'likelihood route (§11b)'],
+                values: [1389, 1693, 2181],
+                colors: ['#9aa79a', '#d4a86a', '#8fa86a'],
+                target: 2223,
+                targetLabel: 'experiment target = 2,223',
+                xtitle: 'TV total contribution (KPI units)'
+            },
+            roas: {
+                labels: ['uncalibrated (§4)', 'calibrated (§11b)'],
+                values: [0.59, 0.93],
+                colors: ['#9aa79a', '#8fa86a'],
+                target: 0.95,
+                targetLabel: 'experiment = 0.95 (&plusmn;1 SE band)',
+                se: 0.095,
+                xtitle: 'TV ROAS (model-implied estimand)'
+            }
+        };
+
+        // Section 9: measured kappa bounds for TV spend (10th-90th pct).
+        const KAPPA_LO = 19.8, KAPPA_HI = 58.8;
+
+        // ------------------------------------------------------------------
+        // Chart 1 — Marginal ROAS forest plot with 90% HDI (MEASURED)
+        // ------------------------------------------------------------------
+        function drawMroas() {
+            const trace = {
+                type: 'scatter',
+                mode: 'markers',
+                y: MROAS.map(function(d) { return d.channel; }),
+                x: MROAS.map(function(d) { return d.roas; }),
+                error_x: {
+                    type: 'data', symmetric: false,
+                    array: MROAS.map(function(d) { return d.hi - d.roas; }),
+                    arrayminus: MROAS.map(function(d) { return d.roas - d.lo; }),
+                    color: '#9aa7c7', thickness: 2, width: 7
+                },
+                marker: {
+                    size: 13,
+                    color: MROAS.map(function(d) { return d.color; }),
+                    line: { color: 'rgba(45,58,45,0.45)', width: 1.5 }
+                },
+                hovertemplate: '<b>%{y}</b><br>marginal ROAS %{x:.2f}<extra></extra>'
+            };
+
+            const layout = PT.layout({
+                margin: { l: 90, r: 30, t: 20, b: 60 },
+                xaxis: { title: 'Marginal ROAS on a +10% spend step (90% HDI)', rangemode: 'tozero' },
+                yaxis: { automargin: true },
+                shapes: [{
+                    type: 'line', x0: 1, x1: 1, y0: -0.5, y1: MROAS.length - 0.5,
+                    line: { color: '#c97067', width: 1.6, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 1, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'break-even (ROAS = 1)', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }].concat(MROAS.map(function(d) {
+                    return {
+                        x: d.roas, y: d.channel, yanchor: 'bottom', yshift: 12,
+                        text: d.roas.toFixed(2), showarrow: false,
+                        font: { size: 11, color: '#2d3a2d' }
+                    };
+                }))
+            });
+
+            Plotly.newPlot('mroasChart', [trace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2 — Robustness values vs the fragile threshold (MEASURED)
+        // ------------------------------------------------------------------
+        function drawRv() {
+            const bars = {
+                type: 'bar',
+                orientation: 'h',
+                y: RV.map(function(d) { return d.channel; }),
+                x: RV.map(function(d) { return d.rv; }),
+                name: 'RV to nullify effect',
+                marker: {
+                    color: RV.map(function(d) { return d.color; }),
+                    line: { color: 'rgba(45,58,45,0.3)', width: 1 }
+                },
+                customdata: RV.map(function(d) { return d.pr2; }),
+                hovertemplate: '<b>%{y}</b><br>robustness value %{x:.3f}<br>' +
+                               'observed partial R&#178; %{customdata:.3f}<extra></extra>'
+            };
+
+            const layout = PT.layout({
+                margin: { l: 90, r: 30, t: 20, b: 60 },
+                xaxis: {
+                    title: 'Robustness value (confounder partial R&#178; required to nullify)',
+                    range: [0, 0.32]
+                },
+                yaxis: { automargin: true },
+                shapes: [{
+                    type: 'line', x0: 0.10, x1: 0.10, y0: -0.5, y1: RV.length - 0.5,
+                    line: { color: '#c97067', width: 1.6, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 0.10, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'fragile threshold (0.10)', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }].concat(RV.map(function(d) {
+                    return {
+                        x: d.rv, y: d.channel, xanchor: 'left', xshift: 6,
+                        text: d.rv.toFixed(3), showarrow: false,
+                        font: { size: 11, color: '#2d3a2d' }
+                    };
+                }))
+            });
+
+            Plotly.newPlot('rvChart', [bars], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3 — Calibration routes, interactive toggle (MEASURED)
+        // ------------------------------------------------------------------
+        function drawCalib(view) {
+            const d = CALIB[view];
+            const bars = {
+                type: 'bar',
+                orientation: 'h',
+                y: d.labels,
+                x: d.values,
+                marker: {
+                    color: d.colors,
+                    line: { color: 'rgba(45,58,45,0.3)', width: 1 }
+                },
+                hovertemplate: '<b>%{y}</b><br>%{x}<extra></extra>'
+            };
+
+            const shapes = [{
+                type: 'line', x0: d.target, x1: d.target, y0: -0.5, y1: d.labels.length - 0.5,
+                line: { color: '#a44c43', width: 1.8, dash: 'dash' }
+            }];
+            if (d.se) {
+                shapes.unshift({
+                    type: 'rect',
+                    x0: d.target - d.se, x1: d.target + d.se,
+                    y0: -0.5, y1: d.labels.length - 0.5,
+                    fillcolor: PT.band('#c97067', 0.14), line: { width: 0 }, layer: 'below'
+                });
+            }
+
+            const layout = PT.layout({
+                margin: { l: 170, r: 40, t: 20, b: 60 },
+                xaxis: { title: d.xtitle, rangemode: 'tozero' },
+                yaxis: { automargin: true },
+                shapes: shapes,
+                annotations: [{
+                    x: d.target, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: d.targetLabel, showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }].concat(d.labels.map(function(lab, i) {
+                    const v = d.values[i];
+                    return {
+                        x: v, y: lab, xanchor: 'left', xshift: 6,
+                        text: view === 'roas' ? v.toFixed(2) : v.toLocaleString('en-US'),
+                        showarrow: false, font: { size: 11, color: '#2d3a2d' }
+                    };
+                }))
+            });
+
+            Plotly.react('calibChart', [bars], layout, PT.config);
+        }
+
+        document.querySelectorAll('.calib-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.calib-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawCalib(btn.dataset.view);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // Chart 4 — Hill curve with data-anchored kappa band (LIVE MATH);
+        // kappa bounds MEASURED [19.8, 58.8]; spend rug ILLUSTRATIVE (seeded).
+        // ------------------------------------------------------------------
+        // Illustrative recreation of the notebook's TV spend draw:
+        // tv = |40 + 18*sin(2*pi*t/52) + noise| over 60 weeks (seeded).
+        const rugSpend = (function() {
+            const rand = mulberry32(7);
+            function gauss() {
+                let u = 0, v = 0;
+                while (u === 0) u = rand();
+                while (v === 0) v = rand();
+                return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+            }
+            const out = [];
+            for (let t = 0; t < 60; t++) {
+                const demand = Math.sin(2 * Math.PI * t / 52) + 0.3 * gauss();
+                out.push(Math.abs(40 + 18 * demand + 8 * gauss()));
+            }
+            return out;
+        })();
+
+        function hill(x, kappa) { return (x * x) / (x * x + kappa * kappa); }
+
+        function drawKappa(kappa) {
+            const xmax = 95;
+            const xs = [], ys = [];
+            for (let i = 0; i <= 250; i++) {
+                const x = xmax * i / 250;
+                xs.push(x);
+                ys.push(hill(x, kappa));
+            }
+
+            const curve = {
+                type: 'scatter', mode: 'lines',
+                x: xs, y: ys,
+                name: 'Hill response',
+                line: { color: PT.colors.tv, width: 3 },
+                hovertemplate: 'spend %{x:.0f} &rarr; f = %{y:.2f}<extra></extra>'
+            };
+            const rug = {
+                type: 'scatter', mode: 'markers',
+                x: rugSpend,
+                y: rugSpend.map(function() { return -0.03; }),
+                name: 'TV spend rug (illustrative)',
+                marker: { symbol: 'line-ns-open', size: 9, color: 'rgba(45,58,45,0.45)' },
+                hovertemplate: 'spend %{x:.0f}<extra>spend week</extra>'
+            };
+
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 20, b: 60 },
+                xaxis: { title: 'TV spend (adstocked units)', range: [0, xmax] },
+                yaxis: { title: 'saturation response f(x)', range: [-0.07, 1.04] },
+                legend: { orientation: 'h', y: 1.1 },
+                shapes: [{
+                    type: 'rect', x0: KAPPA_LO, x1: KAPPA_HI, y0: -0.07, y1: 1.04,
+                    fillcolor: PT.band('#d4a86a', 0.22), line: { width: 0 }, layer: 'below'
+                }, {
+                    type: 'line', x0: kappa, x1: kappa, y0: -0.07, y1: 1.04,
+                    line: { color: '#a44c43', width: 1.5, dash: 'dot' }
+                }, {
+                    type: 'line', x0: 0, x1: xmax, y0: 0.5, y1: 0.5,
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: (KAPPA_LO + KAPPA_HI) / 2, y: 1.0, yanchor: 'top',
+                    text: 'data-anchored &kappa; band [19.8, 58.8] (measured)',
+                    showarrow: false, font: { size: 11, color: '#8a6a2f' }
+                }, {
+                    x: kappa, y: 0.5, xanchor: kappa > 60 ? 'right' : 'left',
+                    xshift: kappa > 60 ? -6 : 6,
+                    text: 'f(&kappa;) = &frac12;', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.react('kappaChart', [curve, rug], layout, PT.config);
+        }
+
+        const slider = document.getElementById('kappaSlider');
+        const readout = document.getElementById('kappaReadout');
+        slider.addEventListener('input', function() {
+            const k = parseFloat(slider.value);
+            readout.innerHTML = '&kappa; = ' + k;
+            const inBand = (k >= KAPPA_LO && k <= KAPPA_HI);
+            readout.style.color = inBand ? '' : '#a44c43';
+            drawKappa(k);
+        });
+
+        function init() {
+            drawMroas();
+            drawRv();
+            drawCalib('contribution');
+            drawKappa(parseFloat(slider.value));
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

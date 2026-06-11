@@ -13,11 +13,19 @@ boundary as data. ``content`` is markdown; ``dashboard`` is a dict merged into
 ``dashboard_data``. Returns are built from ``float()``-cast scalars (the raw
 computes return DataFrames / ndarrays / dataclasses that are NOT JSON-safe — the
 projection happens here, before any boundary).
+
+Ops with tabular output also return a ``tables`` key — a list of structured
+table payloads (``agents.tables`` builders, pure data) that the host-side tool
+wrapper stores content-addressed and surfaces as dashboard refs. The builders
+are import-light by design so this works inside the subprocess/container
+kernel too.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+from mmm_framework.agents.tables import df_to_table_json, records_to_table_json
 
 # Returned (as the `error`) when an op runs but no fitted model is available —
 # shared so the in-process and subprocess kernels produce the identical message.
@@ -47,7 +55,27 @@ def roi_metrics(mmm: Any, results: Any = None, *, hdi_prob: float = 0.94) -> dic
                 f"| {row['channel']} | {row['roi_mean']:.2f} | {ci} | "
                 f"{row['prob_profitable']:.1%} |\n"
             )
-        return _ok(content, {"roi_metrics": roi_df.to_dict(orient="records")})
+        res = _ok(content, {"roi_metrics": roi_df.to_dict(orient="records")})
+        res["tables"] = [
+            df_to_table_json(
+                roi_df,
+                title="ROI by Channel",
+                source="get_roi_metrics",
+                group="results",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "roi_mean", "label": "Mean ROI", "type": "number"},
+                    {"key": "roi_hdi_low", "label": "HDI Low", "type": "number"},
+                    {"key": "roi_hdi_high", "label": "HDI High", "type": "number"},
+                    {
+                        "key": "prob_profitable",
+                        "label": "Prob Profitable",
+                        "type": "percent",
+                    },
+                ],
+            )
+        ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Error computing ROI: {str(e)}")
 
@@ -69,7 +97,25 @@ def component_decomposition(mmm: Any, results: Any = None) -> dict:
                     "pct_of_total": float(d.pct_of_total),
                 }
             )
-        return _ok(content, {"decomposition": decomp_json})
+        res = _ok(content, {"decomposition": decomp_json})
+        res["tables"] = [
+            records_to_table_json(
+                decomp_json,
+                title="Component Decomposition",
+                source="get_component_decomposition",
+                group="results",
+                columns=[
+                    {"key": "component", "label": "Component", "type": "string"},
+                    {
+                        "key": "total_contribution",
+                        "label": "Contribution",
+                        "type": "number",
+                    },
+                    {"key": "pct_of_total", "label": "% of Total", "type": "percent"},
+                ],
+            )
+        ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Error computing decomposition: {str(e)}")
 
@@ -94,7 +140,24 @@ def model_diagnostics(mmm: Any, results: Any = None) -> dict:
         content += (
             f"**Min Tail ESS:** {diag.get('ess_tail_min', 'N/A')} (Should be > 400)\n"
         )
-        return _ok(content, {"diagnostics": diag})
+        res = _ok(content, {"diagnostics": diag})
+        res["tables"] = [
+            records_to_table_json(
+                [
+                    {
+                        "converged": bool(diag.get("converged")),
+                        "divergences": diag.get("divergences", 0),
+                        "rhat_max": diag.get("rhat_max"),
+                        "ess_bulk_min": diag.get("ess_bulk_min"),
+                        "ess_tail_min": diag.get("ess_tail_min"),
+                    }
+                ],
+                title="MCMC Diagnostics",
+                source="get_model_diagnostics",
+                group="results",
+            )
+        ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Error computing diagnostics: {str(e)}")
 
@@ -120,7 +183,30 @@ def adstock_weights(mmm: Any, results: Any = None) -> dict:
                 "total_carryover": float(result.total_carryover),
                 "alpha_mean": float(result.alpha_mean),
             }
-        return _ok(content, {"adstock": adstock_json})
+        res = _ok(content, {"adstock": adstock_json})
+        res["tables"] = [
+            records_to_table_json(
+                [{"channel": ch, **vals} for ch, vals in adstock_json.items()],
+                title="Adstock (Carryover) Effects",
+                source="get_adstock_weights",
+                group="results",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {
+                        "key": "half_life",
+                        "label": "Half-life (Periods)",
+                        "type": "number",
+                    },
+                    {
+                        "key": "total_carryover",
+                        "label": "Total Carryover",
+                        "type": "percent",
+                    },
+                    {"key": "alpha_mean", "label": "Alpha (Decay)", "type": "number"},
+                ],
+            )
+        ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Error computing adstock weights: {str(e)}")
 
@@ -166,7 +252,30 @@ def saturation_curves(mmm: Any, results: Any = None) -> dict:
                 ),
                 "status": status.split(" ")[1],
             }
-        return _ok(content, {"saturation": saturation_json})
+        res = _ok(content, {"saturation": saturation_json})
+        res["tables"] = [
+            records_to_table_json(
+                [{"channel": ch, **vals} for ch, vals in saturation_json.items()],
+                title="Saturation by Channel",
+                source="get_saturation_curves",
+                group="results",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {
+                        "key": "saturation_level",
+                        "label": "Saturation Level",
+                        "type": "percent",
+                    },
+                    {
+                        "key": "marginal_response_at_current",
+                        "label": "Marginal Response",
+                        "type": "number",
+                    },
+                    {"key": "status", "label": "Status", "type": "string"},
+                ],
+            )
+        ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Error computing saturation: {str(e)}")
 
@@ -185,7 +294,23 @@ def budget_scenario(
         content = (
             f"### Budget scenario\nApplied: {changes}\n```json\n{text[:4000]}\n```"
         )
-        return _ok(content, {})
+        res = _ok(content, {})
+        if isinstance(result, dict) and result:
+            rows = [
+                {"metric": str(k), "value": v}
+                for k, v in result.items()
+                if isinstance(v, (int, float, str, bool)) or v is None
+            ]
+            if rows:
+                res["tables"] = [
+                    records_to_table_json(
+                        rows,
+                        title="Budget Scenario",
+                        source="run_budget_scenario",
+                        group="results",
+                    )
+                ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Scenario failed: {e}")
 
@@ -199,21 +324,59 @@ def marginal_analysis(
         df = mmm.compute_marginal_contributions(
             spend_increase_pct=spend_increase_pct, channels=channels
         )
+        preview = df.head(10)
         content = (
-            f"### Marginal analysis (+{spend_increase_pct}% spend)\n```\n"
-            f"{df.to_string()[:4000]}\n```"
+            f"### Marginal analysis (+{spend_increase_pct}% spend)\n\n"
+            f"{len(df)} row(s); first {len(preview)} shown — the full formatted "
+            f"table is in the dashboard.\n```\n{preview.to_string()[:2000]}\n```"
         )
-        return _ok(content, {})
+        res = _ok(content, {})
+        res["tables"] = [
+            df_to_table_json(
+                df,
+                title=f"Marginal Analysis (+{spend_increase_pct:g}% spend)",
+                source="run_marginal_analysis",
+                group="results",
+            )
+        ]
+        return res
     except Exception as e:  # noqa: BLE001
         return _err(f"Marginal analysis failed: {e}")
 
 
 def prior_predictive_check(
-    mmm: Any, results: Any = None, *, n_samples: int = 500
+    mmm: Any,
+    results: Any = None,
+    *,
+    n_samples: int = 500,
+    spec: dict | None = None,
+    dataset_path: str | None = None,
 ) -> dict:
     """Sample the prior predictive (live PyMC) and summarize the implied KPI
     scale. Returns markdown + dashboard + an `assumption` payload the causal tool
-    wrapper records host-side (record_assumption must NOT run in the kernel)."""
+    wrapper records host-side (record_assumption must NOT run in the kernel).
+
+    Runs PRE-FIT by design: when ``spec`` + ``dataset_path`` are available
+    (passed by the tool wrapper from session state), an unfitted model graph is
+    built from the ACTIVE spec — no fit needed, and the check always reflects
+    the priors that the NEXT fit would use (a fitted model's graph carries the
+    priors from fit time, which go stale the moment the user tweaks them). The
+    fitted model is only a fallback when no spec/dataset is in state."""
+    if spec and dataset_path:
+        try:
+            from mmm_framework.agents.fitting import build_model
+
+            mmm = build_model(spec, dataset_path)
+            mode = "pre-fit (built from the active spec; reflects current priors)"
+        except Exception as e:  # noqa: BLE001
+            return _err(f"Could not build the model for a pre-fit check: {e}")
+    elif mmm is not None:
+        mode = "post-fit fallback (fitted model's graph — priors as of fit time)"
+    else:
+        return _err(
+            "No model in the session and no spec/dataset to build one from. "
+            "Configure a model and load a dataset first."
+        )
     try:
         idata = mmm.sample_prior_predictive(samples=int(n_samples))
     except Exception as e:  # noqa: BLE001
@@ -237,7 +400,7 @@ def prior_predictive_check(
         summary = {"error": str(e)}
 
     flag_neg = summary.get("frac_negative", 0) > 0.05
-    lines = ["### Prior Predictive Check", ""]
+    lines = ["### Prior Predictive Check", "", f"- Mode: {mode}"]
     if "error" in summary:
         lines.append(f"Could not summarize: {summary['error']}")
     else:
@@ -262,9 +425,14 @@ def prior_predictive_check(
             else "Implied outcome range looks plausible."
         ),
         "category": "prior",
-        "change_note": f"n_samples={int(n_samples)}",
+        "change_note": f"n_samples={int(n_samples)}, mode={mode}",
     }
     return res
+
+
+# Dispatchers skip the fitted-model gate for this op: it builds an unfitted
+# model from spec+dataset when none exists (the pre-fit path).
+prior_predictive_check.allow_unfitted = True
 
 
 def leave_one_out(
@@ -349,6 +517,143 @@ def save_model(mmm: Any, results: Any = None, *, name: str = "model") -> dict:
         return _err(f"Save failed: {e}")
 
 
+def optimize_budget(
+    mmm: Any,
+    results: Any = None,
+    *,
+    total_budget: float | None = None,
+    budget_change_pct: float | None = None,
+    min_multiplier: float = 0.0,
+    max_multiplier: float = 2.0,
+    max_draws: int = 200,
+) -> dict:
+    """Optimal budget allocation from the fitted model's response curves, with
+    per-draw re-optimization for allocation stability. Returns markdown +
+    a dashboard payload + a structured table."""
+    try:
+        from mmm_framework.planning import optimize_budget as _optimize
+
+        res = _optimize(
+            mmm,
+            total_budget=total_budget,
+            budget_change_pct=budget_change_pct,
+            min_multiplier=min_multiplier,
+            max_multiplier=max_multiplier,
+            max_draws=max_draws,
+            random_seed=42,
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Budget optimization failed: {e}")
+
+    t = res.table
+    lines = ["### Budget Optimization", ""]
+    lines.append(
+        f"- Budget allocated: {res.total_budget:,.0f} "
+        f"(current total spend: {t['current_spend'].sum():,.0f})"
+    )
+    lines.append(
+        f"- Expected KPI uplift vs current allocation: {res.expected_uplift:,.0f} "
+        f"(90% interval [{res.uplift_hdi[0]:,.0f}, {res.uplift_hdi[1]:,.0f}]; "
+        f"P(uplift > 0) = {res.prob_positive_uplift:.0%}; {res.n_draws} draws)"
+    )
+    biggest = t.reindex(t["change_pct"].abs().sort_values(ascending=False).index).head(
+        3
+    )
+    for _, r in biggest.iterrows():
+        lines.append(
+            f"- `{r['channel']}`: {r['current_share_pct']:.0f}% → "
+            f"{r['optimal_share_pct']:.0f}% of budget ({r['change_pct']:+.0f}% spend); "
+            f"optimal share 90% range [{r['optimal_share_p5']:.0f}%, {r['optimal_share_p95']:.0f}%]"
+        )
+    for n in res.notes:
+        lines.append(f"- ⚠️ {n}")
+    lines.append(
+        "\nCaveats: optimal within the sampled spend range only (no evidence "
+        "beyond observed spend); wide per-channel share ranges mean the data "
+        "does not pin down the optimum — see `recommend_experiments`."
+    )
+
+    summary = {
+        "total_budget": res.total_budget,
+        "expected_uplift": res.expected_uplift,
+        "uplift_hdi": list(res.uplift_hdi),
+        "prob_positive_uplift": res.prob_positive_uplift,
+        "allocation": t.to_dict(orient="records"),
+    }
+    out = _ok("\n".join(lines), {"budget_optimization": summary})
+    out["tables"] = [
+        df_to_table_json(
+            t.round(2),
+            title=f"Optimal Budget Allocation ({res.total_budget:,.0f})",
+            source="optimize_budget",
+            group="results",
+        )
+    ]
+    return out
+
+
+def experiment_design(
+    mmm: Any,
+    results: Any = None,
+    *,
+    top_k: int = 3,
+    max_draws: int = 200,
+) -> dict:
+    """Rank channels by experiment value (spend at stake × ROAS uncertainty ×
+    allocation instability) and propose concrete lift-test designs with
+    calibration snippets for the next fit."""
+    try:
+        from mmm_framework.planning import recommend_experiments as _recommend
+
+        table, designs = _recommend(
+            mmm, top_k=int(top_k), max_draws=max_draws, random_seed=42
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Experiment design recommendation failed: {e}")
+
+    lines = ["### Experiment Design Recommendations", ""]
+    lines.append(
+        "Priority = spend share × ROAS uncertainty (CV) × (1 + allocation "
+        "instability) — test where uncertainty is large AND moves real money."
+    )
+    for i, d in enumerate(designs, 1):
+        lines.append(f"\n**{i}. `{d['channel']}`** (priority {d['priority']:.3f})")
+        lines.append(f"   - Why: {d['why']}")
+        lines.append(f"   - Design: {d['design_type']}")
+        lines.append(
+            f"   - Duration: ≥ {d['min_duration_periods']} periods "
+            f"({d['duration_rationale']})"
+        )
+        lines.append(
+            f"   - Target precision: SE ≤ {d['target_se']:.2f} on measured ROAS "
+            f"({d['target_se_rationale']})"
+        )
+    lines.append(
+        "\nWhen a result lands, calibrate it into the next fit (see the "
+        "`calibration_snippet` per design in the dashboard payload) — do not "
+        "reconcile informally."
+    )
+
+    out = _ok(
+        "\n".join(lines),
+        {
+            "experiment_design": {
+                "ranking": table.to_dict(orient="records"),
+                "designs": designs,
+            }
+        },
+    )
+    out["tables"] = [
+        df_to_table_json(
+            table.round(3),
+            title="Experiment Priority Ranking",
+            source="experiment_design",
+            group="results",
+        )
+    ]
+    return out
+
+
 # Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
 OPS = {
     "roi_metrics": roi_metrics,
@@ -361,4 +666,6 @@ OPS = {
     "prior_predictive_check": prior_predictive_check,
     "leave_one_out": leave_one_out,
     "save_model": save_model,
+    "optimize_budget": optimize_budget,
+    "experiment_design": experiment_design,
 }

@@ -11,10 +11,59 @@ import json
 from typing import Any
 
 _PALETTE = [
-    "#4f46e5", "#0d9488", "#f59e0b", "#e11d48",
-    "#059669", "#7c3aed", "#0284c7", "#b45309",
-    "#6366f1", "#0f766e",
+    "#4f46e5",
+    "#0d9488",
+    "#f59e0b",
+    "#e11d48",
+    "#059669",
+    "#7c3aed",
+    "#0284c7",
+    "#b45309",
+    "#6366f1",
+    "#0f766e",
 ]
+
+
+def apply_branding_html(html: str, branding: dict | None) -> str:
+    """Minimal client-branding pass over a finished report/slides HTML.
+
+    String-level by design: remapping the design-palette hexes recolors the
+    CSS *and* the embedded Plotly figure JSON in one move; the sidebar logo
+    text, logo image, and footer line are swapped via their known markup.
+    Call only with confirmed branding (``agents.branding.is_active``)."""
+    if not branding or not html:
+        return html
+    colors = branding.get("colors") or {}
+    palette = [c for c in (colors.get("palette") or []) if c] or [
+        c
+        for c in (colors.get("primary"), colors.get("secondary"), colors.get("accent"))
+        if c
+    ]
+    if palette:
+        for i, design_color in enumerate(_PALETTE):
+            html = html.replace(design_color, palette[i % len(palette)])
+    client_name = branding.get("client_name")
+    logo_url = branding.get("logo_url")
+    if client_name or logo_url:
+        logo_inner = ""
+        if logo_url:
+            logo_inner += (
+                f'<img src="{logo_url}" alt="" '
+                'style="max-height:28px;max-width:160px;display:block;'
+                'margin-bottom:0.35rem"/>'
+            )
+        logo_inner += client_name or "MMM Framework"
+        html = html.replace(
+            '<div class="logo">MMM Framework<span>',
+            f'<div class="logo">{logo_inner}<span>',
+        )
+    footer_text = branding.get("footer_text")
+    if footer_text:
+        html = html.replace(
+            "MMM Framework — Bayesian Marketing Mix Modelling", footer_text
+        )
+    return html
+
 
 _PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.35.2.min.js"
 _REVEAL_CSS = "https://cdn.jsdelivr.net/npm/reveal.js@4/dist/reveal.css"
@@ -338,14 +387,24 @@ _SLIDE_CSS = """
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _extract_rq(value: Any) -> tuple[str, dict]:
     """Return (main_question_str, extra_fields_dict) from an assumption value."""
     if isinstance(value, dict):
-        q = value.get("question") or value.get("primary_question") or value.get("text") or ""
+        q = (
+            value.get("question")
+            or value.get("primary_question")
+            or value.get("text")
+            or ""
+        )
         if not q:
             # fallback: first non-empty string value
             q = next((str(v) for v in value.values() if v), str(value))
-        extra = {k: v for k, v in value.items() if k not in ("question", "primary_question", "text") and v}
+        extra = {
+            k: v
+            for k, v in value.items()
+            if k not in ("question", "primary_question", "text") and v
+        }
         return q, extra
     return str(value), {}
 
@@ -353,6 +412,7 @@ def _extract_rq(value: Any) -> tuple[str, dict]:
 def _truncate_title(s: str, max_len: int = 55) -> str:
     """Strip HTML tags and truncate to max_len chars."""
     import re
+
     clean = re.sub(r"<[^>]+>", " ", s).strip()
     clean = re.sub(r"\s+", " ", clean)
     return clean[:max_len].rstrip() + "…" if len(clean) > max_len else clean
@@ -368,8 +428,8 @@ def _rq_slide_html(question: str, extra: dict) -> str:
     return (
         f'<div class="rq-box">'
         f'<div class="rq-main">{question}</div>'
-        f'{meta}'
-        f'</div>'
+        f"{meta}"
+        f"</div>"
     )
 
 
@@ -379,7 +439,7 @@ def _js(div_id: str, fig: dict, config: dict | None = None) -> str:
         f'Plotly.newPlot("{div_id}",'
         f'{json.dumps(fig.get("data", []))},'
         f'{json.dumps(fig.get("layout", {}))},'
-        f'{json.dumps(cfg)});'
+        f"{json.dumps(cfg)});"
     )
 
 
@@ -404,25 +464,40 @@ def _roi_fig(roi: list[dict]) -> dict:
     hi = [r.get("roi_hdi_high", r.get("roi_mean", 0)) for r in roi]
     colors = [_PALETTE[i % len(_PALETTE)] for i in range(len(channels))]
     return {
-        "data": [{
-            "type": "bar", "orientation": "h",
-            "x": means, "y": channels,
-            "error_x": {
-                "type": "data", "symmetric": False,
-                "array": [h - m for h, m in zip(hi, means)],
-                "arrayminus": [m - l for m, l in zip(means, lo)],
-                "color": "#94a3b8", "thickness": 2, "width": 5,
-            },
-            "marker": {"color": colors},
-            "text": [f"{m:.2f}x" for m in means],
-            "textposition": "outside",
-        }],
+        "data": [
+            {
+                "type": "bar",
+                "orientation": "h",
+                "x": means,
+                "y": channels,
+                "error_x": {
+                    "type": "data",
+                    "symmetric": False,
+                    "array": [h - m for h, m in zip(hi, means)],
+                    "arrayminus": [m - l for m, l in zip(means, lo)],
+                    "color": "#94a3b8",
+                    "thickness": 2,
+                    "width": 5,
+                },
+                "marker": {"color": colors},
+                "text": [f"{m:.2f}x" for m in means],
+                "textposition": "outside",
+            }
+        ],
         "layout": {
-            "title": {"text": "ROI by Channel (94% HDI)", "font": {"size": 14, "color": "#1e293b"}},
-            "xaxis": {"title": "Return per £1 Spent", "automargin": True, "gridcolor": "#f1f5f9"},
+            "title": {
+                "text": "ROI by Channel (94% HDI)",
+                "font": {"size": 14, "color": "#1e293b"},
+            },
+            "xaxis": {
+                "title": "Return per £1 Spent",
+                "automargin": True,
+                "gridcolor": "#f1f5f9",
+            },
             "yaxis": {"automargin": True},
             "margin": {"l": 10, "r": 80, "t": 50, "b": 50},
-            "plot_bgcolor": "#f9fafb", "paper_bgcolor": "rgba(0,0,0,0)",
+            "plot_bgcolor": "#f9fafb",
+            "paper_bgcolor": "rgba(0,0,0,0)",
             "font": {"family": "Inter, system-ui, sans-serif", "size": 12},
             "uniformtext": {"minsize": 9, "mode": "hide"},
         },
@@ -435,14 +510,23 @@ def _decomp_fig(decomp: list[dict]) -> dict:
     values = [d["pct_of_total"] * 100 for d in sorted_d]
     colors = [_PALETTE[i % len(_PALETTE)] for i in range(len(labels))]
     return {
-        "data": [{
-            "type": "pie", "labels": labels, "values": values, "hole": 0.42,
-            "marker": {"colors": colors},
-            "textinfo": "label+percent", "textposition": "outside",
-            "pull": [0.03] + [0] * (len(labels) - 1),
-        }],
+        "data": [
+            {
+                "type": "pie",
+                "labels": labels,
+                "values": values,
+                "hole": 0.42,
+                "marker": {"colors": colors},
+                "textinfo": "label+percent",
+                "textposition": "outside",
+                "pull": [0.03] + [0] * (len(labels) - 1),
+            }
+        ],
         "layout": {
-            "title": {"text": "KPI Decomposition", "font": {"size": 14, "color": "#1e293b"}},
+            "title": {
+                "text": "KPI Decomposition",
+                "font": {"size": 14, "color": "#1e293b"},
+            },
             "showlegend": True,
             "legend": {"orientation": "v", "x": 1.0, "y": 0.5},
             "margin": {"l": 10, "r": 160, "t": 50, "b": 20},
@@ -453,6 +537,7 @@ def _decomp_fig(decomp: list[dict]) -> dict:
 
 
 # ── Slide-only chart helpers ──────────────────────────────────────────────────
+
 
 def _scurves_fig(curves: dict) -> dict:
     """Normalized S-curve chart: x = spend relative to current, y = % of max response."""
@@ -477,41 +562,53 @@ def _scurves_fig(curves: dict) -> dict:
         y_hi = [r / max_resp * 100 for r in resp_hi]
 
         # Uncertainty band (filled polygon)
-        traces.append({
-            "type": "scatter",
-            "x": x_norm + x_norm[::-1],
-            "y": y_hi + y_lo[::-1],
-            "fill": "toself",
-            "fillcolor": color + "22",
-            "line": {"color": "rgba(0,0,0,0)"},
-            "showlegend": False,
-            "hoverinfo": "skip",
-        })
-        traces.append({
-            "type": "scatter",
-            "x": x_norm,
-            "y": y_norm,
-            "name": ch,
-            "mode": "lines",
-            "line": {"color": color, "width": 2.5},
-        })
+        traces.append(
+            {
+                "type": "scatter",
+                "x": x_norm + x_norm[::-1],
+                "y": y_hi + y_lo[::-1],
+                "fill": "toself",
+                "fillcolor": color + "22",
+                "line": {"color": "rgba(0,0,0,0)"},
+                "showlegend": False,
+                "hoverinfo": "skip",
+            }
+        )
+        traces.append(
+            {
+                "type": "scatter",
+                "x": x_norm,
+                "y": y_norm,
+                "name": ch,
+                "mode": "lines",
+                "line": {"color": color, "width": 2.5},
+            }
+        )
         sat_pct = c.get("saturation_level", 0) * 100
-        traces.append({
-            "type": "scatter",
-            "x": [1.0],
-            "y": [sat_pct],
-            "mode": "markers",
-            "marker": {"size": 9, "color": color, "symbol": "circle",
-                       "line": {"color": "#fff", "width": 2}},
-            "showlegend": False,
-            "hovertemplate": f"<b>{ch}</b><br>{sat_pct:.0f}% of maximum response at current spend<extra></extra>",
-        })
+        traces.append(
+            {
+                "type": "scatter",
+                "x": [1.0],
+                "y": [sat_pct],
+                "mode": "markers",
+                "marker": {
+                    "size": 9,
+                    "color": color,
+                    "symbol": "circle",
+                    "line": {"color": "#fff", "width": 2},
+                },
+                "showlegend": False,
+                "hovertemplate": f"<b>{ch}</b><br>{sat_pct:.0f}% of maximum response at current spend<extra></extra>",
+            }
+        )
 
     return {
         "data": traces,
         "layout": {
-            "title": {"text": "Saturation Curves — Where Each Channel Sits on the Diminishing Returns Curve",
-                      "font": {"size": 12, "color": "#1e293b"}},
+            "title": {
+                "text": "Saturation Curves — Where Each Channel Sits on the Diminishing Returns Curve",
+                "font": {"size": 12, "color": "#1e293b"},
+            },
             "xaxis": {
                 "title": "Spend relative to current",
                 "tickformat": ".0%",
@@ -526,11 +623,26 @@ def _scurves_fig(curves: dict) -> dict:
                 "gridcolor": "#f1f5f9",
                 "automargin": True,
             },
-            "shapes": [{"type": "line", "x0": 1.0, "x1": 1.0, "y0": 0, "y1": 110,
-                        "line": {"color": "#94a3b8", "width": 1, "dash": "dot"}}],
-            "annotations": [{"x": 1.02, "y": 108, "text": "Current spend",
-                              "showarrow": False, "font": {"size": 9, "color": "#94a3b8"},
-                              "xanchor": "left"}],
+            "shapes": [
+                {
+                    "type": "line",
+                    "x0": 1.0,
+                    "x1": 1.0,
+                    "y0": 0,
+                    "y1": 110,
+                    "line": {"color": "#94a3b8", "width": 1, "dash": "dot"},
+                }
+            ],
+            "annotations": [
+                {
+                    "x": 1.02,
+                    "y": 108,
+                    "text": "Current spend",
+                    "showarrow": False,
+                    "font": {"size": 9, "color": "#94a3b8"},
+                    "xanchor": "left",
+                }
+            ],
             "margin": {"l": 60, "r": 40, "t": 65, "b": 60},
             "plot_bgcolor": "#f9fafb",
             "paper_bgcolor": "rgba(0,0,0,0)",
@@ -552,35 +664,59 @@ def _mroi_roi_fig(roi: list[dict], mroi: dict, fmt_ch=None) -> dict:
     return {
         "data": [
             {
-                "type": "bar", "orientation": "h",
+                "type": "bar",
+                "orientation": "h",
                 "name": "Average ROI",
-                "x": avg_rois, "y": channels,
+                "x": avg_rois,
+                "y": channels,
                 "marker": {"color": "#4f46e5"},
                 "text": [f"{v:.2f}x" for v in avg_rois],
                 "textposition": "outside",
             },
             {
-                "type": "bar", "orientation": "h",
+                "type": "bar",
+                "orientation": "h",
                 "name": "Marginal ROI (next £1)",
-                "x": marg_rois, "y": channels,
+                "x": marg_rois,
+                "y": channels,
                 "marker": {"color": "#0d9488"},
                 "text": [f"{v:.2f}x" for v in marg_rois],
                 "textposition": "outside",
             },
         ],
         "layout": {
-            "title": {"text": "Average ROI vs Marginal ROI — What the Next £1 Earns",
-                      "font": {"size": 13, "color": "#1e293b"}},
+            "title": {
+                "text": "Average ROI vs Marginal ROI — What the Next £1 Earns",
+                "font": {"size": 13, "color": "#1e293b"},
+            },
             "barmode": "group",
-            "xaxis": {"title": "Return per £1", "automargin": True, "gridcolor": "#f1f5f9"},
+            "xaxis": {
+                "title": "Return per £1",
+                "automargin": True,
+                "gridcolor": "#f1f5f9",
+            },
             "yaxis": {"automargin": True},
-            "shapes": [{"type": "line", "x0": 1.0, "x1": 1.0,
-                        "y0": -0.5, "y1": len(channels) - 0.5,
-                        "line": {"color": "#dc2626", "width": 1.5, "dash": "dot"}}],
-            "annotations": [{"x": 1.0, "y": len(channels) - 0.5,
-                              "text": "Breakeven", "showarrow": False,
-                              "font": {"size": 9, "color": "#dc2626"},
-                              "xanchor": "left", "yanchor": "bottom"}],
+            "shapes": [
+                {
+                    "type": "line",
+                    "x0": 1.0,
+                    "x1": 1.0,
+                    "y0": -0.5,
+                    "y1": len(channels) - 0.5,
+                    "line": {"color": "#dc2626", "width": 1.5, "dash": "dot"},
+                }
+            ],
+            "annotations": [
+                {
+                    "x": 1.0,
+                    "y": len(channels) - 0.5,
+                    "text": "Breakeven",
+                    "showarrow": False,
+                    "font": {"size": 9, "color": "#dc2626"},
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                }
+            ],
             "margin": {"l": 10, "r": 90, "t": 60, "b": 50},
             "plot_bgcolor": "#f9fafb",
             "paper_bgcolor": "rgba(0,0,0,0)",
@@ -612,7 +748,9 @@ def _channel_perf_html(
         if marg is not None and sat_lvl is not None:
             if avg_roi >= 1.0 and marg >= 1.0 and sat_lvl < 0.65:
                 badge, badge_color = "Scale Up", "#059669"
-                rec = "Strong returns with room to grow — additional spend is efficient."
+                rec = (
+                    "Strong returns with room to grow — additional spend is efficient."
+                )
             elif avg_roi >= 1.0 and (marg >= 0.5 or sat_lvl < 0.80):
                 badge, badge_color = "Maintain", "#d97706"
                 rec = "Good returns but approaching diminishing returns — hold current investment."
@@ -640,21 +778,22 @@ def _channel_perf_html(
 
         items.append(
             f'<div style="background:#f8fafc;border:1px solid #e2e8f0;'
-            f'border-left:4px solid {badge_color};border-radius:0 0.6rem 0.6rem 0;'
+            f"border-left:4px solid {badge_color};border-radius:0 0.6rem 0.6rem 0;"
             f'padding:0.6rem 0.9rem;margin-bottom:0.45rem">'
             f'<div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.15rem">'
             f'<span style="font-weight:700;font-size:0.85em;color:#1e293b">{fmt_ch(ch)}</span>'
             f'<span style="font-size:0.6em;font-weight:700;color:{badge_color};'
             f'background:{badge_color}18;padding:0.15em 0.55em;border-radius:999px">{badge}</span>'
-            f'</div>'
+            f"</div>"
             f'<div style="font-size:0.63em;color:#64748b;margin-bottom:0.15rem">{" · ".join(meta_parts)}</div>'
             f'<div style="font-size:0.7em;color:#475569">{rec}</div>'
-            f'</div>'
+            f"</div>"
         )
     return "".join(items)
 
 
 # ── HTML Report ───────────────────────────────────────────────────────────────
+
 
 def generate_html_report(
     title: str,
@@ -680,7 +819,8 @@ def generate_html_report(
         (a for a in assumptions if a.get("key") == "prior_predictive_check"), None
     )
     other_assumptions = [
-        a for a in assumptions
+        a
+        for a in assumptions
         if a.get("key") not in ("research_question", "prior_predictive_check")
         and not a.get("key", "").startswith("sensitivity::")
     ]
@@ -705,47 +845,61 @@ def generate_html_report(
     if decomp:
         top = max(decomp, key=lambda x: x["pct_of_total"])
         media_pct = sum(
-            d["pct_of_total"] for d in decomp
-            if d["component"].lower() not in ("baseline", "trend", "seasonality", "controls")
+            d["pct_of_total"]
+            for d in decomp
+            if d["component"].lower()
+            not in ("baseline", "trend", "seasonality", "controls")
         )
-        findings.append((
-            "📊",
-            f"{top['component']} is the top driver",
-            f"Accounts for {_pct(top['pct_of_total'])} of fitted {kpi}.",
-        ))
+        findings.append(
+            (
+                "📊",
+                f"{top['component']} is the top driver",
+                f"Accounts for {_pct(top['pct_of_total'])} of fitted {kpi}.",
+            )
+        )
         if media_pct > 0:
-            findings.append((
-                "📺",
-                f"Media drives {_pct(media_pct)} of {kpi}",
-                "Combined paid channels collectively explain this share of the KPI in-sample.",
-            ))
+            findings.append(
+                (
+                    "📺",
+                    f"Media drives {_pct(media_pct)} of {kpi}",
+                    "Combined paid channels collectively explain this share of the KPI in-sample.",
+                )
+            )
     if roi:
         best = max(roi, key=lambda x: x.get("roi_mean", 0))
         worst = min(roi, key=lambda x: x.get("roi_mean", 0))
-        findings.append((
-            "💰",
-            f"{best['channel']} has the highest ROI",
-            f"Returns {best.get('roi_mean', 0):.2f}x per unit of spend.",
-        ))
+        findings.append(
+            (
+                "💰",
+                f"{best['channel']} has the highest ROI",
+                f"Returns {best.get('roi_mean', 0):.2f}x per unit of spend.",
+            )
+        )
         if len(roi) > 1 and worst["channel"] != best["channel"]:
-            findings.append((
-                "⚠️",
-                f"{worst['channel']} has the lowest ROI",
-                f"Returns only {worst.get('roi_mean', 0):.2f}x — consider rebalancing budget.",
-            ))
+            findings.append(
+                (
+                    "⚠️",
+                    f"{worst['channel']} has the lowest ROI",
+                    f"Returns only {worst.get('roi_mean', 0):.2f}x — consider rebalancing budget.",
+                )
+            )
     if diag:
         if diag.get("converged"):
-            findings.append((
-                "✅",
-                "Model converged successfully",
-                f"R̂ max {diag.get('rhat_max', '<1.01')}, {diag.get('divergences', 0)} divergences. Estimates are reliable.",
-            ))
+            findings.append(
+                (
+                    "✅",
+                    "Model converged successfully",
+                    f"R̂ max {diag.get('rhat_max', '<1.01')}, {diag.get('divergences', 0)} divergences. Estimates are reliable.",
+                )
+            )
         else:
-            findings.append((
-                "⚠️",
-                "Model has convergence issues",
-                "Treat estimates with caution — consider adjusting priors or increasing samples.",
-            ))
+            findings.append(
+                (
+                    "⚠️",
+                    "Model has convergence issues",
+                    "Treat estimates with caution — consider adjusting priors or increasing samples.",
+                )
+            )
 
     # ── Build chart JS + chart_htmls list ────────────────────────────────────
 
@@ -829,8 +983,10 @@ def generate_html_report(
     if decomp:
         decomp_sorted = sorted(decomp, key=lambda x: x["pct_of_total"], reverse=True)
         media_components = [
-            d for d in decomp_sorted
-            if d["component"].lower() not in ("baseline", "trend", "seasonality", "controls")
+            d
+            for d in decomp_sorted
+            if d["component"].lower()
+            not in ("baseline", "trend", "seasonality", "controls")
         ]
 
         decomp_chart = f'<div class="chart-card"><div class="chart-title">KPI Decomposition</div><div id="chart-decomp" style="height:380px"></div></div>'
@@ -856,7 +1012,9 @@ def generate_html_report(
         decomp_insight = ""
         if media_components:
             top_m = max(media_components, key=lambda x: x["pct_of_total"])
-            baseline = next((d for d in decomp_sorted if d["component"].lower() == "baseline"), None)
+            baseline = next(
+                (d for d in decomp_sorted if d["component"].lower() == "baseline"), None
+            )
             ib = f"<b>{top_m['component']}</b> is the strongest media contributor at {_pct(top_m['pct_of_total'])} of {kpi}."
             if baseline:
                 ib += f" The model baseline accounts for {_pct(baseline['pct_of_total'])} — media spend explains the remainder."
@@ -895,14 +1053,33 @@ def generate_html_report(
             hi = r.get("roi_hdi_high", mean)
             prob = r.get("prob_profitable")
             if mean >= 1.5:
-                tier_cls, roi_cls, tier_icon, tier_desc = "tier-strong", "roi-strong", "🟢", "Strong performer"
+                tier_cls, roi_cls, tier_icon, tier_desc = (
+                    "tier-strong",
+                    "roi-strong",
+                    "🟢",
+                    "Strong performer",
+                )
             elif mean >= 0.8:
-                tier_cls, roi_cls, tier_icon, tier_desc = "tier-moderate", "roi-moderate", "🟡", "Moderate performer"
+                tier_cls, roi_cls, tier_icon, tier_desc = (
+                    "tier-moderate",
+                    "roi-moderate",
+                    "🟡",
+                    "Moderate performer",
+                )
             else:
-                tier_cls, roi_cls, tier_icon, tier_desc = "tier-weak", "roi-weak", "🔴", "Below breakeven"
+                tier_cls, roi_cls, tier_icon, tier_desc = (
+                    "tier-weak",
+                    "roi-weak",
+                    "🔴",
+                    "Below breakeven",
+                )
             prob_html = ""
             if prob is not None:
-                fc = "#059669" if prob >= 0.8 else "#d97706" if prob >= 0.5 else "#dc2626"
+                fc = (
+                    "#059669"
+                    if prob >= 0.8
+                    else "#d97706" if prob >= 0.5 else "#dc2626"
+                )
                 prob_html = f'<div class="prob-bar-wrap"><div class="prob-bar"><div class="prob-bar-fill" style="width:{prob * 100:.0f}%;background:{fc}"></div></div><span class="prob-label">{prob * 100:.0f}% prob. profitable</span></div>'
             roi_cards += f"""
 <div class="channel-card">
@@ -919,11 +1096,11 @@ def generate_html_report(
         worst_r = roi_sorted[-1]
         roi_insight = (
             f'<div class="insight"><div class="icon">💰</div><div class="body">'
-            f'<strong>Budget Implication</strong>'
+            f"<strong>Budget Implication</strong>"
             f'<p><b>{best_r["channel"]}</b> delivers the best return at {best_r.get("roi_mean", 0):.2f}x. '
-            f'If budget is constrained, prioritise channels above 1.0x and consider reallocating spend from '
+            f"If budget is constrained, prioritise channels above 1.0x and consider reallocating spend from "
             f'<b>{worst_r["channel"]}</b> ({worst_r.get("roi_mean", 0):.2f}x).</p>'
-            f'</div></div>'
+            f"</div></div>"
         )
 
         roi_section = f"""
@@ -951,8 +1128,8 @@ def generate_html_report(
         converged = diag.get("converged", False)
         diag_msg = (
             "Model converged successfully. Bayesian estimates are reliable."
-            if converged else
-            "Model has convergence issues. Treat estimates with caution — consider adjusting priors or increasing samples."
+            if converged
+            else "Model has convergence issues. Treat estimates with caution — consider adjusting priors or increasing samples."
         )
         try:
             rhat_val = float(str(diag.get("rhat_max", 99)))
@@ -962,7 +1139,14 @@ def generate_html_report(
 
         prior_callout = ""
         if prior_check:
-            pc_ok = str(prior_check.get("value", "")).lower() in ("passed", "ok", "good", "yes", "true", "acceptable")
+            pc_ok = str(prior_check.get("value", "")).lower() in (
+                "passed",
+                "ok",
+                "good",
+                "yes",
+                "true",
+                "acceptable",
+            )
             prior_callout = (
                 f'<div class="callout {"callout-ok" if pc_ok else "callout-warn"}">'
                 f'<span class="ci">{"✅" if pc_ok else "⚠️"}</span>'
@@ -1020,7 +1204,9 @@ def generate_html_report(
 
     if model_spec or model_run:
         inf = model_run.get("inference") or model_spec.get("inference") or {}
-        trend_type = model_run.get("trend") or (model_spec.get("trend") or {}).get("type", "—")
+        trend_type = model_run.get("trend") or (model_spec.get("trend") or {}).get(
+            "type", "—"
+        )
         seas = model_run.get("seasonality") or model_spec.get("seasonality") or {}
 
         app_inner += (
@@ -1032,7 +1218,7 @@ def generate_html_report(
             f'<p style="font-size:0.85rem;color:#475569;margin-top:0.4rem">Trend: <b>{trend_type}</b>'
             f' &nbsp; Yearly seasonality: <b>{seas.get("yearly", 0)}</b>'
             f' &nbsp; Weekly: <b>{seas.get("weekly", 0)}</b></p>'
-            '</div>'
+            "</div>"
         )
 
         mc_list: list[dict] = model_spec.get("media_channels") or []
@@ -1040,8 +1226,8 @@ def generate_html_report(
             app_inner += (
                 '<div class="app-section"><h3>Channel Configuration</h3>'
                 '<div class="table-wrap"><table><thead><tr>'
-                '<th>Channel</th><th>Adstock</th><th>L-Max</th><th>Saturation</th>'
-                '</tr></thead><tbody>'
+                "<th>Channel</th><th>Adstock</th><th>L-Max</th><th>Saturation</th>"
+                "</tr></thead><tbody>"
             )
             for ch in mc_list:
                 ads = ch.get("adstock") or {}
@@ -1052,21 +1238,26 @@ def generate_html_report(
                     f'<td>{ads.get("l_max","—")}</td>'
                     f'<td>{sat.get("type","—")}</td></tr>'
                 )
-            app_inner += '</tbody></table></div></div>'
+            app_inner += "</tbody></table></div></div>"
 
         if controls:
             app_inner += (
                 '<div class="app-section"><h3>Control Variables</h3><div class="tag-row">'
-                + "".join(f'<span class="badge badge-gray">{c}</span>' for c in controls)
-                + '</div></div>'
+                + "".join(
+                    f'<span class="badge badge-gray">{c}</span>' for c in controls
+                )
+                + "</div></div>"
             )
 
     if other_assumptions:
         app_inner += '<div class="app-section"><h3>Documented Assumptions</h3>'
         _cat_badge = {
-            "causal_structure": "badge-indigo", "data": "badge-indigo",
-            "functional_form": "badge-amber", "prior": "badge-amber",
-            "identification": "badge-indigo", "external_evidence": "badge-green",
+            "causal_structure": "badge-indigo",
+            "data": "badge-indigo",
+            "functional_form": "badge-amber",
+            "prior": "badge-amber",
+            "identification": "badge-indigo",
+            "external_evidence": "badge-green",
         }
         for a in other_assumptions:
             cb = _cat_badge.get(a.get("category", ""), "badge-gray")
@@ -1079,9 +1270,9 @@ def generate_html_report(
                 f' <span style="font-size:0.8rem;font-weight:600;color:#334155;margin-left:0.4rem">{a.get("key","")}</span></div>'
                 f'<div style="font-size:0.8rem;color:#475569"><b>Value:</b> {val_str}</div>'
                 f'<div style="font-size:0.8rem;color:#475569;margin-top:0.15rem"><b>Rationale:</b> {a.get("rationale","")}</div>'
-                f'</div>'
+                f"</div>"
             )
-        app_inner += '</div>'
+        app_inner += "</div>"
 
     if sensitivity_assumptions:
         app_inner += '<div class="app-section"><h3>Sensitivity Analysis</h3>'
@@ -1093,11 +1284,15 @@ def generate_html_report(
                 f'<div style="border:1px solid #e2e8f0;border-radius:0.75rem;padding:0.875rem 1rem;margin-bottom:0.5rem;background:#fff">'
                 f'<div style="font-weight:600;font-size:0.85rem">Drop: {dropped}</div>'
                 f'<div style="font-size:0.8rem;color:#475569">Removing this channel reduces KPI by <b>{frac * 100:.1f}%</b>. {a.get("rationale","")}</div>'
-                f'</div>'
+                f"</div>"
             )
-        app_inner += '</div>'
+        app_inner += "</div>"
 
-    appendix_html = f'<div class="appendix"><h2>Technical Appendix</h2>{app_inner}</div>' if app_inner else ""
+    appendix_html = (
+        f'<div class="appendix"><h2>Technical Appendix</h2>{app_inner}</div>'
+        if app_inner
+        else ""
+    )
 
     # ── Sidebar navigation ────────────────────────────────────────────────────
 
@@ -1113,7 +1308,8 @@ def generate_html_report(
         nav_items.append(("#appendix", "Technical Appendix"))
 
     nav_html = "".join(
-        f'<a href="{href}"><span class="dot"></span>{label}</a>' for href, label in nav_items
+        f'<a href="{href}"><span class="dot"></span>{label}</a>'
+        for href, label in nav_items
     )
 
     scripts_block = "\n".join(scripts)
@@ -1158,6 +1354,7 @@ window.addEventListener('load', function() {{
 
 # ── Slideshow ─────────────────────────────────────────────────────────────────
 
+
 def generate_html_slides(
     title: str,
     date_str: str,
@@ -1181,8 +1378,10 @@ def generate_html_slides(
         (a["value"] for a in assumptions if a.get("key") == "research_question"),
         None,
     )
-    research_q, _rq_extra_s = _extract_rq(_rq_raw_s) if _rq_raw_s is not None else (
-        "To quantify the causal contribution of media channels to the KPI.", {}
+    research_q, _rq_extra_s = (
+        _extract_rq(_rq_raw_s)
+        if _rq_raw_s is not None
+        else ("To quantify the causal contribution of media channels to the KPI.", {})
     )
     channels: list[str] = model_run.get("channels") or [
         c.get("name", "") for c in (model_spec.get("media_channels") or [])
@@ -1201,23 +1400,38 @@ def generate_html_slides(
         [{**r, "channel": _fmt_ch(r["channel"])} for r in roi] if client_mode else roi
     )
     chart_decomp = (
-        [{**d, "component": _fmt_ch(d["component"])} for d in decomp] if client_mode else decomp
+        [{**d, "component": _fmt_ch(d["component"])} for d in decomp]
+        if client_mode
+        else decomp
     )
 
     # Build key findings bullets
     findings: list[str] = []
     if decomp:
         top = max(decomp, key=lambda x: x["pct_of_total"])
-        findings.append(f"<b>{_fmt_ch(top['component'])}</b> is the largest driver ({_pct(top['pct_of_total'])} of {kpi})")
-        media_pct = sum(d["pct_of_total"] for d in decomp if d["component"].lower() not in ("baseline", "trend", "seasonality", "controls"))
+        findings.append(
+            f"<b>{_fmt_ch(top['component'])}</b> is the largest driver ({_pct(top['pct_of_total'])} of {kpi})"
+        )
+        media_pct = sum(
+            d["pct_of_total"]
+            for d in decomp
+            if d["component"].lower()
+            not in ("baseline", "trend", "seasonality", "controls")
+        )
         if media_pct > 0:
-            findings.append(f"Media collectively drives <b>{_pct(media_pct)}</b> of fitted {kpi}")
+            findings.append(
+                f"Media collectively drives <b>{_pct(media_pct)}</b> of fitted {kpi}"
+            )
     if roi:
         best = max(roi, key=lambda x: x.get("roi_mean", 0))
         worst = min(roi, key=lambda x: x.get("roi_mean", 0))
-        findings.append(f"Highest ROI: <b>{_fmt_ch(best['channel'])}</b> at {best.get('roi_mean',0):.2f}x")
+        findings.append(
+            f"Highest ROI: <b>{_fmt_ch(best['channel'])}</b> at {best.get('roi_mean',0):.2f}x"
+        )
         if len(roi) > 1:
-            findings.append(f"Lowest ROI: <b>{_fmt_ch(worst['channel'])}</b> at {worst.get('roi_mean',0):.2f}x")
+            findings.append(
+                f"Lowest ROI: <b>{_fmt_ch(worst['channel'])}</b> at {worst.get('roi_mean',0):.2f}x"
+            )
     if client_mode:
         if diag.get("converged"):
             findings.append("Model estimates are statistically robust and reliable")
@@ -1231,25 +1445,37 @@ def generate_html_slides(
     # Decomp slide
     decomp_slide = ""
     if chart_decomp:
-        scripts.append(_js("slide-decomp", _decomp_fig(chart_decomp), {"responsive": True, "displayModeBar": False}))
+        scripts.append(
+            _js(
+                "slide-decomp",
+                _decomp_fig(chart_decomp),
+                {"responsive": True, "displayModeBar": False},
+            )
+        )
         decomp_slide = (
-            '<section>'
+            "<section>"
             '<span class="slide-tag">Results</span>'
-            f'<h2>What Drove {kpi}?</h2>'
+            f"<h2>What Drove {kpi}?</h2>"
             '<div class="chart-slide" id="slide-decomp"></div>'
-            '</section>'
+            "</section>"
         )
 
     # ROI slide
     roi_slide = ""
     if chart_roi:
-        scripts.append(_js("slide-roi", _roi_fig(chart_roi), {"responsive": True, "displayModeBar": False}))
+        scripts.append(
+            _js(
+                "slide-roi",
+                _roi_fig(chart_roi),
+                {"responsive": True, "displayModeBar": False},
+            )
+        )
         roi_slide = (
-            '<section>'
+            "<section>"
             '<span class="slide-tag">ROI</span>'
-            '<h2>Channel Return on Investment</h2>'
+            "<h2>Channel Return on Investment</h2>"
             '<div class="chart-slide" id="slide-roi"></div>'
-            '</section>'
+            "</section>"
         )
 
     # Client-specific slides: S-curves, mROI vs ROI, channel performance
@@ -1260,44 +1486,58 @@ def generate_html_slides(
     if client_mode:
         # Build sat lookup (raw channel keys, either from curves or the saturation tool output)
         sat_for_perf = (
-            {ch: {"saturation_level": c.get("saturation_level")} for ch, c in curves_data.items()}
-            if curves_data else sat_data
+            {
+                ch: {"saturation_level": c.get("saturation_level")}
+                for ch, c in curves_data.items()
+            }
+            if curves_data
+            else sat_data
         )
 
         # S-curves slide — pre-format channel name keys for legend labels
         if curves_data:
             curves_display = {_fmt_ch(ch): c for ch, c in curves_data.items()}
-            scripts.append(_js("slide-scurves", _scurves_fig(curves_display),
-                               {"responsive": True, "displayModeBar": False}))
+            scripts.append(
+                _js(
+                    "slide-scurves",
+                    _scurves_fig(curves_display),
+                    {"responsive": True, "displayModeBar": False},
+                )
+            )
             scurves_slide = (
-                '<section>'
+                "<section>"
                 '<span class="slide-tag">Efficiency</span>'
-                '<h2>Diminishing Returns — Where Are You on the Curve?</h2>'
+                "<h2>Diminishing Returns — Where Are You on the Curve?</h2>"
                 '<div class="chart-slide" id="slide-scurves"></div>'
-                '</section>'
+                "</section>"
             )
 
         # mROI vs avg ROI — pass raw roi (keys match mroi_data) + fmt_ch for display labels
         if roi and mroi_data:
-            scripts.append(_js("slide-mroi", _mroi_roi_fig(roi, mroi_data, _fmt_ch),
-                               {"responsive": True, "displayModeBar": False}))
+            scripts.append(
+                _js(
+                    "slide-mroi",
+                    _mroi_roi_fig(roi, mroi_data, _fmt_ch),
+                    {"responsive": True, "displayModeBar": False},
+                )
+            )
             mroi_slide = (
-                '<section>'
+                "<section>"
                 '<span class="slide-tag">Marginal Efficiency</span>'
-                '<h2>Average ROI vs Marginal ROI — What the Next £1 Earns</h2>'
+                "<h2>Average ROI vs Marginal ROI — What the Next £1 Earns</h2>"
                 '<div class="chart-slide" id="slide-mroi"></div>'
-                '</section>'
+                "</section>"
             )
 
         # Channel performance — pass raw roi so lookup keys match mroi_data / sat_for_perf
         if roi:
             perf_html = _channel_perf_html(roi, mroi_data, sat_for_perf, _fmt_ch)
             channel_perf_slide = (
-                '<section>'
+                "<section>"
                 '<span class="slide-tag">Recommendations</span>'
-                '<h2>What\'s Working &amp; Budget Priorities</h2>'
-                f'{perf_html}'
-                '</section>'
+                "<h2>What's Working &amp; Budget Priorities</h2>"
+                f"{perf_html}"
+                "</section>"
             )
 
     # Extra chart slides — omitted in client mode (internal validation charts)
@@ -1310,16 +1550,26 @@ def generate_html_slides(
             slide_heading = _truncate_title(str(raw_t), max_len=55)
             p_layout = dict(p.get("layout") or {})
             p_layout["title"] = ""
-            p_layout.update({"paper_bgcolor": "rgba(0,0,0,0)", "plot_bgcolor": "#f9fafb",
-                              "margin": {"l": 60, "r": 40, "t": 20, "b": 60}})
-            scripts.append(_js(div_id, {"data": p.get("data", []), "layout": p_layout},
-                               {"responsive": True, "displayModeBar": False}))
+            p_layout.update(
+                {
+                    "paper_bgcolor": "rgba(0,0,0,0)",
+                    "plot_bgcolor": "#f9fafb",
+                    "margin": {"l": 60, "r": 40, "t": 20, "b": 60},
+                }
+            )
+            scripts.append(
+                _js(
+                    div_id,
+                    {"data": p.get("data", []), "layout": p_layout},
+                    {"responsive": True, "displayModeBar": False},
+                )
+            )
             extra_slides += (
-                f'<section>'
+                f"<section>"
                 f'<span class="slide-tag">Analysis</span>'
                 f'<h2 class="wrap">{slide_heading}</h2>'
                 f'<div class="chart-slide" id="{div_id}"></div>'
-                f'</section>'
+                f"</section>"
             )
 
     # Diagnostics slide content
@@ -1328,10 +1578,10 @@ def generate_html_slides(
             '<div style="text-align:center;margin:1.5rem 0">'
             '<div style="font-size:3rem">✓</div>'
             '<div style="font-size:1.2rem;font-weight:700;color:#059669;margin:0.5rem 0">Model Validated</div>'
-            '</div>'
+            "</div>"
             '<p style="color:#64748b;text-align:center">'
-            'Estimates have been tested for statistical robustness and are suitable for decision-making.'
-            '</p>'
+            "Estimates have been tested for statistical robustness and are suitable for decision-making."
+            "</p>"
         )
     elif diag:
         converged = diag.get("converged", False)
@@ -1342,18 +1592,22 @@ def generate_html_slides(
             f'<div style="font-size:3rem">{icon}</div>'
             f'<div style="font-size:1.2rem;font-weight:700;color:{color};margin:0.5rem 0">'
             f'{"Converged" if converged else "Convergence Issues"}</div>'
-            f'</div>'
+            f"</div>"
             f'<div class="stat-grid-slide">'
             f'<div class="stat-slide"><div class="v">{diag.get("divergences",0)}</div><div class="l">Divergences</div></div>'
             f'<div class="stat-slide"><div class="v">{diag.get("rhat_max","—")}</div><div class="l">Max R̂</div></div>'
             f'<div class="stat-slide"><div class="v">{diag.get("ess_bulk_min","—")}</div><div class="l">Min ESS</div></div>'
-            f'</div>'
+            f"</div>"
         )
     else:
         diag_content = '<p style="color:#64748b">Diagnostics not available.</p>'
 
     # Key findings slide
-    findings_html = "".join(f'<div class="finding-slide">{f}</div>' for f in findings) if findings else '<p style="color:#64748b">Fit a model to generate findings.</p>'
+    findings_html = (
+        "".join(f'<div class="finding-slide">{f}</div>' for f in findings)
+        if findings
+        else '<p style="color:#64748b">Fit a model to generate findings.</p>'
+    )
 
     # Data slide stats
     data_stats = ""
@@ -1361,6 +1615,7 @@ def generate_html_slides(
         # Show analysis weeks instead of raw row count
         try:
             from datetime import datetime as _dt
+
             def _parse(s: str):
                 for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d"):
                     try:
@@ -1368,6 +1623,7 @@ def generate_html_slides(
                     except ValueError:
                         pass
                 return None
+
             d_min = _parse(str(date_range["min"]))
             d_max = _parse(str(date_range["max"]))
             if d_min and d_max:
@@ -1390,8 +1646,8 @@ def generate_html_slides(
     if client_mode:
         model_spec_detail = (
             '<p style="margin-top:0.75rem;color:#64748b;font-size:0.85em">'
-            'Bayesian marketing mix model estimating the incremental contribution of each media channel to the KPI.'
-            '</p>'
+            "Bayesian marketing mix model estimating the incremental contribution of each media channel to the KPI."
+            "</p>"
         )
     else:
         model_spec_detail = _model_spec_slide_detail(model_spec, model_run)
@@ -1407,10 +1663,10 @@ def generate_html_slides(
     if client_mode:
         confidential_footer = (
             f'<div style="position:fixed;bottom:0;left:0;right:0;'
-            f'background:rgba(248,250,252,0.95);border-top:1px solid #e2e8f0;'
+            f"background:rgba(248,250,252,0.95);border-top:1px solid #e2e8f0;"
             f'padding:0.3rem 1rem;font-size:0.6em;color:#94a3b8;text-align:center;z-index:100">'
             f'CONFIDENTIAL — Prepared for {client_name or "Client"} · Not for distribution'
-            f'</div>'
+            f"</div>"
         )
 
     diag_slide_label = "Model Validation" if client_mode else "Model Diagnostics"
@@ -1544,4 +1800,8 @@ def _model_spec_slide_detail(model_spec: dict, model_run: dict) -> str:
         parts.append(f'{inf["chains"]} chains × {inf.get("draws","?")} draws')
     if trend_type:
         parts.append(f"Trend: {trend_type}")
-    return f'<p style="margin-top:0.75rem;color:#64748b;font-size:0.85em">{" &nbsp;·&nbsp; ".join(parts)}</p>' if parts else ""
+    return (
+        f'<p style="margin-top:0.75rem;color:#64748b;font-size:0.85em">{" &nbsp;·&nbsp; ".join(parts)}</p>'
+        if parts
+        else ""
+    )

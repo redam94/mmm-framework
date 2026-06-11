@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora 04: Reporting | MMM Framework</title>
+    <meta name="description" content="Aurora chapter 4: turning a fitted Bayesian MMM into a board-ready HTML report — MMMReportGenerator, themed design tokens, ROI with credible intervals, and the uncertainty-communication doctrine for executives.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-04-reporting.html">
+    <meta property="og:title" content="Aurora 04: Reporting | MMM Framework">
+    <meta property="og:description" content="From posterior to boardroom: one call renders a themed, self-contained HTML report with uncertainty intact — and what you must never strip out when an executive asks for 'just the number'.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-04-reporting.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        /* --- page-specific: mock report outline + theme preview --- */
+        .report-outline {
+            list-style: none;
+            margin: 1.25rem 0 0.5rem;
+            padding: 0;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface);
+            overflow: hidden;
+        }
+        .report-outline li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 1rem;
+            padding: 0.65rem 1.1rem;
+            border-bottom: 1px solid var(--color-border);
+            font-size: 0.95rem;
+            transition: opacity 0.25s ease;
+        }
+        .report-outline li:last-child { border-bottom: none; }
+        .report-outline li .sec-what {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            text-align: right;
+        }
+        .report-outline li.dropped {
+            opacity: 0.32;
+            text-decoration: line-through;
+        }
+        .report-outline li strong { font-weight: 600; }
+
+        .theme-preview {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin: 1.5rem 0 0.5rem;
+            transition: background 0.3s ease;
+        }
+        .theme-preview .tp-header {
+            padding: 1.1rem 1.4rem 0.9rem;
+            transition: background 0.3s ease;
+        }
+        .theme-preview .tp-header .tp-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.35rem;
+            color: #fff;
+            line-height: 1.2;
+        }
+        .theme-preview .tp-header .tp-sub {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.85);
+            margin-top: 0.2rem;
+        }
+        .theme-preview .tp-body {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 1rem;
+            padding: 1rem 1.4rem 0.4rem;
+        }
+        @media (max-width: 640px) { .theme-preview .tp-body { grid-template-columns: 1fr; } }
+        .theme-preview .tp-stat {
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            text-align: center;
+            align-self: start;
+            transition: background 0.3s ease, border-color 0.3s ease;
+            border: 1px solid transparent;
+        }
+        .theme-preview .tp-stat .tp-stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.9rem;
+            line-height: 1.1;
+        }
+        .theme-preview .tp-stat .tp-stat-ci { font-size: 0.8rem; margin-top: 0.25rem; }
+        .theme-preview .tp-stat .tp-stat-label { font-size: 0.8rem; margin-top: 0.3rem; }
+        .theme-preview .tp-chart { height: 240px; }
+
+        .live-report-cta {
+            display: block;
+            background: var(--color-surface);
+            border: 2px solid var(--color-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem 1.75rem;
+            margin: 2rem 0;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition-smooth);
+        }
+        .live-report-cta:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
+        }
+        .live-report-cta .cta-kicker {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--color-primary-dark);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .live-report-cta h3 { margin: 0.35rem 0 0.4rem; font-size: 1.25rem; }
+        .live-report-cta p { margin: 0; font-size: 0.95rem; color: var(--color-text-muted); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#boardroom">From posterior to boardroom</a></li>
+                <li><a href="#generator">One call to a board deck</a></li>
+                <li><a href="#sections">What's inside the report</a></li>
+                <li><a href="#roi">ROI with intervals, graded</a></li>
+                <li><a href="#theming">Theming &amp; design tokens</a></li>
+                <li><a href="#doctrine">"Just give me the number"</a></li>
+                <li><a href="#live">See a real generated report</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>Aurora Showcase</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="aurora-00-overview.html">00 · The Trap</a></li>
+                <li><a href="aurora-01-causality.html">01 · Causality</a></li>
+                <li><a href="aurora-02-base-mmm.html">02 · The Base MMM</a></li>
+                <li><a href="aurora-03-extended-mmm.html">03 · Extended Models</a></li>
+                <li><a href="aurora-04-reporting.html" class="active">04 · Reporting</a></li>
+                <li><a href="aurora-05-unified-workflow.html">05 · Unified Workflow</a></li>
+                <li><a href="causal-features-showcase.html">Causal Features Showcase</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="boardroom">Aurora 04 · Reporting — putting it in front of the board</h1>
+            <p class="lead">
+                Chapter 4 of the Aurora Coffee Co. story. The analysis is done — the
+                <a href="aurora-02-base-mmm.html">base MMM</a> produced contributions, ROAS and marginal
+                ROAS with credible intervals, and the <a href="aurora-03-extended-mmm.html">extended
+                models</a> explained what TV is really doing. Now it has to land with people who don't
+                read trace plots. <code>mmm_framework</code> renders a <strong>self-contained, themed HTML
+                report</strong> straight from a fitted model: executive summary, ROAS with uncertainty,
+                additive decomposition, diagnostics, and a causal-assumptions section so stakeholders see
+                what the number rests on. This page mirrors <code>nbs/04_reporting.ipynb</code> — and
+                because Aurora's world has a known ground truth, we can grade the report's own numbers.
+            </p>
+
+            <div class="note">
+                <h4>💡 Skip ahead: the docs ship a live example</h4>
+                <p>
+                    The fastest way to understand this chapter is to open a generated report:
+                    <a href="mmm-example-report.html"><strong>mmm-example-report.html</strong></a> is a
+                    real <code>MMMReportGenerator</code> artifact shipped with these docs. Everything below
+                    explains what's in it and why.
+                </p>
+            </div>
+
+            <h2>What a decision-grade report must carry</h2>
+            <p>
+                A dashboard hands the board a point estimate. A posterior hands the analyst ten thousand
+                draws. The report is the translation layer between them, and three things must survive the
+                translation:
+            </p>
+            <ul>
+                <li><strong>Uncertainty intact.</strong> Every headline number — attributed revenue,
+                    blended ROI, per-channel ROAS — ships with its credible interval. A point without an
+                    interval is a guess wearing a suit.</li>
+                <li><strong>Diagnostics visible.</strong> Convergence (R-hat, ESS, divergences) is printed
+                    and flagged, not buried. If the fit was rushed, the report says so.</li>
+                <li><strong>Decomposition additive.</strong> Baseline + trend + seasonality + media + controls
+                    must sum to the model's predicted revenue, so every claim reconciles back to the top line.
+                    Strip one component and the story stops adding up — literally.</li>
+            </ul>
+            <p>
+                And one thing a report can never do for itself: <em>know whether the numbers are causal</em>.
+                Good fit, tight intervals and green diagnostics are all compatible with confounding bias
+                (<a href="pressure-testing.html">the stress series</a> measures exactly this). So the report
+                ships a <strong>Causal Assumptions</strong> section that states, in stakeholder language,
+                what identification rests on — and tells the reader to anchor high-stakes channels with
+                experiments.
+            </p>
+
+            <h2 id="generator">One call: the <code>MMMReportGenerator</code> API</h2>
+            <p>
+                The generator builds directly from a fitted <code>BayesianMMM</code> — it extracts
+                contributions, ROAS, fit statistics and diagnostics for you. The notebook fits the Aurora
+                panel (demo-sized: 2 chains × 400 draws, 13 seconds) and renders in two lines:
+            </p>
+
+<pre><code>from mmm_framework.reporting import (
+    MMMReportGenerator, ReportConfig, SectionConfig, ColorScheme, ColorPalette)
+
+config = ReportConfig(
+    title="Aurora Coffee Co. — Marketing Effectiveness",
+    subtitle="Q3 Planning Review",
+    client="Aurora Coffee Co.",
+    analysis_period="2023 – 2024 (weekly)",
+    color_scheme=ColorScheme.from_palette(ColorPalette.CORPORATE),
+    confidential=True,
+    diagnostics=SectionConfig(enabled=True),
+)
+report = MMMReportGenerator(model=mmm, panel=panel, results=results, config=config)
+html = report.render()                          # the full HTML as a string
+out  = report.to_html("artifacts/aurora_report.html")   # ...or written to disk</code></pre>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">1</div>
+                    <div class="stat-label">file — self-contained HTML, 834,156 chars (measured)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">31</div>
+                    <div class="stat-label">interactive Plotly charts in the generated report</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">8</div>
+                    <div class="stat-label">sections, each toggleable via <code>SectionConfig</code></div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">80%</div>
+                    <div class="stat-label">credible interval on every headline number (configurable)</div>
+                </div>
+            </div>
+
+            <p>
+                The baked run prints <code>wrote artifacts/aurora_report.html (834,156 chars of HTML)</code>.
+                One caveat the notebook flags: report charts load Plotly from a CDN, so <em>rendering</em>
+                the file needs a network connection; it is otherwise fully self-contained — no server, no
+                Python, just a file you can email to the CMO.
+            </p>
+
+            <h2 id="sections">What's inside the report</h2>
+            <p>
+                The generated Aurora report contains these sections, in order (headings extracted from the
+                baked artifact). The toggle shows the notebook's second build — the
+                <strong>executive cut</strong> via the fluent <code>ReportBuilder</code>, which drops
+                methodology and diagnostics for a shorter deck:
+            </p>
+
+            <div class="controls-row">
+                <label>Build:</label>
+                <button class="toggle-btn active" data-cut="full" id="btnFull">Full report</button>
+                <button class="toggle-btn" data-cut="exec" id="btnExec">Executive cut</button>
+            </div>
+            <ul class="report-outline" id="reportOutline">
+                <li data-sec="exec"><strong>Executive Summary</strong><span class="sec-what">headline stats with 80% CIs; key finding; "uncertainty matters" box</span></li>
+                <li data-sec="fit"><strong>Model Fit</strong><span class="sec-what">observed vs posterior prediction with credible band</span></li>
+                <li data-sec="perf"><strong>Channel Performance</strong><span class="sec-what">detailed ROI estimates — mean, 80% CI, evidence assessment</span></li>
+                <li data-sec="decomp"><strong>Revenue Decomposition</strong><span class="sec-what">stacked components over time; sums to predicted revenue</span></li>
+                <li data-sec="curves"><strong>Saturation &amp; Carryover Effects</strong><span class="sec-what">response curves and adstock decay per channel</span></li>
+                <li data-sec="causal"><strong>Causal Assumptions</strong><span class="sec-what">identification strategy; robustness to unobserved confounding</span></li>
+                <li data-sec="method"><strong>Methodology</strong><span class="sec-what">model specification, priors, inference settings</span></li>
+                <li data-sec="diag"><strong>Model Diagnostics</strong><span class="sec-what">R-hat, ESS, divergences; trace plots; prior vs posterior</span></li>
+            </ul>
+            <p class="chart-note">
+                <strong>Measured</strong> — section headings extracted from the baked
+                <code>artifacts/aurora_report.html</code>. The executive cut mirrors the notebook's
+                <code>ReportBuilder</code> call: <code>.enable_all_sections().disable_section("methodology")
+                .disable_section("diagnostics").with_credible_interval(0.8)</code>. Note what the exec cut
+                <em>keeps</em>: the intervals and the causal-assumptions section travel with every build.
+            </p>
+
+<pre><code>from mmm_framework.reporting import ReportBuilder
+
+exec_report = (ReportBuilder()
+    .with_model(mmm, panel=panel, results=results)
+    .with_title("Aurora — Executive Summary").with_client("Aurora Coffee Co.")
+    .enable_all_sections().disable_section("methodology").disable_section("diagnostics")
+    .with_credible_interval(0.8)
+    .build())
+exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
+
+            <p>
+                The report's own executive summary, as the baked artifact prints it: marketing-attributed
+                revenue <strong>$14.7K</strong> (80% CI [$5.6K – $25.2K]), blended marketing ROI
+                <strong>0.96</strong> (80% CI [0.38 – 1.65]), marketing contribution <strong>16.9%</strong>
+                (80% CI [6.6% – 29.1%]) of $87.3K total revenue. Notice that the blended-ROI interval
+                straddles 1.0 — the report's own headline admits the program might not pay for itself,
+                which is exactly the kind of sentence a dashboard never produces.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ The diagnostics it refuses to hide</h4>
+                <p>
+                    This is a demo-sized fit (2 chains × 400 draws), and the report says so where it counts:
+                    the diagnostics table prints <strong>2 divergences</strong>, <strong>R-hat (max)
+                    1.010</strong> and <strong>ESS bulk (min) 321</strong> — each row flagged with a warning
+                    badge. A real engagement re-runs with ≥4 chains and ≥1000 draws; the point is that the
+                    report surfaces the problem instead of laundering it. (And remember the stress-series
+                    lesson: green diagnostics validate the <em>sampler</em>, not the attribution —
+                    <a href="pressure-testing.html">every silent failure in the matrix sampled cleanly</a>.)
+                </p>
+            </div>
+
+            <h2 id="roi">The ROI table, recreated — and graded against the truth</h2>
+            <p>
+                The heart of the report is the <em>Detailed ROI Estimates</em> table: per-channel ROI with
+                an 80% credible interval and a plain-language evidence assessment. Below is that table as a
+                chart, with three views: how the report presents it, what's left after an executive strips
+                the intervals, and how it grades against Aurora's known ground truth.
+            </p>
+
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn active" data-view="report">As the report shows it</button>
+                <button class="toggle-btn" data-view="stripped">"Just the number"</button>
+                <button class="toggle-btn" data-view="graded">Graded vs ground truth</button>
+            </div>
+            <div class="chart-container" id="roiChart"></div>
+            <p class="chart-note" id="roiNote">
+                <strong>Measured</strong> — ROI means, 80% CIs and assessments extracted from the baked
+                report artifact (<code>nbs/artifacts/aurora_report.html</code>, the file
+                <code>04_reporting.ipynb</code> writes); ground-truth ROAS from the Aurora generator
+                (<code>nbs/aurora.py</code>). Toggle the views and watch what each one would make you decide.
+            </p>
+
+            <p>
+                The graded view is the honest part of this page. The report — correctly, given what the
+                base model can see — labels <strong>Search 2.82 [1.65, 3.90] "Strong evidence"</strong> and
+                <strong>TV 0.22 [0.02, 0.49] "Underperforming"</strong>. The oracle says Search's true ROAS
+                is <strong>0.66</strong> and TV's is <strong>2.14</strong>. Search is a demand-chasing
+                mirage (<a href="aurora-01-causality.html">chapter 1</a>,
+                <a href="stress-03-confounding-selection.html">stress 03</a>); TV works through awareness,
+                which the base model structurally cannot credit
+                (<a href="aurora-03-extended-mmm.html">chapter 3</a>). The generator cannot know any of
+                that — no report generator can. What it <em>can</em> do is ship the caveat:
+            </p>
+
+            <div class="definition">
+                <h4>What the report's Causal Assumptions section actually says</h4>
+                <p>
+                    Quoting the generated artifact: <em>"The channel effects below are causal only if every
+                    common cause of media spend and the KPI is measured and adjusted for (no unobserved
+                    confounding)&hellip; In marketing the dominant hidden confounder is unobserved demand
+                    &mdash; budgets rise when demand is expected to rise &mdash; which no adjustment set can
+                    remove. Good fit, tight intervals and passing posterior-predictive checks are all
+                    compatible with confounding bias."</em> It then prints per-channel robustness values
+                    (TV 0.122, Search 0.246, Social 0.141, Display 0.121 — all assessed "Robust") and
+                    immediately undercuts its own table: the robustness value is an OLS-analogy
+                    approximation, and the channel it rates <em>most</em> robust — Search — is the one the
+                    oracle says is most wrong. The section's last word: anchor high-stakes channels with a
+                    geo-lift experiment. That is what <a href="aurora-05-unified-workflow.html">chapter 5</a> does.
+                </p>
+            </div>
+
+            <h2 id="theming">Theming &amp; design tokens</h2>
+            <p>
+                Reports are branded with a <code>ColorScheme</code> built from named palettes or custom
+                tokens. The notebook's measured output lists the four built-ins:
+                <code>['SAGE', 'CORPORATE', 'WARM', 'MONOCHROME']</code>. Every color in the report —
+                header band, stat callouts, chart traces, borders — flows from one token set, so a rebrand
+                is one argument, not a CSS hunt. Click a palette to restyle the preview:
+            </p>
+
+            <div class="controls-row">
+                <label>Palette:</label>
+                <button class="toggle-btn" data-palette="SAGE">Sage (default)</button>
+                <button class="toggle-btn active" data-palette="CORPORATE">Corporate</button>
+                <button class="toggle-btn" data-palette="WARM">Warm</button>
+                <button class="toggle-btn" data-palette="MONOCHROME">Monochrome</button>
+            </div>
+            <div class="theme-preview" id="themePreview">
+                <div class="tp-header" id="tpHeader">
+                    <div class="tp-title">Aurora Coffee Co. — Marketing Effectiveness</div>
+                    <div class="tp-sub" id="tpSub">Q3 Planning Review · 2023 – 2024 (weekly) · CONFIDENTIAL</div>
+                </div>
+                <div class="tp-body" id="tpBody">
+                    <div class="tp-stat" id="tpStat">
+                        <div class="tp-stat-value" id="tpStatValue">0.96</div>
+                        <div class="tp-stat-ci" id="tpStatCi">80% CI: [0.38 – 1.65]</div>
+                        <div class="tp-stat-label" id="tpStatLabel">Blended Marketing ROI</div>
+                    </div>
+                    <div class="tp-chart" id="themeChart"></div>
+                </div>
+            </div>
+            <p class="chart-note">
+                <strong>Measured tokens, sketched layout</strong> — the palette hex values are the
+                framework's actual <code>ColorScheme.from_palette(...)</code> constants
+                (<code>src/mmm_framework/reporting/config.py</code>), and the numbers are the baked report's
+                executive-summary and ROI figures. The mini-layout is a stylized sketch of the report
+                header + stat-callout pattern, not the real template — open the
+                <a href="mmm-example-report.html">live example</a> for the genuine article. The notebook's
+                report uses <code>CORPORATE</code>; the exec cut uses the warm palette.
+            </p>
+
+            <h2 id="doctrine">"Just give me the number" — what you must not strip</h2>
+            <p>
+                Every analyst gets this request. The report is built so that complying honestly is possible —
+                and complying dishonestly takes deliberate effort. The doctrine, in order of how expensive
+                each omission is:
+            </p>
+            <ol>
+                <li>
+                    <strong>Never strip the interval.</strong> Social's point estimate is 0.90 — reads as
+                    "roughly break-even, cut it." Its 80% interval is <strong>[0.10, 2.02]</strong>: the data
+                    is consistent with Social returning ten cents <em>or two dollars</em> per dollar. Those
+                    are opposite decisions. The honest sentence is a probability statement —
+                    \( P(\mathrm{ROAS}_{\text{Social}} &gt; 1) \) — not a point.
+                    <a href="interpreting-results.html">Interpreting Results</a> covers how to read these;
+                    <a href="business-stakeholders.html">the stakeholder guide</a> covers how to say them
+                    out loud.
+                </li>
+                <li>
+                    <strong>Never strip the diagnostics line.</strong> One row — divergences, R-hat, ESS —
+                    is the difference between "the posterior is real" and "the sampler gave up." This demo's
+                    report flags all three. If you delete the row, you own the consequences.
+                </li>
+                <li>
+                    <strong>Never strip the causal-assumptions section.</strong> It is the only part of the
+                    report that says what the numbers <em>mean</em>. Search's "Strong evidence" badge is a
+                    statement about posterior precision, not identification — the truth (0.66) sits far
+                    outside its interval because the bias is structural, not statistical.
+                </li>
+                <li>
+                    <strong>Keep the decomposition additive.</strong> Components sum to predicted revenue by
+                    construction. The moment someone hand-edits one bar "for the narrative," the report stops
+                    reconciling and every other number becomes negotiable.
+                </li>
+            </ol>
+
+            <div class="note">
+                <h4>💡 What the generator automates — and what it can't</h4>
+                <p>
+                    <strong>Automated:</strong> extraction (contributions, ROAS, fit stats, robustness,
+                    convergence), 31 charts, theming, section assembly, the uncertainty framing, and the
+                    causal-assumptions boilerplate. <strong>Still on the analyst:</strong> the
+                    recommendation itself, the experiment-calibration story
+                    (<a href="aurora-01-causality.html">chapter 1</a>), the mediation explanation for why TV
+                    looks weak (<a href="aurora-03-extended-mmm.html">chapter 3</a>), and the budget plan
+                    (<a href="aurora-05-unified-workflow.html">chapter 5</a>). The report's auto-generated
+                    "Key Finding" praises Search's positive returns — defensible from the posterior, wrong
+                    in Aurora's world. The generator renders evidence; it does not adjudicate causality.
+                    That's your job, and chapters 1, 3 and 5 are the tools.
+                </p>
+            </div>
+
+            <h2 id="live">See a real generated report</h2>
+
+            <a class="live-report-cta" href="mmm-example-report.html">
+                <div class="cta-kicker">Live artifact</div>
+                <h3>Open the example MMM report →</h3>
+                <p>
+                    A genuine <code>MMMReportGenerator</code> output shipped with these docs — executive
+                    summary with credible intervals, model fit, ROI estimates, additive decomposition,
+                    saturation &amp; adstock curves, causal assumptions, and the full diagnostics section.
+                    Everything this page described, in the form a stakeholder would actually receive.
+                </p>
+            </a>
+
+            <p>
+                The notebook itself writes two more: <code>artifacts/aurora_report.html</code> (the full
+                corporate-palette build) and <code>artifacts/aurora_exec_summary.html</code> (the exec cut)
+                — both regenerate when you run it.
+            </p>
+
+            <div class="definition" id="takeaway">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>One call, board-ready:</strong> <code>MMMReportGenerator(model=, panel=,
+                        results=, config=).to_html(...)</code> turns a fitted model into a single
+                        self-contained HTML file (measured: 834,156 chars, 31 interactive charts).</li>
+                    <li><strong>Uncertainty is load-bearing:</strong> every headline ships an 80% CI; the
+                        demo report's own blended ROI, 0.96 [0.38 – 1.65], straddles break-even — and says so.</li>
+                    <li><strong>Sections toggle, palettes brand:</strong> <code>ReportBuilder</code> one-liners
+                        produce an exec cut; four built-in palettes (<code>SAGE</code>, <code>CORPORATE</code>,
+                        <code>WARM</code>, <code>MONOCHROME</code>) restyle everything via design tokens.</li>
+                    <li><strong>The report is honest about its limits:</strong> it prints its divergences and
+                        ships a causal-assumptions section — because Search's "Strong evidence" (2.82) vs
+                        truth (0.66) is a bias no generator can detect from the fit alone.</li>
+                    <li><strong>Never strip:</strong> intervals, diagnostics, causal assumptions, additivity.
+                        The narrative — and the causal adjudication — remains the analyst's job.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/04_reporting.ipynb</code> (committed with baked outputs),
+                    regenerated from <code>nbs/build_aurora_notebooks.py</code>; the shared Aurora world
+                    lives in <code>nbs/aurora.py</code> and the series guide in
+                    <code>nbs/README_aurora.md</code>. Generated artifacts land in
+                    <code>nbs/artifacts/</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                    Next — tie the whole story into one decision worth ~$12M/year:
+                    <a href="aurora-05-unified-workflow.html">05 · Unified Workflow</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the notebook-guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG — series-wide reference implementation (unused here).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        void mulberry32;
+
+        // ------------------------------------------------------------------
+        // MEASURED data
+        // ROI table extracted from the baked report artifact written by
+        // nbs/04_reporting.ipynb (nbs/artifacts/aurora_report.html):
+        // per-channel ROI mean, 80% CI, evidence assessment.
+        // trueRoas from the Aurora generator's oracle (nbs/aurora.py).
+        // ------------------------------------------------------------------
+        const CHANNELS = [
+            { name: 'TV',      color: PT.colors.tv,      roi: 0.22, lo: 0.02, hi: 0.49, assess: 'Underperforming', truth: 2.14 },
+            { name: 'Search',  color: PT.colors.search,  roi: 2.82, lo: 1.65, hi: 3.90, assess: 'Strong evidence', truth: 0.66 },
+            { name: 'Social',  color: PT.colors.social,  roi: 0.90, lo: 0.10, hi: 2.02, assess: 'Uncertain',       truth: 0.49 },
+            { name: 'Display', color: PT.colors.display, roi: 0.45, lo: 0.04, hi: 1.05, assess: 'Uncertain',       truth: 2.11 }
+        ];
+
+        // Framework palette tokens — ColorScheme.from_palette(...) constants in
+        // src/mmm_framework/reporting/config.py (SAGE = the design-token defaults).
+        const PALETTES = {
+            SAGE: {
+                primary: '#8fa86a', primaryDark: '#6d8a4a', accent: '#6a8fa8',
+                text: '#2d3a2d', textMuted: '#5a6b5a',
+                background: '#fafbf9', backgroundAlt: '#f0f2ed', border: '#d4ddd4'
+            },
+            CORPORATE: {
+                primary: '#4a6fa5', primaryDark: '#3a5a8a', accent: '#5a8fa5',
+                text: '#2d3a4d', textMuted: '#5a6b7a',
+                background: '#f8f9fa', backgroundAlt: '#e9ecef', border: '#dee2e6'
+            },
+            WARM: {
+                primary: '#b87c4c', primaryDark: '#9a6a3a', accent: '#8fa86a',
+                text: '#3d3a2d', textMuted: '#6b6a5a',
+                background: '#faf9f7', backgroundAlt: '#f4f0ed', border: '#ddd4d0'
+            },
+            MONOCHROME: {
+                primary: '#555555', primaryDark: '#333333', accent: '#777777',
+                text: '#222222', textMuted: '#666666',
+                background: '#fafafa', backgroundAlt: '#f0f0f0', border: '#dddddd'
+            }
+        };
+
+        // ------------------------------------------------------------------
+        // ROI chart — three views
+        // ------------------------------------------------------------------
+        const ROI_NOTES = {
+            report: '<strong>Measured</strong> — the report’s Detailed ROI Estimates as a chart: ' +
+                'mean ROI with the 80% credible interval and the report’s evidence assessment in the hover ' +
+                '(extracted from the baked <code>nbs/artifacts/aurora_report.html</code>). The dashed line is ' +
+                'break-even (ROAS = 1). Social’s interval straddles it from 0.10 to 2.02.',
+            stripped: '<strong>Measured (deliberately impoverished)</strong> — the same numbers after ' +
+                '“just give me the number”: intervals and assessments gone. Social now reads as a ' +
+                'verdict (0.90 ≈ break-even, cut it) when the data is equally consistent with 0.10 and 2.02. ' +
+                'This view exists to show what the request costs.',
+            graded: '<strong>Measured + oracle</strong> — report estimates (bars, 80% CI) against Aurora’s ' +
+                'known true ROAS (diamonds, from <code>nbs/aurora.py</code>). Search 2.82 vs truth 0.66 ' +
+                '(demand-chasing, <a href="stress-03-confounding-selection.html">stress 03</a>); TV 0.22 vs 2.14 and ' +
+                'Display 0.45 vs 2.11 (mediated brand effects, <a href="aurora-03-extended-mmm.html">chapter 3</a>). ' +
+                'No report generator can see this from the fit — which is why the report ships its causal-assumptions section.'
+        };
+
+        function drawRoi(view) {
+            const names = CHANNELS.map(function(c) { return c.name; });
+            const bar = {
+                type: 'bar',
+                x: names,
+                y: CHANNELS.map(function(c) { return c.roi; }),
+                marker: {
+                    color: CHANNELS.map(function(c) { return c.color; }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                customdata: CHANNELS.map(function(c) { return [c.lo, c.hi, c.assess]; }),
+                name: 'report ROI (mean)'
+            };
+
+            if (view === 'stripped') {
+                bar.hovertemplate = '<b>%{x}</b><br>ROI %{y:.2f}<extra></extra>';
+            } else {
+                bar.error_y = {
+                    type: 'data',
+                    symmetric: false,
+                    array: CHANNELS.map(function(c) { return c.hi - c.roi; }),
+                    arrayminus: CHANNELS.map(function(c) { return c.roi - c.lo; }),
+                    color: '#2d3a2d', thickness: 1.5, width: 6
+                };
+                bar.hovertemplate = '<b>%{x}</b><br>ROI %{y:.2f}  ·  80% CI [%{customdata[0]:.2f}, %{customdata[1]:.2f}]<br>' +
+                    'report assessment: %{customdata[2]}<extra></extra>';
+            }
+
+            const traces = [bar];
+            const annotations = [];
+
+            if (view === 'graded') {
+                traces.push({
+                    type: 'scatter',
+                    mode: 'markers',
+                    x: names,
+                    y: CHANNELS.map(function(c) { return c.truth; }),
+                    name: 'true ROAS (oracle)',
+                    marker: { symbol: 'diamond', size: 13, color: PT.colors.truth,
+                              line: { color: '#fff', width: 1 } },
+                    hovertemplate: '<b>%{x}</b><br>true ROAS %{y:.2f}<extra></extra>'
+                });
+                annotations.push({
+                    x: 'Search', y: 3.95, yanchor: 'bottom',
+                    text: 'report: 2.82 “Strong evidence”<br>truth: 0.66',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                });
+                annotations.push({
+                    x: 'TV', y: 2.14, yanchor: 'bottom', xanchor: 'center',
+                    text: 'truth 2.14 — mediated via awareness',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }, yshift: 8
+                });
+            }
+            if (view === 'stripped') {
+                annotations.push({
+                    x: 'Social', y: 0.90, yanchor: 'bottom',
+                    text: 'reads like a verdict —<br>the hidden CI is [0.10, 2.02]',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }, yshift: 10
+                });
+            }
+
+            const ymax = view === 'graded' ? 4.6 : 4.2;
+            const layout = PT.layout({
+                yaxis: { title: 'ROAS (revenue per $1 spend)', range: [0, ymax] },
+                showlegend: view === 'graded',
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 70, r: 30, t: 40, b: 50 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: '#5a6b5a', width: 1.5, dash: 'dash' }
+                }],
+                annotations: annotations.concat([{
+                    x: 3.45, y: 1, xanchor: 'right', yanchor: 'bottom',
+                    text: 'break-even', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }])
+            });
+
+            Plotly.react('roiChart', traces, layout, PT.config);
+            document.getElementById('roiNote').innerHTML = ROI_NOTES[view];
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn[data-view]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn[data-view]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawRoi(btn.dataset.view);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // Report outline: full report vs executive cut
+        // ------------------------------------------------------------------
+        const EXEC_DROPS = { method: true, diag: true };
+        function setCut(cut) {
+            document.querySelectorAll('#reportOutline li').forEach(function(li) {
+                const dropped = (cut === 'exec') && EXEC_DROPS[li.dataset.sec];
+                li.classList.toggle('dropped', !!dropped);
+            });
+        }
+        document.querySelectorAll('.controls-row .toggle-btn[data-cut]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn[data-cut]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                setCut(btn.dataset.cut);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // Theme preview: restyle the mock report card + chart from real tokens
+        // ------------------------------------------------------------------
+        function applyPalette(name) {
+            const p = PALETTES[name];
+            const header = document.getElementById('tpHeader');
+            const preview = document.getElementById('themePreview');
+            const body = document.getElementById('tpBody');
+            const stat = document.getElementById('tpStat');
+
+            header.style.background = 'linear-gradient(135deg, ' + p.primaryDark + ', ' + p.primary + ')';
+            preview.style.background = p.background;
+            preview.style.borderColor = p.border;
+            body.style.color = p.text;
+            stat.style.background = p.backgroundAlt;
+            stat.style.borderColor = p.border;
+            document.getElementById('tpStatValue').style.color = p.primaryDark;
+            document.getElementById('tpStatCi').style.color = p.textMuted;
+            document.getElementById('tpStatLabel').style.color = p.textMuted;
+
+            const names = CHANNELS.map(function(c) { return c.name; });
+            const shades = [p.primary, p.accent, p.primaryDark, p.textMuted];
+            const trace = {
+                type: 'bar',
+                x: names,
+                y: CHANNELS.map(function(c) { return c.roi; }),
+                marker: { color: shades, line: { color: p.border, width: 1 } },
+                error_y: {
+                    type: 'data', symmetric: false,
+                    array: CHANNELS.map(function(c) { return c.hi - c.roi; }),
+                    arrayminus: CHANNELS.map(function(c) { return c.roi - c.lo; }),
+                    color: p.text, thickness: 1.2, width: 5
+                },
+                hovertemplate: '<b>%{x}</b><br>ROI %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                font: { family: "'Source Sans 3', sans-serif", color: p.text, size: 12 },
+                margin: { l: 40, r: 10, t: 16, b: 30 },
+                xaxis: { gridcolor: p.backgroundAlt, zerolinecolor: p.border },
+                yaxis: { gridcolor: p.backgroundAlt, zerolinecolor: p.border, title: '' },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: p.textMuted, width: 1, dash: 'dash' }
+                }]
+            });
+            Plotly.react('themeChart', [trace], layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn[data-palette]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn[data-palette]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                applyPalette(btn.dataset.palette);
+            });
+        });
+
+        function init() {
+            drawRoi('report');
+            setCut('full');
+            applyPalette('CORPORATE');   // the notebook's full report uses CORPORATE
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

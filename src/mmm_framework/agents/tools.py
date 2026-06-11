@@ -1,4 +1,5 @@
 import os
+import copy
 import json
 import logging
 import importlib
@@ -25,6 +26,12 @@ from mmm_framework.agents.runtime import (
 from mmm_framework.agents import workspace as _ws
 from mmm_framework.agents import model_ops as _model_ops
 from mmm_framework.agents.fitting import _mff_config_from_spec, build_and_fit
+from mmm_framework.agents.spec_locks import (
+    get_at,
+    make_spec_patch,
+    merge_pending,
+    reconcile_with_locks,
+)
 from mmm_framework.agents.kernels import (
     KernelContext,
     ExecuteResult,
@@ -83,14 +90,34 @@ from mmm_framework.reporting.helpers import (
 _MFF_DIMENSION_COLS = ["Geography", "Product", "Campaign", "Outlet", "Creative"]
 
 
+# Canonical trend-type names live in model/trend_config.py (TrendType). LLMs
+# often emit near-miss aliases ("piecewise_linear", "gp"); map them back so the
+# fit, the display tools, and the dashboard widgets all see the canonical form.
+_TREND_TYPE_ALIASES = {
+    "piecewise_linear": "piecewise",
+    "gp": "gaussian_process",
+}
+
+
+def _normalize_trend_type(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    t = value.strip().lower().replace("-", "_")
+    return _TREND_TYPE_ALIASES.get(t, t)
+
+
 def _normalize_spec_vars(spec: dict) -> dict:
     """Tolerate ``media_channels`` / ``control_variables`` given as bare name
-    strings (``["TV", "Digital"]``) OR as dicts (``[{"name": "TV", ...}]``).
+    strings (``["TV", "Digital"]``) OR as dicts (``[{"name": "TV", ...}]``),
+    and trend-type aliases like ``piecewise_linear`` for ``piecewise``.
 
     Weaker models often emit the simpler string form, which previously crashed
     fit with "string indices must be integers". Normalises every entry to a dict
     with at least a ``name`` key, in place, and returns the spec.
     """
+    trend = spec.get("trend")
+    if isinstance(trend, dict) and "type" in trend:
+        trend["type"] = _normalize_trend_type(trend["type"])
     for key in ("media_channels", "control_variables"):
         items = spec.get(key)
         if isinstance(items, list):
@@ -103,6 +130,61 @@ def _normalize_spec_vars(spec: dict) -> dict:
                 # silently drop malformed entries (None, numbers, dict w/o name)
             spec[key] = normalized
     return spec
+
+
+# LLMs / DAG proxies sometimes list the latent baseline components ("Trend",
+# "Seasonality") as if they were dataset variables. They are modeled via the
+# built-in trend / seasonality components, never as regressor columns — a spec
+# that names them as controls fails at load with "Missing expected variables".
+_LATENT_CONTROL_COMPONENTS = {
+    "trend": "trend",
+    "seasonality": "seasonality",
+    "season": "seasonality",
+}
+
+
+def _dataset_variable_names(dataset_path: str | None) -> set[str] | None:
+    """Unique ``VariableName`` values in an MFF dataset, or None when the file
+    is absent/unreadable/not long-format (callers then skip validation)."""
+    if not dataset_path or not os.path.exists(dataset_path):
+        return None
+    try:
+        import pandas as pd
+
+        if "VariableName" not in pd.read_csv(dataset_path, nrows=0).columns:
+            return None
+        s = pd.read_csv(dataset_path, usecols=["VariableName"])["VariableName"]
+        return set(s.dropna().astype(str).unique())
+    except Exception:
+        return None
+
+
+def _partition_latent_controls(
+    names: list[str], ds_vars: set[str] | None
+) -> tuple[list[str], list[tuple[str, str]], list[str]]:
+    """Split proposed control names into ``(real, latent, missing)``.
+
+    A name present in the dataset is always a real control (even one literally
+    named "Trend"). Otherwise names matching the built-in components are
+    diverted to ``latent`` as ``(name, component)`` pairs; the rest go to
+    ``missing``. With ``ds_vars`` None (no dataset to check against), non-latent
+    names are assumed real.
+    """
+    real: list[str] = []
+    latent: list[tuple[str, str]] = []
+    missing: list[str] = []
+    for name in names:
+        if ds_vars is not None and name in ds_vars:
+            real.append(name)
+            continue
+        comp = _LATENT_CONTROL_COMPONENTS.get(str(name).strip().lower())
+        if comp:
+            latent.append((name, comp))
+        elif ds_vars is None:
+            real.append(name)
+        else:
+            missing.append(name)
+    return real, latent, missing
 
 
 def _normalized_spec(spec: dict | None) -> dict:
@@ -202,8 +284,10 @@ def _build_dataset_dashboard(df, ds_path: str) -> tuple[list[str], dict]:
 @tool
 def generate_synthetic_data(
     state: Annotated[dict, InjectedState],
-    n_weeks: int = 104,
+    n_weeks: Optional[int] = None,
     geographies: Optional[list[str]] = None,
+    scenario: str = "realistic",
+    seed: Optional[int] = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
@@ -211,27 +295,49 @@ def generate_synthetic_data(
     Generate a synthetic Master Flat File (MFF) dataset for testing and demonstration.
     Use this when the user wants to test the framework but doesn't have their own data.
 
+    Data comes from the framework's stress-test worlds (mmm_framework.synth):
+    realistic marketing data with confounded budgets, noisy media, many controls,
+    and a known causal ground truth written alongside as an answer key.
+
     Args:
-        n_weeks: Number of weeks of data to generate (default 104)
-        geographies: Optional list of geographic regions (e.g., ["East", "West"]). If None, national data is generated.
+        n_weeks: Number of weeks of data (scenario default if omitted; min 52).
+        geographies: Optional list of region names (e.g. ["East", "West"]) for a
+            geo panel. With a national scenario name this upgrades the world to
+            a panel ("clean" -> "geo_clean", anything else -> "geo_heterogeneous").
+        scenario: Which world to generate. Default "realistic" (7 channels, 13
+            controls incl. confounders/a mediator/noise, near-collinear Radio+
+            Print, low media SNR). Easier: "clean" (model's exact assumptions).
+            Single-violation worlds: "unobserved_confounding", "reverse_causality",
+            "multicollinearity", "adstock_misspec", "saturation_misspec",
+            "time_varying_beta", "heavy_tailed_noise", "synergy", "spend_outliers",
+            "mixed_data_errors", "negative_effect", "trend_break",
+            "seasonality_misspec", "dense_controls". Panels: "geo_clean",
+            "geo_heterogeneous", "geo_product".
+        seed: Random seed (scenario default if omitted).
 
     Returns:
         A Command that updates the dataset_path in the state.
     """
-    # Import the synthetic data generator from our example
-    import sys
+    from ..synth import generate_mff
 
-    sys.path.insert(
-        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../examples"))
-    )
     try:
-        from ex_model_workflow import generate_synthetic_mff
-    except ImportError:
-        return (
-            "Failed to import generate_synthetic_mff from examples.ex_model_workflow."
+        df, truth = generate_mff(
+            scenario,
+            seed=seed,
+            n_weeks=n_weeks,
+            geographies=geographies,
         )
-
-    df = generate_synthetic_mff(n_weeks=n_weeks, geographies=geographies)
+    except (KeyError, ValueError, TypeError) as exc:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Failed to generate synthetic data: {exc}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     # Write into the session workspace and expose an ABSOLUTE dataset_path so it
     # is readable by execute_python (which runs in the workspace) AND by tools
@@ -241,19 +347,38 @@ def generate_synthetic_data(
         out_dir = _ws.thread_dir(tid)
         before = _ws.snapshot_dir(out_dir)
         output_path = str(out_dir / "synthetic_mff_data.csv")
+        truth_path = str(out_dir / "synthetic_truth.json")
     except Exception:
         before, output_path = {}, "synthetic_mff_data.csv"
+        truth_path = "synthetic_truth.json"
     df.to_csv(output_path, index=False)
+    with open(truth_path, "w") as fh:
+        json.dump(truth, fh, indent=2)
     try:
         _ws.register_generated_files(tid, before, kind="dataset")
     except Exception:
         pass
 
-    info = f"Generated synthetic data with {len(df)} rows. Columns: {', '.join(df.columns.tolist())}"
-    if geographies:
-        info += f"\nGeographies included: {', '.join(geographies)}"
+    n_periods = df["Period"].nunique()
+    info = (
+        f"Generated synthetic data from the '{truth['scenario']}' world: "
+        f"{len(df)} rows, {n_periods} weeks. Columns: {', '.join(df.columns.tolist())}"
+    )
+    info += f"\nScenario: {truth['description']}"
+    if truth.get("violates"):
+        info += f"\nDeliberately violates: {truth['violates']}"
+    info += f"\nMedia channels: {', '.join(truth['channels'])}"
+    if truth.get("geographies"):
+        info += f"\nGeographies: {', '.join(truth['geographies'])}"
+        if truth.get("products"):
+            info += f"; products: {', '.join(truth['products'])}"
     else:
         info += "\nNational level data (no geographies)."
+    info += (
+        f"\nCausal ground truth (true per-channel contribution/ROAS) saved to "
+        f"{os.path.basename(truth_path)} — consult it only AFTER fitting, to "
+        "grade how well the model recovered the known answers."
+    )
 
     dashboard_data = state.get("dashboard_data") or {}
     _, dataset_info = _build_dataset_dashboard(df, output_path)
@@ -269,6 +394,74 @@ def generate_synthetic_data(
     )
 
 
+def _commit_spec(
+    state: dict,
+    candidate: dict,
+    tool_call_id,
+    *,
+    success_msg: str,
+    reason: str | None = None,
+    set_status: str | None = None,
+    patch_paths: list[str] | None = None,
+) -> Command:
+    """Apply an LLM-proposed ``candidate`` spec, honoring user-locked fields.
+
+    Conflicting changes to locked fields are reverted and recorded in
+    ``pending_spec_changes`` for the user to confirm; everything else applies.
+    ``model_spec``, ``locked_fields`` and ``pending_spec_changes`` are mirrored
+    into ``dashboard_data`` so the frontend can render locks + the modal.
+
+    ``patch_paths``: when the candidate differs from the current spec at only
+    these dot-paths (single-setting updates), the spec is written as a patch
+    envelope instead of a full dict. The state reducer applies patches against
+    the latest value, so concurrent ``update_model_setting`` calls in one
+    ToolNode step compose instead of overwriting each other with their stale
+    snapshots. Full-spec commits (configure_model / load_config) omit it.
+    """
+    current = state.get("model_spec") or {}
+    locked = list(state.get("locked_fields") or [])
+
+    merged, new_pending = reconcile_with_locks(
+        candidate, current, locked, reason=reason, tool_call_id=tool_call_id
+    )
+    pending = merge_pending(state.get("pending_spec_changes"), new_pending)
+
+    if new_pending:
+        blocked = ", ".join(f"`{p['path']}`" for p in new_pending)
+        msg = (
+            f"{success_msg}\n\n⚠️ {len(new_pending)} change(s) touch fields the "
+            f"user locked manually ({blocked}). These were NOT applied — they've "
+            "been surfaced to the user for confirmation. Do not retry them unless "
+            "the user explicitly asks again."
+        )
+    else:
+        msg = success_msg
+
+    # Patch mode: write only the touched paths (post-lock-reconciliation, so a
+    # reverted locked value harmlessly re-asserts the current value).
+    if patch_paths is not None:
+        spec_update: Any = make_spec_patch(
+            [{"path": p, "value": get_at(merged, p)} for p in patch_paths]
+        )
+    else:
+        spec_update = merged
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["model_spec"] = spec_update
+    dashboard_data["locked_fields"] = locked
+    dashboard_data["pending_spec_changes"] = pending
+
+    update: dict[str, Any] = {
+        "model_spec": spec_update,
+        "pending_spec_changes": pending,
+        "messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)],
+        "dashboard_data": dashboard_data,
+    }
+    if set_status is not None:
+        update["model_status"] = set_status
+    return Command(update=update)
+
+
 @tool
 def configure_model(
     state: Annotated[dict, InjectedState],
@@ -276,6 +469,7 @@ def configure_model(
     kpi_level: str,
     media_channels: list[str],
     control_variables: list[str],
+    reason: str = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
     """
@@ -287,53 +481,105 @@ def configure_model(
         kpi_level: Either "national" or "geo".
         media_channels: List of media channel variable names (e.g., ["TV", "Digital"]).
         control_variables: List of control variable names (e.g., ["Price_Index", "Distribution"]).
+        reason: A short explanation of why you are (re)configuring. Shown to the
+            user if any change collides with a field they locked manually.
+
+    Latent baseline components: do NOT list "Trend" or "Seasonality" as
+    control_variables — they are not dataset variables. They are handled by the
+    model's built-in trend/seasonality components (this tool auto-diverts them
+    and enables sensible defaults; tune via ``update_model_setting``).
 
     Returns:
         A Command that updates the model_spec in the state.
     """
+    ds_vars = _dataset_variable_names(state.get("dataset_path"))
+
+    def _reject(msg: str) -> Command:
+        return Command(
+            update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+        )
+
+    if ds_vars is not None:
+        if kpi not in ds_vars:
+            return _reject(
+                f"KPI `{kpi}` not found in the dataset. "
+                f"Available variables: {', '.join(sorted(ds_vars))}"
+            )
+        bad_media = [m for m in media_channels if m not in ds_vars]
+        if bad_media:
+            return _reject(
+                f"Media channel(s) not found in the dataset: {', '.join(bad_media)}. "
+                f"Available variables: {', '.join(sorted(ds_vars))}"
+            )
+    real_controls, latent, missing = _partition_latent_controls(
+        control_variables, ds_vars
+    )
+    if missing:
+        return _reject(
+            f"Control variable(s) not found in the dataset: {', '.join(missing)}. "
+            f"Available variables: {', '.join(sorted(ds_vars or []))}. "
+            "Latent components like trend/seasonality belong in the model's "
+            "built-in `trend` / `seasonality` settings, not in control_variables."
+        )
+
     model_spec = {
         "kpi": kpi,
         "kpi_level": kpi_level,
         "media_channels": [{"name": ch} for ch in media_channels],
-        "control_variables": [{"name": cv} for cv in control_variables],
+        "control_variables": [{"name": cv} for cv in real_controls],
         "time_granularity": "weekly",
         "model_type": "numpyro",
     }
+    notes = []
+    for name, comp in latent:
+        if comp == "trend":
+            model_spec["trend"] = {"type": "linear"}
+            notes.append(
+                f"- `{name}` is not a dataset variable — mapped to the built-in "
+                "trend component (type=linear; adjust via "
+                "`update_model_setting('trend.type', ...)`)."
+            )
+        else:
+            model_spec["seasonality"] = {"yearly": 2}
+            notes.append(
+                f"- `{name}` is not a dataset variable — mapped to the built-in "
+                "seasonality component (yearly Fourier order 2; adjust via "
+                "`update_model_setting('seasonality.yearly', ...)`)."
+            )
 
-    dashboard_data = state.get("dashboard_data", {})
-    if dashboard_data is None:
-        dashboard_data = {}
-    dashboard_data["model_spec"] = model_spec
-
-    return Command(
-        update={
-            "model_spec": model_spec,
-            "model_status": "configured",
-            "messages": [
-                ToolMessage(
-                    content="Model configured successfully.", tool_call_id=tool_call_id
-                )
-            ],
-            "dashboard_data": dashboard_data,
-        }
+    success_msg = "Model configured successfully."
+    if notes:
+        success_msg += (
+            "\n\n**Latent components diverted from controls:**\n" + "\n".join(notes)
+        )
+    return _commit_spec(
+        state,
+        model_spec,
+        tool_call_id,
+        success_msg=success_msg,
+        reason=reason,
+        set_status="configured",
     )
 
 
 @tool
 def fit_mmm_model(
     state: Annotated[dict, InjectedState],
-    dataset_path: str,
-    model_spec: str,
+    dataset_path: str | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
     """
-    Build and fit the Bayesian MMM using the dataset and the configured model specification.
-    You must pass the dataset_path and the JSON string representation of the model_spec from the state.
+    Build and fit the Bayesian MMM using the active model configuration.
+
+    The model specification and dataset live in the session state — this tool
+    reads them directly, so you do NOT need to reconstruct or pass the spec.
+    Configure the model first with ``configure_model`` / ``update_model_setting``,
+    then simply call this tool.
 
     Args:
-        dataset_path: The path to the CSV dataset.
-        model_spec: A JSON string representation of the model_spec dictionary.
+        dataset_path: Optional override for the dataset path. Defaults to the
+            dataset already loaded into the session state.
 
     Returns:
         A Command that updates the model_status and fit_results_summary in the state.
@@ -345,10 +591,20 @@ def fit_mmm_model(
     # lives where execute_python + run_model_op run — removing the Phase-1
     # boundary). build_and_fit raises on failure -> InProcessKernel.fit raises ->
     # caught here; SubprocessKernel.fit returns the failure as {error}.
+    #
+    # The spec is read from state (server-authoritative) rather than passed by
+    # the LLM, so manual user edits / locked fields can never be silently
+    # reconstructed away. dataset_path falls back to the loaded dataset.
     try:
-        spec = json.loads(model_spec)
+        spec = state.get("model_spec")
+        if not spec or not spec.get("kpi"):
+            raise ValueError("No model is configured yet. Call configure_model first.")
+        path = dataset_path or state.get("dataset_path")
+        if not path:
+            raise ValueError("No dataset is loaded. Load a dataset before fitting.")
+        spec = copy.deepcopy(dict(spec))
         _normalize_spec_vars(spec)  # accept bare-string channel/control lists
-        info = _KERNELS.get_or_spawn(get_current_thread()).fit(spec, dataset_path)
+        info = _KERNELS.get_or_spawn(get_current_thread()).fit(spec, path)
     except Exception as e:
         info = {"error": f"Error fitting model: {str(e)}"}
 
@@ -373,6 +629,47 @@ def fit_mmm_model(
     summary = info["summary"]
     dashboard_data = dict(state.get("dashboard_data") or {})
     dashboard_data.update(info.get("dashboard") or {})
+
+    # Lineage stamping (host-side; the kernel only knows spec+path): dataset
+    # fingerprint, spec hash, parent run, and the assumption stack at fit time.
+    # These ride the model_run artifact and feed the /runs MLflow-style
+    # timeline (api/runs.py).
+    try:
+        from mmm_framework.api import runs as _runs
+        from mmm_framework.api import sessions as _sessions
+
+        tid = get_current_thread()
+        lineage = {
+            "data_fingerprint": _runs.data_fingerprint(path),
+            "spec_hash": _runs.spec_hash(spec),
+            "parent_run_id": next(
+                (
+                    a["payload"].get("run_id")
+                    for a in reversed(_sessions.list_artifacts(tid))
+                    if a.get("kind") == "model_run"
+                ),
+                None,
+            ),
+            "assumptions": [
+                {
+                    "key": a.get("key"),
+                    "version": a.get("version"),
+                    "category": a.get("category"),
+                    "rationale": (a.get("rationale") or "")[:300],
+                }
+                for a in _sessions.list_assumptions(tid)
+            ],
+        }
+        for target in (info.get("model_run"), dashboard_data.get("model_run")):
+            if isinstance(target, dict):
+                target.update(lineage)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "run-lineage stamping failed (fit result unaffected)"
+        )
+
     return Command(
         update={
             "model_status": "completed",
@@ -392,8 +689,9 @@ def fit_mmm_model(
 # once fits move there (PR-C). The no-model / unknown-op cases come back as the
 # result's `error`, rendered below.
 def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
-    """Turn a model_ops result ``{content, dashboard, error}`` into a Command,
-    merging any dashboard payload into ``dashboard_data``."""
+    """Turn a model_ops result ``{content, dashboard, error, tables?}`` into a
+    Command, merging any dashboard payload into ``dashboard_data`` and storing
+    any structured table payloads as content-addressed dashboard refs."""
     if res.get("error"):
         return Command(
             update={
@@ -402,14 +700,20 @@ def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
                 ]
             }
         )
-    update = {
-        "messages": [ToolMessage(content=res["content"], tool_call_id=tool_call_id)]
-    }
+    content = res["content"]
     dash = res.get("dashboard") or {}
-    if dash:
+    tables = res.get("tables") or []
+    update: dict = {}
+    if dash or tables:
         dashboard_data = dict(state.get("dashboard_data") or {})
         dashboard_data.update(dash)
+        if tables:
+            from mmm_framework.agents.tables import publish_tables, tables_note
+
+            refs, dropped = publish_tables(tables, dashboard_data, get_current_thread())
+            content += tables_note(refs, dropped)
         update["dashboard_data"] = dashboard_data
+    update["messages"] = [ToolMessage(content=content, tool_call_id=tool_call_id)]
     return Command(update=update)
 
 
@@ -826,6 +1130,26 @@ class InProcessKernel:
         original_pio_show = None
         original_fig_show = None
 
+        # show_table(df): render a DataFrame as a structured dashboard table
+        # instead of printing it (mirrors the subprocess kernel's binding).
+        captured_tables = []
+
+        def _show_table(df, title=None, group="repl"):
+            """Render a DataFrame as a formatted, sortable table in the
+            dashboard (instead of printing it). Returns None."""
+            from mmm_framework.agents.tables import df_to_table_json
+
+            captured_tables.append(
+                df_to_table_json(
+                    df,
+                    title=str(title or "Table"),
+                    source="execute_python",
+                    group=str(group or "repl"),
+                )
+            )
+
+        env["show_table"] = _show_table
+
         try:
             import plotly.io as pio
             import plotly.basedatatypes as pbd
@@ -894,6 +1218,7 @@ class InProcessKernel:
         return ExecuteResult(
             stdout=output,
             plots=captured_plots,
+            tables=captured_tables,
             is_error="Error executing code" in output,
         )
 
@@ -911,7 +1236,7 @@ class InProcessKernel:
                 "error": f"Unknown model op: {op_name}",
             }
         mmm = _MODEL_CACHE.get("fitted_model")
-        if mmm is None:
+        if mmm is None and not getattr(op, "allow_unfitted", False):
             return {"content": None, "dashboard": {}, "error": _model_ops.NO_MODEL_MSG}
         res = op(mmm, _MODEL_CACHE.get("fit_results"), **(kwargs or {}))
         return _json_safe(res)
@@ -988,6 +1313,8 @@ def execute_python(
     to see the full menu of capabilities.
 
     Always print() what you want to see. Use Plotly + `fig.show()` for charts.
+    For tabular results call `show_table(df, title=...)` — it renders a
+    formatted, sortable table in the dashboard; don't print full DataFrames.
     """
     _activate_thread(config)
     thread_id = get_current_thread()
@@ -1020,8 +1347,17 @@ def execute_python(
         # an inline figure if the store write fails (back-compat).
         existing_plots = dashboard_data.get("plots", [])
         plot_refs = []
+        from mmm_framework.agents.branding import (
+            apply_brand_colors,
+            is_active as _brand_active,
+            resolve_branding,
+        )
+
+        _branding = resolve_branding(thread_id)
         for fig in captured_plots:
             try:
+                if _brand_active(_branding):
+                    fig = apply_brand_colors(fig, _branding)
                 pid = _ws.store_plot(fig, thread_id)
             except ValueError as exc:
                 # Rejected (oversize / not a figure) — drop it. Inlining would
@@ -1044,6 +1380,16 @@ def execute_python(
             plot_refs.append({"id": pid, "title": title or ""})
         dashboard_data["plots"] = existing_plots + plot_refs
 
+    # Structured tables captured via show_table(df) — content-addressed refs,
+    # same trust model and streaming behavior as the plots above.
+    table_refs, dropped_tables = [], 0
+    if result.tables:
+        from mmm_framework.agents.tables import publish_tables
+
+        table_refs, dropped_tables = publish_tables(
+            result.tables, dashboard_data, thread_id
+        )
+
     # Register any files the code wrote to the workspace so they become listable
     # and downloadable from the frontend. The `results/` subdir (save_result
     # snapshots, reloaded by name) is excluded so it doesn't clutter deliverables.
@@ -1063,6 +1409,12 @@ def execute_python(
         content += (
             f"\n\n*{dropped_plots} chart(s) omitted (too large or not a valid figure).*"
         )
+    if table_refs:
+        content += (
+            f"\n\n*{len(table_refs)} formatted table(s) rendered in the dashboard.*"
+        )
+    if dropped_tables:
+        content += f"\n\n*{dropped_tables} table(s) omitted (too large or invalid).*"
     if new_files:
         names = ", ".join(f"`{f['name']}`" for f in new_files[:8])
         more = "" if len(new_files) <= 8 else f" (+{len(new_files) - 8} more)"
@@ -1215,25 +1567,12 @@ def load_config(
     )
 
 
-@tool
-def list_configs(
-    state: Annotated[dict, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId] = None,
-) -> Command:
-    """List all saved model configurations with a brief summary of each."""
+def _scan_saved_configs() -> list[dict]:
+    """Summaries of saved model-spec configs in mmm_configs/ (shared by
+    list_configs and list_templates)."""
+    out: list[dict] = []
     if not os.path.exists(_CONFIGS_DIR):
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content="No saved configurations yet. Use `save_config` after configuring a model.",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
-
-    rows = []
+        return out
     for fname in sorted(os.listdir(_CONFIGS_DIR)):
         if not fname.endswith(".json"):
             continue
@@ -1241,19 +1580,42 @@ def list_configs(
         try:
             with open(os.path.join(_CONFIGS_DIR, fname)) as f:
                 spec = json.load(f)
-            channels = len(spec.get("media_channels", []))
-            controls = len(spec.get("control_variables", []))
-            rows.append(
-                f"- **{name}**: KPI=`{spec.get('kpi','?')}`, {channels} channels, {controls} controls"
+            out.append(
+                {
+                    "name": name,
+                    "kpi": spec.get("kpi", "?"),
+                    "n_channels": len(spec.get("media_channels", [])),
+                    "n_controls": len(spec.get("control_variables", [])),
+                }
             )
         except Exception:
-            rows.append(f"- **{name}**: (could not read)")
+            out.append({"name": name, "error": "could not read"})
+    return out
 
-    content = (
-        "### Saved Configurations\n\n" + "\n".join(rows)
-        if rows
-        else "No saved configurations found."
-    )
+
+@tool
+def list_configs(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """List all saved model configurations with a brief summary of each."""
+    configs = _scan_saved_configs()
+    rows = []
+    for c in configs:
+        if c.get("error"):
+            rows.append(f"- **{c['name']}**: (could not read)")
+        else:
+            rows.append(
+                f"- **{c['name']}**: KPI=`{c['kpi']}`, {c['n_channels']} channels, "
+                f"{c['n_controls']} controls"
+            )
+    if not rows:
+        content = (
+            "No saved configurations yet. Use `save_config` after configuring "
+            "a model."
+        )
+    else:
+        content = "### Saved Configurations\n\n" + "\n".join(rows)
     return Command(
         update={"messages": [ToolMessage(content=content, tool_call_id=tool_call_id)]}
     )
@@ -1365,6 +1727,7 @@ def update_model_setting(
     state: Annotated[dict, InjectedState],
     setting_path: str,
     value: Any,
+    reason: str = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
     """
@@ -1373,7 +1736,7 @@ def update_model_setting(
     Examples:
       setting_path="inference.draws",           value=2000
       setting_path="inference.chains",          value=4
-      setting_path="trend.type",                value="piecewise_linear"
+      setting_path="trend.type",                value="piecewise"
       setting_path="trend.n_changepoints",      value=10
       setting_path="seasonality.yearly",        value=4
       setting_path="kpi",                       value="Revenue"
@@ -1382,10 +1745,27 @@ def update_model_setting(
       setting_path="media_channels.TV.adstock.l_max",     value=13
       setting_path="media_channels.TV.saturation.type",   value="logistic"
 
-    For media_channels and control_variables, use the channel/variable name as the key after the list name.
-    """
-    import copy
+    Trend priors (standardized-y scale; base slope applies to linear AND piecewise):
+      setting_path="priors.trend.growth_prior_mu",          value=0.2
+      setting_path="priors.trend.growth_prior_sigma",       value=0.5
+      setting_path="priors.trend.changepoint_prior_scale",  value=0.5   (piecewise)
+      setting_path="priors.trend.spline_prior_sigma",       value=1.0   (spline)
+      setting_path="priors.trend.gp_lengthscale_prior_mu",  value=0.3   (gaussian_process)
+      setting_path="priors.trend.gp_amplitude_prior_sigma", value=0.5   (gaussian_process)
 
+    Seasonality amplitude priors (sigma of Normal on Fourier coefficients,
+    standardized-y scale; default 0.3 — raise for strongly seasonal KPIs):
+      setting_path="priors.seasonality.prior_sigma",         value=0.5  (all components)
+      setting_path="priors.seasonality.yearly_prior_sigma",  value=0.8  (per-component override)
+      setting_path="priors.seasonality.monthly_prior_sigma", value=0.2
+      setting_path="priors.seasonality.weekly_prior_sigma",  value=0.2
+
+    For media_channels and control_variables, use the channel/variable name as the key after the list name.
+
+    If the user manually locked this field, the change is NOT applied silently —
+    it is surfaced to the user for confirmation. Pass ``reason`` to explain why
+    you want the change; it is shown in the confirmation prompt.
+    """
     spec = state.get("model_spec")
     if not spec:
         return Command(
@@ -1430,6 +1810,9 @@ def update_model_setting(
             obj[key] = {}
         _set(obj[key], rest, val)
 
+    if setting_path == "trend.type":
+        value = _normalize_trend_type(value)
+
     try:
         parts = setting_path.split(".")
         _set(new_spec, parts, value)
@@ -1445,20 +1828,13 @@ def update_model_setting(
             }
         )
 
-    dashboard_data = dict(state.get("dashboard_data") or {})
-    dashboard_data["model_spec"] = new_spec
-
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(
-                    content=f"Updated **{setting_path}** → `{value}`",
-                    tool_call_id=tool_call_id,
-                )
-            ],
-            "model_spec": new_spec,
-            "dashboard_data": dashboard_data,
-        }
+    return _commit_spec(
+        state,
+        new_spec,
+        tool_call_id,
+        success_msg=f"Updated **{setting_path}** → `{value}`",
+        reason=reason,
+        patch_paths=[setting_path],
     )
 
 
@@ -1617,15 +1993,17 @@ def save_fitted_model(
     return _modelop_command(res, {}, tool_call_id)
 
 
-@tool
-def load_fitted_model(
-    state: Annotated[dict, InjectedState],
-    name: str,
-    tool_call_id: Annotated[str, InjectedToolCallId] = None,
-    config: InjectedConfig = None,
-) -> Command:
-    """Load a previously saved fitted model from disk by name, making it available for analysis tools."""
-    _activate_thread(config)
+def load_model_core(
+    thread_id: str | None, name: str, spec: dict | None, dataset_path: str | None
+) -> dict:
+    """Load a saved fitted model into the session's model cache.
+
+    Shared by the ``load_fitted_model`` tool AND the direct
+    ``POST /sessions/{tid}/load-model`` endpoint (UI buttons load directly —
+    no LLM round-trip). Returns ``{"ok": bool, "message": str}``.
+    """
+    if thread_id:
+        set_current_thread(thread_id)
     save_dir = os.path.join(_MODELS_DIR, name)
     if not os.path.exists(save_dir):
         available = (
@@ -1637,38 +2015,24 @@ def load_fitted_model(
             if os.path.exists(_MODELS_DIR)
             else []
         )
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Model **{name}** not found. Available: {available or 'none'}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return {
+            "ok": False,
+            "message": f"Model **{name}** not found. Available: {available or 'none'}",
+        }
 
     # The serializer rebuilds the live PyMC model against a COMPATIBLE panel, so
     # loading needs this session's dataset + model spec (it returns a single
     # model, not a (model, results) tuple — the prior `load(save_dir)` omitted the
     # required `panel` and mis-unpacked, so load ALWAYS failed).
-    spec = state.get("model_spec") if isinstance(state, dict) else None
-    dataset_path = state.get("dataset_path") if isinstance(state, dict) else None
     if not spec or not spec.get("kpi") or not dataset_path:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=(
-                            f"To load **{name}**, this session needs the original dataset and its "
-                            "model configuration (the saved model is rebuilt against a compatible "
-                            "panel). Restore the dataset + model spec, then load again."
-                        ),
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return {
+            "ok": False,
+            "message": (
+                f"To load **{name}**, this session needs the original dataset and its "
+                "model configuration (the saved model is rebuilt against a compatible "
+                "panel). Restore the dataset + model spec, then load again."
+            ),
+        }
 
     try:
         from mmm_framework.serialization import MMMSerializer
@@ -1677,28 +2041,35 @@ def load_fitted_model(
         mmm = MMMSerializer.load(save_dir, panel)
         _MODEL_CACHE["fitted_model"] = mmm
         _MODEL_CACHE["fit_results"] = None
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Model **{name}** loaded. You can now run analysis tools.",
-                        tool_call_id=tool_call_id,
-                    )
-                ],
-                "model_status": "completed",
-            }
-        )
+        return {
+            "ok": True,
+            "message": f"Model **{name}** loaded. You can now run analysis tools.",
+        }
     except Exception as exc:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Load failed: {exc}",
-                        tool_call_id=tool_call_id,
-                    )
-                ]
-            }
-        )
+        return {"ok": False, "message": f"Load failed: {exc}"}
+
+
+@tool
+def load_fitted_model(
+    state: Annotated[dict, InjectedState],
+    name: str,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load a previously saved fitted model from disk by name, making it available for analysis tools."""
+    tid = _activate_thread(config)
+    res = load_model_core(
+        tid,
+        name,
+        state.get("model_spec") if isinstance(state, dict) else None,
+        state.get("dataset_path") if isinstance(state, dict) else None,
+    )
+    update: dict[str, Any] = {
+        "messages": [ToolMessage(content=res["message"], tool_call_id=tool_call_id)]
+    }
+    if res["ok"]:
+        update["model_status"] = "completed"
+    return Command(update=update)
 
 
 @tool
@@ -1813,8 +2184,19 @@ def generate_project_report(
     slides_path = str(_ws.report_path("agent_project_slides.html", thread_id))
     errors: list[str] = []
 
+    from mmm_framework.agents.branding import (
+        is_active as _brand_active,
+        resolve_branding,
+    )
+    from mmm_framework.agents.report_builder import apply_branding_html
+
+    _branding = resolve_branding(thread_id)
+    if not _brand_active(_branding):
+        _branding = None
+
     try:
         html = generate_html_report(report_title, date_str, dashboard, assumptions)
+        html = apply_branding_html(html, _branding)
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(html)
     except Exception as e:
@@ -1825,6 +2207,7 @@ def generate_project_report(
         slides_html = generate_html_slides(
             report_title, date_str, dashboard, assumptions
         )
+        slides_html = apply_branding_html(slides_html, _branding)
         with open(slides_path, "w", encoding="utf-8") as f:
             f.write(slides_html)
     except Exception as e:
@@ -1853,28 +2236,30 @@ def generate_project_report(
 @tool
 def generate_client_report(
     state: Annotated[dict, InjectedState],
-    client_name: str,
+    client_name: str = None,
     report_title: Optional[str] = None,
     analysis_period: Optional[str] = None,
+    template: str = "client",
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
 ) -> Command:
     """
     Generate a clean, client-ready HTML report from the fitted model.
 
-    Compared to the internal report this version:
-    • Omits MCMC diagnostics and trace plots (not relevant to clients)
-    • Adds a sticky navigation sidebar for easy section jumping
-    • Adds a confidentiality notice in the footer
-    • Formats channel names (underscores → spaces, title-case)
-    • Uses plain-language methodology description
+    Uses the project's confirmed client branding automatically (colors, client
+    name) — check it first with `get_preferences`. template: "client"
+    (default), "minimal" (summary + ROI), "presentation" (summary + ROI +
+    decomposition), or "full" (every section). See `list_templates`.
 
     Call this after `fit_mmm_model` when the user wants to share results externally.
 
     Args:
-        client_name: Client/company name shown in the header and confidentiality notice.
+        client_name: Client/company name (defaults to the branded client name).
         report_title: Optional report title (defaults to "Marketing Mix Model Results").
         analysis_period: Optional period string, e.g. "Q1–Q2 2024".
+        template: Report template name.
     """
+    _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
     results = _MODEL_CACHE.get("fit_results")
     if mmm is None:
@@ -1889,6 +2274,17 @@ def generate_client_report(
             }
         )
 
+    from mmm_framework.agents.branding import (
+        branding_to_channel_colors,
+        branding_to_color_scheme,
+        is_active as _brand_active,
+        resolve_branding,
+    )
+
+    branding = resolve_branding(get_current_thread())
+    if not client_name:
+        client_name = (branding or {}).get("client_name") or "Client"
+
     title = report_title or "Marketing Mix Model Results"
     report_path = str(_ws.report_path("agent_client_report.html"))
 
@@ -1900,17 +2296,43 @@ def generate_client_report(
             .with_model(mmm, results)
             .with_title(title)
             .with_client(client_name)
-            .client_report()
         )
+        tpl = (template or "client").strip().lower()
+        if tpl == "minimal":
+            builder = builder.minimal_report()
+        elif tpl == "full":
+            builder = builder.enable_all_sections()
+        elif tpl == "presentation":
+            builder = builder.client_report()
+            for section in ("saturation", "methodology"):
+                builder = builder.disable_section(section)
+        else:
+            tpl = "client"
+            builder = builder.client_report()
         if analysis_period:
             builder = builder.with_analysis_period(analysis_period)
+        branded = False
+        if _brand_active(branding):
+            builder = builder.with_color_scheme(branding_to_color_scheme(branding))
+            channels = [
+                m.get("name")
+                for m in _normalized_spec(state.get("model_spec")).get(
+                    "media_channels", []
+                )
+                if m.get("name")
+            ]
+            if channels:
+                builder = builder.with_channel_colors(
+                    branding_to_channel_colors(branding, channels)
+                )
+            branded = True
 
         report = builder.build()
         report.to_html(report_path)
         summary = (
-            f"Client report generated at `{report_path}`. "
-            f"Diagnostics and trace plots excluded; navigation sidebar and "
-            f"confidentiality notice added."
+            f"Client report (template: {tpl}"
+            + (", branded" if branded else "")
+            + f") generated at `{report_path}`."
         )
     except Exception as e:
         return Command(
@@ -2017,6 +2439,15 @@ def generate_client_slides(
             client_mode=True,
             client_name=client_name,
         )
+        from mmm_framework.agents.branding import (
+            is_active as _brand_active,
+            resolve_branding,
+        )
+        from mmm_framework.agents.report_builder import apply_branding_html
+
+        _branding = resolve_branding(thread_id)
+        if _brand_active(_branding):
+            slides_html = apply_branding_html(slides_html, _branding)
         with open(slides_path, "w", encoding="utf-8") as f:
             f.write(slides_html)
 
@@ -2220,6 +2651,338 @@ def list_knowledge_base(config: InjectedConfig = None) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  Preferences, branding & templates
+# ══════════════════════════════════════════════════════════════════════════
+
+
+@tool
+def get_preferences(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Recall the user's saved preferences and the project's client branding
+    (color palette, logo, fonts, footer). Call this BEFORE producing
+    client-facing charts, reports, or slides so output matches the client's
+    brand. Plots automatically use confirmed branding; this tool tells you
+    what is set."""
+    from mmm_framework.agents.branding import brand_palette, is_active
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = _activate_thread(config)
+    project_id = sessions_store.resolve_project_id(tid)
+    branding = sessions_store.get_project_branding(project_id)
+    global_prefs = sessions_store.list_preferences("global")
+
+    lines = ["### Preferences & branding"]
+    if branding:
+        colors = branding.get("colors") or {}
+        status = (
+            "confirmed" if branding.get("confirmed") else "PROPOSED — not confirmed"
+        )
+        lines.append(
+            f"**Project branding** ({status}, source: {branding.get('source','manual')}):"
+        )
+        if branding.get("client_name"):
+            lines.append(f"- Client: {branding['client_name']}")
+        if brand_palette(branding):
+            lines.append(f"- Palette: {', '.join(brand_palette(branding))}")
+        for k in ("primary", "secondary", "accent"):
+            if colors.get(k):
+                lines.append(f"- {k.title()}: {colors[k]}")
+        if branding.get("logo_url"):
+            lines.append(f"- Logo: {branding['logo_url']}")
+        fonts = branding.get("fonts") or {}
+        if fonts.get("heading") or fonts.get("body"):
+            lines.append(
+                f"- Fonts: heading={fonts.get('heading') or '—'}, "
+                f"body={fonts.get('body') or '—'}"
+            )
+        if branding.get("footer_text"):
+            lines.append(f"- Footer: {branding['footer_text']}")
+        if is_active(branding):
+            lines.append("\nPlots and client reports automatically use this palette.")
+        elif not branding.get("confirmed"):
+            lines.append(
+                "\n⚠️ This branding was extracted but NOT confirmed — ask the "
+                "user to confirm before styling deliverables with it."
+            )
+    else:
+        lines.append("**Project branding:** none set.")
+    if global_prefs:
+        lines.append("\n**Global preferences:**")
+        for k, v in global_prefs.items():
+            lines.append(f"- {k}: {json.dumps(v, default=str)[:200]}")
+    else:
+        lines.append("\n**Global preferences:** none set.")
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    if branding:
+        dashboard_data["branding"] = branding
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
+def save_preference(
+    key: str,
+    value: str,
+    scope: str = "global",
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Persist a lasting user preference so future sessions recall it.
+
+    Use when the user states a durable preference ("always use the corporate
+    palette", "reports should be in EUR"). scope: "global" (all projects) or
+    "project" (this project — e.g. client branding; key "branding" expects the
+    branding JSON shape). value may be a JSON string or plain text."""
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = _activate_thread(config)
+    try:
+        parsed = json.loads(value)
+    except Exception:
+        parsed = value
+
+    if scope == "project":
+        target = sessions_store.resolve_project_id(tid)
+    elif scope == "global":
+        from mmm_framework.agents.profile import is_hosted
+
+        if is_hosted():
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content="Global preferences are disabled in the hosted "
+                            'profile — save with scope="project" instead.',
+                            tool_call_id=tool_call_id,
+                        )
+                    ]
+                }
+            )
+        target = "global"
+    else:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f'Unknown scope {scope!r} — use "global" or "project".',
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    if key == "branding" and isinstance(parsed, dict):
+        from mmm_framework.agents.branding import Branding
+
+        try:
+            parsed = Branding.model_validate(parsed).model_dump()
+        except Exception as exc:
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"Invalid branding payload: {exc}",
+                            tool_call_id=tool_call_id,
+                        )
+                    ]
+                }
+            )
+
+    sessions_store.set_preference(target, key, parsed)
+    dashboard_data = dict(state.get("dashboard_data") or {}) if state else {}
+    if key == "branding" and isinstance(parsed, dict):
+        dashboard_data["branding"] = parsed
+    update: dict = {
+        "messages": [
+            ToolMessage(
+                content=f"Saved preference `{key}` (scope: {scope}).",
+                tool_call_id=tool_call_id,
+            )
+        ]
+    }
+    if dashboard_data:
+        update["dashboard_data"] = dashboard_data
+    return Command(update=update)
+
+
+@tool
+def list_templates(
+    kind: str = None,
+    config: InjectedConfig = None,
+) -> str:
+    """Discover available templates: report layouts, color palettes, saved
+    model-spec configs, and knowledge-base template documents.
+
+    kind: "report" | "palette" | "model_config" | "kb" (default: all). Load a
+    model config with `load_config`; pick a report template by passing
+    template=<name> to `generate_client_report`."""
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = _activate_thread(config)
+    kinds = [kind] if kind else ["report", "palette", "model_config", "kb"]
+    sections: list[str] = []
+
+    if "report" in kinds:
+        sections.append(
+            "**Report templates** (use with `generate_client_report(template=...)`):\n"
+            "- `client` — clean client-ready report (default; no MCMC internals)\n"
+            "- `minimal` — executive summary + channel ROI only\n"
+            "- `presentation` — summary, ROI, decomposition (deck-friendly)\n"
+            "- `full` — every section incl. diagnostics & methodology"
+        )
+
+    if "palette" in kinds:
+        from mmm_framework.reporting.config import ColorPalette, ColorScheme
+
+        rows = []
+        for p in ColorPalette:
+            cs = ColorScheme.from_palette(p)
+            rows.append(f"- `{p.value}` — primary {cs.primary}, accent {cs.accent}")
+        branding = sessions_store.get_project_branding(
+            sessions_store.resolve_project_id(tid)
+        )
+        if branding:
+            from mmm_framework.agents.branding import brand_palette
+
+            pal = brand_palette(branding)
+            if pal:
+                status = "confirmed" if branding.get("confirmed") else "unconfirmed"
+                rows.append(
+                    f"- `brand` — project branding ({status}): {', '.join(pal)}"
+                )
+        sections.append("**Color palettes:**\n" + "\n".join(rows))
+
+    if "model_config" in kinds:
+        configs = _scan_saved_configs()
+        if configs:
+            rows = [
+                f"- `{c['name']}` — KPI={c.get('kpi','?')}, "
+                f"{c.get('n_channels',0)} channels, {c.get('n_controls',0)} controls"
+                for c in configs
+            ]
+            sections.append(
+                "**Saved model configs** (load with `load_config`):\n" + "\n".join(rows)
+            )
+        else:
+            sections.append(
+                "**Saved model configs:** none yet (`save_config` creates them)."
+            )
+
+    if "kb" in kinds:
+        project_id = sessions_store.resolve_project_id(tid)
+        docs = sessions_store.list_kb_documents(project_id)
+        tpl_docs = [
+            d
+            for d in docs
+            if (d.get("meta") or {}).get("template")
+            or "template" in (d.get("name") or "").lower()
+        ]
+        if tpl_docs:
+            rows = [f"- {d['name']} [{d['status']}]" for d in tpl_docs]
+            sections.append(
+                "**Knowledge-base templates** (search with `search_knowledge_base`):\n"
+                + "\n".join(rows)
+            )
+        else:
+            sections.append("**Knowledge-base templates:** none found.")
+
+    return "### Available templates\n\n" + "\n\n".join(sections)
+
+
+@tool
+def extract_brand_from_website(
+    url: str,
+    save: bool = True,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Extract client branding (colors, logo, fonts, company name) from a
+    website and save it as the project's PROPOSED branding (confirmed=false).
+
+    Show the user the extracted swatches and ask them to confirm; once they
+    approve, save it via `save_preference(scope="project", key="branding",
+    value=<branding json with "confirmed": true>)` — unconfirmed branding never
+    styles deliverables. Runs server-side with a strict public-URL guard."""
+    from mmm_framework.agents.brand_extract import (
+        BrandExtractError,
+        extract_brand_from_url,
+    )
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = _activate_thread(config)
+    try:
+        proposal = extract_brand_from_url(url)
+    except BrandExtractError as exc:
+        return Command(
+            update={
+                "messages": [ToolMessage(content=str(exc), tool_call_id=tool_call_id)]
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Brand extraction failed: {exc}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    if save:
+        project_id = sessions_store.resolve_project_id(tid)
+        sessions_store.set_project_branding(project_id, proposal)
+
+    colors = proposal.get("colors") or {}
+    fonts = proposal.get("fonts") or {}
+    lines = [f"### Brand proposal extracted from {url}", ""]
+    if proposal.get("client_name"):
+        lines.append(f"- **Client:** {proposal['client_name']}")
+    lines.append("\n| Role | Color |\n|---|---|")
+    for k in ("primary", "secondary", "accent"):
+        if colors.get(k):
+            lines.append(f"| {k.title()} | `{colors[k]}` |")
+    if colors.get("palette"):
+        lines.append(f"| Palette | {', '.join(f'`{c}`' for c in colors['palette'])} |")
+    if proposal.get("logo_url"):
+        lines.append(f"\n- **Logo:** {proposal['logo_url']}")
+    if fonts.get("heading"):
+        lines.append(
+            f"- **Fonts:** {fonts.get('heading')} / {fonts.get('body') or '—'}"
+        )
+    lines.append(
+        "\n⚠️ Saved as **proposed** branding (unconfirmed). Ask the user to "
+        "review these colors; on approval, re-save with `confirmed: true`."
+        if save
+        else "\n(Not saved — pass save=true to store it as the project proposal.)"
+    )
+
+    dashboard_data = dict(state.get("dashboard_data") or {}) if state else {}
+    dashboard_data["branding"] = proposal
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #  Reusable past results (req 6)
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -2278,6 +3041,14 @@ _LIBRARY_MENU = """\
 - `mmf.MFFLoader(config).load(df_or_path)` → PanelDataset (.y, .X_media, .X_controls, .coords)
 - `mmf.load_mff(...)`, `mmf.mff_from_wide_format(...)`, `mmf.load_ragged_mff(...)`
 
+## Pre-fit data quality (EDA / validation / outliers)
+- `from mmm_framework.eda import load_eda_panel, validate_dataset, detect_outliers,
+  recommend_treatments, apply_treatments, profile_panel, collinearity_analysis,
+  decompose_series, stationarity_tests, spend_share`
+- Chart builders (return go.Figure — call `.show()`): `from mmm_framework.eda.charts import ...`
+  (dedicated tools cover the common paths: `validate_data`, `run_eda`,
+  `detect_outliers`, `apply_outlier_treatment`)
+
 ## Build & fit the standard model
 - Builders (`mmf.ModelConfigBuilder`, `mmf.MediaChannelConfigBuilder`, …) → ModelConfig
 - `mmf.BayesianMMM(panel, model_config, trend_config=None)` then `.fit(draws=, tune=, chains=)`
@@ -2314,6 +3085,15 @@ Tip: write outputs to `OUTPUT_DIR` so they become downloadable; use Plotly `fig.
 """
 
 
+def _filter_reference(menu: str, topic: str | None) -> str:
+    """Return the full menu, or only the ``## `` sections matching ``topic``."""
+    if not topic:
+        return menu
+    blocks = menu.split("\n## ")
+    matched = [blocks[0]] + [b for b in blocks[1:] if topic.lower() in b.lower()]
+    return "\n## ".join(matched) if len(matched) > 1 else menu
+
+
 @tool
 def library_reference(topic: str = None) -> str:
     """Return a menu of EVERY mmm_framework capability the agent can use (data
@@ -2322,11 +3102,25 @@ def library_reference(topic: str = None) -> str:
     serialization) with exact import paths and the input-shape/ordering traps.
     Consult this before hand-writing complex code in execute_python. Optionally
     pass a topic substring to filter."""
-    if not topic:
-        return _LIBRARY_MENU
-    blocks = _LIBRARY_MENU.split("\n## ")
-    matched = [blocks[0]] + [b for b in blocks[1:] if topic.lower() in b.lower()]
-    return "\n## ".join(matched) if len(matched) > 1 else _LIBRARY_MENU
+    return _filter_reference(_LIBRARY_MENU, topic)
+
+
+@tool
+def bayesian_workflow_reference(topic: str = None) -> str:
+    """Return the Bayesian-workflow methodology reference: why each workflow
+    step exists, what to inspect, the decision thresholds (R-hat/ESS/divergence
+    gates, prior-predictive flags), what to do when a check FAILS, and the
+    MMM-specific silent failure modes (confounding, collinearity, saturation
+    form, prior-dominated posteriors, average-vs-marginal ROAS).
+
+    Consult this when a diagnostic fails and you need the remedy, when choosing
+    or revising priors, before claiming sensitivity was tested, when explaining
+    methodology to the user, or whenever unsure WHY a workflow step matters.
+    Optionally pass a topic substring (e.g. "prior", "diagnostics",
+    "sensitivity", "failure modes") to filter sections."""
+    from mmm_framework.agents.workflow_reference import BAYESIAN_WORKFLOW_REFERENCE
+
+    return _filter_reference(BAYESIAN_WORKFLOW_REFERENCE, topic)
 
 
 @tool
@@ -2383,6 +3177,250 @@ def run_marginal_analysis(
     return _modelop_command(res, {}, tool_call_id)
 
 
+@tool
+def run_budget_optimizer(
+    config: InjectedConfig = None,
+    total_budget: float = None,
+    budget_change_pct: float = None,
+    min_multiplier: float = 0.0,
+    max_multiplier: float = 2.0,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Find the budget allocation that maximizes expected KPI, using the fitted
+    model's posterior response curves (saturation + adstock respected).
+
+    Defaults to REALLOCATING the current total spend; pass `total_budget` (an
+    absolute amount) or `budget_change_pct` (e.g. -10 or 15) to size the budget.
+    `min_multiplier`/`max_multiplier` bound each channel's spend as multiples of
+    its current spend (default 0–2x — beyond observed spend the curves are
+    extrapolation, so recommendations stay inside the evidence).
+
+    The result includes DECISION uncertainty: the optimizer re-runs under each
+    posterior draw, so each channel gets a 90% range of its optimal share. Wide
+    ranges mean the data does not pin down the optimum — follow up with
+    `recommend_lift_experiments`. Requires a fitted model.
+    """
+    _activate_thread(config)
+    kwargs = {
+        "min_multiplier": min_multiplier,
+        "max_multiplier": max_multiplier,
+    }
+    if total_budget is not None:
+        kwargs["total_budget"] = float(total_budget)
+    if budget_change_pct is not None:
+        kwargs["budget_change_pct"] = float(budget_change_pct)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "optimize_budget", kwargs
+    )
+    return _modelop_command(res, {}, tool_call_id)
+
+
+@tool
+def log_experiment(
+    channel: str = None,
+    status: str = None,
+    experiment_id: str = None,
+    design_type: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    estimand: str = None,
+    value: float = None,
+    se: float = None,
+    notes: str = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Create or update an entry in the project's experiment registry — the
+    log the home page tracks and the calibration loop reads.
+
+    Create: pass `channel` (+ optional design fields), status defaults to
+    'planned'. Update: pass `experiment_id` plus only the fields that changed.
+
+    Lifecycle: planned → running → completed → calibrated.
+    - When results land, set status='completed' with `value`, `se` and
+      `estimand` ('roas' | 'contribution' | 'mroas') — 'completed' means
+      measured but NOT yet folded into a fit, and the home page will flag the
+      model for calibration.
+    - After refitting with the experiment as a calibration likelihood, set
+      status='calibrated' (do this every time you calibrate, or the flag
+      never clears).
+
+    Dates are ISO strings (e.g. "2026-07-01").
+    """
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    project_id = None
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:
+        pass
+    try:
+        exp = sessions_store.upsert_experiment(
+            experiment_id=experiment_id,
+            project_id=project_id,
+            thread_id=tid,
+            channel=channel,
+            design_type=design_type,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            estimand=estimand,
+            value=value,
+            se=se,
+            notes=notes,
+        )
+    except ValueError as exc:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not log experiment: {exc}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    msg = (
+        f"Experiment **{exp['channel']}** logged (id `{exp['id']}`, "
+        f"status **{exp['status']}**"
+        + (
+            f", result {exp['value']:g} ± {exp['se']:g} {exp['estimand'] or ''}"
+            if exp.get("value") is not None
+            else ""
+        )
+        + ")."
+    )
+    if exp["status"] == "completed":
+        msg += (
+            " This result is not yet calibrated into a fit — when you refit "
+            "with it via add_experiment_calibration, update the entry to "
+            "status='calibrated'."
+        )
+    return Command(
+        update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
+def list_experiment_log(
+    status: str = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """List the project's experiment registry (planned / running / completed /
+    calibrated lift tests), optionally filtered by status. Check this before
+    recommending new experiments (don't re-propose a channel already being
+    tested) and when deciding whether a refresh should calibrate in completed
+    results."""
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    project_id = None
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:
+        pass
+    exps = sessions_store.list_experiments(project_id=project_id, status=status)
+    if not exps:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No experiments logged for this project yet.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    lines = ["### Experiment Log", ""]
+    lines.append("| Channel | Status | Window | Result | id |")
+    lines.append("|---|---|---|---|---|")
+    for e in exps:
+        window = (
+            f"{e['start_date'] or '?'} → {e['end_date'] or '?'}"
+            if e.get("start_date") or e.get("end_date")
+            else "—"
+        )
+        result = (
+            f"{e['value']:g} ± {e['se']:g} {e['estimand'] or ''}"
+            if e.get("value") is not None
+            else "—"
+        )
+        lines.append(
+            f"| {e['channel']} | {e['status']} | {window} | {result} | `{e['id'][:8]}` |"
+        )
+    completed = [e for e in exps if e["status"] == "completed"]
+    if completed:
+        lines.append(
+            f"\n⚠️ {len(completed)} completed result(s) not yet calibrated into a "
+            "fit — recommend a calibrated refit."
+        )
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ]
+        }
+    )
+
+
+@tool
+def get_run_history(
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Return the project's model-run lineage: every fit with its dataset
+    fingerprint, what changed in the spec vs the previous run, and which
+    assumptions were added/revised (the rationale for each change).
+
+    Use this to audit the modeling process, explain why the current model
+    differs from earlier ones, and as the PROVENANCE section when writing a
+    final report — it is the versioned record of data, model, and rationale.
+    """
+    from mmm_framework.api import runs as _runs
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    project_id = None
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:
+        pass
+    md = _runs.run_timeline_markdown(project_id)
+    return Command(
+        update={"messages": [ToolMessage(content=md, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
+def recommend_lift_experiments(
+    config: InjectedConfig = None,
+    top_k: int = 3,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Recommend which lift experiments to run next, based on the fitted model:
+    channels are ranked by spend share × ROAS uncertainty × how much that
+    uncertainty destabilizes the optimal budget allocation across posterior
+    draws — i.e. test where better information would change the decision.
+
+    Each recommendation includes a concrete design (geo holdout vs national
+    spend pulse, minimum duration from the channel's adstock window, target
+    standard error) and the `ExperimentMeasurement` snippet that calibrates the
+    result into the next fit. Requires a fitted model.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "experiment_design", {"top_k": int(top_k)}
+    )
+    return _modelop_command(res, {}, tool_call_id)
+
+
+from mmm_framework.agents.eda_tools import EDA_TOOLS
+
 # List of all tools
 TOOLS = [
     # Step 1 — Define the question (pre-registration)
@@ -2390,11 +3428,15 @@ TOOLS = [
     # Data
     generate_synthetic_data,
     inspect_dataset,
+    # Step 2 — Data quality (pre-fit): validate_data, run_eda, detect_outliers,
+    # apply_outlier_treatment
+    *EDA_TOOLS,
     # Step 2 — Tell the story / DAG
     *[
         t
         for t in CAUSAL_TOOLS
-        if t.name in ("propose_dag", "validate_causal_identification")
+        if t.name
+        in ("propose_dag", "validate_causal_identification", "build_model_from_dag")
     ],
     # Config management
     configure_model,
@@ -2419,6 +3461,12 @@ TOOLS = [
     get_saturation_curves,
     run_budget_scenario,
     run_marginal_analysis,
+    # Decision layer: learnings -> budget + next experiment
+    run_budget_optimizer,
+    recommend_lift_experiments,
+    log_experiment,
+    list_experiment_log,
+    get_run_history,
     # Step 8 — Sensitivity (post-fit)
     *[t for t in CAUSAL_TOOLS if t.name == "leave_one_out_decomposition"],
     # Pre-registration: lock the plan + check divergence (were previously unregistered)
@@ -2437,6 +3485,12 @@ TOOLS = [
     get_session_status,
     # Library discovery (reach ALL features)
     library_reference,
+    bayesian_workflow_reference,
+    # Preferences, branding & templates
+    get_preferences,
+    save_preference,
+    list_templates,
+    extract_brand_from_website,
     # Knowledge base (project-level RAG)
     search_knowledge_base,
     list_knowledge_base,

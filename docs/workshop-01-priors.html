@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop 01: Priors | MMM Framework</title>
+    <meta name="description" content="Workshop 01 of the Bayesian MMM workshop: flat vs weakly-informative vs informative priors, the MMM distribution zoo (Beta, Gamma, HalfNormal), priors on parameters as priors on behavior, prior predictive checks, and the framework's PriorConfig API.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/workshop-01-priors.html">
+    <meta property="og:title" content="Workshop 01: Priors | MMM Framework">
+    <meta property="og:description" content="Refusing to choose a prior is itself a choice. The MMM prior zoo, slider-driven fans of implied adstock and response curves, and the prior predictive check that catches silly priors before any fitting.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/workshop-01-priors.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            width: 140px;
+            accent-color: var(--color-primary-dark);
+        }
+        .ctrl-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#vocabulary">The prior vocabulary</a></li>
+                <li><a href="#zoo">The MMM prior zoo</a></li>
+                <li><a href="#behavior">Priors on behavior</a></li>
+                <li><a href="#prior-predictive">The prior predictive check</a></li>
+                <li><a href="#framework">How the framework says it</a></li>
+                <li><a href="#sensitivity">When priors matter</a></li>
+                <li><a href="#glossary">Glossary &amp; what's next</a></li>
+            </ul>
+
+            <h3>The Workshop Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="workshop-00-thinking-in-distributions.html">00 · Thinking in Distributions</a></li>
+                <li><a href="workshop-01-priors.html" class="active">01 · Priors</a></li>
+                <li><a href="workshop-02-sampling.html">02 · Sampling</a></li>
+                <li><a href="workshop-03-first-mmm.html">03 · Your First MMM</a></li>
+                <li><a href="workshop-04-reading-the-posterior.html">04 · Reading the Posterior</a></li>
+                <li><a href="workshop-05-from-draws-to-decisions.html">05 · Draws to Decisions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Workshop 01 — Priors: Saying What You Know</h1>
+            <p class="lead">
+                Before you've seen a single week of data, you already know things. TV's effect on sales
+                isn't negative. Carryover from a radio ad doesn't last two years. The return on a search
+                campaign isn't 500-to-1. A <strong>prior</strong> — your model's starting beliefs about a
+                parameter, written as a probability distribution (the idea from
+                <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>) — is how you write
+                that knowledge down so the model can use it. And here is the part that surprises people:
+                <em>refusing to choose a prior is itself a choice</em> — usually the choice that ROAS of
+                &minus;80 and ROAS of +500 are exactly as believable as ROAS of 2. That's not neutrality.
+                That's a strong, silly opinion wearing a "no opinion" costume.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">50%</div>
+                    <div class="stat-label">of the "no opinion" flat prior's belief says TV <em>hurts</em> sales</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">3.5 wk</div>
+                    <div class="stat-label">median carryover half-life implied by a Beta(8, 2) retention prior</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">30%</div>
+                    <div class="stat-label">of the default saturation prior's belief: "we never got halfway to saturating this channel"</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.000</div>
+                    <div class="stat-label">gap between flat and weakly-informative answers after 3 years of data</div>
+                </div>
+            </div>
+            <p class="chart-note"><strong>Measured</strong> — printed outputs of the seeded
+            <code>nbs/workshop_01_priors.ipynb</code> run; each is re-verified by an assert when the
+            notebook bakes.</p>
+
+            <h2 id="vocabulary">1 — The prior vocabulary: three ways to "know" something</h2>
+            <p>
+                Take one concrete parameter: <strong>the effect of TV</strong> — incremental sales dollars
+                generated per $1 of TV spend (you may know this as ROAS). Three analysts write down three
+                priors:
+            </p>
+            <ul>
+                <li>A <strong>flat (uninformative) prior</strong> — a distribution that spreads belief
+                evenly over a huge range, trying to say "I know nothing." Here: <em>"any value between
+                &minus;10 and +10 is equally likely."</em> Sounds humble. But look at what it actually
+                asserts: TV <em>destroying</em> $8 of sales per dollar is exactly as plausible as TV
+                earning $2 — and half of all belief sits on TV being harmful.</li>
+                <li>A <strong>weakly informative prior</strong> — a distribution that rules out the absurd
+                while staying loose about everything plausible. Here: <em>"the effect is not negative,
+                probably modest, and values beyond ~6 would be extraordinary."</em> This is the workhorse
+                of practical Bayesian modeling.</li>
+                <li>An <strong>informative prior</strong> — a distribution that commits to real knowledge,
+                e.g. from last year's model or industry benchmarks. Here: <em>"around 0.8, give or take
+                0.3, and never negative."</em></li>
+            </ul>
+            <p>
+                All three on one axis. The slider controls the <em>strength</em> of the weakly informative
+                prior — its scale \( \sigma \) — so you can feel what tightening or loosening a prior does
+                to its tail.
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>weak prior &sigma;</label>
+                    <input type="range" id="sigmaWeak" min="0.5" max="5" step="0.25" value="2">
+                    <span class="ctrl-val" id="sigmaWeakVal">2.00</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>P(effect &gt; 6)</label>
+                    <span class="ctrl-val" id="weakTailVal">0.27%</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>90% of belief below</label>
+                    <span class="ctrl-val" id="weakQ90Val">3.29</span>
+                </div>
+            </div>
+            <div class="chart-container" id="vocabChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Flat = Uniform(&minus;10, 10); weakly informative = HalfNormal(&sigma;); informative =
+                TruncatedNormal(0.8, 0.3) cut at zero. At the notebook's settings (&sigma; = 2):
+                <strong>P(TV effect &lt; 0) = 50%</strong> under the flat prior,
+                <strong>P(effect &gt; 6) = 0.27%</strong> under the weak prior, and the informative prior
+                puts <strong>96%</strong> of its belief in (0.2, 1.4). Drag &sigma; and watch the readouts:
+                &sigma; is a pure stretch — doubling it doubles every quantile.
+            </p>
+
+            <p>Read the three curves as three <em>sentences</em>:</p>
+            <table>
+                <thead><tr><th>prior</th><th>what it literally says</th><th>when to use it</th></tr></thead>
+                <tbody>
+                    <tr><td>flat</td><td>"&minus;8 is as plausible as +2; harm is a coin flip"</td><td>almost never — it isn't neutral, it's reckless</td></tr>
+                    <tr><td>weakly informative</td><td>"not negative, probably small, extremes need extraordinary evidence"</td><td>your default for MMM effect parameters</td></tr>
+                    <tr><td>informative</td><td>"around 0.8 &plusmn; 0.3 — I have benchmarks/lift tests and I'm using them"</td><td>when you genuinely have the evidence (and can defend it in a meeting)</td></tr>
+                </tbody>
+            </table>
+            <p>
+                One more vocabulary item before the zoo: the numbers that <em>define</em> a prior — the
+                &sigma; = 2 in HalfNormal(&sigma; = 2), the (0.8, 0.3) in the informative one — are called
+                <strong>hyperparameters</strong> (the knobs you set on a prior distribution, as opposed to
+                the parameters the model learns from data). Choosing a prior = choosing a shape from the
+                zoo + setting its hyperparameters.
+            </p>
+
+            <h2 id="zoo">2 — The distribution zoo for MMM</h2>
+            <p>
+                An MMM has four recurring kinds of parameter, and each has a distribution family whose
+                <em>shape matches the job</em>. This section is a field guide; the full prior table for
+                every parameter the model owns lives in
+                <a href="math-00-overview.html">Math 00 — The Generative Model</a>.
+            </p>
+
+            <h3>2.1 HalfNormal &rarr; channel effect sizes</h3>
+            <p>
+                A media channel's effect on sales <strong>can't be negative</strong> (advertising may be
+                useless, but it isn't anti-persuasive — and if you truly believe a channel hurts sales,
+                you want a different model, not a negative coefficient) and is <strong>probably
+                small</strong>. So we want a shape whose <strong>support</strong> — the set of values a
+                distribution allows at all — starts at zero, puts plenty of belief near zero, and fades
+                smoothly into a tail. That's the <strong>HalfNormal(&sigma;)</strong>: a bell curve folded
+                at zero, with one knob — "how big could this effect plausibly be?" You already drove it
+                with the slider above. The measured quantile check from the notebook: the 90th percentile
+                of HalfNormal(&sigma;) is <strong>0.82 / 1.64 / 3.29</strong> for &sigma; = 0.5 / 1 / 2 —
+                exact linear scaling, asserted in the bake. When you have a <em>location</em> in mind, not
+                just a scale, use its cousin <strong>TruncatedNormal(&mu;, &sigma;, lower=0)</strong>: a
+                bell centered at your benchmark, chopped at zero.
+            </p>
+
+            <h3>2.2 Beta &rarr; adstock retention (a fraction in [0, 1])</h3>
+            <p>
+                <strong>Adstock</strong> is MMM's word for <em>carryover</em> — an ad you run this week
+                still nudges sales next week, a bit less the week after, and so on. The simplest
+                ("geometric") version has one parameter: the <strong>retention rate</strong> \( \alpha \) —
+                the fraction of this week's advertising pressure that survives into next week. After
+                \( k \) weeks an impulse is worth \( \alpha^k \). A retention rate is a fraction — it lives
+                strictly between 0 and 1 — so its natural prior family is the <strong>Beta
+                distribution</strong> (the flexible distribution <em>on</em> [0, 1] you met with conversion
+                rates in <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>).
+            </p>
+            <p>
+                Here is the move that makes priors <em>talkable in a marketing meeting</em>: convert
+                retention into <strong>half-life</strong> — the number of weeks until the carryover effect
+                has decayed to half its original strength. Setting \( \alpha^h = \tfrac12 \) and solving:
+            </p>
+            <p>\[ h(\alpha) = \frac{\ln(0.5)}{\ln(\alpha)} \]</p>
+            <p>
+                A retention of 0.5 means a half-life of exactly 1 week; higher retention stretches it
+                fast. So a Beta prior on retention <em>is</em> a prior on half-lives — and you can ask the
+                brand team "does a 3-week TV half-life sound right?" instead of "is Beta(8, 2) okay?".
+                Drag the two hyperparameters and watch both panels move together.
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>Beta a</label>
+                    <input type="range" id="betaA" min="0.5" max="12" step="0.5" value="2">
+                    <span class="ctrl-val" id="betaAVal">2.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>Beta b</label>
+                    <input type="range" id="betaB" min="0.5" max="12" step="0.5" value="2">
+                    <span class="ctrl-val" id="betaBVal">2.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>median half-life</label>
+                    <span class="ctrl-val" id="betaMedHL">1.0 weeks</span>
+                </div>
+            </div>
+            <div class="chart-container" id="betaZooChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong> (the
+                half-life panel uses the exact change-of-variables density where the notebook histograms
+                20,000 draws; same identity, no sampling noise). Notebook anchors, asserted in the bake:
+                median implied half-life is <strong>0.44 weeks</strong> for fast-decay Beta(1, 3),
+                <strong>1.0 week</strong> for open-minded Beta(2, 2), and <strong>3.5 weeks</strong> for
+                long-memory Beta(8, 2). Try those three settings on the sliders.
+            </p>
+
+            <h3>2.3 Gamma &amp; Exponential &rarr; the saturation rate &lambda;</h3>
+            <p>
+                <strong>Saturation</strong> is the other workhorse transform: doubling spend doesn't double
+                sales — audiences run out, auctions get pricier. The framework's core model uses the
+                logistic curve \( f(x) = 1 - e^{-\lambda x} \), where \( x \) is media pressure scaled so
+                the biggest observed week is 1, and the <strong>saturation rate</strong> \( \lambda \)
+                controls how fast returns diminish. \( \lambda \) must be positive and could be anywhere
+                from "barely saturating" to "saturates immediately" — a job for a positive, right-skewed
+                family like <strong>Gamma</strong> or the one-knob <strong>Exponential</strong> (the
+                framework's built-in default for this parameter, with mean 2).
+            </p>
+            <p>
+                Like retention &rarr; half-life, \( \lambda \) has a marketing translation: the
+                <strong>half-saturation point</strong> — the spend level at which you've already banked
+                half of the channel's maximum possible effect. From \( f(x_{1/2}) = \tfrac12 \):
+            </p>
+            <p>\[ x_{1/2} = \frac{\ln 2}{\lambda} \]</p>
+            <p>
+                Multiply by the channel's max weekly spend (here $50k, as in the notebook) and your prior
+                on \( \lambda \) becomes a statement like <em>"we hit half of TV's ceiling somewhere
+                around $X thousand a week"</em> — something a media planner can actually argue with. Watch
+                the right-hand readout: a chunk of the default prior's belief puts the half-saturation
+                point <strong>beyond the biggest week you've ever bought</strong> — i.e. "we never even got
+                halfway to saturating this channel." Decide whether you believe that.
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>Gamma shape a</label>
+                    <input type="range" id="lamShape" min="1" max="8" step="0.5" value="1">
+                    <span class="ctrl-val" id="lamShapeVal">1.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>prior mean of &lambda;</label>
+                    <input type="range" id="lamMean" min="0.5" max="6" step="0.25" value="2">
+                    <span class="ctrl-val" id="lamMeanVal">2.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>P(half-sat beyond max week)</label>
+                    <span class="ctrl-val" id="lamBeyondVal">30%</span>
+                </div>
+            </div>
+            <div class="chart-container" id="lamZooChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong> (exact
+                change-of-variables density for the half-saturation panel). Shape a = 1 is the
+                Exponential — the framework default. Notebook anchors, asserted in the bake:
+                P(half-saturation beyond the max observed week) = <strong>30%</strong> under the default
+                Exponential(mean 2), <strong>15%</strong> under Gamma(2, 1), and <strong>0%</strong> under
+                the confident Gamma(6, 2) (set a = 6, mean = 3). Saturation-adjacent defaults are not
+                cosmetic: in <a href="stress-01-carryover-shape.html">Stress 01</a> the Weibull adstock
+                scale prior's default materially shaped the recovered carryover kernel.
+            </p>
+
+            <h3>2.4 Normal &rarr; control &amp; seasonal coefficients — and the zoo, summarized</h3>
+            <p>
+                Controls are different: a price increase, a competitor launch, a heat wave can push sales
+                <em>either way</em>. For sign-free coefficients the plain <strong>Normal(&mu;, &sigma;)</strong>
+                is right: centered at zero ("no effect until the data says otherwise"), symmetric, with
+                &sigma; setting how big an effect you'd entertain. The framework's default for controls is
+                Normal(0, 1) on standardized data — the same idea powers seasonal (Fourier) coefficients.
+            </p>
+            <table>
+                <thead><tr><th>parameter</th><th>lives in</th><th>family</th><th>marketing translation of the prior</th></tr></thead>
+                <tbody>
+                    <tr><td>channel effect &beta;</td><td>[0, &infin;)</td><td>HalfNormal / TruncatedNormal / Gamma</td><td>"not harmful, probably modest"</td></tr>
+                    <tr><td>adstock retention &alpha;</td><td>(0, 1)</td><td>Beta</td><td>a <strong>half-life</strong> in weeks</td></tr>
+                    <tr><td>saturation rate &lambda;</td><td>(0, &infin;)</td><td>Gamma / Exponential</td><td>a <strong>half-saturation spend</strong> in $</td></tr>
+                    <tr><td>control / seasonal coef</td><td>(&minus;&infin;, &infin;)</td><td>Normal</td><td>"either direction, probably small"</td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="behavior">3 — Priors on parameters are priors on BEHAVIOR</h2>
+            <p>
+                Here is the single most useful mental shift on this page — its core doctrine. You never
+                actually care about \( \alpha \) or \( \lambda \). You care about <em>curves</em>: how
+                carryover decays week by week, how sales respond as spend ramps. Every draw from the prior
+                on \( \alpha \) is a whole <strong>decay curve</strong>; every draw from the prior on
+                \( \lambda \) is a whole <strong>response curve</strong>. So a prior on a parameter is
+                really a prior over <em>families of behavior</em> — and the honest way to inspect a prior
+                is to draw a hundred parameter values and plot the hundred curves they imply (a
+                "spaghetti plot").
+            </p>
+            <div class="definition">
+                <h4>Doctrine</h4>
+                <p>
+                    If the spaghetti contains curves your gut rejects — carryover lasting half a year for a
+                    flash-sale channel, response curves still climbing steeply at twice your maximum
+                    budget — <strong>your prior said that, whether you meant to or not.</strong>
+                </p>
+            </div>
+            <p>
+                The payoff exhibit. Each slider reshapes a prior; each render draws 70 parameter values
+                from it and plots the 70 behaviors they imply. Left: carryover curves
+                \( \alpha^k \) from the Beta retention prior. Right: response curves
+                \( 1 - e^{-\lambda x} \) from the \( \lambda \) prior. The dark line is the median curve;
+                the dotted markers are the half-strength line (left) and the biggest week ever bought
+                (right).
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>retention Beta a</label>
+                    <input type="range" id="fanA" min="0.5" max="12" step="0.5" value="2">
+                    <span class="ctrl-val" id="fanAVal">2.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>retention Beta b</label>
+                    <input type="range" id="fanB" min="0.5" max="12" step="0.5" value="2">
+                    <span class="ctrl-val" id="fanBVal">2.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>&lambda; prior mean (Exponential)</label>
+                    <input type="range" id="fanLam" min="0.25" max="6" step="0.25" value="2">
+                    <span class="ctrl-val" id="fanLamVal">2.0</span>
+                </div>
+            </div>
+            <div class="chart-container tall" id="fansChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser, seeded — the same math as the notebook.</strong>
+                Every curve starts at full strength and only decays (left) or starts at zero, rises, and
+                never exceeds the ceiling (right) — the bake asserts both, for every slider setting it
+                tests. The notebook's measured gut-check at the defaults: under the framework's default
+                Exponential(mean 2) &lambda; prior, <strong>28% of prior response curves are still below
+                half their ceiling at 1.2&times; the maximum observed week</strong> — the prior leaves
+                "this channel barely saturates" firmly on the table. Try Beta(8, 2): week-4 carryover
+                under the long-memory prior is more than 5&times; the fast-decay Beta(1, 3) setting
+                (asserted in the bake).
+            </p>
+
+            <h2 id="prior-predictive">4 — The prior predictive check: simulate sales before you fit</h2>
+            <p>
+                Curves are behavior one transform at a time. The full-strength version of the same idea
+                runs the <strong>whole model forward from its priors</strong>: draw one value of
+                <em>every</em> parameter from its prior, push spend through the model, add noise — out
+                comes one completely fake year of weekly sales. Repeat a few hundred times and you have
+                the <strong>prior predictive distribution</strong> — the spread of datasets your model
+                considers plausible <em>before seeing any real data</em>. Comparing that spread against
+                common sense is the <strong>prior predictive check</strong>.
+            </p>
+            <div class="definition">
+                <h4>Doctrine, worth memorizing</h4>
+                <p>
+                    <strong>This is the cheapest, highest-value check in the entire workflow.</strong> It
+                    needs no fitting, no MCMC, no waiting — and it catches the embarrassing failures
+                    (negative sales! 10&times; revenue weeks!) at the moment they're easiest to fix:
+                    before the data ever gets a vote.
+                </p>
+            </div>
+            <p>
+                The toy world: two channels (TV-ish and Search-ish), 104 weeks, sales in $thousands — the
+                exact MMM skeleton you'll meet for real in
+                <a href="workshop-03-first-mmm.html">Workshop 03</a>: intercept +
+                &beta;·saturate(adstock(spend)) per channel + noise. History says weekly sales live
+                roughly between $800k and $1.3M (the green band). First attempt: an analyst who "doesn't
+                want to assume anything" sets huge, vague priors. Then the fix: say what you actually
+                know — sales hover around $1M/week, no channel plausibly adds more than a few hundred $k
+                at full saturation, week-to-week noise is tens of $k.
+            </p>
+
+            <div class="controls-row">
+                <label>Priors:</label>
+                <button class="toggle-btn active" data-ppc="vague">"assume nothing" (vague)</button>
+                <button class="toggle-btn" data-ppc="sane">after the check (weakly informative)</button>
+            </div>
+            <div class="chart-container tall" id="ppcChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser (seeded recreation of the notebook's simulation;
+                the quoted shares are measured from the baked notebook run).</strong> 200 fake years from
+                the priors: shaded band = 90% of prior draws, thin lines = 30 individual fake years, green
+                band = where real weekly sales actually live, dashed red = zero sales. Measured under the
+                vague priors: <strong>43% of prior draws contain at least one negative sales week</strong>
+                and only <strong>27%</strong> of simulated weekly values land within shouting distance
+                ($400k&ndash;$2.2M) of reality. After the check: <strong>0%</strong> negative weeks,
+                <strong>100%</strong> in the sane range — and the 90% band is still comfortably wider than
+                the historical range, so the data keeps room to speak.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">43%</div>
+                    <div class="stat-label">vague-prior draws with a negative sales week</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">27%</div>
+                    <div class="stat-label">vague-prior weekly values anywhere near reality</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0%</div>
+                    <div class="stat-label">negative weeks after the check</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">weekly values in the sane range after the check</div>
+                </div>
+            </div>
+
+            <p>
+                Nothing about the second set of priors is "biased" — it still entertains flat TV, powerful
+                TV, fast and slow carryover, every saturation speed. It has simply stopped insisting that
+                <em>negative million-dollar sales weeks</em> deserve belief. That's the whole craft:
+                <strong>rule out the absurd, stay loose about the plausible.</strong>
+            </p>
+            <div class="note">
+                <h4>💡 Two habits</h4>
+                <p>
+                    Run the prior predictive <strong>every time you change a prior or add a channel</strong>
+                    — it costs seconds. And judge it against <strong>outside knowledge</strong> (what sales
+                    <em>can</em> be), never against the dataset you're about to fit — tuning priors to the
+                    data you'll fit is using the data twice. In
+                    <a href="workshop-04-reading-the-posterior.html">Workshop 04</a> you'll meet the
+                    posterior predictive check — same trick, run <em>after</em> fitting.
+                </p>
+            </div>
+
+            <h2 id="framework">5 — How <code>mmm_framework</code> says it</h2>
+            <p>
+                Everything above was raw math so you could see the gears. In the framework, a prior is a
+                small config object — <code>PriorConfig</code> — holding a distribution name and its
+                hyperparameters, and you attach priors to the things they govern: the adstock config
+                carries the retention prior, the saturation config carries the &lambda; prior, the channel
+                config carries the effect-size prior. Classmethod shortcuts and fluent builders produce
+                identical configs (the notebook asserts their equality):
+            </p>
+
+            <pre><code>from mmm_framework.config import PriorConfig
+from mmm_framework.builders import PriorConfigBuilder
+
+effect_prior    = PriorConfig.half_normal(sigma=2.0)
+retention_prior = PriorConfig.beta(alpha=8, beta=2)   # long-memory carryover
+rate_prior      = PriorConfig.gamma(alpha=6, beta=2)  # confident saturation
+
+# ...or the fluent builder — same object either way.
+effect_prior_b = PriorConfigBuilder().half_normal(sigma=2.0).build()
+assert effect_prior == effect_prior_b</code></pre>
+
+            <p>A channel's priors live on its transform configs plus the channel itself:</p>
+
+            <pre><code>from mmm_framework.config import AdstockConfig, SaturationConfig, MediaChannelConfig, DimensionType
+from mmm_framework.builders import MediaChannelConfigBuilder
+
+tv_channel = MediaChannelConfig(
+    name="TV",
+    dimensions=[DimensionType.PERIOD],
+    adstock=AdstockConfig.geometric(            # carryover: retention prior
+        l_max=8, alpha_prior=PriorConfig.beta(alpha=3, beta=3)),
+    saturation=SaturationConfig.logistic(),     # λ keeps the built-in Exponential default
+    roi_prior=PriorConfig.half_normal(sigma=1.0),
+)
+
+search_channel = (MediaChannelConfigBuilder("Search")
+                  .with_geometric_adstock(l_max=4)
+                  .with_logistic_saturation()
+                  .with_positive_prior(sigma=2.0)   # sets coefficient_prior (HalfNormal)
+                  .build())</code></pre>
+
+            <div class="warning">
+                <h4>⚠️ A naming gotcha</h4>
+                <p>
+                    Despite its name, <code>roi_prior</code> is a prior on the (saturation-scaled)
+                    <em>coefficient</em> \( \beta_{TV} \), not on ROI directly. When it's
+                    <code>None</code>, the core model's default is <strong>Gamma(mu=1.5, sigma=1.0)</strong>,
+                    which gently favors paying channels. And remember the rest of the defaults:
+                    &lambda; gets Exponential(mean 2) — the prior whose belief you inspected in §2.3 — and
+                    controls get Normal(0, 1) on standardized data.
+                </p>
+            </div>
+
+            <p>
+                The real prior predictive: hand those channel configs to <code>BayesianMMM</code> (properly
+                introduced in <a href="workshop-03-first-mmm.html">Workshop 03</a>) and ask it to simulate
+                sales from its priors — no fitting involved:
+            </p>
+
+            <pre><code>cfg = ModelConfig(inference_method=InferenceMethod.BAYESIAN_NUMPYRO,
+                  use_parametric_adstock=True)  # honor the configured adstock priors
+mmm = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))
+idata = mmm.sample_prior_predictive(samples=300)
+
+pp = idata.prior["y_obs_scaled"].values[0]      # (draws, weeks), original $k scale</code></pre>
+
+            <p>
+                Two details worth knowing, both verified by the notebook's asserts: the framework
+                <strong>standardizes</strong> the KPI internally (a quiet prior-hygiene trick — priors
+                live on a unitless scale, so defaults transfer across brands), and the simulated KPI back
+                in original units is the <em>derived</em> <code>y_obs_scaled</code> variable, which lands
+                in the <code>prior</code> group of the returned object (the <code>prior_predictive</code>
+                group holds the standardized-scale <code>y_obs</code>). The baked run confirms the
+                configured priors were honored — TV effect draws never negative, retention draws inside
+                (0, 1) with a Beta(3, 3)-ish mean — and the prior fan brackets the observed sales level.
+                That's the full configuration loop you'll reuse for real:
+                <strong>zoo shape &rarr; <code>PriorConfig</code> &rarr; attach to configs &rarr; simulate
+                sales &rarr; eyeball &rarr; adjust.</strong>
+            </p>
+
+            <h2 id="sensitivity">6 — Sensitivity in one picture: when priors matter</h2>
+            <p>
+                The last worry every newcomer has: <em>"doesn't the prior just decide the answer?"</em>
+                The honest reply is <strong>it depends on how much the data knows</strong>. Tiny model:
+                weekly incremental sales \( y_t = \beta x_t + \varepsilon_t \) with known noise. For this
+                special case the posterior has an exact pencil-and-paper formula (the Normal prior is
+                <strong>conjugate</strong> here — maths jargon for "prior and posterior come out in the
+                same family, so no sampler is needed"). Three analysts: near-flat Normal(0, 50); weakly
+                informative Normal(1, 1); and a strongly informative, <em>miscalibrated</em>
+                Normal(0.5, 0.15) — confident, and (unknown to its author) centered well below the truth.
+                The world's true \( \beta \) is 1.2. Six weeks of data, then three years:
+            </p>
+
+            <div class="chart-container" id="sensPanelChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same conjugate math as the notebook</strong>
+                (browser-seeded data, so curve positions are an illustrative recreation; the quoted
+                numbers are measured from the notebook run). Measured: the spread of the three posterior
+                means is <strong>0.57 after 6 weeks &rarr; 0.20 after 156 weeks</strong>, and the gap
+                between the near-flat and weakly-informative answers at 156 weeks is
+                <strong>0.000</strong> — reasonable priors wash out. The confident-and-wrong prior is
+                <em>still</em> dragging its posterior below the truth after three years.
+            </p>
+
+            <p>Now be all three analysts at once — pick a prior, pick a data size:</p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>prior mean</label>
+                    <input type="range" id="sensMu" min="-1" max="2.5" step="0.1" value="0.5">
+                    <span class="ctrl-val" id="sensMuVal">0.50</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>prior sd</label>
+                    <input type="range" id="sensSd" min="0.05" max="5" step="0.05" value="0.5">
+                    <span class="ctrl-val" id="sensSdVal">0.50</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>weeks of data</label>
+                    <input type="range" id="sensN" min="2" max="156" step="2" value="12">
+                    <span class="ctrl-val" id="sensNVal">12</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>posterior mean</label>
+                    <span class="ctrl-val" id="sensPostVal">&mdash;</span>
+                </div>
+            </div>
+            <div class="chart-container" id="sensChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> The
+                conjugate identity behind the update (asserted in the bake): posterior precision is
+                <em>exactly</em> prior precision + data precision,
+                \( 1/\sigma_{\text{post}}^2 = 1/\sigma_0^2 + \sum_t x_t^2 / \sigma^2 \) — so data can only
+                sharpen the belief. Set the prior sd tiny and watch even 156 weeks fail to drag a
+                confident wrong prior to the truth.
+            </p>
+
+            <p>Three lessons, straight off the picture:</p>
+            <ol>
+                <li><strong>Small data &rArr; the prior is load-bearing.</strong> With six weeks, the three
+                analysts walk out of the meeting with three different &beta;s. Choose priors like they
+                matter — because here they do.</li>
+                <li><strong>Reasonable priors wash out.</strong> With three years, near-flat and weakly
+                informative land on the same answer. The weakly informative one got there with less drama
+                (narrower at every stage, no absurd detours).</li>
+                <li><strong>Overconfident wrong priors don't wash out politely.</strong> The Normal(0.5,
+                0.15) author is <em>still</em> biased after three years. Informative priors are powerful
+                exactly because they're strong — earn them with evidence (lift tests, last year's model),
+                and prior-predictive-check them like everything else.</li>
+            </ol>
+            <div class="warning">
+                <h4>⚠️ The MMM-specific kicker</h4>
+                <p>
+                    A real MMM is <em>permanently</em> in the small-data panel. Channels move together,
+                    carryover and saturation trade off against each other, and three years of weekly data
+                    is only 156 rows against dozens of parameters — the data is never as loud as you'd
+                    hope (<strong>weak identification</strong>: the situation where the data alone can't
+                    pin parameters down). In MMM, priors aren't training wheels you outgrow; they're part
+                    of the vehicle. The stress series shows what that costs when assumptions break — start
+                    with <a href="pressure-testing.html">the pressure-testing scorecard</a>.
+                </p>
+            </div>
+
+            <h2 id="glossary">7 — Glossary &amp; what's next</h2>
+            <table>
+                <thead><tr><th>term</th><th>plain English</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>prior</strong></td><td>your starting beliefs about a parameter, written as a distribution</td></tr>
+                    <tr><td><strong>flat / uninformative prior</strong></td><td>spreads belief evenly over a huge range; sounds neutral, usually isn't</td></tr>
+                    <tr><td><strong>weakly informative prior</strong></td><td>rules out the absurd, loose about the plausible — your default</td></tr>
+                    <tr><td><strong>informative prior</strong></td><td>commits to real external knowledge (benchmarks, lift tests)</td></tr>
+                    <tr><td><strong>hyperparameter</strong></td><td>a knob that defines a prior (the &sigma; in HalfNormal(&sigma;))</td></tr>
+                    <tr><td><strong>support</strong></td><td>the set of values a distribution allows at all</td></tr>
+                    <tr><td><strong>adstock / retention rate</strong></td><td>carryover; the fraction of ad pressure surviving each week</td></tr>
+                    <tr><td><strong>half-life</strong></td><td>weeks until carryover halves: ln(0.5)/ln(&alpha;)</td></tr>
+                    <tr><td><strong>saturation rate &lambda;</strong></td><td>how fast diminishing returns bite in 1 &minus; e<sup>&minus;&lambda;x</sup></td></tr>
+                    <tr><td><strong>half-saturation point</strong></td><td>spend where you've banked half the ceiling: ln 2/&lambda;</td></tr>
+                    <tr><td><strong>prior predictive distribution</strong></td><td>fake datasets simulated from priors alone</td></tr>
+                    <tr><td><strong>prior predictive check</strong></td><td>comparing those fakes against common sense, before fitting</td></tr>
+                    <tr><td><strong>conjugate</strong></td><td>prior/posterior in the same family — exact pencil-and-paper update</td></tr>
+                    <tr><td><strong>weak identification</strong></td><td>when the data alone can't pin parameters down — MMM's natural habitat</td></tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Refusing to choose a prior is itself a choice</strong> — the flat prior
+                    spends half its belief on TV destroying sales. That's an opinion, not neutrality.</li>
+                    <li><strong>Match the shape to the job:</strong> Beta for retention fractions, Gamma /
+                    Exponential for positive rates, HalfNormal for effect sizes, Normal for sign-free
+                    controls — and translate every hyperparameter into marketing units (half-life,
+                    half-saturation spend) before defending it in a meeting.</li>
+                    <li><strong>A prior on a parameter is a prior on behavior.</strong> Plot the implied
+                    decay and response curves; if the spaghetti contains nonsense, your prior said it.</li>
+                    <li><strong>The prior predictive check is the cheapest, highest-value check in the
+                    workflow</strong> — judge it against outside knowledge, never against the data you're
+                    about to fit.</li>
+                    <li><strong>In MMM, priors never fully wash out</strong> (weak identification), so the
+                    loop is: zoo shape &rarr; <code>PriorConfig</code> &rarr; simulate &rarr; eyeball
+                    &rarr; adjust.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This guide mirrors <code>nbs/workshop_01_priors.ipynb</code>, authored by
+                    <code>nbs/build_workshop_01_priors.py</code> — see <code>nbs/README_workshop.md</code>
+                    for the full six-notebook series. Every computational cell ends with seeded asserts
+                    encoding the claim it plots, so a clean bake re-verifies every number quoted here.
+                    The notebook adds three <code>ipywidgets</code> live-exploration cells matching the
+                    sliders on this page. Next:
+                    <a href="workshop-02-sampling.html">Workshop 02 — Sampling: How the Machine Learns</a>
+                    — why we draw samples instead of solving equations, and the diagnostics that tell you
+                    whether to trust the draws. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the notebook-guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG (series-wide reference implementation).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Math helpers: densities, cdfs, seeded samplers.
+        // ------------------------------------------------------------------
+        function erf(x) {
+            const s = x < 0 ? -1 : 1;
+            x = Math.abs(x);
+            const t = 1 / (1 + 0.3275911 * x);
+            const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+                       - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+            return s * y;
+        }
+        function normPdf(z) { return Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI); }
+        function normCdf(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
+
+        function lnGamma(z) {
+            const g = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
+                       -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+                       9.9843695780195716e-6, 1.5056327351493116e-7];
+            if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lnGamma(1 - z);
+            z -= 1;
+            let x = 0.99999999999980993;
+            for (let i = 0; i < 8; i++) x += g[i] / (z + i + 1);
+            const t = z + 7.5;
+            return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+        }
+        function betaPdf(x, a, b) {
+            if (x <= 0 || x >= 1) return 0;
+            return Math.exp((a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x)
+                   - (lnGamma(a) + lnGamma(b) - lnGamma(a + b)));
+        }
+        function gammaPdf(x, a, rate) {
+            if (x <= 0) return 0;
+            return Math.exp(a * Math.log(rate) + (a - 1) * Math.log(x) - rate * x - lnGamma(a));
+        }
+        function halfNormPdf(x, sigma) {
+            return x < 0 ? 0 : 2 * normPdf(x / sigma) / sigma;
+        }
+        function truncNormPdf(x, mu, sigma) {  // lower=0
+            if (x < 0) return 0;
+            return normPdf((x - mu) / sigma) / sigma / (1 - normCdf((0 - mu) / sigma));
+        }
+
+        function makeNormal(rng) {
+            let spare = null;
+            return function() {
+                if (spare !== null) { const v = spare; spare = null; return v; }
+                let u, v, s;
+                do { u = 2 * rng() - 1; v = 2 * rng() - 1; s = u * u + v * v; } while (s >= 1 || s === 0);
+                const m = Math.sqrt(-2 * Math.log(s) / s);
+                spare = v * m;
+                return u * m;
+            };
+        }
+        function gammaSample(rng, norm, shape, scale) {
+            // Marsaglia-Tsang, with the boost trick for shape < 1.
+            if (shape < 1) {
+                return gammaSample(rng, norm, shape + 1, scale) * Math.pow(rng(), 1 / shape);
+            }
+            const d = shape - 1 / 3, c = 1 / Math.sqrt(9 * d);
+            for (;;) {
+                let x, v;
+                do { x = norm(); v = 1 + c * x; } while (v <= 0);
+                v = v * v * v;
+                const u = rng();
+                if (u < 1 - 0.0331 * x * x * x * x) return d * v * scale;
+                if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v * scale;
+            }
+        }
+        function betaSample(rng, norm, a, b) {
+            const g1 = gammaSample(rng, norm, a, 1), g2 = gammaSample(rng, norm, b, 1);
+            return g1 / (g1 + g2);
+        }
+        function linspace(lo, hi, n) {
+            const out = new Array(n);
+            for (let i = 0; i < n; i++) out[i] = lo + (hi - lo) * i / (n - 1);
+            return out;
+        }
+        function percentile(sortedArr, p) {
+            const idx = p / 100 * (sortedArr.length - 1);
+            const lo = Math.floor(idx), hi = Math.ceil(idx);
+            return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (idx - lo);
+        }
+
+        // Two-panel layout helper (left/right subplots sharing the PT look).
+        function twoPanelLayout(xt1, xt2, yt1, yt2, extra) {
+            const ax = { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' };
+            const lay = PT.layout(Object.assign({
+                margin: { l: 60, r: 20, t: 30, b: 55 },
+                xaxis: { domain: [0, 0.46], title: xt1 },
+                yaxis: { title: yt1 },
+                xaxis2: Object.assign({ domain: [0.54, 1], anchor: 'y2', title: xt2 }, ax),
+                yaxis2: Object.assign({ anchor: 'x2', title: yt2 }, ax),
+                showlegend: false
+            }, extra || {}));
+            return lay;
+        }
+
+        // ------------------------------------------------------------------
+        // 1. Vocabulary chart — three prior philosophies, weak-prior sigma slider
+        // ------------------------------------------------------------------
+        const vocabX = linspace(-10, 10, 1001);
+        function drawVocab() {
+            const sigma = parseFloat(document.getElementById('sigmaWeak').value);
+            document.getElementById('sigmaWeakVal').textContent = sigma.toFixed(2);
+            const pTail = 2 * (1 - normCdf(6 / sigma));
+            document.getElementById('weakTailVal').textContent =
+                pTail < 0.0001 ? '<0.01%' : (100 * pTail).toFixed(2) + '%';
+            document.getElementById('weakQ90Val').textContent = (1.6449 * sigma).toFixed(2);
+
+            const traces = [
+                { x: vocabX, y: vocabX.map(function(v) { return (v >= -10 && v <= 10) ? 0.05 : 0; }),
+                  name: 'flat: Uniform(-10, 10) — "no opinion"', mode: 'lines',
+                  line: { color: PT.colors.expected, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.expected, 0.18) },
+                { x: vocabX, y: vocabX.map(function(v) { return halfNormPdf(v, sigma); }),
+                  name: 'weakly informative: HalfNormal(σ=' + sigma.toFixed(2) + ')', mode: 'lines',
+                  line: { color: PT.colors.search, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.search, 0.18) },
+                { x: vocabX, y: vocabX.map(function(v) { return truncNormPdf(v, 0.8, 0.3); }),
+                  name: 'informative: TruncNormal(0.8, 0.3), ≥ 0', mode: 'lines',
+                  line: { color: PT.colors.display, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.display, 0.18) }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'effect of TV ($ sales per $1 spend)' },
+                yaxis: { title: 'prior density' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 60, r: 20, t: 40, b: 55 },
+                shapes: [{ type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper',
+                           line: { color: PT.colors.truth, width: 1, dash: 'dot' } }],
+                annotations: [{
+                    x: -5, y: 0.25, text: 'half the flat prior’s belief:<br>TV HURTS sales',
+                    showarrow: true, arrowhead: 2, ax: 0, ay: -45,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.react('vocabChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2.2 Beta zoo — retention density + exact implied half-life density
+        // ------------------------------------------------------------------
+        const betaGridA = linspace(0.002, 0.998, 499);
+        const hlGrid = linspace(0.06, 12, 480);
+        function drawBetaZoo() {
+            const a = parseFloat(document.getElementById('betaA').value);
+            const b = parseFloat(document.getElementById('betaB').value);
+            document.getElementById('betaAVal').textContent = a.toFixed(1);
+            document.getElementById('betaBVal').textContent = b.toFixed(1);
+
+            const pdfA = betaGridA.map(function(x) { return Math.min(betaPdf(x, a, b), 12); });
+
+            // Exact change of variables: h = ln(.5)/ln(alpha)  =>  alpha(h) = 2^(-1/h),
+            // p_H(h) = p_Beta(alpha(h)) * alpha(h) * ln2 / h^2.
+            const pdfH = hlGrid.map(function(h) {
+                const al = Math.pow(2, -1 / h);
+                return betaPdf(al, a, b) * al * Math.LN2 / (h * h);
+            });
+
+            // Median half-life via the numeric Beta cdf (trapezoid on the alpha grid).
+            let cum = 0, medAlpha = 0.5;
+            const dx = betaGridA[1] - betaGridA[0];
+            for (let i = 1; i < betaGridA.length; i++) {
+                const step = 0.5 * (betaPdf(betaGridA[i - 1], a, b) + betaPdf(betaGridA[i], a, b)) * dx;
+                if (cum + step >= 0.5) {
+                    medAlpha = betaGridA[i - 1] + dx * (0.5 - cum) / step;
+                    break;
+                }
+                cum += step;
+            }
+            const medHL = Math.log(0.5) / Math.log(medAlpha);
+            document.getElementById('betaMedHL').textContent =
+                (medHL > 30 ? '>30' : medHL.toFixed(2)) + ' weeks';
+
+            const traces = [
+                { x: betaGridA, y: pdfA, mode: 'lines', xaxis: 'x', yaxis: 'y',
+                  line: { color: PT.colors.search, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.search, 0.18),
+                  hovertemplate: 'α=%{x:.2f}<br>density %{y:.2f}<extra></extra>' },
+                { x: hlGrid, y: pdfH, mode: 'lines', xaxis: 'x2', yaxis: 'y2',
+                  line: { color: PT.colors.social, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.social, 0.18),
+                  hovertemplate: 'half-life %{x:.1f} wk<br>density %{y:.3f}<extra></extra>' }
+            ];
+            const layout = twoPanelLayout('retention rate α', 'half-life (weeks)',
+                                          'prior density', 'implied density', {
+                shapes: [{ type: 'line', xref: 'x2', yref: 'paper',
+                           x0: medHL, x1: medHL, y0: 0, y1: 1,
+                           line: { color: PT.colors.truth, width: 1.5, dash: 'dot' } }],
+                annotations: [
+                    { xref: 'x domain', yref: 'paper', x: 0.5, y: 1.08, showarrow: false,
+                      text: 'Beta(' + a.toFixed(1) + ', ' + b.toFixed(1) + ') on retention α',
+                      font: { size: 12 } },
+                    { xref: 'x2 domain', yref: 'paper', x: 0.5, y: 1.08, showarrow: false,
+                      text: 'implied carryover HALF-LIFE (median dotted)',
+                      font: { size: 12 } }
+                ]
+            });
+            Plotly.react('betaZooChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 2.3 Gamma/Exponential zoo — lambda density + half-saturation spend
+        // ------------------------------------------------------------------
+        const MAXW = 50;  // $k: the channel's biggest observed week (as in the notebook)
+        const lamGrid = linspace(0.005, 8, 480);
+        const spendGrid = linspace(0.5, 150, 480);
+        function drawLamZoo() {
+            const a = parseFloat(document.getElementById('lamShape').value);
+            const mean = parseFloat(document.getElementById('lamMean').value);
+            const rate = a / mean;
+            document.getElementById('lamShapeVal').textContent = a.toFixed(1);
+            document.getElementById('lamMeanVal').textContent = mean.toFixed(2);
+
+            const pdfL = lamGrid.map(function(l) { return Math.min(gammaPdf(l, a, rate), 12); });
+
+            // Exact change of variables: x_half($k) = MAXW*ln2/lambda  =>
+            // lambda(x) = MAXW*ln2/x,  p_X(x) = p_lambda(lambda(x)) * MAXW*ln2 / x^2.
+            const pdfS = spendGrid.map(function(x) {
+                const l = MAXW * Math.LN2 / x;
+                return gammaPdf(l, a, rate) * MAXW * Math.LN2 / (x * x);
+            });
+
+            // P(x_half > max week) = P(lambda < ln2), numeric integral of the pdf.
+            const cutGrid = linspace(1e-4, Math.LN2, 300);
+            let pBeyond = 0;
+            for (let i = 1; i < cutGrid.length; i++) {
+                pBeyond += 0.5 * (gammaPdf(cutGrid[i - 1], a, rate) + gammaPdf(cutGrid[i], a, rate))
+                           * (cutGrid[i] - cutGrid[i - 1]);
+            }
+            document.getElementById('lamBeyondVal').textContent = (100 * pBeyond).toFixed(0) + '%';
+
+            const famName = (a === 1)
+                ? 'Exponential(mean ' + mean.toFixed(2) + ') — framework default shape'
+                : 'Gamma(' + a.toFixed(1) + ', rate ' + rate.toFixed(2) + '), mean ' + mean.toFixed(2);
+            const traces = [
+                { x: lamGrid, y: pdfL, mode: 'lines', xaxis: 'x', yaxis: 'y',
+                  line: { color: PT.colors.tv, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.tv, 0.18),
+                  hovertemplate: 'λ=%{x:.2f}<br>density %{y:.2f}<extra></extra>' },
+                { x: spendGrid, y: pdfS, mode: 'lines', xaxis: 'x2', yaxis: 'y2',
+                  line: { color: PT.colors.display, width: 2.5 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.display, 0.18),
+                  hovertemplate: 'half-sat $%{x:.0f}k/wk<br>density %{y:.4f}<extra></extra>' }
+            ];
+            const layout = twoPanelLayout('saturation rate λ', 'half-saturation spend ($k/week)',
+                                          'prior density', 'implied density', {
+                shapes: [{ type: 'line', xref: 'x2', yref: 'paper',
+                           x0: MAXW, x1: MAXW, y0: 0, y1: 1,
+                           line: { color: PT.colors.truth, width: 1.5, dash: 'dot' } }],
+                annotations: [
+                    { xref: 'x domain', yref: 'paper', x: 0.5, y: 1.08, showarrow: false,
+                      text: famName, font: { size: 12 } },
+                    { xref: 'x2 domain', yref: 'paper', x: 0.5, y: 1.08, showarrow: false,
+                      text: 'implied HALF-SATURATION spend (dotted = max week, $' + MAXW + 'k)',
+                      font: { size: 12 } }
+                ]
+            });
+            Plotly.react('lamZooChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 3. Behavior fans — prior-drawn carryover + response curves
+        // ------------------------------------------------------------------
+        const FAN_SEED = 9, N_FAN = 70;
+        const weeksOut = linspace(0, 12, 13);
+        const xPressure = linspace(0, 1.2, 121);
+        function drawFans() {
+            const a = parseFloat(document.getElementById('fanA').value);
+            const b = parseFloat(document.getElementById('fanB').value);
+            const lamMean = parseFloat(document.getElementById('fanLam').value);
+            document.getElementById('fanAVal').textContent = a.toFixed(1);
+            document.getElementById('fanBVal').textContent = b.toFixed(1);
+            document.getElementById('fanLamVal').textContent = lamMean.toFixed(2);
+
+            const rng = mulberry32(FAN_SEED), norm = makeNormal(rng);
+            const traces = [];
+            const decAll = [], satAll = [];
+            for (let i = 0; i < N_FAN; i++) {
+                const al = betaSample(rng, norm, a, b);
+                const lam = -lamMean * Math.log(1 - rng());
+                const dec = weeksOut.map(function(k) { return Math.pow(al, k); });
+                const sat = xPressure.map(function(x) { return 1 - Math.exp(-lam * x); });
+                decAll.push(dec); satAll.push(sat);
+                traces.push({ x: weeksOut, y: dec, mode: 'lines', xaxis: 'x', yaxis: 'y',
+                              line: { color: PT.colors.search, width: 1 }, opacity: 0.18,
+                              hoverinfo: 'skip', showlegend: false });
+                traces.push({ x: xPressure, y: sat, mode: 'lines', xaxis: 'x2', yaxis: 'y2',
+                              line: { color: PT.colors.tv, width: 1 }, opacity: 0.18,
+                              hoverinfo: 'skip', showlegend: false });
+            }
+            function medianCurve(curves, grid) {
+                return grid.map(function(_, j) {
+                    const col = curves.map(function(c) { return c[j]; }).sort(function(p, q) { return p - q; });
+                    return percentile(col, 50);
+                });
+            }
+            traces.push({ x: weeksOut, y: medianCurve(decAll, weeksOut), mode: 'lines',
+                          xaxis: 'x', yaxis: 'y',
+                          line: { color: PT.colors.truth, width: 3 }, showlegend: false,
+                          hovertemplate: 'median, week %{x}: %{y:.2f}<extra></extra>' });
+            traces.push({ x: xPressure, y: medianCurve(satAll, xPressure), mode: 'lines',
+                          xaxis: 'x2', yaxis: 'y2',
+                          line: { color: PT.colors.truth, width: 3 }, showlegend: false,
+                          hovertemplate: 'median at %{x:.2f}×: %{y:.2f}<extra></extra>' });
+
+            const layout = twoPanelLayout('weeks after the ad ran',
+                                          'media pressure (share of max observed week)',
+                                          'remaining effect (share of week-0 impact)',
+                                          'effect (share of channel ceiling)', {
+                shapes: [
+                    { type: 'line', xref: 'x', yref: 'y', x0: 0, x1: 12, y0: 0.5, y1: 0.5,
+                      line: { color: PT.colors.display, width: 1.5, dash: 'dot' } },
+                    { type: 'line', xref: 'x2', yref: 'y2', x0: 1, x1: 1, y0: 0, y1: 1.02,
+                      line: { color: PT.colors.display, width: 1.5, dash: 'dot' } }
+                ],
+                annotations: [
+                    { xref: 'x domain', yref: 'paper', x: 0.5, y: 1.07, showarrow: false,
+                      text: 'carryover fan — Beta(' + a.toFixed(1) + ', ' + b.toFixed(1) + ')',
+                      font: { size: 12 } },
+                    { xref: 'x2 domain', yref: 'paper', x: 0.5, y: 1.07, showarrow: false,
+                      text: 'response fan — Exponential(mean ' + lamMean.toFixed(2) + ')',
+                      font: { size: 12 } },
+                    { xref: 'x', yref: 'y', x: 11.4, y: 0.5, yanchor: 'bottom', showarrow: false,
+                      text: 'half strength', font: { size: 10, color: '#a44c43' } },
+                    { xref: 'x2', yref: 'y2', x: 1, y: 0.03, xanchor: 'right', showarrow: false,
+                      text: 'biggest week ever bought ', font: { size: 10, color: '#a44c43' } }
+                ]
+            });
+            layout.yaxis.range = [0, 1.02];
+            layout.yaxis2.range = [0, 1.02];
+            Plotly.react('fansChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 4. Prior predictive — full model forward from priors, vague vs sane
+        // ------------------------------------------------------------------
+        const N_WEEKS = 104, N_PP = 200;
+        const SALES_LO = 800, SALES_HI = 1300;
+        function buildSpend() {
+            const rng = mulberry32(7), norm = makeNormal(rng);
+            const tv = [], se = [];
+            for (let t = 0; t < N_WEEKS; t++) tv.push(gammaSample(rng, norm, 3.0, 15.0));
+            for (let t = 0; t < N_WEEKS; t++) se.push(gammaSample(rng, norm, 5.0, 6.0));
+            const mtv = Math.max.apply(null, tv), mse = Math.max.apply(null, se);
+            return { xTv: tv.map(function(v) { return v / mtv; }),
+                     xSe: se.map(function(v) { return v / mse; }) };
+        }
+        const SPEND = buildSpend();
+        function adstock(x, alpha, lmax) {
+            const w = [];
+            let wsum = 0;
+            for (let k = 0; k < lmax; k++) { const v = Math.pow(alpha, k); w.push(v); wsum += v; }
+            const out = new Array(x.length).fill(0);
+            for (let t = 0; t < x.length; t++) {
+                let acc = 0;
+                for (let k = 0; k < lmax && k <= t; k++) acc += x[t - k] * w[k] / wsum;
+                out[t] = acc;
+            }
+            return out;
+        }
+        const ppcCache = {};
+        function simulatePP(mode) {
+            if (ppcCache[mode]) return ppcCache[mode];
+            const p = mode === 'vague'
+                ? { icMu: 0, icSd: 2000, betaSd: 3000, noiseSd: 500, seed: 11 }
+                : { icMu: 1000, icSd: 150, betaSd: 150, noiseSd: 60, seed: 11 };
+            const rng = mulberry32(p.seed), norm = makeNormal(rng);
+            const draws = [];
+            for (let d = 0; d < N_PP; d++) {
+                const b1 = Math.abs(norm() * p.betaSd), b2 = Math.abs(norm() * p.betaSd);
+                const a1 = betaSample(rng, norm, 2, 2), a2 = betaSample(rng, norm, 2, 2);
+                const l1 = -2 * Math.log(1 - rng()), l2 = -2 * Math.log(1 - rng());
+                const ic = p.icMu + norm() * p.icSd;
+                const sd = Math.abs(norm() * p.noiseSd);
+                const ad1 = adstock(SPEND.xTv, a1, 8), ad2 = adstock(SPEND.xSe, a2, 8);
+                const y = new Array(N_WEEKS);
+                for (let t = 0; t < N_WEEKS; t++) {
+                    y[t] = ic + b1 * (1 - Math.exp(-l1 * ad1[t]))
+                              + b2 * (1 - Math.exp(-l2 * ad2[t])) + norm() * sd;
+                }
+                draws.push(y);
+            }
+            const lo = [], hi = [];
+            for (let t = 0; t < N_WEEKS; t++) {
+                const col = draws.map(function(y) { return y[t]; }).sort(function(a, b) { return a - b; });
+                lo.push(percentile(col, 5));
+                hi.push(percentile(col, 95));
+            }
+            ppcCache[mode] = { draws: draws, lo: lo, hi: hi };
+            return ppcCache[mode];
+        }
+        function drawPPC(mode) {
+            const sim = simulatePP(mode);
+            const weeks = linspace(0, N_WEEKS - 1, N_WEEKS);
+            const traces = [{
+                x: weeks.concat(weeks.slice().reverse()),
+                y: sim.hi.concat(sim.lo.slice().reverse()),
+                fill: 'toself', fillcolor: PT.band(PT.colors.search, 0.18),
+                line: { width: 0 }, name: '90% of prior draws', hoverinfo: 'skip'
+            }];
+            for (let i = 0; i < 30; i++) {
+                traces.push({ x: weeks, y: sim.draws[i], mode: 'lines',
+                              line: { color: PT.colors.search, width: 1 }, opacity: 0.25,
+                              hoverinfo: 'skip', showlegend: false });
+            }
+            const title = mode === 'vague'
+                ? 'prior predictive under “assume nothing” priors — fake sales the model finds plausible'
+                : 'prior predictive after the check — fake sales now look like sales';
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'weekly sales ($k)' },
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 70, r: 30, t: 45, b: 55 },
+                shapes: [
+                    { type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: SALES_LO, y1: SALES_HI,
+                      fillcolor: PT.band(PT.colors.tv, 0.22), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0,
+                      line: { color: PT.colors.display, width: 1.5, dash: 'dash' } }
+                ],
+                annotations: [
+                    { xref: 'paper', x: 0.02, y: (SALES_LO + SALES_HI) / 2, xanchor: 'left',
+                      text: 'where real weekly sales actually live', showarrow: false,
+                      font: { size: 11, color: '#3f7a58' } },
+                    { xref: 'paper', x: 0.98, y: 0, xanchor: 'right', yanchor: 'bottom',
+                      text: 'zero sales', showarrow: false,
+                      font: { size: 11, color: '#a44c43' } },
+                    { xref: 'paper', yref: 'paper', x: 0.5, y: 1.07, showarrow: false,
+                      text: title, font: { size: 12.5 } }
+                ]
+            });
+            Plotly.react('ppcChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // 6. Sensitivity — conjugate Normal update, exact pencil-and-paper
+        // ------------------------------------------------------------------
+        const TRUE_BETA = 1.2, NOISE_SD = 1.0, N_BIG = 156;
+        const sensData = (function() {
+            const rng = mulberry32(21), norm = makeNormal(rng);
+            const x = [], y = [];
+            for (let i = 0; i < N_BIG; i++) {
+                const xi = 0.2 + 0.8 * rng();
+                x.push(xi);
+                y.push(TRUE_BETA * xi + norm() * NOISE_SD);
+            }
+            return { x: x, y: y };
+        })();
+        function exactPosterior(mu0, sd0, n) {
+            let sxx = 0, sxy = 0;
+            for (let i = 0; i < n; i++) {
+                sxx += sensData.x[i] * sensData.x[i];
+                sxy += sensData.x[i] * sensData.y[i];
+            }
+            const prec = 1 / (sd0 * sd0) + sxx / (NOISE_SD * NOISE_SD);
+            const mean = (mu0 / (sd0 * sd0) + sxy / (NOISE_SD * NOISE_SD)) / prec;
+            return { mean: mean, sd: Math.pow(prec, -0.5) };
+        }
+        const betaGrid = linspace(-0.6, 2.6, 481);
+        const SENS_PRIORS = [
+            { name: 'near-flat: Normal(0, 50)', mu: 0, sd: 50, color: PT.colors.expected },
+            { name: 'weakly informative: Normal(1, 1)', mu: 1, sd: 1, color: PT.colors.search },
+            { name: 'confident & WRONG: Normal(0.5, 0.15)', mu: 0.5, sd: 0.15, color: PT.colors.display }
+        ];
+        function drawSensPanel() {
+            const traces = [];
+            [[6, 'x', 'y', true], [N_BIG, 'x2', 'y2', false]].forEach(function(cfg) {
+                const n = cfg[0], xa = cfg[1], ya = cfg[2], showLeg = cfg[3];
+                SENS_PRIORS.forEach(function(p) {
+                    const post = exactPosterior(p.mu, p.sd, n);
+                    traces.push({
+                        x: betaGrid,
+                        y: betaGrid.map(function(v) { return normPdf((v - post.mean) / post.sd) / post.sd; }),
+                        mode: 'lines', xaxis: xa, yaxis: ya, name: p.name,
+                        legendgroup: p.name, showlegend: showLeg,
+                        line: { color: p.color, width: 2.5 },
+                        hovertemplate: 'β=%{x:.2f}<br>density %{y:.2f}<extra>' + p.name + '</extra>'
+                    });
+                });
+            });
+            const layout = twoPanelLayout('TV effect β', 'TV effect β',
+                                          'posterior density', '', {
+                showlegend: true,
+                legend: { orientation: 'h', y: 1.18 },
+                margin: { l: 60, r: 20, t: 55, b: 55 },
+                shapes: [
+                    { type: 'line', xref: 'x', yref: 'paper', x0: TRUE_BETA, x1: TRUE_BETA,
+                      y0: 0, y1: 0.92, line: { color: PT.colors.tv, width: 2, dash: 'dot' } },
+                    { type: 'line', xref: 'x2', yref: 'paper', x0: TRUE_BETA, x1: TRUE_BETA,
+                      y0: 0, y1: 0.92, line: { color: PT.colors.tv, width: 2, dash: 'dot' } }
+                ],
+                annotations: [
+                    { xref: 'x domain', yref: 'paper', x: 0.5, y: 0.99, showarrow: false,
+                      text: 'after 6 weeks of data', font: { size: 12 } },
+                    { xref: 'x2 domain', yref: 'paper', x: 0.5, y: 0.99, showarrow: false,
+                      text: 'after 156 weeks (3 years)', font: { size: 12 } },
+                    { xref: 'x', yref: 'paper', x: TRUE_BETA, y: 0.93, showarrow: false,
+                      text: 'truth', font: { size: 10, color: '#3f7a58' } }
+                ]
+            });
+            layout.xaxis.range = [-0.4, 2.4];
+            layout.xaxis2.range = [-0.4, 2.4];
+            Plotly.newPlot('sensPanelChart', traces, layout, PT.config);
+        }
+        function drawSensExplorer() {
+            const mu0 = parseFloat(document.getElementById('sensMu').value);
+            const sd0 = parseFloat(document.getElementById('sensSd').value);
+            const n = parseInt(document.getElementById('sensN').value, 10);
+            document.getElementById('sensMuVal').textContent = mu0.toFixed(2);
+            document.getElementById('sensSdVal').textContent = sd0.toFixed(2);
+            document.getElementById('sensNVal').textContent = String(n);
+            const post = exactPosterior(mu0, sd0, n);
+            document.getElementById('sensPostVal').textContent = post.mean.toFixed(2);
+
+            const traces = [
+                { x: betaGrid,
+                  y: betaGrid.map(function(v) { return normPdf((v - mu0) / sd0) / sd0; }),
+                  mode: 'lines', name: 'prior',
+                  line: { color: PT.colors.expected, width: 2, dash: 'dash' } },
+                { x: betaGrid,
+                  y: betaGrid.map(function(v) { return normPdf((v - post.mean) / post.sd) / post.sd; }),
+                  mode: 'lines', name: 'posterior',
+                  line: { color: PT.colors.search, width: 3 } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'TV effect β', range: [-0.6, 2.6] },
+                yaxis: { title: 'density' },
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 60, r: 20, t: 40, b: 55 },
+                shapes: [{ type: 'line', x0: TRUE_BETA, x1: TRUE_BETA, y0: 0, y1: 1, yref: 'paper',
+                           line: { color: PT.colors.tv, width: 2, dash: 'dot' } }],
+                annotations: [{ x: TRUE_BETA, y: 1, yref: 'paper', yanchor: 'bottom',
+                                text: 'truth', showarrow: false,
+                                font: { size: 11, color: '#3f7a58' } }]
+            });
+            Plotly.react('sensChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Wiring
+        // ------------------------------------------------------------------
+        function init() {
+            drawVocab();
+            drawBetaZoo();
+            drawLamZoo();
+            drawFans();
+            drawPPC('vague');
+            drawSensPanel();
+            drawSensExplorer();
+
+            document.getElementById('sigmaWeak').addEventListener('input', drawVocab);
+            document.getElementById('betaA').addEventListener('input', drawBetaZoo);
+            document.getElementById('betaB').addEventListener('input', drawBetaZoo);
+            document.getElementById('lamShape').addEventListener('input', drawLamZoo);
+            document.getElementById('lamMean').addEventListener('input', drawLamZoo);
+            document.getElementById('fanA').addEventListener('input', drawFans);
+            document.getElementById('fanB').addEventListener('input', drawFans);
+            document.getElementById('fanLam').addEventListener('input', drawFans);
+            document.getElementById('sensMu').addEventListener('input', drawSensExplorer);
+            document.getElementById('sensSd').addEventListener('input', drawSensExplorer);
+            document.getElementById('sensN').addEventListener('input', drawSensExplorer);
+
+            document.querySelectorAll('[data-ppc]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('[data-ppc]').forEach(function(b) {
+                        b.classList.remove('active');
+                    });
+                    btn.classList.add('active');
+                    drawPPC(btn.dataset.ppc);
+                });
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

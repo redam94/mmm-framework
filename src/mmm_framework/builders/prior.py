@@ -214,7 +214,7 @@ class SaturationConfigBuilder:
     """
 
     def __init__(self) -> None:
-        self._type: SaturationType = SaturationType.HILL
+        self._type: SaturationType = SaturationType.LOGISTIC
         self._kappa_prior: PriorConfig | None = None
         self._slope_prior: PriorConfig | None = None
         self._beta_prior: PriorConfig | None = None

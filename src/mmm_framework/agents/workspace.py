@@ -111,6 +111,59 @@ def plot_path(plot_id: str) -> Path | None:
     return p if p.exists() else None
 
 
+def table_store_dir() -> Path:
+    """Content-addressed store for structured table payloads (shared, dedup'd)."""
+    d = workspace_root() / "tables"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+# Tables are untrusted egress from the kernel, same as plots: schema-filtered,
+# size-capped, thread-salted. Rows never travel through the SSE stream — only
+# the id ref does; the payload is served once via GET /tables/{id}.
+_TABLE_MAX_BYTES = int(os.environ.get("MMM_TABLE_MAX_BYTES", str(1024 * 1024)))
+_TABLE_ALLOWED_KEYS = (
+    "title",
+    "columns",
+    "rows",
+    "total_rows",
+    "truncated",
+    "source",
+    "group",
+)
+
+
+def store_table(table_json: dict, thread_id: str | None = None) -> str:
+    """Write a structured table payload to the content-addressed store and
+    return its id.
+
+    Same trust model as :func:`store_plot`: the payload is schema-filtered
+    (must be a dict with a ``rows`` list; extra top-level keys are dropped) and
+    size-capped (``MMM_TABLE_MAX_BYTES``) — a violation raises ``ValueError``
+    so the caller drops it. The id is salted with ``thread_id`` because the id
+    IS the capability for ``GET /tables/{id}``."""
+    if not isinstance(table_json, dict) or not isinstance(table_json.get("rows"), list):
+        raise ValueError("not a table payload (expected a dict with a 'rows' list)")
+    table = {k: table_json[k] for k in _TABLE_ALLOWED_KEYS if k in table_json}
+    payload = json.dumps(table, sort_keys=True, default=str)
+    if len(payload.encode("utf-8")) > _TABLE_MAX_BYTES:
+        raise ValueError(
+            f"table exceeds MMM_TABLE_MAX_BYTES ({_TABLE_MAX_BYTES} bytes)"
+        )
+    salt = f"{thread_id or ''}\x00"
+    tid = hashlib.sha256((salt + payload).encode("utf-8")).hexdigest()[:24]
+    path = table_store_dir() / f"{tid}.json"
+    if not path.exists():
+        path.write_text(payload, encoding="utf-8")
+    return tid
+
+
+def table_path(table_id: str) -> Path | None:
+    """Resolve a stored table id to its on-disk JSON path (or None)."""
+    p = table_store_dir() / f"{_safe_segment(table_id)}.json"
+    return p if p.exists() else None
+
+
 def report_path(name: str, thread_id: str | None = None) -> Path:
     """Where an agent report HTML file lives (PR-F.6). Hosted: per-session under
     the workspace (an allowed root, so it survives dropping ``Path.cwd()`` and is

@@ -3,8 +3,8 @@ import { clsx } from 'clsx';
 import {
   HomeIcon,
   ChartBarIcon,
-  ClipboardDocumentListIcon,
   ChatBubbleLeftRightIcon,
+  CircleStackIcon,
   ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
@@ -17,7 +17,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Analysis Plan', href: '/analysis-plan', icon: ClipboardDocumentListIcon },
+  { name: 'Runs', href: '/runs', icon: CircleStackIcon },
   { name: 'Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
 ];
 
