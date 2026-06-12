@@ -136,6 +136,10 @@
                 This guide walks you through a complete, pre-specified modeling workflow using the MMM Framework. Each step includes both the conceptual reasoning and the code to implement it. The goal is not just to produce a model, but to produce a model you can defend.
             </p>
 
+            <p>
+                The workflow is causal at its core. Every variable enters with a declared role&mdash;a <strong>confounder</strong> the model must adjust for (holiday demand lifts both spend and sales), a <strong>precision control</strong> that sharpens estimates without biasing them, or a <strong>mediator</strong> that carries the very effect you are measuring&mdash;and the specification is locked in before results are seen. That combination is what lets the model answer &ldquo;what did media cause&rdquo; rather than &ldquo;what correlates best.&rdquo;
+            </p>
+
             <div class="takeaway-box">
                 <h4>The Core Principle</h4>
                 <p>
@@ -259,7 +263,7 @@
 
             <h2 id="preregister">Pre-Register Your Specification</h2>
             <p>
-                Before fitting the model, document the following decisions. This is your analysis plan.
+                Before fitting the model, document the following decisions. This is your analysis plan&mdash;and the lock against specification shopping. Once variable roles, priors, and structure are written down, there is no quiet path to a more flattering model later: any change must be documented, justified, and reported alongside the original.
             </p>
 
             <div class="code-wrapper">
@@ -643,6 +647,10 @@ for name, res in sensitivity_results.items():
                 </p>
             </div>
 
+            <p>
+                Fragile estimates are not a dead end&mdash;they are the entry point to the measurement loop: the channels where conclusions are least stable are exactly where a lift test buys the most learning. See the <a href="measurement-calibration.html">Measurement &amp; Calibration</a> guide for how experiment results feed back into the model.
+            </p>
+
             <!-- PHASE 4: REPORT -->
             <h2 id="extract-insights" style="border-top: 3px solid var(--color-danger);">
                 <span class="phase-badge report">Phase 4: Report</span><br>
@@ -717,6 +725,10 @@ report.to_html("q4_2025_mmm_report.html")</code></pre>
                     See the <a href="interpreting-results.html">Interpreting Results for Media Planners and CMOs</a> guide for specific recommendations on presenting uncertainty, creating executive summaries, and translating model outputs into actionable planning guidance.
                 </p>
             </div>
+
+            <p>
+                When a report recommends validation, the platform&rsquo;s experiment design studio can turn that recommendation directly into a pre-registered geo lift or matched-market test&mdash;see the <a href="platform-overview.html">Platform Overview</a> for a tour.
+            </p>
 
             <h2 id="iterate">When (and How) to Iterate</h2>
             <p>

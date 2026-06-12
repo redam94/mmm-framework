@@ -136,6 +136,14 @@
                 <li><strong>Overfitting is tempting:</strong> With many channels and controls, specification shopping is easy</li>
             </ul>
 
+            <p>
+                Beneath the mechanics, the seven phases share one purpose: protecting the <strong>causal
+                interpretation</strong> of the model's attribution. Prior predictive checks encode marketing knowledge
+                before the data can speak; sensitivity analysis asks whether the attribution survives perturbation.
+                A model that passes these gates has earned the right to say "this is what your media caused," not
+                merely "this is what fit best."
+            </p>
+
             <!-- ================================================================== -->
             <h2 id="workflow-diagram">The Full Workflow</h2>
             
@@ -269,7 +277,9 @@
             <h3 id="prior-elicitation">Prior Elicitation</h3>
 
             <p>
-                Priors encode domain knowledge <em>before</em> seeing the data. In MMM, we often have strong beliefs:
+                Priors encode domain knowledge <em>before</em> seeing the data. Think of them as your media plan's
+                institutional memory—what decades of marketing science says about plausible effect sizes, carryover,
+                and saturation before this particular dataset speaks. In MMM, we often have strong beliefs:
             </p>
 
             <table>
@@ -738,7 +748,9 @@ az.plot_compare(comparison)</code></pre>
 
             <p>
                 How much do our conclusions depend on our modeling choices? Sensitivity analysis systematically
-                varies assumptions to assess robustness.
+                varies assumptions to assess robustness. For an MMM, this is the causal stress test: if a channel's
+                attribution survives reasonable perturbations of priors, trend, and influential weeks, you can treat
+                it as a finding rather than an artifact of one specification.
             </p>
 
             <h3 id="prior-sensitivity">Prior Sensitivity</h3>

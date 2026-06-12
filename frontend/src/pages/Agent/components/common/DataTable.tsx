@@ -80,24 +80,24 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
 
   return (
     <div>
-      <div className="overflow-auto rounded-lg border border-gray-200" style={{ maxHeight }}>
+      <div className="overflow-auto rounded-lg border border-line-200" style={{ maxHeight }}>
         <table className="w-full text-left text-sm border-collapse">
-          <thead className="sticky top-0 bg-gray-50 z-10 text-gray-500 uppercase text-xs">
+          <thead className="sticky top-0 bg-cream-50 z-10 text-ink-400 uppercase text-xs">
             <tr>
               {table.columns.map(col => {
                 const numeric = numericCols.has(col.key);
                 const active = sort?.key === col.key;
                 return (
-                  <th key={col.key} className="px-3 py-2.5 font-medium border-b border-gray-200">
+                  <th key={col.key} className="px-3 py-2.5 font-medium border-b border-line-200">
                     <button
                       onClick={() => cycleSort(col.key)}
                       className={`flex items-center gap-1 w-full uppercase transition-colors ${
                         numeric ? 'justify-end text-right' : 'justify-start text-left'
-                      } ${active ? 'text-indigo-600' : 'hover:text-gray-800'}`}
+                      } ${active ? 'text-sage-800' : 'hover:text-ink-900'}`}
                       title="Sort column"
                     >
                       <span className="truncate">{col.label}</span>
-                      <span className={`text-[9px] shrink-0 ${active ? 'text-indigo-500' : 'text-gray-300'}`}>
+                      <span className={`text-[9px] shrink-0 ${active ? 'text-sage-700' : 'text-ink-300'}`}>
                         {active ? (sort?.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
@@ -106,16 +106,16 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line-200">
             {sortedRows.map((row, ri) => (
-              <tr key={ri} className="bg-white hover:bg-gray-50 transition-colors">
+              <tr key={ri} className="bg-white hover:bg-cream-100 transition-colors">
                 {table.columns.map(col => (
                   <td
                     key={col.key}
                     className={`px-3 py-2 whitespace-nowrap ${
                       numericCols.has(col.key)
-                        ? 'text-right tabular-nums text-gray-700'
-                        : 'text-gray-700'
+                        ? 'text-right tabular-nums text-ink-700'
+                        : 'text-ink-700'
                     }`}
                   >
                     {formatCell(row[col.key], col.type)}
@@ -125,7 +125,7 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
             ))}
             {sortedRows.length === 0 && (
               <tr>
-                <td colSpan={table.columns.length} className="px-3 py-6 text-center text-gray-400">
+                <td colSpan={table.columns.length} className="px-3 py-6 text-center text-ink-300">
                   No rows
                 </td>
               </tr>
@@ -134,14 +134,14 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
         </table>
       </div>
       <div className="flex items-center justify-between gap-3 pt-2">
-        <p className="text-[11px] text-gray-400">
+        <p className="text-[11px] text-ink-300">
           {table.truncated
             ? `Showing ${table.rows.length} of ${totalRows} rows — full data available via CSV`
             : `${totalRows} row${totalRows === 1 ? '' : 's'}`}
         </p>
         <button
           onClick={downloadCsv}
-          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 transition-colors shrink-0"
+          className="flex items-center gap-1 text-[11px] text-ink-300 hover:text-sage-800 transition-colors shrink-0"
           title="Download the visible rows as CSV"
         >
           <Download size={11} /> Download CSV

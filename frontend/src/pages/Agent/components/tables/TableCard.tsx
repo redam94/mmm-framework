@@ -27,17 +27,17 @@ export const TableCard = React.memo(function TableCard({
   return (
     <div
       ref={wrapRef}
-      className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden min-h-[140px]"
+      className="rounded-xl border border-line-200 bg-white shadow-sm overflow-hidden min-h-[140px]"
     >
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <p className="text-xs text-gray-500 font-semibold truncate flex-1">{title}</p>
+        <p className="text-xs text-ink-400 font-semibold truncate flex-1">{title}</p>
         {spec && (
-          <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">
+          <span className="text-[10px] text-ink-300 shrink-0 tabular-nums">
             {(spec.total_rows ?? spec.rows.length)} × {spec.columns.length}
           </span>
         )}
         {source && (
-          <span className="text-[10px] font-mono bg-gray-100 text-gray-500 border border-gray-200 rounded-full px-2 py-0.5 shrink-0">
+          <span className="text-[10px] font-mono bg-cream-100 text-ink-400 border border-line-200 rounded-full px-2 py-0.5 shrink-0">
             {source}
           </span>
         )}
@@ -47,7 +47,7 @@ export const TableCard = React.memo(function TableCard({
           <DataTable table={spec} maxHeight={360} />
         </div>
       ) : (
-        <div className="h-[100px] flex items-center justify-center text-sm text-gray-400">
+        <div className="h-[100px] flex items-center justify-center text-sm text-ink-300">
           {inView ? 'Loading table…' : ''}
         </div>
       )}

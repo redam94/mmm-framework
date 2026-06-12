@@ -1168,8 +1168,13 @@ class BayesianMMM:
             else:
                 n_obs_data = X_media_low_data.shape[0]
 
-            # INTERCEPT
-            intercept = pm.Normal("intercept", mu=0, sigma=0.5)
+            # INTERCEPT (getattr defaults keep configs pickled before these
+            # fields existed loadable)
+            intercept = pm.Normal(
+                "intercept",
+                mu=getattr(self.model_config, "intercept_prior_mu", 0.0),
+                sigma=getattr(self.model_config, "intercept_prior_sigma", 0.5),
+            )
             pm.Deterministic(
                 "intercept_component", intercept + pt.zeros(n_obs_data), dims="obs"
             )

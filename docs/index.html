@@ -20,7 +20,7 @@
         {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "Your MMM Framework Name",
+        "name": "MMM Framework",
         "operatingSystem": "Python",
         "applicationCategory": "BusinessApplication",
         "offers": {
@@ -525,11 +525,11 @@
                 <span class="hero-badge">🎯 Open Source</span>
                 <h1>Marketing Measurement <span>You Can Trust</span></h1>
                 <p class="hero-description">
-                    Move beyond point estimates and gut feelings. Our Bayesian framework gives you honest uncertainty ranges so you can make decisions with confidence.
+                    A marketing mix model answers a causal question — "what would sales have been without this media?" — not just "what moved together?" Our Bayesian framework estimates the <em>incremental</em> impact your media actually caused, with honest uncertainty ranges so you can make decisions with confidence. And unlike most MMM stacks, measurement here is a closed loop: the model prices which experiment to run next, pre-registers it, and folds the result back in.
                 </p>
                 <div class="hero-cta">
                     <a href="#demo" class="btn btn-primary">Try Interactive Demo</a>
-                    <a href="technical-guide.html" class="btn btn-secondary">Technical Guide</a>
+                    <a href="#compare" class="btn btn-secondary">How It Compares</a>
                 </div>
             </div>
             <div class="hero-visual">
@@ -549,10 +549,10 @@
             </div>
             <div class="problem-grid">
                 <div class="problem-content fade-in">
-                    <h3>Specification Shopping</h3>
-                    <p>Traditional approaches often involve running dozens of model variations and selecting the one with results that "make sense." This feels rigorous but actually destroys statistical validity.</p>
-                    <p>Watch the dartboard: each throw represents a model specification. Only the bullseyes (models with "good" results) get reported. The misses? Quietly discarded.</p>
-                    <p><strong>The result:</strong> Your reported 100% accuracy is an illusion. The real accuracy is much lower, but you'll never know because you only see the "winners."</p>
+                    <h3>Coincidence Is Not Contribution</h3>
+                    <p>Lots of things move together: ice cream sales and sunburns rise in the same weeks without one causing the other, and holiday demand lifts both ad spend and sales at once. Separating coincidence from contribution takes discipline — and traditional MMM often skips it, running dozens of model variations and reporting the one that "makes sense."</p>
+                    <p>Watch the dartboard: each throw is a model specification. Only the bullseyes get reported; the misses are quietly discarded, so the reported accuracy is an illusion.</p>
+                    <p>This framework takes the opposite path. It accounts for confounders like underlying demand, locks the model design in before results are seen, and checks its answers against real-world experiments such as regional holdout tests. The result is an estimate of <em>incremental</em> impact — what your media actually caused. Read <a href="about.html">the full argument</a>, or see <a href="business-stakeholders.html">what specification shopping costs the business</a>.</p>
                 </div>
                 <div class="dartboard-demo fade-in">
                     <div class="dartboard-container">
@@ -586,7 +586,7 @@
                         <h4>This Is Specification Shopping</h4>
                         <p>The darts that miss are models with "unrealistic" results—quietly discarded.</p>
                         <div id="punchline" class="hidden">
-                            <p>🎯 Real accuracy: 15% | Reported: 100%</p>
+                            <p>🎯 <span id="punchline-text"></span></p>
                         </div>
                         <button class="restart-btn" onclick="restartDartboard()">↻ Replay Animation</button>
                     </div>
@@ -793,6 +793,116 @@
         </div>
     </section>
 
+    <!-- Measurement Loop Section -->
+    <section class="feature-section" id="measurement-loop">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>Measurement Is a Loop, Not a Report</h2>
+                <p>One model fit is a snapshot. The framework's operating rhythm is a cycle that keeps sharpening your answers — like a research budget for your media plan, spent exactly where learning changes the next decision most.</p>
+            </div>
+            <div class="docs-grid">
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">T&#8320; &middot; Fit</div>
+                    <h3>Fit the Model</h3>
+                    <p>Estimate incremental impact for every channel, with honest uncertainty ranges instead of single guaranteed numbers.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">T&#8321; &middot; Find</div>
+                    <h3>Find the Expensive Unknowns</h3>
+                    <p>Pinpoint where uncertainty costs the most, in dollars — expected information gain and expected value of information rank what to learn next.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">T&#8322; &middot; Run</div>
+                    <h3>Run the Right Experiment</h3>
+                    <p>Pre-registered tests that buy the most learning: regional holdout (geo lift), matched-market, or budget-neutral flighting designs.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">T&#8323; &middot; Feed Back</div>
+                    <h3>Feed the Result Back</h3>
+                    <p>Experiment readouts flow into a calibrated refit — the model proposes, a real-world test disposes, and the estimates tighten.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">T&#8324; &middot; Reallocate</div>
+                    <h3>Reallocate Budget</h3>
+                    <p>Shift spend with the sharper answer, accounting for carryover, saturation, and genuine remaining uncertainty.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">T&#8325; &middot; Re-evaluate</div>
+                    <h3>Re-evaluate as Knowledge Ages</h3>
+                    <p>Information decays as markets shift, so the cycle flags when a past answer needs re-testing — and the loop repeats.</p>
+                </div>
+            </div>
+            <p style="text-align: center; color: var(--color-text-muted); margin-top: 2rem;">
+                See how the loop works in <a href="measurement-calibration.html">the calibration loop guide</a>, or follow <a href="workflow-calibration-decisions.html">a worked calibration decision</a> end to end.
+            </p>
+        </div>
+    </section>
+
+    <!-- Platform Section -->
+    <section class="models-section" id="platform">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>The Platform</h2>
+                <p>The measurement loop runs in a modern web application — and everything it does is also available as a Python library for teams who prefer code.</p>
+            </div>
+            <div class="docs-grid">
+                <a class="doc-card" href="platform-overview.html">
+                    <div class="doc-eyebrow">Web app</div>
+                    <h3>Program</h3>
+                    <p>Your home base: where you are in the measurement cycle, headline KPIs, next-best actions, and a coverage map of what has been validated.</p>
+                </a>
+                <a class="doc-card" href="platform-overview.html">
+                    <div class="doc-eyebrow">Web app</div>
+                    <h3>Experiments</h3>
+                    <p>A priority matrix of what to test next, a lifecycle board from draft to calibrated, and a studio for designing the tests themselves.</p>
+                </a>
+                <a class="doc-card" href="platform-overview.html">
+                    <div class="doc-eyebrow">Web app</div>
+                    <h3>Performance</h3>
+                    <p>Cycle-over-cycle trajectories, a log of where the model and experiments agree, and a timeline of every model run.</p>
+                </a>
+                <a class="doc-card" href="platform-overview.html">
+                    <div class="doc-eyebrow">Web app</div>
+                    <h3>AI Agent Workspace</h3>
+                    <p>A chat-based analyst assistant that validates data, fits models, plans experiments, and drafts client-ready reports — with dashboards alongside the conversation.</p>
+                </a>
+            </div>
+            <p style="text-align: center; color: var(--color-text-muted); margin-top: 2rem;">
+                <a href="platform-overview.html">Take the platform tour</a>, or start with <a href="getting-started.html">the Python library</a>.
+            </p>
+        </div>
+    </section>
+
+    <!-- Comparison Section -->
+    <section class="feature-section" id="compare">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2>Honest About the Alternatives</h2>
+                <p>Meridian, Robyn, and PyMC-Marketing are serious tools built by serious teams. Here is the difference in approach — stated plainly, the way we would want a vendor to state it to us.</p>
+            </div>
+            <div class="docs-grid">
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">vs. Robyn (Meta)</div>
+                    <h3>One Pre-Specified Model, Not a Menu</h3>
+                    <p>Robyn searches thousands of model candidates with an evolutionary optimizer and asks the analyst to choose from a Pareto front of finalists. That selection step is exactly where specification shopping lives — and exactly what this framework locks down. Here there is one pre-registered Bayesian model, and uncertainty comes from its full posterior, not from which finalist got picked.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">vs. Meridian (Google)</div>
+                    <h3>Calibration Plus the Planning Loop</h3>
+                    <p>Meridian is a capable Bayesian geo-MMM, and its lift-test calibration is real. This framework operates the rest of the loop: it prices <em>which</em> experiment to run next (expected information gain, expected value of information in dollars), pre-registers the design, tracks its lifecycle, and folds the readout back in. It also models mediation — TV driving search driving sales — and multiple KPIs jointly, structures most MMM stacks do not represent.</p>
+                </div>
+                <div class="doc-card fade-in">
+                    <div class="doc-eyebrow">vs. PyMC-Marketing</div>
+                    <h3>Built On It, Not Against It</h3>
+                    <p>We extend PyMC-Marketing rather than compete with it. The library provides excellent Bayesian MMM foundations; this framework adds what a production measurement program needs around them: causal guardrails (declared variable roles, refutation checks), the experiment loop, a full web platform, and an AI analyst workspace.</p>
+                </div>
+            </div>
+            <p style="text-align: center; color: var(--color-text-muted); margin-top: 2rem; max-width: 760px; margin-left: auto; margin-right: auto;">
+                Every vendor's deck says "Bayesian" and "calibrated." Two claims here are harder to make and easy to verify: the model design is locked <em>before</em> results are seen, and the methodology is pressure-tested in public against synthetic markets with known ground truth — including the worlds where it struggles. <a href="pressure-testing.html">See the pressure-test scorecard</a>.
+            </p>
+        </div>
+    </section>
+
     <!-- Documentation Section -->
     <section class="docs-section" id="documentation">
         <div class="container">
@@ -927,13 +1037,27 @@
             document.getElementById('punchline').classList.add('hidden');
             let dartIndex = 0;
             const throwInterval = setInterval(() => {
-                if (dartIndex >= 20) { clearInterval(throwInterval); dartboardAnimationRunning = false; document.getElementById('accuracy-stat').classList.remove('hidden'); document.getElementById('punchline').classList.remove('hidden'); return; }
-                throwDart(); dartIndex++;
+                if (dartIndex >= 20) {
+                    clearInterval(throwInterval); dartboardAnimationRunning = false;
+                    document.getElementById('accuracy-stat').classList.remove('hidden');
+                    // Punchline is computed from this run, not hardcoded: only the
+                    // bullseyes get reported, so "reported accuracy" is 100% by
+                    // construction, while real accuracy is hits over all models run.
+                    const realPct = Math.round(100 * dartsKept / dartsThrown);
+                    document.getElementById('punchline-text').textContent =
+                        'Real accuracy: ' + realPct + '% (' + dartsKept + ' of ' + dartsThrown + ' models) | Reported: 100%';
+                    document.getElementById('punchline').classList.remove('hidden');
+                    return;
+                }
+                // Two throws are guaranteed hits so there is always something to
+                // "report"; the rest are honest random throws.
+                throwDart(dartIndex === 6 || dartIndex === 14); dartIndex++;
             }, 300);
         }
-        function throwDart() {
+        function throwDart(forceBullseye) {
             const dartsGroup = document.getElementById('darts-group');
-            const angle = Math.random() * 2 * Math.PI, distance = Math.random() * 130;
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = forceBullseye ? Math.random() * 22 : Math.random() * 130;
             const x = 150 + distance * Math.cos(angle), y = 150 + distance * Math.sin(angle);
             const isBullseye = distance < 25;
             const dart = document.createElementNS('http://www.w3.org/2000/svg', 'circle');

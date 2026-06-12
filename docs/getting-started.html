@@ -371,8 +371,8 @@
             <h3>Architecture</h3>
             <ul class="sidebar-nav">
                 <li><a href="#project-structure">Project Structure</a></li>
-                <li><a href="#api-backend">API Backend</a></li>
-                <li><a href="#streamlit-app">Streamlit App</a></li>
+                <li><a href="#api-backend">Web Application</a></li>
+                <li><a href="#streamlit-app">Streamlit (Legacy)</a></li>
             </ul>
 
             <h3>Next Steps</h3>
@@ -391,8 +391,22 @@
             <div class="highlight-box">
                 <h4>What You'll Build</h4>
                 <p>
-                    By the end of this guide, you'll have a working MMM that estimates media effects 
+                    By the end of this guide, you'll have a working MMM that estimates media effects
                     with honest uncertainty quantification—the foundation for decisions you can trust.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>What you're building is a causal model</h4>
+                <p>
+                    A marketing mix model answers a causal question—"what would sales have been if we
+                    hadn't run this media?"—not just "what moved together?" Lots of things move together
+                    without one causing the other, the way holiday demand lifts both ad spend and sales
+                    at the same time. This framework separates coincidence from contribution: it accounts
+                    for confounders like underlying demand, locks the model design in before results are
+                    seen, and checks its answers against real-world experiments such as regional holdout
+                    tests. Read more in <a href="causal-inference.html">Causal Inference</a> and
+                    <a href="measurement-calibration.html">Measurement &amp; Calibration</a>.
                 </p>
             </div>
 
@@ -445,8 +459,8 @@
             <div class="note">
                 <h4>Why Redis?</h4>
                 <p>
-                    The framework uses Redis + ARQ for asynchronous model fitting. This allows the 
-                    Streamlit frontend to remain responsive while MCMC sampling runs in the background.
+                    The framework uses Redis + ARQ for asynchronous model fitting. This allows the
+                    web frontends to remain responsive while MCMC sampling runs in the background.
                     For development, a local Redis instance is sufficient.
                 </p>
             </div>
@@ -473,7 +487,7 @@
             </div>
 
             <h3>Install App Dependencies</h3>
-            <p>If you want to use the Streamlit frontend and API backend:</p>
+            <p>If you want to use the web application (API backend plus the React or Streamlit frontend):</p>
             <div class="terminal-block">
                 <div class="terminal-header">
                     <span class="terminal-dot red"></span>
@@ -481,10 +495,12 @@
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
-                    <span class="comment"># Install app dependencies for Streamlit frontend</span><br>
+                    <span class="comment"># Install app dependencies (API backend + Streamlit frontend)</span><br>
                     <span class="prompt">$</span> uv sync --group app<br><br>
                     <span class="comment"># For development (includes testing tools)</span><br>
-                    <span class="prompt">$</span> uv sync --group dev --group app
+                    <span class="prompt">$</span> uv sync --group dev --group app<br><br>
+                    <span class="comment"># For the React frontend, install its packages once</span><br>
+                    <span class="prompt">$</span> cd frontend &amp;&amp; npm install
                 </div>
             </div>
 
@@ -740,8 +756,8 @@ az.plot_forest(results.idata, var_names=["beta_TV", "beta_Digital"])</code></pre
 
             <h3 id="generating-reports">Generating Reports</h3>
             <p>
-                The framework includes a powerful <strong>reporting module</strong> that generates 
-                portable, single-file HTML reports with embedded Plotly charts and honest uncertainty 
+                The framework includes a <strong>reporting module</strong> that generates
+                portable, single-file HTML reports with embedded Plotly charts and honest uncertainty
                 quantification throughout.
             </p>
 
@@ -1019,9 +1035,11 @@ hierarchical = (
                 <span class="indent"><span class="file">README.md</span> — Project documentation</span>
             </div>
 
-            <h2 id="api-backend">Running the API Backend</h2>
+            <h2 id="api-backend">Running the Web Application</h2>
             <p>
-                For production use or the Streamlit app, start the full stack:
+                The web application pairs a shared backend (Redis, FastAPI, and an ARQ worker) with
+                your choice of two frontends: the modern React web app (recommended) or the legacy
+                Streamlit interface. Whichever frontend you choose, start the backend services first:
             </p>
 
             <div class="quick-start-grid">
@@ -1036,7 +1054,7 @@ hierarchical = (
                 </div>
                 <div class="quick-start-card">
                     <h4><span class="step-number">2</span> Start API Server</h4>
-                    <p>FastAPI backend with OpenAPI docs.</p>
+                    <p>FastAPI backend with OpenAPI docs (port 8000).</p>
                     <div class="terminal-block" style="margin: 0.5rem 0;">
                         <div class="terminal-content" style="padding: 0.75rem;">
                             <span class="prompt">$</span> cd api<br>
@@ -1054,21 +1072,47 @@ hierarchical = (
                         </div>
                     </div>
                 </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">4</span> Launch Streamlit</h4>
-                    <p>Interactive UI for configuration and analysis.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd app<br>
-                            <span class="prompt">$</span> streamlit run Home.py
-                        </div>
-                    </div>
+            </div>
+
+            <h3>Option 1: React Web App (modern, recommended)</h3>
+            <p>
+                The React frontend is where the full measurement loop lives—Program, Experiments,
+                Performance, and the AI agent workspace. Take the
+                <a href="platform-overview.html">platform tour</a> for a guided look around.
+            </p>
+            <div class="terminal-block">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <div class="terminal-content">
+                    <span class="comment"># Terminal 4: React UI (Vite dev server)</span><br>
+                    <span class="prompt">$</span> cd frontend<br>
+                    <span class="prompt">$</span> npm run dev
                 </div>
             </div>
 
-            <h2 id="streamlit-app">Streamlit Application</h2>
+            <h3 id="streamlit-app">Option 2: Streamlit (legacy)</h3>
             <p>
-                The Streamlit app provides an interactive interface for the complete MMM workflow:
+                The original Streamlit interface remains available as a secondary surface. It uses
+                the same backend services.
+            </p>
+            <div class="terminal-block">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <div class="terminal-content">
+                    <span class="comment"># Terminal 4: Streamlit UI (port 8501)</span><br>
+                    <span class="prompt">$</span> cd app<br>
+                    <span class="prompt">$</span> streamlit run Home.py
+                </div>
+            </div>
+
+            <p>
+                Either frontend gives you an interactive interface for the complete MMM workflow:
             </p>
 
             <div class="concept-grid">
@@ -1093,7 +1137,7 @@ hierarchical = (
             <!-- Next Steps -->
             <h2 id="next-steps">Next Steps</h2>
             <p>
-                You've built your first model! Here's where to go next:
+                You've built your first model. Here's where to go next:
             </p>
 
             <div class="highlight-box" style="background: linear-gradient(135deg, rgba(143, 168, 106, 0.15) 0%, rgba(106, 143, 168, 0.15) 100%); border: 2px solid var(--color-primary); margin-bottom: 2rem;">
@@ -1112,6 +1156,24 @@ hierarchical = (
             </div>
 
             <div class="next-steps">
+                <a href="platform-overview.html" class="next-step-link">
+                    <div>
+                        <strong>Platform Tour</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Program, Experiments, Performance—the web app, room by room
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="platform-overview.html" class="next-step-link">
+                    <div>
+                        <strong>Agent Workspace</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            An AI analyst that validates data, fits models, and plans experiments
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
                 <a href="technical-guide.html" class="next-step-link">
                     <div>
                         <strong>Technical Guide</strong>

@@ -142,6 +142,11 @@ class BudgetOptimizationResult:
     prob_positive_uplift: float
     n_draws: int
     notes: list[str] = field(default_factory=list)
+    # (D, C) per-draw optimal allocations — the raw decision-uncertainty
+    # sample; reused by planning.evoi.compute_evpi to avoid re-optimizing.
+    per_draw_alloc: np.ndarray | None = None
+    # (C,) the recommended allocation on the mean curves.
+    optimal_alloc: np.ndarray | None = None
 
 
 def optimize_budget(
@@ -260,4 +265,6 @@ def optimize_budget(
         prob_positive_uplift=float(np.mean(uplift > 0)),
         n_draws=D,
         notes=notes,
+        per_draw_alloc=per_draw_alloc,
+        optimal_alloc=optimal,
     )

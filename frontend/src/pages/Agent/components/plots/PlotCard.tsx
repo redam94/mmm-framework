@@ -40,20 +40,20 @@ export const PlotCard = React.memo(function PlotCard({ plot, idx }: { plot: any;
     <>
       <div
         ref={wrapRef}
-        className="rounded-xl overflow-hidden border border-gray-200 bg-white relative group shadow-sm min-h-[400px]"
+        className="rounded-xl overflow-hidden border border-line-200 bg-white relative group shadow-sm min-h-[400px]"
       >
         <button
           onClick={() => setFullscreen(true)}
-          className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/90 text-gray-400 hover:text-gray-700 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all border border-gray-200"
+          className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/90 text-ink-300 hover:text-ink-700 hover:bg-cream-100 opacity-0 group-hover:opacity-100 transition-all border border-line-200"
           title="Expand chart"
         >
           <Maximize2 size={15} />
         </button>
-        <p className="text-xs text-gray-500 px-4 pt-3 pb-0 font-semibold truncate">{title}</p>
+        <p className="text-xs text-ink-400 px-4 pt-3 pb-0 font-semibold truncate">{title}</p>
         {inView && fig ? (
           plotEl('360px')
         ) : (
-          <div className="h-[360px] flex items-center justify-center text-sm text-gray-400">
+          <div className="h-[360px] flex items-center justify-center text-sm text-ink-300">
             {inView ? 'Loading chart…' : ''}
           </div>
         )}

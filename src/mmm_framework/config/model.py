@@ -87,6 +87,11 @@ class ModelConfig(BaseModel):
     # Functional form
     specification: ModelSpecification = ModelSpecification.ADDITIVE
 
+    # Intercept prior: Normal(mu, sigma) on standardized y, so mu is measured in
+    # KPI standard deviations from the mean (values beyond ±2 are extreme).
+    intercept_prior_mu: float = 0.0
+    intercept_prior_sigma: float = Field(default=0.5, gt=0)
+
     # Inference settings
     inference_method: InferenceMethod = InferenceMethod.BAYESIAN_NUMPYRO
 

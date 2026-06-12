@@ -53,7 +53,7 @@ export function ExtractFromWebsite({ projectId, apiKey, modelName, onConfirm }: 
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && runExtract()}
           placeholder="https://client-website.com"
-          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="flex-1 text-sm border border-line-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
         />
         <button
           onClick={runExtract}
@@ -74,7 +74,7 @@ export function ExtractFromWebsite({ projectId, apiKey, modelName, onConfirm }: 
               Proposed (unconfirmed)
             </span>
             {proposal.source_url && (
-              <span className="text-[10px] text-gray-400 truncate">{proposal.source_url}</span>
+              <span className="text-[10px] text-ink-300 truncate">{proposal.source_url}</span>
             )}
           </div>
           <BrandPreview branding={proposal} />
@@ -87,11 +87,11 @@ export function ExtractFromWebsite({ projectId, apiKey, modelName, onConfirm }: 
             </button>
             <button
               onClick={() => setProposal(null)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-line-200 text-ink-600 text-sm font-medium hover:bg-cream-100 transition-colors"
             >
               <X size={14} /> Discard
             </button>
-            <span className="text-[10px] text-gray-400">Confirm copies it into the form — hit Save to apply.</span>
+            <span className="text-[10px] text-ink-300">Confirm copies it into the form — hit Save to apply.</span>
           </div>
         </div>
       )}

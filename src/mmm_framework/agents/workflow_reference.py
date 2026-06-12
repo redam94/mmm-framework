@@ -57,7 +57,9 @@ obstacle. (Gelman et al. 2020, arXiv:2011.01808.)
   standardized scale; compare against the standardized KPI, not raw units.
 - Iterate priors → re-check → `record_assumption` (category: prior) until
   implications are plausible. Only then fit.
-- Spec-settable baseline priors (`update_model_setting`): `priors.trend.*`
+- Spec-settable baseline priors (`update_model_setting`): `priors.intercept.mu`
+  / `.sigma` (Normal on standardized y — mu is in KPI standard deviations from
+  the mean, default Normal(0, 0.5)); `priors.trend.*`
   (growth mu/sigma — base slope for linear AND piecewise; changepoint scale;
   spline sigma; GP lengthscale/amplitude) and `priors.seasonality.prior_sigma`
   (+ `yearly/monthly/weekly_prior_sigma` overrides) — the seasonal amplitude
@@ -143,14 +145,39 @@ obstacle. (Gelman et al. 2020, arXiv:2011.01808.)
   don't just hand over the point allocation.
 - The optimizer maximizes contribution given the model; it inherits every
   upstream assumption. Confounded ROI in → confidently wrong allocation out.
-- Experiments: `recommend_lift_experiments` ranks channels by spend share ×
-  ROAS uncertainty × allocation instability — the value-of-information logic:
-  test where better information would actually change the decision, not where
-  the posterior is merely wide. Designs include duration (adstock window + 4)
-  and a target SE (≤ half the posterior ROAS sd, so calibration genuinely
-  shrinks it).
+- Experiments: `compute_experiment_priorities` builds the EIG/EVOI grid —
+  expected information gain (what an experiment of achievable precision would
+  teach about the channel's ROI) × expected value of information (what that
+  learning is worth to the budget decision), with the 2×2 quadrants: test_now
+  / learn_cheaply / monitor / deprioritize. `recommend_lift_experiments`
+  returns concrete top-k designs: duration (adstock window + 4) and a target
+  SE (≤ half the posterior ROAS sd, so calibration genuinely shrinks it).
+  Channels with old calibrated evidence accrue information decay — when the
+  decayed EIG re-crosses the threshold, a re-test is due.
+- Test DESIGN is its own problem (`design_experiment_plan`): randomization is
+  what buys unconfoundedness. Geo/DMA panels → matched-pair geo lift (pairs
+  from pre-period KPI co-movement + scale; treatment RANDOMIZED within pair;
+  DiD power analysis — SE/MDE on the ROAS scale vs duration; placebo bar from
+  pre-period windows calibrates how big a chance "lift" looks). When the
+  business dictates treatment geos → matched-market DiD: same matching and
+  power math, but parallel-trends is an ASSUMPTION, not a design guarantee —
+  report the placebo band prominently. National data → budget-neutral
+  block-randomized flighting (±amplitude spend pulses, blocks ≥ the adstock
+  window): historical spend variance is demand-confounded; the schedule's
+  variance is exogenous, so it tightens the channel's posterior in the next
+  fit even before any separate readout.
+- The measurement cycle (T₀–T₅): fit baseline → compute priorities → design
+  the test (`design_experiment_plan`) → plan + pre-register the top
+  experiments (`plan_experiment`,
+  `preregister_experiment`) → run them → record readouts
+  (`record_experiment_readout`) → stage calibration
+  (`apply_experiment_calibration`) → refit (`fit_mmm_model` folds the
+  likelihoods in and marks the registry entries calibrated) → re-evaluate
+  priorities with the tightened posterior. Each cycle should contract the
+  uncertainty that matters most for the budget decision.
 - Close the loop: a finished experiment enters the NEXT fit as an
-  `ExperimentMeasurement` likelihood term (`add_experiment_calibration`), never
-  as an informal reconciliation. MMM → experiment → calibrated MMM is the
-  flywheel that converts correlational fits into defensible causal estimates.
+  `ExperimentMeasurement` likelihood term (staged in `spec.experiments`),
+  never as an informal reconciliation. MMM → experiment → calibrated MMM is
+  the flywheel that converts correlational fits into defensible causal
+  estimates.
 """

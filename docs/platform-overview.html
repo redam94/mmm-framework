@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Tour | MMM Framework</title>
+    <meta name="description" content="A guided tour of the MMM Framework platform: the Program home, experiment planning, performance tracking, the agent workspace, knowledge base, and team roles — one place to run the whole measurement loop.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/platform-overview.html">
+    <meta property="og:title" content="Platform Tour | MMM Framework">
+    <meta property="og:description" content="A guided tour of the MMM Framework platform: the Program home, experiment planning, performance tracking, the agent workspace, knowledge base, and team roles.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/platform-overview.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Measurement-loop strip (tokens only, no JS) */
+        .loop-strip {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.75rem;
+            margin: 2rem 0;
+        }
+        .loop-stage {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            position: relative;
+        }
+        .loop-stage .stage-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            color: var(--color-primary-dark);
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+        .loop-stage .stage-verb {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+        .loop-stage p {
+            font-size: 0.82rem;
+            color: var(--color-text-muted);
+            margin: 0 0 0.5rem 0;
+        }
+        .loop-stage .stage-where {
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--color-accent);
+        }
+        .loop-stage::after {
+            content: "→";
+            position: absolute;
+            right: -0.72rem;
+            top: 1rem;
+            color: var(--color-text-muted);
+            z-index: 1;
+        }
+        .loop-stage:last-child::after {
+            content: "↺";
+        }
+        @media (max-width: 1000px) {
+            .loop-strip { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 640px) {
+            .loop-strip { grid-template-columns: 1fr 1fr; }
+            .loop-stage::after { display: none; }
+        }
+        section { padding: 3.5rem 0; }
+        .route-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--color-accent);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation and footer injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Product Tour</span>
+            <h1>The MMM Framework Platform</h1>
+            <p class="lead">
+                One place to run the whole measurement loop — from the first data check to calibrated budget decisions. This tour walks through each area of the app and shows where every step of the cycle lives.
+            </p>
+        </div>
+    </section>
+
+    <div class="container">
+        <nav class="page-toc" aria-label="On this page">
+            <span class="page-toc-label">On this page</span>
+            <a href="#measurement-loop">The loop</a>
+            <a href="#program">Program</a>
+            <a href="#experiments">Experiments</a>
+            <a href="#performance">Performance</a>
+            <a href="#agent">Agent workspace</a>
+            <a href="#knowledge">Knowledge</a>
+            <a href="#team">Team</a>
+            <a href="#under-the-hood">Under the hood</a>
+        </nav>
+    </div>
+
+    <section id="measurement-loop" style="padding-top: 1rem;">
+        <div class="container">
+            <h2>The measurement loop, end to end</h2>
+            <p>
+                Measurement here is a loop, not a one-time report: <strong>fit</strong> the model (T₀) → <strong>find</strong> where uncertainty is most expensive (T₁: expected information gain and expected value of information, in dollars) → <strong>run</strong> the experiment that buys the most learning (T₂: pre-registered geo lift, matched-market, or budget-neutral flighting tests) → <strong>feed the result back</strong> into the model (T₃: calibrated refit) → <strong>reallocate</strong> budget with the sharper answer (T₄) → <strong>re-evaluate</strong> as information decays and the market shifts (T₅, then the cycle repeats).
+            </p>
+
+            <div class="loop-strip">
+                <div class="loop-stage">
+                    <span class="stage-id">T₀</span>
+                    <span class="stage-verb">Fit</span>
+                    <p>Validate the data and fit the model.</p>
+                    <span class="stage-where">Agent workspace</span>
+                </div>
+                <div class="loop-stage">
+                    <span class="stage-id">T₁</span>
+                    <span class="stage-verb">Find</span>
+                    <p>Rank where learning is worth the most, in dollars.</p>
+                    <span class="stage-where">Experiments</span>
+                </div>
+                <div class="loop-stage">
+                    <span class="stage-id">T₂</span>
+                    <span class="stage-verb">Run</span>
+                    <p>Pre-register and run the highest-value test.</p>
+                    <span class="stage-where">Experiments</span>
+                </div>
+                <div class="loop-stage">
+                    <span class="stage-id">T₃</span>
+                    <span class="stage-verb">Calibrate</span>
+                    <p>Fold the readout into the next model fit.</p>
+                    <span class="stage-where">Agent workspace</span>
+                </div>
+                <div class="loop-stage">
+                    <span class="stage-id">T₄</span>
+                    <span class="stage-verb">Reallocate</span>
+                    <p>Move budget with the sharper answer.</p>
+                    <span class="stage-where">Agent workspace</span>
+                </div>
+                <div class="loop-stage">
+                    <span class="stage-id">T₅</span>
+                    <span class="stage-verb">Re-evaluate</span>
+                    <p>Watch evidence age and schedule re-tests.</p>
+                    <span class="stage-where">Performance</span>
+                </div>
+            </div>
+
+            <p>
+                Why the loop matters: a marketing mix model answers a causal question — &ldquo;what would sales have been if we hadn&rsquo;t run this media?&rdquo; — not just &ldquo;what moved together?&rdquo; Lots of things move together: ice cream sales and sunburns rise in the same weeks without one causing the other, and holiday demand lifts both ad spend and sales at the same time. The platform is built to separate coincidence from contribution: it accounts for confounders like underlying demand, locks the model design in before results are seen, and checks its answers against real-world experiments such as regional holdout tests. Each pass around the loop turns one more guess into an estimate of <em>incremental</em> impact — what your media actually caused.
+            </p>
+            <p>
+                The loop in depth — including the math behind it — is covered in <a href="measurement-calibration.html">Measurement &amp; Calibration</a>.
+            </p>
+        </div>
+    </section>
+
+    <section id="program" style="background: var(--color-bg-alt);">
+        <div class="container">
+            <h2>Program <span class="route-chip">/program</span></h2>
+            <p>
+                Program is home base — the page you open Monday morning. A stage ring shows where your measurement program sits in the T₀–T₅ cycle, headline KPIs summarize the current model&rsquo;s view of the business, and a next-best-actions list tells you what the program needs next: a data refresh, an experiment readout, a refit. A coverage map shows which channels have been validated by experiments and which still rest on observational evidence alone — like an account review that flags which line items have receipts. An activity log keeps the recent history of the program in one place.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>See the current measurement-cycle stage (T₀–T₅) at a glance</li>
+                    <li>Track headline KPIs for the active model</li>
+                    <li>Pick up the next-best action the program recommends</li>
+                    <li>Check the coverage map: which channels are experiment-backed</li>
+                    <li>Review the activity log of recent fits, tests, and decisions</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="experiments">
+        <div class="container">
+            <h2>Experiments <span class="route-chip">/experiments</span></h2>
+            <p>
+                Experiments is where the platform spends your research budget wisely. A priority matrix ranks channels by how much an experiment would teach you (expected information gain) and what that learning is worth in dollars (expected value of information) — a research budget for your media plan, spent exactly where it changes the next decision most. A lifecycle board tracks each test from <strong>draft → planned → running → completed → calibrated</strong>, so every experiment is pre-registered before results are seen and folded into the model after. A re-test schedule flags evidence that is going stale as markets shift.
+            </p>
+            <p>
+                The Design-experiment studio drafts a concrete test plan for you. Three designs are offered: randomized matched-pair geo lift (markets matched on residual co-movement and covariates, with power calibrated by placebo simulation), matched-market difference-in-differences, and budget-neutral randomized flighting for national data where geo splits are not available.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Rank candidate experiments on the EIG/EVOI priority matrix (test now / learn cheaply / monitor / deprioritize)</li>
+                    <li>Design a test in the studio: geo lift, matched-market DiD, or budget-neutral flighting</li>
+                    <li>Pre-register a test plan, then track it across the lifecycle board</li>
+                    <li>Record readouts and watch them flow into the next calibrated fit</li>
+                    <li>Check the re-test schedule as older evidence decays</li>
+                </ul>
+            </div>
+            <div class="note">
+                <h4>For analysts</h4>
+                <p>
+                    EIG uses the closed form 0.5&middot;ln(1 + &sigma;&sup2;<sub>post</sub>/&sigma;&sup2;<sub>exp</sub>); EVOI is the preposterior dollar value of deciding the budget with versus without the experiment, with EVPI as the perfect-information upper bound. Priority is the geometric mean of normalized EIG&times;EVOI. Information decays as &sigma;&sup2;<sub>eff</sub>(t) = &sigma;&sup2;<sub>post</sub>&middot;e<sup>&lambda;t</sup>, with half-lives of roughly 26 weeks for digital and 52 weeks for TV and brand media. Deciding which experiment to run is worked through in <a href="workflow-calibration-decisions.html">the calibration-decisions workshop</a>.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section id="performance" style="background: var(--color-bg-alt);">
+        <div class="container">
+            <h2>Performance <span class="route-chip">/performance</span></h2>
+            <p>
+                Performance is the program&rsquo;s scorecard across cycles. Trajectories show how channel estimates have moved and tightened from one fit to the next — uncertainty should narrow as experiments land. The model-vs-experiment agreement log is the honesty check: it records, side by side, what the model predicted and what each real-world test measured, like comparing the recipe to the taste test. A runs timeline keeps every model fit on the record.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Follow cycle-over-cycle trajectories of channel estimates</li>
+                    <li>Audit the model-vs-experiment agreement log</li>
+                    <li>Browse the runs timeline of past model fits</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="agent">
+        <div class="container">
+            <h2>Agent workspace <span class="route-chip">/workspace</span></h2>
+            <p>
+                The agent workspace is a chat with an analyst that does the work as you talk — with EDA, planning, and results dashboard tabs alongside the conversation. Ask it to check a new dataset and it validates the data, runs exploratory analysis, and flags outliers with suggested treatments. Ask it to fit a model and it configures and fits one, then walks you through ROI, the revenue decomposition, and saturation curves. Ask &ldquo;where should the next dollar go?&rdquo; and it runs the budget optimizer, marginal analysis, or a what-if budget scenario. It also plans experiments end to end — computing priorities, recommending lift tests, drafting designs, pre-registering plans, recording readouts, and applying the calibration to the next fit.
+            </p>
+            <p>
+                Two things set it apart from a generic chatbot. First, it can practice on synthetic worlds with known ground truth — simulated markets where the true ROI is on file — including scenarios that deliberately break naive models (hidden confounders, multicollinearity, mis-specified saturation, trend breaks, geo panels), so you can see how the method behaves before trusting it on your data. Second, its Python runs in a sandboxed kernel: code executes in an isolated environment, and tabular results render as sortable dashboard tables rather than walls of text. When the analysis is done, it generates branded HTML client reports in your colors.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Validate data, run EDA, and detect and treat outliers</li>
+                    <li>Generate synthetic ground-truth worlds to pressure-test the method</li>
+                    <li>Configure and fit models in conversation</li>
+                    <li>Read ROI, component decomposition, and saturation curves</li>
+                    <li>Run the budget optimizer, marginal analysis, and budget scenarios</li>
+                    <li>Plan, pre-register, and calibrate experiments with the planning tools</li>
+                    <li>Run sandboxed Python with sortable dashboard tables</li>
+                    <li>Generate branded HTML client reports</li>
+                </ul>
+            </div>
+            <div class="note">
+                <h4>For analysts</h4>
+                <p>
+                    The tool names, for the curious: <code>validate_data</code>, <code>run_eda</code>, <code>detect_outliers</code>, <code>apply_outlier_treatment</code>; <code>generate_synthetic_data</code> (scenarios including <code>realistic</code>, <code>clean</code>, <code>unobserved_confounding</code>, <code>multicollinearity</code>, <code>saturation_misspec</code>, <code>trend_break</code>, and geo panels); <code>configure_model</code> and <code>fit_mmm_model</code>; <code>get_roi_metrics</code>, <code>get_component_decomposition</code>, <code>get_saturation_curves</code>, <code>run_budget_optimizer</code>, <code>run_marginal_analysis</code>, <code>run_budget_scenario</code>; experiment planning via <code>compute_experiment_priorities</code>, <code>recommend_lift_experiments</code>, <code>design_experiment_plan</code>, <code>plan_experiment</code>, <code>preregister_experiment</code>, <code>record_experiment_readout</code>, <code>apply_experiment_calibration</code>; and <code>execute_python</code> with <code>show_table</code> for sandboxed analysis. Reading the outputs is covered in <a href="interpreting-results.html">Interpreting Results</a>.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section id="knowledge" style="background: var(--color-bg-alt);">
+        <div class="container">
+            <h2>Knowledge <span class="route-chip">/knowledge</span></h2>
+            <p>
+                Knowledge is the project&rsquo;s shared memory. Upload client briefs, planning decks, and reference documents, and the agent retrieves them when it answers — so when you ask &ldquo;does this plan fit the client&rsquo;s goals?&rdquo;, it can quote the brief back rather than guessing. Think of it as the account team&rsquo;s shared drive, except the analyst has actually read everything in it.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Upload briefs, decks, and documents to the knowledge base</li>
+                    <li>Search the knowledge base directly</li>
+                    <li>Get agent answers grounded in your uploaded material</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="team">
+        <div class="container">
+            <h2>Team <span class="route-chip">/team</span></h2>
+            <p>
+                Team keeps the people on the record alongside the work. A project roster assigns owner, analyst, and viewer roles, used for attribution and sign-off — so a pre-registered experiment or an approved budget shift carries a name, the way a media plan carries an approver&rsquo;s signature. These roles are about accountability for decisions, not gatekeeping logins.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Manage the project roster</li>
+                    <li>Assign owner, analyst, and viewer roles</li>
+                    <li>Attribute decisions and sign-offs to named people</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="under-the-hood" style="background: var(--color-bg-alt);">
+        <div class="container">
+            <h2>Under the hood</h2>
+            <p>
+                For the technically curious: the React interface sits on a FastAPI backend with an ARQ worker and Redis handling long-running jobs, so model fits queue and run without tying up the app. Underneath is the open-source Python library (Python 3.12 or newer) documented across this site — everything the platform does, you can also script directly. Fitted models serialize to disk, so a fit can be saved, reloaded, and re-analyzed later. The agent&rsquo;s LLM is your choice of provider: Anthropic, OpenAI, Google (Gemini), Vertex AI (Anthropic and Gemini models via Application Default Credentials), or a local model through LM Studio for fully on-machine use. A legacy Streamlit UI remains available as a secondary surface.
+            </p>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Take it for a spin</h2>
+            <p>Set up the platform locally, then run your first cycle of the measurement loop.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Get Started</a>
+                <a href="measurement-calibration.html" class="btn btn-outline-white">The Loop in Depth</a>
+                <a href="faq.html" class="btn btn-outline-white">FAQ</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared components (nav + footer) -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

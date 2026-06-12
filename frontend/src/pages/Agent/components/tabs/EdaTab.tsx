@@ -24,20 +24,20 @@ function severityBucket(s: string): 'error' | 'warning' | 'info' {
 
 function IssueRow({ issue }: { issue: EdaIssue }) {
   return (
-    <div className="flex items-start gap-2.5 px-3 py-2.5 bg-white rounded-lg border border-gray-100">
+    <div className="flex items-start gap-2.5 px-3 py-2.5 bg-white rounded-lg border border-line-200">
       <span className="shrink-0 mt-0.5">
         <Badge label={severityBucket(issue.severity)} color={SEVERITY_BADGE[severityBucket(issue.severity)]} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-indigo-600">
+          <code className="bg-cream-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-indigo-600">
             {issue.check}
           </code>
           {issue.variable && (
-            <span className="text-[11px] font-medium text-gray-500">{issue.variable}</span>
+            <span className="text-[11px] font-medium text-ink-400">{issue.variable}</span>
           )}
         </div>
-        <p className="text-sm text-gray-700 mt-0.5">{issue.message}</p>
+        <p className="text-sm text-ink-700 mt-0.5">{issue.message}</p>
       </div>
     </div>
   );
@@ -64,19 +64,19 @@ function OutlierActionRow({
   const applied = action.status === 'applied';
 
   return (
-    <div className="px-3 py-2.5 bg-white rounded-lg border border-gray-100">
+    <div className="px-3 py-2.5 bg-white rounded-lg border border-line-200">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900">{action.strategy}</span>
+            <span className="text-sm font-medium text-ink-900">{action.strategy}</span>
             {action.variable && (
-              <code className="bg-gray-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-indigo-600">
+              <code className="bg-cream-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-indigo-600">
                 {action.variable}
               </code>
             )}
           </div>
           {action.rationale && (
-            <p className="text-xs text-gray-500 mt-0.5">{action.rationale}</p>
+            <p className="text-xs text-ink-400 mt-0.5">{action.rationale}</p>
           )}
         </div>
         {applied ? (
@@ -187,7 +187,7 @@ export function EdaTab({
       {tables.length > 0 && (
         <button
           onClick={() => onNavigate('plots')}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors self-start"
+          className="flex items-center gap-1.5 text-sm text-ink-400 hover:text-indigo-600 transition-colors self-start"
         >
           EDA charts are in the Plots tab <ArrowRight size={14} />
         </button>

@@ -369,6 +369,7 @@
             margin: 1.5rem 0;
             overflow-x: auto;
             line-height: 1.6;
+            white-space: pre;
         }
         .code-example .comment { color: #6a8d6a; }
         .code-example .keyword { color: #c792ea; }
@@ -635,8 +636,8 @@
         <h3>3.2 The ROI Forest Plot</h3>
 
         <p>
-            A <strong>forest plot</strong> shows ROI estimates for all channels on one chart, making it
-            easy to compare effectiveness and spot which channels are confidently profitable.
+            A <strong>forest plot</strong> shows ROI estimates for all channels on one chart, so you can
+            compare effectiveness at a glance and spot which channels are confidently profitable.
         </p>
 
         <div class="chart-container" id="forestPlot"></div>
@@ -762,6 +763,10 @@
                 <li>Present uncertainty honestly to stakeholders&mdash;it builds trust and leads to better decisions</li>
             </ul>
         </div>
+
+        <p>
+            For practical guidance on communicating these results to stakeholders&mdash;turning credible intervals and contributions into language a CMO or media planner can act on&mdash;see <a href="interpreting-results.html">Interpreting Model Results</a>.
+        </p>
     </section>
 
     <!-- SECTION 5: Implementation -->
@@ -774,8 +779,7 @@
 
         <h3>Computing Counterfactual Contributions</h3>
 
-        <div class="code-example">
-<span class="comment"># After fitting your model...</span>
+        <div class="code-example"><span class="comment"># After fitting your model...</span>
 <span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
 
 analyzer = MMMAnalyzer(fitted_model)
@@ -795,13 +799,11 @@ contributions = analyzer.compute_counterfactual_contributions(
 <span class="comment"># Search       $1.82M         13.5%   $1.45M     $2.24M</span>
 <span class="comment"># Social       $0.95M          7.1%   $0.42M     $1.58M</span>
 <span class="comment"># Display      $0.34M          2.5%  -$0.21M     $0.92M</span>
-<span class="comment"># Radio        $0.78M          5.8%   $0.41M     $1.19M</span>
-        </div>
+<span class="comment"># Radio        $0.78M          5.8%   $0.41M     $1.19M</span></div>
 
         <h3>Computing ROI with Uncertainty</h3>
 
-        <div class="code-example">
-<span class="keyword">from</span> mmm_framework.reporting.helpers <span class="keyword">import</span> compute_roi_with_uncertainty
+        <div class="code-example"><span class="keyword">from</span> mmm_framework.reporting.helpers <span class="keyword">import</span> compute_roi_with_uncertainty
 
 <span class="comment"># Compute ROI with full uncertainty quantification</span>
 roi_df = compute_roi_with_uncertainty(
@@ -824,13 +826,11 @@ roi_df = compute_roi_with_uncertainty(
 <span class="comment"># Search      2.41        2.08           2.81            0.999</span>
 <span class="comment"># Social      1.28        0.76           1.89            0.872</span>
 <span class="comment"># Display     0.68        0.28           1.12            0.284</span>
-<span class="comment"># Radio       1.62        1.28           2.01            0.991</span>
-        </div>
+<span class="comment"># Radio       1.62        1.28           2.01            0.991</span></div>
 
         <h3>Getting Component Decomposition</h3>
 
-        <div class="code-example">
-<span class="comment"># Decompose total outcome into components</span>
+        <div class="code-example"><span class="comment"># Decompose total outcome into components</span>
 decomposition = analyzer.compute_component_decomposition()
 
 <span class="comment"># Returns breakdown of:</span>
@@ -840,8 +840,7 @@ decomposition = analyzer.compute_component_decomposition()
 <span class="comment"># - media (per-channel contributions)</span>
 <span class="comment"># - controls (other factors)</span>
 
-<span class="function">print</span>(decomposition.summary())
-        </div>
+<span class="function">print</span>(decomposition.summary())</div>
     </section>
 
     <!-- Question Navigation -->

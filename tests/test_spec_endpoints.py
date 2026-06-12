@@ -180,3 +180,95 @@ async def test_resolve_unknown_path_is_404(app_main):
         tid, M.SpecResolveRequest(path="nope.path", action="reject")
     )
     assert resp.status_code == 404
+
+
+# ── Streamed spec-patch materialization ──────────────────────────────────────
+# update_model_setting writes model_spec as a {"__spec_patch__": [...]} envelope
+# (so concurrent updates compose in the reducer). stream_mode="updates" hands
+# the /chat SSE generator that RAW envelope; _fold_dashboard_update must
+# materialize it before it goes over the wire, or the frontend shallow-merge
+# replaces its concrete spec with the envelope and the Model tab resets to
+# defaults (the "seasonality stays Off" bug).
+
+
+class TestFoldDashboardUpdate:
+    def _M(self):
+        from mmm_framework.api import main as M
+
+        return M
+
+    def test_patch_envelope_is_materialized_against_live_spec(self):
+        M = self._M()
+        from mmm_framework.agents.spec_locks import make_spec_patch
+
+        live = {"kpi": "Sales", "trend": {"type": "linear"}}
+        combined: dict = {}
+        dd = {
+            "model_spec": make_spec_patch([{"path": "seasonality.yearly", "value": 4}])
+        }
+
+        live = M._fold_dashboard_update(combined, dd, live)
+
+        assert combined["model_spec"]["seasonality"] == {"yearly": 4}
+        assert combined["model_spec"]["kpi"] == "Sales"  # base spec preserved
+        assert "__spec_patch__" not in combined["model_spec"]
+        assert live is combined["model_spec"]
+
+    def test_sequential_envelopes_accumulate(self):
+        M = self._M()
+        from mmm_framework.agents.spec_locks import make_spec_patch
+
+        live: dict = {"kpi": "Sales"}
+        combined: dict = {}
+        live = M._fold_dashboard_update(
+            combined,
+            {
+                "model_spec": make_spec_patch(
+                    [{"path": "trend.type", "value": "linear"}]
+                )
+            },
+            live,
+        )
+        live = M._fold_dashboard_update(
+            combined,
+            {
+                "model_spec": make_spec_patch(
+                    [{"path": "seasonality.yearly", "value": 4}]
+                )
+            },
+            live,
+        )
+
+        spec = combined["model_spec"]
+        assert spec["trend"] == {"type": "linear"}  # first patch survives the second
+        assert spec["seasonality"] == {"yearly": 4}
+
+    def test_full_spec_replaces_and_becomes_new_base(self):
+        M = self._M()
+        from mmm_framework.agents.spec_locks import make_spec_patch
+
+        combined: dict = {}
+        new_spec = {"kpi": "Revenue", "media_channels": [{"name": "TV"}]}
+        live = M._fold_dashboard_update({}, {"model_spec": new_spec}, {"kpi": "Sales"})
+        assert live == new_spec
+
+        live = M._fold_dashboard_update(
+            combined,
+            {
+                "model_spec": make_spec_patch(
+                    [{"path": "inference.draws", "value": 2000}]
+                )
+            },
+            live,
+        )
+        assert combined["model_spec"]["kpi"] == "Revenue"
+        assert combined["model_spec"]["inference"] == {"draws": 2000}
+
+    def test_non_spec_keys_pass_through_and_input_not_mutated(self):
+        M = self._M()
+        combined: dict = {"existing": 1}
+        dd = {"eda": {"issues": []}}
+        live = M._fold_dashboard_update(combined, dd, {"kpi": "Sales"})
+        assert combined == {"existing": 1, "eda": {"issues": []}}
+        assert live == {"kpi": "Sales"}
+        assert dd == {"eda": {"issues": []}}  # caller's dict untouched

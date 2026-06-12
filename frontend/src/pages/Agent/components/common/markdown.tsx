@@ -20,7 +20,7 @@ export function mdComponents(onNavigate?: (tab: string) => void): any {
             href={href}
             title={title}
             onClick={(e) => { e.preventDefault(); onNavigate(tab); }}
-            className="text-indigo-600 underline decoration-indigo-300 hover:decoration-indigo-500 cursor-pointer"
+            className="text-sage-800 underline decoration-sage-300 hover:decoration-sage-600 cursor-pointer"
           >
             {children}
           </a>
@@ -34,10 +34,10 @@ export function mdComponents(onNavigate?: (tab: string) => void): any {
         <table className="min-w-full text-sm border-collapse">{children}</table>
       </div>
     ),
-    thead: ({ children }: any) => <thead className="bg-gray-100">{children}</thead>,
-    th: ({ children }: any) => <th className="px-3 py-2 text-left font-semibold text-indigo-600 border border-gray-200">{children}</th>,
-    td: ({ children }: any) => <td className="px-3 py-2 text-gray-700 border border-gray-200">{children}</td>,
-    tr: ({ children }: any) => <tr className="even:bg-gray-50">{children}</tr>,
+    thead: ({ children }: any) => <thead className="bg-cream-100">{children}</thead>,
+    th: ({ children }: any) => <th className="px-3 py-2 text-left font-semibold text-sage-800 border border-line-200">{children}</th>,
+    td: ({ children }: any) => <td className="px-3 py-2 text-ink-700 border border-line-200">{children}</td>,
+    tr: ({ children }: any) => <tr className="even:bg-cream-50">{children}</tr>,
     code: ({ inline, className, children }: any) => {
       const raw = String(children ?? '').replace(/\n$/, '');
       const langMatch = /language-(\w+)/.exec(className || '');
@@ -45,7 +45,7 @@ export function mdComponents(onNavigate?: (tab: string) => void): any {
       // fenced block via the language className or a multi-line body.
       const isBlock = inline === false || !!langMatch || raw.includes('\n');
       if (!isBlock) {
-        return <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-xs font-mono">{children}</code>;
+        return <code className="bg-cream-100 px-1 py-0.5 rounded text-sage-800 text-xs font-mono">{children}</code>;
       }
       return (
         <SyntaxHighlighter

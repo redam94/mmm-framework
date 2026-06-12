@@ -2,7 +2,14 @@ import { apiClient } from '../client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ExperimentStatus = 'planned' | 'running' | 'completed' | 'calibrated' | 'cancelled';
+export type ExperimentStatus =
+  | 'draft'
+  | 'planned'
+  | 'running'
+  | 'completed'
+  | 'calibrated'
+  | 'abandoned'
+  | 'cancelled';
 
 export interface ExperimentInfo {
   id: string;
@@ -33,6 +40,11 @@ export interface ExperimentUpsert {
   value?: number | null;
   se?: number | null;
   notes?: string | null;
+  // lifecycle-registry fields (design studio / agent snapshots)
+  recommending_run_id?: string | null;
+  design?: Record<string, unknown> | null;
+  readout?: Record<string, unknown> | null;
+  priority?: Record<string, unknown> | null;
 }
 
 export interface ModelRunInfo {

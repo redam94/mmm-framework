@@ -154,6 +154,7 @@
 
             <h3>For Clients</h3>
             <ul class="sidebar-nav">
+                <li><a href="#causation-correlation">Causation or Correlation?</a></li>
                 <li><a href="#what-statistics-does">What Statistics Actually Does</a></li>
                 <li><a href="#reading-intervals">Reading Credible Intervals</a></li>
                 <li><a href="#uncertainty-value">Why Uncertainty is Valuable</a></li>
@@ -163,6 +164,8 @@
 
             <h3>Framework Features</h3>
             <ul class="sidebar-nav">
+                <li><a href="#no-code-needed">Do I Need to Write Code?</a></li>
+                <li><a href="#vs-alternatives">vs. Meridian, Robyn, PyMC-Marketing</a></li>
                 <li><a href="#how-framework-helps">How This Framework Helps</a></li>
                 <li><a href="#prior-specification">Prior Specification</a></li>
                 <li><a href="#validation-features">Validation Features</a></li>
@@ -434,6 +437,43 @@
             <!-- ================================================================== -->
             <h2 id="for-clients">For Clients</h2>
             <!-- ================================================================== -->
+
+            <div class="faq-item" id="causation-correlation">
+                <div class="faq-question">Is this measuring causation or just correlation?</div>
+                <div class="faq-answer">
+                    <p>
+                        Causation—that is the whole point. A marketing mix model answers a causal question:
+                        "what would sales have been if we hadn't run this media?" Not just "what moved together?"
+                        Lots of things move together without one causing the other: ice cream sales and sunburns
+                        rise in the same weeks, and holiday demand lifts both ad spend and sales at the same time.
+                        A model that only tracks co-movement would hand your media credit for the holiday.
+                    </p>
+                    <p>
+                        This framework is built to separate coincidence from contribution, in three ways:
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>It accounts for confounders</strong>—outside forces like underlying demand,
+                            seasonality, and pricing that push spend and sales up together—so media only gets
+                            credit for what those forces don't explain.
+                        </li>
+                        <li>
+                            <strong>The model design is locked in before results are seen</strong> (pre-specification),
+                            so the answer can't be quietly reshaped until it looks the way someone hoped.
+                        </li>
+                        <li>
+                            <strong>Its answers are checked against real-world experiments</strong>, such as regional
+                            holdout tests, and those results are folded back into the model (experiment calibration)—a
+                            taste test for the recipe.
+                        </li>
+                    </ul>
+                    <p>
+                        The result is an estimate of <em>incremental</em> impact—what your media actually caused.
+                        For the full story of how the framework reasons about cause and effect, see the
+                        <a href="causal-inference.html">causal inference guide</a>.
+                    </p>
+                </div>
+            </div>
 
             <div class="faq-item" id="what-statistics-does">
                 <div class="faq-question">What does statistics actually do? I thought it gives us the answer.</div>
@@ -707,6 +747,64 @@
             <!-- ================================================================== -->
             <h2 id="framework-features">Framework Features</h2>
             <!-- ================================================================== -->
+
+            <div class="faq-item" id="no-code-needed">
+                <div class="faq-question">Do I need to write code to use this?</div>
+                <div class="faq-answer">
+                    <p>
+                        No. The modern React web app covers the full measurement loop without code: the
+                        <strong>Program</strong> page tracks where you are in the measurement cycle,
+                        <strong>Experiments</strong> prioritizes and manages real-world tests, and
+                        <strong>Performance</strong> shows how estimates evolve cycle over cycle. Alongside
+                        them sits the <strong>AI agent workspace</strong>—an analyst-assistant that can
+                        validate your data, configure and fit models, analyze results, plan experiments,
+                        and draft client-ready reports through conversation. Take the
+                        <a href="platform-overview.html">platform tour</a> to see each surface.
+                    </p>
+                    <p>
+                        The Python library underneath is there for analysts and data scientists who want
+                        direct control—custom priors, extended model types, scripted workflows. The
+                        <a href="getting-started.html">getting started guide</a> walks through both paths:
+                        launching the web app and fitting a first model in code.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="vs-alternatives">
+                <div class="faq-question">How is this different from Meridian, Robyn, or PyMC-Marketing?</div>
+                <div class="faq-answer">
+                    <p>
+                        All three are serious tools, and the honest answer differs by tool.
+                        <strong>Robyn</strong> (Meta) searches thousands of model candidates with an
+                        evolutionary optimizer and asks the analyst to pick from a Pareto front of
+                        finalists—a workflow where the selection step itself can quietly become
+                        specification shopping. This framework fits one pre-registered Bayesian model and
+                        reports its full posterior, so uncertainty reflects the data rather than which
+                        finalist was chosen.
+                    </p>
+                    <p>
+                        <strong>Meridian</strong> (Google) is a capable Bayesian geo-MMM with genuine
+                        lift-test calibration. The difference is the operating loop around the model: this
+                        framework also prices <em>which</em> experiment to run next (expected information
+                        gain and expected value of information, in dollars), pre-registers the design,
+                        tracks the experiment lifecycle, and folds readouts back into the next fit
+                        automatically. It additionally supports mediation structures (TV driving search
+                        driving sales) and jointly modeled KPIs.
+                    </p>
+                    <p>
+                        <strong>PyMC-Marketing</strong> is not a competitor—this framework builds on it,
+                        adding causal guardrails (declared variable roles, refutation checks), the
+                        experiment planning loop, a web platform, and an AI analyst workspace on top of its
+                        Bayesian foundations.
+                    </p>
+                    <p>
+                        Two claims you can verify rather than take on faith: model designs are locked
+                        before results are seen, and the methodology is
+                        <a href="pressure-testing.html">pressure-tested in public</a> against synthetic
+                        markets with known ground truth—including the scenarios where it struggles.
+                    </p>
+                </div>
+            </div>
 
             <div class="faq-item" id="how-framework-helps">
                 <div class="faq-question">How does this framework specifically help with these issues?</div>

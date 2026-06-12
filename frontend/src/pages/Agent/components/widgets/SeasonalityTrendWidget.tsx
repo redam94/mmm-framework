@@ -193,7 +193,7 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
           <div className="flex gap-2 flex-wrap">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${tab === t.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${tab === t.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-ink-600 border-line-200 hover:bg-cream-100'}`}
               >{t.label}</button>
             ))}
           </div>
@@ -202,8 +202,8 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
             config={{ responsive: true, displayModeBar: true, displaylogo: false }}
           />
           {modelCompleted && (
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Generate from fitted model:</p>
+            <div className="border-t border-line-200 pt-4">
+              <p className="text-xs font-semibold text-ink-600 mb-2">Generate from fitted model:</p>
               <div className="flex flex-wrap gap-2">
                 {quickActions.map(qa => (
                   <button key={qa.label} onClick={() => onQuickAction(qa.msg)}
@@ -222,7 +222,7 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
         <div className="flex gap-2 flex-wrap">
           {tabs.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${tab === t.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${tab === t.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-cream-50 text-ink-600 border-line-200 hover:bg-cream-100'}`}
             >{t.label}</button>
           ))}
         </div>
@@ -233,7 +233,7 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
         />
         {modelCompleted && (
           <div>
-            <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">Quick Actions (from fitted model)</p>
+            <p className="text-[10px] text-ink-300 uppercase tracking-widest mb-1.5">Quick Actions (from fitted model)</p>
             <div className="flex flex-wrap gap-1.5">
               {quickActions.map(qa => (
                 <button key={qa.label} onClick={() => onQuickAction(qa.msg)}
@@ -245,7 +245,7 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
           </div>
         )}
         {!modelCompleted && (
-          <p className="text-[11px] text-gray-400 italic">Fit the model to generate actual component plots.</p>
+          <p className="text-[11px] text-ink-300 italic">Fit the model to generate actual component plots.</p>
         )}
       </div>
     </DashWidget>

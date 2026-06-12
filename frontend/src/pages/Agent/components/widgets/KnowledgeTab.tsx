@@ -129,16 +129,16 @@ export function KnowledgeTab({ projectId, apiKey, modelName }: {
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           className={`flex flex-col items-center justify-center gap-2 py-8 px-4 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
-            dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
+            dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-line-200 hover:border-indigo-300 hover:bg-cream-100'
           }`}
         >
           {uploading ? (
             <><Loader2 size={22} className="text-indigo-500 animate-spin" />
-              <p className="text-sm text-gray-500">Uploading & ingesting…</p></>
+              <p className="text-sm text-ink-400">Uploading & ingesting…</p></>
           ) : (
             <><UploadCloud size={22} className="text-indigo-400" />
-              <p className="text-sm text-gray-600 font-medium">Drop a file or click to upload</p>
-              <p className="text-xs text-gray-400">txt · md · csv · pdf · docx · xlsx</p></>
+              <p className="text-sm text-ink-600 font-medium">Drop a file or click to upload</p>
+              <p className="text-xs text-ink-300">txt · md · csv · pdf · docx · xlsx</p></>
           )}
         </div>
         {error && <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5">{error}</p>}
@@ -146,25 +146,25 @@ export function KnowledgeTab({ projectId, apiKey, modelName }: {
         {/* Document list */}
         <div className="mt-4 space-y-2">
           {loading && docs.length === 0 ? (
-            <div className="flex items-center justify-center py-6 text-gray-400"><Loader2 size={18} className="animate-spin" /></div>
+            <div className="flex items-center justify-center py-6 text-ink-300"><Loader2 size={18} className="animate-spin" /></div>
           ) : docs.length === 0 ? (
-            <p className="text-sm text-gray-400 italic text-center py-2">No documents yet. Upload context files the agent can look up.</p>
+            <p className="text-sm text-ink-300 italic text-center py-2">No documents yet. Upload context files the agent can look up.</p>
           ) : docs.map(d => (
-            <div key={d.id} className="flex items-start gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white">
+            <div key={d.id} className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line-200 bg-white">
               <FileText size={14} className="text-indigo-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-gray-800 truncate">{d.name}</span>
+                  <span className="text-sm font-semibold text-ink-900 truncate">{d.name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5 border border-indigo-200">{d.kind}</span>
-                  <span className="text-[10px] text-gray-400">{fmtBytes(d.size_bytes)}</span>
-                  {d.n_chunks > 0 && <span className="text-[10px] text-gray-400">{d.n_chunks} chunk{d.n_chunks !== 1 ? 's' : ''}</span>}
+                  <span className="text-[10px] text-ink-300">{fmtBytes(d.size_bytes)}</span>
+                  {d.n_chunks > 0 && <span className="text-[10px] text-ink-300">{d.n_chunks} chunk{d.n_chunks !== 1 ? 's' : ''}</span>}
                   <span className={`text-[10px] uppercase tracking-wider font-semibold rounded border px-1.5 py-0.5 ${KB_STATUS_STYLE[d.status] ?? KB_STATUS_STYLE.error}`}>
                     {d.status === 'pending' && <Loader2 size={9} className="inline animate-spin mr-1" />}
                     {d.status}
                   </span>
                 </div>
               </div>
-              <button onClick={() => deleteDoc(d.id)} className="p-1 rounded text-gray-300 hover:text-red-500 shrink-0" title="Delete">
+              <button onClick={() => deleteDoc(d.id)} className="p-1 rounded text-ink-300 hover:text-red-500 shrink-0" title="Delete">
                 <Trash2 size={12} />
               </button>
             </div>
@@ -180,7 +180,7 @@ export function KnowledgeTab({ projectId, apiKey, modelName }: {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && runSearch()}
             placeholder="Search the knowledge base…"
-            className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+            className="flex-1 text-sm border border-line-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
           />
           <button onClick={runSearch} disabled={searching || !query.trim()}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-500 disabled:opacity-40">
@@ -190,16 +190,16 @@ export function KnowledgeTab({ projectId, apiKey, modelName }: {
         {results != null && (
           <div className="mt-3 space-y-2">
             {results.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No matches found.</p>
+              <p className="text-sm text-ink-300 italic">No matches found.</p>
             ) : results.map((r, i) => (
-              <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <div key={i} className="rounded-lg border border-line-200 bg-cream-50 px-3 py-2">
                 <div className="flex items-baseline gap-2 mb-1">
                   <FileText size={12} className="text-teal-600 shrink-0" />
-                  <span className="text-xs font-semibold text-gray-700 truncate flex-1">{r.document}</span>
-                  <span className="text-[10px] text-gray-400">#{r.chunk_index}</span>
+                  <span className="text-xs font-semibold text-ink-700 truncate flex-1">{r.document}</span>
+                  <span className="text-[10px] text-ink-300">#{r.chunk_index}</span>
                   <span className="text-[10px] font-mono text-teal-600 bg-teal-50 rounded px-1.5 py-0.5 border border-teal-200">{r.score.toFixed(3)}</span>
                 </div>
-                <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap line-clamp-6">{r.text}</p>
+                <p className="text-xs text-ink-600 leading-relaxed whitespace-pre-wrap line-clamp-6">{r.text}</p>
               </div>
             ))}
           </div>

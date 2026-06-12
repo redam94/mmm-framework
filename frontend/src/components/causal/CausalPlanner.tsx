@@ -125,9 +125,9 @@ const NODE_LEGEND: Array<{ pos: CausalPosition; label: string }> = [
 
 const AnalysisLegend = memo(function AnalysisLegend() {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl border border-gray-200 bg-white px-4 py-3">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl border border-line-200 bg-white px-4 py-3">
       <div>
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-1.5">Edges</p>
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-300 mb-1.5">Edges</p>
         {EDGE_LEGEND.map(e => (
           <div key={e.label} className="flex items-center gap-2 py-0.5">
             <span
@@ -136,16 +136,16 @@ const AnalysisLegend = memo(function AnalysisLegend() {
                 ? { backgroundImage: `repeating-linear-gradient(90deg, ${e.color} 0, ${e.color} 3px, transparent 3px, transparent 6px)` }
                 : { backgroundColor: e.color }}
             />
-            <span className="text-[11px] text-gray-600">{e.label}</span>
+            <span className="text-[11px] text-ink-600">{e.label}</span>
           </div>
         ))}
       </div>
       <div>
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-1.5">Nodes</p>
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-300 mb-1.5">Nodes</p>
         {NODE_LEGEND.map(n => (
           <div key={n.pos} className="flex items-center gap-2 py-0.5">
             <span className="w-3 h-3 rounded border-2 shrink-0" style={{ backgroundColor: NODE_COLORS[n.pos].bg, borderColor: NODE_COLORS[n.pos].border }} />
-            <span className="text-[11px] text-gray-600">{n.label}</span>
+            <span className="text-[11px] text-ink-600">{n.label}</span>
           </div>
         ))}
       </div>
@@ -164,8 +164,8 @@ const AnalysisSummary = memo(function AnalysisSummary({
 }) {
   if (!analysis) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-        <p className="text-xs text-gray-600">
+      <div className="rounded-xl border border-line-200 bg-cream-50 px-4 py-3">
+        <p className="text-xs text-ink-600">
           Click a node to assign it a role. Select at least one <span className="font-semibold text-blue-600">Treatment</span> and
           one <span className="font-semibold text-emerald-600">Outcome</span> to analyze causal paths.
         </p>
@@ -216,7 +216,7 @@ const AnalysisSummary = memo(function AnalysisSummary({
               <button
                 key={id}
                 onClick={() => onToggleControlled(id)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 hover:bg-gray-100 text-red-700 hover:text-gray-700 rounded-full text-[11px] transition-colors"
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 hover:bg-cream-100 text-red-700 hover:text-ink-700 rounded-full text-[11px] transition-colors"
               >
                 {nameOf(id)} <span>→ uncontrol</span>
               </button>
@@ -253,7 +253,7 @@ const AnalysisSummary = memo(function AnalysisSummary({
               <span key={id} className={`px-2 py-0.5 rounded-full text-[11px] border ${
                 analysis.confounders.has(id)
                   ? 'bg-indigo-100 border-indigo-300 text-indigo-700'
-                  : 'bg-gray-100 border-gray-300 text-gray-600'
+                  : 'bg-cream-100 border-line-300 text-ink-600'
               }`}>
                 {nameOf(id)}{analysis.confounders.has(id) ? ' (blocking)' : ''}
               </span>
@@ -263,8 +263,8 @@ const AnalysisSummary = memo(function AnalysisSummary({
       )}
 
       {/* Per-treatment breakdown */}
-      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-2">Per-treatment analysis</p>
+      <div className="rounded-xl border border-line-200 bg-white px-4 py-3">
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-300 mb-2">Per-treatment analysis</p>
         <div className="space-y-1.5">
           {analysis.treatmentNodes.map(tid => {
             const r = analysis.perTreatmentResults.get(tid);
@@ -278,7 +278,7 @@ const AnalysisSummary = memo(function AnalysisSummary({
                 : 'border-amber-200 bg-amber-50/50'
               }`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-gray-800 truncate">{nameOf(tid)}</span>
+                  <span className="text-xs font-semibold text-ink-900 truncate">{nameOf(tid)}</span>
                   <span className={`text-[10px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 ${
                     effect === 'total' ? 'bg-emerald-100 text-emerald-700'
                     : effect === 'direct' ? 'bg-blue-100 text-blue-700'
@@ -287,7 +287,7 @@ const AnalysisSummary = memo(function AnalysisSummary({
                     {effect === 'none' ? 'not identified' : `${effect} effect`}
                   </span>
                 </div>
-                <div className="mt-1 text-[11px] text-gray-500 space-y-0.5">
+                <div className="mt-1 text-[11px] text-ink-400 space-y-0.5">
                   <div>
                     Required controls:{' '}
                     {r.requiredControls.length > 0
@@ -311,7 +311,7 @@ const AnalysisSummary = memo(function AnalysisSummary({
       </div>
 
       {/* Path counts */}
-      <div className="text-[11px] text-gray-500 px-1 flex flex-wrap gap-x-4 gap-y-0.5">
+      <div className="text-[11px] text-ink-400 px-1 flex flex-wrap gap-x-4 gap-y-0.5">
         <span>Treatments: {analysis.treatmentNodes.length}</span>
         <span>Total-effect edges: {analysis.totalEdges.size}</span>
         <span>Backdoor edges: {analysis.backdoorEdges.size}</span>
@@ -590,8 +590,8 @@ export function CausalPlanner({
   // ── Header chrome ─────────────────────────────────────────────────────────
   const saveChip = (mode === 'edit' || dirty || saveState !== 'idle') && (
     saveState === 'saving' ? (
-      <span className="flex items-center gap-1 text-[11px] text-gray-500">
-        <span className="w-3 h-3 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" /> Saving…
+      <span className="flex items-center gap-1 text-[11px] text-ink-400">
+        <span className="w-3 h-3 border-2 border-line-300 border-t-indigo-500 rounded-full animate-spin" /> Saving…
       </span>
     ) : saveState === 'error' ? (
       <button onClick={() => void doSave()} className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 hover:bg-red-100" title="Retry save">
@@ -609,7 +609,7 @@ export function CausalPlanner({
       key={m}
       onClick={() => switchMode(m)}
       className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors ${
-        mode === m ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'
+        mode === m ? 'bg-indigo-600 text-white' : 'bg-white text-ink-400 hover:bg-cream-100'
       }`}
       title={label}
     >
@@ -621,11 +621,11 @@ export function CausalPlanner({
     <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
       {saveChip}
       {mode === 'edit' && (
-        <button onClick={handleCancelEdit} className="flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50" title="Discard unsaved changes and restore the last saved DAG">
+        <button onClick={handleCancelEdit} className="flex items-center gap-1 px-2 py-1 rounded-lg border border-line-200 text-[11px] text-ink-400 hover:bg-cream-100" title="Discard unsaved changes and restore the last saved DAG">
           <X size={11} /> Cancel
         </button>
       )}
-      <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+      <div className="flex items-center rounded-lg border border-line-200 overflow-hidden">
         {modeButton('view', <Eye size={11} />, 'View')}
         {modeButton('edit', <Pencil size={11} />, 'Edit')}
         {modeButton('analyze', <Workflow size={11} />, 'Analyze')}
@@ -638,7 +638,7 @@ export function CausalPlanner({
         <button
           onClick={() => void handleLockPlan()}
           disabled={!threadId || nodes.length === 0 || lockState === 'locking'}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-line-200 text-[11px] text-ink-400 hover:bg-cream-100 disabled:opacity-40"
           title="Snapshot the current DAG as a locked analysis plan"
         >
           <Lock size={11} /> {lockState === 'locking' ? 'Locking…' : lockState === 'error' ? 'Lock failed — retry' : 'Lock plan'}
@@ -646,7 +646,7 @@ export function CausalPlanner({
       )}
       <button
         onClick={() => setExpanded(true)}
-        className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50"
+        className="p-1.5 rounded-lg border border-line-200 text-ink-300 hover:text-ink-700 hover:bg-cream-100"
         title="Expand to fullscreen"
       >
         <Maximize2 size={12} />
@@ -694,7 +694,7 @@ export function CausalPlanner({
       <select
         value=""
         onChange={e => { if (e.target.value) handleLoadTemplate(e.target.value); }}
-        className="text-xs border border-violet-200 rounded px-2 py-1.5 bg-white focus:outline-none text-gray-600"
+        className="text-xs border border-violet-200 rounded px-2 py-1.5 bg-white focus:outline-none text-ink-600"
         title="Replace the canvas with a starter template"
       >
         <option value="">Templates…</option>
@@ -705,7 +705,7 @@ export function CausalPlanner({
   );
 
   const canvas = (height: number | string) => (
-    <div style={{ height }} className="relative rounded-xl border border-gray-200 overflow-hidden bg-gray-50/50">
+    <div style={{ height }} className="relative rounded-xl border border-line-200 overflow-hidden bg-cream-50/50">
       <ReactFlow
         nodes={displayNodes}
         edges={displayEdges}
@@ -730,22 +730,22 @@ export function CausalPlanner({
 
       {/* Role-assignment popover (analyze mode) */}
       {mode === 'analyze' && roleMenuNode && (
-        <div className="absolute top-2 left-2 z-10 bg-white rounded-xl border border-gray-200 shadow-lg px-3 py-2.5 w-52">
+        <div className="absolute top-2 left-2 z-10 bg-white rounded-xl border border-line-200 shadow-lg px-3 py-2.5 w-52">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-800 truncate pr-2">{String(roleMenuNode.data?.label ?? roleMenuNode.id)}</span>
-            <button onClick={() => setRoleMenuNodeId(null)} className="text-gray-300 hover:text-gray-600 shrink-0"><X size={12} /></button>
+            <span className="text-xs font-semibold text-ink-900 truncate pr-2">{String(roleMenuNode.data?.label ?? roleMenuNode.id)}</span>
+            <button onClick={() => setRoleMenuNodeId(null)} className="text-ink-300 hover:text-ink-600 shrink-0"><X size={12} /></button>
           </div>
           <div className="space-y-1">
             {([
               ['treatment', 'Treatment', 'text-blue-700 bg-blue-50 border-blue-200'],
               ['outcome', 'Outcome', 'text-emerald-700 bg-emerald-50 border-emerald-200'],
-              ['controlled', 'Controlled', 'text-gray-700 bg-gray-50 border-gray-300'],
+              ['controlled', 'Controlled', 'text-ink-700 bg-cream-50 border-line-300'],
             ] as Array<[CausalRole, string, string]>).map(([role, label, cls]) => (
               <button
                 key={label}
                 onClick={() => assignRole(roleMenuNode.id, roleMenuRole === role ? null : role)}
                 className={`w-full text-left text-[11px] px-2 py-1 rounded-lg border transition-colors ${
-                  roleMenuRole === role ? `${cls} font-semibold ring-1 ring-indigo-300` : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-50'
+                  roleMenuRole === role ? `${cls} font-semibold ring-1 ring-indigo-300` : 'text-ink-600 bg-white border-line-200 hover:bg-cream-100'
                 }`}
               >
                 {label}{roleMenuRole === role ? ' ✓' : ''}
@@ -754,7 +754,7 @@ export function CausalPlanner({
             {roleMenuRole && (
               <button
                 onClick={() => assignRole(roleMenuNode.id, null)}
-                className="w-full text-left text-[11px] px-2 py-1 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50"
+                className="w-full text-left text-[11px] px-2 py-1 rounded-lg border border-line-200 text-ink-300 hover:bg-cream-100"
               >
                 Clear role
               </button>
@@ -791,8 +791,8 @@ export function CausalPlanner({
   if (!dag && nodes.length === 0 && mode === 'view') {
     return (
       <PanelShell title="Causal Planner" icon={<Network size={16} className="text-violet-600" />} color="violet" right={headerActions}>
-        <p className="text-sm text-gray-400 italic">
-          No DAG yet. Ask the agent to <code className="text-xs bg-gray-100 px-1 rounded">propose_dag</code> after inspecting the data,
+        <p className="text-sm text-ink-300 italic">
+          No DAG yet. Ask the agent to <code className="text-xs bg-cream-100 px-1 rounded">propose_dag</code> after inspecting the data,
           or switch to <strong>Edit</strong> to build one manually (templates available).
         </p>
       </PanelShell>
@@ -803,7 +803,7 @@ export function CausalPlanner({
     <>
       <PanelShell title={title} icon={<Network size={16} className="text-violet-600" />} color="violet" right={headerActions}>
         {expanded
-          ? <p className="text-sm text-gray-400 italic">Open in fullscreen…</p>
+          ? <p className="text-sm text-ink-300 italic">Open in fullscreen…</p>
           : body(520)}
       </PanelShell>
 

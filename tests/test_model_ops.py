@@ -23,6 +23,7 @@ def test_ops_registry_complete():
         "save_model",
         "optimize_budget",
         "experiment_design",
+        "experiment_priorities",
     }
 
 
@@ -356,6 +357,106 @@ def test_seasonality_amplitude_and_trend_priors_wire_into_graph(tmp_path):
     model = mmm.model
     assert abs(float(model["season_yearly"].owner.inputs[-1].eval()) - 0.8) < 1e-9
     assert abs(float(model["season_monthly"].owner.inputs[-1].eval()) - 0.5) < 1e-9
+
+
+def test_experiment_priorities_tool_no_model_message():
+    """compute_experiment_priorities dispatches through the kernel; with no
+    fitted model it returns the no-model error, and the host-side evidence
+    lookup must not blow up without a session/project."""
+    from mmm_framework.agents import tools as T
+
+    cfg = {"configurable": {"thread_id": "t_priorities"}}
+    T._MODEL_CACHE.clear_thread("t_priorities")
+    cmd = T.compute_experiment_priorities.func(config=cfg, tool_call_id="t")
+    assert "No fitted model" in cmd.update["messages"][0].content
+
+
+def test_intercept_prior_wires_into_graph(tmp_path):
+    """spec.priors.intercept controls the intercept Normal (previously
+    hardcoded Normal(0, 0.5), so 'tightening the intercept prior' was a
+    silent no-op the prior predictive check could never reflect)."""
+    path = _write_synth_mff(tmp_path)
+    from mmm_framework.agents.fitting import build_model
+
+    spec = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "time_granularity": "weekly",
+        "media_channels": [{"name": "TV"}],
+        "control_variables": [],
+        "priors": {"intercept": {"mu": -0.5, "sigma": 0.1}},
+    }
+    mmm = build_model(spec, path)
+    assert mmm.model_config.intercept_prior_mu == -0.5
+    assert mmm.model_config.intercept_prior_sigma == 0.1
+    # mu and sigma actually land on the PyMC RV
+    model = mmm.model
+    assert abs(float(model["intercept"].owner.inputs[-2].eval()) + 0.5) < 1e-9
+    assert abs(float(model["intercept"].owner.inputs[-1].eval()) - 0.1) < 1e-9
+
+
+def test_unconsumed_prior_path_validator():
+    """Every priors.* write must be one build_model actually reads; anything
+    else is named and rejected with the valid alternatives."""
+    from mmm_framework.agents.fitting import unconsumed_prior_path as v
+
+    spec = {
+        "media_channels": [{"name": "TV"}],
+        "control_variables": [{"name": "Price"}],
+    }
+    # consumed paths pass
+    assert v(["priors", "intercept", "mu"], -0.5, spec) is None
+    assert v(["priors", "intercept"], {"mu": -0.5, "sigma": 0.3}, spec) is None
+    assert v(["priors", "seasonality", "yearly_prior_sigma"], 0.8, spec) is None
+    assert v(["priors", "trend", "growth_prior_mu"], 0.1, spec) is None
+    prior = {"distribution": "normal", "params": {"mu": 0, "sigma": 1}}
+    assert v(["priors", "media", "TV", "coefficient"], prior, spec) is None
+    assert (
+        v(["priors", "media", "TV", "coefficient", "params", "mu"], 0.2, spec) is None
+    )
+    assert v(["priors", "controls", "Price", "allow_negative"], False, spec) is None
+    # silently-dropped paths are rejected
+    assert "never reads" in v(["priors", "intercept", "scale"], 1.0, spec)
+    assert "never reads" in v(["priors", "intercept"], prior, spec)  # wrong shape
+    assert "never reads" in v(["priors", "baseline"], {"mu": 0}, spec)
+    assert "never reads" in v(["priors", "media", "TV", "roi"], prior, spec)
+    assert "unknown media channel" in v(
+        ["priors", "media", "Radio", "coefficient"], prior, spec
+    )
+    assert "unknown control" in v(
+        ["priors", "controls", "Promo", "coefficient"], prior, spec
+    )
+
+
+def test_update_model_setting_rejects_unconsumed_priors(tmp_path):
+    """The tool-level guard: an unread priors.* write must fail loudly instead
+    of committing to the spec and changing nothing downstream."""
+    from mmm_framework.agents import tools as T
+
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [{"name": "TV"}],
+        "control_variables": [],
+    }
+    state = {"model_spec": spec, "locked_fields": [], "dashboard_data": {}}
+
+    bad = T.update_model_setting.func(
+        state=state,
+        setting_path="priors.intercept",
+        value={"distribution": "normal", "params": {"mu": -4, "sigma": 0.25}},
+        tool_call_id="t",
+    )
+    assert "model_spec" not in bad.update
+    msg = bad.update["messages"][0].content
+    assert "Rejected" in msg and "mu" in msg and "sigma" in msg
+
+    ok = T.update_model_setting.func(
+        state=state,
+        setting_path="priors.intercept.sigma",
+        value=0.3,
+        tool_call_id="t",
+    )
+    assert "model_spec" in ok.update
 
 
 def test_seasonality_components_respect_spec_and_frequency(tmp_path):

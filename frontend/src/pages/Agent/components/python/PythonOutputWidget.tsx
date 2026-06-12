@@ -21,14 +21,14 @@ export function PythonOutputWidget({ outputs, onClear, onExport }: { outputs: Py
       color="emerald"
     >
       <div className="space-y-1 mb-2 flex items-center justify-between">
-        <p className="text-xs text-gray-500">{outputs.length} execution{outputs.length > 1 ? 's' : ''} recorded this session.</p>
+        <p className="text-xs text-ink-400">{outputs.length} execution{outputs.length > 1 ? 's' : ''} recorded this session.</p>
         <div className="flex items-center gap-3">
           {onExport && (
-            <button onClick={onExport} className="text-[10px] text-gray-400 hover:text-indigo-600 flex items-center gap-1 transition-colors" title="Download this session's work as a standalone, runnable Python script">
+            <button onClick={onExport} className="text-[10px] text-ink-300 hover:text-indigo-600 flex items-center gap-1 transition-colors" title="Download this session's work as a standalone, runnable Python script">
               <Download size={11} /> Download .py
             </button>
           )}
-          <button onClick={onClear} className="text-[10px] text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors">
+          <button onClick={onClear} className="text-[10px] text-ink-300 hover:text-red-500 flex items-center gap-1 transition-colors">
             <Trash2 size={11} /> Clear
           </button>
         </div>

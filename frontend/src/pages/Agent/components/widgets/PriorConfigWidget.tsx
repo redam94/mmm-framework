@@ -16,7 +16,7 @@ function DensitySparkline({ x, y, color = '#6366f1' }: { x: number[]; y: number[
   const valid = x.length >= 2 && y.length >= 2
     && x.every(v => isFinite(v)) && y.every(v => isFinite(v))
     && Math.max(...y) > 0;
-  if (!valid) return <div className="h-[52px] bg-gray-50 rounded flex items-center justify-center text-[10px] text-gray-300">no preview</div>;
+  if (!valid) return <div className="h-[52px] bg-cream-50 rounded flex items-center justify-center text-[10px] text-ink-300">no preview</div>;
   const W = 280; const H = 52;
   const maxY = Math.max(...y, 1e-12);
   const minX = x[0]; const rangeX = x[x.length - 1] - x[0] || 1;
@@ -33,7 +33,7 @@ function DensitySparkline({ x, y, color = '#6366f1' }: { x: number[]; y: number[
         <polyline points={fill} fill={color} fillOpacity={0.12} stroke="none" />
         <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <div className="flex justify-between text-[9px] text-gray-400 mt-0.5 px-0.5">
+      <div className="flex justify-between text-[9px] text-ink-300 mt-0.5 px-0.5">
         <span>{xFmt(x[0])}</span>
         <span>{xFmt(x[Math.floor(x.length / 2)])}</span>
         <span>{xFmt(x[x.length - 1])}</span>
@@ -67,13 +67,13 @@ function PriorEditor({ label, hint, value, onChange, disabled, allowed = ANY_DIS
   const changeParam = (key: string, val: number) =>
     onChange({ ...value, params: { ...value.params, [key]: val } });
 
-  const selectCls = 'bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all';
+  const selectCls = 'bg-cream-50 border border-line-200 rounded-lg px-2 py-1 text-xs text-ink-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2">
+    <div className="bg-white rounded-xl border border-line-200 p-3 space-y-2">
       {/* Row 1: label + distribution select */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-gray-800 truncate">{label}</p>
+        <p className="text-xs font-semibold text-ink-900 truncate">{label}</p>
         <select
           className={selectCls + ' w-36 shrink-0'}
           value={dist}
@@ -85,7 +85,7 @@ function PriorEditor({ label, hint, value, onChange, disabled, allowed = ANY_DIS
       </div>
 
       {/* Row 2: hint */}
-      <p className="text-[10px] text-gray-400 leading-snug">{hint}</p>
+      <p className="text-[10px] text-ink-300 leading-snug">{hint}</p>
 
       {/* Row 3: parameter inputs */}
       <div className="flex gap-2 flex-wrap">
@@ -164,7 +164,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
       <div className="flex gap-1.5 flex-wrap">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${tab === t.key ? 'bg-fuchsia-600 text-white border-fuchsia-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${tab === t.key ? 'bg-fuchsia-600 text-white border-fuchsia-600' : 'bg-white text-ink-600 border-line-200 hover:bg-cream-100'}`}>
             {t.label}
           </button>
         ))}
@@ -179,23 +179,23 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
       {/* ── Media tab ─────────────────────────────────────────────────────── */}
       {tab === 'media' && (
         <div className="space-y-2">
-          {channels.length === 0 && <p className="text-xs text-gray-400 italic py-2">No media channels configured yet.</p>}
+          {channels.length === 0 && <p className="text-xs text-ink-300 italic py-2">No media channels configured yet.</p>}
           {channels.map((ch: any) => {
             const isOpen = openChannel === ch.name;
             const aSat = satType(ch.name);
             const aAds = adstockType(ch.name);
             const chPriors = priors.media[ch.name] ?? {};
             return (
-              <div key={ch.name} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div key={ch.name} className="border border-line-200 rounded-xl overflow-hidden">
                 <button onClick={() => setOpenChannel(isOpen ? null : ch.name)}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-cream-50 hover:bg-cream-100 transition-colors text-left">
                   <Zap size={13} className="text-indigo-500 shrink-0" />
-                  <span className="flex-1 text-xs font-bold text-gray-700">{ch.name}</span>
+                  <span className="flex-1 text-xs font-bold text-ink-700">{ch.name}</span>
                   <div className="flex gap-1.5 mr-2">
                     <Badge label={aAds} color="indigo" />
                     <Badge label={aSat} color="blue" />
                   </div>
-                  {isOpen ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+                  {isOpen ? <ChevronDown size={13} className="text-ink-300" /> : <ChevronRight size={13} className="text-ink-300" />}
                 </button>
                 {isOpen && (
                   <div className="px-4 py-3 space-y-3 bg-white">
@@ -240,24 +240,24 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
       {/* ── Controls tab ──────────────────────────────────────────────────── */}
       {tab === 'controls' && (
         <div className="space-y-2">
-          {ctrls.length === 0 && <p className="text-xs text-gray-400 italic py-2">No control variables configured yet.</p>}
+          {ctrls.length === 0 && <p className="text-xs text-ink-300 italic py-2">No control variables configured yet.</p>}
           {ctrls.map((cv: any) => {
             const isOpen = openControl === cv.name;
             const cvPriors = priors.controls[cv.name] ?? {};
             const allowNeg = cvPriors.allow_negative ?? true;
             return (
-              <div key={cv.name} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div key={cv.name} className="border border-line-200 rounded-xl overflow-hidden">
                 <button onClick={() => setOpenControl(isOpen ? null : cv.name)}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
-                  <Layers size={13} className="text-gray-500 shrink-0" />
-                  <span className="flex-1 text-xs font-bold text-gray-700">{cv.name}</span>
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-cream-50 hover:bg-cream-100 transition-colors text-left">
+                  <Layers size={13} className="text-ink-400 shrink-0" />
+                  <span className="flex-1 text-xs font-bold text-ink-700">{cv.name}</span>
                   <Badge label={allowNeg ? 'any sign' : 'positive only'} color={allowNeg ? 'gray' : 'green'} />
-                  {isOpen ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+                  {isOpen ? <ChevronDown size={13} className="text-ink-300" /> : <ChevronRight size={13} className="text-ink-300" />}
                 </button>
                 {isOpen && (
                   <div className="px-4 py-3 space-y-3 bg-white">
                     <div className="flex items-center gap-3 py-1">
-                      <span className="text-xs text-gray-600 font-medium">Allow negative coefficient</span>
+                      <span className="text-xs text-ink-600 font-medium">Allow negative coefficient</span>
                       <button onClick={() => editable && setControlPrior(cv.name, 'allow_negative', !allowNeg)}
                         className={`relative w-9 h-5 rounded-full transition-colors ${allowNeg ? 'bg-indigo-500' : 'bg-gray-300'} ${!editable ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
                         <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${allowNeg ? 'translate-x-4' : 'translate-x-0.5'}`} />
@@ -289,7 +289,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                     value={priors.trend.growth_prior_mu}
                     disabled={!editable}
                     onChange={e => setTrendPrior('growth_prior_mu', Number(e.target.value))} />
-                  <p className="text-[10px] text-gray-400 mt-0.5">Expected average growth rate (the base slope for piecewise). Use 0 for no expected trend.</p>
+                  <p className="text-[10px] text-ink-300 mt-0.5">Expected average growth rate (the base slope for piecewise). Use 0 for no expected trend.</p>
                 </div>
                 <div>
                   <FLabel>Growth Prior σ</FLabel>
@@ -297,14 +297,14 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                     value={priors.trend.growth_prior_sigma}
                     disabled={!editable}
                     onChange={e => setTrendPrior('growth_prior_sigma', Number(e.target.value))} />
-                  <p className="text-[10px] text-gray-400 mt-0.5">Uncertainty in growth rate. Smaller = tighter prior.</p>
+                  <p className="text-[10px] text-ink-300 mt-0.5">Uncertainty in growth rate. Smaller = tighter prior.</p>
                 </div>
               </div>
               {(() => {
                 const { x, y } = computeDensity('normal', { mu: priors.trend.growth_prior_mu, sigma: priors.trend.growth_prior_sigma });
                 return (
-                  <div className="bg-white rounded-xl border border-gray-200 p-3">
-                    <p className="text-[10px] text-gray-500 font-semibold mb-1.5">Growth Rate Prior Distribution</p>
+                  <div className="bg-white rounded-xl border border-line-200 p-3">
+                    <p className="text-[10px] text-ink-400 font-semibold mb-1.5">Growth Rate Prior Distribution</p>
                     <DensitySparkline x={x} y={y} color="#6366f1" />
                   </div>
                 );
@@ -319,7 +319,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                 value={priors.trend.changepoint_prior_scale}
                 disabled={!editable}
                 onChange={e => setTrendPrior('changepoint_prior_scale', Number(e.target.value))} />
-              <p className="text-[10px] text-gray-400 mt-0.5">Controls how sharply the trend can change at each changepoint. Smaller = smoother.</p>
+              <p className="text-[10px] text-ink-300 mt-0.5">Controls how sharply the trend can change at each changepoint. Smaller = smoother.</p>
             </div>
           )}
 
@@ -330,7 +330,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                 value={priors.trend.spline_prior_sigma}
                 disabled={!editable}
                 onChange={e => setTrendPrior('spline_prior_sigma', Number(e.target.value))} />
-              <p className="text-[10px] text-gray-400 mt-0.5">Controls how far spline coefficients can deviate from zero. Larger = more flexible trend.</p>
+              <p className="text-[10px] text-ink-300 mt-0.5">Controls how far spline coefficients can deviate from zero. Larger = more flexible trend.</p>
             </div>
           )}
 
@@ -358,7 +358,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                   value={priors.trend.gp_amplitude_prior_sigma}
                   disabled={!editable}
                   onChange={e => setTrendPrior('gp_amplitude_prior_sigma', Number(e.target.value))} />
-                <p className="text-[10px] text-gray-400 mt-0.5">Controls the overall magnitude of the GP trend component.</p>
+                <p className="text-[10px] text-ink-300 mt-0.5">Controls the overall magnitude of the GP trend component.</p>
               </div>
             </div>
           )}
@@ -369,7 +369,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
       {tab === 'seasonality' && (
         <div className="space-y-3">
           {seasonalityComponents.length === 0 && (
-            <p className="text-xs text-gray-400 italic py-2">
+            <p className="text-xs text-ink-300 italic py-2">
               No seasonality components are enabled — set a Fourier order (e.g. Seasonality → Yearly) in the model spec first.
             </p>
           )}
@@ -381,7 +381,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                   value={priors.seasonality.prior_sigma}
                   disabled={!editable}
                   onChange={e => setSeasonalityPrior('prior_sigma', Number(e.target.value))} />
-                <p className="text-[10px] text-gray-400 mt-0.5">
+                <p className="text-[10px] text-ink-300 mt-0.5">
                   Each Fourier coefficient gets Normal(0, σ) on standardized KPI — this bounds the seasonal swing.
                   Default 0.3 suits mild seasonality; raise toward 0.5–1.0 for strongly seasonal categories.
                 </p>
@@ -402,8 +402,8 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                 const sigma = priors.seasonality.prior_sigma;
                 const { x, y } = computeDensity('normal', { mu: 0, sigma });
                 return (
-                  <div className="bg-white rounded-xl border border-gray-200 p-3">
-                    <p className="text-[10px] text-gray-500 font-semibold mb-1.5">Fourier Coefficient Prior (shared σ)</p>
+                  <div className="bg-white rounded-xl border border-line-200 p-3">
+                    <p className="text-[10px] text-ink-400 font-semibold mb-1.5">Fourier Coefficient Prior (shared σ)</p>
                     <DensitySparkline x={x} y={y} color="#d946ef" />
                   </div>
                 );

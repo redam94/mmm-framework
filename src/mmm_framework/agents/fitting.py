@@ -71,6 +71,110 @@ def _build_prior(p: dict):
     return b.build()
 
 
+# ── Consumed spec.priors paths ────────────────────────────────────────────────
+# Registry of every `priors.*` path that build_model / _mff_config_from_spec
+# actually reads. update_model_setting validates writes against this so a prior
+# the builder would silently drop is rejected up front (the PPC-no-op bug:
+# `priors.intercept` used to be accepted into the spec but never consumed).
+# Adding a new prior read below MUST come with a registry entry here.
+
+_MEDIA_PRIOR_PARAMS = {
+    "coefficient",
+    "adstock_alpha",
+    "adstock_theta",
+    "saturation_kappa",
+    "saturation_slope",
+}
+_CONTROL_PRIOR_PARAMS = {"coefficient", "allow_negative"}
+_SCALAR_PRIOR_KEYS = {
+    "intercept": {"mu", "sigma"},
+    "seasonality": {
+        "prior_sigma",
+        "yearly_prior_sigma",
+        "monthly_prior_sigma",
+        "weekly_prior_sigma",
+    },
+    "trend": {
+        "growth_prior_mu",
+        "growth_prior_sigma",
+        "changepoint_prior_scale",
+        "spline_prior_sigma",
+        "gp_lengthscale_prior_mu",
+        "gp_lengthscale_prior_sigma",
+        "gp_amplitude_prior_sigma",
+    },
+}
+
+
+def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
+    """Return an error message when writing ``value`` at the ``priors.*`` path
+    ``parts`` would never be read by ``build_model`` (a silently-dropped prior),
+    else None. Dict values are expanded so e.g. setting the whole
+    ``priors.intercept`` dict validates its keys too. ``spec`` supplies the
+    known channel/control names for typo detection."""
+
+    def _leaves(p: list[str], v) -> list[list[str]]:
+        if isinstance(v, dict) and v:
+            out: list[list[str]] = []
+            for k, sub in v.items():
+                out.extend(_leaves(p + [str(k)], sub))
+            return out
+        return [p]
+
+    groups = "media, controls, seasonality, trend, intercept"
+    channels = {m.get("name") for m in spec.get("media_channels", [])}
+    controls = {c.get("name") for c in spec.get("control_variables", [])}
+
+    for leaf in _leaves(list(parts), value):
+        path = ".".join(leaf)
+        if len(leaf) < 3:
+            return (
+                f"`{path}` would have no effect — the model builder never reads "
+                f"it. Set a specific prior under one of: {groups} "
+                "(e.g. `priors.intercept.sigma`)."
+            )
+        group = leaf[1]
+        if group in _SCALAR_PRIOR_KEYS:
+            keys = _SCALAR_PRIOR_KEYS[group]
+            if len(leaf) != 3 or leaf[2] not in keys:
+                return (
+                    f"`{path}` would have no effect — the model builder never "
+                    f"reads it. Valid `priors.{group}.*` keys: "
+                    f"{', '.join(sorted(keys))}."
+                )
+        elif group == "media":
+            if channels and leaf[2] not in channels:
+                return (
+                    f"`{path}` names unknown media channel '{leaf[2]}'. "
+                    f"Channels in the spec: {', '.join(sorted(channels))}."
+                )
+            if len(leaf) < 4 or leaf[3] not in _MEDIA_PRIOR_PARAMS:
+                return (
+                    f"`{path}` would have no effect — the model builder never "
+                    f"reads it. Valid per-channel prior params: "
+                    f"{', '.join(sorted(_MEDIA_PRIOR_PARAMS))} "
+                    "(each a {distribution, params} dict)."
+                )
+        elif group == "controls":
+            if controls and leaf[2] not in controls:
+                return (
+                    f"`{path}` names unknown control variable '{leaf[2]}'. "
+                    f"Controls in the spec: {', '.join(sorted(controls))}."
+                )
+            if len(leaf) < 4 or leaf[3] not in _CONTROL_PRIOR_PARAMS:
+                return (
+                    f"`{path}` would have no effect — the model builder never "
+                    f"reads it. Valid per-control prior params: "
+                    f"{', '.join(sorted(_CONTROL_PRIOR_PARAMS))}."
+                )
+        else:
+            return (
+                f"`{path}` would have no effect — the model builder never reads "
+                f"`priors.{group}`. Valid prior groups: {groups}."
+            )
+    return None
+
+
 def _mff_config_from_spec(spec: dict):
     """Build an ``MFFConfig`` from a (normalized) model_spec dict — shared by fit
     and by ``load_fitted_model`` (the panel a saved model reloads against)."""
@@ -200,6 +304,12 @@ def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
         .with_tune(tune)
         .with_target_accept(target_accept)
     )
+    intercept_prior = spec.get("priors", {}).get("intercept", {})
+    if "mu" in intercept_prior or "sigma" in intercept_prior:
+        model_config_builder.with_intercept_prior(
+            mu=float(intercept_prior.get("mu", 0.0)),
+            sigma=float(intercept_prior.get("sigma", 0.5)),
+        )
     season = spec.get("seasonality", {})
     yearly = int(season.get("yearly", 0))
     monthly = int(season.get("monthly", 0))
@@ -284,7 +394,26 @@ def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
         )
     trend_config = tb.build()
 
-    return BayesianMMM(panel, model_config, trend_config)
+    mmm = BayesianMMM(panel, model_config, trend_config)
+
+    # 4. Experiment calibration (closes the measurement loop): the spec carries
+    # completed lift readouts as ExperimentMeasurement dicts; they become
+    # in-graph likelihood terms on the channel's contribution/ROAS/mROAS.
+    exps_spec = spec.get("experiments") or []
+    if exps_spec:
+        from mmm_framework.calibration.likelihood import ExperimentMeasurement
+
+        try:
+            measurements = [ExperimentMeasurement.from_dict(e) for e in exps_spec]
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Invalid experiment calibration entry in spec.experiments: {e}. "
+                "Each entry needs channel, test_period [start, end], value, se, "
+                "and estimand (contribution | roas | mroas)."
+            ) from e
+        mmm.add_experiment_calibration(measurements)
+
+    return mmm
 
 
 def build_and_fit(spec: dict, dataset_path: str):
@@ -372,6 +501,30 @@ def build_and_fit(spec: dict, dataset_path: str):
         # reload this model from disk (PR-C.3 cold-reload).
         "spec": spec,
     }
+    if spec.get("experiments"):
+        model_run["calibration"] = {
+            "experiments": spec.get("experiments"),
+            "experiment_ids": spec.get("experiment_ids", []),
+        }
+        summary += (
+            f" Calibrated with {len(spec['experiments'])} experiment likelihood(s)."
+        )
+        model_run["summary"] = summary
+    # 8b. History metrics snapshot (best-effort — a metrics failure must never
+    # fail a fit). Kernel-side: model-only compute; the host enriches with
+    # registry calibration status and persists to the run_metrics table.
+    # Knob: inference.metrics_draws (0 disables).
+    metrics_draws = int(inf.get("metrics_draws", 200))
+    if metrics_draws > 0:
+        try:
+            from mmm_framework.planning.history import compute_run_metrics
+
+            model_run["metrics"] = compute_run_metrics(
+                mmm, max_draws=metrics_draws, random_seed=random_seed
+            )
+        except Exception as metrics_err:  # noqa: BLE001
+            model_run["metrics_error"] = str(metrics_err)
+
     if model_saved:
         try:
             with open(_os.path.join(model_path, "run_metadata.json"), "w") as f:

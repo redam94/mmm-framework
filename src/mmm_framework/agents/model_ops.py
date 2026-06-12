@@ -605,17 +605,39 @@ def experiment_design(
     try:
         from mmm_framework.planning import recommend_experiments as _recommend
 
-        table, designs = _recommend(
-            mmm, top_k=int(top_k), max_draws=max_draws, random_seed=42
-        )
+        try:
+            table, designs = _recommend(
+                mmm,
+                top_k=int(top_k),
+                max_draws=max_draws,
+                random_seed=42,
+                method="eig_evoi",
+            )
+            method = "eig_evoi"
+        except Exception:  # noqa: BLE001 — EIG/EVOI is the default; never block
+            table, designs = _recommend(
+                mmm,
+                top_k=int(top_k),
+                max_draws=max_draws,
+                random_seed=42,
+                method="heuristic",
+            )
+            method = "heuristic"
     except Exception as e:  # noqa: BLE001
         return _err(f"Experiment design recommendation failed: {e}")
 
     lines = ["### Experiment Design Recommendations", ""]
-    lines.append(
-        "Priority = spend share × ROAS uncertainty (CV) × (1 + allocation "
-        "instability) — test where uncertainty is large AND moves real money."
-    )
+    if method == "eig_evoi":
+        lines.append(
+            "Priority = √(EIG × EVOI), normalized — what the experiment teaches "
+            "(expected information gain) times what that learning is worth to "
+            "the budget decision (expected value of information)."
+        )
+    else:
+        lines.append(
+            "Priority = spend share × ROAS uncertainty (CV) × (1 + allocation "
+            "instability) — test where uncertainty is large AND moves real money."
+        )
     for i, d in enumerate(designs, 1):
         lines.append(f"\n**{i}. `{d['channel']}`** (priority {d['priority']:.3f})")
         lines.append(f"   - Why: {d['why']}")
@@ -654,6 +676,102 @@ def experiment_design(
     return out
 
 
+def experiment_priorities(
+    mmm: Any,
+    results: Any = None,
+    *,
+    evidence: dict | None = None,
+    as_of: str | None = None,
+    n_outcomes: int = 48,
+    max_draws: int = 200,
+) -> dict:
+    """The EIG/EVOI priority grid: per-channel expected information gain,
+    expected value of information for the budget decision, the 2×2 quadrant
+    classification, and information-decay re-test triggers (when the registry
+    supplies per-channel evidence dates via ``evidence``)."""
+    try:
+        from mmm_framework.planning import compute_experiment_priorities as _grid
+
+        grid, portfolio = _grid(
+            mmm,
+            evidence=evidence,
+            as_of=as_of,
+            n_outcomes=int(n_outcomes),
+            max_draws=int(max_draws),
+            random_seed=42,
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Experiment priority computation failed: {e}")
+
+    rows = [g.to_dict() for g in grid]
+    quad_lists: dict[str, list[str]] = {}
+    for g in grid:
+        quad_lists.setdefault(g.quadrant, []).append(g.channel)
+
+    lines = ["### EIG/EVOI Experiment Priorities", ""]
+    lines.append(
+        f"- Portfolio EVPI (value of perfect information): "
+        f"{portfolio['evpi']:,.0f} KPI units over the response window"
+    )
+    for quad, label in (
+        ("test_now", "🎯 Test now (high EIG × high EVOI)"),
+        ("learn_cheaply", "📚 Learn cheaply (informative; decision robust)"),
+        ("monitor", "👁 Monitor (high stakes; already precise)"),
+        ("deprioritize", "💤 Deprioritize"),
+    ):
+        if quad in quad_lists:
+            lines.append(f"- {label}: {', '.join(f'`{c}`' for c in quad_lists[quad])}")
+    retests = [g.channel for g in grid if g.retest_due]
+    if retests:
+        lines.append(
+            f"- ⏰ Re-test due (evidence decayed past threshold): "
+            f"{', '.join(f'`{c}`' for c in retests)}"
+        )
+    top = grid[0] if grid else None
+    if top:
+        lines.append(
+            f"\nTop priority: `{top.channel}` — EIG {top.eig:.2f} nats, "
+            f"EVOI {top.evoi:,.0f} ({top.evpi_share:.0%} of EVPI)."
+        )
+
+    out = _ok(
+        "\n".join(lines),
+        {
+            "experiment_priorities": {
+                "channels": rows,
+                "portfolio": portfolio,
+                "matrix": quad_lists,
+            }
+        },
+    )
+    out["tables"] = [
+        records_to_table_json(
+            [
+                {
+                    k: r[k]
+                    for k in (
+                        "channel",
+                        "quadrant",
+                        "priority",
+                        "eig",
+                        "evoi",
+                        "evpi_share",
+                        "roi_mean",
+                        "roi_sd",
+                        "spend_share",
+                        "retest_due",
+                    )
+                }
+                for r in rows
+            ],
+            title="EIG/EVOI Priority Grid",
+            source="compute_experiment_priorities",
+            group="results",
+        )
+    ]
+    return out
+
+
 # Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
 OPS = {
     "roi_metrics": roi_metrics,
@@ -668,4 +786,5 @@ OPS = {
     "save_model": save_model,
     "optimize_budget": optimize_budget,
     "experiment_design": experiment_design,
+    "experiment_priorities": experiment_priorities,
 }

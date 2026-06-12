@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from mmm_framework.agents.graph import create_agent_graph
+from mmm_framework.agents.spec_locks import apply_spec_patch, is_spec_patch
 from mmm_framework.api import sessions as sessions_store
 
 logger = logging.getLogger("mmm_api")
@@ -81,6 +82,31 @@ def _message_dashboard(combined_dashboard: dict) -> dict:
         for k, v in (combined_dashboard or {}).items()
         if k not in _REF_LIST_DASHBOARD_KEYS
     }
+
+
+def _fold_dashboard_update(combined: dict, dd: dict, live_spec: dict) -> dict:
+    """Fold one raw tool update's ``dashboard_data`` into the per-event
+    ``combined`` dict (mutated in place), materializing ``model_spec`` patch
+    envelopes against ``live_spec``. Returns the new live spec.
+
+    stream_mode="updates" yields each tool's RAW Command update, so a
+    single-setting ``update_model_setting`` arrives with ``dashboard_data``
+    carrying a ``{"__spec_patch__": [...]}`` envelope (see spec_locks.py). The
+    state reducer materializes it into the checkpoint, but the wire copy must
+    be materialized here too — the frontend shallow-merges ``dashboard_data``,
+    and an envelope would clobber its concrete spec. Applying each envelope
+    against the latest spec also lets concurrent single-field updates in one
+    ToolNode step accumulate instead of the last envelope winning.
+    """
+    dd = dict(dd)
+    spec = dd.get("model_spec")
+    if is_spec_patch(spec):
+        live_spec = apply_spec_patch(live_spec, spec)
+        dd["model_spec"] = live_spec
+    elif isinstance(spec, dict):
+        live_spec = spec
+    combined.update(dd)
+    return live_spec
 
 
 # ── Persistent checkpointer ───────────────────────────────────────────────────
@@ -258,6 +284,10 @@ async def _repair_orphan_tool_calls(thread_id: str) -> None:
 class ChatRequest(BaseModel):
     message: str
     thread_id: str = "default_thread"
+    # Where the user is in the app (set by the floating guide bubble), so the
+    # agent can answer "what am I looking at?" — prepended to the message as a
+    # bracketed app-context note, visibly distinct from the user's own words.
+    page_context: str | None = None
 
 
 @app.post("/chat")
@@ -316,7 +346,13 @@ async def chat_endpoint(
         # history ends with an AIMessage(tool_calls) that has no ToolMessage reply.
         await _repair_orphan_tool_calls(request.thread_id)
 
-        initial_message = HumanMessage(content=request.message)
+        user_text = request.message
+        if request.page_context:
+            user_text = (
+                f"[App context — not typed by the user: {request.page_context}]\n\n"
+                f"{request.message}"
+            )
+        initial_message = HumanMessage(content=user_text)
 
         # Pre-populate dedup keys from artifacts already saved in this session so
         # we don't re-add model_run / report / code artifacts on every new request
@@ -347,6 +383,20 @@ async def chat_endpoint(
             elif _k == "text_output":
                 captured_artifact_keys.add(f"text_output::{_p.get('call_id', '')}")
 
+        # Base spec for materializing streamed spec-patch envelopes (see
+        # _fold_dashboard_update).
+        live_spec: dict = {}
+        try:
+            _snap = await agent_graph.aget_state(config)
+            if _snap and _snap.values:
+                live_spec = (
+                    (_snap.values.get("dashboard_data") or {}).get("model_spec")
+                    or _snap.values.get("model_spec")
+                    or {}
+                )
+        except Exception:
+            logger.exception("Could not load base model_spec for patch streaming")
+
         try:
             stream = agent_graph.astream(
                 {"messages": [initial_message]}, config, stream_mode="updates"
@@ -374,7 +424,9 @@ async def chat_endpoint(
                         all_messages.extend(upd.get("messages", []))
                         dd = upd.get("dashboard_data")
                         if dd:
-                            combined_dashboard.update(dd)
+                            live_spec = _fold_dashboard_update(
+                                combined_dashboard, dd, live_spec
+                            )
 
                     if not all_messages:
                         continue
@@ -1023,6 +1075,212 @@ async def delete_project_endpoint(project_id: str):
     return JSONResponse(content={"success": True})
 
 
+# ── Project onboarding (client profile → KB project brief) ───────────────────
+
+
+class OnboardingRequest(BaseModel):
+    client_name: str | None = None
+    industry: str | None = None
+    website: str | None = None
+    markets: str | None = None
+    goals: str | None = None
+    kpis: str | None = None
+    channels: str | None = None
+    constraints: str | None = None
+    audience: str | None = None
+    notes: str | None = None
+    members: list[dict] | None = None  # [{user_id, role}]
+
+
+_BRIEF_FIELDS = [
+    ("client_name", "Client"),
+    ("industry", "Industry"),
+    ("website", "Website"),
+    ("markets", "Markets"),
+    ("audience", "Target audience"),
+    ("goals", "Business goals"),
+    ("kpis", "KPI definitions"),
+    ("channels", "Channel landscape"),
+    ("constraints", "Known constraints"),
+    ("notes", "Additional context"),
+]
+
+
+def _project_brief_md(project: dict, meta: dict) -> str:
+    lines = [
+        f"# Project brief — {project['name']}",
+        "",
+        "This brief was captured during project onboarding and is the canonical "
+        "client/project context for this engagement. The copilot should ground "
+        "client-specific answers (goals, KPI semantics, channel landscape, "
+        "constraints) in this document.",
+        "",
+    ]
+    if project.get("description"):
+        lines += [f"**Project description:** {project['description']}", ""]
+    for key, label in _BRIEF_FIELDS:
+        if meta.get(key):
+            lines += [f"## {label}", "", str(meta[key]), ""]
+    return "\n".join(lines)
+
+
+@app.post("/projects/{project_id}/onboarding")
+async def project_onboarding_endpoint(project_id: str, body: OnboardingRequest):
+    """Save the client/project profile, assign team members, and render the
+    profile into a `project_brief.md` in the project's knowledge base — so
+    both the global guide chat and every session chat can retrieve it. Safe
+    to re-run: the meta merges and the brief is replaced."""
+    from fastapi.concurrency import run_in_threadpool
+    from mmm_framework.agents import knowledge_base as kb
+    from mmm_framework.agents import workspace as _ws
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    # merge semantics: only provided fields change (None never deletes here)
+    meta_fields = {
+        k: getattr(body, k) for k, _ in _BRIEF_FIELDS if getattr(body, k) is not None
+    }
+    meta_fields["onboarded"] = True
+    project = sessions_store.set_project_meta(project_id, meta_fields)
+
+    members: list[dict] = []
+    if body.members is not None:
+        try:
+            members = sessions_store.set_project_members(project_id, body.members)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # Render + (re)ingest the brief. KB ingestion needs an embedding backend;
+    # when none is configured the brief file still lands in the KB dir and the
+    # doc row records the error — onboarding itself never fails on it.
+    brief_status = "skipped"
+    try:
+        brief_md = _project_brief_md(project, project.get("meta") or {})
+        kb_dir = _ws.project_kb_dir(project_id)
+        dest = str(_ws.safe_join(kb_dir, "project_brief.md"))
+        for doc in sessions_store.list_kb_documents(project_id):
+            if doc.get("name") == "project_brief.md":
+                sessions_store.delete_kb_document(doc["id"])
+        with open(dest, "w") as f:
+            f.write(brief_md)
+        doc = sessions_store.add_kb_document(
+            project_id=project_id,
+            name="project_brief.md",
+            path=dest,
+            kind="markdown",
+            size_bytes=os.path.getsize(dest),
+            status="pending",
+            meta={"source": "onboarding"},
+        )
+        doc = await run_in_threadpool(kb.ingest_document, doc["id"])
+        brief_status = doc.get("status", "unknown")
+    except Exception:
+        logger.exception("project brief ingestion failed (onboarding saved)")
+        brief_status = "error"
+
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {"project": project, "members": members, "brief_status": brief_status}
+        )
+    )
+
+
+# ── Project guide (the floating per-page assistant) ──────────────────────────
+
+GUIDE_SESSION_NAME = "✦ Project guide"
+
+
+@app.post("/projects/{project_id}/guide")
+async def project_guide_session_endpoint(project_id: str):
+    """The project's global guide thread: one persistent session per project
+    that the floating chat bubble talks to (full agent + project KB). Created
+    on first use, reused after — it's a normal session, so it also shows up in
+    the Workspace if the user wants the full view."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    for s in sessions_store.list_sessions(project_id=project_id):
+        if s.get("name") == GUIDE_SESSION_NAME:
+            return JSONResponse(content={"thread_id": s["thread_id"], "created": False})
+    sess = sessions_store.create_session(GUIDE_SESSION_NAME, project_id=project_id)
+    return JSONResponse(content={"thread_id": sess["thread_id"], "created": True})
+
+
+# ── Users (team roster) ───────────────────────────────────────────────────────
+
+
+class UserCreateRequest(BaseModel):
+    name: str
+    email: str | None = None
+    role: str = "analyst"
+
+
+class UserUpdateRequest(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    role: str | None = None
+
+
+class MembersRequest(BaseModel):
+    members: list[dict]  # [{user_id, role?}]
+
+
+@app.get("/users")
+async def list_users_endpoint():
+    users = sessions_store.list_users()
+    return JSONResponse(content={"users": users, "total": len(users)})
+
+
+@app.post("/users")
+async def create_user_endpoint(body: UserCreateRequest):
+    try:
+        return JSONResponse(
+            content=sessions_store.create_user(body.name, body.email, body.role)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/users/{user_id}")
+async def update_user_endpoint(user_id: str, body: UserUpdateRequest):
+    try:
+        return JSONResponse(
+            content=sessions_store.update_user(
+                user_id, name=body.name, email=body.email, role=body.role
+            )
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404 if "Unknown user" in str(e) else 400, detail=str(e)
+        )
+
+
+@app.delete("/users/{user_id}")
+async def delete_user_endpoint(user_id: str):
+    if not sessions_store.delete_user(user_id):
+        raise HTTPException(status_code=404, detail="user not found")
+    return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/projects/{project_id}/members")
+async def list_members_endpoint(project_id: str):
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    members = sessions_store.list_project_members(project_id)
+    return JSONResponse(content={"members": members, "total": len(members)})
+
+
+@app.put("/projects/{project_id}/members")
+async def set_members_endpoint(project_id: str, body: MembersRequest):
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    try:
+        members = sessions_store.set_project_members(project_id, body.members)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content={"members": members, "total": len(members)})
+
+
 # ── Preferences & client branding ────────────────────────────────────────────
 
 
@@ -1150,14 +1408,44 @@ class ExperimentUpsertRequest(BaseModel):
     value: float | None = None
     se: float | None = None
     notes: str | None = None
+    recommending_run_id: str | None = None
+    design: dict | None = None
+    readout: dict | None = None
+    priority: dict | None = None
+
+
+class ExperimentTransitionRequest(BaseModel):
+    status: str
+    note: str | None = None
+    # readout fields, used when transitioning to 'completed'
+    value: float | None = None
+    se: float | None = None
+    estimand: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    readout: dict | None = None
+    # used when transitioning to 'calibrated'
+    calibrated_run_id: str | None = None
 
 
 @app.get("/experiments")
 async def list_experiments_endpoint(
-    project_id: str | None = None, status: str | None = None
+    project_id: str | None = None,
+    status: str | None = None,
+    channel: str | None = None,
 ):
-    exps = sessions_store.list_experiments(project_id=project_id, status=status)
+    exps = sessions_store.list_experiments(
+        project_id=project_id, status=status, channel=channel
+    )
     return JSONResponse(content={"experiments": exps, "total": len(exps)})
+
+
+@app.get("/experiments/{experiment_id}")
+async def get_experiment_endpoint(experiment_id: str):
+    exp = sessions_store.get_experiment(experiment_id)
+    if exp is None:
+        raise HTTPException(status_code=404, detail="experiment not found")
+    return JSONResponse(content=exp)
 
 
 @app.post("/experiments")
@@ -1176,9 +1464,43 @@ async def upsert_experiment_endpoint(body: ExperimentUpsertRequest):
             value=body.value,
             se=body.se,
             notes=body.notes,
+            recommending_run_id=body.recommending_run_id,
+            design=body.design,
+            readout=body.readout,
+            priority=body.priority,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=exp)
+
+
+@app.post("/experiments/{experiment_id}/transition")
+async def transition_experiment_endpoint(
+    experiment_id: str, body: ExperimentTransitionRequest
+):
+    """Validated lifecycle move (draft→planned→running→completed→calibrated,
+    abandoned from any active state). 409 on an illegal transition so the UI
+    can distinguish state-machine conflicts from bad input."""
+    if sessions_store.get_experiment(experiment_id) is None:
+        raise HTTPException(status_code=404, detail="experiment not found")
+    try:
+        exp = sessions_store.transition_experiment(
+            experiment_id,
+            body.status,
+            note=body.note,
+            value=body.value,
+            se=body.se,
+            estimand=body.estimand,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            readout=body.readout,
+            calibrated_run_id=body.calibrated_run_id,
+        )
+    except ValueError as e:
+        msg = str(e)
+        raise HTTPException(
+            status_code=409 if "Illegal transition" in msg else 400, detail=msg
+        )
     return JSONResponse(content=exp)
 
 
@@ -1365,6 +1687,32 @@ async def portfolio_endpoint(project_id: str | None = None, stale_after_days: in
                 }
             )
 
+    # 4. Re-test triggers: calibrated evidence that information decay has
+    # pushed back over the EIG threshold (see planning.eig).
+    if project_id:
+        try:
+            from mmm_framework.api.history import build_calibration_coverage
+
+            cov = build_calibration_coverage(project_id)
+            due = [c for c in cov["channels"] if c.get("retest_due")]
+            if due:
+                chs = ", ".join(c["channel"] for c in due)
+                next_actions.append(
+                    {
+                        "type": "retest",
+                        "urgency": "medium",
+                        "title": f"Re-test {len(due)} channel(s) — evidence has decayed",
+                        "detail": (
+                            f"Experimental evidence for {chs} is old enough that a "
+                            "fresh test clears the information-gain threshold. "
+                            "Recompute priorities and schedule re-tests."
+                        ),
+                        "channels": [c["channel"] for c in due],
+                    }
+                )
+        except Exception:
+            pass
+
     return JSONResponse(
         content=safe_json_dumps_load(
             {
@@ -1377,6 +1725,165 @@ async def portfolio_endpoint(project_id: str | None = None, stale_after_days: in
             }
         )
     )
+
+
+# ── Measurement-program history (per-project, from run_metrics snapshots) ─────
+
+
+@app.get("/projects/{project_id}/history")
+async def project_history_endpoint(project_id: str):
+    """Cycle-over-cycle trajectory series for the Performance page: per-channel
+    ROI posteriors (CI contraction), spend shares (allocation migration),
+    share gaps, calibration status, and the portfolio series (misallocation
+    proxy, marginal ROI, EVPI). Assembled purely from stored run_metrics rows
+    — no model loads."""
+    from mmm_framework.api.history import build_history_series
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(content=safe_json_dumps_load(build_history_series(project_id)))
+
+
+@app.get("/projects/{project_id}/calibration-coverage")
+async def calibration_coverage_endpoint(project_id: str, as_of: str | None = None):
+    """Channels × evidence tier (calibrated / stale / model_only) with
+    information decay applied at read time, plus coverage percentages."""
+    from mmm_framework.api.history import build_calibration_coverage
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            build_calibration_coverage(project_id, as_of=as_of)
+        )
+    )
+
+
+@app.get("/projects/{project_id}/experiment-priorities")
+async def experiment_priorities_endpoint(project_id: str, as_of: str | None = None):
+    """The latest EIG/EVOI priority grid with decay + registry state applied
+    at read time. 404 when the project has no run metrics yet (fit a model
+    first, or backfill: python -m mmm_framework.api.backfill)."""
+    from mmm_framework.api.history import build_priorities_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    payload = build_priorities_payload(project_id, as_of=as_of)
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No run metrics for this project yet. Fit a model (metrics are "
+                "recorded automatically) or backfill saved runs with "
+                "`python -m mmm_framework.api.backfill`."
+            ),
+        )
+    return JSONResponse(content=safe_json_dumps_load(payload))
+
+
+# ── Experiment design studio (geo lift / matched-market DiD / flighting) ─────
+
+
+def _design_inputs(project_id: str, channel: str) -> tuple[str, str]:
+    """(dataset_path, kpi) for design computation, from the latest run."""
+    import os as _os
+
+    from mmm_framework.api.history import latest_model_run_payload
+
+    run = latest_model_run_payload(project_id)
+    if not run:
+        raise HTTPException(
+            status_code=404,
+            detail="No model runs in this project yet — fit a model first so the "
+            "designer knows the dataset and KPI.",
+        )
+    dataset_path = run.get("dataset_path")
+    kpi = run.get("kpi") or (run.get("spec") or {}).get("kpi")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"The run's dataset is not on disk ({dataset_path}) — re-upload "
+            "or refit before designing.",
+        )
+    if not kpi:
+        raise HTTPException(status_code=404, detail="The run records no KPI.")
+    if channel and channel not in (run.get("channels") or [channel]):
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{channel}' is not a channel of the latest run "
+            f"({', '.join(run.get('channels') or [])}).",
+        )
+    return dataset_path, kpi
+
+
+@app.get("/projects/{project_id}/experiment-design/options")
+async def experiment_design_options_endpoint(project_id: str, channel: str):
+    """What designs the project's data supports (geo designs need >= 4 geos),
+    plus the recommended one."""
+    from mmm_framework.planning.design import design_options
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, channel)
+    try:
+        opts = design_options(dataset_path, kpi, channel)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load({**opts, "kpi": kpi}))
+
+
+class ExperimentDesignRequest(BaseModel):
+    channel: str
+    design_key: str | None = None  # geo_lift | matched_market_did | national_flighting
+    # geo designs
+    design: str = "scaling"  # holdout | scaling
+    intensity_pct: float = 50.0
+    n_pairs: int | None = None
+    duration: int = 8
+    # flighting
+    amplitude_pct: float = 50.0
+    block_weeks: int = 2
+    seed: int = 42
+
+
+@app.post("/projects/{project_id}/experiment-design")
+async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequest):
+    """Compute a runnable experiment design: randomized matched-pair geo lift
+    (or observational matched-market DiD) with DiD power/MDE curves, or a
+    budget-neutral randomized flighting schedule for national data. Pure data
+    computation — no model load."""
+    from mmm_framework.planning.design import design_experiment, design_options
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, body.channel)
+    try:
+        design_key = (
+            body.design_key
+            or design_options(dataset_path, kpi, body.channel)["recommended"]
+        )
+        if design_key == "national_flighting":
+            kwargs: dict = {
+                "duration": int(body.duration),
+                "seed": int(body.seed),
+                "amplitude_pct": body.amplitude_pct,
+                "block_weeks": int(body.block_weeks),
+            }
+        else:
+            kwargs = {
+                "duration": int(body.duration),
+                "seed": int(body.seed),
+                "design": body.design,
+                "intensity_pct": body.intensity_pct,
+            }
+            if body.n_pairs is not None:
+                kwargs["n_pairs"] = int(body.n_pairs)
+        design = design_experiment(
+            dataset_path, kpi, body.channel, design_key=design_key, **kwargs
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load(design))
 
 
 # ── Artifacts ─────────────────────────────────────────────────────────────────
