@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDownIcon,
   XMarkIcon,
@@ -178,9 +179,12 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
         <ChevronDownIcon className="h-3 w-3 shrink-0" />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+          // Portaled to <body>: an ancestor with backdrop-filter (the sticky
+          // Header) would otherwise become this fixed overlay's containing
+          // block, clipping the dialog to the header strip.
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink-900/40 p-4"
           onClick={() => !saving && setOpen(false)}
         >
           <div
@@ -208,7 +212,7 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
                     const m = metaFor(e.target.value);
                     setKeyInput(m?.ui ? getStoredKeyForProvider(m.ui) || '' : '');
                   }}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600 disabled:bg-gray-100 disabled:text-gray-500"
                 >
                   {PROVIDERS.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -255,7 +259,7 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
                     setSelModel(e.target.value);
                     setCustomModel('');
                   }}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600"
                 >
                   <option value="" disabled>
                     {modelOptions.length ? 'Select a model…' : 'No models discovered — type one below'}
@@ -271,7 +275,7 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
                   placeholder="…or type a model id"
                   value={customModel}
                   onChange={(e) => setCustomModel(e.target.value)}
-                  className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
                 />
               </div>
 
@@ -287,7 +291,7 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
                     placeholder="sk-…"
                     value={keyInput}
                     onChange={(e) => setKeyInput(e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
                   />
                   <p className="mt-1 text-[11px] text-gray-400">
                     Stored locally in your browser and sent as the X-API-Key header.
@@ -314,13 +318,14 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-1.5 bg-sage-700 text-white text-sm font-medium rounded-lg hover:bg-sage-800 disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

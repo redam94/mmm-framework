@@ -32,7 +32,7 @@ function HexField({ label, value, onChange, disabled }: {
           value={toPickerHex(value)}
           disabled={disabled}
           onChange={e => onChange(e.target.value)}
-          className="w-8 h-8 p-0.5 rounded-lg border border-gray-200 bg-white cursor-pointer shrink-0 disabled:opacity-40"
+          className="w-8 h-8 p-0.5 rounded-lg border border-line-200 bg-white cursor-pointer shrink-0 disabled:opacity-40"
         />
         <input
           type="text"
@@ -63,7 +63,7 @@ function PaletteEditor({ palette, onChange, disabled }: {
               disabled={disabled}
               title={c}
               onChange={e => onChange(palette.map((x, j) => (j === i ? e.target.value : x)))}
-              className="w-8 h-8 p-0.5 rounded-lg border border-gray-200 bg-white cursor-pointer disabled:opacity-40"
+              className="w-8 h-8 p-0.5 rounded-lg border border-line-200 bg-white cursor-pointer disabled:opacity-40"
             />
             {!disabled && (
               <button
@@ -81,7 +81,7 @@ function PaletteEditor({ palette, onChange, disabled }: {
           type="button"
           disabled={disabled || palette.length >= MAX_PALETTE}
           onClick={() => onChange([...palette, palette[palette.length - 1] || '#8fa86a'])}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-dashed border-line-300 text-ink-300 hover:border-indigo-400 hover:text-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           title="Add color"
         >
           <Plus size={14} />
@@ -255,13 +255,13 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
       </datalist>
 
       {/* Segmented control */}
-      <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-0.5 mb-5">
+      <div className="inline-flex rounded-lg border border-line-200 bg-cream-100 p-0.5 mb-5">
         {([['project', 'Project branding'], ['global', 'Global defaults']] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setSection(id)}
             className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              section === id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+              section === id ? 'bg-white text-indigo-700 shadow-sm' : 'text-ink-400 hover:text-ink-900'
             }`}
           >
             {label}
@@ -272,8 +272,8 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
       {/* ── Project branding section ── */}
       {section === 'project' && (
         !projectId ? (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center">
-            <p className="text-sm text-gray-500">
+          <div className="rounded-xl border border-line-200 bg-cream-50 px-4 py-6 text-center">
+            <p className="text-sm text-ink-400">
               No active project. Select or create a project in the sidebar to set its branding.
             </p>
           </div>
@@ -282,7 +282,7 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
             {loadedConfirmed === false && (
               <div className="flex items-center gap-2">
                 <Badge label="Proposed (unconfirmed)" color="amber" />
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-ink-300">
                   Unconfirmed branding never styles output — review and Save to confirm.
                 </span>
               </div>
@@ -370,7 +370,7 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
             </div>
 
             {/* Save row */}
-            <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-3 pt-2 border-t border-line-200">
               <button
                 onClick={saveProject}
                 disabled={saving || !dirty}
@@ -383,7 +383,7 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
                   {saveMsg.kind === 'success' ? <Check size={13} /> : <AlertTriangle size={13} />} {saveMsg.text}
                 </span>
               )}
-              {dirty && !saveMsg && <span className="text-xs text-gray-400">Unsaved changes</span>}
+              {dirty && !saveMsg && <span className="text-xs text-ink-300">Unsaved changes</span>}
             </div>
             {savedNote && (
               <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
@@ -410,7 +410,7 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
               onApply={p => { setGlobalPresetId(p.id); setGlobalDirty(true); setGlobalMsg(null); }}
               disabled={hostedDisabled}
             />
-            <p className="text-[10px] text-gray-400 mt-1">
+            <p className="text-[10px] text-ink-300 mt-1">
               Used as the default branding for projects without their own.
             </p>
           </div>
@@ -427,7 +427,7 @@ export function BrandingModal({ projectId, apiKey, modelName, onClose }: {
             </select>
           </div>
 
-          <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+          <div className="flex items-center gap-3 pt-2 border-t border-line-200">
             <button
               onClick={saveGlobal}
               disabled={globalSaving || hostedDisabled || !globalDirty}

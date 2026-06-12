@@ -1,0 +1,76 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens — the single source of truth for the editorial-professional
+   identity: warm cream surfaces, ink-green text, sage primary, gold accent,
+   steel-blue secondary, rust warnings. Fraunces carries display type; IBM
+   Plex Sans is the UI workhorse; JetBrains Mono renders every numeral.
+
+   Tailwind 4: `@theme` tokens auto-generate utilities (bg-cream-50,
+   text-ink-900, border-line-300, font-display, …). Keep names disjoint from
+   Tailwind defaults we still use during migration — hence `gold`, not a
+   custom `amber` that would silently restyle existing amber-* usages.
+   TS mirror for Plotly/inline styles: src/theme/colors.ts (keep in sync).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Surfaces */
+  --color-cream-50: #faf8f3;
+  --color-cream-100: #f3f0e6;
+  --color-cream-200: #f0ede0;
+  --color-cream-300: #e9e5d4;
+
+  /* Ink (text) — green-cast neutrals */
+  --color-ink-900: #2a3528;
+  --color-ink-700: #3a4838;
+  --color-ink-600: #4a5a48;
+  --color-ink-400: #7a8a78;
+  --color-ink-300: #9aa498;
+
+  /* Sage — primary */
+  --color-sage-100: #eef2e7;
+  --color-sage-200: #dde7cf;
+  --color-sage-300: #a8c485;
+  --color-sage-600: #6d8a4a;
+  --color-sage-700: #5a7a3a;
+  --color-sage-800: #4a6d2a;
+  --color-sage-900: #3a5d1a;
+
+  /* Gold — accent (named gold, NOT amber: Tailwind's amber stays intact) */
+  --color-gold-100: #f5ecd8;
+  --color-gold-300: #d4a86a;
+  --color-gold-600: #b8860b;
+  --color-gold-700: #8a6408;
+
+  /* Steel blue — secondary */
+  --color-steel-100: #e7eef2;
+  --color-steel-300: #9db8c9;
+  --color-steel-600: #4a6d8a;
+  --color-steel-700: #3a5a75;
+
+  /* Rust — warnings / stale */
+  --color-rust-100: #f5e7e2;
+  --color-rust-600: #a04535;
+  --color-rust-700: #7a3525;
+
+  /* Hairlines */
+  --color-line-200: #e8e4d5;
+  --color-line-300: #d8d4c5;
+  --color-line-400: #b8b4a5;
+
+  /* Type */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+/* Semantic aliases (plain vars — read by components, not Tailwind) */
+:root {
+  /* Evidence tiers: how well a channel's ROI is causally anchored */
+  --evidence-calibrated: var(--color-sage-600);
+  --evidence-calibrated-bg: var(--color-sage-100);
+  --evidence-running: var(--color-gold-600);
+  --evidence-running-bg: var(--color-gold-100);
+  --evidence-model-only: var(--color-steel-600);
+  --evidence-model-only-bg: var(--color-steel-100);
+  --evidence-stale: var(--color-rust-600);
+  --evidence-stale-bg: var(--color-rust-100);
+}

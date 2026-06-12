@@ -23,15 +23,15 @@ export function PalettePicker({ activePrimary, onApply, disabled = false }: {
             className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
               active
                 ? 'border-indigo-400 bg-indigo-50/60 ring-1 ring-indigo-300'
-                : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50'
+                : 'border-line-200 bg-white hover:border-indigo-300 hover:bg-cream-100'
             }`}
           >
-            <span className="flex rounded-md overflow-hidden border border-gray-200 shrink-0">
+            <span className="flex rounded-md overflow-hidden border border-line-200 shrink-0">
               {p.palette.map(c => (
                 <span key={c} className="w-5 h-5" style={{ backgroundColor: c }} />
               ))}
             </span>
-            <span className="text-xs font-medium text-gray-700 flex-1">{p.label}</span>
+            <span className="text-xs font-medium text-ink-700 flex-1">{p.label}</span>
             {active && <Check size={14} className="text-indigo-600 shrink-0" />}
           </button>
         );

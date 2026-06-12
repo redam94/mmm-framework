@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { titleColorClass } from '../../theme/uiMaps';
 import {
   ReactFlow,
   Background,
@@ -82,12 +83,12 @@ export function PanelShell({ title, icon, color = 'gray', defaultOpen = true, ch
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-line-200 shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-4">
         <button onClick={() => setOpen(v => !v)} className="flex items-center gap-3 flex-1 text-left">
           {icon}
-          <span className={`font-semibold text-sm text-${color}-600 flex-1`}>{title}</span>
-          {open ? <ChevronDown size={15} className="text-gray-400" /> : <ChevronRight size={15} className="text-gray-400" />}
+          <span className={`font-semibold text-sm flex-1 ${titleColorClass(color)}`}>{title}</span>
+          {open ? <ChevronDown size={15} className="text-ink-300" /> : <ChevronRight size={15} className="text-ink-300" />}
         </button>
         {right}
       </div>
@@ -99,10 +100,10 @@ export function PanelShell({ title, icon, color = 'gray', defaultOpen = true, ch
 // ── 1. Workflow Checklist ───────────────────────────────────────────────────
 
 const STEP_ICON: Record<string, React.ReactNode> = {
-  pending: <Circle size={16} className="text-gray-300" />,
+  pending: <Circle size={16} className="text-ink-300" />,
   in_progress: <Clock size={16} className="text-amber-500 animate-pulse" />,
   done: <CheckCircle2 size={16} className="text-emerald-500" />,
-  skipped: <XCircle size={16} className="text-gray-400" />,
+  skipped: <XCircle size={16} className="text-ink-300" />,
 };
 
 export function WorkflowChecklist({ steps, onOverride }: {
@@ -125,26 +126,26 @@ export function WorkflowChecklist({ steps, onOverride }: {
             className={`flex items-start gap-3 px-3 py-2 rounded-lg border transition-colors ${
               s.status === 'done' ? 'border-emerald-100 bg-emerald-50/40' :
               s.status === 'in_progress' ? 'border-amber-100 bg-amber-50/40' :
-              'border-gray-100 bg-white'
+              'border-line-200 bg-white'
             }`}
           >
             <div className="mt-0.5 shrink-0">{STEP_ICON[s.status] ?? STEP_ICON.pending}</div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-xs font-mono text-gray-400">{s.step}</span>
-                <span className="text-sm font-semibold text-gray-800">{s.title}</span>
+                <span className="text-xs font-mono text-ink-300">{s.step}</span>
+                <span className="text-sm font-semibold text-ink-900">{s.title}</span>
                 {s.overridden && (
                   <span className="text-[10px] uppercase tracking-wider text-indigo-500 bg-indigo-50 rounded px-1.5 py-0.5">manual</span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">{s.description}</p>
-              {s.notes && <p className="text-xs text-gray-600 mt-1 italic">"{s.notes}"</p>}
+              <p className="text-xs text-ink-400 mt-0.5">{s.description}</p>
+              {s.notes && <p className="text-xs text-ink-600 mt-1 italic">"{s.notes}"</p>}
             </div>
             <div className="shrink-0">
               <select
                 value={s.status}
                 onChange={e => onOverride(s.step, e.target.value as WorkflowStep['status'])}
-                className="text-[11px] bg-transparent border border-gray-200 rounded px-1.5 py-1 text-gray-500 hover:border-gray-300 focus:outline-none"
+                className="text-[11px] bg-transparent border border-line-200 rounded px-1.5 py-1 text-ink-400 hover:border-line-300 focus:outline-none"
                 title={`Inferred: ${s.inferred_status}`}
               >
                 <option value="pending">pending</option>
@@ -170,7 +171,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   functional_form:   'bg-orange-50 text-orange-700 border-orange-200',
   prior:             'bg-pink-50 text-pink-700 border-pink-200',
   external_evidence: 'bg-teal-50 text-teal-700 border-teal-200',
-  other:             'bg-gray-50 text-gray-700 border-gray-200',
+  other:             'bg-cream-50 text-ink-700 border-line-200',
 };
 
 export function AssumptionsLog({ threadId, assumptions, onRefresh }: {
@@ -209,7 +210,7 @@ export function AssumptionsLog({ threadId, assumptions, onRefresh }: {
   if (assumptions.length === 0) {
     return (
       <PanelShell title="Modeling Assumptions" icon={<FileText size={16} className="text-indigo-600" />} color="indigo">
-        <p className="text-sm text-gray-400 italic">No assumptions recorded yet. The agent will log them as you make modeling choices.</p>
+        <p className="text-sm text-ink-300 italic">No assumptions recorded yet. The agent will log them as you make modeling choices.</p>
       </PanelShell>
     );
   }
@@ -231,48 +232,48 @@ export function AssumptionsLog({ threadId, assumptions, onRefresh }: {
               <span className={`text-[10px] uppercase tracking-wider font-semibold rounded border px-1.5 py-0.5 ${CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.other}`}>
                 {cat.replace(/_/g, ' ')}
               </span>
-              <span className="text-[11px] text-gray-400">{items.length}</span>
+              <span className="text-[11px] text-ink-300">{items.length}</span>
             </div>
             <div className="space-y-1.5">
               {items.map(a => (
-                <div key={a.key} className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                <div key={a.key} className="rounded-lg border border-line-200 bg-cream-50 overflow-hidden">
                   <div className="flex items-start gap-2 px-3 py-2">
                     <button
                       onClick={() => loadHistory(a.key)}
-                      className="p-0.5 rounded text-gray-400 hover:text-indigo-600 shrink-0 mt-0.5"
+                      className="p-0.5 rounded text-ink-300 hover:text-indigo-600 shrink-0 mt-0.5"
                       title="Toggle history"
                     >
                       <History size={13} />
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2 flex-wrap">
-                        <code className="text-xs font-semibold text-gray-800 break-all">{a.key}</code>
-                        <span className="text-[10px] text-gray-400">v{a.version}</span>
-                        <span className="text-[10px] text-gray-400">{new Date(a.created_at * 1000).toLocaleString()}</span>
+                        <code className="text-xs font-semibold text-ink-900 break-all">{a.key}</code>
+                        <span className="text-[10px] text-ink-300">v{a.version}</span>
+                        <span className="text-[10px] text-ink-300">{new Date(a.created_at * 1000).toLocaleString()}</span>
                       </div>
-                      <p className="text-xs text-gray-600 mt-0.5 italic">{a.rationale}</p>
+                      <p className="text-xs text-ink-600 mt-0.5 italic">{a.rationale}</p>
                       {a.change_note && (
                         <p className="text-[11px] text-indigo-600 mt-0.5">↳ {a.change_note}</p>
                       )}
                       <details className="mt-1">
-                        <summary className="text-[11px] text-gray-400 cursor-pointer select-none">value</summary>
-                        <pre className="text-[10px] font-mono text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 mt-1 overflow-x-auto max-h-32">{JSON.stringify(a.value, null, 2)}</pre>
+                        <summary className="text-[11px] text-ink-300 cursor-pointer select-none">value</summary>
+                        <pre className="text-[10px] font-mono text-ink-700 bg-white border border-line-200 rounded px-2 py-1 mt-1 overflow-x-auto max-h-32">{JSON.stringify(a.value, null, 2)}</pre>
                       </details>
                     </div>
                     <button
                       onClick={() => retract(a.key)}
-                      className="p-1 rounded text-gray-300 hover:text-red-500 shrink-0"
+                      className="p-1 rounded text-ink-300 hover:text-red-500 shrink-0"
                       title="Retract"
                     ><Trash2 size={12} /></button>
                   </div>
                   {expandedKey === a.key && historyByKey[a.key] && (
-                    <div className="border-t border-gray-200 bg-white px-3 py-2 space-y-1.5">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Change log ({historyByKey[a.key].length})</p>
+                    <div className="border-t border-line-200 bg-white px-3 py-2 space-y-1.5">
+                      <p className="text-[10px] uppercase tracking-wider text-ink-300 font-semibold">Change log ({historyByKey[a.key].length})</p>
                       {historyByKey[a.key].map(h => (
                         <div key={h.id} className="text-[11px] flex items-baseline gap-2">
-                          <span className="text-gray-400 shrink-0">v{h.version}</span>
-                          <span className="text-gray-400 shrink-0">{new Date(h.created_at * 1000).toLocaleTimeString()}</span>
-                          <span className={`${h.is_tombstone ? 'text-red-500 italic' : 'text-gray-700'}`}>
+                          <span className="text-ink-300 shrink-0">v{h.version}</span>
+                          <span className="text-ink-300 shrink-0">{new Date(h.created_at * 1000).toLocaleTimeString()}</span>
+                          <span className={`${h.is_tombstone ? 'text-red-500 italic' : 'text-ink-700'}`}>
                             {h.is_tombstone ? `retracted (${h.change_note})` : (h.change_note || 'recorded')}
                           </span>
                         </div>
@@ -297,7 +298,7 @@ export function DataFilesWidget({ files, onDelete }: {
   if (files.length === 0) {
     return (
       <PanelShell title="Session Files" icon={<Database size={16} className="text-amber-600" />} color="amber">
-        <p className="text-sm text-gray-400 italic">No files associated with this session. Upload a CSV via the paperclip icon, or the agent can generate synthetic data.</p>
+        <p className="text-sm text-ink-300 italic">No files associated with this session. Upload a CSV via the paperclip icon, or the agent can generate synthetic data.</p>
       </PanelShell>
     );
   }
@@ -313,26 +314,26 @@ export function DataFilesWidget({ files, onDelete }: {
     <PanelShell title={`Session Files (${files.length})`} icon={<Database size={16} className="text-amber-600" />} color="amber">
       <div className="space-y-2">
         {files.map(f => (
-          <div key={f.id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div key={f.id} className="rounded-lg border border-line-200 bg-white overflow-hidden">
             <div className="flex items-start gap-2 px-3 py-2">
               <Database size={14} className="text-amber-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-gray-800 truncate">{f.name}</span>
+                  <span className="text-sm font-semibold text-ink-900 truncate">{f.name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">{f.kind}</span>
-                  <span className="text-[10px] text-gray-400">{fmtSize(f.size_bytes)}</span>
+                  <span className="text-[10px] text-ink-300">{fmtSize(f.size_bytes)}</span>
                 </div>
-                <p className="text-[11px] text-gray-400 font-mono mt-0.5 truncate">{f.path}</p>
+                <p className="text-[11px] text-ink-300 font-mono mt-0.5 truncate">{f.path}</p>
                 {f.preview && (
                   <details className="mt-1">
-                    <summary className="text-[11px] text-gray-400 cursor-pointer select-none">preview</summary>
-                    <pre className="text-[10px] font-mono text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1 mt-1 overflow-x-auto whitespace-pre max-h-32">{f.preview}</pre>
+                    <summary className="text-[11px] text-ink-300 cursor-pointer select-none">preview</summary>
+                    <pre className="text-[10px] font-mono text-ink-700 bg-cream-50 border border-line-200 rounded px-2 py-1 mt-1 overflow-x-auto whitespace-pre max-h-32">{f.preview}</pre>
                   </details>
                 )}
               </div>
               <button
                 onClick={() => onDelete(f.id)}
-                className="p-1 rounded text-gray-300 hover:text-red-500 shrink-0"
+                className="p-1 rounded text-ink-300 hover:text-red-500 shrink-0"
                 title="Remove from session (file on disk is kept)"
               ><Trash2 size={12} /></button>
             </div>
@@ -478,18 +479,18 @@ export function SemanticCallouts({
             {' '}— {identification.treatment} → {identification.outcome}
           </p>
           {adjustSet.length > 0 && (
-            <p className="text-[11px] text-gray-700 mb-1.5">
+            <p className="text-[11px] text-ink-700 mb-1.5">
               Adjustment set: <span className="font-mono">{`{ ${adjustSet.join(', ')} }`}</span>
             </p>
           )}
           {identification.backdoor_paths.length > 0 && (
             <details className="mt-1">
-              <summary className="text-[11px] text-gray-500 cursor-pointer select-none hover:text-gray-700">
+              <summary className="text-[11px] text-ink-400 cursor-pointer select-none hover:text-ink-700">
                 {identification.backdoor_paths.length} backdoor path{identification.backdoor_paths.length !== 1 ? 's' : ''}
               </summary>
               <div className="mt-1.5 pl-2 space-y-1">
                 {identification.backdoor_paths.map((p, i) => (
-                  <div key={i} className="text-[11px] font-mono text-gray-700">
+                  <div key={i} className="text-[11px] font-mono text-ink-700">
                     {p.path}
                     {p.blocked_by.length > 0
                       ? <span className="text-emerald-600"> ✓ blocked by {p.blocked_by.join(', ')}</span>
@@ -502,7 +503,7 @@ export function SemanticCallouts({
           {identification.notes.length > 0 && (
             <div className="mt-1.5 space-y-0.5">
               {identification.notes.map((n, i) => (
-                <p key={i} className="text-[11px] text-gray-600 italic">{n}</p>
+                <p key={i} className="text-[11px] text-ink-600 italic">{n}</p>
               ))}
             </div>
           )}
@@ -564,8 +565,8 @@ export function DAGViewer({ dag }: { dag: DagPayload | null }) {
   if (!dag) {
     return (
       <PanelShell title="Causal DAG" icon={<Network size={16} className="text-violet-600" />} color="violet">
-        <p className="text-sm text-gray-400 italic">
-          No DAG yet. Ask the agent to <code className="text-xs bg-gray-100 px-1 rounded">propose_dag</code> after inspecting the data.
+        <p className="text-sm text-ink-300 italic">
+          No DAG yet. Ask the agent to <code className="text-xs bg-cream-100 px-1 rounded">propose_dag</code> after inspecting the data.
         </p>
       </PanelShell>
     );
@@ -573,7 +574,7 @@ export function DAGViewer({ dag }: { dag: DagPayload | null }) {
 
   return (
     <PanelShell title="Causal DAG" icon={<Network size={16} className="text-violet-600" />} color="violet">
-      <div style={{ height: 400 }} className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50/50">
+      <div style={{ height: 400 }} className="rounded-xl border border-line-200 overflow-hidden bg-cream-50/50">
         <ReactFlow
           nodes={nodes}
           edges={edges}

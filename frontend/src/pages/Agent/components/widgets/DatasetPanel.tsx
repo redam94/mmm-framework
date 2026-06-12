@@ -53,18 +53,18 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
       {/* Summary */}
       <DashWidget title="Dataset Summary" dotColor="bg-indigo-500" color="indigo">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Rows</p>
-            <p className="text-2xl font-bold text-gray-900">{dataset.rows.toLocaleString()}</p>
+          <div className="bg-cream-50 p-3 rounded-xl border border-line-200">
+            <p className="text-[10px] text-ink-300 uppercase tracking-wider mb-1">Rows</p>
+            <p className="text-2xl font-bold text-ink-900">{dataset.rows.toLocaleString()}</p>
           </div>
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Columns</p>
-            <p className="text-2xl font-bold text-gray-900">{dataset.columns.length}</p>
+          <div className="bg-cream-50 p-3 rounded-xl border border-line-200">
+            <p className="text-[10px] text-ink-300 uppercase tracking-wider mb-1">Columns</p>
+            <p className="text-2xl font-bold text-ink-900">{dataset.columns.length}</p>
           </div>
           {dataset.date_range && (
-            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 col-span-2">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Date Range</p>
-              <p className="text-sm font-medium text-gray-700">{dataset.date_range.min} → {dataset.date_range.max}</p>
+            <div className="bg-cream-50 p-3 rounded-xl border border-line-200 col-span-2">
+              <p className="text-[10px] text-ink-300 uppercase tracking-wider mb-1">Date Range</p>
+              <p className="text-sm font-medium text-ink-700">{dataset.date_range.min} → {dataset.date_range.max}</p>
             </div>
           )}
         </div>
@@ -81,11 +81,11 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
                 const opts = stat?.top_values ?? [];
                 return (
                   <div key={dim} className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-500 font-medium">{dim}:</span>
+                    <span className="text-xs text-ink-400 font-medium">{dim}:</span>
                     <select
                       value={dimFilters[dim] ?? ''}
                       onChange={e => setDimFilters(prev => ({ ...prev, [dim]: e.target.value }))}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      className="text-xs border border-line-200 rounded-lg px-2 py-1 bg-white text-ink-700 focus:outline-none focus:ring-2 focus:ring-violet-400"
                     >
                       <option value="">All</option>
                       {opts.map(o => (
@@ -106,7 +106,7 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                   selectedVar === v
                     ? 'bg-violet-600 text-white border-violet-600'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-violet-400 hover:text-violet-600'
+                    : 'bg-white text-ink-600 border-line-200 hover:border-violet-400 hover:text-violet-600'
                 }`}
               >
                 {v}
@@ -115,9 +115,9 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
           </div>
           {/* Chart */}
           {selectedVar && (
-            <div className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
+            <div className="rounded-xl overflow-hidden border border-line-200 bg-cream-50">
               {loadingSeries ? (
-                <div className="flex items-center justify-center h-[280px] text-gray-400">
+                <div className="flex items-center justify-center h-[280px] text-ink-300">
                   <Loader2 size={22} className="animate-spin" />
                 </div>
               ) : series ? (
@@ -129,7 +129,7 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
                   config={{ responsive: true, displayModeBar: false }}
                 />
               ) : (
-                <div className="flex items-center justify-center h-[280px] text-gray-400 text-sm">No data</div>
+                <div className="flex items-center justify-center h-[280px] text-ink-300 text-sm">No data</div>
               )}
             </div>
           )}
@@ -148,10 +148,10 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-3 py-2 text-left font-semibold text-sky-600 border-b border-gray-200">Value</th>
-                  <th className="px-3 py-2 text-right font-semibold text-sky-600 border-b border-gray-200">Count</th>
-                  <th className="px-3 py-2 text-right font-semibold text-sky-600 border-b border-gray-200">%</th>
+                <tr className="bg-cream-50">
+                  <th className="px-3 py-2 text-left font-semibold text-sky-600 border-b border-line-200">Value</th>
+                  <th className="px-3 py-2 text-right font-semibold text-sky-600 border-b border-line-200">Count</th>
+                  <th className="px-3 py-2 text-right font-semibold text-sky-600 border-b border-line-200">%</th>
                 </tr>
               </thead>
               <tbody>
@@ -159,10 +159,10 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
                   const total = stat.top_values.reduce((s, r) => s + r.count, 0);
                   const pct = total > 0 ? ((row.count / total) * 100).toFixed(1) : '0.0';
                   return (
-                    <tr key={i} className="even:bg-gray-50 hover:bg-sky-50 transition-colors">
-                      <td className="px-3 py-1.5 text-gray-700 border-b border-gray-100 font-mono">{row.value}</td>
-                      <td className="px-3 py-1.5 text-right text-gray-600 border-b border-gray-100">{row.count.toLocaleString()}</td>
-                      <td className="px-3 py-1.5 text-right text-gray-400 border-b border-gray-100">{pct}%</td>
+                    <tr key={i} className="even:bg-cream-50 hover:bg-sky-50 transition-colors">
+                      <td className="px-3 py-1.5 text-ink-700 border-b border-line-200 font-mono">{row.value}</td>
+                      <td className="px-3 py-1.5 text-right text-ink-600 border-b border-line-200">{row.count.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right text-ink-300 border-b border-line-200">{pct}%</td>
                     </tr>
                   );
                 })}

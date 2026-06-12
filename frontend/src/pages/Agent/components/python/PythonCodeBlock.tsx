@@ -7,16 +7,16 @@ export function PythonCodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="rounded-t-lg overflow-hidden border border-gray-700">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-700">
         <div className="flex gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
           <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
           <span className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
         </div>
-        <span className="text-[10px] text-gray-400 font-medium">Python</span>
+        <span className="text-[10px] text-ink-300 font-medium">Python</span>
         <button
           onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-          className="text-[10px] text-gray-500 hover:text-gray-200 transition-colors flex items-center gap-1"
+          className="text-[10px] text-ink-400 hover:text-cream-200 transition-colors flex items-center gap-1"
         >
           {copied ? <><Check size={10} />Copied</> : 'Copy'}
         </button>

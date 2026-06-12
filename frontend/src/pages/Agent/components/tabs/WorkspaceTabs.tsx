@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import {
-  Activity, BarChart2, BookOpen, BrainCircuit, Database, Download,
-  ExternalLink, FileCode, FlaskConical, Layers, Maximize2, Minimize2, Network,
-  SlidersHorizontal,
+  Activity, BarChart2, BookOpen, Database, Download,
+  ExternalLink, Layers, Maximize2, Minimize2, Network,
+  SlidersHorizontal, TestTubes,
 } from 'lucide-react';
 import {
   WorkflowChecklist, AssumptionsLog, DataFilesWidget, useCausalPanels,
@@ -24,6 +24,8 @@ import { ModelSpecWidget } from '../widgets/ModelSpecWidget';
 import { PriorConfigWidget } from '../widgets/PriorConfigWidget';
 import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
 import { WorkspaceFilesWidget } from '../widgets/WorkspaceFilesWidget';
+import { ExperimentsTab } from '../widgets/ExperimentsTab';
+import { useExperimentRegistry } from '../../../../api/hooks/useMeasurement';
 import { EdaTab } from './EdaTab';
 import type { Artifact, DashboardData, OutlierAction, PythonOutput } from '../../types';
 
@@ -51,7 +53,7 @@ export function WorkspaceTabs({
   workspaceRefreshKey: number;
   chatLoading: boolean;
   onApplySpec: (newSpec: any) => void;
-  onUnlockField: (path: string) => void;
+  onUnlockField: (path: string | string[]) => void;
   onQuickAction: (msg: string) => void;
   onRerunArtifact: (a: Artifact) => void;
   onDeleteArtifact: (id: string) => void;
@@ -60,6 +62,11 @@ export function WorkspaceTabs({
   onResolveOutlierAction: (action: OutlierAction) => Promise<string | null>;
 }) {
   const [brandingOpen, setBrandingOpen] = useState(false);
+  // Experiment registry (read-only here; lifecycle work is chat- or /experiments-driven)
+  const { data: registryExperiments = [] } = useExperimentRegistry(projectId);
+  const activeExperiments = registryExperiments.filter(
+    (e) => !['abandoned', 'cancelled'].includes(e.status),
+  );
   const modelCompleted = dashboardData.model_status === 'completed';
   const hasSpec = !!dashboardData.model_spec;
   const hasDecomp = dashboardData.decomposition?.length > 0;
@@ -76,7 +83,7 @@ export function WorkspaceTabs({
     .some(a => a.status === 'proposed');
 
   return (
-    <div className={`${rightExpanded ? 'w-full' : 'w-2/3'} bg-gray-50 overflow-hidden flex flex-col`}>
+    <div className={`${rightExpanded ? 'w-full' : 'w-2/3'} bg-cream-50 overflow-hidden flex flex-col`}>
       {brandingOpen && (
         <BrandingModal
           projectId={projectId}
@@ -85,51 +92,29 @@ export function WorkspaceTabs({
           onClose={() => setBrandingOpen(false)}
         />
       )}
-      {/* Header — title + tab bar + settings + fullscreen toggle */}
-      <div className="px-5 pt-5 pb-0 bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-bold text-gray-900">Project Workspace</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setBrandingOpen(true)}
-              title="Branding & preferences"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-800 shadow-sm transition-all text-sm font-medium"
-            >
-              <SlidersHorizontal size={14} /> Settings
-            </button>
-            <button
-              onClick={onToggleExpand}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-800 shadow-sm transition-all text-sm font-medium"
-            >
-              {rightExpanded ? <><Minimize2 size={14} /> Restore Chat</> : <><Maximize2 size={14} /> Full Screen</>}
-            </button>
-          </div>
-        </div>
-
-        {/* Tab bar */}
+      {/* One slim row: tab bar left, settings + expand right (the global app
+          Header already names the page — no duplicate title here). */}
+      <div className="px-5 pt-3 pb-0 bg-cream-50 sticky top-0 z-10 border-b border-line-200 flex items-end justify-between gap-3">
         {(() => {
+          // Six groups, in workflow order: think → look at the data → specify
+          // → read results → decide experiments → reference material.
           const tabs = [
-            { id: 'workflow',  label: 'Workflow',  icon: <BookOpen size={14} />,
-              badge: `${causal.workflow.filter(s => s.status === 'done').length}/9` },
-            { id: 'causal',    label: 'Causal',    icon: <Network size={14} />,
-              badge: causal.assumptions.length > 0 ? String(causal.assumptions.length) : null,
-              dot: !!causal.dag },
+            { id: 'plan',      label: 'Plan',      icon: <Network size={14} />,
+              badge: `${causal.workflow.filter(s => s.status === 'done').length}/9`,
+              dot: !!causal.dag || causal.assumptions.length > 0 },
             { id: 'data',      label: 'Data',      icon: <Database size={14} />,
-              badge: causal.files.length > 0 ? String(causal.files.length) : null,
-              dot: !!dashboardData.dataset },
-            { id: 'eda',       label: 'EDA',       icon: <FlaskConical size={14} />,
-              badge: edaIssueCount > 0 ? String(edaIssueCount) : null,
-              dot: edaHasProposed },
-            { id: 'knowledge', label: 'Knowledge', icon: <BrainCircuit size={14} />,
-              badge: null, dot: false },
+              badge: edaIssueCount > 0 ? String(edaIssueCount)
+                : causal.files.length > 0 ? String(causal.files.length) : null,
+              dot: !!dashboardData.dataset || edaHasProposed },
             { id: 'model',     label: 'Model',     icon: <Layers size={14} />,
               dot: hasSpec },
             { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
-              dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
-            { id: 'plots',     label: 'Plots',     icon: <Activity size={14} />,
               badge: (dashboardData.plots?.length || 0) > 0 ? String(dashboardData.plots.length) : null,
-              dot: (dashboardData.plots?.length || 0) > 0 },
-            { id: 'artifacts', label: 'Artifacts', icon: <FileCode size={14} />,
+              dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
+            { id: 'experiments', label: 'Experiments', icon: <TestTubes size={14} />,
+              badge: activeExperiments.length > 0 ? String(activeExperiments.length) : null,
+              dot: activeExperiments.some(e => e.status === 'completed') },
+            { id: 'library',   label: 'Library',   icon: <BookOpen size={14} />,
               badge: (artifacts.length + pythonOutputs.length) > 0
                 ? String(artifacts.length + pythonOutputs.length) : null },
           ];
@@ -143,21 +128,21 @@ export function WorkspaceTabs({
                     onClick={() => onTabChange(t.id)}
                     className={`flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors shrink-0 ${
                       active
-                        ? 'border-indigo-500 text-indigo-700 bg-white'
-                        : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                        ? 'border-sage-700 text-sage-800 bg-white'
+                        : 'border-transparent text-ink-400 hover:text-ink-900 hover:bg-cream-100'
                     }`}
                   >
-                    <span className={active ? 'text-indigo-600' : 'text-gray-400'}>{t.icon}</span>
+                    <span className={active ? 'text-sage-700' : 'text-ink-300'}>{t.icon}</span>
                     <span>{t.label}</span>
                     {t.badge && (
                       <span className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${
-                        active ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+                        active ? 'bg-sage-100 text-sage-800' : 'bg-cream-200 text-ink-600'
                       }`}>
                         {t.badge}
                       </span>
                     )}
                     {!t.badge && t.dot && (
-                      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-sage-600' : 'bg-line-400'}`} />
                     )}
                   </button>
                 );
@@ -165,13 +150,29 @@ export function WorkspaceTabs({
             </div>
           );
         })()}
+        <div className="flex items-center gap-1 pb-1.5 shrink-0">
+          <button
+            onClick={() => setBrandingOpen(true)}
+            title="Branding & preferences"
+            className="p-2 rounded-lg text-ink-300 hover:text-ink-900 hover:bg-cream-100 transition-colors"
+          >
+            <SlidersHorizontal size={15} />
+          </button>
+          <button
+            onClick={onToggleExpand}
+            title={rightExpanded ? 'Restore chat' : 'Full screen'}
+            className="p-2 rounded-lg text-ink-300 hover:text-ink-900 hover:bg-cream-100 transition-colors"
+          >
+            {rightExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+        </div>
       </div>
 
       {/* Tab panels — only one is rendered at a time */}
       <div className="flex-1 overflow-y-auto p-5">
         <div className="grid grid-cols-1 gap-4">
 
-          {activeTab === 'workflow' && (
+          {activeTab === 'plan' && (
             causal.workflow.length > 0
               ? <WorkflowChecklist steps={causal.workflow} onOverride={causal.overrideWorkflow} />
               : <EmptyTabState
@@ -181,7 +182,7 @@ export function WorkspaceTabs({
                 />
           )}
 
-          {activeTab === 'causal' && (
+          {activeTab === 'plan' && (
             <>
               <CausalPlanner
                 // Prefer the mid-stream agent-pushed DAG; fall back to the
@@ -220,7 +221,7 @@ export function WorkspaceTabs({
             </>
           )}
 
-          {activeTab === 'eda' && (
+          {activeTab === 'data' && (
             <EdaTab
               eda={dashboardData.eda}
               tables={edaTables}
@@ -230,7 +231,15 @@ export function WorkspaceTabs({
             />
           )}
 
-          {activeTab === 'knowledge' && (
+          {activeTab === 'experiments' && (
+            <ExperimentsTab
+              projectId={projectId}
+              onQuickAction={onQuickAction}
+              disabled={chatLoading}
+            />
+          )}
+
+          {activeTab === 'library' && (
             <KnowledgeTab
               projectId={projectId}
               apiKey={apiKey}
@@ -261,7 +270,7 @@ export function WorkspaceTabs({
                   />
                   {modelCompleted && (
                     <DashWidget title="Model Successfully Fit" dotColor="bg-green-500 animate-pulse" color="green">
-                      <p className="text-sm text-gray-700">{dashboardData.summary}</p>
+                      <p className="text-sm text-ink-700">{dashboardData.summary}</p>
                     </DashWidget>
                   )}
                 </>
@@ -289,27 +298,27 @@ export function WorkspaceTabs({
 
               {dashboardData.roi_metrics && (() => {
                 const table = (
-                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <div className="overflow-x-auto rounded-xl border border-line-200">
                     <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                      <thead className="bg-cream-50 text-ink-400 uppercase text-xs">
                         <tr>
                           {['Channel', 'Mean ROI', '94% HDI', 'Prob. Profitable'].map(h => (
                             <th key={h} className="px-4 py-3 font-medium">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-line-200">
                         {dashboardData.roi_metrics.map((row: any) => (
-                          <tr key={row.channel} className="bg-white hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-gray-900">{row.channel}</td>
+                          <tr key={row.channel} className="bg-white hover:bg-cream-100 transition-colors">
+                            <td className="px-4 py-3 font-medium text-ink-900">{row.channel}</td>
                             <td className="px-4 py-3 text-emerald-600 font-semibold">{row.roi_mean?.toFixed(2)}x</td>
-                            <td className="px-4 py-3 text-gray-500">[{row.roi_hdi_low?.toFixed(2)}, {row.roi_hdi_high?.toFixed(2)}]</td>
+                            <td className="px-4 py-3 text-ink-400">[{row.roi_hdi_low?.toFixed(2)}, {row.roi_hdi_high?.toFixed(2)}]</td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                   <div className="h-full bg-emerald-500" style={{ width: `${(row.prob_profitable || 0) * 100}%` }} />
                                 </div>
-                                <span className="text-gray-700 text-xs font-medium">{((row.prob_profitable || 0) * 100).toFixed(1)}%</span>
+                                <span className="text-ink-700 text-xs font-medium">{((row.prob_profitable || 0) * 100).toFixed(1)}%</span>
                               </div>
                             </td>
                           </tr>
@@ -340,23 +349,23 @@ export function WorkspaceTabs({
                   expandTitle="MMM Report"
                   expandContent={
                     <div className="h-[80vh]">
-                      <iframe src={`${API_BASE}/report`} className="w-full h-full rounded-xl border border-gray-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
+                      <iframe src={`${API_BASE}/report`} className="w-full h-full rounded-xl border border-line-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
                     </div>
                   }
                 >
                   <div className="flex flex-col gap-3">
-                    <p className="text-sm text-gray-500">Full analysis report with diagnostics, ROI, and channel decomposition.</p>
+                    <p className="text-sm text-ink-400">Full analysis report with diagnostics, ROI, and channel decomposition.</p>
                     <div className="flex gap-3">
                       <a href={`${API_BASE}/report/download`} download="mmm_report.html"
                         className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-xl transition-colors font-medium">
                         <Download size={15} /> Download
                       </a>
                       <a href={`${API_BASE}/report`} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-xl transition-colors font-medium border border-gray-200">
+                        className="flex items-center gap-2 px-4 py-2 bg-cream-100 hover:bg-gray-200 text-ink-700 text-sm rounded-xl transition-colors font-medium border border-line-200">
                         <ExternalLink size={15} /> Open Tab
                       </a>
                     </div>
-                    <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '340px' }}>
+                    <div className="rounded-xl overflow-hidden border border-line-200" style={{ height: '340px' }}>
                       <iframe src={`${API_BASE}/report`} className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
                     </div>
                   </div>
@@ -365,7 +374,7 @@ export function WorkspaceTabs({
             </>
           )}
 
-          {activeTab === 'plots' && (
+          {activeTab === 'results' && (
             <>
               {dashboardData.plots?.length > 0 ? (
                 <DashWidget title={`Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500" color="fuchsia">
@@ -395,7 +404,7 @@ export function WorkspaceTabs({
             </>
           )}
 
-          {activeTab === 'artifacts' && (
+          {activeTab === 'library' && (
             <>
               <ArtifactsPanel
                 artifacts={artifacts}

@@ -40,11 +40,11 @@ export function DecompositionWidget({ decomposition }: { decomposition: Array<{ 
         {sorted.map((d, i) => (
           <div key={d.component} className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-            <span className="text-xs text-gray-700 flex-1 font-medium">{d.component}</span>
-            <div className="flex-1 max-w-[120px] bg-gray-100 rounded-full h-1.5 overflow-hidden">
+            <span className="text-xs text-ink-700 flex-1 font-medium">{d.component}</span>
+            <div className="flex-1 max-w-[120px] bg-cream-100 rounded-full h-1.5 overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${(d.pct_of_total * 100).toFixed(1)}%`, backgroundColor: COLORS[i % COLORS.length] }} />
             </div>
-            <span className="text-xs font-semibold text-gray-900 w-10 text-right">{(d.pct_of_total * 100).toFixed(1)}%</span>
+            <span className="text-xs font-semibold text-ink-900 w-10 text-right">{(d.pct_of_total * 100).toFixed(1)}%</span>
           </div>
         ))}
       </div>

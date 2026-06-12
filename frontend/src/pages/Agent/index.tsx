@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { ModelSwitcher } from '../../components/common';
 import { useCausalPanels } from '../../components/causal/CausalWidgets';
 import { API_BASE, authHeaders } from './constants';
 import { specLeafDiff, specWithDefaults } from './utils/spec';
 import { useAgentSessions } from './hooks/useAgentSessions';
 import { useChatStream } from './hooks/useChatStream';
 import { ChatPanel } from './components/chat/ChatPanel';
-import { SessionSidebar } from './components/sidebar/SessionSidebar';
 import { WorkspaceTabs } from './components/tabs/WorkspaceTabs';
 import { PendingSpecChangesModal } from './components/widgets/PendingSpecChangesModal';
 import type { Artifact, OutlierAction } from './types';
@@ -16,21 +13,32 @@ import type { Artifact, OutlierAction } from './types';
 // ─── Main AgentPage ───────────────────────────────────────────────────────────
 
 export function AgentPage() {
-  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [rightExpanded, setRightExpanded] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceRefreshKey, setWorkspaceRefreshKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { apiKey, modelName } = useAuthStore();
-  const {
-    sessions, threadId, setThreadId, projects, projectId,
-    handleProjectSelect, handleProjectCreate,
-    handleCreateSession, handleRenameSession, handleDeleteSession,
-  } = useAgentSessions({ apiKey, modelName });
+  // Sessions are navigated from the app Sidebar's Workspace item
+  // (/workspace?session=…); this hook resolves + auto-creates the thread.
+  const { threadId, projectId } = useAgentSessions({ apiKey, modelName });
   const causal = useCausalPanels(threadId);
-  const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('mmm.activeTab') || 'workflow');
+  // Tab consolidation (10 → 6 groups): legacy ids from stored state, widget
+  // deep-links (onNavigate('plots'), the workflow pill, EDA buttons) all keep
+  // working through this alias map.
+  const TAB_ALIASES: Record<string, string> = {
+    workflow: 'plan', causal: 'plan', eda: 'data',
+    plots: 'results', knowledge: 'library', artifacts: 'library',
+  };
+  const resolveTab = (t: string) => TAB_ALIASES[t] ?? t;
+  const [activeTab, rawSetActiveTab] = useState<string>(
+    () => resolveTab(localStorage.getItem('mmm.activeTab') || 'plan'),
+  );
+  const setActiveTab = useCallback(
+    (t: string) => rawSetActiveTab(resolveTab(t)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // Artifact state lives here (it is shared with the Artifacts tab); the chat
   // stream hook hands artifacts back via this stable callback.
@@ -203,12 +211,14 @@ export function AgentPage() {
   }, [threadId, apiKey, modelName, setDashboardData]);
 
   // Hand a locked field back to the LLM.
-  const handleUnlockField = useCallback(async (path: string) => {
+  // Accepts one path or a batch (the Model tab unlocks whole groups at once).
+  const handleUnlockField = useCallback(async (path: string | string[]) => {
+    const unlockPaths = Array.isArray(path) ? path : [path];
     try {
       const res = await fetch(`${API_BASE}/spec/${encodeURIComponent(threadId ?? "")}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
-        body: JSON.stringify({ model_spec: dashboardData.model_spec || {}, unlock_paths: [path] }),
+        body: JSON.stringify({ model_spec: dashboardData.model_spec || {}, unlock_paths: unlockPaths }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'unlock failed');
@@ -291,53 +301,18 @@ export function AgentPage() {
   const canRetry = !loading && messages.some(m => m.type === 'human');
   const canBack = !loading && messages.length >= 2;
 
-  const activeSession = sessions.find(s => s.thread_id === threadId);
-
   return (
-    <div className="flex flex-col h-screen bg-gray-50 text-gray-900 overflow-hidden font-sans">
+    // Fills the AppShell's full-bleed content area — global nav + Header (with
+    // the shared project switcher) provide chrome; no private header here.
+    <div className="flex flex-col h-full bg-cream-50 text-ink-900 overflow-hidden font-sans">
       <PendingSpecChangesModal
         // Hold the modal until the turn settles: resolving mid-stream would race
         // the agent's own aupdate_state writes on this thread.
         changes={loading ? [] : (dashboardData.pending_spec_changes || [])}
         onResolve={handleResolveSpecChange}
       />
-      {/* ── Shared top bar (matches main app Header) ── */}
-      <header className="flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:px-6 z-20">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          <span className="hidden sm:inline">Dashboard</span>
-        </button>
-        <div className="h-6 w-px bg-gray-200" />
-        <h1 className="text-lg font-semibold text-gray-900 flex-1">MMM Chat</h1>
-        <span className="text-sm text-gray-400 truncate max-w-48 hidden md:block">
-          {activeSession?.name ?? ''}
-        </span>
-        <div className="h-6 w-px bg-gray-200 hidden md:block" />
-        <ModelSwitcher theme="light" />
-      </header>
-
-      {/* ── Panel row ── */}
+      {/* ── Panel row (sessions live in the app Sidebar) ── */}
       <div className="flex flex-1 overflow-hidden">
-      <SessionSidebar
-        sessions={sessions}
-        activeId={threadId}
-        onSelect={setThreadId}
-        onCreate={handleCreateSession}
-        onRename={handleRenameSession}
-        onDelete={handleDeleteSession}
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(v => !v)}
-        projects={projects}
-        projectId={projectId}
-        onProjectSelect={handleProjectSelect}
-        onProjectCreate={handleProjectCreate}
-      />
-
       {/* ── Left: Chat (1/3 width) ── */}
       {!rightExpanded && (
         <ChatPanel
@@ -356,6 +331,9 @@ export function AgentPage() {
           onNavigate={setActiveTab}
           fileInputRef={fileInputRef}
           onFileUpload={handleFileUpload}
+          dashboardData={dashboardData}
+          projectId={projectId}
+          workflow={causal.workflow}
         />
       )}
 

@@ -1,18 +1,25 @@
 import { useState, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import { clsx } from 'clsx';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { GuideBubble } from '../guide';
+import { useUiStore } from '../../stores/uiStore';
 
 interface AppShellProps {
   children: React.ReactNode;
+  /** Full-height, unpadded content area (the chat workspace) — the shell's
+   * nav + header stay, so the workspace shares the app's chrome. */
+  fullBleed?: boolean;
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, fullBleed = false }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream-50">
       {/* Mobile sidebar */}
       <Transition.Root show={sidebarOpen} as={Fragment}>
         <Dialog as="div" className="relative z-50 lg:hidden" onClose={setSidebarOpen}>
@@ -25,7 +32,7 @@ export function AppShell({ children }: AppShellProps) {
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-gray-900/80" />
+            <div className="fixed inset-0 bg-ink-900/80" />
           </Transition.Child>
 
           <div className="fixed inset-0 flex">
@@ -66,20 +73,34 @@ export function AppShell({ children }: AppShellProps) {
         </Dialog>
       </Transition.Root>
 
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
+      {/* Desktop sidebar (width tracks the collapse state) */}
+      <div
+        className={clsx(
+          'hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:flex-col transition-all',
+          sidebarCollapsed ? 'lg:w-16' : 'lg:w-64',
+        )}
+      >
         <Sidebar />
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className={clsx('transition-all', sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64')}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="py-6">
-          <div className="px-4 sm:px-6 lg:px-8">
-            {children}
-          </div>
-        </main>
+        {fullBleed ? (
+          // Header is sticky h-16; the workspace owns the rest of the viewport.
+          <main className="h-[calc(100vh-4rem)] overflow-hidden">{children}</main>
+        ) : (
+          <main className="py-6">
+            <div className="px-4 sm:px-6 lg:px-8">
+              {children}
+            </div>
+          </main>
+        )}
+
+        {/* Floating per-project guide on the dashboard pages — the workspace
+            (fullBleed) has the full chat, so the bubble would be redundant. */}
+        {!fullBleed && <GuideBubble />}
       </div>
     </div>
   );

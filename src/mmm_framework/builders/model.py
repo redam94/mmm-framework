@@ -274,6 +274,8 @@ class ModelConfigBuilder:
         self._n_draws: int = 1000
         self._n_tune: int = 1000
         self._target_accept: float = 0.9
+        self._intercept_prior_mu: float = 0.0
+        self._intercept_prior_sigma: float = 0.5
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -335,6 +337,18 @@ class ModelConfigBuilder:
         if not 0 < rate < 1:
             raise ValueError(f"Target accept must be between 0 and 1, got {rate}")
         self._target_accept = rate
+        return self
+
+    def with_intercept_prior(self, mu: float = 0.0, sigma: float = 0.5) -> Self:
+        """Set the intercept prior: Normal(mu, sigma) on standardized y.
+
+        ``mu`` is measured in KPI standard deviations from the mean, so values
+        beyond roughly ±2 place the baseline outside the observed KPI range.
+        """
+        if sigma <= 0:
+            raise ValueError(f"Intercept prior sigma must be positive, got {sigma}")
+        self._intercept_prior_mu = mu
+        self._intercept_prior_sigma = sigma
         return self
 
     # Component configs
@@ -401,6 +415,8 @@ class ModelConfigBuilder:
             n_draws=self._n_draws,
             n_tune=self._n_tune,
             target_accept=self._target_accept,
+            intercept_prior_mu=self._intercept_prior_mu,
+            intercept_prior_sigma=self._intercept_prior_sigma,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection

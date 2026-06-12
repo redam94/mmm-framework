@@ -22,19 +22,19 @@ export function BrandPreview({ branding }: { branding: Branding }) {
       {/* Swatch strip */}
       {swatches.length > 0 && (
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+          <div className="flex rounded-lg overflow-hidden border border-line-200">
             {swatches.map((c, i) => (
               <div key={`${c}-${i}`} className="w-9 h-7 flex items-end justify-center" style={{ backgroundColor: c }} />
             ))}
           </div>
-          <div className="flex flex-col text-[10px] text-gray-400 font-mono leading-tight">
+          <div className="flex flex-col text-[10px] text-ink-300 font-mono leading-tight">
             {swatches.slice(0, 3).map((c, i) => <span key={`${c}-${i}`}>{c}</span>)}
           </div>
         </div>
       )}
 
       {/* Mini mock report card */}
-      <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+      <div className="rounded-xl border border-line-200 overflow-hidden bg-white shadow-sm">
         <div className="h-1.5" style={{ backgroundColor: primary }} />
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-3">
@@ -46,7 +46,7 @@ export function BrandPreview({ branding }: { branding: Branding }) {
                 onError={() => setFailedLogoUrl(branding.logo_url ?? null)}
               />
             ) : branding.logo_url ? (
-              <span className="flex items-center justify-center h-8 w-8 rounded bg-gray-100 text-gray-300">
+              <span className="flex items-center justify-center h-8 w-8 rounded bg-cream-100 text-ink-300">
                 <ImageOff size={14} />
               </span>
             ) : null}
@@ -59,7 +59,7 @@ export function BrandPreview({ branding }: { branding: Branding }) {
               </p>
             </div>
           </div>
-          <p className="text-xs text-gray-600 leading-relaxed" style={{ fontFamily: bodyFont }}>
+          <p className="text-xs text-ink-600 leading-relaxed" style={{ fontFamily: bodyFont }}>
             Media drove an estimated 24% of revenue this quarter, led by paid search and
             connected TV. Diminishing returns suggest reallocating spend at the margin.
           </p>
@@ -74,7 +74,7 @@ export function BrandPreview({ branding }: { branding: Branding }) {
             ))}
           </div>
           <div className="pt-2 border-t" style={{ borderColor: accent }}>
-            <p className="text-[10px] text-gray-400" style={{ fontFamily: bodyFont }}>
+            <p className="text-[10px] text-ink-300" style={{ fontFamily: bodyFont }}>
               {branding.footer_text || 'Confidential — prepared for internal use.'}
             </p>
           </div>

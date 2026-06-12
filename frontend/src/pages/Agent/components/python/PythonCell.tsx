@@ -27,23 +27,23 @@ export const PythonCell = React.memo(function PythonCell({
       {/* Cell header */}
       <button
         onClick={() => onToggle(out.id)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 transition-colors text-left border border-gray-200 rounded-t-xl"
+        className="w-full flex items-center gap-2 px-3 py-2 bg-cream-100 hover:bg-gray-200 transition-colors text-left border border-line-200 rounded-t-xl"
       >
-        <span className="text-[10px] font-mono text-gray-400 shrink-0">In [{index + 1}]</span>
-        <span className="flex-1 text-[11px] font-mono text-gray-600 truncate">{firstLine}</span>
+        <span className="text-[10px] font-mono text-ink-300 shrink-0">In [{index + 1}]</span>
+        <span className="flex-1 text-[11px] font-mono text-ink-600 truncate">{firstLine}</span>
         {out.hasError && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">ERROR</span>}
         {out.plotCount > 0 && <span className="text-[9px] bg-fuchsia-100 text-fuchsia-600 px-1.5 py-0.5 rounded font-semibold">{out.plotCount} plot{out.plotCount > 1 ? 's' : ''}</span>}
-        {isCollapsed ? <ChevronRight size={13} className="text-gray-400 shrink-0" /> : <ChevronDown size={13} className="text-gray-400 shrink-0" />}
+        {isCollapsed ? <ChevronRight size={13} className="text-ink-300 shrink-0" /> : <ChevronDown size={13} className="text-ink-300 shrink-0" />}
       </button>
       {!isCollapsed && (
-        <div className="border-l border-r border-b border-gray-200 rounded-b-xl overflow-hidden min-h-[2.5rem]">
+        <div className="border-l border-r border-b border-line-200 rounded-b-xl overflow-hidden min-h-[2.5rem]">
           {inView ? (
             <>
               {hasCode && <PythonCodeBlock code={out.code} />}
               <PythonOutputBlock output={out.output} hasError={out.hasError} />
             </>
           ) : (
-            <div className="h-10 bg-gray-50" />
+            <div className="h-10 bg-cream-50" />
           )}
         </div>
       )}

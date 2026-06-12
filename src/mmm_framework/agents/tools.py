@@ -25,7 +25,11 @@ from mmm_framework.agents.runtime import (
 )
 from mmm_framework.agents import workspace as _ws
 from mmm_framework.agents import model_ops as _model_ops
-from mmm_framework.agents.fitting import _mff_config_from_spec, build_and_fit
+from mmm_framework.agents.fitting import (
+    _mff_config_from_spec,
+    build_and_fit,
+    unconsumed_prior_path,
+)
 from mmm_framework.agents.spec_locks import (
     get_at,
     make_spec_patch,
@@ -670,15 +674,64 @@ def fit_mmm_model(
             "run-lineage stamping failed (fit result unaffected)"
         )
 
-    return Command(
-        update={
-            "model_status": "completed",
-            "fit_results_summary": summary,
-            "report_path": info.get("report_path"),
-            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
-            "dashboard_data": dashboard_data,
-        }
-    )
+    # History metrics persistence (host-side, best-effort): enrich the
+    # kernel-computed snapshot with registry calibration status and write the
+    # run_metrics row that powers /projects/{id}/history + priorities.
+    run_for_metrics = info.get("model_run") or dashboard_data.get("model_run")
+    if isinstance(run_for_metrics, dict) and run_for_metrics.get("metrics"):
+        from mmm_framework.api.history import persist_run_metrics
+
+        persist_run_metrics(run_for_metrics, get_current_thread())
+
+    update: dict[str, Any] = {
+        "model_status": "completed",
+        "fit_results_summary": summary,
+        "report_path": info.get("report_path"),
+        "dashboard_data": dashboard_data,
+    }
+
+    # Calibrated-fit close-out (host-side, best-effort): the spec's experiment
+    # likelihoods are now folded into THIS run, so transition the registry
+    # entries completed → calibrated with the run link, and clear the spec's
+    # experiments so the NEXT fit isn't silently double-calibrated.
+    if spec.get("experiments"):
+        try:
+            from mmm_framework.api import sessions as _sessions
+            from mmm_framework.agents.spec_locks import make_spec_patch
+
+            run_id = (info.get("model_run") or {}).get("run_id")
+            done = 0
+            for eid in spec.get("experiment_ids") or []:
+                try:
+                    _sessions.transition_experiment(
+                        eid,
+                        "calibrated",
+                        calibrated_run_id=run_id,
+                        note=f"folded into fit {run_id}",
+                    )
+                    done += 1
+                except ValueError:
+                    pass  # already calibrated / deleted — not this fit's problem
+            patch = make_spec_patch(
+                [
+                    {"path": "experiments", "value": []},
+                    {"path": "experiment_ids", "value": []},
+                ]
+            )
+            update["model_spec"] = patch
+            dashboard_data["model_spec"] = patch
+            if done:
+                summary += f" Registry updated: {done} experiment(s) marked calibrated."
+                update["fit_results_summary"] = summary
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "experiment calibration close-out failed (fit result unaffected)"
+            )
+
+    update["messages"] = [ToolMessage(content=summary, tool_call_id=tool_call_id)]
+    return Command(update=update)
 
 
 # ── Model-op dispatch (Phase 2) ───────────────────────────────────────────────
@@ -1745,6 +1798,12 @@ def update_model_setting(
       setting_path="media_channels.TV.adstock.l_max",     value=13
       setting_path="media_channels.TV.saturation.type",   value="logistic"
 
+    Intercept prior (Normal on standardized y — mu is in KPI standard deviations
+    from the mean, so values beyond ±2 put the baseline outside the observed KPI
+    range; defaults mu=0, sigma=0.5):
+      setting_path="priors.intercept.mu",     value=0.0
+      setting_path="priors.intercept.sigma",  value=0.3
+
     Trend priors (standardized-y scale; base slope applies to linear AND piecewise):
       setting_path="priors.trend.growth_prior_mu",          value=0.2
       setting_path="priors.trend.growth_prior_sigma",       value=0.5
@@ -1813,8 +1872,25 @@ def update_model_setting(
     if setting_path == "trend.type":
         value = _normalize_trend_type(value)
 
+    parts = setting_path.split(".")
+
+    # Refuse priors the model builder would silently drop (writing an unread
+    # spec key looks like success but changes nothing — see agents/fitting.py).
+    if parts[0] == "priors":
+        err = unconsumed_prior_path(parts, value, new_spec)
+        if err:
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"Rejected `{setting_path}`: {err}",
+                            tool_call_id=tool_call_id,
+                        )
+                    ]
+                }
+            )
+
     try:
-        parts = setting_path.split(".")
         _set(new_spec, parts, value)
     except Exception as exc:
         return Command(
@@ -3233,19 +3309,18 @@ def log_experiment(
     """Create or update an entry in the project's experiment registry — the
     log the home page tracks and the calibration loop reads.
 
+    PREFER the lifecycle tools for the standard flow: plan_experiment (create
+    with design+priority snapshots) → preregister_experiment →
+    record_experiment_readout → apply_experiment_calibration + fit_mmm_model
+    (auto-marks calibrated). Use log_experiment for ad-hoc edits: importing a
+    historical experiment, fixing a field, marking a test 'running' at launch,
+    or abandoning one (status='abandoned').
+
     Create: pass `channel` (+ optional design fields), status defaults to
     'planned'. Update: pass `experiment_id` plus only the fields that changed.
-
-    Lifecycle: planned → running → completed → calibrated.
-    - When results land, set status='completed' with `value`, `se` and
-      `estimand` ('roas' | 'contribution' | 'mroas') — 'completed' means
-      measured but NOT yet folded into a fit, and the home page will flag the
-      model for calibration.
-    - After refitting with the experiment as a calibration likelihood, set
-      status='calibrated' (do this every time you calibrate, or the flag
-      never clears).
-
-    Dates are ISO strings (e.g. "2026-07-01").
+    Lifecycle: draft → planned → running → completed → calibrated.
+    Results: status='completed' with `value`, `se`, `estimand`
+    ('roas' | 'contribution' | 'mroas'). Dates are ISO strings.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -3356,7 +3431,7 @@ def list_experiment_log(
     if completed:
         lines.append(
             f"\n⚠️ {len(completed)} completed result(s) not yet calibrated into a "
-            "fit — recommend a calibrated refit."
+            "fit — call apply_experiment_calibration, then fit_mmm_model."
         )
     return Command(
         update={
@@ -3365,6 +3440,339 @@ def list_experiment_log(
             ]
         }
     )
+
+
+def _simple_msg(text: str, tool_call_id) -> Command:
+    return Command(
+        update={"messages": [ToolMessage(content=text, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
+def plan_experiment(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    hypothesis: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    preregister: bool = False,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Create a registry entry (status 'draft') for an experiment on `channel`,
+    snapshotting the latest recommendation: the concrete design from
+    recommend_lift_experiments / compute_experiment_priorities (design type,
+    duration, target SE) plus the EIG/EVOI priority row, and the recommending
+    model run. Set preregister=true to lock it straight to 'planned' (the
+    pre-registration step) — or call preregister_experiment after review.
+
+    Lifecycle: draft → planned → running → completed → calibrated. Dates are
+    ISO strings for the intended test window.
+    """
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    project_id = None
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:
+        pass
+
+    dashboard = state.get("dashboard_data") or {}
+    # design snapshot: a full design-studio plan for this channel wins
+    # (assignment, power curve, schedule); else the latest recommendation row.
+    design = None
+    plan = dashboard.get("experiment_design_plan")
+    if isinstance(plan, dict) and plan.get("channel") == channel:
+        design = dict(plan)
+    if design is None:
+        for d in (dashboard.get("experiment_design") or {}).get("designs", []):
+            if d.get("channel") == channel:
+                design = dict(d)
+                break
+    if hypothesis:
+        design = design or {"channel": channel}
+        design["hypothesis"] = hypothesis
+    # priority snapshot from the latest grid (if any)
+    priority = next(
+        (
+            dict(r)
+            for r in (dashboard.get("experiment_priorities") or {}).get("channels", [])
+            if r.get("channel") == channel
+        ),
+        None,
+    )
+    recommending_run_id = (dashboard.get("model_run") or {}).get("run_id")
+
+    try:
+        exp = sessions_store.upsert_experiment(
+            project_id=project_id,
+            thread_id=tid,
+            channel=channel,
+            design_type=(design or {}).get("design_key")
+            or (design or {}).get("design_type"),
+            status="draft",
+            start_date=start_date,
+            end_date=end_date,
+            recommending_run_id=recommending_run_id,
+            design=design,
+            priority=priority,
+        )
+        if preregister:
+            exp = sessions_store.transition_experiment(
+                exp["id"], "planned", note="pre-registered at planning time"
+            )
+    except ValueError as exc:
+        return _simple_msg(f"Could not plan experiment: {exc}", tool_call_id)
+
+    msg = (
+        f"Experiment on **{channel}** created (id `{exp['id']}`, status "
+        f"**{exp['status']}**"
+        + (
+            f", recommended by run `{recommending_run_id}`"
+            if recommending_run_id
+            else ""
+        )
+        + ")."
+    )
+    if design:
+        msg += f" Design snapshot: {design.get('design_type', 'n/a')}."
+    if exp["status"] == "draft":
+        msg += " Pre-register it with preregister_experiment before launch."
+    return _simple_msg(msg, tool_call_id)
+
+
+@tool
+def preregister_experiment(
+    experiment_id: str,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Pre-register a drafted experiment (draft → planned): locks the design
+    BEFORE the experiment runs, stamping the pre-registration time. Run this
+    only when the design (channel, window, intensity, target precision) is
+    final — analysis choices after seeing results are exactly what
+    pre-registration protects against."""
+    from mmm_framework.api import sessions as sessions_store
+
+    try:
+        exp = sessions_store.transition_experiment(
+            experiment_id, "planned", note="pre-registered"
+        )
+    except ValueError as exc:
+        return _simple_msg(f"Could not pre-register: {exc}", tool_call_id)
+    return _simple_msg(
+        f"Experiment `{exp['id']}` on **{exp['channel']}** pre-registered "
+        "(status **planned**). Move it to 'running' with log_experiment when "
+        "the test launches, and record results with record_experiment_readout.",
+        tool_call_id,
+    )
+
+
+@tool
+def record_experiment_readout(
+    experiment_id: str,
+    value: float,
+    se: float,
+    estimand: str = "roas",
+    start_date: str = None,
+    end_date: str = None,
+    method: str = None,
+    notes: str = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Record an experiment's measured result (→ 'completed'): the lift point
+    estimate, its standard error, and the estimand ('roas' | 'contribution' |
+    'mroas'), plus the actual test window (ISO dates) and the measurement
+    method (e.g. 'geo holdout DiD', 'synthetic control'). A planned experiment
+    is moved through 'running' automatically.
+
+    'completed' means measured but NOT yet in the model — follow with
+    apply_experiment_calibration + fit_mmm_model to close the loop.
+    """
+    from mmm_framework.api import sessions as sessions_store
+
+    exp = sessions_store.get_experiment(experiment_id)
+    if exp is None:
+        return _simple_msg(f"Unknown experiment id '{experiment_id}'.", tool_call_id)
+    try:
+        if exp["status"] == "planned":
+            exp = sessions_store.transition_experiment(
+                experiment_id, "running", note="auto-advanced at readout"
+            )
+        readout = {
+            "value": value,
+            "se": se,
+            "estimand": estimand,
+            "method": method,
+            "notes": notes,
+        }
+        exp = sessions_store.transition_experiment(
+            experiment_id,
+            "completed",
+            value=float(value),
+            se=float(se),
+            estimand=estimand,
+            start_date=start_date,
+            end_date=end_date,
+            readout=readout,
+            note=method,
+        )
+    except ValueError as exc:
+        return _simple_msg(f"Could not record readout: {exc}", tool_call_id)
+    return _simple_msg(
+        f"Readout recorded for **{exp['channel']}**: {value:g} ± {se:g} "
+        f"({estimand}). Status **completed** — not yet in the model. Next: "
+        "apply_experiment_calibration, then fit_mmm_model for the calibrated "
+        "refit.",
+        tool_call_id,
+    )
+
+
+@tool
+def apply_experiment_calibration(
+    state: Annotated[dict, InjectedState],
+    experiment_ids: list[str] = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Stage completed experiment readouts as calibration likelihoods for the
+    NEXT fit: writes `experiments` (ExperimentMeasurement payloads) into the
+    model spec. The next fit_mmm_model folds them into the model as in-graph
+    likelihood terms and marks the registry entries 'calibrated'.
+
+    Uses every 'completed' experiment in the project unless `experiment_ids`
+    narrows it. Each experiment needs value, se, estimand, and a test window
+    (start/end dates) inside the dataset's date range.
+    """
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    spec = state.get("model_spec")
+    if not spec or not spec.get("kpi"):
+        return _simple_msg(
+            "No model is configured yet — configure_model first, then stage "
+            "the calibration.",
+            tool_call_id,
+        )
+    project_id = None
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:
+        pass
+
+    completed = sessions_store.list_experiments(
+        project_id=project_id, status="completed"
+    )
+    if experiment_ids:
+        wanted = set(experiment_ids)
+        missing = wanted - {e["id"] for e in completed}
+        if missing:
+            return _simple_msg(
+                f"Not in 'completed' status (or unknown): {', '.join(sorted(missing))}. "
+                "Only completed experiments can be calibrated.",
+                tool_call_id,
+            )
+        completed = [e for e in completed if e["id"] in wanted]
+    if not completed:
+        return _simple_msg(
+            "No completed experiments to calibrate. Record results first with "
+            "record_experiment_readout.",
+            tool_call_id,
+        )
+
+    channels = {m.get("name") for m in spec.get("media_channels", [])}
+    measurements, problems = [], []
+    for e in completed:
+        errs = []
+        if e["channel"] not in channels:
+            errs.append(f"channel '{e['channel']}' is not in the model spec")
+        if e.get("value") is None or e.get("se") is None:
+            errs.append("missing value/se")
+        if not e.get("start_date") or not e.get("end_date"):
+            errs.append("missing test window (start_date/end_date)")
+        if errs:
+            problems.append(f"`{e['id'][:8]}` ({e['channel']}): {'; '.join(errs)}")
+            continue
+        measurements.append(
+            {
+                "experiment_id": e["id"],
+                "channel": e["channel"],
+                "test_period": [e["start_date"], e["end_date"]],
+                "value": float(e["value"]),
+                "se": float(e["se"]),
+                "estimand": e.get("estimand") or "roas",
+            }
+        )
+    if problems:
+        return _simple_msg(
+            "Cannot stage calibration — fix these first:\n- " + "\n- ".join(problems),
+            tool_call_id,
+        )
+
+    # Window validation against the loaded dataset (best-effort: skip when the
+    # date range can't be read).
+    dataset_path = state.get("dataset_path")
+    bounds = _dataset_date_bounds(dataset_path)
+    if bounds:
+        lo, hi = bounds
+        outside = [
+            m
+            for m in measurements
+            if m["test_period"][0] < lo or m["test_period"][1] > hi
+        ]
+        if outside:
+            desc = ", ".join(
+                f"{m['channel']} [{m['test_period'][0]} → {m['test_period'][1]}]"
+                for m in outside
+            )
+            return _simple_msg(
+                f"Experiment window(s) outside the dataset's date range "
+                f"[{lo} → {hi}]: {desc}. Extend the dataset (the window must be "
+                "observed data) or fix the recorded dates.",
+                tool_call_id,
+            )
+
+    new_spec = copy.deepcopy(dict(spec))
+    new_spec["experiments"] = [
+        {k: v for k, v in m.items() if k != "experiment_id"} for m in measurements
+    ]
+    new_spec["experiment_ids"] = [m["experiment_id"] for m in measurements]
+    chs = ", ".join(sorted({m["channel"] for m in measurements}))
+    return _commit_spec(
+        state,
+        new_spec,
+        tool_call_id,
+        success_msg=(
+            f"Staged {len(measurements)} experiment likelihood(s) ({chs}) into "
+            "the spec. Now call fit_mmm_model — the refit folds them into the "
+            "model and marks the registry entries calibrated."
+        ),
+        patch_paths=["experiments", "experiment_ids"],
+    )
+
+
+def _dataset_date_bounds(dataset_path: str | None) -> tuple[str, str] | None:
+    """(min, max) ISO dates of the dataset's Period column, or None when the
+    file/column can't be read cheaply."""
+    if not dataset_path or not os.path.exists(dataset_path):
+        return None
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(dataset_path, usecols=["Period"])
+        period = pd.to_datetime(df["Period"], errors="coerce").dropna()
+        if period.empty:
+            return None
+        return (
+            period.min().date().isoformat(),
+            period.max().date().isoformat(),
+        )
+    except Exception:
+        return None
 
 
 @tool
@@ -3402,21 +3810,218 @@ def recommend_lift_experiments(
     top_k: int = 3,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
-    """Recommend which lift experiments to run next, based on the fitted model:
-    channels are ranked by spend share × ROAS uncertainty × how much that
-    uncertainty destabilizes the optimal budget allocation across posterior
-    draws — i.e. test where better information would change the decision.
+    """Recommend which lift experiments to run next, based on the fitted model.
+    Channels are ranked by EIG × EVOI — what the experiment would teach
+    (expected information gain over the channel's ROI posterior) times what
+    that learning is worth to the budget decision (expected value of
+    information) — falling back to the transparent heuristic (spend share ×
+    ROAS uncertainty × allocation instability) if the EIG/EVOI pass fails.
 
     Each recommendation includes a concrete design (geo holdout vs national
     spend pulse, minimum duration from the channel's adstock window, target
     standard error) and the `ExperimentMeasurement` snippet that calibrates the
-    result into the next fit. Requires a fitted model.
+    result into the next fit. Requires a fitted model. Use
+    `compute_experiment_priorities` for the full grid with quadrants and
+    re-test triggers.
     """
     _activate_thread(config)
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "experiment_design", {"top_k": int(top_k)}
     )
     return _modelop_command(res, {}, tool_call_id)
+
+
+def _project_evidence(config) -> tuple[str | None, dict]:
+    """(project_id, latest calibrated evidence per channel) for the active
+    session — registry reads stay host-side; the evidence dict crosses the
+    kernel boundary as plain JSON."""
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+        if project_id:
+            return project_id, sessions_store.latest_calibrated_evidence(project_id)
+    except Exception:
+        pass
+    return None, {}
+
+
+@tool
+def compute_experiment_priorities(
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """The full EIG/EVOI experiment-priority grid from the fitted model: per
+    channel, the expected information gain of an experiment (nats), the
+    expected value of that information for the budget decision (KPI units),
+    the composite priority, and the 2×2 quadrant — test_now / learn_cheaply /
+    monitor / deprioritize. Channels with calibrated experiments in the
+    project registry also get information-decay status: how stale the evidence
+    is and whether a re-test is due. Requires a fitted model.
+
+    Use this at step T₁ of the measurement cycle (after a fit, before
+    committing to the next experiment portfolio); `plan_experiment` turns a
+    grid row into a registry entry.
+    """
+    from datetime import date as _date
+
+    _activate_thread(config)
+    _project_id, evidence = _project_evidence(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "experiment_priorities",
+        {"evidence": evidence, "as_of": _date.today().isoformat()},
+    )
+    return _modelop_command(res, {}, tool_call_id)
+
+
+@tool
+def design_experiment_plan(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    design_key: str = None,
+    duration: int = 8,
+    intensity_pct: float = 50.0,
+    geo_design: str = "scaling",
+    amplitude_pct: float = 50.0,
+    block_weeks: int = 2,
+    n_pairs: int = None,
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Design a runnable experiment for `channel` from the loaded dataset —
+    the randomization IS the product:
+
+    - Geo/DMA panels (>= 4 geos): `design_key='geo_lift'` builds matched pairs
+      from pre-period KPI co-movement and RANDOMIZES treatment within each
+      pair, with a DiD power analysis (SE/MDE on the ROAS scale vs duration)
+      and a placebo falsification bar. `geo_design='holdout'` goes dark in the
+      treated geos; `'scaling'` lifts spend by `intensity_pct`.
+    - `design_key='matched_market_did'`: the pseudo-experimental variant when
+      the business dictates treatment geos — same matching + power math, with
+      the parallel-trends caveat made explicit.
+    - National data: `design_key='national_flighting'` builds a budget-neutral
+      block-randomized on/off spend schedule (±`amplitude_pct`%, blocks of
+      `block_weeks` weeks) that manufactures the exogenous variance the spend
+      history lacks, with the identification gain quantified.
+
+    Omit design_key to auto-pick from the data. Pure data computation — works
+    PRE-FIT (no fitted model needed). Follow with `plan_experiment` to
+    register + pre-register the design.
+    """
+    import os as _os
+
+    from mmm_framework.planning.design import design_experiment, design_options
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before designing.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the designer knows "
+            "the outcome series.",
+            tool_call_id,
+        )
+    try:
+        key = design_key or design_options(dataset_path, kpi, channel)["recommended"]
+        if key == "national_flighting":
+            design = design_experiment(
+                dataset_path,
+                kpi,
+                channel,
+                design_key=key,
+                duration=int(duration),
+                amplitude_pct=float(amplitude_pct),
+                block_weeks=int(block_weeks),
+                seed=int(seed),
+            )
+        else:
+            kwargs: dict = dict(
+                duration=int(duration),
+                design=geo_design,
+                intensity_pct=float(intensity_pct),
+                seed=int(seed),
+            )
+            if n_pairs is not None:
+                kwargs["n_pairs"] = int(n_pairs)
+            design = design_experiment(
+                dataset_path, kpi, channel, design_key=key, **kwargs
+            )
+    except ValueError as exc:
+        return _simple_msg(f"Could not design the experiment: {exc}", tool_call_id)
+
+    lines = [f"### Experiment design — `{channel}` ({design['design_type']})", ""]
+    if design["design_key"] in ("geo_lift", "matched_market_did"):
+        pairs = ", ".join(
+            f"{p['treatment']}→T / {p['control']}→C (r={p['correlation']:.2f})"
+            for p in design["assignment"]
+        )
+        lines += [
+            f"- Matched pairs ({design['n_pairs']}): {pairs}",
+            f"- Treated-cell spend change: {design['intensity_pct']:+.0f}% "
+            f"(≈ {design['weekly_spend_delta']:,.0f}/week)",
+            f"- {design['duration']}-week test → SE(ROAS) ≈ {design['se_roas']:.2f}, "
+            f"MDE ≈ {design['mde_roas']:.2f} (80% power)",
+            f"- Placebo bar (pre-period chance 'lift', 95%): "
+            f"±{design['placebo'].get('p95_abs') or 0:,.0f} KPI units",
+        ]
+        diag = design["diagnostics"]
+        lines.append(
+            f"- Matching: {diag.get('matching', 'residual matching')}; power "
+            f"{design.get('se_source', 'analytic')}; worst covariate imbalance "
+            f"{diag.get('max_balance_abs_std_diff', 0):.2f} std (< 0.25 is balanced)"
+        )
+        if diag["parallel_trends_warning"]:
+            lines.append(
+                "- ⚠️ Weakest pair RESIDUAL correlation "
+                f"{diag.get('min_residual_correlation', 0):.2f} — after removing "
+                "shared trend/seasonality the pairs barely co-move, so parallel "
+                "trends is shaky; prefer fewer, better-matched pairs."
+            )
+        if not design["randomized"]:
+            lines.append(
+                "- ⚠️ Observational (no randomization) — report the placebo band "
+                "prominently; this is a pseudo-experiment."
+            )
+    else:
+        ident = design["identification"]
+        on_off = "".join(
+            "▮" if s["multiplier"] > 1 else "▯" for s in design["schedule"]
+        )
+        lines += [
+            f"- Schedule ({design['duration']} weeks, ±{design['amplitude_pct']:.0f}%, "
+            f"{design['block_weeks']}-week blocks, budget-neutral): `{on_off}`",
+            f"- Exogenous share of test-window spend variance: "
+            f"{ident['exogenous_share']:.0%} (historical spend CV "
+            f"{ident['historical_spend_cv']:.2f} is demand-confounded; the "
+            "schedule's variance is randomized, i.e. clean)",
+            f"- On/off contrast → SE(ROAS) ≈ {design['se_roas']:.2f}, "
+            f"MDE ≈ {design['mde_roas']:.2f} (80% power)",
+        ]
+    lines += [
+        "",
+        design["analysis_plan"],
+        "",
+        "Next: `plan_experiment` to register and pre-register this design.",
+    ]
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["experiment_design_plan"] = design
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard_data,
+        }
+    )
 
 
 from mmm_framework.agents.eda_tools import EDA_TOOLS
@@ -3464,6 +4069,12 @@ TOOLS = [
     # Decision layer: learnings -> budget + next experiment
     run_budget_optimizer,
     recommend_lift_experiments,
+    compute_experiment_priorities,
+    design_experiment_plan,
+    plan_experiment,
+    preregister_experiment,
+    record_experiment_readout,
+    apply_experiment_calibration,
     log_experiment,
     list_experiment_log,
     get_run_history,

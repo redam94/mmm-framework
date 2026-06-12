@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useProjectStore } from '../../../stores/projectStore';
 import { API_BASE, authHeaders } from '../constants';
 import type { Project, Session } from '../types';
 
@@ -11,50 +12,47 @@ export function useAgentSessions({ apiKey, modelName }: {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [threadId, setThreadId] = useState<string | null>(() => localStorage.getItem('mmm.activeThreadId'));
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  // Gate session loading until /projects has resolved (success or failure) so we
-  // know whether to filter by project. Degraded mode (error) → projectId stays null.
+  // ONE source of project truth: the shared zustand store the Header's
+  // ProjectSwitcher drives (it persists itself). Switching projects anywhere
+  // in the app switches the workspace too. null = All projects (no filter).
+  const projectId = useProjectStore(s => s.currentProjectId);
+  const setProjectId = useProjectStore(s => s.setProject);
+  // Gate session loading until /projects has resolved (success or failure) so
+  // we know whether the stored project still exists.
   const [projectsReady, setProjectsReady] = useState(false);
-
-  // Persist the selected project id
-  useEffect(() => {
-    if (projectId) localStorage.setItem('mmm.projectId', projectId);
-  }, [projectId]);
 
   const loadProjects = useCallback(async (): Promise<Project[]> => {
     const data = await fetch(`${API_BASE}/projects`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
     return Array.isArray(data?.projects) ? data.projects : [];
   }, [apiKey, modelName]);
 
-  // Effect P (mount): resolve the project list + selected project, then unlock
-  // session loading. On error, degrade to a single implicit project (projectId=null).
+  // Effect P (mount): validate the stored selection against the live project
+  // list (a deleted project must not filter sessions forever), then unlock
+  // session loading. On error, degrade to no filter.
   useEffect(() => {
     (async () => {
       try {
         const list = await loadProjects();
         setProjects(list);
-        if (list.length > 0) {
-          const stored = localStorage.getItem('mmm.projectId');
-          const pick = stored && list.some(p => p.project_id === stored) ? stored : list[0].project_id;
-          setProjectId(pick);
-        } else {
+        const current = useProjectStore.getState().currentProjectId;
+        if (current && !list.some(p => p.project_id === current)) {
           setProjectId(null);
         }
       } catch (e) {
         console.error('Failed to load projects (degrading to single implicit project)', e);
         setProjects([]);
-        setProjectId(null);
       } finally {
         setProjectsReady(true);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resume session from ?session=<thread_id> query param (e.g. launched from Dashboard)
+  // Follow ?session=<thread_id>: set on launch AND whenever the app Sidebar's
+  // session list navigates while the workspace is already mounted.
   useEffect(() => {
     const sessionParam = searchParams.get('session');
     if (sessionParam) setThreadId(sessionParam);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Persist active session
   useEffect(() => {
@@ -101,7 +99,7 @@ export function useAgentSessions({ apiKey, modelName }: {
   // Project actions
   const handleProjectSelect = useCallback((id: string) => {
     setProjectId(id);
-  }, []);
+  }, [setProjectId]);
 
   const handleProjectCreate = useCallback(async (name: string, description?: string) => {
     try {
@@ -115,7 +113,7 @@ export function useAgentSessions({ apiKey, modelName }: {
       else setProjects(prev => [...prev, created]);
       if (created?.project_id) setProjectId(created.project_id);
     } catch (e) { console.error('Failed to create project', e); }
-  }, [apiKey, modelName, loadProjects]);
+  }, [apiKey, modelName, loadProjects, setProjectId]);
 
   // ── Session actions ────────────────────────────────────────────────────────
   const handleCreateSession = async () => {

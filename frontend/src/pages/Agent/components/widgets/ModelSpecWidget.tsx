@@ -9,9 +9,9 @@ import { lockPathLabel, specWithDefaults } from '../../utils/spec';
 
 function SpecRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between items-center py-1.5 border-b border-gray-100 last:border-0">
-      <span className="text-xs text-gray-500 font-medium">{label}</span>
-      <span className="text-xs text-gray-900 font-semibold text-right max-w-[60%]">{value}</span>
+    <div className="flex justify-between items-center py-1.5 border-b border-line-200 last:border-0">
+      <span className="text-xs text-ink-400 font-medium">{label}</span>
+      <span className="text-xs text-ink-900 font-semibold text-right max-w-[60%]">{value}</span>
     </div>
   );
 }
@@ -21,12 +21,12 @@ function SpecSection({ title, icon, children }: { title: string; icon: React.Rea
   return (
     <div className="mb-3">
       <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5 hover:text-gray-900 transition-colors">
+        className="w-full flex items-center gap-2 text-xs font-bold text-ink-600 uppercase tracking-wider mb-1.5 hover:text-ink-900 transition-colors">
         {icon}
         <span className="flex-1 text-left">{title}</span>
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
       </button>
-      {open && <div className="bg-gray-50 rounded-lg px-3 py-1 border border-gray-100">{children}</div>}
+      {open && <div className="bg-cream-50 rounded-lg px-3 py-1 border border-line-200">{children}</div>}
     </div>
   );
 }
@@ -36,12 +36,12 @@ function SpecSection({ title, icon, children }: { title: string; icon: React.Rea
 function EditSection({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="border border-line-200 rounded-xl overflow-hidden">
       <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
-        <span className="text-gray-500">{icon}</span>
-        <span className="flex-1 text-xs font-bold text-gray-700 uppercase tracking-wider">{title}</span>
-        {open ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+        className="w-full flex items-center gap-2 px-4 py-3 bg-cream-50 hover:bg-cream-100 transition-colors text-left">
+        <span className="text-ink-400">{icon}</span>
+        <span className="flex-1 text-xs font-bold text-ink-700 uppercase tracking-wider">{title}</span>
+        {open ? <ChevronDown size={13} className="text-ink-300" /> : <ChevronRight size={13} className="text-ink-300" />}
       </button>
       {open && <div className="px-4 py-3 space-y-3 bg-white">{children}</div>}
     </div>
@@ -55,7 +55,7 @@ interface ModelSpecWidgetProps {
   editable: boolean;
   onApplySpec: (newSpec: any) => void;
   lockedFields?: string[];
-  onUnlock?: (path: string) => void;
+  onUnlock?: (path: string | string[]) => void;
 }
 
 export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = [], onUnlock }: ModelSpecWidgetProps) {
@@ -161,8 +161,8 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       {displaySpec.media_channels?.length > 0 && (
         <SpecSection title="Media Channels" icon={<Zap size={13} />}>
           {displaySpec.media_channels.map((ch: any) => (
-            <div key={ch.name} className="py-2 border-b border-gray-100 last:border-0">
-              <p className="text-xs font-semibold text-gray-800 mb-1">{ch.name}</p>
+            <div key={ch.name} className="py-2 border-b border-line-200 last:border-0">
+              <p className="text-xs font-semibold text-ink-900 mb-1">{ch.name}</p>
               <div className="flex flex-wrap gap-1.5">
                 <Badge label={`${ch.adstock?.type ?? 'geometric'} adstock`} color="indigo" />
                 <Badge label={`l_max=${ch.adstock?.l_max ?? 8}`} color="gray" />
@@ -306,7 +306,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       <EditSection title="Media Channels" icon={<Zap size={13} />}>
         <div className="space-y-2">
           {draft.media_channels.map((ch: any, idx: number) => (
-            <div key={idx} className="flex gap-2 items-end bg-gray-50 rounded-lg p-2 border border-gray-100">
+            <div key={idx} className="flex gap-2 items-end bg-cream-50 rounded-lg p-2 border border-line-200">
               <div className="flex-1">
                 <FLabel>Name</FLabel>
                 <input className={iCls} value={ch.name}
@@ -360,9 +360,9 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       <EditSection title="Control Variables" icon={<Layers size={13} />}>
         <div className="flex flex-wrap gap-1.5">
           {draft.control_variables.map((c: any, idx: number) => (
-            <span key={idx} className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 text-xs rounded-full border border-gray-200">
+            <span key={idx} className="flex items-center gap-1 px-2.5 py-1 bg-cream-100 text-ink-700 text-xs rounded-full border border-line-200">
               {c.name}
-              <button onClick={() => removeControl(idx)} className="text-gray-400 hover:text-red-500 transition-colors ml-0.5">
+              <button onClick={() => removeControl(idx)} className="text-ink-300 hover:text-red-500 transition-colors ml-0.5">
                 <X size={11} />
               </button>
             </span>
@@ -374,7 +374,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
             onChange={e => setNewControl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addControl()} />
           <button onClick={addControl}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-medium rounded-lg border border-gray-200 transition-colors">
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-cream-50 hover:bg-cream-100 text-ink-700 text-xs font-medium rounded-lg border border-line-200 transition-colors">
             <Plus size={13} /> Add
           </button>
         </div>
@@ -390,20 +390,20 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
         <Check size={13} /> Apply
       </button>
       <button onClick={handleDiscard}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium rounded-lg transition-colors border border-gray-200">
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-cream-100 hover:bg-gray-200 text-ink-600 text-xs font-medium rounded-lg transition-colors border border-line-200">
         <RotateCcw size={13} /> Discard
       </button>
     </div>
   ) : editable ? (
     <button onClick={() => setEditMode(true)}
-      className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-indigo-600 text-xs font-medium rounded-lg border border-gray-200 transition-colors">
+      className="flex items-center gap-1.5 px-2.5 py-1 bg-cream-50 hover:bg-cream-100 text-ink-400 hover:text-indigo-600 text-xs font-medium rounded-lg border border-line-200 transition-colors">
       <Pencil size={12} /> Edit
     </button>
   ) : null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+    <div className="bg-white rounded-2xl border border-line-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-line-200">
         <Activity size={15} className="text-blue-500 shrink-0" />
         <span className="font-semibold text-sm text-blue-600 flex-1">Model Configuration</span>
         {editMode && (
@@ -414,16 +414,86 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
         {headerActions}
       </div>
       {lockedFields.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 px-5 py-2.5 border-b border-gray-100 bg-amber-50/40">
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">
-            <Lock size={10} /> Locked by you
-          </span>
-          {lockedFields.map((p) => (
-            <span key={p} className="group flex items-center gap-1 px-2 py-0.5 bg-white text-amber-700 text-[11px] rounded-full border border-amber-200">
-              {lockPathLabel(p)}
+        <LockedFieldsSummary lockedFields={lockedFields} onUnlock={onUnlock} />
+      )}
+      <div className="px-5 py-4 max-h-[600px] overflow-y-auto">
+        {editMode ? editForm : viewContent}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Locked-fields summary ───────────────────────────────────────────────────
+// A manual prior edit can lock dozens of leaf paths at once; rendering a pill
+// per leaf buries the tab. Collapse to one quiet line, and group expanded
+// pills by their parent (e.g. all of TV's prior leaves -> one pill).
+
+function groupLockedPaths(paths: string[]): { label: string; paths: string[] }[] {
+  const groups = new Map<string, string[]>();
+  for (const p of paths) {
+    const segs = p.split('.');
+    const key = segs.slice(0, Math.min(3, segs.length)).join('.');
+    const list = groups.get(key) ?? [];
+    list.push(p);
+    groups.set(key, list);
+  }
+  return [...groups.entries()]
+    .map(([key, members]) => ({ label: lockPathLabel(key), paths: members }))
+    .sort((a, b) => b.paths.length - a.paths.length || a.label.localeCompare(b.label));
+}
+
+function LockedFieldsSummary({ lockedFields, onUnlock }: {
+  lockedFields: string[];
+  onUnlock?: (path: string | string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const groups = groupLockedPaths(lockedFields);
+
+  return (
+    <div className="border-b border-line-200 bg-cream-100/60">
+      <div className="flex items-center gap-2 px-5 py-2">
+        <Lock size={11} className="shrink-0 text-gold-600" />
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex flex-1 items-center gap-1.5 text-left text-[11px] font-medium text-ink-600 hover:text-ink-900 transition-colors"
+          title={open ? 'Hide locked fields' : 'Show locked fields'}
+        >
+          {lockedFields.length} field{lockedFields.length === 1 ? '' : 's'} locked by you
+          <span className="text-ink-300">— the assistant asks before changing these</span>
+          <ChevronDown size={12} className={`text-ink-300 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {onUnlock && (
+          <button
+            onClick={() => {
+              if (confirm(`Unlock all ${lockedFields.length} fields? The assistant can change them again without asking.`)) {
+                onUnlock([...lockedFields]);
+              }
+            }}
+            className="shrink-0 text-[11px] font-medium text-ink-400 hover:text-rust-600 transition-colors"
+          >
+            Unlock all
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="flex flex-wrap items-center gap-1.5 px-5 pb-2.5">
+          {groups.map((g) => (
+            <span
+              key={g.label}
+              className="flex items-center gap-1 rounded-full border border-line-200 bg-white px-2 py-0.5 text-[11px] text-ink-600"
+              title={g.paths.map(lockPathLabel).join('\n')}
+            >
+              {g.label}
+              {g.paths.length > 1 && (
+                <span className="text-ink-300">({g.paths.length})</span>
+              )}
               {onUnlock && (
-                <button onClick={() => onUnlock(p)} title="Unlock — let the assistant change this"
-                  className="text-amber-400 hover:text-amber-700 transition-colors">
+                <button
+                  onClick={() => onUnlock([...g.paths])}
+                  title={g.paths.length > 1 ? `Unlock all ${g.paths.length} fields under ${g.label}` : 'Unlock — let the assistant change this'}
+                  className="text-ink-300 hover:text-gold-700 transition-colors"
+                >
                   <Unlock size={10} />
                 </button>
               )}
@@ -431,9 +501,6 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
           ))}
         </div>
       )}
-      <div className="px-5 py-4 max-h-[600px] overflow-y-auto">
-        {editMode ? editForm : viewContent}
-      </div>
     </div>
   );
 }

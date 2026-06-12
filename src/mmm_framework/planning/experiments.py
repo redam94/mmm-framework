@@ -44,17 +44,26 @@ def recommend_experiments(
     top_k: int = 3,
     max_draws: int = 200,
     random_seed: int | None = None,
+    method: str = "eig_evoi",
+    evidence: dict[str, dict] | None = None,
 ) -> tuple[pd.DataFrame, list[dict]]:
     """Rank channels by experiment value and propose concrete designs.
 
     Returns ``(table, designs)``: a per-channel scoring table (all channels,
     sorted by priority) and a list of design dicts for the ``top_k`` channels.
 
-    Priority score (transparent, unitless):
+    method="eig_evoi" (default): priority is the normalized geometric mean of
+    EIG (what the experiment teaches) and EVOI (what that learning is worth to
+    the budget decision) — see ``planning.priority``. The table gains eig /
+    evoi / quadrant columns and designs carry the priority snapshot.
+
+    method="heuristic": the transparent legacy score
         spend_share × roas_cv × (1 + allocation_instability)
     — money at stake, times relative ROAS uncertainty, amplified when the
     uncertainty visibly destabilizes the optimal allocation.
     """
+    if method not in ("eig_evoi", "heuristic"):
+        raise ValueError(f"Unknown method '{method}'. Valid: eig_evoi, heuristic")
     if curves is None:
         curves = compute_response_curves(
             mmm, max_draws=max_draws, random_seed=random_seed
@@ -72,6 +81,19 @@ def recommend_experiments(
 
     opt = optimization.table.set_index("channel")
 
+    priority_grid: dict[str, Any] = {}
+    if method == "eig_evoi":
+        from .priority import compute_experiment_priorities
+
+        grid, _portfolio = compute_experiment_priorities(
+            mmm,
+            curves=curves,
+            optimization=optimization,
+            evidence=evidence,
+            random_seed=random_seed,
+        )
+        priority_grid = {g.channel: g for g in grid}
+
     rows = []
     for c, name in enumerate(names):
         spend = float(base[c])
@@ -82,19 +104,30 @@ def recommend_experiments(
         cv = roas_sd / max(abs(roas_med), 1e-9)
         instability = float(opt.loc[name, "allocation_instability"]) / 100.0
         spend_share = spend / max(total_spend, 1e-12)
-        rows.append(
-            {
-                "channel": name,
-                "spend_share_pct": 100 * spend_share,
-                "roas_median": roas_med,
-                "roas_p5": p5,
-                "roas_p95": p95,
-                "roas_cv": cv,
-                "prob_roas_below_1": float(np.mean(roas_draws < 1.0)),
-                "allocation_instability_pct": 100 * instability,
-                "priority": spend_share * cv * (1.0 + instability),
-            }
-        )
+        row = {
+            "channel": name,
+            "spend_share_pct": 100 * spend_share,
+            "roas_median": roas_med,
+            "roas_p5": p5,
+            "roas_p95": p95,
+            "roas_cv": cv,
+            "prob_roas_below_1": float(np.mean(roas_draws < 1.0)),
+            "allocation_instability_pct": 100 * instability,
+        }
+        if method == "eig_evoi":
+            g = priority_grid[name]
+            row.update(
+                {
+                    "eig": g.eig,
+                    "evoi": g.evoi,
+                    "evpi_share": g.evpi_share,
+                    "quadrant": g.quadrant,
+                    "priority": g.priority,
+                }
+            )
+        else:
+            row["priority"] = spend_share * cv * (1.0 + instability)
+        rows.append(row)
 
     table = (
         pd.DataFrame(rows)
@@ -111,22 +144,44 @@ def recommend_experiments(
         # An informative experiment should at least halve the posterior sd
         roas_sd = (row["roas_p95"] - row["roas_p5"]) / 3.29  # ~sd from 90% interval
         target_se = roas_sd / 2.0
+        design_key = "geo_holdout" if has_geo else "national_pulse"
         design_type = (
             "geo holdout / geo lift test"
             if has_geo
             else "national spend pulse (sustained +/-20% or dark period)"
         )
+        why = (
+            f"{row['spend_share_pct']:.0f}% of spend with ROAS 90% CI "
+            f"[{row['roas_p5']:.2f}, {row['roas_p95']:.2f}] "
+            f"(median {row['roas_median']:.2f}); optimal share swings "
+            f"{row['allocation_instability_pct']:.0f} pts across posterior draws."
+        )
+        if method == "eig_evoi":
+            g = priority_grid[name]
+            # design-grounded precision wins when tighter than the heuristic
+            target_se = min(target_se, g.sigma_exp)
+            why += (
+                f" EIG {g.eig:.2f} nats; EVOI {g.evoi:,.0f} KPI units "
+                f"({g.evpi_share:.0%} of EVPI); quadrant: {g.quadrant}."
+            )
         designs.append(
             {
                 "channel": name,
                 "priority": float(row["priority"]),
-                "why": (
-                    f"{row['spend_share_pct']:.0f}% of spend with ROAS 90% CI "
-                    f"[{row['roas_p5']:.2f}, {row['roas_p95']:.2f}] "
-                    f"(median {row['roas_median']:.2f}); optimal share swings "
-                    f"{row['allocation_instability_pct']:.0f} pts across posterior draws."
+                "priority_method": method,
+                **(
+                    {
+                        "eig": float(row["eig"]),
+                        "evoi": float(row["evoi"]),
+                        "quadrant": str(row["quadrant"]),
+                        "sigma_exp": float(priority_grid[name].sigma_exp),
+                    }
+                    if method == "eig_evoi"
+                    else {}
                 ),
+                "why": why,
                 "design_type": design_type,
+                "design_key": design_key,
                 "min_duration_periods": int(duration),
                 "duration_rationale": (
                     f"adstock l_max={l_max} carryover window + 4 measurement periods"

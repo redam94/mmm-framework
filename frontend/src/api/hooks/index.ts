@@ -66,8 +66,29 @@ export {
   useProject,
   useCreateProject,
   useUpdateProject,
+  useOnboardProject,
   useDeleteProject,
 } from './useProjects';
+
+// Knowledge base hooks
+export {
+  kbKeys,
+  useKbDocuments,
+  useUploadKbDocument,
+  useDeleteKbDocument,
+  useKbSearch,
+} from './useKb';
+
+// Team hooks
+export {
+  teamKeys,
+  useUsers,
+  useCreateUser,
+  useUpdateUser,
+  useDeleteUser,
+  useProjectMembers,
+  useSetProjectMembers,
+} from './useTeam';
 
 // Session hooks
 export {
