@@ -337,6 +337,49 @@
                 exotic, all of them quiet.
             </p>
 
+            <p>
+                The same scorecard as a plain table — one row per world, in the order the matrix records
+                them. "Silent failure" means attribution is wrong while every check an analyst acts on
+                stayed green.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>World</th>
+                        <th>What it violates</th>
+                        <th>Median |error|</th>
+                        <th>Max |error|</th>
+                        <th>90% CI coverage</th>
+                        <th>Silent failure?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>clean</code></td><td>— (positive control)</td><td>7%</td><td>7%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>unobserved_confounding</code></td><td>no unobserved confounding (exogeneity of spend)</td><td>23%</td><td>69%</td><td>75%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>reverse_causality</code></td><td>no unobserved confounding (exogeneity of spend)</td><td>13%</td><td>19%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>multicollinearity</code></td><td>identifiability (independent spend variation)</td><td>39%</td><td>60%</td><td>100%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>adstock_misspec</code></td><td>adstock functional form / carryover window</td><td>80%</td><td>96%</td><td>50%</td><td><span class="verdict-pill ok">no — flagged (fragile robustness value)</span></td></tr>
+                    <tr><td><code>saturation_misspec</code></td><td>saturation functional form (concavity / no threshold)</td><td>43%</td><td>65%</td><td>25%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>time_varying_beta</code></td><td>time-invariant coefficients (stationarity)</td><td>13%</td><td>20%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>heavy_tailed_noise</code></td><td>Gaussian, homoscedastic likelihood</td><td>4%</td><td>37%</td><td>75%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>synergy</code></td><td>additive separability of channels</td><td>4%</td><td>6%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>spend_outliers</code></td><td>robustness of per-channel max-normalization</td><td>39%</td><td>70%</td><td>0%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>negative_effect</code></td><td>positivity of media effects (Gamma prior, &beta; &ge; 0)</td><td>19%</td><td>101%</td><td>50%</td><td><span class="verdict-pill expected">expected (unrepresentable)</span></td></tr>
+                    <tr><td><code>trend_break</code></td><td>smooth global trend (no structural breaks)</td><td>27%</td><td>41%</td><td>100%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>seasonality_misspec</code></td><td>static low-order Fourier seasonality</td><td>37%</td><td>104%</td><td>75%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>dense_controls</code></td><td>a parsimonious, correctly-chosen control set</td><td>16%</td><td>52%</td><td>75%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>confounding_controlled</code></td><td>no unobserved confounding (noisy-proxy control)</td><td>10%</td><td>50%</td><td>100%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>aurora_kitchen_sink</code></td><td>multiple at once (confounding + mediation + non-1-exp saturation)</td><td>92%</td><td>223%</td><td>25%</td><td><span class="verdict-pill expected">expected (unrepresentable)</span></td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Scorecard provenance:</strong> <code>tests/synth/results/stress_matrix.md</code>,
+                repo snapshot 2026-06-12 (matrix re-recorded 2026-06-10 on current defaults; seeded NumPyro
+                runs). One honest caveat: the clean world's ~7% median error is an <em>upper bound</em> on
+                real-world performance — the control DGP is drawn from the model's own structural family,
+                and real data never is.
+            </p>
+
             <h2 id="green">The checks were green everywhere</h2>
             <p>
                 If convergence diagnostics could see attribution error, the points below would slope upward:
@@ -365,6 +408,15 @@
                 </p>
             </div>
 
+            <div class="note">
+                <h4>📜 The identification contract</h4>
+                <p style="margin-bottom: 0;">
+                    Each world in this matrix breaks one named assumption. The full list — all seven, stated
+                    formally, labeled testable or untestable, with these scorecard numbers as the price of breach —
+                    lives in one place: <a href="identification-assumptions.html">the identification contract</a>.
+                </p>
+            </div>
+
             <h2 id="strengths-weaknesses">Known strengths &amp; weaknesses</h2>
             <p>
                 The honest summary an analyst should carry around. Everything here is measured in the
@@ -382,19 +434,19 @@
                         <li><strong>Slow effectiveness drift:</strong> time-varying betas average out to ~13% error on totals, and split-window refits expose the drift when you look.</li>
                         <li><strong>Decoy controls don't steal credit:</strong> media-tracking decoys cost precision, not attribution — the adstock/saturation pipeline separates them.</li>
                         <li><strong>Honest collinear intervals:</strong> under near-perfect collinearity the posterior widens and the contribution "seesaw" is visible in posterior correlations — the uncertainty is real, and reported.</li>
-                        <li><strong>Calibration is surgical:</strong> one ROAS lift test pulls a +110% confounded channel to +14% without disturbing the others.</li>
+                        <li><strong>Calibration is surgical:</strong> one ROAS lift test pulls the confounded channel's bias from +110% to +14% without disturbing the others (a measured before/after pair from the stress-03 notebook bake; the recorded scorecard's worst-channel bias for this world is +69%).</li>
                     </ul>
                 </div>
                 <div class="sw-col weaknesses">
                     <h3>❌ Where it fails silently</h3>
                     <ul>
-                        <li><strong>Demand confounding:</strong> spend that chases demand inflates the chasing channel up to +110%, with every diagnostic green. Only design (roles, controls, experiments) fixes it.</li>
-                        <li><strong>"We controlled for it" isn't a fix:</strong> a noisy proxy of the confounder leaves ~+35% residual bias with truth outside the interval.</li>
+                        <li><strong>Demand confounding:</strong> spend that chases demand inflates the chasing channel +69% (worst channel; 23% median) in the recorded scorecard, with every diagnostic green — an earlier notebook bake measured +110%. Only design (roles, controls, experiments) fixes it.</li>
+                        <li><strong>"We controlled for it" isn't a fix:</strong> a noisy proxy of the confounder still leaves a +50% worst-channel bias in the recorded scorecard (an earlier bake measured ~+35% with truth outside the interval; under current defaults the wide interval covers — wrong and quiet either way).</li>
                         <li><strong>Saturation form:</strong> Hill-type thresholds fit with a concave default read +38% on total media — green across the board.</li>
                         <li><strong>Spend outliers:</strong> a handful of 15× spikes crush max-normalization — coverage drops to 0%. (A 30-second max/median screen catches this before fitting.)</li>
                         <li><strong>Trend breaks &amp; evolving seasonality:</strong> structural time misfit flows into whichever channel's spend co-moves with it — direction unpredictable, totals often still right.</li>
                         <li><strong>Mediation:</strong> the base model structurally loses mediated channels (TV ROAS 0.22 vs true 2.14); extensions recover them but add prior-determined splits the data cannot identify.</li>
-                        <li><strong>Open issue — legacy default adstock:</strong> the default two-point blend recovers the <em>clean</em> world at ~28% median error vs 7% parametric. Prefer <code>use_parametric_adstock=True</code>.</li>
+                        <li><strong>Resolved (June 2026) — legacy adstock default:</strong> the old default two-point blend recovers the <em>clean</em> world at ~28% median error vs 7% parametric. That finding drove a change: <code>use_parametric_adstock=True</code> is now the shipped default; the blend remains an explicit opt-out for reproducing older fits.</li>
                         <li><strong>Open issue — holdout validation:</strong> the holdout path falls back to a logistic curve for non-logistic channels, so holdout predictions are wrong (no crash) for Hill-fit models.</li>
                     </ul>
                 </div>
@@ -508,6 +560,15 @@
                 </a>
             </div>
 
+            <p class="chart-note">
+                <strong>A note on the card numbers</strong> — guide-card figures mirror each guide's baked
+                notebook run. Where a card disagrees with the recorded scorecard (e.g. confounded Search
+                +110/+111% vs the matrix's +69% worst-channel; delayed-carryover median 88% vs 80%;
+                Hill-threshold total +40% vs +38%), the scorecard at
+                <code>tests/synth/results/stress_matrix.md</code> is canonical — the larger figures are
+                earlier bakes recorded under older defaults.
+            </p>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
@@ -519,6 +580,14 @@
                     <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
                 </p>
             </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Cinelli, C. &amp; Hazlett, C. (2020). <em>Making sense of sensitivity: extending omitted variable bias.</em> Journal of the Royal Statistical Society B 82(1), 39&ndash;67. [the robustness value reported per channel in the silent-failure gate]</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D. &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects.</em> Google Research. [the carryover/shape parameterizations several stress worlds violate by design]</li>
+                <li>Chan, D. &amp; Perry, M. (2017). <em>Challenges and Opportunities in Media Mix Modeling.</em> Google Research. [the catalogue of MMM failure modes this series measures rather than lists]</li>
+                <li>Vaver, J. &amp; Koehler, J. (2011). <em>Measuring Ad Effectiveness Using Geo Experiments.</em> Google Research. [the experiment family the fix ladder prescribes when observational identification fails]</li>
+            </ul>
         </main>
     </div>
 

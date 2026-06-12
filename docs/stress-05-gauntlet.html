@@ -242,9 +242,29 @@
                 channels stay wrong, because calibration is surgical, not contagious.
             </p>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How to run the full analyst workflow — EDA pre-flight, naive fit, symptom-driven triage, structural pivots, experiment — on a world with four simultaneous violations and a fully inverted naive ranking.</li>
+                    <li>Why fit quality is not attribution: four specs with R² within 0.011 of each other span truth-gaps from 95% to 31%, and interval width is the one analyst-visible signal that tracks the gap.</li>
+                    <li>Why experiments end arguments exactly where they're aimed — Search 5.59 → 0.65 against a truth of 0.66 — while the untested channels stay wrong, so the honest deliverable is a costed test plan.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_05_the_gauntlet.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_05_the_gauntlet.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2>The world: everything broken at once</h2>
             <p>
-                <code>aurora_kitchen_sink</code> (from <code>tests/synth/dgp.py</code>) is Aurora Coffee Co.:
+                <code>aurora_kitchen_sink</code> (from <code>src/mmm_framework/synth/dgp.py</code>) is Aurora Coffee Co.:
                 two years of weekly data, four channels — and four simultaneous violations, fit
                 <strong>demand-blind</strong> (the demand proxy is the column nobody exported):
             </p>
@@ -625,6 +645,13 @@
                 Symptom → likely cause → cheapest check → pivot → where it's demonstrated. This is the
                 table to copy out of the whole series. Filter by symptom category:
             </p>
+            <div class="note">
+                <p style="margin-bottom: 0;">
+                    📋 This table ships as a printable one-pager — the
+                    <a href="artifacts/diagnostic-checklist.html">MMM Diagnostic Checklist</a>,
+                    with the EDA pre-flight and the fix ladder on the same sheet.
+                </p>
+            </div>
             <div class="controls-row" id="dtFilters">
                 <button class="toggle-btn dt-btn active" data-cat="all">All (15)</button>
                 <button class="toggle-btn dt-btn" data-cat="sampler">Sampler alarms</button>

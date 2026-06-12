@@ -29,11 +29,28 @@ This module quantifies that with three complementary, sample-based diagnostics:
 * **shift_z** ``= (mean_post - mean_prior) / sd_prior`` -- how far, in prior standard
   deviations, the posterior mean moved. Catches pure *location* learning that
   contraction alone misses (a posterior can shift without narrowing).
+* **contraction_robust** -- the same variance-ratio idea computed on the
+  **interquartile range** instead of the standard deviation. The sd is
+  tail-sensitive: heavy posterior tails (a genuine feature of the likelihood, or an
+  artifact of chains that mixed slowly into a region the prior disfavored) inflate
+  ``post_sd`` and drag ``contraction`` negative even when the posterior *bulk*
+  narrowed. If ``contraction`` is negative but ``contraction_robust`` is not, the
+  widening is tail-driven -- corroborate with ``post_ess_bulk`` before reading it
+  as prior-data conflict.
+* **post_ess_bulk** -- the posterior bulk effective sample size per parameter (when
+  chain structure is available). A negative contraction with low ESS may say more
+  about the sampler than the posterior.
 
 Each parameter gets a heuristic ``verdict`` -- ``"strong"`` / ``"moderate"`` /
-``"weak"`` / ``"prior-dominated"`` -- from ``contraction`` and ``overlap`` (the
-thresholds are tunable; treat them as conventions, not law). A ``"prior-dominated"``
-verdict is the diagnostic the user is after: the posterior is essentially the prior.
+``"weak"`` / ``"relocated"`` / ``"prior-dominated"`` -- from ``contraction``,
+``overlap``, and ``shift_z`` (the thresholds are tunable; treat them as conventions,
+not law). A ``"prior-dominated"`` verdict is the diagnostic the user is after: the
+posterior is essentially the prior. ``"relocated"`` is the opposite failure of a
+width-only reading: the posterior **moved at least one prior-sd without narrowing**
+-- the *evidence dominated the location* (the prior was tight in the wrong place);
+the width reflects the likelihood's flatness in the new region (or tail/mixing
+artifacts -- see ``contraction_robust`` / ``post_ess_bulk``), so do not read it as
+"the data taught nothing".
 
 The core :func:`parameter_learning` works on raw samples (arviz ``InferenceData``,
 xarray ``Dataset``, or plain dicts of arrays), so it is unit-testable without a fit.
@@ -64,6 +81,9 @@ _VERDICT_COLORS = {
     "strong": "#3f7d5e",       # green  -- data clearly informed the parameter
     "moderate": "#3b6ea5",     # blue
     "weak": "#d98a2b",         # amber
+    "relocated": "#7b5ea5",    # purple -- moved >= 1 prior-sd without narrowing:
+                               #   evidence dominated the LOCATION; width may be
+                               #   likelihood flatness or tail/mixing inflation
     "prior-dominated": "#a63a50",  # red -- posterior ~ prior
     "undetermined": "#8a8079", # grey   -- degenerate prior (sd 0)
 }
@@ -183,12 +203,24 @@ def _overlap_coefficient(prior: np.ndarray, post: np.ndarray, bins: int) -> floa
 def _verdict(
     contraction: float,
     overlap: float,
+    shift_z: float,
     c_strong: float,
     c_weak: float,
     ovl_dominated: float,
+    z_relocated: float,
 ) -> str:
     if not np.isfinite(contraction):
         return "undetermined"
+    # Relocation outranks the width-based reading: a posterior that MOVED at
+    # least ``z_relocated`` prior-sds without narrowing is evidence-dominated in
+    # location -- the prior was tight in the wrong place. Negative contraction
+    # here is not "the data taught nothing": the width is set by the
+    # likelihood's flatness in the newly-favored region (and possibly inflated
+    # by heavy tails from chains drifting into it -- see contraction_robust /
+    # post_ess_bulk). Without this rule such parameters mislabel as
+    # "weak"/"prior-dominated".
+    if np.isfinite(shift_z) and abs(shift_z) >= z_relocated and contraction < c_weak:
+        return "relocated"
     overlap_high = (not np.isfinite(overlap)) or overlap > ovl_dominated
     if contraction < c_weak and overlap_high:
         return "prior-dominated"
@@ -197,6 +229,56 @@ def _verdict(
     if contraction >= c_weak:
         return "moderate"
     return "weak"  # little narrowing but moved enough to not be prior-dominated
+
+
+def _robust_contraction(prior: np.ndarray, post: np.ndarray) -> float:
+    """IQR-based contraction: tail-insensitive analogue of the variance ratio.
+
+    ``1 - (IQR_post / IQR_prior)^2``. Heavy posterior tails (slow mixing into a
+    region the prior disfavored, or a genuinely heavy-tailed likelihood) inflate
+    the sd-based contraction downward; the IQR tracks the posterior *bulk*. A
+    negative ``contraction`` alongside a non-negative ``contraction_robust`` is
+    the tail-inflation signature.
+    """
+    q1p, q3p = np.percentile(prior, [25, 75])
+    q1q, q3q = np.percentile(post, [25, 75])
+    iqr_prior = q3p - q1p
+    iqr_post = q3q - q1q
+    if iqr_prior <= 0:
+        return float("nan")
+    return float(1.0 - (iqr_post / iqr_prior) ** 2)
+
+
+def _posterior_ess(posterior: Any, names: Sequence[str]) -> dict[str, float]:
+    """Per-(flattened-)parameter bulk ESS where chain structure is available.
+
+    Plain dicts of flattened draws carry no chain information -- those return an
+    empty mapping and the ``post_ess_bulk`` column is NaN.
+    """
+    try:
+        import arviz as az
+
+        if isinstance(posterior, az.InferenceData):
+            ds = posterior["posterior"]
+        elif hasattr(posterior, "data_vars"):
+            ds = posterior
+        else:
+            return {}
+        if "chain" not in ds.dims or "draw" not in ds.dims:
+            return {}
+        ess = az.ess(ds, method="bulk")
+        out: dict[str, float] = {}
+        for name in ess.data_vars:
+            da = ess[name]
+            vals = np.asarray(da.values, dtype=float)
+            if vals.ndim == 0:
+                out[str(name)] = float(vals)
+            else:
+                for idx in np.ndindex(vals.shape):
+                    out[f"{name}[{','.join(map(str, idx))}]"] = float(vals[idx])
+        return {n: v for n, v in out.items() if n in set(names)}
+    except Exception:  # pragma: no cover - ESS is best-effort decoration
+        return {}
 
 
 def parameter_learning(
@@ -208,6 +290,7 @@ def parameter_learning(
     c_strong: float = 0.5,
     c_weak: float = 0.1,
     ovl_dominated: float = 0.85,
+    z_relocated: float = 1.0,
 ) -> pd.DataFrame:
     """How much did the data teach us about each parameter, beyond the prior?
 
@@ -224,11 +307,14 @@ def parameter_learning(
         compares every parameter present in **both** containers.
     bins:
         Histogram resolution for the overlap coefficient.
-    c_strong, c_weak, ovl_dominated:
-        Heuristic verdict thresholds (conventions, not law): ``contraction >=
-        c_strong`` -> ``"strong"``; ``contraction >= c_weak`` -> ``"moderate"``;
-        ``contraction < c_weak`` **and** ``overlap > ovl_dominated`` ->
-        ``"prior-dominated"``; otherwise ``"weak"``.
+    c_strong, c_weak, ovl_dominated, z_relocated:
+        Heuristic verdict thresholds (conventions, not law). Checked in order:
+        ``|shift_z| >= z_relocated`` **and** ``contraction < c_weak`` ->
+        ``"relocated"`` (the posterior moved at least one prior-sd without
+        narrowing -- evidence dominated the *location*); then ``contraction <
+        c_weak`` **and** ``overlap > ovl_dominated`` -> ``"prior-dominated"``;
+        ``contraction >= c_strong`` -> ``"strong"``; ``contraction >= c_weak`` ->
+        ``"moderate"``; otherwise ``"weak"``.
 
     Returns
     -------
@@ -236,13 +322,20 @@ def parameter_learning(
         One row per parameter, sorted by ``contraction`` ascending (so the least-learned,
         most prior-dominated parameters sort to the top). Columns: ``parameter``,
         ``prior_mean``, ``prior_sd``, ``post_mean``, ``post_sd``, ``contraction``,
-        ``overlap``, ``shift_z``, ``verdict``.
+        ``contraction_robust``, ``overlap``, ``shift_z``, ``post_ess_bulk``,
+        ``verdict``.
 
     Notes
     -----
     ``contraction`` is intentionally **not** clipped: a negative value (posterior wider
-    than prior) is a genuine warning sign (prior-data conflict or sampling trouble), not
-    noise to hide.
+    than prior) is a genuine warning sign, but it is **ambiguous on its own** -- it can
+    mean prior-data conflict, a likelihood that is genuinely flat in the newly-favored
+    region, or sd inflation from heavy tails left by chains that mixed slowly into that
+    region. Disambiguate with the companions: a large ``|shift_z|`` says the evidence
+    dominated the location (verdict ``"relocated"``, not a failure to learn);
+    ``contraction_robust`` >= 0 alongside ``contraction`` < 0 says the widening is
+    tail-driven; a low ``post_ess_bulk`` says the width estimate itself may be a
+    sampling artifact -- re-run with more tune/draws before interpreting.
 
     **Informativeness, not importance.** High ``contraction`` / low ``overlap`` means the
     data was *informative* about the parameter -- which **includes confidently pinning it
@@ -261,6 +354,8 @@ def parameter_learning(
         keep = set(var_names)
         names = [n for n in names if n in keep or n.split("[")[0] in keep]
 
+    ess = _posterior_ess(posterior, names)
+
     rows: list[dict[str, Any]] = []
     for name in names:
         a = pri[name][np.isfinite(pri[name])]
@@ -277,6 +372,7 @@ def parameter_learning(
         else:
             contraction = float("nan")
             shift_z = float("nan")
+        contraction_robust = _robust_contraction(a, b)
         overlap = _overlap_coefficient(a, b, bins)
         rows.append(
             {
@@ -286,9 +382,14 @@ def parameter_learning(
                 "post_mean": post_mean,
                 "post_sd": post_sd,
                 "contraction": contraction,
+                "contraction_robust": contraction_robust,
                 "overlap": overlap,
                 "shift_z": shift_z,
-                "verdict": _verdict(contraction, overlap, c_strong, c_weak, ovl_dominated),
+                "post_ess_bulk": ess.get(name, float("nan")),
+                "verdict": _verdict(
+                    contraction, overlap, shift_z,
+                    c_strong, c_weak, ovl_dominated, z_relocated,
+                ),
             }
         )
 
@@ -296,7 +397,8 @@ def parameter_learning(
         rows,
         columns=[
             "parameter", "prior_mean", "prior_sd", "post_mean", "post_sd",
-            "contraction", "overlap", "shift_z", "verdict",
+            "contraction", "contraction_robust", "overlap", "shift_z",
+            "post_ess_bulk", "verdict",
         ],
     )
     if not df.empty:

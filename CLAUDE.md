@@ -267,6 +267,7 @@ Test organization:
 - `tests/` - Core module tests
 - `tests/reporting/` - Reporting module tests
 - `tests/mmm_extensions/` - Extension module tests
+- `tests/test_docs_snippets.py` - Docs code-snippet gate: verifies `docs/*.html` Python blocks only reference real APIs (see `technical-docs/doc-snippet-testing.md`)
 
 ## Common Development Tasks
 

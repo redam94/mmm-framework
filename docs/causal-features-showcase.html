@@ -349,12 +349,12 @@ iv_ok = iv_criterion(dag_iv, "z", "tv", "sales")</code></pre>
     TrendConfig(type=TrendType.LINEAR))
 results = model.fit(random_seed=0)</code></pre>
                 <p class="verdict-line">
-                    <strong>Measured:</strong> 4 chains &times; 1,000 draws in 21 seconds; in-sample
-                    R&sup2; &asymp; <strong>0.924</strong> (with 29 post-tuning divergences at these small
+                    <strong>Measured:</strong> 4 chains &times; 1,000 draws in 16 seconds; in-sample
+                    R&sup2; &asymp; <strong>0.984</strong> (with 12 post-tuning divergences at these small
                     settings — the notebook flags them honestly).
                 </p>
                 <p class="limit-line">
-                    <strong>Limit:</strong> a 0.92 R&sup2; proves nothing about attribution.
+                    <strong>Limit:</strong> a 0.98 R&sup2; proves nothing about attribution.
                     <a href="stress-00-rosy-picture.html">Stress-00</a> measured a confounded fit at +111% bias on
                     one channel with <em>identical</em> green diagnostics to the clean fit. Everything below
                     exists because fit quality is not causal validity.
@@ -373,9 +373,10 @@ results = model.fit(random_seed=0)</code></pre>
                 <div class="chart-container" id="mroasChart"></div>
                 <p class="chart-note">
                     <strong>Measured</strong> from the baked run: marginal ROAS with 90% HDI per channel.
-                    Digital's interval (0.90–6.58) and Search's (0.21–5.86) both straddle huge ranges — exactly
-                    the honesty the point estimate alone would have hidden. TV's interval (0.02–1.31) barely
-                    crosses break-even: the model is telling you it cannot promise the next TV dollar pays back.
+                    Digital's interval (0.07–1.00) and Search's (0.08–1.12) both span from near zero up to
+                    break-even — exactly the honesty the point estimate alone would have hidden. TV's interval
+                    (0.03–0.78) sits entirely below break-even: the model is telling you the next TV dollar
+                    does not pay back.
                 </p>
                 <p class="limit-line">
                     <strong>Limit:</strong> the interval quantifies <em>posterior</em> uncertainty under the
@@ -400,9 +401,9 @@ sens.fragile_channels   # channels a weak confounder could overturn</code></pre>
                 <div class="chart-container short" id="rvChart"></div>
                 <p class="chart-note">
                     <strong>Measured:</strong> RV to nullify each channel's effect, against the 0.10 fragile
-                    threshold. TV 0.170, Digital 0.258, Search 0.182 — no channel flagged fragile
+                    threshold. TV 0.154, Digital 0.178, Search 0.186 — no channel flagged fragile
                     (<code>fragile_channels = []</code>), so overturning any estimate would take a confounder
-                    explaining 17–26% of residual variance on both sides.
+                    explaining 15–19% of residual variance on both sides.
                 </p>
                 <p class="limit-line">
                     <strong>Limit — this is NOT an all-clear:</strong> the stress series measured that the RV is
@@ -550,10 +551,10 @@ lift = LiftTestResult("TV", period, measured_lift, lift_se)
 outcome = calibrate_with_experiments(model, [lift], refit=True,
                                      draws=1000, tune=1000, chains=4)</code></pre>
                 <p class="verdict-line">
-                    <strong>Measured:</strong> baseline-fit &beta;(TV) mean <strong>1.162</strong> &rarr;
-                    experiment-implied &beta; target <strong>1.460</strong>; TV total contribution
-                    <strong>1,389</strong> (baseline) &rarr; <strong>2,223</strong> (experiment target) &rarr;
-                    <strong>1,693</strong> (calibrated refit). The refit moves toward the experiment but does not
+                    <strong>Measured:</strong> baseline-fit &beta;(TV) mean <strong>0.928</strong> &rarr;
+                    experiment-implied &beta; target <strong>0.918</strong>; TV total contribution
+                    <strong>1,016</strong> (baseline) &rarr; <strong>1,626</strong> (experiment target) &rarr;
+                    <strong>1,113</strong> (calibrated refit). The refit moves toward the experiment but does not
                     snap to it — the prior and the data negotiate, as they should.
                 </p>
             </div>
@@ -579,10 +580,10 @@ model_lik.fit(draws=1000, tune=1000, chains=4)</code></pre>
                 <p class="verdict-line">
                     <strong>Measured:</strong> the graph now carries
                     <code>experiment_TV_roas_0_model_estimand</code> — "what the model thinks the experiment
-                    should have measured." TV's model-implied ROAS: uncalibrated &asymp; <strong>0.59</strong>
-                    &rarr; calibrated <strong>0.93</strong>, against a measured <strong>0.95</strong>. TV
-                    contribution 1,389 &rarr; <strong>2,181</strong>, nearly on the 2,223 target — closer than
-                    the prior route's 1,693 because the whole media transform moved jointly.
+                    should have measured." TV's model-implied ROAS: uncalibrated &asymp; <strong>0.43</strong>
+                    &rarr; calibrated <strong>0.68</strong>, against a measured <strong>0.69</strong>. TV
+                    contribution 1,016 &rarr; <strong>1,599</strong>, nearly on the 1,626 target — closer than
+                    the prior route's 1,113 because the whole media transform moved jointly.
                 </p>
                 <div class="controls-row">
                     <label>View:</label>
@@ -592,11 +593,11 @@ model_lik.fit(draws=1000, tune=1000, chains=4)</code></pre>
                 <div class="chart-container" id="calibChart"></div>
                 <p class="chart-note">
                     <strong>Measured</strong> from the baked run, both views.
-                    <strong>Contribution view:</strong> baseline 1,389 vs the prior route's 1,693 and the
-                    likelihood route's 2,181, against the dashed experiment target of 2,223.
-                    <strong>ROAS view:</strong> the model-implied TV ROAS jumps from 0.59 to 0.93 once the
+                    <strong>Contribution view:</strong> baseline 1,016 vs the prior route's 1,113 and the
+                    likelihood route's 1,599, against the dashed experiment target of 1,626.
+                    <strong>ROAS view:</strong> the model-implied TV ROAS jumps from 0.43 to 0.68 once the
                     experiment enters the likelihood; the shaded band is the experiment's &plusmn;1 SE
-                    (0.95 &plusmn; 0.095).
+                    (0.69 &plusmn; 0.069).
                 </p>
                 <p>
                     The same one-line API reaches further — both <strong>measured</strong> from the baked run:
@@ -638,23 +639,23 @@ mv.add_experiment_calibration([ExperimentMeasurement("TV", period,
 summary = ModelValidator(model).validate(cfg)</code></pre>
                 <div class="stat-row">
                     <div class="stat-callout">
-                        <div class="stat-value">0.88</div>
+                        <div class="stat-value">0.98</div>
                         <div class="stat-label">R&sup2; fitting the real KPI (measured)</div>
                     </div>
                     <div class="stat-callout">
                         <div class="stat-value">0.03</div>
                         <div class="stat-label">R&sup2; fitting the scrambled KPI — collapses, as it must</div>
                     </div>
-                    <div class="stat-callout danger">
-                        <div class="stat-value">FLAGGED</div>
-                        <div class="stat-label">placebo-treatment test on this run (small draws; a flag is the suite <em>working</em>)</div>
+                    <div class="stat-callout">
+                        <div class="stat-value">ok</div>
+                        <div class="stat-label">placebo-treatment test on this run (small draws; a flag here would be the suite <em>working</em>, not failing)</div>
                     </div>
                 </div>
                 <p class="verdict-line">
                     <strong>Measured:</strong> <code>negative_control_outcome &rarr; ok</code> (R&sup2;
-                    0.88 &rarr; 0.03), <code>placebo_treatment &rarr; FLAGGED</code>. The notebook is explicit
-                    that a flagged test is the suite surfacing a problem loudly rather than letting it pass
-                    silently.
+                    0.98 &rarr; 0.03), <code>placebo_treatment &rarr; ok</code>. The notebook is explicit
+                    that a flagged test, when one fires, is the suite surfacing a problem loudly rather than
+                    letting it pass silently.
                 </p>
                 <p class="limit-line">
                     <strong>Limit — also NOT an all-clear:</strong> the stress series measured the refutation
@@ -734,7 +735,7 @@ bundle.causal_assumptions["identification_strategy"]</code></pre>
                         all price the fragility of the estimate.</li>
                     <li><strong>Anchor to experiments</strong> — the prior route is simple and robust; the
                         likelihood route updates &beta; + saturation + adstock jointly, speaks ROAS/mROAS, and
-                        works on every model class. Measured: ROAS 0.59 &rarr; 0.93 against a 0.95 experiment.</li>
+                        works on every model class. Measured: ROAS 0.43 &rarr; 0.68 against a 0.69 experiment.</li>
                     <li><strong>No green light is an all-clear</strong> — the RV and the refutation suite are
                         tripwires, not verdicts; the stress series measured both failing to distinguish clean
                         from confounded worlds.</li>
@@ -815,35 +816,35 @@ bundle.causal_assumptions["identification_strategy"]</code></pre>
 
         // Section 5: compute_marginal_contributions(spend_increase_pct=10, hdi_prob=0.9)
         const MROAS = [
-            { channel: 'TV',      color: PT.colors.tv,      roas: 0.474, lo: 0.024, hi: 1.308 },
-            { channel: 'Search',  color: PT.colors.search,  roas: 2.494, lo: 0.206, hi: 5.863 },
-            { channel: 'Digital', color: PT.colors.social,  roas: 3.972, lo: 0.899, hi: 6.583 }
+            { channel: 'TV',      color: PT.colors.tv,      roas: 0.332, lo: 0.029, hi: 0.781 },
+            { channel: 'Search',  color: PT.colors.search,  roas: 0.554, lo: 0.079, hi: 1.117 },
+            { channel: 'Digital', color: PT.colors.social,  roas: 0.487, lo: 0.066, hi: 0.998 }
         ];
 
         // Section 6: UnobservedConfoundingAnalysis(model).run().summary()
         const RV = [
-            { channel: 'TV',      color: PT.colors.tv,     rv: 0.170, pr2: 0.033 },
-            { channel: 'Search',  color: PT.colors.search, rv: 0.182, pr2: 0.039 },
-            { channel: 'Digital', color: PT.colors.social, rv: 0.258, pr2: 0.082 }
+            { channel: 'TV',      color: PT.colors.tv,     rv: 0.154, pr2: 0.027 },
+            { channel: 'Search',  color: PT.colors.search, rv: 0.186, pr2: 0.041 },
+            { channel: 'Digital', color: PT.colors.social, rv: 0.178, pr2: 0.037 }
         ];
 
         // Sections 11 / 11b: calibration outcomes (TV contribution, KPI units; ROAS, ratio)
         const CALIB = {
             contribution: {
                 labels: ['baseline fit (§4)', 'prior route (§11)', 'likelihood route (§11b)'],
-                values: [1389, 1693, 2181],
+                values: [1016, 1113, 1599],
                 colors: ['#9aa79a', '#d4a86a', '#8fa86a'],
-                target: 2223,
-                targetLabel: 'experiment target = 2,223',
+                target: 1626,
+                targetLabel: 'experiment target = 1,626',
                 xtitle: 'TV total contribution (KPI units)'
             },
             roas: {
                 labels: ['uncalibrated (§4)', 'calibrated (§11b)'],
-                values: [0.59, 0.93],
+                values: [0.43, 0.68],
                 colors: ['#9aa79a', '#8fa86a'],
-                target: 0.95,
-                targetLabel: 'experiment = 0.95 (&plusmn;1 SE band)',
-                se: 0.095,
+                target: 0.69,
+                targetLabel: 'experiment = 0.69 (&plusmn;1 SE band)',
+                se: 0.069,
                 xtitle: 'TV ROAS (model-implied estimand)'
             }
         };

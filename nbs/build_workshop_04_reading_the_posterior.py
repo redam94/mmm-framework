@@ -605,7 +605,8 @@ prior samples, compares them with the posterior, and reports:
 - **shift_z** — how far the center moved, in prior standard deviations (a
   posterior can *move* without narrowing — that's still learning);
 - a plain-English **verdict** per parameter: `strong` / `moderate` / `weak` /
-  `prior-dominated`.
+  `relocated` (moved ≥ 1 prior-sd *without* narrowing — the evidence overruled the
+  prior's location; don't read the width as "nothing learned") / `prior-dominated`.
 """),
     code(r"""
 with quiet():
@@ -625,8 +626,8 @@ display(betas_l[["contraction", "overlap", "verdict"]].round(3))
 
 # CLAIM 1: the table is sorted least-learned first and verdicts are well-formed.
 assert learn["contraction"].dropna().is_monotonic_increasing
-assert set(learn["verdict"]) <= {"strong", "moderate", "weak", "prior-dominated",
-                                 "undetermined"}
+assert set(learn["verdict"]) <= {"strong", "moderate", "weak", "relocated",
+                                 "prior-dominated", "undetermined"}
 # CLAIM 2: structural parameters the data sees every week (noise level, trend,
 # intercept) are learned hard...
 struct = learn.set_index("parameter")

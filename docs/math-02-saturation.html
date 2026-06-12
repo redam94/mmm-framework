@@ -201,6 +201,26 @@
                 </p>
             </div>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why the core saturation \(f(x) = 1 - e^{-\lambda x}\) is strictly concave — not "S-shaped" as the docstring claims — and why the genuine S belongs only to Hill with \(n &gt; 1\).</li>
+                    <li>The half-saturation points and slopes of both families: \(\ln 2/\lambda\) for the core curve, exactly \(\kappa\) for Hill at every \(n\).</li>
+                    <li>Why spend is normalized before saturating, and why the ceiling \(f \in [0,1)\) makes contribution \(\beta f\) — and an optimal budget — finite.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_02_saturation.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_02_saturation.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="core">1 · The core curve: \( f(x) = 1 - e^{-\lambda x} \)</h2>
             <p>
                 This is what the default <code>BayesianMMM</code> actually builds, per channel

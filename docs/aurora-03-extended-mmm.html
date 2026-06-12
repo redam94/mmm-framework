@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html">
     <meta property="og:title" content="Aurora 03: Extended Models | MMM Framework">
-    <meta property="og:description" content="The base model called TV weak (ROAS 0.21 vs a true 2.14). The NestedMMM shows why: its effect flows ~100% through awareness. Then a cannibalization posterior sits entirely below zero — and the honest diagnostic flips the verdict.">
+    <meta property="og:description" content="The base model called TV weak (ROAS 0.35 vs a true 2.14). The NestedMMM shows why: its effect flows ~100% through awareness. Then a cannibalization posterior sits entirely below zero — and the honest diagnostic flips the verdict.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -168,6 +168,25 @@
                 confirmed and turns out to be the prior talking.
             </p>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00–05</a> (Bayesian fluency assumed) — or equivalent.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~35–45 min reading + fit time if running
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why the base model structurally undervalues Aurora's brand channels (TV read 0.35 vs a true 2.14) — and how NestedMMM recovers the TV → awareness → sales pathway from 26 monthly survey points.</li>
+                    <li>How MultivariateMMM models Original and Cold Brew together with a cross-effect, and why the honest cannibalization test is contraction and overlap, not the sign of a one-sided prior.</li>
+                    <li>How a claim that looks confirmed against the answer key can turn out to be the prior talking — and where the extension traps live.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/03_extended_mmm.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/03_extended_mmm.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2>The blind spot, quantified</h2>
             <p>
                 In Aurora's true data-generating process, TV and Display barely touch sales directly. They
@@ -180,10 +199,10 @@
             <p class="chart-note">
                 <strong>Measured</strong> — base-model ROAS from the chapter-2 fit
                 (<code>nbs/02_base_mmm.ipynb</code>) vs the known true ROAS from the Aurora generator
-                (<code>nbs/aurora.py</code>). TV: 0.21 vs 2.14. Display: 0.46 vs 2.11. Meanwhile Search
+                (<code>nbs/aurora.py</code>). TV: 0.35 vs 2.14. Display: 0.67 vs 2.11. Meanwhile Search
                 — the demand-chasing mirage from <a href="aurora-00-overview.html">chapter 0</a> — reads
-                2.82 against a truth of 0.66. The base model undervalues the brand engines by ~10× and
-                overvalues the demand-chaser by ~4×.
+                1.05 against a truth of 0.66. The base model undervalues the brand engines three- to
+                six-fold and overvalues the demand-chaser by ~60%.
             </p>
 
             <div class="note">
@@ -230,8 +249,8 @@ med = nested.get_mediation_effects()</code></pre>
             <div class="chart-container" id="mediationStackChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — <code>get_mediation_effects()</code> from the baked notebook:
-                TV direct 0.05 vs indirect 151.08 (total 151.13); Display direct 0.12 vs indirect 185.99
-                (total 186.11). The direct slices are so small they are invisible at this scale — that
+                TV direct 0.05 vs indirect 151.48 (total 151.53); Display direct 0.11 vs indirect 186.28
+                (total 186.39). The direct slices are so small they are invisible at this scale — that
                 <em>is</em> the finding. <code>proportion_mediated</code> = 1.00 for both channels.
                 Search and Social were not mapped to the mediator (they are pure direct-response channels
                 in Aurora's world), so the decomposition applies only to the brand channels.
@@ -269,7 +288,7 @@ med = nested.get_mediation_effects()</code></pre>
                 <p>
                     TV and Display aren't weak — they're <strong>brand engines</strong> whose value lives
                     entirely in the awareness pathway (true ROAS ≈ 2.1 for both). The base model saw only
-                    the direct slice and read them at 0.21 and 0.46. This is the single finding that turns
+                    the direct slice and read them at 0.35 and 0.67. This is the single finding that turns
                     chapter 5's <a href="aurora-05-unified-workflow.html">budget reallocation</a> from
                     "cut the brand channels" to "feed them."
                 </p>
@@ -380,7 +399,7 @@ ce = mv.get_cross_effects_summary()</code></pre>
                     <div class="stat-label">prior↔posterior overlap — the densities barely touch</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">0.012%</div>
+                    <div class="stat-value">0.013%</div>
                     <div class="stat-label">of Original's weekly sales — the size of the "confirmed" cross-effect</div>
                 </div>
                 <div class="stat-callout">
@@ -395,8 +414,8 @@ ce = mv.get_cross_effects_summary()</code></pre>
                     The diagnostic clears the first hurdle: contraction = 1.000 and overlap = 0.052
                     (measured), so the posterior is <em>not</em> a prior artifact — the data genuinely
                     spoke. But "the data spoke" is not "the effect is real" — read <em>what</em> it said.
-                    The data pinned ψ to <strong>essentially zero</strong>: a posterior mean of −0.00028,
-                    worth 0.012% of Original's weekly sales. Within this model there is <strong>little
+                    The data pinned ψ to <strong>essentially zero</strong>: a posterior mean of −0.00030,
+                    worth 0.013% of Original's weekly sales. Within this model there is <strong>little
                     direct cannibalization</strong>. \( P(\psi &lt; 0) \approx 1 \) was the near-vacuous
                     part — under a one-sided prior, the sign is automatic. Contraction told us the data
                     was informative; the posterior <em>mean</em> told us it found a negligible effect.
@@ -463,7 +482,8 @@ ce = mv.get_cross_effects_summary()</code></pre>
                 <h4>What to take away</h4>
                 <ul>
                     <li><strong>The base model structurally undervalues mediated channels.</strong> TV read
-                        0.21 and Display 0.46 against true ROAS of 2.14 and 2.11 — a ~10× miss no amount of
+                        0.35 and Display 0.67 against true ROAS of 2.14 and 2.11 — a three- to six-fold miss
+                        no amount of
                         sampling can fix, because the model had no awareness pathway to route credit through.</li>
                     <li><strong>NestedMMM recovers the pathway and grades out.</strong> Measured
                         <code>proportion_mediated</code> = 1.00 for TV and Display vs true mediated shares of
@@ -472,7 +492,7 @@ ce = mv.get_cross_effects_summary()</code></pre>
                         Cold Brew → Original ψ posterior sat entirely below zero (94% HDI [−0.0008, −0.0000])
                         — but ψ ≤ 0 was true before any data. The honest test is contraction and overlap.</li>
                     <li><strong>The honest verdict flipped the naive one.</strong> Contraction = 1.000,
-                        overlap = 0.052: the data pinned ψ — to essentially zero (0.012% of weekly sales).
+                        overlap = 0.052: the data pinned ψ — to essentially zero (0.013% of weekly sales).
                         Little direct cannibalization; the products co-move via a shared demand wave
                         (residual correlation +0.41) and should be planned together for that reason.</li>
                     <li><strong>Extensions are cure and disease.</strong> Shared-mediator over-crediting and
@@ -570,10 +590,10 @@ ce = mv.get_cross_effects_summary()</code></pre>
         // ------------------------------------------------------------------
         const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
         const CH_COLORS = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
-        const BASE_ROAS = [0.21, 2.82, 0.85, 0.46];      // nbs/02_base_mmm.ipynb cell "ROAS vs truth"
+        const BASE_ROAS = [0.35, 1.05, 0.64, 0.67];      // nbs/02_base_mmm.ipynb cell "ROAS vs truth"
         const TRUE_ROAS = [2.14, 0.66, 0.49, 2.11];      // aurora.py true_roas
-        const MED_DIRECT   = { TV: 0.05,   Display: 0.12   };  // 03 nb: get_mediation_effects()
-        const MED_INDIRECT = { TV: 151.08, Display: 185.99 };
+        const MED_DIRECT   = { TV: 0.05,   Display: 0.11   };  // 03 nb: get_mediation_effects()
+        const MED_INDIRECT = { TV: 151.48, Display: 186.28 };
         const PROP_TRUE  = [0.99, 0.00, 0.00, 0.97];     // aurora.py true_mediated_share
         const PROP_MODEL = [1.00, 0.00, 0.00, 1.00];     // model proportion_mediated (Search/Social: not mapped)
         const PSI_MEAN = -0.0003, PSI_HDI = [-0.0008, -0.0000];   // 03 nb cross-effect summary
@@ -644,11 +664,11 @@ ce = mv.get_cross_effects_summary()</code></pre>
                 legend: { orientation: 'h', y: 1.12 },
                 margin: { l: 70, r: 30, t: 40, b: 50 },
                 annotations: [
-                    { x: 'TV', y: 151.13, yanchor: 'bottom', showarrow: false,
-                      text: 'direct 0.05 · indirect 151.08<br>proportion mediated 1.00',
+                    { x: 'TV', y: 151.53, yanchor: 'bottom', showarrow: false,
+                      text: 'direct 0.05 · indirect 151.48<br>proportion mediated 1.00',
                       font: { size: 11, color: '#5a6b5a' } },
-                    { x: 'Display', y: 186.11, yanchor: 'bottom', showarrow: false,
-                      text: 'direct 0.12 · indirect 185.99<br>proportion mediated 1.00',
+                    { x: 'Display', y: 186.39, yanchor: 'bottom', showarrow: false,
+                      text: 'direct 0.11 · indirect 186.28<br>proportion mediated 1.00',
                       font: { size: 11, color: '#5a6b5a' } }
                 ]
             });

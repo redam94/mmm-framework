@@ -78,6 +78,31 @@
             font-size: 0.8rem;
             color: var(--color-accent);
         }
+        .screenshot-figure {
+            margin: 1.75rem 0;
+        }
+        .screenshot-figure img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            box-shadow: var(--shadow-md);
+        }
+        .screenshot-figure figcaption {
+            margin-top: 0.6rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            line-height: 1.5;
+        }
+        .screenshot-figure figcaption .shot-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--color-primary-dark);
+            margin-right: 0.6em;
+        }
     </style>
 </head>
 <body>
@@ -87,6 +112,10 @@
         <div class="container">
             <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Product Tour</span>
             <h1>The MMM Framework Platform</h1>
+            <p style="margin: -0.25rem 0 0.75rem;">
+                <span class="tag tag-warning">Beta</span>
+                <span style="font-size: 0.9rem;">Platform status: the web UI, agent workspace, and planning engine are on the Beta tier &mdash; see the <a href="changelog.html#stability">Changelog</a>.</span>
+            </p>
             <p class="lead">
                 One place to run the whole measurement loop — from the first data check to calibrated budget decisions. This tour walks through each area of the app and shows where every step of the cycle lives.
             </p>
@@ -168,6 +197,15 @@
             <p>
                 Program is home base — the page you open Monday morning. A stage ring shows where your measurement program sits in the T₀–T₅ cycle, headline KPIs summarize the current model&rsquo;s view of the business, and a next-best-actions list tells you what the program needs next: a data refresh, an experiment readout, a refit. A coverage map shows which channels have been validated by experiments and which still rest on observational evidence alone — like an account review that flags which line items have receipts. An activity log keeps the recent history of the program in one place.
             </p>
+            <figure class="screenshot-figure">
+                <img src="assets/screenshots/platform-program.png" loading="lazy"
+                     alt="Program page: measurement-cycle stage ring (T0–T5), headline KPIs including portfolio marginal ROI and misallocation proxy, next-best-action cards, calibration coverage, and recent activity">
+                <figcaption><span class="shot-tag">Screenshot · /program</span>The seeded
+                demo project (&ldquo;Adaptive Measurement Loop&rdquo;): the T₀&ndash;T₅ cycle
+                strip, headline KPIs with cycle-over-cycle deltas, and the next-best-actions
+                queue — here recommending a calibrated refit and flagging an unvalidated
+                channel for testing. Captured from a local dev build (Beta).</figcaption>
+            </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
@@ -190,6 +228,23 @@
             <p>
                 The Design-experiment studio drafts a concrete test plan for you. Three designs are offered: randomized matched-pair geo lift (markets matched on residual co-movement and covariates, with power calibrated by placebo simulation), matched-market difference-in-differences, and budget-neutral randomized flighting for national data where geo splits are not available.
             </p>
+            <figure class="screenshot-figure">
+                <img src="assets/screenshots/platform-experiments.png" loading="lazy"
+                     alt="Experiments page: EIG/EVOI priority matrix scatter plot with channels placed by expected information gain and expected value of information, quadrants labeled test now, learn cheaply, monitor, deprioritize">
+                <figcaption><span class="shot-tag">Screenshot · /experiments</span>The
+                EIG/EVOI priority matrix on the demo project: Search sits in
+                &ldquo;test&nbsp;now&rdquo; (high information gain, high dollar value), the
+                small collinear channels cluster near &ldquo;monitor&rdquo;. Marker size
+                tracks spend share; color marks experiment-backed vs model-only evidence.</figcaption>
+            </figure>
+            <figure class="screenshot-figure">
+                <img src="assets/screenshots/platform-lifecycle.png" loading="lazy"
+                     alt="Experiments lifecycle board: kanban columns draft, planned, running, completed, calibrated with experiment cards carrying dates and measured ROAS readouts">
+                <figcaption><span class="shot-tag">Screenshot · /experiments · lifecycle board</span>Every
+                test moves draft &rarr; planned &rarr; running &rarr; completed &rarr;
+                calibrated — pre-registered before results are seen, carrying its measured
+                readout (ROAS ± SE) once complete, and feeding the next calibrated fit.</figcaption>
+            </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
@@ -203,7 +258,7 @@
             <div class="note">
                 <h4>For analysts</h4>
                 <p>
-                    EIG uses the closed form 0.5&middot;ln(1 + &sigma;&sup2;<sub>post</sub>/&sigma;&sup2;<sub>exp</sub>); EVOI is the preposterior dollar value of deciding the budget with versus without the experiment, with EVPI as the perfect-information upper bound. Priority is the geometric mean of normalized EIG&times;EVOI. Information decays as &sigma;&sup2;<sub>eff</sub>(t) = &sigma;&sup2;<sub>post</sub>&middot;e<sup>&lambda;t</sup>, with half-lives of roughly 26 weeks for digital and 52 weeks for TV and brand media. Deciding which experiment to run is worked through in <a href="workflow-calibration-decisions.html">the calibration-decisions workshop</a>.
+                    EIG uses the closed form 0.5&middot;ln(1 + &sigma;&sup2;<sub>post</sub>/&sigma;&sup2;<sub>exp</sub>); EVOI is the preposterior dollar value of deciding the budget with versus without the experiment, with EVPI as the perfect-information upper bound. Priority is the geometric mean of normalized EIG&times;EVOI. Information decays as &sigma;&sup2;<sub>eff</sub>(t) = &sigma;&sup2;<sub>post</sub>&middot;e<sup>&lambda;t</sup>; the platform&rsquo;s default decay assumptions set &lambda; to half-lives of 26 weeks for digital and 52 weeks for TV and brand media&mdash;configurable modeling priors, not empirical industry estimates. Deciding which experiment to run is worked through in <a href="workflow-calibration-decisions.html">the calibration-decisions workshop</a>.
                 </p>
             </div>
         </div>
@@ -215,6 +270,14 @@
             <p>
                 Performance is the program&rsquo;s scorecard across cycles. Trajectories show how channel estimates have moved and tightened from one fit to the next — uncertainty should narrow as experiments land. The model-vs-experiment agreement log is the honesty check: it records, side by side, what the model predicted and what each real-world test measured, like comparing the recipe to the taste test. A runs timeline keeps every model fit on the record.
             </p>
+            <figure class="screenshot-figure">
+                <img src="assets/screenshots/platform-performance.png" loading="lazy"
+                     alt="Performance page: CI contraction line chart per channel across cycles, budget-share migration area chart, misallocation and portfolio marginal ROI trajectories">
+                <figcaption><span class="shot-tag">Screenshot · /performance</span>Cycle-over-cycle
+                trajectories on the demo program: per-channel 90% interval widths falling as
+                experiments calibrate the model (left), and budget share migrating toward the
+                better-evidenced channels (right).</figcaption>
+            </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
@@ -235,6 +298,16 @@
             <p>
                 Two things set it apart from a generic chatbot. First, it can practice on synthetic worlds with known ground truth — simulated markets where the true ROI is on file — including scenarios that deliberately break naive models (hidden confounders, multicollinearity, mis-specified saturation, trend breaks, geo panels), so you can see how the method behaves before trusting it on your data. Second, its Python runs in a sandboxed kernel: code executes in an isolated environment, and tabular results render as sortable dashboard tables rather than walls of text. When the analysis is done, it generates branded HTML client reports in your colors.
             </p>
+            <figure class="screenshot-figure">
+                <img src="assets/screenshots/platform-workspace.png" loading="lazy"
+                     alt="Agent workspace: MMM Copilot chat on the left, scientific workflow checklist with stages from define the question through communicate results on the right, causal planner below">
+                <figcaption><span class="shot-tag">Screenshot · /workspace</span>The copilot
+                answering a portfolio question beside the scientific-workflow checklist it
+                walks (define &rarr; EDA &rarr; build &rarr; prior checks &rarr; fit &rarr;
+                diagnostics &rarr; posterior checks &rarr; sensitivity &rarr; communicate)
+                and the causal planner. The chat, plan, data, model, and results tabs share
+                one session.</figcaption>
+            </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>

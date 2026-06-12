@@ -208,10 +208,29 @@
             <div class="note">
                 <h4>💡 The series' honesty device, stated up front</h4>
                 <p>
-                    The data below was <em>generated</em> by code in this repo (<code>tests/synth/dgp.py</code>),
+                    The data below was <em>generated</em> by code in this repo (<code>src/mmm_framework/synth/dgp.py</code>),
                     so we hold the answer key: the true contribution of every channel. Real marketing data never
                     comes with one — which is exactly why we train on data that does. It is the only way to
                     <em>grade ourselves</em> instead of merely admiring a converged model.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>–<a href="workshop-02-sampling.html">02</a>.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~60–75 min
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>That an MMM is the Bayesian workflow wearing a marketing costume: generative story → priors → likelihood → NUTS → posterior, with parameters given business names like adstock and saturation.</li>
+                    <li>How to pass the diagnostics gate before reading anything — and why it certifies the computation, never the attribution.</li>
+                    <li>Why channel contributions are derived quantities, not parameters — and how grading a fit against a sealed answer key shows what a trustworthy posterior looks like.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/workshop_03_first_mmm.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/workshop_03_first_mmm.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -769,7 +788,7 @@ mmm = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))</code></pre>
         }
 
         // ------------------------------------------------------------------
-        // The transform math — identical to tests/synth/dgp.py
+        // The transform math — identical to src/mmm_framework/synth/dgp.py
         // ------------------------------------------------------------------
         function geomAdstock(x, alpha, lmax) {
             lmax = lmax || 8;
@@ -790,7 +809,7 @@ mmm = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))</code></pre>
         }
 
         // ------------------------------------------------------------------
-        // The clean world's true constants (tests/synth/dgp.py) — for the
+        // The clean world's true constants (src/mmm_framework/synth/dgp.py) — for the
         // illustrative recreation and the "snap to truth" button.
         // ------------------------------------------------------------------
         const CHANNELS = ['TV', 'Search', 'Social', 'Display'];

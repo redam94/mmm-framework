@@ -283,6 +283,7 @@ class ModelConfigBuilder:
         self._bootstrap_samples: int = 1000
         self._optim_maxiter: int = 500
         self._optim_seed: int | None = 42
+        self._use_parametric_adstock: bool = True
 
     # Model specification
     def additive(self) -> Self:
@@ -296,6 +297,21 @@ class ModelConfigBuilder:
         return self
 
     # Inference method
+    def with_parametric_adstock(self, enabled: bool = True) -> Self:
+        """Estimate a continuous in-graph adstock kernel per channel (default).
+
+        Honors each ``MediaChannelConfig.adstock`` (geometric, delayed, or
+        Weibull). Pass ``enabled=False`` for the legacy fixed-alpha blend —
+        the pre-2026-06 default, kept for reproducing older fits.
+        """
+        self._use_parametric_adstock = enabled
+        return self
+
+    def with_legacy_blend_adstock(self) -> Self:
+        """Use the legacy fixed-alpha-bank blend adstock (pre-change default)."""
+        self._use_parametric_adstock = False
+        return self
+
     def bayesian_pymc(self) -> Self:
         """Use PyMC for Bayesian inference (CPU)."""
         self._inference_method = InferenceMethod.BAYESIAN_PYMC
@@ -425,6 +441,7 @@ class ModelConfigBuilder:
             bootstrap_samples=self._bootstrap_samples,
             optim_maxiter=self._optim_maxiter,
             optim_seed=self._optim_seed,
+            use_parametric_adstock=self._use_parametric_adstock,
         )
 
 

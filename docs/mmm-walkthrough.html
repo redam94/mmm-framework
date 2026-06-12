@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/mmm-walkthrough.html">
     <meta property="og:title" content="The MMM Walkthrough | MMM Framework">
-    <meta property="og:description" content="What the MMM workflow looks like when the world is kind: naive fit 109% wrong on Search with green diagnostics, the DAG-driven revision pulls it to +9%, and lift tests pin what the data cannot. Every number measured against known truth.">
+    <meta property="og:description" content="What the MMM workflow looks like when the world is kind: naive fit 101% wrong on Search with green diagnostics, the DAG-driven revision pulls it to +7%, and lift tests pin what the data cannot. Every number measured against known truth.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/mmm-walkthrough.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -184,17 +184,17 @@
                     <div class="stat-label">media's true share of sales — a small, confounded slice</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">+109%</div>
-                    <div class="stat-label">the naive fit's error on Search — with r-hat 1.004</div>
+                    <div class="stat-value">+101%</div>
+                    <div class="stat-label">the naive fit's error on Search — with r-hat 1.021</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">+9%</div>
+                    <div class="stat-value">+7%</div>
                     <div class="stat-label">the same channel after the causal revision</div>
                 </div>
             </div>
 
             <p>
-                The world is <code>tests/synth/dgp.make_realistic(seed=42)</code>: 156 weekly observations,
+                The world is <code>mmm_framework.synth.dgp.make_realistic(seed=42)</code>: 156 weekly observations,
                 7 media channels (TV, Search, Social, Display, Video, Radio, Print) and 13 candidate
                 controls. Because the data is synthetic, every channel's <em>true</em> counterfactual
                 contribution is recorded — so each modeling iteration gets graded, not guessed at.
@@ -203,6 +203,31 @@
                 <a href="getting-started.html">Getting Started</a>; this page assumes you know what a fit
                 looks like and shows you the <em>workflow around it</em>.
             </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop&nbsp;03</a>
+                    or equivalent — this page assumes you know what a fit looks like.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~60–90 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why pre-fit EDA (CoV, VIF, the max/median screen, spend-vs-demand correlation,
+                        control classification) decides identifiability before any sampling — and why
+                        green sampler diagnostics say nothing about attribution.</li>
+                    <li>How DAG-driven control classification — not more data or tuning — turns a naive
+                        fit's +101% Search error into +7%.</li>
+                    <li>What lift-test calibration can and cannot fix (anchored coefficient SDs contract
+                        several-fold; TV's residual bias survives), and how to ship recommendations with
+                        honest confidence labels instead of bare point estimates.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/mmm_walkthrough.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/mmm_walkthrough.ipynb</code></a> on GitHub.
+                </p>
+            </div>
 
             <h2 id="eda">Part 1 — EDA before you model</h2>
             <p>
@@ -349,6 +374,14 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                 </p>
             </div>
 
+            <div class="note">
+                <p style="margin-bottom: 0;">
+                    📋 This checklist exists as a printable one-pager — the
+                    <a href="artifacts/diagnostic-checklist.html">MMM Diagnostic Checklist</a>
+                    (EDA pre-flight + the symptom→diagnosis→action table + the fix ladder).
+                </p>
+            </div>
+
             <h2 id="model">Part 2 — The pre-specified model and the prior gate</h2>
             <p>
                 <strong>Question:</strong> each channel's incremental contribution, with honest uncertainty,
@@ -370,7 +403,7 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
             <p>
                 <strong>The prior predictive gate:</strong> do the priors generate plausible sales before
                 seeing the likelihood? Measured: the prior-predictive 90% KPI range is
-                <strong>[687, 1751]</strong> against an observed range of <strong>[544, 1145]</strong> —
+                <strong>[685, 1750]</strong> against an observed range of <strong>[544, 1145]</strong> —
                 the observed mean (814) sits comfortably inside the prior band, which is neither absurdly
                 wide nor too tight to contain the data. Priors pass; proceed.
             </p>
@@ -380,7 +413,7 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                 A first pass <strong>without the DAG</strong>: include the obvious controls and the
                 tempting <code>brand_awareness</code>, but omit the demand confounders — their back-door
                 is invisible until you draw the story. The diagnostics gate
-                <strong>passes</strong>: r-hat&nbsp;=&nbsp;1.004, one post-tuning divergence, 20.7&nbsp;s
+                <strong>passes</strong>: r-hat&nbsp;=&nbsp;1.021, zero post-tuning divergences, 11.4&nbsp;s
                 wall-clock. And the answer is badly wrong.
             </p>
 
@@ -395,18 +428,20 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                 <strong>Measured</strong> — estimated total contribution per channel (bars) against the
                 recorded ground truth (dark ticks), for each of the three iterations. Hover for the full
                 grade row: relative error, whether truth landed in the 90% interval, the relative interval
-                width, and the prior→posterior learning verdict. v1: Search +109% and TV −42% with truth
-                <em>outside</em> their intervals. v2: every confounded channel snaps back (Search +9%,
-                TV −18%). v3: lift tests pin Radio/Print/TV/Search coefficients — and expose TV's residual
-                bias (−19%, truth now outside the narrowed interval).
+                width, and the prior→posterior learning verdict. v1: Search +101% and TV −45% with truth
+                <em>outside</em> their intervals. v2: every confounded channel snaps back (Search +7%,
+                TV −18% — though TV's truth stays just outside its interval, and its learning verdict
+                reads <em>relocated</em>: the posterior moved more than a prior-sd without narrowing).
+                v3: lift tests pin Radio/Print/TV/Search coefficients — and TV's residual bias survives
+                (−19%, truth still outside the now-narrowed interval).
             </p>
 
             <div class="warning">
                 <h4>⚠️ Failure mode #1 — confident &amp; wrong</h4>
                 <p>
                     Computational diagnostics check the <em>sampler</em>, not the <em>causal structure</em>.
-                    v1 converged cleanly (r-hat 1.004) and would pass a posterior-predictive check — yet
-                    Search is +109% and TV −42%, both with truth outside the 90% interval. Two causal
+                    v1 converged cleanly (r-hat 1.021) and would pass a posterior-predictive check — yet
+                    Search is +101% and TV −45%, both with truth outside the 90% interval. Two causal
                     errors at work: omitting the demand proxies leaves the back-door open (TV, Search
                     inflate or distort), and including the <code>brand_awareness</code> mediator absorbs
                     part of TV's and Video's effect. This is the silent-failure mode that
@@ -420,16 +455,17 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                 Revise using the DAG: <strong>add the confounders</strong>
                 (<code>category_demand</code>, <code>distribution</code>) with a wide, un-shrunk prior via
                 <code>CausalControlRole.CONFOUNDER</code>; <strong>drop the mediator</strong>; keep the
-                precision controls. Measured result (r-hat 1.004, zero divergences, 20.0&nbsp;s): the large
-                confounded/mediated errors collapse — TV −42%&nbsp;→&nbsp;−18%, Search
-                +109%&nbsp;→&nbsp;+9%, Video −29%&nbsp;→&nbsp;+9% — and <strong>every channel's truth is
-                inside its 90% interval</strong>. Toggle the chart above to v2 and compare.
+                precision controls. Measured result (r-hat 1.020, zero divergences, 10.2&nbsp;s): the large
+                confounded/mediated errors collapse — TV −45%&nbsp;→&nbsp;−18%, Search
+                +101%&nbsp;→&nbsp;+7%, Video −33%&nbsp;→&nbsp;+9% — and <strong>every channel's truth but
+                TV's is inside its 90% interval</strong> (TV's sits just outside; the residual-bias thread
+                below picks that up). Toggle the chart above to v2 and compare.
             </p>
             <p>
                 Two confirmations that the structure is doing its job, both measured from the posterior:
                 the demand confounder is now the largest-credited control
-                (coefficient 0.306, distribution 0.189), and the six <code>noise_*</code> controls are
-                shrunk to ≈ 0 (between −0.09 and +0.10) by the regularizing prior — automatic soft
+                (coefficient 0.308, distribution 0.191), and the six <code>noise_*</code> controls are
+                shrunk to ≈ 0 (between −0.10 and +0.11) by the regularizing prior — automatic soft
                 variable selection, no extra step.
             </p>
 
@@ -446,12 +482,13 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
             <p class="chart-note">
                 <strong>Measured</strong> — posterior mean |coefficient| for every control under the
                 Normal prior vs the horseshoe, grouped by true role. The horseshoe drives the irrelevant
-                noise controls markedly closer to zero (e.g. noise_3: 0.104&nbsp;→&nbsp;0.043, noise_2:
-                0.024&nbsp;→&nbsp;0.002) while the confounders keep — or grow — their full coefficients
-                (category_demand 0.306&nbsp;→&nbsp;0.311). Honest caveat: in this low-SNR world it also
+                noise controls markedly closer to zero (e.g. noise_3: 0.113&nbsp;→&nbsp;0.022, noise_2:
+                0.023&nbsp;→&nbsp;0.003) while the confounders keep — or grow — their full coefficients
+                (category_demand 0.308&nbsp;→&nbsp;0.306, distribution 0.191&nbsp;→&nbsp;0.217). Honest
+                caveat: in this low-SNR world it also
                 shrinks the genuinely-weak precision controls, which is why the framework keeps selection
                 <strong>off by default</strong>. The horseshoe fit sampled clean (0 divergences) but
-                slower (22.5&nbsp;s vs 20.0&nbsp;s) — it adds a per-control tau/lambda/c2/z hierarchy.
+                slower (11.6&nbsp;s vs 10.2&nbsp;s) — it adds a per-control tau/lambda/c2/z hierarchy.
                 More on this trade in <a href="variable-selection.html">Variable Selection</a> and
                 <a href="stress-03-confounding-selection.html">stress&nbsp;03</a>.
             </p>
@@ -466,8 +503,9 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                     honest signal of the collinear pair EDA flagged in §1.3. A wide interval is the model
                     routing you to an experiment.</li>
                 <li><strong>TV is still ~18% low, and nothing flags it:</strong> residual confounding from
-                    a <em>noisy</em> demand proxy that the control only partly removes. In this run TV's
-                    truth sits just inside its 90% interval, so even the coverage column looks clean — no
+                    a <em>noisy</em> demand proxy that the control only partly removes. In this run the
+                    grader's coverage column does show the miss (truth just outside the 90% interval) —
+                    but that column needs the answer key a real analyst never has; no
                     observational diagnostic catches a noisy-proxy bias
                     (<a href="stress-03-confounding-selection.html">stress&nbsp;03</a> measures this trap
                     in isolation: ~+35% residual bias with green checks).</li>
@@ -488,9 +526,9 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
             <p class="chart-note">
                 <strong>Measured</strong> — posterior SD of each channel's coefficient before (v2) and
                 after (v3) calibration. The four anchored channels contract sharply: TV
-                0.93&nbsp;→&nbsp;0.36, Search 0.46&nbsp;→&nbsp;0.10, Radio 0.71&nbsp;→&nbsp;0.10, Print
-                0.68&nbsp;→&nbsp;0.06. The three un-anchored channels barely move (Social
-                0.61&nbsp;→&nbsp;0.60, Display 0.70&nbsp;→&nbsp;0.69, Video 0.67&nbsp;→&nbsp;0.68) —
+                1.05&nbsp;→&nbsp;0.39, Search 0.44&nbsp;→&nbsp;0.10, Radio 0.68&nbsp;→&nbsp;0.10, Print
+                0.70&nbsp;→&nbsp;0.07. The three un-anchored channels move far less (Social
+                0.68&nbsp;→&nbsp;0.57, Display 0.71&nbsp;→&nbsp;0.72, Video 0.67&nbsp;→&nbsp;0.71) —
                 calibration is surgical, not contagious.
             </p>
 
@@ -498,8 +536,8 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                 <h4>⚠️ The honest limit — what survives even calibration</h4>
                 <p>
                     Toggle the grade chart to v3: TV's <em>contribution</em> barely improves (−19%, and
-                    truth now sits <em>outside</em> the narrowed interval; learning verdict:
-                    <strong>prior-dominated</strong>). Pinning a coefficient is not enough when the channel
+                    truth still sits <em>outside</em> the narrowed interval; learning verdict:
+                    <strong>weak</strong>). Pinning a coefficient is not enough when the channel
                     is heavily confounded through a noisy proxy — the lift-to-coefficient conversion
                     inherits the residual bias. TV needs a better demand proxy or a cleaner, TV-specific
                     experiment; until then its number is <strong>provisional</strong>. A single lift test
@@ -519,29 +557,29 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                     <tr><th>Channel</th><th>True</th><th>Est (v3)</th><th>Err</th><th>In 90% CI</th><th>Evidence</th><th>Confidence</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>TV</td><td class="num">8948</td><td class="num">7217</td><td class="num bad">−19%</td><td class="bad">✗</td><td>lift-anchored</td><td class="bad">PROVISIONAL (residual bias)</td></tr>
-                    <tr><td>Search</td><td class="num">3978</td><td class="num">4482</td><td class="num">+13%</td><td class="good">✓</td><td>lift-anchored</td><td class="good">usable</td></tr>
-                    <tr><td>Social</td><td class="num">3948</td><td class="num">4608</td><td class="num">+17%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
-                    <tr><td>Display</td><td class="num">3090</td><td class="num">3601</td><td class="num">+17%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
-                    <tr><td>Video</td><td class="num">8286</td><td class="num">8895</td><td class="num">+7%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
-                    <tr><td>Radio</td><td class="num">3301</td><td class="num">1731</td><td class="num">−48%</td><td class="good">✓</td><td>lift-anchored</td><td>wide — report as a pair</td></tr>
-                    <tr><td>Print</td><td class="num">2097</td><td class="num">2091</td><td class="num">−0%</td><td class="good">✓</td><td>lift-anchored</td><td>wide — report as a pair</td></tr>
+                    <tr><td>TV</td><td class="num">8948</td><td class="num">7218</td><td class="num bad">−19%</td><td class="bad">✗</td><td>lift-anchored</td><td class="bad">PROVISIONAL (residual bias)</td></tr>
+                    <tr><td>Search</td><td class="num">3978</td><td class="num">4471</td><td class="num">+12%</td><td class="good">✓</td><td>lift-anchored</td><td class="good">usable</td></tr>
+                    <tr><td>Social</td><td class="num">3948</td><td class="num">4597</td><td class="num">+16%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
+                    <tr><td>Display</td><td class="num">3090</td><td class="num">3627</td><td class="num">+17%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
+                    <tr><td>Video</td><td class="num">8286</td><td class="num">8970</td><td class="num">+8%</td><td class="good">✓</td><td>observational + DAG</td><td class="good">usable</td></tr>
+                    <tr><td>Radio</td><td class="num">3301</td><td class="num">1789</td><td class="num">−46%</td><td class="good">✓</td><td>lift-anchored</td><td>wide — report as a pair</td></tr>
+                    <tr><td>Print</td><td class="num">2097</td><td class="num">2041</td><td class="num">−3%</td><td class="good">✓</td><td>lift-anchored</td><td>wide — report as a pair</td></tr>
                 </tbody>
             </table>
             <p>
                 <strong>Budget guidance (the notebook's closing line):</strong> shift toward
                 well-identified winners (Search, Video); treat the collinear Radio/Print pair as one line
                 item; <strong>HOLD</strong> provisional channels (TV) pending a cleaner experiment. Note
-                Radio's −48% point error sits inside an interval ~2× the estimate — the pair's individual
+                Radio's −46% point error sits inside an interval ~2× the estimate — the pair's individual
                 numbers are honestly wide, which is exactly why they're reported as one line item.
             </p>
 
             <h2 id="compute">How much compute did this take?</h2>
             <p>
                 Measured wall-clock from the baked run (156 obs, 7 channels, 1000 draws × 4 chains,
-                NumPyro): v1 naive <strong>20.7&nbsp;s</strong>, v2 causal <strong>20.0&nbsp;s</strong>,
-                v2 + horseshoe <strong>22.5&nbsp;s</strong>, v3 calibration refit
-                <strong>19.6&nbsp;s</strong> — <strong>83&nbsp;s total across 4 fits</strong>. Cost
+                NumPyro): v1 naive <strong>11.4&nbsp;s</strong>, v2 causal <strong>10.2&nbsp;s</strong>,
+                v2 + horseshoe <strong>11.6&nbsp;s</strong>, v3 calibration refit
+                <strong>9.8&nbsp;s</strong> — <strong>43&nbsp;s total across 4 fits</strong>. Cost
                 drivers from the robustness study: time scales with observations and draws, super-linearly
                 in channels (the adstock kernel sits inside every gradient step); NumPyro runs ~2× faster
                 than the PyMC sampler at equal draws; the horseshoe's per-control hierarchy costs extra;
@@ -583,13 +621,13 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
                     <strong>1.</strong> EDA decides identifiability before any fit: CoV, VIF, the
                     max/median screen, spend-vs-demand correlation, and control classification each take
                     seconds and catch what sampling never will.<br>
-                    <strong>2.</strong> The naive fit was +109% wrong on Search with r-hat 1.004 — green
+                    <strong>2.</strong> The naive fit was +101% wrong on Search with r-hat 1.021 — green
                     diagnostics are a statement about the sampler, never about attribution.<br>
-                    <strong>3.</strong> The single biggest improvement (Search +109% → +9%, TV −42% → −18%)
+                    <strong>3.</strong> The single biggest improvement (Search +101% → +7%, TV −45% → −18%)
                     came from classifying controls — adding confounders un-shrunk, dropping the mediator —
                     not from more data or tuning.<br>
                     <strong>4.</strong> Calibration is surgical: anchored coefficient SDs contract
-                    several-fold (Print 0.68 → 0.06) while un-anchored channels don't move — but a lift
+                    several-fold (Print 0.70 → 0.07) while un-anchored channels barely move — but a lift
                     test pins a slope, and TV's −19% residual bias survives it.<br>
                     <strong>5.</strong> The deliverable carries confidence labels: usable / wide — report
                     as a pair / PROVISIONAL. Never a bare point estimate.
@@ -712,39 +750,39 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
         const TRUE_CONTRIB = { TV: 8948, Search: 3978, Social: 3948, Display: 3090, Video: 8286, Radio: 3301, Print: 2097 };
         const GRADES = {
             v1: {
-                label: 'v1 · naive (no DAG)', rhat: '1.004', div: 1, secs: 20.7,
+                label: 'v1 · naive (no DAG)', rhat: '1.021', div: 0, secs: 11.4,
                 rows: {
-                    TV:      { est: 5161, err: '-42%',  inCI: false, relCI: 0.7, sd: 0.90, learn: 'weak' },
-                    Search:  { est: 8311, err: '+109%', inCI: false, relCI: 0.7, sd: 0.37, learn: 'strong' },
-                    Social:  { est: 4028, err: '+2%',   inCI: true,  relCI: 0.6, sd: 0.78, learn: 'moderate' },
-                    Display: { est: 4060, err: '+31%',  inCI: true,  relCI: 1.2, sd: 0.72, learn: 'strong' },
-                    Video:   { est: 5870, err: '-29%',  inCI: true,  relCI: 1.7, sd: 0.80, learn: 'moderate' },
-                    Radio:   { est: 2416, err: '-27%',  inCI: true,  relCI: 1.9, sd: 0.71, learn: 'moderate' },
-                    Print:   { est: 2131, err: '+2%',   inCI: true,  relCI: 2.2, sd: 0.65, learn: 'strong' }
+                    TV:      { est: 4948, err: '-45%',  inCI: false, relCI: 0.7, sd: 0.99, learn: 'weak' },
+                    Search:  { est: 7998, err: '+101%', inCI: false, relCI: 0.7, sd: 0.31, learn: 'strong' },
+                    Social:  { est: 4040, err: '+2%',   inCI: true,  relCI: 0.7, sd: 0.83, learn: 'moderate' },
+                    Display: { est: 3815, err: '+23%',  inCI: true,  relCI: 1.2, sd: 0.71, learn: 'strong' },
+                    Video:   { est: 5586, err: '-33%',  inCI: true,  relCI: 1.7, sd: 0.77, learn: 'moderate' },
+                    Radio:   { est: 2501, err: '-24%',  inCI: true,  relCI: 1.9, sd: 0.74, learn: 'moderate' },
+                    Print:   { est: 2132, err: '+2%',   inCI: true,  relCI: 2.1, sd: 0.70, learn: 'strong' }
                 }
             },
             v2: {
-                label: 'v2 · causal structure', rhat: '1.004', div: 0, secs: 20.0,
+                label: 'v2 · causal structure', rhat: '1.020', div: 0, secs: 10.2,
                 rows: {
-                    TV:      { est: 7314, err: '-18%', inCI: true, relCI: 0.4, sd: 0.93, learn: 'moderate' },
-                    Search:  { est: 4324, err: '+9%',  inCI: true, relCI: 0.7, sd: 0.46, learn: 'strong' },
-                    Social:  { est: 4604, err: '+17%', inCI: true, relCI: 0.8, sd: 0.61, learn: 'strong' },
-                    Display: { est: 3548, err: '+15%', inCI: true, relCI: 1.1, sd: 0.70, learn: 'strong' },
-                    Video:   { est: 9007, err: '+9%',  inCI: true, relCI: 0.5, sd: 0.67, learn: 'strong' },
-                    Radio:   { est: 2081, err: '-37%', inCI: true, relCI: 1.9, sd: 0.71, learn: 'strong' },
-                    Print:   { est: 1800, err: '-14%', inCI: true, relCI: 2.2, sd: 0.68, learn: 'strong' }
+                    TV:      { est: 7319, err: '-18%', inCI: false, relCI: 0.4, sd: 1.05, learn: 'relocated' },
+                    Search:  { est: 4271, err: '+7%',  inCI: true, relCI: 0.7, sd: 0.44, learn: 'strong' },
+                    Social:  { est: 4588, err: '+16%', inCI: true, relCI: 0.7, sd: 0.68, learn: 'moderate' },
+                    Display: { est: 3644, err: '+18%', inCI: true, relCI: 1.1, sd: 0.71, learn: 'moderate' },
+                    Video:   { est: 9070, err: '+9%',  inCI: true, relCI: 0.5, sd: 0.67, learn: 'moderate' },
+                    Radio:   { est: 2148, err: '-35%', inCI: true, relCI: 1.9, sd: 0.68, learn: 'strong' },
+                    Print:   { est: 1741, err: '-17%', inCI: true, relCI: 2.2, sd: 0.70, learn: 'moderate' }
                 }
             },
             v3: {
-                label: 'v3 · + lift-test calibration', rhat: '1.004', div: 0, secs: 19.6,
+                label: 'v3 · + lift-test calibration', rhat: '1.025', div: 0, secs: 9.8,
                 rows: {
-                    TV:      { est: 7217, err: '-19%', inCI: false, relCI: 0.4, sd: 0.36, learn: 'prior-dominated' },
-                    Search:  { est: 4482, err: '+13%', inCI: true,  relCI: 0.6, sd: 0.10, learn: 'moderate' },
-                    Social:  { est: 4608, err: '+17%', inCI: true,  relCI: 0.8, sd: 0.60, learn: 'strong' },
-                    Display: { est: 3601, err: '+17%', inCI: true,  relCI: 1.1, sd: 0.69, learn: 'strong' },
-                    Video:   { est: 8895, err: '+7%',  inCI: true,  relCI: 0.5, sd: 0.68, learn: 'strong' },
-                    Radio:   { est: 1731, err: '-48%', inCI: true,  relCI: 2.0, sd: 0.10, learn: 'weak' },
-                    Print:   { est: 2091, err: '-0%',  inCI: true,  relCI: 2.4, sd: 0.06, learn: 'weak' }
+                    TV:      { est: 7218, err: '-19%', inCI: false, relCI: 0.4, sd: 0.39, learn: 'weak' },
+                    Search:  { est: 4471, err: '+12%', inCI: true,  relCI: 0.6, sd: 0.10, learn: 'moderate' },
+                    Social:  { est: 4597, err: '+16%', inCI: true,  relCI: 0.7, sd: 0.57, learn: 'strong' },
+                    Display: { est: 3627, err: '+17%', inCI: true,  relCI: 1.1, sd: 0.72, learn: 'strong' },
+                    Video:   { est: 8970, err: '+8%',  inCI: true,  relCI: 0.5, sd: 0.71, learn: 'strong' },
+                    Radio:   { est: 1789, err: '-46%', inCI: true,  relCI: 2.0, sd: 0.10, learn: 'weak' },
+                    Print:   { est: 2041, err: '-3%',  inCI: true,  relCI: 2.2, sd: 0.07, learn: 'weak' }
                 }
             }
         };
@@ -753,18 +791,18 @@ Radio ≈ Print (collinear)                            (needs an experiment to s
         // Control |coefficient|: Normal prior vs horseshoe (posterior means).
         const SHRINK = [
             // [name, role, normal, horseshoe]
-            ['category_demand',  'confounder', 0.306, 0.311],
-            ['distribution',     'confounder', 0.189, 0.251],
-            ['price',            'precision',  0.094, 0.059],
-            ['holiday',          'precision',  0.060, 0.051],
-            ['competitor_promo', 'precision',  0.046, 0.026],
-            ['weather',          'precision',  0.013, 0.001],
-            ['noise_3',          'irrelevant', 0.104, 0.043],
-            ['noise_5',          'irrelevant', 0.086, 0.047],
-            ['noise_4',          'irrelevant', 0.036, 0.017],
-            ['noise_2',          'irrelevant', 0.024, 0.002],
-            ['noise_1',          'irrelevant', 0.015, 0.003],
-            ['noise_6',          'irrelevant', 0.003, 0.006]
+            ['category_demand',  'confounder', 0.308, 0.306],
+            ['distribution',     'confounder', 0.191, 0.217],
+            ['price',            'precision',  0.094, 0.057],
+            ['holiday',          'precision',  0.060, 0.048],
+            ['competitor_promo', 'precision',  0.049, 0.019],
+            ['weather',          'precision',  0.014, 0.001],
+            ['noise_3',          'irrelevant', 0.113, 0.022],
+            ['noise_5',          'irrelevant', 0.097, 0.025],
+            ['noise_4',          'irrelevant', 0.035, 0.021],
+            ['noise_2',          'irrelevant', 0.023, 0.003],
+            ['noise_1',          'irrelevant', 0.017, 0.004],
+            ['noise_6',          'irrelevant', 0.004, 0.002]
         ];
 
         // ------------------------------------------------------------------

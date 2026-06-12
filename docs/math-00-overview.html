@@ -282,6 +282,26 @@
                 </p>
             </div>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How the full additive mean function \(\mu_t\) plus a Normal likelihood forms a complete generative recipe — and why fitting the model is running that recipe backwards.</li>
+                    <li>What every default prior in the model is, and the two structural commitments they bake in before any data arrive: monotone increasing, concave response curves.</li>
+                    <li>How one draw from the prior generates a plausible year of sales whose decomposition is exactly additive — the picture the fitted model must recover.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_00_overview.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_00_overview.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2>The generative equation</h2>
             <p>
                 The framework first <strong>standardizes</strong> the KPI so all priors live on a common,
@@ -386,9 +406,10 @@
                 </thead>
                 <tbody>
                     <tr><td>\(\text{intercept}\)</td><td>\(\mathrm{Normal}(0,\,0.5)\)</td><td>baseline near the KPI mean (data are standardized)</td></tr>
-                    <tr><td>\(\beta_c\) (channel)</td><td>\(\mathrm{Gamma}(\mu{=}1.5,\,\sigma{=}1.0)\)</td><td><strong>positive</strong> effect, mass above 1 (encourages ROI &gt; 1&times;); or an experiment-calibrated prior (<a href="math-05-calibration.html">math 05</a>)</td></tr>
+                    <tr><td>\(\beta_c\) (channel)</td><td>\(\mathrm{Gamma}(\mu{=}1.5,\,\sigma{=}1.0)\)</td><td><strong>positive</strong> effect with mass above 1 on the <em>standardized max-contribution</em> scale — \(\beta_c\) is the channel's standardized contribution ceiling, <strong>not</strong> its ROI (dollar ROI also depends on spend, saturation, and KPI scale); or an experiment-calibrated prior (<a href="math-05-calibration.html">math 05</a>)</td></tr>
                     <tr><td>\(\lambda_c\) (saturation rate)</td><td>\(\mathrm{Exponential}(0.5)\)</td><td>mostly gentle saturation; mean \(1/0.5 = 2\)</td></tr>
-                    <tr><td>\(m_c\) (adstock blend)</td><td>\(\mathrm{Beta}(2,\,2)\)</td><td><strong>mix weight</strong> between two fixed-\(\alpha\) geometric adstocks, centered at 0.5 — <em>not</em> a decay rate (<a href="math-01-adstock.html">math 01</a>)</td></tr>
+                    <tr><td>\(\alpha_c\) (adstock decay — <strong>the default</strong>)</td><td>\(\mathrm{Beta}(1,\,3)\) (geometric)</td><td>continuous in-graph decay (<code>use_parametric_adstock=True</code>, the default since June 2026) — prior mean 0.25; delayed adds \(\theta_c \sim \mathrm{HalfNormal}(2)\), Weibull uses Gamma shape/scale. Made the default after the stress series measured the legacy blend at ~28% error vs ~7% parametric on carryover-sensitive worlds</td></tr>
+                    <tr><td>\(m_c\) (legacy adstock blend, opt-out)</td><td>\(\mathrm{Beta}(2,\,2)\)</td><td><strong>mix weight</strong> between two fixed-\(\alpha\) geometric adstocks, centered at 0.5 — <em>not</em> a decay rate (<a href="math-01-adstock.html">math 01</a>); the pre-change default, via <code>use_parametric_adstock=False</code></td></tr>
                     <tr><td>seasonality coefficients</td><td>\(\mathrm{Normal}(0,\,0.3)\)</td><td>small, symmetric Fourier amplitudes</td></tr>
                     <tr><td>\(\beta^{\text{ctrl}}_j\)</td><td>\(\mathrm{Normal}(0,\,\sigma_{\text{ctrl}})\)</td><td>linear control; <em>wider</em> prior for a flagged confounder</td></tr>
                     <tr><td>geo scale</td><td>\(\mathrm{HalfNormal}(0.3)\)</td><td>spread of geo offsets (hierarchical scale)</td></tr>
@@ -406,9 +427,11 @@
                     media cannot <em>hurt</em> the KPI. This is a strong, deliberate modeling choice (and
                     the lever experiment calibration tightens; <a href="math-05-calibration.html">math 05</a>,
                     <a href="stress-05-gauntlet.html">stress 05</a>).
-                    <strong>\(m_c\) is a Beta <em>blend weight</em>, not a decay rate.</strong> By default
-                    the model precomputes geometric adstock at two fixed decay rates and learns how much to
-                    lean on each. <a href="math-01-adstock.html">Math 01</a> dissects this in full.
+                    <strong>The default adstock now estimates a real decay rate</strong>
+                    (\(\alpha_c\) in-graph, since June 2026). On the <em>legacy</em> path,
+                    \(m_c\) is a Beta <em>blend weight</em>, not a decay rate — the model precomputes
+                    geometric adstock at two fixed decay rates and learns how much to lean on each.
+                    <a href="math-01-adstock.html">Math 01</a> dissects both in full.
                 </p>
             </div>
 
@@ -523,8 +546,10 @@
                 samples one value of every parameter from its exact framework prior —
                 \(\beta_c \sim \mathrm{Gamma}(\mu{=}1.5, \sigma{=}1.0)\),
                 \(\lambda_c \sim \mathrm{Exponential}(0.5)\), intercept, trend slope, two Fourier
-                coefficients, \(\sigma\) — plus an <em>illustrative</em> per-channel geometric decay
-                \(\alpha_c \sim \mathrm{Beta}(2,2)\) (the default model learns a blend weight instead;
+                coefficients, \(\sigma\) — plus a per-channel geometric decay
+                \(\alpha_c \sim \mathrm{Beta}(2,2)\) (illustratively wider than the shipped default
+                prior \(\mathrm{Beta}(1,3)\); the default model estimates exactly such an
+                \(\alpha_c\) in-graph since June 2026 —
                 <a href="math-01-adstock.html">math 01</a>). It then pushes a fixed two-year, four-channel
                 spend plan through adstock &#8594; saturation &#8594; \(\beta\), assembles \(\mu_t\), adds
                 \(\mathrm{Normal}(0, \sigma)\) noise, and decomposes the result. The spend plan never
@@ -627,7 +652,7 @@
                 Every term in \(\mu_t\) that we just sampled gets a dedicated page.
                 <a href="math-01-adstock.html"><strong>Math 01</strong></a> derives carryover: the
                 geometric IIR recurrence vs normalized FIR kernels, the \(1/(1-\alpha)\) multiplier, and
-                why the default adstock parameter is a Beta(2,2) <em>blend weight</em>.
+                the parametric default vs the legacy Beta(2,2) <em>blend weight</em>.
                 <a href="math-02-saturation.html"><strong>Math 02</strong></a> owns diminishing returns:
                 \(1 - e^{-\lambda u}\) vs Hill, the half-saturation point \(\ln 2 / \lambda\), and marginal
                 ROAS. <a href="math-03-seasonality-trend.html"><strong>Math 03</strong></a> builds the
@@ -665,7 +690,7 @@
                 <ul>
                     <li>The MMM is one additive mean function \(\mu_t\) plus a Normal likelihood — a complete <strong>generative recipe</strong>. Fitting inverts it.</li>
                     <li>The media term is \(\sum_c \beta_c\, \mathrm{sat}_c(\mathrm{adstock}_c(x_{c,t}))\): carryover, then diminishing returns (\(1 - e^{-\lambda u}\), <em>not</em> Hill), then a strictly positive coefficient.</li>
-                    <li>The default priors are weakly informative and exactly tabulated: \(\beta \sim \mathrm{Gamma}(\mu{=}1.5, \sigma{=}1)\), \(\lambda \sim \mathrm{Exp}(0.5)\), \(\sigma \sim \mathrm{HalfNormal}(0.5)\), and a \(\mathrm{Beta}(2,2)\) adstock <em>blend weight</em> — not a decay rate.</li>
+                    <li>The default priors are weakly informative and exactly tabulated: \(\beta \sim \mathrm{Gamma}(\mu{=}1.5, \sigma{=}1)\), \(\lambda \sim \mathrm{Exp}(0.5)\), \(\sigma \sim \mathrm{HalfNormal}(0.5)\), an in-graph adstock decay \(\alpha_c \sim \mathrm{Beta}(1,3)\) (the default since June 2026; the legacy path's \(\mathrm{Beta}(2,2)\) adstock parameter is a <em>blend weight</em>, not a decay rate).</li>
                     <li>One prior draw generates a plausible year of sales whose decomposition is <em>exactly</em> additive — the picture the fitted model must recover when only the dots are observed.</li>
                     <li>The priors bake in two structural commitments before any data arrive: response curves are monotone increasing and concave. Math 01&ndash;06 make every term precise.</li>
                 </ul>

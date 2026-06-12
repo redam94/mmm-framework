@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMM Diagnostic Checklist — MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #6abf8a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.6;
+        }
+
+        .report-container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2rem;
+            counter-reset: report-section;
+        }
+
+        /* Header — editorial masthead */
+        .report-header {
+            border-top: 4px solid var(--color-primary-dark);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1.5rem 0 1.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .masthead-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        .report-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.3rem;
+            font-weight: 400;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+            margin-bottom: 0.6rem;
+            max-width: 20em;
+        }
+
+        .report-header .subtitle {
+            font-size: 1rem;
+            color: var(--color-text-muted);
+            max-width: 44em;
+        }
+
+        /* Section styling — numbered, editorial */
+        .section {
+            background: var(--color-surface);
+            border-radius: 10px;
+            padding: 1.75rem 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--color-border);
+            counter-increment: report-section;
+        }
+
+        .section > h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: var(--color-text);
+            margin-bottom: 1.1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            position: relative;
+        }
+
+        .section > h2::before {
+            content: counter(report-section, decimal-leading-zero);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            color: var(--color-primary-dark);
+            display: block;
+            margin-bottom: 0.4rem;
+        }
+
+        .section > h2::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -1px;
+            width: 3.5rem;
+            height: 2px;
+            background: var(--color-primary);
+        }
+
+        .section h3 {
+            font-size: 1.05rem;
+            color: var(--color-text);
+            margin-top: 1.25rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .section p {
+            margin-bottom: 0.9rem;
+            color: var(--color-text);
+        }
+
+        .section-subtitle {
+            color: var(--color-text-muted);
+            font-size: 0.92rem;
+            margin-bottom: 1.25rem;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88em;
+            background: var(--color-bg-alt);
+            border-radius: 4px;
+            padding: 0.1em 0.35em;
+        }
+
+        /* Key metrics grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .metric-card {
+            display: flex;
+            flex-direction: column;
+            background: var(--color-surface);
+            border-radius: 8px;
+            padding: 1.2rem 1.3rem 1.1rem;
+            text-align: left;
+            border: 1px solid var(--color-border);
+            border-top: 3px solid var(--color-primary);
+            break-inside: avoid;
+        }
+
+        .metric-card .label {
+            order: -1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 0.6rem;
+        }
+
+        .metric-card .value {
+            font-size: 1.6rem;
+            font-weight: 600;
+            line-height: 1.2;
+            color: var(--color-text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-card .ci {
+            font-size: 0.78rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-card.highlight {
+            border-top-color: var(--color-accent);
+            background: var(--color-bg-alt);
+        }
+
+        /* Callout boxes */
+        .callout {
+            border-radius: 8px;
+            padding: 1.1rem 1.3rem;
+            margin: 1.25rem 0;
+            break-inside: avoid;
+        }
+
+        .callout h4 {
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+            font-size: 0.93rem;
+        }
+
+        .callout.insight {
+            background: rgba(106, 143, 168, 0.1);
+            border: 1px solid rgba(106, 143, 168, 0.3);
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .callout.insight h4 { color: var(--color-accent-dark); }
+
+        .callout.warning {
+            background: rgba(212, 168, 106, 0.1);
+            border: 1px solid rgba(212, 168, 106, 0.3);
+            border-left: 4px solid var(--color-warning);
+        }
+
+        .callout.warning h4 { color: #b8860b; }
+
+        .callout.danger {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+        }
+
+        .callout.danger h4 { color: var(--color-danger); }
+
+        /* Tables — editorial: rule-based, tabular numerals */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.25rem 0;
+            font-size: 0.88rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.55rem 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+
+        .data-table th {
+            background: transparent;
+            border-bottom: 2px solid var(--color-text);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            color: var(--color-text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .data-table tbody tr { break-inside: avoid; }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .data-table .mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82em;
+        }
+
+        /* Checklist rows — printable empty checkbox via bordered span */
+        .check-list { margin: 0.75rem 0 0.25rem; }
+
+        .check-item {
+            display: flex;
+            gap: 0.85rem;
+            align-items: baseline;
+            padding: 0.55rem 0.25rem;
+            border-bottom: 1px solid var(--color-border);
+            break-inside: avoid;
+        }
+
+        .check-item:last-child { border-bottom: none; }
+
+        .check-box {
+            flex: none;
+            display: inline-block;
+            width: 0.9em;
+            height: 0.9em;
+            border: 1.5px solid var(--color-text-muted);
+            border-radius: 2px;
+            background: var(--color-surface);
+            transform: translateY(0.12em);
+        }
+
+        .check-body { flex: 1; }
+
+        .check-what {
+            font-weight: 600;
+            font-size: 0.93rem;
+        }
+
+        .check-catches {
+            display: block;
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            margin-top: 0.1rem;
+        }
+
+        /* Fill-in fields — bottom-bordered blanks with mono placeholder */
+        .fill-field {
+            display: inline-block;
+            min-width: 11em;
+            margin: 0 0.3em;
+            padding: 0.05em 0.5em 0;
+            border-bottom: 1px solid var(--color-text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            line-height: 2.1;
+            vertical-align: baseline;
+        }
+
+        .fill-field.wide {
+            display: block;
+            width: 100%;
+            margin: 0.65rem 0;
+        }
+
+        .fill-field.tall { line-height: 3.2; }
+
+        .metric-card .ci .fill-field { min-width: 4em; margin: 0 0.15em; }
+
+        .fill-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 0.4rem 1.5rem;
+            margin: 0.75rem 0 1rem;
+        }
+
+        .fill-grid .fill-field { display: block; margin: 0.35rem 0; }
+
+        /* Signature block */
+        .signature-block {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 2rem;
+            margin-top: 2.25rem;
+            break-inside: avoid;
+        }
+
+        .signature-line {
+            border-top: 1px solid var(--color-text);
+            margin-top: 2.6rem;
+            padding-top: 0.4rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.66rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+        }
+
+        /* Index page artifact cards */
+        .artifact-card {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: 8px;
+            padding: 1.1rem 1.4rem;
+            margin: 0.9rem 0;
+            break-inside: avoid;
+        }
+
+        .artifact-card:hover { background: var(--color-bg-alt); }
+
+        .artifact-card .artifact-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.15rem;
+            color: var(--color-text);
+            margin-bottom: 0.25rem;
+        }
+
+        .artifact-card .artifact-desc {
+            color: var(--color-text-muted);
+            font-size: 0.92rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .artifact-card .artifact-file {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--color-primary-dark);
+        }
+
+        ol.fix-ladder { margin: 0.75rem 0 0.5rem 1.4rem; }
+
+        ol.fix-ladder li {
+            margin-bottom: 0.7rem;
+            break-inside: avoid;
+        }
+
+        /* Footer — colophon */
+        .report-footer {
+            text-align: left;
+            border-top: 1px solid var(--color-border);
+            margin-top: 2rem;
+            padding: 1.25rem 0 2rem;
+            color: var(--color-text-muted);
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .report-container { padding: 1rem; }
+            .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .report-header h1 { font-size: 1.7rem; }
+        }
+
+        /* Print styles — these are printed and filled in by hand */
+        @page {
+            margin: 14mm 15mm;
+        }
+
+        @media print {
+            /* rem-based sizes scale from the root: shrink it once, everything follows */
+            html { font-size: 10.5px; }
+            body { background: white; font-size: 0.85rem; line-height: 1.4; }
+            .report-container { max-width: none; padding: 0; margin: 0; }
+            .report-header {
+                border-top-width: 5px;
+                padding: 0.6rem 0 0.9rem;
+                margin-bottom: 1.1rem;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .report-header h1 { font-size: 1.7rem; }
+            .masthead-meta { margin-bottom: 0.8rem; }
+            .section {
+                box-shadow: none;
+                border: none;
+                border-top: 1px solid #ddd;
+                border-radius: 0;
+                padding: 0.6rem 0;
+                margin-bottom: 0.15rem;
+            }
+            .section > h2 { font-size: 1.15rem; margin-bottom: 0.5rem; padding-bottom: 0.35rem; }
+            .section > h2::before { margin-bottom: 0.15rem; }
+            .section > h2::before,
+            .section > h2::after,
+            .metric-card,
+            .check-box,
+            .callout {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .data-table { font-size: 0.7rem; margin: 0.7rem 0; }
+            .data-table th, .data-table td { padding: 0.28rem 0.4rem; }
+            .data-table tbody tr:hover { background: transparent; }
+            .check-item { padding: 0.25rem 0.1rem; }
+            .check-catches { font-size: 0.78rem; }
+            .callout { padding: 0.6rem 0.85rem; margin: 0.7rem 0; }
+            .metrics-grid { gap: 0.7rem; margin: 0.8rem 0; }
+            .metric-card { padding: 0.7rem 0.85rem 0.6rem; }
+            .fill-field { line-height: 1.9; }
+            .fill-field.tall { line-height: 2.6; }
+            .fill-grid { gap: 0.2rem 1.2rem; margin: 0.5rem 0 0.7rem; }
+            .signature-block { margin-top: 1.2rem; }
+            .signature-line { margin-top: 1.8rem; }
+            ol.fix-ladder li { margin-bottom: 0.35rem; }
+            .section p { margin-bottom: 0.55rem; }
+            .section-subtitle { margin-bottom: 0.7rem; }
+            .signature-block { page-break-inside: avoid; }
+            .artifact-card { box-shadow: none; }
+            .report-footer { page-break-inside: avoid; padding-bottom: 0; margin-top: 1.25rem; }
+            a { color: inherit; text-decoration: none; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <header class="report-header">
+            <div class="masthead-meta">
+                <span class="masthead-kind">MMM Framework — Consultant Artifact</span>
+                <span class="masthead-date">v0.1.0 · 2026-06-12</span>
+            </div>
+            <h1>MMM Diagnostic Checklist</h1>
+            <div class="subtitle">EDA pre-flight, the symptom → diagnosis → action decision table, and the fix ladder — the one-pager to keep next to every fit.</div>
+        </header>
+        <section class="section"><h2>EDA pre-flight</h2><p class="section-subtitle">Run before the first fit. Minutes of work that flag most failures before any sample is drawn.</p><div class="check-list"><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Outlier screen — every channel's spend max/median well under the ~8× danger line.</span><span class="check-catches">Catches data-entry spikes and one-off bursts that crush max-based normalization and silently flatten the response curve.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Identifiability screen — spend CoV high enough (≳ 0.3) for every channel.</span><span class="check-catches">Catches nearly always-on channels with almost no variation to learn from: expect prior-dominated, wide posteriors no matter what you do observationally. Flag them for experiments now, before any fit.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Collinearity screen — no spend pair with |corr| > 0.9 / VIF > 10 left unhandled.</span><span class="check-catches">Catches channel splits the data cannot identify: the combined effect is identified, the split isn't.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Demand-chasing screen (the mirage table) — corr(spend, KPI) next to corr(spend, demand proxy) for every channel.</span><span class="check-catches">Catches confounded ROAS: when spend chases demand, corr(spend, KPI) measures the bidding rule, not the ad. If spend is driven by demand, the demand proxy is a mandatory control.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Causal-role classification — every control classified: confounder (must include, don't shrink) / precision control / mediator (exclude as control) / irrelevant.</span><span class="check-catches">Catches mediators included as controls — controlling for what a channel is bought to do destroys that channel's effect. The mediator call comes from institutional knowledge, not a correlation screen.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">KPI structure read — trend, seasonality, and level breaks understood before fitting.</span><span class="check-catches">Catches regime changes a constant-coefficient MMM can't absorb; never let media absorb a break.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Pre-specification — adstock, saturation, priors, trend/seasonality pre-specified now, before seeing results.</span><span class="check-catches">Catches researcher degrees of freedom: structural pivots must later be chosen from symptoms, never from disliked answers.</span></span></div></div></section><section class="section"><h2>Symptom → diagnosis → action</h2><p class="section-subtitle">The decision table. Find the symptom, run the cheap check, take the pivot.</p><table class="data-table"><thead><tr><th>#</th><th>Symptom</th><th>Likely cause</th><th>Cheap check</th><th>Action</th></tr></thead><tbody><tr><td>1</td><td>Divergences / r-hat &gt; 1.01</td><td>Model fighting the data (misspecification, conflict-laden priors) — not merely a tuning problem</td><td>Where do divergent draws sit? Does the conflict survive <code>target_accept</code> 0.95?</td><td>Triage parameters (learning, pair plots) <strong>before</strong> re-tuning; fix the structure the conflict points at</td></tr><tr><td>2</td><td>One channel's HDI ≫ its estimate</td><td>Weak/flat spend (low CoV) — intercept-confounded</td><td>CoV &lt; ~0.3?</td><td>Report the interval, or buy an experiment; no model rescues a flat series</td></tr><tr><td>3</td><td>Two channels' HDIs huge <em>and</em> their spends correlated</td><td>Collinearity — the combined effect is identified, the split isn't</td><td>Spend corr &gt; ~0.9 / VIF &gt; 10</td><td>Group them, or lift-test one channel to anchor the split</td></tr><tr><td>4</td><td>PPC fails (shape / autocorrelation)</td><td>Missing time structure: trend break, seasonality, carryover misspecification</td><td>Plot residuals over time and by season</td><td>Richer trend / seasonality / adstock — then re-check</td></tr><tr><td>5</td><td>PPC <strong>passes</strong></td><td>— it certifies fit, not attribution</td><td>(none — that's the point)</td><td>Never read a green PPC as causal validation</td></tr><tr><td>6</td><td>Confounding robustness value (RV) low on a channel</td><td>Estimate would be nullified by a mild confounder</td><td>Does a candidate confounder that strong exist?</td><td>Find/keep the proxy control; calibrate</td></tr><tr><td>7</td><td>RV high but a plausible confounder is <em>known</em></td><td>RV measures required strength, not existence</td><td>corr(spend, proxy), corr(proxy, KPI)</td><td>Control the proxy regardless; RV is no green light</td></tr><tr><td>8</td><td>Parameter prior-dominated (contraction ≈ 0, overlap ≈ 1)</td><td>The data carries no information (flat, collinear, short window)</td><td>CoV, spend correlations, window length</td><td>Experiment, or own the prior in the writeup</td></tr><tr><td>9</td><td><strong>Negative contraction</strong> + big shift</td><td>Prior–data conflict — often confounding demanding an absurd effect</td><td>corr(spend, demand proxy)</td><td>Close the back-door; if it persists, calibrate</td></tr><tr><td>10</td><td>Estimate piled on the sign constraint (β ≈ 0 under a positive prior)</td><td>True effect negative (cannibalization) or mediated-away</td><td>Cross-product / holdout correlations; mediator inventory</td><td>Allow the sign / model the cross-effect or mediation explicitly</td></tr><tr><td>11</td><td>Spend max/median ≫ ~8</td><td>Data-entry spike or one-off burst → normalization trap</td><td>The 30-second max/median screen</td><td>Verify, winsorize/cap, percentile-normalize</td></tr><tr><td>12</td><td>KPI level break</td><td>Regime change a constant-coefficient MMM can't absorb</td><td>Plot the KPI; ask the business what happened</td><td>Dummy / piecewise trend; never let media absorb a break</td></tr><tr><td>13</td><td>Holiday-shaped residuals</td><td>Seasonality misspecification</td><td>Residuals by week-of-year</td><td>Holiday terms / higher Fourier order</td></tr><tr><td>14</td><td>A ROAS that would make the channel the best investment the company owns</td><td>Demand confounding — a mirage by construction</td><td>corr(spend, demand proxy); benchmark sanity</td><td>Treat as confounded until an experiment says otherwise</td></tr><tr><td>15</td><td>Naive corr(spend, KPI) ≫ any plausible ROAS</td><td>Spend chases demand — the dashboard mirage</td><td>The mirage table</td><td>The proxy control is mandatory; calibrate the channel</td></tr></tbody></table></section><section class="section"><h2>The fix ladder</h2><p class="section-subtitle">Ordered escalation — exhaust each rung before climbing to the next.</p>
+    <ol class="fix-ladder">
+        <li><strong>Estimand first.</strong> Pin down what "contribution" means
+            (counterfactual zero-out) before reading any posterior. If you can't say
+            what number would be wrong, no diagnostic can save you.</li>
+        <li><strong>EDA pre-flight.</strong> The mirage table, the CoV screen, the
+            max/median outlier screen, the causal-role classification — minutes of work
+            that can flag every failure a dataset contains before the first sample is drawn.</li>
+        <li><strong>Structural pivots — chosen from symptoms, never from disliked
+            answers.</strong> Demand controls help but don't identify; functional-form
+            pivots matter only when form is the problem. Pivot at the structure the
+            symptom points at, then re-check.</li>
+        <li><strong>Experiments calibrate what structure can't.</strong> A lift test is
+            surgical on the tested channel — and not contagious: untested channels stay
+            wrong. That is why the deliverable ends with a costed test plan, not a full
+            table of midpoints.</li>
+    </ol>
+    </section><section class="section"><h2>What green diagnostics mean</h2><div class="callout danger"><h4>The doctrine</h4><p><strong>Convergence checks the <em>sampler</em>, never the <em>attribution</em>.</strong> Green diagnostics — clean r-hat, zero divergences, a passing posterior predictive check — validate the computation, not the causal claims. Identification comes from design: declared causal roles, pre-specified structure, and experiments.</p></div></section>
+        <footer class="report-footer">
+            <p>Built with the MMM Framework · Apache-2.0 · github.com/redam94/mmm-framework
+               — re-generate via <code>python -m mmm_framework.reporting.consultant_artifacts</code></p>
+        </footer>
+    </div>
+</body>
+</html>

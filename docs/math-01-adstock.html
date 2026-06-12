@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Math 01: Adstock | MMM Framework</title>
-    <meta name="description" content="The mathematics of adstock (carryover): the geometric recurrence and its 1/(1−α) multiplier, normalized FIR kernels, the geometric/delayed/Weibull families in an interactive explorer, the default model's Beta(2,2) blend-weight mechanism, and what l_max truncation cuts off.">
+    <meta name="description" content="The mathematics of adstock (carryover): the geometric recurrence and its 1/(1−α) multiplier, normalized FIR kernels, the geometric/delayed/Weibull families in an interactive explorer, the parametric default vs the legacy Beta(2,2) blend-weight mechanism, and what l_max truncation cuts off.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-01-adstock.html">
     <meta property="og:title" content="Math 01: Adstock | MMM Framework">
-    <meta property="og:description" content="Carryover as a convolution: derive the geometric recurrence, normalize the kernel, explore delayed and Weibull shapes live, and learn why the default adstock parameter is a blend weight — not a decay rate.">
+    <meta property="og:description" content="Carryover as a convolution: derive the geometric recurrence, normalize the kernel, explore delayed and Weibull shapes live, and learn why the legacy blend parameter is a mixing weight — not a decay rate — while the default now estimates the kernel itself.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-01-adstock.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -152,7 +152,7 @@
                 <li><a href="#recurrence">(a) The geometric recurrence</a></li>
                 <li><a href="#fir">(b) Normalized FIR kernels</a></li>
                 <li><a href="#families">(c) Kernel families, live</a></li>
-                <li><a href="#blend">(d) The default model's blend</a></li>
+                <li><a href="#blend">(d) The legacy blend path</a></li>
                 <li><a href="#truncation">IIR vs FIR: what l_max cuts</a></li>
                 <li><a href="#equifinality">Identifiability</a></li>
                 <li><a href="#recap">Recap &amp; takeaways</a></li>
@@ -180,15 +180,17 @@
                 function that turns a raw spend series \(x_t\) into an <em>effective</em> exposure series
                 that carries the past forward. This page derives every formula the framework uses, charts
                 every kernel live in your browser, and ends with the single most-misread fact in the
-                codebase: the default model's <code>adstock_&lt;channel&gt;</code> parameter is a
-                <strong>blend weight between two fixed kernels — not a decay rate</strong>.
+                codebase: the legacy model's <code>adstock_&lt;channel&gt;</code> parameter is a
+                <strong>blend weight between two fixed kernels — not a decay rate</strong>
+                (the default since June 2026 estimates the kernel itself in-graph).
                 It mirrors <code>nbs/math_01_adstock.ipynb</code>, where every identity below is
                 encoded as an executable <code>assert</code> against the real framework functions.
             </p>
 
             <p>
                 The framework offers <strong>three related representations</strong> of adstock, plus a
-                fourth thing that is easy to misread — the way the default model actually uses it:
+                fourth thing that is easy to misread — the legacy blend mechanism that was the default
+                before June 2026 (the current default is the parametric path, (c)):
             </p>
 
             <table>
@@ -199,9 +201,29 @@
                     <tr><td><strong>(a)</strong></td><td>Geometric <strong>recurrence</strong> (IIR)</td><td><code>transforms.geometric_adstock</code></td><td>fixed \(\alpha\)</td></tr>
                     <tr><td><strong>(b)</strong></td><td>Normalized <strong>FIR kernels</strong> (geometric / delayed / Weibull)</td><td><code>transforms.adstock.adstock_weights</code> + <code>apply_adstock</code></td><td>fixed shape</td></tr>
                     <tr><td><strong>(c)</strong></td><td><strong>In-graph PyTensor</strong> mirror of (b)</td><td><code>transforms.adstock_pt</code></td><td>differentiable, learned</td></tr>
-                    <tr><td><strong>(d)</strong></td><td>The <strong>default <code>BayesianMMM</code></strong> mechanism</td><td><code>model.base</code></td><td>learns a <em>blend weight</em>, <strong>not</strong> a decay rate</td></tr>
+                    <tr><td><strong>(d)</strong></td><td>The <strong>legacy <code>BayesianMMM</code></strong> mechanism (pre-2026-06 default)</td><td><code>model.base</code></td><td>learns a <em>blend weight</em>, <strong>not</strong> a decay rate; the current default is (c)</td></tr>
                 </tbody>
             </table>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why the geometric recurrence \(a_t = x_t + \alpha a_{t-1}\) is a convolution with kernel \(\alpha^k\), and why its total-effect multiplier \(1/(1-\alpha)\) explodes near \(\alpha = 1\).</li>
+                    <li>How normalized FIR kernels (geometric, delayed, Weibull) separate timing from size — the kernel sums to exactly 1, pushing the magnitude into \(\beta\).</li>
+                    <li>Why the legacy model's <code>adstock_&lt;channel&gt;</code> parameter is a blend weight between two fixed kernels — not a decay rate (the current default, part (c), estimates the kernel itself).</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_01_adstock.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_01_adstock.ipynb</code></a> on GitHub.
+                </p>
+            </div>
 
             <h2 id="recurrence">(a) Carryover as a convolution: the geometric recurrence</h2>
             <p>
@@ -273,7 +295,7 @@
                 <p>
                     <code>geometric_adstock_2d(X, alpha)</code> applies the same recurrence independently
                     to each column of a \((T, n_\text{channels})\) spend matrix. It is the workhorse the
-                    default model precomputes with — see part (d).
+                    legacy blend path precomputes with — see part (d).
                 </p>
             </div>
 
@@ -442,11 +464,15 @@
                 </p>
             </div>
 
-            <h2 id="blend">(d) How the default <code>BayesianMMM</code> uses adstock — read this carefully</h2>
+            <h2 id="blend">(d) The legacy blend path — read this carefully</h2>
             <p>
-                Here is the single most common point of confusion. <strong>By default</strong>
-                (<code>use_parametric_adstock=False</code>) the model does <strong>not</strong> estimate a
-                decay rate at all. Instead it:
+                Here is the single most common point of confusion. Since June 2026 the model's
+                <strong>default is the parametric path of part (c)</strong>
+                (<code>use_parametric_adstock=True</code>): it estimates the actual kernel parameters
+                in-graph. But the framework still ships — and many older fits used — the
+                <strong>legacy blend path</strong> (<code>use_parametric_adstock=False</code>, the
+                default before the change), and on that path the model does <strong>not</strong>
+                estimate a decay rate at all. Instead it:
             </p>
             <ol>
                 <li>
@@ -503,7 +529,7 @@
             <h3>The reachable kernel set — and what lives outside it</h3>
             <div class="chart-container" id="reachableChart"></div>
             <p class="chart-note">
-                <strong>Computed live.</strong> The shaded region is <em>every</em> kernel the default
+                <strong>Computed live.</strong> The shaded region is <em>every</em> kernel the legacy
                 blend can express as \(m\) sweeps \([0,1]\) (spike-at-0 plus a scaled \(\alpha=0.9\)
                 tail). The dashed lines are a delayed kernel (\(\theta=3\)) and a Weibull hump
                 (\(s=2.5\)): their peaks sit far above the band at lags 2–5. <strong>No value of \(m\)

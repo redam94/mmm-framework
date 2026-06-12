@@ -206,7 +206,7 @@
                 effect arrives, and a saturation curve that says how it bends with spend. No sampler
                 diagnostic ever inspects either. This guide mirrors
                 <code>nbs/stress_01_carryover_and_shape.ipynb</code>: three worlds from
-                <code>tests/synth/dgp.py</code> where exactly one shape assumption is wrong, three naive
+                <code>src/mmm_framework/synth/dgp.py</code> where exactly one shape assumption is wrong, three naive
                 fits that converge beautifully onto badly wrong attribution, and three measured pivots.
                 <a href="stress-00-rosy-picture.html">Stress&nbsp;00</a> set the doctrine — <em>green
                 diagnostics ≠ correct attribution</em> — this is where the doctrine starts costing money.
@@ -239,6 +239,26 @@
                 <code>tests/synth/results/stress_matrix.md</code>
                 (see the <a href="pressure-testing.html#scorecard">hub scorecard</a>).
             </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why functional-form errors are silent by construction — the sampler explores the model you wrote, not the one that generated the data, so a wrong kernel or curve converges green onto badly wrong attribution.</li>
+                    <li>How to see shape failures directly: plot the fitted transform over the spend distribution, let LOO arbitrate between fitted kernel candidates, and screen spend ratios before the model corrupts its own normalization.</li>
+                    <li>Why the measured pivots are partial fixes on purpose — they buy back most of the damage and leave the residual visible in honest intervals instead of confident wrong numbers.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_01_carryover_and_shape.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_01_carryover_and_shape.ipynb</code></a> on GitHub.
+                </p>
+            </div>
 
             <h2 id="act1">Act 1 — Carryover: the kernel the model cannot draw</h2>
             <p>
@@ -801,7 +821,7 @@
         }
 
         // ------------------------------------------------------------------
-        // Pure transform functions (mirror tests/synth/dgp.py / the model)
+        // Pure transform functions (mirror src/mmm_framework/synth/dgp.py / the model)
         // ------------------------------------------------------------------
         function geometricKernel(alpha, lMax) {
             const w = []; let s = 0;

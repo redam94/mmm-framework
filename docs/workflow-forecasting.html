@@ -484,6 +484,7 @@
         <a href="#downside-risk">Downside risk</a>
         <a href="#guidance">Practical guidance</a>
         <a href="#implementation">Implementation</a>
+        <a href="#backtesting">Measured accuracy</a>
     </nav>
 
     <!-- SECTION 1: What We're Actually Asking -->
@@ -754,6 +755,18 @@
     <section class="section">
         <h2 id="implementation">Implementation in MMM Framework</h2>
 
+        <p>
+            A scoping note before the code: <code>predict()</code> re-predicts <em>within the
+            fitted window</em> — given the fitted model and a (possibly modified) media plan, it
+            returns the posterior predictive for the modeled periods. That is the right tool for
+            the what-if scenarios below. Genuine <em>future-period</em> forecasting — predicting
+            weeks the model never saw — goes through the backtesting machinery in
+            <code>mmm_framework.validation.backtest</code> (<code>PosteriorForecaster</code>
+            extrapolates trend and seasonality past the training window and carries adstock
+            across the cutoff), and its accuracy is measured in the
+            <a href="#backtesting">section below</a>.
+        </p>
+
         <h3>Basic Forecasting</h3>
 
         <div class="code-example"><span class="keyword">import</span> numpy <span class="keyword">as</span> np 
@@ -834,6 +847,99 @@ scenarios = {
 <span class="comment"># Baseline: $11,200,000</span>
 <span class="comment"># Aggressive: $12,800,000</span>
 </div>
+    </section>
+
+    <!-- SECTION 7: Measured forecast accuracy -->
+    <section class="section">
+        <h2 id="backtesting">Forecast Accuracy — Measured, Not Asserted</h2>
+
+        <p>
+            "How accurate were the model's forecasts on data it had not seen?" now has a measured
+            answer. The framework ships a rolling-origin backtest harness
+            (<code>mmm_framework.validation.backtest</code>): refit the full model on an expanding
+            training window, forecast a fixed horizon past each cutoff, and grade against held-out
+            actuals — no information from the forecast window reaches the fit, and adstock
+            carryover is convolved across the cutoff correctly.
+        </p>
+        <p>
+            <strong>Measured (from the baked notebook <code>nbs/backtest_validation.ipynb</code>)</strong> —
+            realistic synthetic world (156 weeks &times; 7 channels, confounded spend, low
+            signal-to-noise), 4 refits at cutoffs {104, 117, 130, 143}, 13-week horizons,
+            52 graded out-of-time weekly forecasts (NumPyro, 4 chains &times; 500 draws;
+            each refit 15&ndash;19&nbsp;s):
+        </p>
+
+        <table>
+            <thead>
+                <tr><th>Forecaster</th><th>MAPE</th><th>MASE</th><th>80% PI coverage</th><th>95% PI coverage</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>MMM (this framework)</strong></td><td><strong>3.0%</strong></td><td><strong>0.24</strong></td><td>90%</td><td>94%</td></tr>
+                <tr><td>Seasonal naive (copy last year)</td><td>13.8%</td><td>1.19</td><td>&mdash;</td><td>&mdash;</td></tr>
+                <tr><td>Naive (carry last value)</td><td>13.2%</td><td>1.07</td><td>&mdash;</td><td>&mdash;</td></tr>
+            </tbody>
+        </table>
+
+        <p>
+            Three readings of that table, in order of importance:
+        </p>
+        <ul>
+            <li><strong>Skill is relative.</strong> MASE&nbsp;0.24 means the model's out-of-time
+                error is roughly a quarter of "copy the same week last year." Bare MAPE on a
+                seasonal series flatters everyone; quote the baseline comparison.</li>
+            <li><strong>Intervals survive contact with unseen data.</strong> The 80% prediction
+                interval covered 90% of held-out actuals and the 95% interval covered 94%, at mean
+                widths of 11% and 17% of the weekly KPI — honest, slightly conservative, not
+                decoratively wide.</li>
+            <li><strong>Error is roughly flat across the 13-week horizon</strong> (h&nbsp;1&ndash;4
+                &approx; 3.3% vs h&nbsp;10&ndash;13 &approx; 2.3% MAPE). That is structural: the
+                model carries no autoregressive term, so week 13 is forecast from the same
+                ingredients as week 1 (planned media, seasonality, trend). Good for quarter-ahead
+                budget planning; not a substitute for short-range operational forecasting.</li>
+        </ul>
+
+        <p>
+            The harness also fails honestly: on the trend-break stress world (a level shock a
+            linear-trend model cannot represent), the identical protocol reports 11.4% MAPE and
+            80%-interval coverage collapsing to 58% — a backtest that cannot fail cannot validate.
+        </p>
+
+        <div class="code-example"><span class="keyword">from</span> mmm_framework.validation <span class="keyword">import</span> BacktestConfig, run_backtest
+
+config = BacktestConfig(
+    min_train_size=<span class="number">104</span>,   <span class="comment"># two seasonal cycles before the first cutoff</span>
+    horizon=<span class="number">13</span>,           <span class="comment"># forecast a quarter past each cutoff</span>
+    step=<span class="number">13</span>,              <span class="comment"># non-overlapping forecast windows</span>
+    coverage_levels=(<span class="number">0.5</span>, <span class="number">0.8</span>, <span class="number">0.95</span>),
+)
+result = run_backtest(mmm, config)   <span class="comment"># refits per origin; ~15s each here</span>
+
+result.fits          <span class="comment"># per-refit convergence — read this first</span>
+result.summary()     <span class="comment"># MAPE/sMAPE/RMSE/MASE vs naive + seasonal-naive</span>
+result.by_horizon()  <span class="comment"># accuracy and coverage by lead time</span>
+result.coverage()    <span class="comment"># nominal vs empirical interval coverage + sharpness</span></div>
+
+        <div class="warning-box">
+            <h4>Forecast skill is not causal validity</h4>
+            <p>
+                A model can forecast well while attributing wrongly — the confounded worlds in the
+                <a href="pressure-testing.html">pressure-testing series</a> forecast fine while
+                misattributing by &gt;100%. Backtests validate the <em>predictive</em> model;
+                attribution is validated by pressure testing and
+                <a href="measurement-calibration.html">experiment calibration</a>. Use both.
+            </p>
+        </div>
+
+        <div class="success-box">
+            <h4>Run it yourself</h4>
+            <p>
+                This section mirrors <code>nbs/backtest_validation.ipynb</code> (authored by
+                <code>nbs/build_backtest_validation.py</code>). Every computational cell ends in a
+                seeded assert encoding the claim it demonstrates; the measured headlines above are
+                recorded in <code>nbs/artifacts/backtest_metrics.json</code> at bake time. If a
+                re-bake moves a number materially, this page is stale.
+            </p>
+        </div>
     </section>
 
     <!-- Question Navigation -->

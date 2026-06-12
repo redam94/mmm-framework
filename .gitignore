@@ -18,6 +18,10 @@ node_modules/
 
 !package.json
 !package-lock.json
+# Measured-evidence artifacts the docs site quotes (baked notebook outputs)
+!nbs/artifacts/backtest_metrics.json
+!nbs/artifacts/runtime_benchmark.json
+!nbs/artifacts/pinkham_pressure_test.json
 
 *.db
 *.db-*

@@ -638,6 +638,7 @@
                     <th>Saturation Level</th>
                     <th>Position</th>
                     <th>Marginal ROI</th>
+                    <th>94% Interval</th>
                     <th>Recommendation</th>
                 </tr>
             </thead>
@@ -648,6 +649,7 @@
                     <td class="mono">72%</td>
                     <td><span class="position-indicator mid">Mid-curve</span></td>
                     <td class="mono">1.15</td>
+                    <td class="mono">0.85 &ndash; 1.48</td>
                     <td class="warning">Limited headroom</td>
                 </tr>
                 <tr>
@@ -656,6 +658,7 @@
                     <td class="mono">85%</td>
                     <td><span class="position-indicator saturated">Near saturation</span></td>
                     <td class="mono">0.65</td>
+                    <td class="mono">0.42 &ndash; 0.91</td>
                     <td class="negative">Consider reducing</td>
                 </tr>
                 <tr>
@@ -664,6 +667,7 @@
                     <td class="mono">35%</td>
                     <td><span class="position-indicator early">Early curve</span></td>
                     <td class="mono">2.10</td>
+                    <td class="mono">1.30 &ndash; 2.95</td>
                     <td class="positive">Growth opportunity</td>
                 </tr>
                 <tr>
@@ -672,6 +676,7 @@
                     <td class="mono">60%</td>
                     <td><span class="position-indicator mid">Mid-curve</span></td>
                     <td class="mono">0.85</td>
+                    <td class="mono">0.55 &ndash; 1.20</td>
                     <td class="warning">Near break-even</td>
                 </tr>
                 <tr>
@@ -680,10 +685,20 @@
                     <td class="mono">25%</td>
                     <td><span class="position-indicator early">Early curve</span></td>
                     <td class="mono">1.85</td>
+                    <td class="mono">1.10 &ndash; 2.65</td>
                     <td class="positive">Growth opportunity</td>
                 </tr>
             </tbody>
         </table>
+
+        <div class="chart-explanation">
+            <strong>Illustrative numbers.</strong> The intervals are why they matter: channels whose
+            marginal-ROI intervals overlap should not be confidently re-ranked&mdash;Social
+            (1.30&ndash;2.95) and Radio (1.10&ndash;2.65) overlap almost entirely, so "grow Social
+            before Radio" is not a conclusion this model supports, and Display's interval
+            (0.55&ndash;1.20) straddles break-even, so "near break-even" is genuinely undecided
+            rather than settled.
+        </div>
 
         <h3>3.2 Marginal ROI Comparison</h3>
 
@@ -795,6 +810,14 @@
         </div>
 
         <div class="chart-container" id="scenarioComparisonChart"></div>
+
+        <p>
+            The "Optimized" mix above is illustrated by hand. In the framework it is not
+            hand-waved: <a href="#implementation">the shipped optimizer</a> searches the
+            allocation space for you, respects per-channel floors and caps, and&mdash;because it
+            re-optimizes under every posterior draw&mdash;tells you how confident to be that the
+            recommended mix actually beats what you are doing today.
+        </p>
     </section>
 
     <!-- SECTION 5: Practical Guidance -->
@@ -826,24 +849,106 @@
     <section class="section">
         <h2 id="implementation">Implementation in MMM Framework</h2>
 
+        <h3>Optimize with Constraints &mdash; the Shipped API</h3>
+
+        <p>
+            The optimizer lives in <strong>mmm_framework.planning</strong>. It samples per-channel
+            response curves from the fitted model's posterior, then runs a greedy marginal
+            allocation (exact for saturating curves). Crucially, it re-optimizes under
+            <em>each posterior draw</em>&mdash;turning parameter uncertainty into
+            <strong>decision uncertainty</strong>: not just "how wide are the ROIs" but
+            "how stable is the recommended allocation".
+        </p>
+
+        <div class="code-example"><span class="keyword">from</span> mmm_framework.planning <span class="keyword">import</span> optimize_budget
+
+<span class="comment"># Reallocate the current total budget with per-channel guardrails.</span>
+<span class="comment"># Bounds are multipliers of CURRENT spend: TV may move between</span>
+<span class="comment"># 80% and 120% of today's level.</span>
+result = <span class="function">optimize_budget</span>(
+    fitted_model,
+    bounds={
+        <span class="string">"TV"</span>: (<span class="number">0.8</span>, <span class="number">1.2</span>),
+        <span class="string">"Search"</span>: (<span class="number">0.5</span>, <span class="number">1.1</span>),
+        <span class="string">"Social"</span>: (<span class="number">0.8</span>, <span class="number">1.75</span>),
+        <span class="string">"Display"</span>: (<span class="number">0.5</span>, <span class="number">1.2</span>),
+        <span class="string">"Radio"</span>: (<span class="number">0.8</span>, <span class="number">1.75</span>),
+    },
+    max_draws=<span class="number">200</span>,  <span class="comment"># posterior draws re-optimized for stability</span>
+)
+
+<span class="comment"># Same idea with a 10% smaller total budget. Channels without explicit</span>
+<span class="comment"># bounds use min_multiplier / max_multiplier, which also cap how far</span>
+<span class="comment"># recommendations may extrapolate beyond observed spend.</span>
+trimmed = <span class="function">optimize_budget</span>(
+    fitted_model,
+    budget_change_pct=<span class="number">-10</span>,  <span class="comment"># scales current total spend</span>
+    min_multiplier=<span class="number">0.5</span>,
+    max_multiplier=<span class="number">1.5</span>,
+)
+
+<span class="comment"># Per-channel table: current_spend / optimal_spend and shares, plus the</span>
+<span class="comment"># decision-uncertainty columns optimal_share_p5 / optimal_share_p95 and</span>
+<span class="comment"># allocation_instability (their spread across posterior draws).</span>
+<span class="function">print</span>(result.table)
+
+lo, hi = result.uplift_hdi
+<span class="function">print</span>(<span class="string">f"Expected uplift: ${result.expected_uplift:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"  5-95% interval: ${lo:,.0f} to ${hi:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"  P(uplift &gt; 0): {result.prob_positive_uplift:.0%} over {result.n_draws} draws"</span>)
+
+<span class="comment"># Output (Illustrative):</span>
+<span class="comment"># Expected uplift: $740,000</span>
+<span class="comment">#   5-95% interval: $210,000 to $1,290,000</span>
+<span class="comment">#   P(uplift &gt; 0): 97% over 200 draws</span></div>
+
+        <p>
+            Read the uplift the same way you read everything else on this site: the interval, not
+            the point. A median uplift of $740K with a 5&ndash;95% interval of $210K&ndash;$1.29M and
+            P(uplift &gt; 0) of 97% is a strong case for reallocating; the same median with an
+            interval straddling zero is not. And if a channel's
+            <strong>optimal_share_p5&ndash;p95</strong> range is wide, the posterior does not pin
+            down that channel's share&mdash;treat the recommendation as a direction, not a number.
+            Caps above the sampled curve range are clamped and reported in
+            <strong>result.notes</strong> rather than silently extrapolated.
+        </p>
+
+        <div class="warning-box">
+            <h4>Halo and Cross-Effects Are Out of Scope Here</h4>
+            <p>
+                <strong>optimize_budget()</strong> treats the fitted model the way the model is
+                built: additive in channels. Each channel's response curve responds only to its
+                own spend, so the optimizer assumes shifting budget into one channel never changes
+                what another channel&mdash;or another product&mdash;delivers. There is no halo or
+                cannibalization term anywhere in the shipped optimizer. If TV lifts a sister
+                product's sales, or two brands cannibalize each other, optimizing each
+                single-outcome model separately will miss or double-count those effects.
+                Cross-outcome effects need the MultivariateMMM extension&mdash;see the
+                <a href="technical-guide.html#multivariate">multivariate section of the technical
+                guide</a>&mdash;and its budgets should then be assessed jointly, not channel by channel.
+            </p>
+        </div>
+
         <h3>Computing Marginal Contributions</h3>
 
         <div class="code-example"><span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
 
 analyzer = MMMAnalyzer(fitted_model)
 
-<span class="comment"># Compute marginal returns for 10% spend increase</span>
+<span class="comment"># Compute marginal returns for 10% spend increase. With</span>
+<span class="comment"># compute_uncertainty=True (the default) the frame gains HDI columns --</span>
+<span class="comment"># the headline efficiency number is never a bare point estimate.</span>
 marginal_df = analyzer.compute_marginal_contributions(
     spend_increase_pct=<span class="number">10.0</span>
 )
 
-<span class="comment"># Output shows which channel benefits most from extra spend:</span>
-<span class="comment"># Channel     Current_Spend   Increase   Marginal_Contribution   Marginal_ROAS</span>
-<span class="comment"># Social      $800K           $80K       $168K                   2.10</span>
-<span class="comment"># Radio       $300K           $30K       $55.5K                  1.85</span>
-<span class="comment"># TV          $2.5M           $250K      $287.5K                 1.15</span>
-<span class="comment"># Display     $500K           $50K       $42.5K                  0.85</span>
-<span class="comment"># Search      $1.2M           $120K      $78K                    0.65</span></div>
+<span class="comment"># Output (Illustrative) -- which channel benefits most from extra spend:</span>
+<span class="comment"># Channel   Current Spend   Spend Increase (10.0%)   Marginal Contribution   Marginal ROAS   Marginal ROAS HDI Low   Marginal ROAS HDI High</span>
+<span class="comment"># Social    $800K           $80K                     $168K                   2.10            1.30                    2.95</span>
+<span class="comment"># Radio     $300K           $30K                     $55.5K                  1.85            1.10                    2.65</span>
+<span class="comment"># TV        $2.5M           $250K                    $287.5K                 1.15            0.85                    1.48</span>
+<span class="comment"># Display   $500K           $50K                     $42.5K                  0.85            0.55                    1.20</span>
+<span class="comment"># Search    $1.2M           $120K                    $78K                    0.65            0.42                    0.91</span></div>
 
         <h3>Running What-If Scenarios</h3>
 
@@ -858,11 +963,12 @@ scenario_result = analyzer.what_if_scenario(
     }
 )
 
-<span class="function">print</span>(<span class="string">f"Baseline outcome: ${scenario_result.baseline_outcome:,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"Scenario outcome: ${scenario_result.scenario_outcome:,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"Change: {scenario_result.outcome_change_pct:+.1%}"</span>)
+<span class="comment"># what_if_scenario returns a dict (outcome_change_pct is already in %)</span>
+<span class="function">print</span>(<span class="string">f"Baseline outcome: ${scenario_result['baseline_outcome']:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"Scenario outcome: ${scenario_result['scenario_outcome']:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"Change: {scenario_result['outcome_change_pct']:+.1f}%"</span>)
 
-<span class="comment"># Output:</span>
+<span class="comment"># Output (Illustrative):</span>
 <span class="comment"># Baseline outcome: $18,400,000</span>
 <span class="comment"># Scenario outcome: $19,125,000</span>
 <span class="comment"># Change: +3.9%</span></div>
@@ -875,15 +981,16 @@ scenario_result = analyzer.what_if_scenario(
 curves = compute_saturation_curves_with_uncertainty(
     model=fitted_model,
     n_points=<span class="number">100</span>,
-    spend_multiplier=<span class="number">1.5</span>  <span class="comment"># Explore up to 150% of current spend</span>
+    spend_multiplier=<span class="number">1.5</span>  <span class="comment"># Explore up to 1.5x current spend</span>
 )
 
-<span class="comment"># Each curve includes:</span>
-<span class="comment"># - spend_levels: Array of spend values</span>
+<span class="comment"># Each SaturationCurveResult includes:</span>
+<span class="comment"># - spend_grid: Array of spend values</span>
 <span class="comment"># - response_mean: Expected response at each spend level</span>
-<span class="comment"># - response_hdi_low/high: Uncertainty bands</span>
+<span class="comment"># - response_lower / response_upper: Uncertainty bands (94% HDI)</span>
+<span class="comment"># - current_spend / current_response: Where you sit on the curve today</span>
 <span class="comment"># - saturation_level: Current % of maximum response</span>
-<span class="comment"># - marginal_response_at_current: Marginal ROI at current spend</span>
+<span class="comment"># - marginal_response_at_current: Marginal response at current spend</span>
 
 <span class="keyword">for</span> channel, curve <span class="keyword">in</span> curves.items():
     <span class="function">print</span>(<span class="string">f"{channel}: {curve.saturation_level:.0%} saturated"</span>)

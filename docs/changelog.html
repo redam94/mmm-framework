@@ -118,9 +118,11 @@
                 <h4>Pre-1.0: read before depending</h4>
                 <p style="margin-bottom: 0;">
                     Public API may have backwards-incompatible changes between minor versions until 1.0.
-                    Pin a specific version (<code>mmm-framework==0.1.0</code>) for production use, and
-                    review the release notes before upgrading. Once 1.0 ships, the framework will follow
-                    semantic versioning strictly.
+                    The package is not yet published to PyPI &mdash; install from source and pin a specific
+                    git commit or tag for production use
+                    (<code>pip install git+https://github.com/redam94/mmm-framework@&lt;commit&gt;</code>),
+                    and review the release notes before upgrading. PyPI publication is planned.
+                    Once 1.0 ships, the framework will follow semantic versioning strictly.
                 </p>
             </div>
 
@@ -185,11 +187,27 @@
 
             <div class="release">
                 <div class="release-header">
-                    <span class="release-version">0.1.0</span>
-                    <span class="release-date">initial release</span>
+                    <span class="release-version">0.1.0 (Beta)</span>
+                    <span class="release-date">in development since December 2025; unreleased</span>
                     <span class="release-tag">Current</span>
                 </div>
-                <p style="margin: 0.5rem 0 0.5rem 0;">First public release of the MMM Framework. Includes:</p>
+                <p style="margin: 0.5rem 0 0.5rem 0;">The first release line of the MMM Framework, still in development. Includes:</p>
+                <div class="callout warning" style="margin: 0.75rem 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--color-warning); background: rgba(212,168,106,0.08); border-radius: 8px;">
+                    <strong>Behavioral change (June 2026, within the 0.1.0 development line):</strong>
+                    <code>ModelConfig.use_parametric_adstock</code> now defaults to
+                    <strong><code>True</code></strong> — new fits estimate a continuous in-graph adstock
+                    kernel per channel (geometric by default; delayed/Weibull per
+                    <code>MediaChannelConfig.adstock</code>) instead of the legacy fixed-alpha blend.
+                    Motivation: the pressure-testing series measured the legacy blend at ~28% attribution
+                    error vs ~7% parametric on carryover-sensitive worlds. To reproduce older fits, set
+                    <code>use_parametric_adstock=False</code> (or
+                    <code>ModelConfigBuilder().with_legacy_blend_adstock()</code>); models serialized
+                    before the change keep their original behavior on load. Validator cross-validation
+                    now routes out-of-sample prediction through the backtest forecaster, which supports
+                    both adstock paths and fails loudly on panel models instead of silently
+                    mispredicting. All notebooks and documentation were re-baked/updated under the new
+                    default.
+                </div>
                 <ul>
                     <li>Bayesian MMM core (<code>BayesianMMM</code>) extending PyMC-Marketing with hierarchical specs, configurable adstock/saturation, and reproducible model serialization</li>
                     <li>Fluent builders for model, channel, and variable configuration</li>

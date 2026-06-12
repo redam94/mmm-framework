@@ -1,0 +1,46 @@
+{
+  "data": {
+    "years": "1907-1960",
+    "n": 54,
+    "checksums": {
+      "advertising_sum": 50464,
+      "sales_sum": 98792
+    }
+  },
+  "fit": {
+    "rhat_max": 1.002943222096204,
+    "divergences": 0
+  },
+  "carryover": {
+    "alpha_mean": 0.20358741928329338,
+    "alpha_hdi_94": [
+      0.014474896459226241,
+      0.4123861546421787
+    ],
+    "duration90_median_years": 1.4400544943860938,
+    "learning_verdict": "strong",
+    "literature": {
+      "palda_annual": 0.628,
+      "hanssens_monthly": 0.5,
+      "bultez_naert_monthly": 0.7
+    }
+  },
+  "roas": {
+    "mean": 1.4835349882347055,
+    "hdi_94": [
+      1.1157918521899237,
+      1.8514101469921902
+    ],
+    "literature_bracket": [
+      0.537,
+      1.44
+    ],
+    "overlaps_literature": true
+  },
+  "backtest": {
+    "mape": 0.14905372938396944,
+    "mase": 1.3631649473216445,
+    "naive_mape": 0.11424656983996287,
+    "coverage_80": 0.9444444444444444
+  }
+}

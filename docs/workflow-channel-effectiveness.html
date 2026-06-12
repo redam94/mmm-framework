@@ -568,8 +568,8 @@
         <h3>2.3 Understanding Uncertainty</h3>
 
         <p>
-            No measurement is perfect. When we say "TV has an ROI of 2.1", what we really mean is
-            "Our best estimate is 2.1, but it could plausibly be anywhere from 1.8 to 2.5."
+            No measurement is perfect. When we say "TV has an ROI of 2.0", what we really mean is
+            "Our best estimate is 2.0, but it could plausibly be anywhere from 1.6 to 2.6."
         </p>
 
         <p>
@@ -607,6 +607,19 @@
     <!-- SECTION 3: Reading Your Results -->
     <section class="section">
         <h2 id="reading-results">Reading Your Results</h2>
+
+        <div class="warning-box">
+            <h4>Before You Trust These Numbers</h4>
+            <p>
+                Contribution and ROI estimates inherit every flaw in the data and the model
+                specification. Before acting on anything below, run the EDA pre-flight in
+                <a href="mmm-walkthrough.html">the walkthrough (Part 1)</a>, confirm every
+                variable plays the right causal role via
+                <a href="variable-selection.html">variable selection</a>, and know the silent
+                failure modes catalogued in <a href="pressure-testing.html">pressure testing</a>.
+                An unchecked model can put narrow intervals around the wrong answer.
+            </p>
+        </div>
 
         <h3>3.1 The Contribution Waterfall</h3>
 
@@ -648,6 +661,52 @@
             are confidently profitable.
         </div>
 
+        <h4>How Much Weight Can Each Estimate Bear?</h4>
+
+        <p>
+            Not every row of a forest plot deserves equal trust. The framework's confidence tiers,
+            in descending order: <strong>validated</strong> (anchored by an experiment) &gt;
+            <strong>narrow-unvalidated</strong> &gt; <strong>wide-unvalidated</strong>. Here is the
+            same fictional dataset, tiered (Illustrative):
+        </p>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>ROI (94% interval)</th>
+                    <th>Evidence Tier</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Paid Search</strong></td>
+                    <td class="mono">2.43 (1.93 &ndash; 2.99)</td>
+                    <td class="positive">Validated &mdash; calibrated against a geo-lift test</td>
+                </tr>
+                <tr>
+                    <td><strong>TV</strong></td>
+                    <td class="mono">2.04 (1.58 &ndash; 2.60)</td>
+                    <td class="warning">Narrow-unvalidated &mdash; precise, but never experimentally tested</td>
+                </tr>
+                <tr>
+                    <td><strong>Radio</strong></td>
+                    <td class="mono">1.95 (1.03 &ndash; 2.98)</td>
+                    <td class="negative">Wide-unvalidated &mdash; direction clear, magnitude not</td>
+                </tr>
+                <tr>
+                    <td><strong>Paid Social</strong></td>
+                    <td class="mono">1.27 (0.56 &ndash; 2.11)</td>
+                    <td class="negative">Wide-unvalidated &mdash; profitability uncertain; strong test candidate</td>
+                </tr>
+                <tr>
+                    <td><strong>Display</strong></td>
+                    <td class="mono">0.68 (&minus;0.42 &ndash; 1.84)</td>
+                    <td class="negative">Wide-unvalidated &mdash; even the sign is uncertain; test before cutting or growing</td>
+                </tr>
+            </tbody>
+        </table>
+
         <h3>3.3 Probability Metrics</h3>
 
         <p>
@@ -676,17 +735,17 @@
         <div class="probability-grid">
             <div class="probability-gauge">
                 <div class="gauge-label">P(ROI &gt; 0)</div>
-                <div class="gauge-value high" id="probPositive">99.8%</div>
+                <div class="gauge-value high" id="probPositive">99.9%</div>
                 <div class="gauge-desc">Probability of positive effect</div>
             </div>
             <div class="probability-gauge">
                 <div class="gauge-label">P(ROI &gt; 1)</div>
-                <div class="gauge-value high" id="probProfitable">97.2%</div>
+                <div class="gauge-value high" id="probProfitable">99.9%</div>
                 <div class="gauge-desc">Probability of profitability</div>
             </div>
             <div class="probability-gauge">
                 <div class="gauge-label">P(ROI &gt; 1.5)</div>
-                <div class="gauge-value medium" id="probGreat">84.5%</div>
+                <div class="gauge-value high" id="probGreat">97.7%</div>
                 <div class="gauge-desc">Probability of strong ROI</div>
             </div>
         </div>
@@ -790,16 +849,17 @@ contributions = analyzer.compute_counterfactual_contributions(
     hdi_prob=<span class="number">0.94</span>  <span class="comment"># 94% credible interval</span>
 )
 
-<span class="comment"># View the summary</span>
+<span class="comment"># View the summary ("Contribution %" is each channel's share of the</span>
+<span class="comment"># total media effect, so the column sums to 100%)</span>
 <span class="function">print</span>(contributions.summary())
 
-<span class="comment"># Output:</span>
-<span class="comment"># Channel      Contribution    Pct     HDI_Low    HDI_High</span>
-<span class="comment"># TV           $2.45M         18.2%   $1.89M     $3.12M</span>
-<span class="comment"># Search       $1.82M         13.5%   $1.45M     $2.24M</span>
-<span class="comment"># Social       $0.95M          7.1%   $0.42M     $1.58M</span>
-<span class="comment"># Display      $0.34M          2.5%  -$0.21M     $0.92M</span>
-<span class="comment"># Radio        $0.78M          5.8%   $0.41M     $1.19M</span></div>
+<span class="comment"># Output (Illustrative):</span>
+<span class="comment"># Channel    Total Contribution   Contribution %   HDI 3%     HDI 97%</span>
+<span class="comment"># TV         $2.45M               38.6%            $1.89M     $3.12M</span>
+<span class="comment"># Search     $1.82M               28.7%            $1.45M     $2.24M</span>
+<span class="comment"># Social     $0.95M               15.0%            $0.42M     $1.58M</span>
+<span class="comment"># Display    $0.34M                5.4%           -$0.21M     $0.92M</span>
+<span class="comment"># Radio      $0.78M               12.3%            $0.41M     $1.19M</span></div>
 
         <h3>Computing ROI with Uncertainty</h3>
 
@@ -813,32 +873,37 @@ roi_df = compute_roi_with_uncertainty(
 
 <span class="comment"># Key columns in roi_df:</span>
 <span class="comment"># - channel: Channel name</span>
-<span class="comment"># - roi_mean: Point estimate of ROI</span>
+<span class="comment"># - spend: Total channel spend (the ROI denominator)</span>
+<span class="comment"># - contribution_mean, contribution_hdi_low/high: Revenue contribution</span>
+<span class="comment"># - roi_mean: Point estimate of ROI (= contribution / spend)</span>
 <span class="comment"># - roi_hdi_low, roi_hdi_high: 94% credible interval</span>
-<span class="comment"># - prob_positive: P(ROI > 0)</span>
-<span class="comment"># - prob_profitable: P(ROI > 1)</span>
+<span class="comment"># - prob_positive: P(ROI &gt; 0)</span>
+<span class="comment"># - prob_profitable: P(ROI &gt; 1)</span>
 
-<span class="comment"># Example output:</span>
-<span class="function">print</span>(roi_df[[<span class="string">'channel'</span>, <span class="string">'roi_mean'</span>, <span class="string">'roi_hdi_low'</span>, <span class="string">'roi_hdi_high'</span>, <span class="string">'prob_profitable'</span>]])
+<span class="comment"># Example output -- same fictional dataset as the contribution table</span>
+<span class="comment"># above, so each row is exactly that contribution divided by spend:</span>
+<span class="function">print</span>(roi_df[[<span class="string">'channel'</span>, <span class="string">'spend'</span>, <span class="string">'roi_mean'</span>, <span class="string">'roi_hdi_low'</span>, <span class="string">'roi_hdi_high'</span>, <span class="string">'prob_profitable'</span>]])
 
-<span class="comment"># Channel     roi_mean    roi_hdi_low    roi_hdi_high    prob_profitable</span>
-<span class="comment"># TV          2.12        1.78           2.52            0.998</span>
-<span class="comment"># Search      2.41        2.08           2.81            0.999</span>
-<span class="comment"># Social      1.28        0.76           1.89            0.872</span>
-<span class="comment"># Display     0.68        0.28           1.12            0.284</span>
-<span class="comment"># Radio       1.62        1.28           2.01            0.991</span></div>
+<span class="comment"># Output (Illustrative):</span>
+<span class="comment"># channel    spend     roi_mean    roi_hdi_low    roi_hdi_high    prob_profitable</span>
+<span class="comment"># TV         $1.20M    2.04        1.58           2.60            0.999</span>
+<span class="comment"># Search     $0.75M    2.43        1.93           2.99            0.999</span>
+<span class="comment"># Social     $0.75M    1.27        0.56           2.11            0.745</span>
+<span class="comment"># Display    $0.50M    0.68       -0.42           1.84            0.298</span>
+<span class="comment"># Radio      $0.40M    1.95        1.03           2.98            0.966</span></div>
 
         <h3>Getting Component Decomposition</h3>
 
-        <div class="code-example"><span class="comment"># Decompose total outcome into components</span>
-decomposition = analyzer.compute_component_decomposition()
+        <div class="code-example"><span class="comment"># Decompose total outcome into components.</span>
+<span class="comment"># This one is a method on the fitted model itself (not the analyzer).</span>
+decomposition = fitted_model.compute_component_decomposition()
 
-<span class="comment"># Returns breakdown of:</span>
-<span class="comment"># - intercept (baseline demand)</span>
-<span class="comment"># - trend (long-term trajectory)</span>
-<span class="comment"># - seasonality (calendar patterns)</span>
-<span class="comment"># - media (per-channel contributions)</span>
-<span class="comment"># - controls (other factors)</span>
+<span class="comment"># summary() returns one row per component:</span>
+<span class="comment"># - Base (Intercept): baseline demand</span>
+<span class="comment"># - Trend: long-term trajectory</span>
+<span class="comment"># - Seasonality: calendar patterns</span>
+<span class="comment"># - Media (Total): combined channel contributions</span>
+<span class="comment"># - Controls (Total): other factors</span>
 
 <span class="function">print</span>(decomposition.summary())</div>
     </section>
@@ -890,12 +955,13 @@ let channelsActive = { tv: true, search: true, social: true, display: true };
 let showWaterfallUncertainty = true;
 
 // Channel data
+// Illustrative; ROI = contribution / spend from the Implementation tables
 const channelData = {
-    tv: { name: 'TV', roi: 2.12, roiLow: 1.78, roiHigh: 2.52, probPos: 99.8, probProf: 97.2, probGreat: 84.5, color: colors.primary },
-    search: { name: 'Paid Search', roi: 2.41, roiLow: 2.08, roiHigh: 2.81, probPos: 99.9, probProf: 99.1, probGreat: 92.3, color: colors.accent },
-    social: { name: 'Paid Social', roi: 1.28, roiLow: 0.76, roiHigh: 1.89, probPos: 97.2, probProf: 72.4, probGreat: 28.6, color: colors.warning },
-    display: { name: 'Display', roi: 0.68, roiLow: 0.28, roiHigh: 1.12, probPos: 78.4, probProf: 28.4, probGreat: 5.2, color: colors.danger },
-    radio: { name: 'Radio', roi: 1.62, roiLow: 1.28, roiHigh: 2.01, probPos: 99.1, probProf: 94.8, probGreat: 68.9, color: '#9b7fb8' }
+    tv: { name: 'TV', roi: 2.04, roiLow: 1.58, roiHigh: 2.60, probPos: 99.9, probProf: 99.9, probGreat: 97.7, color: colors.primary },
+    search: { name: 'Paid Search', roi: 2.43, roiLow: 1.93, roiHigh: 2.99, probPos: 99.9, probProf: 99.9, probGreat: 99.5, color: colors.accent },
+    social: { name: 'Paid Social', roi: 1.27, roiLow: 0.56, roiHigh: 2.11, probPos: 99.8, probProf: 74.5, probGreat: 28.8, color: colors.warning },
+    display: { name: 'Display', roi: 0.68, roiLow: -0.42, roiHigh: 1.84, probPos: 87.1, probProf: 29.8, probGreat: 8.7, color: colors.danger },
+    radio: { name: 'Radio', roi: 1.95, roiLow: 1.03, roiHigh: 2.98, probPos: 99.9, probProf: 96.6, probGreat: 80.8, color: '#9b7fb8' }
 };
 
 // Initialize charts on load
@@ -1075,9 +1141,9 @@ function initWaterfallChart() {
 // Forest plot
 function initForestPlot() {
     const channels = ['Display', 'Social', 'Radio', 'TV', 'Search'];
-    const rois = [0.68, 1.28, 1.62, 2.12, 2.41];
-    const lows = [0.28, 0.76, 1.28, 1.78, 2.08];
-    const highs = [1.12, 1.89, 2.01, 2.52, 2.81];
+    const rois = [0.68, 1.27, 1.95, 2.04, 2.43];
+    const lows = [-0.42, 0.56, 1.03, 1.58, 1.93];
+    const highs = [1.84, 2.11, 2.98, 2.60, 2.99];
 
     const barColors = rois.map((r, i) => {
         if (lows[i] > 1) return colors.success;
@@ -1114,7 +1180,7 @@ function initForestPlot() {
     Plotly.newPlot('forestPlot', traces, {
         ...layout_base,
         margin: { t: 20, r: 30, b: 50, l: 100 },
-        xaxis: { title: 'ROI', gridcolor: colors.grid, range: [0, 3.5] },
+        xaxis: { title: 'ROI', gridcolor: colors.grid, range: [-0.75, 3.5] },
         yaxis: { gridcolor: colors.grid },
         showlegend: false
     }, cfg);

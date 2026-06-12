@@ -67,6 +67,15 @@
                 The key to using variable selection correctly is understanding the causal relationships in your data. Some variables only affect your outcome (precision controls), while others affect both your treatment and outcome (confounders).
             </p>
 
+            <div class="info-box">
+                <h4>📜 The identification contract</h4>
+                <p style="margin-bottom: 0;">
+                    Why confounders may never be shrunk is clause #1 of the seven assumptions every causal claim
+                    rests on — stated formally, labeled testable or untestable, and priced against the
+                    pressure-testing scorecard: <a href="identification-assumptions.html">the identification contract</a>.
+                </p>
+            </div>
+
             <!-- DAG Diagrams -->
             <div class="dag-container">
                 <div class="dag-box good">
@@ -176,19 +185,19 @@
                 <tbody>
                     <tr>
                         <td><strong>Precision Controls</strong></td>
-                        <td>Weather, gas prices, minor holidays, local events</td>
+                        <td>Weather, gas prices, minor/movable promotional holidays, local events, competitor media (when it only affects sales)</td>
                         <td><span class="badge badge-success">✓ OK</span></td>
                         <td>Affect outcome only, not media allocation</td>
                     </tr>
                     <tr>
                         <td><strong>Confounders</strong></td>
-                        <td>Distribution/ACV, price, competitor media</td>
+                        <td>Distribution/ACV, price, competitor media (when it shapes your spend decisions)</td>
                         <td><span class="badge badge-danger">✗ Never</span></td>
                         <td>Affect both media AND outcome—shrinking biases estimates</td>
                     </tr>
                     <tr>
                         <td><strong>Core Structure</strong></td>
-                        <td>Trend, seasonality, intercept</td>
+                        <td>Trend, seasonality, intercept, structural holidays (major fixed calendar events)</td>
                         <td><span class="badge badge-danger">✗ Never</span></td>
                         <td>Fundamental model components, always required</td>
                     </tr>
@@ -212,6 +221,24 @@
                 <h4>💡 The Key Question</h4>
                 <p>
                     Ask yourself: "Does this variable influence how we allocate our media budget?" If yes, it's likely a confounder and must be excluded from selection.
+                </p>
+            </div>
+
+            <div class="info-box">
+                <h4>Two classifications that depend on context</h4>
+                <p>
+                    <strong>Competitor media is conditional, not automatic.</strong> It is a confounder only
+                    if competitor activity influences <em>both</em> your spend decisions and your sales — for
+                    example, you up-weight media in response to a rival's campaign. Then it must be included
+                    with standard (unshrunk) priors. If it only affects sales and never enters your budget
+                    decisions, it is a precision control and is legitimately selection-eligible.
+                </p>
+                <p style="margin-bottom: 0;">
+                    <strong>Holidays split the same way.</strong> Structural holidays — the major, fixed,
+                    recurring calendar events that dominate your category's seasonality — belong in the
+                    seasonality/calendar structure and are always included, never selected over. Minor or
+                    movable promotional holidays, whose relevance is genuinely uncertain, are legitimately
+                    selection-eligible and can carry a posterior inclusion probability.
                 </p>
             </div>
         </div>
@@ -848,7 +875,7 @@
                             <span class="prob-high">Strong evidence</span>
                         </li>
                         <li>
-                            <span><strong>Holiday Indicator</strong> — PIP: 0.87</span>
+                            <span><strong>Holiday Indicator (minor/movable)</strong> — PIP: 0.87</span>
                             <span class="prob-high">Strong evidence</span>
                         </li>
                         <li>
@@ -951,6 +978,14 @@
                     <li>Don't run selection, see "excluded" variables, remove them and refit without selection</li>
                 </ul>
             </div>
+
+            <h2 id="references" style="margin-top: 3rem;">References</h2>
+            <ul>
+                <li>Carvalho, C.M., Polson, N.G. &amp; Scott, J.G. (2010). <em>The horseshoe estimator for sparse signals.</em> Biometrika 97(2), 465&ndash;480. [the horseshoe prior used for precision-control selection]</li>
+                <li>Piironen, J. &amp; Vehtari, A. (2017). <em>Sparsity information and regularization in the horseshoe and other shrinkage priors.</em> Electronic Journal of Statistics 11(2), 5018&ndash;5051. [the regularized horseshoe and the expected-nonzero calibration of the global scale]</li>
+                <li>Westreich, D. &amp; Greenland, S. (2013). <em>The Table 2 Fallacy: Presenting and Interpreting Confounder and Modifier Coefficients.</em> American Journal of Epidemiology 177(4), 292&ndash;298. [why control coefficients must not be read as causal effects &mdash; the doctrine behind reporting media effects only]</li>
+                <li>VanderWeele, T.J. (2019). <em>Principles of confounder selection.</em> European Journal of Epidemiology 34, 211&ndash;219. [role-based selection: adjust for confounders, never mediators or colliders]</li>
+            </ul>
 
             <div style="text-align: center; margin-top: 3rem;">
                 <a href="technical-guide.html#variable-selection" class="btn btn-primary">View Technical Details →</a>

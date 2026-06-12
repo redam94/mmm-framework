@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-04-bayesian-model.html">
     <meta property="og:title" content="Math 04: The Bayesian Model | MMM Framework">
-    <meta property="og:description" content="Priors × likelihood → posterior, run for real: prior predictive, NUTS, R-hat = 1.01, in-sample R² = 0.92 — and a recovered ROAS that is still wrong. Clean sampling is not correct attribution.">
+    <meta property="og:description" content="Priors × likelihood → posterior, run for real: prior predictive, NUTS, R-hat = 1.01, in-sample R² = 0.925 — and a recovered ROAS that is still wrong. Clean sampling is not correct attribution.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-04-bayesian-model.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -159,6 +159,26 @@
                 400 tune + 400 draws).
             </p>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How the joint model is priors &times; likelihood, written exactly as <code>model/base.py::_build_model</code> does, and why the posterior \(p(\theta\mid\tilde y) \propto p(\tilde y\mid\theta)\,p(\theta)\) is the object of inference.</li>
+                    <li>How the full pipeline runs on real data: prior predictive check, gradient-driven NUTS, convergence diagnostics, posterior intervals, posterior-predictive check, and additive decomposition.</li>
+                    <li>Why convergence diagnostics validate the computation but not the claim — every diagnostic can pass while a channel's ROAS is still badly biased.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_04_bayesian_model.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_04_bayesian_model.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2>The joint model: priors &times; likelihood</h2>
             <p>
                 The framework first <strong>standardizes</strong> the KPI,
@@ -173,9 +193,13 @@
             \]
             <p>
                 with the exponential saturation \(\operatorname{sat}(u) = 1 - e^{-\lambda u}\) (not Hill —
-                see <a href="math-02-saturation.html">math 02</a>) and the default adstock as a
-                \(\mathrm{Beta}(2,2)\) <em>blend weight</em> between two fixed-\(\alpha\) geometric kernels
-                (not a decay rate — see <a href="math-01-adstock.html">math 01</a>). The
+                see <a href="math-02-saturation.html">math 02</a>) and the <strong>default adstock</strong>
+                (since June 2026) a parametric in-graph geometric kernel,
+                \(\operatorname{adstock}_c(x)_t = \sum_{k} w_k\, x_{t-k}\) with \(w_k \propto \alpha_c^{\,k}\)
+                and a <em>learned per-channel decay rate</em> \(\alpha_c \sim \mathrm{Beta}(1,3)\) — a real
+                decay rate, unlike the legacy path's \(\mathrm{Beta}(2,2)\) blend weight \(m_c\), which is
+                demoted to an opt-out via <code>use_parametric_adstock=False</code> (see
+                <a href="math-01-adstock.html">math 01</a>). The
                 <strong>likelihood</strong> is Gaussian on the standardized KPI:
             </p>
             \[
@@ -187,7 +211,7 @@
             <p>
                 A Bayesian model is this likelihood <em>times</em> a prior \(p(\theta)\) over every unknown
                 — here \(\theta\) collects roughly twenty parameters
-                (\(\beta_c, \lambda_c, m_c, \gamma_j\), seasonal amplitudes, intercept, slope, \(\sigma\)).
+                (\(\beta_c, \lambda_c, \alpha_c, \gamma_j\), seasonal amplitudes, intercept, slope, \(\sigma\)).
                 The <strong>object of inference</strong> is the posterior, by <strong>Bayes' theorem for
                 the MMM</strong>:
             </p>
@@ -235,7 +259,7 @@
                     <tr><td>Intercept</td><td>\(\text{intercept}\)</td><td>\(\mathcal N(0,\,0.5)\)</td><td>base level (std. scale)</td></tr>
                     <tr><td><strong>Channel coefficient</strong></td><td>\(\beta_c\)</td><td>\(\mathrm{Gamma}(\mu{=}1.5,\,\sigma{=}1.0)\)</td><td>media effect \(\ge 0\)</td></tr>
                     <tr><td>Saturation rate</td><td>\(\lambda_c\)</td><td>\(\mathrm{Exponential}(0.5)\)</td><td>diminishing-returns speed</td></tr>
-                    <tr><td>Adstock <strong>blend</strong> weight</td><td>\(m_c\)</td><td>\(\mathrm{Beta}(2,2)\)</td><td>short- vs long-memory mix</td></tr>
+                    <tr><td>Adstock <strong>decay</strong> rate</td><td>\(\alpha_c\)</td><td>\(\mathrm{Beta}(1,3)\)</td><td>carryover per week, prior mean 0.25</td></tr>
                     <tr><td>Seasonality coefficients</td><td>\(\text{season}\)</td><td>\(\mathcal N(0,\,0.3)\)</td><td>Fourier amplitudes</td></tr>
                     <tr><td>Control coefficients</td><td>\(\gamma_j\)</td><td>\(\mathcal N(0,\,\sigma_{\text{ctrl}})\)</td><td>wider for a confounder</td></tr>
                     <tr><td>Trend slope</td><td>\(\text{slope}\)</td><td>\(\mathcal N(0,\,0.5)\)</td><td>linear drift</td></tr>
@@ -247,24 +271,26 @@
                 Two choices deserve a second look. The \(\mathrm{Gamma}(\mu{=}1.5, \sigma{=}1.0)\) on
                 \(\beta_c\) is <strong>positive-only</strong> — it bakes in "more media does not reduce
                 sales" (an experiment-calibrated prior would replace it: that is
-                <a href="math-05-calibration.html">math 05</a>). The \(\mathrm{Beta}(2,2)\) on the blend
-                weight is symmetric about \(m = 0.5\): a-priori agnostic between short and long memory.
-                The notebook verifies the documented moments by assertion: the Gamma has mean exactly 1.5,
-                sd exactly 1.0, and <em>zero</em> mass below 0; the Exponential has mean \(1/0.5 = 2\).
+                <a href="math-05-calibration.html">math 05</a>). The \(\mathrm{Beta}(1,3)\) on the decay
+                rate is right-skewed with mean \(0.25\): a-priori the model leans toward <em>short</em>
+                memory and must be argued into long carryover by the data — a deliberate, conservative
+                commitment. The notebook verifies the documented moments by assertion: the Gamma has mean
+                exactly 1.5, sd exactly 1.0, and <em>zero</em> mass below 0; the Exponential has mean
+                \(1/0.5 = 2\); the Beta(1,3) has mean 0.25 with most of its mass below 0.5.
             </p>
 
             <div class="controls-row">
                 <label>Prior:</label>
                 <button class="toggle-btn active" data-prior="gamma">&beta;&#7580; ~ Gamma(&mu;=1.5, &sigma;=1)</button>
                 <button class="toggle-btn" data-prior="expon">&lambda;&#7580; ~ Exponential(0.5)</button>
-                <button class="toggle-btn" data-prior="beta">m&#7580; ~ Beta(2,2)</button>
+                <button class="toggle-btn" data-prior="beta">&alpha;&#7580; ~ Beta(1,3)</button>
             </div>
             <div class="chart-container short" id="priorChart"></div>
             <p class="chart-note">
                 <strong>Computed live in your browser — the same math as the notebook.</strong> The three
                 media priors as density curves. Note the Gamma's hard wall at zero (positivity), the
-                Exponential's mean at 2 (dashed), and the Beta's symmetric hump at 0.5: each encodes one
-                modeling commitment.
+                Exponential's mean at 2 (dashed), and the Beta(1,3)'s right-skewed mass with mean 0.25
+                (short memory unless the data argues otherwise): each encodes one modeling commitment.
             </p>
 
             <h2 id="prior-predictive">Prior predictive: simulate sales <em>before</em> seeing data</h2>
@@ -282,7 +308,9 @@
                 predictive <em>brackets</em> the observed range without being absurdly wide. One subtlety
                 to expect: because \(\beta_c\) is positive-only and saturated media only ever <em>adds</em>,
                 the envelope <strong>leans high</strong> — the prior's honest default belief is "media
-                probably helps a bit."
+                probably helps a bit." And under the parametric-adstock default (June 2026) the prior is
+                noticeably more concentrated than the legacy blend's was, so expect bulk-not-blanket
+                coverage of the observed weeks.
             </p>
 
             <div class="controls-row">
@@ -296,8 +324,8 @@
                 HalfNormal &sigma;) pushed through a simplified Aurora-shaped generative model; hit the
                 button for a fresh batch. The <strong>measured</strong> notebook run
                 (<code>mmm.sample_prior_predictive(samples=300)</code>): prior 1–99% envelope
-                <strong>[710, 1516]</strong> vs observed range [690, 1035] (mean 839); <strong>75%</strong>
-                of observed weeks inside the band; prior-predictive median <strong>1032</strong> — same
+                <strong>[703, 1602]</strong> vs observed range [690, 1035] (mean 839); <strong>63%</strong>
+                of observed weeks inside the band; prior-predictive median <strong>1100</strong> — same
                 order as the data, leaning high, exactly as the positivity prior predicts.
             </p>
 
@@ -334,7 +362,7 @@
                 The notebook then fits for real:
                 <code>mmm.fit(draws=400, tune=400, chains=2, cores=1, random_seed=0)</code>
                 (<code>cores=1</code> is required on macOS). Sampling 800 + 800 draws took
-                <strong>14 seconds</strong>.
+                <strong>20 seconds</strong>.
             </p>
 
             <h2 id="convergence">Convergence: did the sampler work?</h2>
@@ -359,19 +387,19 @@
 
             <div class="stat-row">
                 <div class="stat-callout">
-                    <div class="stat-value">1.0121</div>
+                    <div class="stat-value">1.0113</div>
                     <div class="stat-label">max R&#770; across all parameters (measured)</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">321</div>
-                    <div class="stat-label">min bulk ESS (measured; beta_Social)</div>
+                    <div class="stat-value">152</div>
+                    <div class="stat-label">min bulk ESS (measured, all parameters)</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">2</div>
+                    <div class="stat-value">0</div>
                     <div class="stat-label">divergences after tuning (2 chains &times; 400 draws)</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">14 s</div>
+                    <div class="stat-value">20 s</div>
                     <div class="stat-label">wall-clock sampling time (Aurora, 104 weeks)</div>
                 </div>
             </div>
@@ -380,7 +408,7 @@
             <p class="chart-note">
                 <strong>Measured</strong> — \(\hat R\) for the 14 key parameters from the baked
                 <code>mmm.summary()</code> table. Every bar hugs 1: all 14 are below the 1.1 red line
-                (max 1.010 on this subset), and ESS ranges 321–1663. The sampler worked. Hold that thought
+                (max 1.010 on this subset), and ESS ranges 196–797. The sampler worked. Hold that thought
                 — <a href="#posterior">&sect;Posterior</a> shows what clean sampling does <em>not</em>
                 guarantee.
             </p>
@@ -416,8 +444,9 @@
                 model is; the \(\lambda_c\) (saturation-rate) intervals are wide — that is the model
                 <em>honestly reporting</em> that observational data weakly identifies saturation speed (the
                 \(\beta\)–\(\lambda\) equifinality of math 02 and
-                <a href="math-05-calibration.html">math 05</a>); and the adstock blend weights barely move
-                off their \(\mathrm{Beta}(2,2)\) prior at all (quantified in
+                <a href="math-05-calibration.html">math 05</a>); and the adstock decay rates \(\alpha_c\)
+                come out <em>wider</em> than their short-memory \(\mathrm{Beta}(1,3)\) prior — prior–data
+                tension, not learning (quantified in
                 <a href="#learning">&sect;Did the data teach us?</a>).
             </p>
 
@@ -425,14 +454,15 @@
                 <label>Parameter group:</label>
                 <button class="toggle-btn active" data-group="beta">&beta;&#7580; (effect size)</button>
                 <button class="toggle-btn" data-group="lam">&lambda;&#7580; (saturation rate)</button>
-                <button class="toggle-btn" data-group="ad">m&#7580; (adstock blend)</button>
+                <button class="toggle-btn" data-group="ad">&alpha;&#7580; (adstock decay)</button>
             </div>
             <div class="chart-container short" id="forestChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — posterior mean and 94% HDI per channel from the baked summary
-                table. \(\beta\): Search 3.35 [1.39, 5.74] dominates, TV 1.04 [0.05, 2.54].
-                \(\lambda\): only Search is pinned (1.08 [0.36, 1.92]); the others' HDIs span nearly the
-                whole prior. \(m\): all four blend weights sit near the prior's 0.5 with wide bands.
+                table. \(\beta\): Search 1.62 [0.04, 3.47] is the largest, TV 1.06 [0.03, 2.51].
+                \(\lambda\): every HDI is wide, spanning much of the prior — nothing is pinned.
+                \(\alpha\): means 0.38–0.55, all <em>above</em> the prior's 0.25, with wide bands —
+                the data pushing toward longer carryover than the Beta(1,3) prior wants.
             </p>
 
             <p>
@@ -446,9 +476,9 @@
             <div class="chart-container" id="roiChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — model ROAS (94% band from the contribution HDI) vs Aurora's
-                known truth. The model is <em>wrong everywhere</em>: TV reads 0.22 vs a true 2.14, Display
-                0.45 vs 2.11 (both act through an unmodeled awareness mediator the single-equation model
-                cannot see), while Search reads 2.83 vs a true 0.66 (its spend chases latent demand). The
+                known truth. The model is <em>wrong everywhere</em>: TV reads 0.33 vs a true 2.14, Display
+                0.67 vs 2.11 (both act through an unmodeled awareness mediator the single-equation model
+                cannot see), while Search reads 1.05 vs a true 0.66 (its spend chases latent demand). The
                 sampler converged perfectly on the wrong answer —
                 <a href="pressure-testing.html">clean sampling is not correct attribution</a>. Fixing this
                 takes mediation structure (extensions) or experiment calibration
@@ -483,9 +513,9 @@
             <p class="chart-note">
                 <strong>Illustrative recreation (seeded)</strong> of the posterior-predictive figure — an
                 Aurora-shaped series with a 90% band of the same character. The <strong>measured</strong>
-                notebook values: corr(predicted, observed) = <strong>0.959</strong>, in-sample
-                R&sup2; = <strong>0.919</strong>, and <strong>90%</strong> of weeks fall inside the 90%
-                band — nominal coverage, almost exactly. The fit is genuinely good. That is precisely what
+                notebook values: corr(predicted, observed) = <strong>0.962</strong>, in-sample
+                R&sup2; = <strong>0.925</strong>, and <strong>92%</strong> of weeks fall inside the 90%
+                band — essentially nominal coverage. The fit is genuinely good. That is precisely what
                 makes the ROAS bias above <em>silent</em>: every check on this page is green. See
                 <a href="workshop-04-reading-the-posterior.html">workshop 04</a> for how to read these
                 checks as an analyst.
@@ -515,11 +545,11 @@
             <p class="chart-note">
                 <strong>Illustrative recreation (seeded), scaled to the measured component sizes</strong> —
                 stacked baseline + per-channel media vs the <code>predict()</code> mean (dashed).
-                <strong>Measured</strong> levels ($000s/week): baseline mean <strong>697.9</strong>
-                (std 53.5), media means TV <strong>12.5</strong>, Search <strong>90.0</strong>, Social
-                <strong>26.9</strong>, Display <strong>12.2</strong> — the organic baseline (698) dwarfs
-                total media (142). Seasonality and controls are mean-zero by construction but carry real
-                amplitude (std 26.5 and 31.2): read them as swing around the level, not contributions to
+                <strong>Measured</strong> levels ($000s/week): baseline mean <strong>747.4</strong>
+                (std 61.4), media means TV <strong>19.4</strong>, Search <strong>33.1</strong>, Social
+                <strong>21.1</strong>, Display <strong>18.4</strong> — the organic baseline (747) dwarfs
+                total media (92). Seasonality and controls are mean-zero by construction but carry real
+                amplitude (std 27.0 and 24.8): read them as swing around the level, not contributions to
                 the average. Additivity, measured:
                 corr(baseline + &sum; media, predict()) = <strong>0.9999</strong>.
             </p>
@@ -558,20 +588,36 @@
             \]
             <p>
                 \(c \to 1\): the data pinned it. \(c \approx 0\): prior-dominated. \(c &lt; 0\): the
-                posterior is <em>wider</em> than the prior — a prior-data-conflict flag.
+                posterior is <em>wider</em> than the prior — a flag, but an <em>ambiguous</em> one on
+                its own. Read it with the shift: if \(|z| \geq 1\) the posterior <em>moved</em> at
+                least one prior-sd without narrowing — the evidence dominated the <em>location</em>
+                (verdict <strong>relocated</strong>), and the extra width reflects the likelihood's
+                flatness in the newly-favored region, or heavy tails left by chains that mixed into
+                it slowly. The diagnostic separates those two with an IQR-based
+                <code>contraction_robust</code> (tail-insensitive) and <code>post_ess_bulk</code>
+                (low ESS = suspect the sampler, not the posterior).
             </p>
 
             <div class="chart-container tall" id="learnChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — contraction per parameter from the baked
                 <code>compute_parameter_learning(prior_samples=2000)</code> table, sorted so the
-                least-learned parameters land on top. The headline contrasts: the
-                <strong>adstock blend weights are prior-dominated</strong> (c &asymp; 0, overlap
-                &asymp; 0.85–0.88 — observational data barely identifies carryover, the equifinality of
-                math 01 as a measurement); \(\sigma\), the intercept, the controls, and the Fourier
-                amplitudes are strongly learned (c = 0.82–0.99); and
-                <strong>beta_Search has c = &minus;0.346</strong> with shift z = +1.77 — its posterior is
-                <em>wider</em> than its prior. That is the demand-confounded channel
+                least-learned parameters land on top. The headline under the parametric-adstock default
+                is <strong>prior–data tension, not prior-domination</strong>: every
+                <strong>adstock_alpha decay rate has <em>negative</em> contraction</strong>
+                (c = &minus;0.85 to &minus;0.66, overlap 0.49&ndash;0.77) — the
+                short-memory \(\mathrm{Beta}(1,3)\) prior commits to mean 0.25, the data argue for longer
+                carryover, and the posterior comes out <em>wider</em> than the prior. For Search the
+                likelihood outright wins the argument over <em>location</em>: shift z = +1.50 — the
+                posterior moved 1.5 prior-sd without narrowing — verdict <strong>relocated</strong>
+                (the evidence dominated where the parameter sits; the width is the likelihood's flatness,
+                not "the data taught nothing"). The other three alphas stay verdict <em>weak</em>: the
+                likelihood fights the prior without winning — observational data barely identifies
+                carryover, the equifinality of math 01 as a measurement. Meanwhile \(\sigma\), the
+                intercept, the controls, the
+                saturation rates, and the Fourier amplitudes are clearly learned (c = 0.67–0.995); and
+                <strong>beta_Search has c = &minus;0.177</strong> with shift z = +0.13 — its posterior, too,
+                is <em>wider</em> than its prior. That is the demand-confounded channel
                 (<a href="stress-03-confounding-selection.html">stress 03</a>) flagging prior-data tension
                 that a forest plot alone would hide.
             </p>
@@ -583,22 +629,26 @@
                         \(p(\theta\mid\tilde y) \propto p(\tilde y\mid\theta)\,p(\theta)\) is the object of
                         inference, and MCMC draws <em>are</em> the posterior for every band you report.</li>
                     <li><strong>Check the prior predictive before fitting:</strong> on Aurora the prior
-                        envelope [710, 1516] brackets the data (mean 839) and leans high — the honest
-                        consequence of a positive-only \(\beta\) prior.</li>
+                        envelope [703, 1602] contains the data mean (839), covers 63% of observed weeks,
+                        and leans high — the honest consequence of a positive-only \(\beta\) prior.</li>
                     <li><strong>NUTS works because of gradients:</strong> leapfrog steps follow
                         \(\nabla \log p\) along ridges; that is why every transform must be differentiable
-                        — and why the fit takes 14 seconds, not hours.</li>
+                        — and why the fit takes 20 seconds, not hours.</li>
                     <li><strong>Convergence diagnostics validate the computation, not the claim:</strong>
-                        \(\hat R \le 1.012\), ESS &ge; 321, R&sup2; = 0.92, 90% coverage — and TV's ROAS is
-                        still 0.22 vs a true 2.14. Identification comes from design, not from sampling
-                        longer.</li>
+                        \(\hat R \le 1.012\), ESS &ge; 152, zero divergences, R&sup2; = 0.925, 92% coverage
+                        — and TV's ROAS is still 0.33 vs a true 2.14. Identification comes from design, not
+                        from sampling longer.</li>
                     <li><strong>Decomposition is additive — now:</strong> baseline + &sum; media
                         reconstructs the fit at corr 0.9999, after the 2026-06-02 fix; before it, the
                         helper silently dropped controls (reconstruction R&sup2; = &minus;2.86).</li>
                     <li><strong>Ask "did the data teach us?", not "is the interval tight?":</strong>
                         contraction/overlap separate learned parameters from prior echoes — Aurora's
-                        adstock weights are prior-dominated and beta_Search shows genuine prior-data
-                        tension.</li>
+                        adstock_alpha decay rates show <em>negative</em> contraction with high overlap:
+                        Search's verdict is <em>relocated</em> (it moved +1.5 prior-sd without narrowing —
+                        the evidence dominated the location), the other three <em>weak</em> — the
+                        short-memory Beta(1,3) prior in tension with data
+                        that wants longer carryover, the posterior widening rather than narrowing.
+                        beta_Search tells the same tension story on the demand-confounded channel.</li>
                 </ul>
             </div>
 
@@ -699,12 +749,12 @@
         // ------------------------------------------------------------------
         // Shared Aurora-shaped series (illustrative recreation, seeded), scaled
         // to the MEASURED component sizes from the baked notebook:
-        //   baseline mean 697.9 (std 53.5); seasonality std 26.5; controls std
-        //   31.2; media means TV 12.5 / Search 90.0 / Social 26.9 / Display 12.2.
+        //   baseline mean 747.4 (std 61.4); seasonality std 27.0; controls std
+        //   24.8; media means TV 19.4 / Search 33.1 / Social 21.1 / Display 18.4.
         // ------------------------------------------------------------------
         function buildAuroraShapes() {
             const rng = mulberry32(20260610);
-            const MEDIA_MEANS = [12.5, 90.0, 26.9, 12.2];
+            const MEDIA_MEANS = [19.4, 33.1, 21.1, 18.4];
 
             const trend = [], season = [], controls = [], baseline = [];
             // smooth seeded "controls" wiggle: two slow sinusoids + AR noise
@@ -720,11 +770,11 @@
             const cSd = Math.sqrt(rawCtrl.reduce(function(a, b) { return a + (b - cMean) * (b - cMean); }, 0) / T);
 
             for (let t = 0; t < T; t++) {
-                trend.push(13.5 * (t / (T - 1) - 0.5) * 2);                    // measured slope 0.175 (std scale)
-                season.push(37.5 * Math.cos(2 * Math.PI * (t - 80) / 52) +
-                            6 * Math.cos(4 * Math.PI * (t - 8) / 52));          // std ~26.5
-                controls.push((rawCtrl[t] - cMean) / cSd * 31.2);               // std == 31.2, mean 0
-                baseline.push(697.9 + trend[t] + season[t] + controls[t]);
+                trend.push(51 * (t / (T - 1) - 0.5) * 2);                       // measured slope 1.331 (std scale) ≈ ±51 $000s
+                season.push(38.2 * Math.cos(2 * Math.PI * (t - 80) / 52) +
+                            6 * Math.cos(4 * Math.PI * (t - 8) / 52));          // std ~27.0
+                controls.push((rawCtrl[t] - cMean) / cSd * 24.8);               // std == 24.8, mean 0
+                baseline.push(747.4 + trend[t] + season[t] + controls[t]);
             }
 
             // per-channel media paths: positive, mild seeded variation around the
@@ -746,7 +796,7 @@
                 let m = baseline[t];
                 for (let c = 0; c < 4; c++) m += media[c][t];
                 predMean.push(m);
-                obs.push(m + 22 * randn(rng));     // residual sd ~ sigma*y_std = 0.30*77
+                obs.push(m + 22 * randn(rng));     // residual sd ~ sigma*y_std = 0.291*77
                 bandLo.push(m - 39);               // ~90% band half-width 1.64*resid sd
                 bandHi.push(m + 39);
             }
@@ -774,10 +824,10 @@
                 pdf: function(x) { return x < 0 ? 0 : 0.5 * Math.exp(-0.5 * x); }
             },
             beta: {
-                xmax: 1, vline: 0.5, vlabel: 'mode = 0.5', color: PT.colors.display,
-                title: 'm ~ Beta(2,2): short ↔ long memory blend weight',
-                xlab: 'm (adstock blend weight)',
-                pdf: function(x) { return (x < 0 || x > 1) ? 0 : 6 * x * (1 - x); }
+                xmax: 1, vline: 0.25, vlabel: 'mean = 0.25', color: PT.colors.display,
+                title: 'α ~ Beta(1,3): adstock decay rate (leans short-memory)',
+                xlab: 'α (adstock decay rate)',
+                pdf: function(x) { return (x < 0 || x > 1) ? 0 : 3 * (1 - x) * (1 - x); }
             }
         };
 
@@ -912,20 +962,20 @@
         // ------------------------------------------------------------------
         const SUMMARY = [
             // name, mean, hdi3, hdi97, r_hat, ess_bulk
-            ['beta_TV',          1.044,  0.054, 2.536, 1.00,  776],
-            ['beta_Search',      3.349,  1.389, 5.741, 1.01,  343],
-            ['beta_Social',      1.423,  0.048, 3.048, 1.01,  321],
-            ['beta_Display',     1.057,  0.024, 2.472, 1.00, 1248],
-            ['sat_lam_TV',       0.746,  0.000, 2.421, 1.00,  501],
-            ['sat_lam_Search',   1.079,  0.359, 1.920, 1.00,  710],
-            ['sat_lam_Social',   0.925,  0.003, 2.377, 1.00,  606],
-            ['sat_lam_Display',  0.773,  0.001, 2.654, 1.00,  531],
-            ['adstock_TV',       0.462,  0.068, 0.883, 1.00, 1663],
-            ['adstock_Search',   0.656,  0.366, 0.942, 1.00,  990],
-            ['adstock_Social',   0.507,  0.126, 0.898, 1.01, 1103],
-            ['adstock_Display',  0.462,  0.101, 0.867, 1.00, 1176],
-            ['intercept',       -1.920, -2.324, -1.534, 1.00, 556],
-            ['sigma',            0.300,  0.257, 0.346, 1.00,  820]
+            ['beta_TV',                1.064,  0.029, 2.509, 1.00, 652],
+            ['beta_Search',            1.623,  0.043, 3.470, 1.00, 205],
+            ['beta_Social',            1.268,  0.060, 3.139, 1.00, 445],
+            ['beta_Display',           1.043,  0.020, 2.511, 1.00, 565],
+            ['sat_lam_TV',             0.630,  0.001, 1.913, 1.00, 640],
+            ['sat_lam_Search',         0.727,  0.002, 1.630, 1.00, 378],
+            ['sat_lam_Social',         0.638,  0.001, 1.862, 1.00, 574],
+            ['sat_lam_Display',        0.665,  0.000, 2.318, 1.00, 487],
+            ['adstock_alpha_TV',       0.386,  0.007, 0.837, 1.00, 514],
+            ['adstock_alpha_Search',   0.553,  0.066, 0.942, 1.00, 196],
+            ['adstock_alpha_Social',   0.399,  0.002, 0.806, 1.01, 337],
+            ['adstock_alpha_Display',  0.380,  0.001, 0.812, 1.00, 474],
+            ['intercept',             -1.855, -2.376, -1.268, 1.00, 454],
+            ['sigma',                  0.291,  0.252, 0.330, 1.00, 797]
         ];
 
         function chColor(name) {
@@ -1056,7 +1106,7 @@
         const FOREST = {
             beta: { rows: SUMMARY.slice(0, 4),  title: 'β (channel coefficient), mean and 94% HDI', xmin: 0 },
             lam:  { rows: SUMMARY.slice(4, 8),  title: 'λ = sat_lam (saturation rate), mean and 94% HDI', xmin: 0 },
-            ad:   { rows: SUMMARY.slice(8, 12), title: 'm = adstock blend weight, mean and 94% HDI', xmin: 0 }
+            ad:   { rows: SUMMARY.slice(8, 12), title: 'α = adstock_alpha (decay rate), mean and 94% HDI', xmin: 0 }
         };
 
         function drawForest(group) {
@@ -1099,10 +1149,10 @@
         // ------------------------------------------------------------------
         const ROI = [
             // channel, model ROI, ROAS_low, ROAS_high, true ROAS
-            ['TV',      0.218, -0.036, 0.711, 2.143],
-            ['Search',  2.828,  1.146, 4.250, 0.664],
-            ['Social',  0.905, -0.022, 2.960, 0.486],
-            ['Display', 0.445, -0.087, 1.521, 2.111]
+            ['TV',      0.334, -0.004, 1.117, 2.143],
+            ['Search',  1.047,  0.014, 2.729, 0.664],
+            ['Social',  0.715, -0.008, 2.334, 0.486],
+            ['Display', 0.673, -0.057, 2.433, 2.111]
         ];
 
         function drawRoi() {
@@ -1207,53 +1257,65 @@
         // 9) Prior -> posterior learning: contraction per parameter (measured).
         // ------------------------------------------------------------------
         const LEARNING = [
-            // parameter, contraction, overlap, shift_z, verdict (sorted ascending by c)
-            ['beta_Search',      -0.346, 0.356,  1.772, 'weak'],
-            ['adstock_TV',       -0.123, 0.862, -0.209, 'prior-dominated'],
-            ['adstock_Display',   0.025, 0.852, -0.166, 'prior-dominated'],
-            ['adstock_Social',    0.036, 0.878,  0.010, 'prior-dominated'],
-            ['beta_Social',       0.061, 0.913, -0.092, 'prior-dominated'],
-            ['trend_slope',       0.075, 0.370,  1.760, 'weak'],
-            ['beta_TV',           0.318, 0.755, -0.456, 'moderate'],
-            ['beta_Display',      0.328, 0.774, -0.451, 'moderate'],
-            ['adstock_Search',    0.478, 0.678,  0.689, 'moderate'],
-            ['sat_lam_Display',   0.720, 0.614, -0.614, 'strong'],
-            ['sat_lam_Social',    0.729, 0.683, -0.539, 'strong'],
-            ['sat_lam_TV',        0.756, 0.631, -0.620, 'strong'],
-            ['intercept',         0.820, 0.006, -3.835, 'strong'],
-            ['season_yearly[1]',  0.909, 0.201,  1.457, 'strong'],
-            ['sat_lam_Search',    0.944, 0.493, -0.474, 'strong'],
-            ['season_yearly[3]',  0.969, 0.321,  0.094, 'strong'],
-            ['season_yearly[0]',  0.971, 0.264, -0.654, 'strong'],
-            ['season_yearly[2]',  0.976, 0.273, -0.419, 'strong'],
-            ['beta_controls[1]',  0.983, 0.182,  0.935, 'strong'],
-            ['beta_controls[0]',  0.991, 0.163, -0.352, 'strong'],
-            ['sigma',             0.993, 0.176, -0.339, 'strong']
+            // parameter, contraction, detail (overlap/shift from the baked lrn.round(3)
+            // table; robust = IQR-based contraction_robust where the bake's ✓ lines print it), group.
+            // Groups follow the framework's contraction thresholds (c_weak=0.1, c_strong=0.5);
+            // the bake's verdict column reads "relocated" for adstock_alpha_Search
+            // (|shift z| ≥ 1 with c < 0.1) and "weak" for the other three decay rates.
+            ['adstock_alpha_Search',  -0.853, 'robust −1.630 · overlap 0.494 · shift z +1.50', 'relocated'],
+            ['adstock_alpha_Social',   -0.823, 'robust −1.947 · overlap 0.698 · shift z +0.83', 'tension'],
+            ['adstock_alpha_TV',       -0.719, 'robust −1.143 · overlap 0.768 · shift z +0.66', 'tension'],
+            ['adstock_alpha_Display',  -0.657, 'robust −1.162 · overlap 0.752 · shift z +0.63', 'tension'],
+            ['beta_Search',            -0.177, 'shift z +0.13', 'tension'],
+            ['beta_Social',             0.062, 'shift z −0.22', 'barely'],
+            ['beta_TV',                 0.337, 'shift z −0.45', 'moderate'],
+            ['beta_Display',            0.372, 'shift z −0.48', 'moderate'],
+            ['intercept',               0.672, 'overlap 0.019 · shift z −3.67', 'strong'],
+            ['sat_lam_Display',         0.757, 'shift z −0.66', 'strong'],
+            ['sat_lam_TV',              0.783, 'shift z −0.70', 'strong'],
+            ['sat_lam_Social',          0.812, 'shift z −0.70', 'strong'],
+            ['sat_lam_Search',          0.850, 'shift z −0.61', 'strong'],
+            ['trend_slope',             0.870, 'shift z +2.62', 'strong'],
+            ['season_yearly[1]',        0.900, 'shift z +1.55', 'strong'],
+            ['season_yearly[3]',        0.958, 'shift z +0.01', 'strong'],
+            ['season_yearly[2]',        0.969, 'shift z −0.41', 'strong'],
+            ['season_yearly[0]',        0.969, 'shift z −0.10', 'strong'],
+            ['beta_controls[1]',        0.982, 'shift z +0.75', 'strong'],
+            ['beta_controls[0]',        0.992, 'shift z −0.31', 'strong'],
+            ['sigma',                   0.995, 'overlap 0.147', 'strong']
         ];
-        const VERDICT_COLORS = {
-            'prior-dominated': PT.colors.silent,
-            'weak': PT.colors.social,
+        const GROUP_LABELS = {
+            'relocated': 'relocated: moved ≥1 prior-sd, no narrowing',
+            'tension':  'tension: posterior wider (c < 0)',
+            'barely':   'barely learned (0 ≤ c < 0.1)',
+            'moderate': 'moderate (0.1 ≤ c < 0.5)',
+            'strong':   'strong (c ≥ 0.5)'
+        };
+        const GROUP_COLORS = {
+            'relocated': '#7b5ea5',
+            'tension': PT.colors.silent,
+            'barely': PT.colors.social,
             'moderate': PT.colors.search,
             'strong': PT.colors.tv
         };
 
         function drawLearning() {
-            const verdicts = ['prior-dominated', 'weak', 'moderate', 'strong'];
-            const traces = verdicts.map(function(v) {
-                const rows = LEARNING.filter(function(r) { return r[4] === v; });
+            const groups = ['relocated', 'tension', 'barely', 'moderate', 'strong'];
+            const traces = groups.map(function(v) {
+                const rows = LEARNING.filter(function(r) { return r[3] === v; });
                 return {
-                    type: 'bar', orientation: 'h', name: v,
+                    type: 'bar', orientation: 'h', name: GROUP_LABELS[v],
                     y: rows.map(function(r) { return r[0]; }),
                     x: rows.map(function(r) { return r[1]; }),
-                    marker: { color: VERDICT_COLORS[v], line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
-                    customdata: rows.map(function(r) { return [r[2], r[3]]; }),
-                    hovertemplate: '<b>%{y}</b><br>contraction %{x:.3f}<br>overlap %{customdata[0]:.3f} · shift z %{customdata[1]:+.2f}<extra>' + v + '</extra>'
+                    marker: { color: GROUP_COLORS[v], line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    customdata: rows.map(function(r) { return [r[2]]; }),
+                    hovertemplate: '<b>%{y}</b><br>contraction %{x:.3f}<br>%{customdata[0]}<extra>' + GROUP_LABELS[v] + '</extra>'
                 };
             });
             const order = LEARNING.map(function(r) { return r[0]; });
             const layout = PT.layout({
                 margin: { l: 150, r: 30, t: 10, b: 55 },
-                xaxis: { title: 'contraction  c = 1 − Var(post)/Var(prior)', range: [-0.45, 1.05] },
+                xaxis: { title: 'contraction  c = 1 − Var(post)/Var(prior)', range: [-1.0, 1.05] },
                 yaxis: { categoryorder: 'array', categoryarray: order.slice().reverse(), automargin: true },
                 legend: { orientation: 'h', y: 1.07 },
                 shapes: [{

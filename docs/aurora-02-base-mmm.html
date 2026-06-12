@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-02-base-mmm.html">
     <meta property="og:title" content="Aurora 02: The Base MMM | MMM Framework">
-    <meta property="og:description" content="What is each channel worth? Contributions and ROAS with honest uncertainty, marginal ROAS, a what-if — and the gap the base model can't close: TV ROAS 0.21 vs a true 2.14.">
+    <meta property="og:description" content="What is each channel worth? Contributions and ROAS with honest uncertainty, marginal ROAS, a what-if — and the gap the base model can't close: TV ROAS 0.35 vs a true 2.14.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-02-base-mmm.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -174,24 +174,45 @@
                     <div class="stat-label">weeks of Aurora panel data, 4 media channels + demand control</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">1.012</div>
+                    <div class="stat-value">1.016</div>
                     <div class="stat-label">max R̂ on the demo fit (2 chains × 600 draws)</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">0.21</div>
+                    <div class="stat-value">0.35</div>
                     <div class="stat-label">estimated TV ROAS — the truth is 2.14</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">−1.49%</div>
+                    <div class="stat-value">−0.30%</div>
                     <div class="stat-label">the model's verdict on a budget move that is actually good</div>
                 </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00–05</a> (Bayesian fluency assumed) — or equivalent.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~35–45 min reading + fit time if running
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How one demand-controlled, builder-configured fit delivers contributions, ROAS, and marginal ROAS for Aurora — all with credible intervals.</li>
+                    <li>How to gate on diagnostics (R̂, ESS, divergences, PPC) and then check what the data actually learned versus what the priors supplied.</li>
+                    <li>Why a well-converged model can still be structurally wrong twice — Search inflated by residual demand-chasing, TV/Display gutted by unmodeled mediation — and why that's the cliffhanger, not the conclusion.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/02_base_mmm.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/02_base_mmm.ipynb</code></a> on GitHub.
+                </p>
             </div>
 
             <h2 id="config">One model, demand-controlled</h2>
             <p>
                 The configuration is deliberately boring: the MFF-style Aurora panel with the
-                <strong>demand control included</strong> (the back-door from Chapter 1), geometric adstock and
-                saturation per channel (the framework's defaults — both learned), yearly seasonality, and a
+                <strong>demand control included</strong> (the back-door from Chapter 1), parametric geometric
+                adstock with a learned decay rate \(\alpha_c \sim \mathrm{Beta}(1,3)\) and saturation per
+                channel (the framework's defaults — both learned; the legacy fixed-decay blend is an opt-out),
+                yearly seasonality, and a
                 linear trend. Bayesian sampling returns a full posterior, not a point estimate. The builder
                 makes the whole specification one readable expression:
             </p>
@@ -211,7 +232,7 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
                 <h4>💡 Why control_demand=True matters</h4>
                 <p>
                     Without it, Search — whose spend <em>chases</em> demand — soaks up the demand signal and
-                    looks like a hero (naive ROI ≈ 2.8 against a true ROAS of 0.66). The control closes the
+                    looks like a hero (demand-blind ROI ≈ 2.5 against a true ROAS of 0.66). The control closes the
                     back-door the DAG identified. <a href="stress-03-confounding-selection.html">Stress 03</a>
                     shows what happens when you can only control for a noisy proxy: the bias survives.
                 </p>
@@ -226,17 +247,17 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <table>
                 <thead><tr><th>Check</th><th>Measured</th><th>Gate</th><th>Verdict</th></tr></thead>
                 <tbody>
-                    <tr><td>R̂ max</td><td>1.012</td><td>&lt; 1.01</td><td>marginally over — small-draw demo run</td></tr>
-                    <tr><td>ESS bulk min</td><td>461</td><td>&gt; 400</td><td>passes</td></tr>
-                    <tr><td>Divergences</td><td>10</td><td>0</td><td>flagged — raise target_accept / draws in production</td></tr>
+                    <tr><td>R̂ max</td><td>1.016</td><td>&lt; 1.01</td><td>marginally over — small-draw demo run</td></tr>
+                    <tr><td>ESS bulk min</td><td>167</td><td>&gt; 400</td><td>well under — small-draw demo run</td></tr>
+                    <tr><td>Divergences</td><td>8</td><td>0</td><td>flagged — raise target_accept / draws in production</td></tr>
                 </tbody>
             </table>
             <p>
                 The notebook is explicit that these 2-chain, 600-draw fits trade rigor for speed; real
                 analyses use ≥4 chains and ≥1000 draws/tune. The deeper doctrine — established in
                 <a href="stress-00-rosy-picture.html">Stress 00</a> — is that this gate validates the
-                <em>sampler</em>, never the <em>causal claim</em>. We will pass (most of) the gate and still
-                end this page with two channels off by a factor of ten.
+                <em>sampler</em>, never the <em>causal claim</em>. We will limp through the gate and still
+                end this page with two channels undervalued three- to six-fold.
             </p>
             <p>
                 Every ROAS number below is a summary of these posterior coefficient distributions. Wide
@@ -245,9 +266,9 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <div class="chart-container short" id="betaForestChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — posterior mean and 94% HDI for each channel coefficient \(\beta_c\),
-                from the baked notebook's <code>results.summary()</code>. Search is the only coefficient pinned
-                clearly away from zero; TV, Social and Display all have HDIs reaching nearly to 0 — the model
-                genuinely isn't sure they do much. Hold that thought.
+                from the baked notebook's <code>results.summary()</code>. Every coefficient is wide and none is
+                pinned clearly away from zero — even Search, the largest mean (1.74), has an HDI reaching down
+                to 0.12 — the model genuinely isn't sure any single channel does much. Hold that thought.
             </p>
 
             <h2 id="learning">How much came from the data vs the priors?</h2>
@@ -263,13 +284,21 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <div class="chart-container tall" id="learningChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — contraction per parameter from the baked notebook's learning table.
-                Read the bars honestly: the <strong>adstock blend weights</strong> sit at ≈0 contraction with
-                ~0.87 prior overlap — observational data barely moves <em>carryover</em> (the
+                Read the bars honestly: all four <strong>adstock decay rates</strong> \(\alpha_c\) show
+                <em>negative</em> contraction (<code>adstock_alpha_TV</code> −0.91 down to
+                <code>adstock_alpha_Social</code> −0.57) with high prior overlap (0.48–0.75) — the posterior
+                comes back <em>wider</em> than the \(\mathrm{Beta}(1,3)\) prior, a weak-identification /
+                prior↔data-tension flag: observational data barely pins <em>carryover</em> (the
                 carryover/saturation equifinality; see <a href="stress-01-carryover-shape.html">Stress 01</a>).
+                Three of the four carry verdict <em>weak</em>; <code>adstock_alpha_Search</code> (purple bar)
+                is verdict <em>relocated</em> — shift z +1.60, the posterior moved 1.6 prior-sd
+                <em>without narrowing</em>, so the evidence dominated the <em>location</em> and the width
+                reflects likelihood flatness, not "the data taught nothing".
                 But the pieces that drive ROI — saturation rates, intercept, controls, seasonality,
                 \(\sigma\) — are strongly learned (\(c\) up to 0.99). And <code>beta_Search</code> shows
-                <em>negative</em> contraction with a large standardized shift (1.78): a genuine prior↔data
-                tension flag on exactly the demand-confounded channel Chapter 1 warned about.
+                negative contraction too (−0.11, with 0.88 prior overlap — verdict
+                <em>prior-dominated</em>): the one coefficient the data cannot pin is exactly the
+                demand-confounded channel Chapter 1 warned about.
             </p>
 
             <h3>Does the model track revenue?</h3>
@@ -296,10 +325,10 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <table>
                 <thead><tr><th>Channel</th><th>Total spend ($k)</th><th>Total contribution ($k)</th><th>ROAS (est.)</th><th>True ROAS</th></tr></thead>
                 <tbody>
-                    <tr><td>TV</td><td>6,053.78</td><td>1,265.88</td><td>0.21</td><td><strong>2.14</strong></td></tr>
-                    <tr><td>Search</td><td>3,312.38</td><td>9,353.67</td><td>2.82</td><td><strong>0.66</strong></td></tr>
-                    <tr><td>Social</td><td>3,095.75</td><td>2,629.10</td><td>0.85</td><td><strong>0.49</strong></td></tr>
-                    <tr><td>Display</td><td>2,853.73</td><td>1,322.09</td><td>0.46</td><td><strong>2.11</strong></td></tr>
+                    <tr><td>TV</td><td>6,053.78</td><td>2,106.14</td><td>0.35</td><td><strong>2.14</strong></td></tr>
+                    <tr><td>Search</td><td>3,312.38</td><td>3,476.73</td><td>1.05</td><td><strong>0.66</strong></td></tr>
+                    <tr><td>Social</td><td>3,095.75</td><td>1,992.49</td><td>0.64</td><td><strong>0.49</strong></td></tr>
+                    <tr><td>Display</td><td>2,853.73</td><td>1,914.14</td><td>0.67</td><td><strong>2.11</strong></td></tr>
                 </tbody>
             </table>
             <p>
@@ -327,16 +356,16 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <table>
                 <thead><tr><th>Channel</th><th>Current spend ($k)</th><th>Marginal contribution ($k)</th><th>Marginal ROAS</th><th>Average ROAS</th></tr></thead>
                 <tbody>
-                    <tr><td>TV</td><td>6,053.78</td><td>100.16</td><td>0.17</td><td>0.21</td></tr>
-                    <tr><td>Search</td><td>3,312.38</td><td>687.59</td><td>2.08</td><td>2.82</td></tr>
-                    <tr><td>Social</td><td>3,095.75</td><td>203.03</td><td>0.66</td><td>0.85</td></tr>
-                    <tr><td>Display</td><td>2,853.73</td><td>102.42</td><td>0.36</td><td>0.46</td></tr>
+                    <tr><td>TV</td><td>6,053.78</td><td>153.64</td><td>0.25</td><td>0.35</td></tr>
+                    <tr><td>Search</td><td>3,312.38</td><td>266.06</td><td>0.80</td><td>1.05</td></tr>
+                    <tr><td>Social</td><td>3,095.75</td><td>149.62</td><td>0.48</td><td>0.64</td></tr>
+                    <tr><td>Display</td><td>2,853.73</td><td>136.88</td><td>0.48</td><td>0.67</td></tr>
                 </tbody>
             </table>
             <div class="chart-container" id="marginalChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — average vs marginal ROAS from the baked tables. Every channel's
-                next dollar earns less than its average dollar (Search: 2.82 → 2.08): all four are on the
+                next dollar earns less than its average dollar (Search: 1.05 → 0.80): all four are on the
                 concave part of their saturation curves. The gap between the pair of bars is the budgeting
                 signal — and it is why "Search has the best ROAS, give it everything" is wrong even when
                 you believe the model.
@@ -371,9 +400,9 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <table>
                 <thead><tr><th></th><th>Revenue</th></tr></thead>
                 <tbody>
-                    <tr><td>Baseline</td><td>$87,310k</td></tr>
-                    <tr><td>Scenario (Search −20%, TV +20%)</td><td>$86,011k</td></tr>
-                    <tr><td><strong>Change</strong></td><td><strong>−1.49% (−$1,298k)</strong></td></tr>
+                    <tr><td>Baseline</td><td>$87,302k</td></tr>
+                    <tr><td>Scenario (Search −20%, TV +20%)</td><td>$87,037k</td></tr>
+                    <tr><td><strong>Change</strong></td><td><strong>−0.30% (−$265k)</strong></td></tr>
                 </tbody>
             </table>
             <div class="warning">
@@ -400,10 +429,10 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <div class="chart-container short" id="whatifChart"></div>
             <p class="chart-note">
                 <strong>Illustrative</strong> — computed live from the calibrated response-curve approximation,
-                anchored to measured numbers (baseline revenue $87,310k; per-channel average and marginal
-                ROAS). At the notebook's setting (+20%) the approximation gives ≈ −1.45% against the measured
-                −1.49% — close enough to trust the shape. Every point on this curve inherits the base model's
-                blind spot: it prices TV at 0.21, not 2.14.
+                anchored to measured numbers (baseline revenue $87,302k; per-channel average and marginal
+                ROAS). At the notebook's setting (+20%) the approximation gives ≈ −0.31% against the measured
+                −0.30% — close enough to trust the shape. Every point on this curve inherits the base model's
+                blind spot: it prices TV at 0.35, not 2.14.
             </p>
 
             <h2 id="honest">The honest residual — what the base model gets wrong here</h2>
@@ -413,7 +442,7 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             <div class="chart-container short" id="gapChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — estimated minus true ROAS per channel (baked
-                <code>chk</code> table): TV −1.93, Search +2.16, Social +0.36, Display −1.65. Two failure
+                <code>chk</code> table): TV −1.79, Search +0.39, Social +0.16, Display −1.44. Two failure
                 modes, opposite signs, one fit.
             </p>
             <p>
@@ -421,16 +450,17 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             </p>
             <ul>
                 <li>
-                    <strong>Search is still overstated (2.82 vs 0.66).</strong> The demand control closes most
+                    <strong>Search is still overstated (1.05 vs 0.66).</strong> The demand control closes most
                     of the back-door, but Search spend chases demand so tightly that residual confounding
                     survives — the learning diagnostic flagged it (<code>beta_Search</code>: negative
-                    contraction, shift 1.78). Observational control alone cannot finish the job; the fix is a
+                    contraction, 0.88 prior overlap — prior-dominated). Observational control alone cannot
+                    finish the job; the fix is a
                     <em>geo-lift experiment folded into the likelihood</em>, which
-                    <a href="aurora-01-causality.html">Chapter 1</a> demonstrates pulling Search's naive ~2.8
-                    down to ~0.68 against the truth of 0.66.
+                    <a href="aurora-01-causality.html">Chapter 1</a> demonstrates pulling Search from 2.51
+                    (demand-blind) and 1.04 (demand-controlled) onto the truth of 0.66.
                 </li>
                 <li>
-                    <strong>TV and Display are undervalued (0.21 vs 2.14; 0.46 vs 2.11).</strong> They work
+                    <strong>TV and Display are undervalued (0.35 vs 2.14; 0.67 vs 2.11).</strong> They work
                     almost entirely through <em>brand awareness</em> — a mediated pathway
                     (TV → awareness → sales) the base model has no node for, so it can only credit the tiny
                     direct slice. To value a brand channel you must model the mediation:
@@ -457,15 +487,16 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
                         with credible intervals</strong> — from one demand-controlled, builder-configured fit.</li>
                     <li><strong>Gate on diagnostics first</strong> (R̂, ESS, divergences, PPC), then check
                         <strong>what the data actually learned</strong>: here the ROI-driving parameters
-                        contracted strongly while adstock stayed prior-dominated and
-                        <code>beta_Search</code> flagged prior↔data tension.</li>
+                        contracted strongly while the adstock decay rates came back with negative contraction
+                        (three verdict <em>weak</em>; Search verdict <em>relocated</em> — it moved 1.6
+                        prior-sd without narrowing) and <code>beta_Search</code> stayed prior-dominated.</li>
                     <li><strong>Marginal ≠ average</strong>: every Aurora channel's next dollar earns less
-                        than its average dollar (Search 2.08 vs 2.82) — the saturation gap is the budgeting
+                        than its average dollar (Search 0.80 vs 1.05) — the saturation gap is the budgeting
                         signal, not the ROAS ranking.</li>
                     <li>The model is honest about <em>statistical</em> uncertainty yet still
                         <strong>structurally wrong twice</strong>: Search overstated by residual demand-chasing
-                        (+2.16 ROAS), TV/Display gutted by unmodeled mediation (−1.93 / −1.65).</li>
-                    <li>Hence the what-if's wrong sign (−1.49% on a truly good move): a base MMM is a
+                        (+0.39 ROAS), TV/Display gutted by unmodeled mediation (−1.79 / −1.44).</li>
+                    <li>Hence the what-if's wrong sign (−0.30% on a truly good move): a base MMM is a
                         <em>starting point</em> for <a href="interpreting-results.html">interpretation</a>,
                         not the final word — experiments and mediation models finish the story.</li>
                 </ul>
@@ -542,45 +573,47 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
 
         // results.summary(): posterior mean / hdi_3% / hdi_97% of beta_c (94% HDI).
         const BETA = {
-            TV:      { mean: 1.045, lo: 0.029, hi: 2.453 },
-            Search:  { mean: 3.305, lo: 1.229, hi: 5.534 },
-            Social:  { mean: 1.451, lo: 0.036, hi: 3.399 },
-            Display: { mean: 1.067, lo: 0.021, hi: 2.666 }
+            TV:      { mean: 1.112, lo: 0.058, hi: 2.712 },
+            Search:  { mean: 1.736, lo: 0.120, hi: 3.598 },
+            Social:  { mean: 1.130, lo: 0.036, hi: 2.704 },
+            Display: { mean: 1.052, lo: 0.035, hi: 2.518 }
         };
 
         // MMMAnalyzer ROI table + aurora.true_roas + marginal contributions table.
         const ROI = {
-            TV:      { spend: 6053.78, contrib: 1265.88, roas: 0.21, truth: 2.14, mroas: 0.17, mcontrib: 100.16 },
-            Search:  { spend: 3312.38, contrib: 9353.67, roas: 2.82, truth: 0.66, mroas: 2.08, mcontrib: 687.59 },
-            Social:  { spend: 3095.75, contrib: 2629.10, roas: 0.85, truth: 0.49, mroas: 0.66, mcontrib: 203.03 },
-            Display: { spend: 2853.73, contrib: 1322.09, roas: 0.46, truth: 2.11, mroas: 0.36, mcontrib: 102.42 }
+            TV:      { spend: 6053.78, contrib: 2106.14, roas: 0.35, truth: 2.14, mroas: 0.25, mcontrib: 153.64 },
+            Search:  { spend: 3312.38, contrib: 3476.73, roas: 1.05, truth: 0.66, mroas: 0.80, mcontrib: 266.06 },
+            Social:  { spend: 3095.75, contrib: 1992.49, roas: 0.64, truth: 0.49, mroas: 0.48, mcontrib: 149.62 },
+            Display: { spend: 2853.73, contrib: 1914.14, roas: 0.67, truth: 2.11, mroas: 0.48, mcontrib: 136.88 }
         };
 
-        const BASELINE_REVENUE = 87310;   // what_if_scenario baseline_outcome ($k)
+        const BASELINE_REVENUE = 87302;   // what_if_scenario baseline_outcome ($k)
 
         // compute_parameter_learning(): contraction per parameter (sorted ascending).
+        // v marks the bake's verdict where it departs from the contraction thresholds:
+        // adstock_alpha_Search is "relocated" (|shift z| ≥ 1 prior-sd with c < 0.1).
         const LEARNING = [
-            { p: 'beta_Search',      c: -0.326 },
-            { p: 'beta_Social',      c: -0.127 },
-            { p: 'adstock_TV',       c: -0.014 },
-            { p: 'adstock_Display',  c:  0.002 },
-            { p: 'trend_slope',      c:  0.091 },
-            { p: 'adstock_Social',   c:  0.181 },
-            { p: 'beta_TV',          c:  0.369 },
-            { p: 'beta_Display',     c:  0.390 },
-            { p: 'adstock_Search',   c:  0.444 },
-            { p: 'sat_lam_Social',   c:  0.704 },
-            { p: 'sat_lam_TV',       c:  0.705 },
-            { p: 'sat_lam_Display',  c:  0.738 },
-            { p: 'intercept',        c:  0.817 },
-            { p: 'season_yearly[1]', c:  0.905 },
-            { p: 'sat_lam_Search',   c:  0.927 },
-            { p: 'season_yearly[0]', c:  0.970 },
-            { p: 'season_yearly[3]', c:  0.976 },
-            { p: 'season_yearly[2]', c:  0.977 },
-            { p: 'beta_controls[1]', c:  0.983 },
-            { p: 'beta_controls[0]', c:  0.992 },
-            { p: 'sigma',            c:  0.994 }
+            { p: 'adstock_alpha_TV',      c: -0.910 },
+            { p: 'adstock_alpha_Search',  c: -0.857, v: 'relocated' },
+            { p: 'adstock_alpha_Display', c: -0.725 },
+            { p: 'adstock_alpha_Social',  c: -0.570 },
+            { p: 'beta_Search',           c: -0.113 },
+            { p: 'beta_Social',           c:  0.233 },
+            { p: 'beta_TV',               c:  0.253 },
+            { p: 'beta_Display',          c:  0.353 },
+            { p: 'intercept',             c:  0.650 },
+            { p: 'sat_lam_Social',        c:  0.740 },
+            { p: 'sat_lam_TV',            c:  0.752 },
+            { p: 'sat_lam_Display',       c:  0.807 },
+            { p: 'trend_slope',           c:  0.862 },
+            { p: 'season_yearly[1]',      c:  0.875 },
+            { p: 'sat_lam_Search',        c:  0.910 },
+            { p: 'season_yearly[3]',      c:  0.955 },
+            { p: 'season_yearly[0]',      c:  0.966 },
+            { p: 'season_yearly[2]',      c:  0.970 },
+            { p: 'beta_controls[1]',      c:  0.979 },
+            { p: 'beta_controls[0]',      c:  0.992 },
+            { p: 'sigma',                 c:  0.994 }
         ];
 
         // ------------------------------------------------------------------
@@ -648,6 +681,7 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
         function drawLearning() {
             const rows = LEARNING;
             const colors = rows.map(function(r) {
+                if (r.v === 'relocated') return '#7b5ea5';     // relocated: moved ≥1 prior-sd, no narrowing
                 if (r.c < 0.1) return PT.colors.silent;        // prior-dominated / tension
                 if (r.c < 0.5) return PT.colors.social;        // weakly learned
                 return PT.colors.ok;                           // strongly learned
@@ -661,7 +695,7 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             };
             const layout = PT.layout({
                 margin: { l: 150, r: 30, t: 10, b: 55 },
-                xaxis: { title: 'contraction  c = 1 − Var(post)/Var(prior)', range: [-0.45, 1.05] },
+                xaxis: { title: 'contraction  c = 1 − Var(post)/Var(prior)', range: [-1.08, 1.05] },
                 yaxis: { automargin: true },
                 shapes: [{
                     type: 'line', x0: 0.1, x1: 0.1, y0: -0.5, y1: rows.length - 0.5,
@@ -893,7 +927,7 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
                 title: { text: dirText + ' → ' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '% revenue (base-model view)',
                          font: { size: 14 }, x: 0.5 },
                 yaxis: { title: 'total 2-year revenue ($k)',
-                         range: [84000, 89500] }
+                         range: [86200, 88200] }
             });
             Plotly.react('whatifChart', [bars], layout, PT.config);
         }
@@ -907,7 +941,7 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
         // Chart 8: the honest residual — estimated minus true ROAS (measured)
         // ------------------------------------------------------------------
         function drawGap() {
-            const gaps = { TV: -1.93, Search: 2.16, Social: 0.36, Display: -1.65 };  // chk table
+            const gaps = { TV: -1.79, Search: 0.39, Social: 0.16, Display: -1.44 };  // chk table
             const trace = {
                 type: 'bar',
                 x: CHANNELS,
@@ -926,11 +960,11 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
             };
             const layout = PT.layout({
                 margin: { l: 70, r: 30, t: 24, b: 50 },
-                yaxis: { title: 'estimated − true ROAS', range: [-2.6, 2.9], zeroline: true },
+                yaxis: { title: 'estimated − true ROAS', range: [-2.3, 1.1], zeroline: true },
                 annotations: [
-                    { x: 'Search', y: 2.45, text: 'demand-chasing residual',
+                    { x: 'Search', y: 0.72, text: 'demand-chasing residual',
                       showarrow: false, font: { size: 11, color: '#a44c43' } },
-                    { x: 'TV', y: -2.25, text: 'unmodeled mediation',
+                    { x: 'TV', y: -2.12, text: 'unmodeled mediation',
                       showarrow: false, font: { size: 11, color: '#a44c43' } }
                 ]
             });

@@ -14,6 +14,7 @@ Features:
 
 from .generator import MMMReportGenerator, ReportBuilder
 from .config import ReportConfig, SectionConfig, ColorScheme, ColorPalette
+from .consultant_artifacts import ARTIFACTS, ArtifactSpec, render_artifact, write_all
 from .data_extractors import (
     MMMDataBundle,
     DataExtractor,
@@ -73,6 +74,11 @@ __all__ = [
     # Main generator
     "MMMReportGenerator",
     "ReportBuilder",
+    # Consultant artifacts
+    "ARTIFACTS",
+    "ArtifactSpec",
+    "render_artifact",
+    "write_all",
     # Data & Extractors
     "MMMDataBundle",
     "DataExtractor",

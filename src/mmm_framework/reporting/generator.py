@@ -231,7 +231,8 @@ class MMMReportGenerator:
         """Assemble complete HTML document."""
         generated_date = self.config.generated_date or datetime.now().strftime("%B %Y")
 
-        # Build header
+        # Build header: an editorial masthead — meta row (document kind,
+        # confidentiality, dates), serif title, client line, accent rule.
         subtitle = ""
         if self.config.client:
             subtitle = f'<div class="subtitle">{html.escape(self.config.client)}'
@@ -239,29 +240,41 @@ class MMMReportGenerator:
                 subtitle += f" — {html.escape(self.config.subtitle)}"
             subtitle += "</div>"
 
-        period = ""
+        meta_right = f"Generated {generated_date}"
         if self.config.analysis_period:
-            period = f'<div class="date">Analysis Period: {html.escape(self.config.analysis_period)} | Generated: {generated_date}</div>'
+            meta_right = (
+                f"Analysis period {html.escape(self.config.analysis_period)}"
+                f'<span class="meta-sep">·</span>{meta_right}'
+            )
+
+        conf_tag = ""
+        if self.config.confidential:
+            conf_tag = '<span class="masthead-tag">Confidential</span>'
 
         header = f"""
         <header class="report-header">
+            <div class="masthead-meta">
+                <span class="masthead-kind">Marketing Mix Model Report{conf_tag}</span>
+                <span class="masthead-date">{meta_right}</span>
+            </div>
             <h1>{html.escape(self.config.title)}</h1>
             {subtitle}
-            {period}
         </header>
         """
 
-        # Build footer
+        # Build footer (colophon)
         conf_line = ""
         if self.config.confidential:
             client_label = (
                 f" — {html.escape(self.config.client)}" if self.config.client else ""
             )
-            conf_line = f'<p class="confidential-notice">⚠ CONFIDENTIAL{client_label} — Not for distribution</p>'
+            conf_line = f'<p class="confidential-notice">CONFIDENTIAL{client_label} — not for distribution</p>'
         footer = f"""
         <footer class="report-footer">
             {conf_line}
-            <p>Generated: {generated_date}</p>
+            <p>Generated {generated_date} · Built with the MMM Framework
+               (Bayesian marketing mix modeling — estimates carry the uncertainty
+               intervals shown; point values alone are not decisions)</p>
         </footer>
         """
 
@@ -368,50 +381,104 @@ class MMMReportGenerator:
             padding: 2rem;
         }}
 
-        /* Header */
+        /* Header — editorial masthead */
         .report-header {{
-            text-align: center;
-            padding: 3rem 2rem;
-            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-dark) 100%);
-            color: white;
-            border-radius: 16px;
-            margin-bottom: 2rem;
+            border-top: 4px solid var(--color-primary-dark);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1.5rem 0 2rem;
+            margin-bottom: 2.5rem;
+        }}
+
+        .masthead-meta {{
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.5rem;
+            font-family: {self.config.font_family_mono};
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 1.75rem;
+        }}
+
+        .masthead-meta .meta-sep {{
+            margin: 0 0.6em;
+            opacity: 0.5;
+        }}
+
+        .masthead-tag {{
+            display: inline-block;
+            margin-left: 0.9em;
+            padding: 0.15em 0.7em;
+            border: 1px solid var(--color-danger);
+            border-radius: 3px;
+            color: var(--color-danger);
+            font-size: 0.92em;
         }}
 
         .report-header h1 {{
             font-family: {self.config.font_family_serif};
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
+            font-size: 2.6rem;
+            font-weight: 400;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+            margin-bottom: 0.6rem;
+            max-width: 18em;
         }}
 
         .report-header .subtitle {{
-            font-size: 1.1rem;
-            opacity: 0.9;
+            font-size: 1.05rem;
+            color: var(--color-text-muted);
         }}
 
-        .report-header .date {{
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            opacity: 0.8;
+        /* Section styling — numbered, editorial */
+        .report-container {{
+            counter-reset: report-section;
         }}
 
-        /* Section styling */
         .section {{
             background: var(--color-surface);
-            border-radius: 16px;
-            padding: 2rem;
+            border-radius: 10px;
+            padding: 2.25rem 2.5rem;
             margin-bottom: 2rem;
             box-shadow: var(--shadow-sm);
             border: 1px solid var(--color-border);
+            counter-increment: report-section;
         }}
 
-        .section h2 {{
+        .section > h2 {{
             font-family: {self.config.font_family_serif};
-            font-size: 1.6rem;
+            font-size: 1.55rem;
+            font-weight: 400;
             color: var(--color-text);
-            margin-bottom: 1rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid var(--color-primary);
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.85rem;
+            border-bottom: 1px solid var(--color-border);
+            position: relative;
+        }}
+
+        .section > h2::before {{
+            content: counter(report-section, decimal-leading-zero);
+            font-family: {self.config.font_family_mono};
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            color: var(--color-primary-dark);
+            display: block;
+            margin-bottom: 0.4rem;
+        }}
+
+        .section > h2::after {{
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -1px;
+            width: 3.5rem;
+            height: 2px;
+            background: var(--color-primary);
         }}
 
         .section h3 {{
@@ -441,43 +508,55 @@ class MMMReportGenerator:
         }}
 
         .metric-card {{
-            background: var(--color-bg-alt);
-            border-radius: 12px;
-            padding: 1.5rem;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            background: var(--color-surface);
+            border-radius: 8px;
+            padding: 1.4rem 1.5rem 1.25rem;
+            text-align: left;
             border: 1px solid var(--color-border);
-        }}
-
-        .metric-card .value {{
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--color-primary-dark);
-            font-family: {self.config.font_family_mono};
+            border-top: 3px solid var(--color-primary);
         }}
 
         .metric-card .label {{
-            font-size: 0.85rem;
+            order: -1;
+            font-family: {self.config.font_family_mono};
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
             color: var(--color-text-muted);
-            margin-top: 0.25rem;
+            margin-bottom: 0.6rem;
+        }}
+
+        .metric-card .value {{
+            font-size: 2.1rem;
+            font-weight: 600;
+            line-height: 1.1;
+            color: var(--color-text);
+            font-family: {self.config.font_family_sans};
+            font-variant-numeric: tabular-nums;
         }}
 
         .metric-card .ci {{
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             color: var(--color-text-muted);
             margin-top: 0.5rem;
             font-family: {self.config.font_family_mono};
+            font-variant-numeric: tabular-nums;
         }}
 
         .metric-card.highlight {{
-            border-left: 4px solid var(--color-primary);
+            border-top-color: var(--color-accent);
+            background: var(--color-bg-alt);
         }}
 
         .metric-card.warning {{
-            border-left: 4px solid var(--color-warning);
+            border-top-color: var(--color-warning);
         }}
 
         .metric-card.danger {{
-            border-left: 4px solid var(--color-danger);
+            border-top-color: var(--color-danger);
         }}
 
         /* Charts */
@@ -503,14 +582,18 @@ class MMMReportGenerator:
 
         /* Callout boxes */
         .callout {{
-            border-radius: 12px;
-            padding: 1.5rem;
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
             margin: 1.5rem 0;
         }}
 
         .callout h4 {{
-            margin-bottom: 0.75rem;
-            font-size: 1rem;
+            margin-bottom: 0.6rem;
+            font-family: {self.config.font_family_mono};
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
         }}
 
         .callout p {{
@@ -576,30 +659,37 @@ class MMMReportGenerator:
             border-radius: 50%;
         }}
 
-        /* Tables */
+        /* Tables — editorial: rule-based, tabular numerals */
         .data-table {{
             width: 100%;
             border-collapse: collapse;
             margin: 1.5rem 0;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
+            font-variant-numeric: tabular-nums;
         }}
 
         .data-table th, .data-table td {{
-            padding: 0.75rem 1rem;
+            padding: 0.65rem 1rem;
             text-align: left;
             border-bottom: 1px solid var(--color-border);
         }}
 
         .data-table th {{
-            background: var(--color-bg-alt);
-            font-weight: 600;
+            background: transparent;
+            border-bottom: 2px solid var(--color-text);
+            font-family: {self.config.font_family_mono};
+            font-weight: 500;
             color: var(--color-text-muted);
-            font-size: 0.85rem;
+            font-size: 0.72rem;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
+            letter-spacing: 0.1em;
         }}
 
-        .data-table tr:hover {{
+        .data-table tbody tr:last-child td {{
+            border-bottom: 2px solid var(--color-border);
+        }}
+
+        .data-table tbody tr:hover {{
             background: var(--color-bg-alt);
         }}
 
@@ -630,12 +720,15 @@ class MMMReportGenerator:
             margin: 0.5rem 0 0 1.5rem;
         }}
 
-        /* Footer */
+        /* Footer — colophon */
         .report-footer {{
-            text-align: center;
-            padding: 2rem;
+            text-align: left;
+            border-top: 1px solid var(--color-border);
+            margin-top: 2.5rem;
+            padding: 1.5rem 0 2.5rem;
             color: var(--color-text-muted);
-            font-size: 0.85rem;
+            font-size: 0.82rem;
+            line-height: 1.6;
         }}
 
         .report-footer a {{
@@ -655,21 +748,44 @@ class MMMReportGenerator:
             .report-header h1 {{ font-size: 1.8rem; }}
         }}
 
-        /* Print styles */
+        /* Print styles — consultants print these */
+        @page {{
+            margin: 18mm 16mm;
+        }}
+
         @media print {{
-            body {{ background: white; }}
+            body {{ background: white; font-size: 11pt; }}
             .report-nav {{ display: none !important; }}
             .report-body {{ display: block !important; }}
+            .report-body.has-nav .report-container {{ padding-left: 0; }}
             .report-container {{ max-width: none; padding: 0; margin: 0; }}
+            .report-header {{
+                border-top-width: 6px;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
             .section {{
                 break-inside: avoid;
                 box-shadow: none;
-                border: 1px solid #ddd;
+                border: none;
+                border-top: 1px solid #ddd;
+                border-radius: 0;
+                padding: 1.5rem 0;
             }}
+            .section > h2::before,
+            .section > h2::after,
+            .metric-card,
+            .callout {{
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
+            .metric-card {{ break-inside: avoid; }}
             .chart-container {{
                 break-inside: avoid;
                 page-break-inside: avoid;
             }}
+            .data-table tbody tr:hover {{ background: transparent; }}
+            .report-footer {{ page-break-inside: avoid; }}
         }}
 
         /* ── Layout shell ─────────────────────────────────────────────── */

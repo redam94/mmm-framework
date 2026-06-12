@@ -210,13 +210,33 @@
                 </div>
             </div>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why green sampler diagnostics — r-hat 1.00, zero divergences, a passing PPC — can coexist with attribution that is wrong by multiples: they validate the computation, never the causal claim.</li>
+                    <li>How a counterfactual zero-out estimand and a clean positive control (7% median error, 100% coverage) make model error measurable instead of rhetorical.</li>
+                    <li>What each check in the diagnostic toolkit can and cannot see — sampler checks test sampling, PPC tests fit, and none of them tests attribution.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_00_the_rosy_picture.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_00_the_rosy_picture.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="estimand">1 · The estimand discipline: what number would be wrong?</h2>
             <p>
                 A stress test is only as honest as its definition of "truth", and an MMM is only as
                 honest as its definition of "contribution". Before reading any posterior — before
                 <em>fitting</em> — you must be able to answer: <strong>if this model is wrong, which
                 number is wrong, and against what?</strong> The series' answer, used in every world in
-                <code>tests/synth/dgp.py</code>: contribution is the <strong>counterfactual
+                <code>src/mmm_framework/synth/dgp.py</code>: contribution is the <strong>counterfactual
                 zero-out</strong>, evaluated on the noiseless structural mean,
             </p>
             <p>
@@ -555,16 +575,18 @@
                 worse.
             </p>
 
-            <h2 id="open">7 · Still open: the legacy default adstock</h2>
+            <h2 id="open">7 · Resolved: the legacy adstock default</h2>
             <div class="warning">
-                <h4>⚠️ Known open finding (stress 00)</h4>
+                <h4>✅ Finding closed (June 2026) — and it changed the framework</h4>
                 <p>
                     Every fit on this page uses <code>use_parametric_adstock=True</code>, so the model
                     estimates the same kernel family the world was generated with. With the legacy
-                    two-point blend adstock — <code>use_parametric_adstock=False</code>, the current
-                    <em>default</em> config — the <strong>clean positive control recovers at ~28% median
-                    error vs 7% parametric</strong>: the default underperforms on the model's own
-                    generative family. Until the default changes, prefer the parametric adstock.
+                    two-point blend adstock — <code>use_parametric_adstock=False</code>, the
+                    <em>default before June 2026</em> — the <strong>clean positive control recovers at
+                    ~28% median error vs 7% parametric</strong>: the old default underperformed on the
+                    model's own generative family. This finding drove a change:
+                    <strong>parametric adstock is now the shipped default</strong>; the blend remains an
+                    explicit opt-out for reproducing older fits.
                     <a href="stress-01-carryover-shape.html">Guide 01</a> covers kernel choice in depth.
                 </p>
             </div>
@@ -596,8 +618,8 @@
                 <h4>💡 Run it yourself</h4>
                 <p>
                     This page mirrors <code>nbs/stress_00_the_rosy_picture.ipynb</code> (authored by
-                    <code>nbs/build_stress_00_rosy_picture.py</code>), backed by the scenario DGPs and
-                    scoring harness in <code>tests/synth/</code> and the recorded scorecard in
+                    <code>nbs/build_stress_00_rosy_picture.py</code>), backed by the scenario DGPs in
+                    <code>mmm_framework.synth</code>, the scoring harness in <code>tests/synth/</code>, and the recorded scorecard in
                     <code>tests/synth/results/stress_matrix.md</code>. Every computational cell ends in a
                     seeded assert encoding the claim it demonstrates — if the notebook executes clean, the
                     story on this page is still true. Next:
