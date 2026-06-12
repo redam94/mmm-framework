@@ -269,7 +269,7 @@
                     <div class="range">90% Credible Interval: 0.4 &ndash; 2.3</div>
                 </div>
                 <p>
-                    <strong>What this means:</strong> The best estimate is $1.10 for every $1 spent, but this could be as low as $0.40 (unprofitable) or as high as $2.30. The model cannot confidently determine whether display is profitable. Budget decisions should be made cautiously, and experimental validation is recommended.
+                    <strong>What this means:</strong> The best estimate is $1.10 for every $1 spent, but this could be as low as $0.40 (unprofitable) or as high as $2.30. The model cannot confidently determine whether display is profitable. Treat budget changes here cautiously, and consider validating with a real-world experiment before committing.
                 </p>
             </div>
 
@@ -288,10 +288,17 @@
                 </div>
             </div>
 
+            <p>
+                For the statistical reasoning behind these judgments&mdash;how the model arrives at a credible interval and what separates a confident green from an uncertain yellow&mdash;see the <a href="workflow-channel-effectiveness.html">channel-effectiveness workflow</a>.
+            </p>
+
             <!-- Contributions -->
             <h2 id="contributions">Revenue Decomposition</h2>
             <p>
                 The decomposition chart shows what drives your revenue. It breaks total sales into contributions from each media channel, base demand, and other factors.
+            </p>
+            <p>
+                One reminder worth keeping front of mind: these contributions are counterfactual, causal estimates&mdash;the model&rsquo;s answer to &ldquo;what would sales have been without this channel?&rdquo;&mdash;not a tally of what happened to move together. Holiday demand can lift both ad spend and sales in the same weeks; the model is built to credit your media only with the sales it actually caused.
             </p>
 
             <div id="decomposition-chart" style="height: 350px; margin: 1.5rem 0;"></div>

@@ -148,6 +148,12 @@
                 applicable to Marketing Mix Models and beyond.
             </p>
 
+            <p>
+                This page is the philosophy deep-dive: for a gentler guided read of the same ideas, start with the
+                <a href="scientific-workflow-simple.html">simple workflow guide</a>, and for a hands-on walkthrough,
+                try the <a href="scientific-workflow-demo.html">interactive workflow demo</a>.
+            </p>
+
             <div class="note">
                 <h4>Core Insight</h4>
                 <p style="margin-bottom: 0;">
@@ -192,6 +198,9 @@
             <p>
                 This perspective is liberating: we don't need to find the "true" model (which doesn't exist).
                 We need to find models that are useful for our purposes while being honest about their limitations.
+                In marketing mix modeling, those limitations are causal as much as statistical: a model earns its keep
+                only if it separates what media actually caused from what demand would have delivered anyway, and the
+                discipline described on this page exists to protect that separation.
             </p>
 
             <!-- ================================================================== -->
@@ -500,6 +509,13 @@
                 <li><strong>Posterior predictive failures</strong> show where the model fails to capture data patterns</li>
                 <li><strong>Sensitivity analysis</strong> reveals which conclusions are robust and which are fragile</li>
             </ul>
+
+            <p>
+                For an MMM, these checks carry causal weight. When we stress the model—perturb the priors, vary the
+                trend, re-run the predictive checks—and confirm it still separates the media signal from underlying
+                demand, we are testing causal assumptions, not just goodness of fit. An iteration loop that only
+                rewards better in-sample fit will happily hand demand's contribution to the media channels.
+            </p>
 
             <!-- ================================================================== -->
             <h2 id="honest-iteration">Honest Iteration vs. Specification Shopping</h2>

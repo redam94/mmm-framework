@@ -344,6 +344,18 @@
             <section class="glossary-section" id="measurement">
                 <h2>Measurement &amp; Experiments</h2>
                 <dl class="glossary-list">
+                    <dt id="term-measurement-loop">Measurement loop</dt>
+                    <dd>
+                        The framework's operating rhythm: measurement as a cycle, not a one-time report.
+                        Fit the model (T&#8320;) &rarr; find where uncertainty is most expensive (T&#8321;:
+                        EIG and EVOI) &rarr; run the experiment that buys the most learning (T&#8322;:
+                        pre-registered tests) &rarr; feed the result back into the model (T&#8323;: calibrated
+                        refit) &rarr; reallocate budget with the sharper answer (T&#8324;) &rarr; re-evaluate
+                        as information decays (T&#8325;, then the cycle repeats). The Program page of the
+                        web app tracks where you are in the cycle.
+                        <span class="also">See: <a href="measurement-calibration.html">Calibration Loop</a>, <a href="platform-overview.html">Platform Overview</a></span>
+                    </dd>
+
                     <dt id="term-eig">EIG (Expected Information Gain)</dt>
                     <dd>
                         The expected reduction in posterior entropy from running an experiment. Measures how much
@@ -466,6 +478,16 @@
                         observational data.
                     </dd>
 
+                    <dt id="term-incrementality">Incrementality</dt>
+                    <dd>
+                        The portion of an outcome that media actually <em>caused</em> &mdash; sales that
+                        happened because the campaign ran and would not have happened otherwise (the gap
+                        between the observed outcome and its counterfactual). Incrementality is the quantity
+                        both the MMM and lift experiments estimate, which is what makes them comparable and
+                        calibratable against each other.
+                        <span class="also">See: <a href="causal-inference.html">Causal Inference</a>, <a href="measurement-calibration.html">Calibration Loop</a></span>
+                    </dd>
+
                     <dt id="term-spec-shopping">Specification shopping</dt>
                     <dd>
                         Re-running models with different choices (variables, transforms, lags) until one produces
@@ -511,6 +533,17 @@
                     <dd>
                         Async job queue used by the API service for long-running model fits. Workers run via
                         <code>arq worker.WorkerSettings</code> against a Redis backend.
+                    </dd>
+
+                    <dt id="term-agent-workspace">Agent workspace</dt>
+                    <dd>
+                        The AI analyst-assistant built into the React web app (the <code>/workspace</code> page).
+                        A chat session whose assistant has tools to validate and explore data, configure and fit
+                        models, analyze ROI and decompositions, plan and pre-register experiments, run Python in
+                        a sandboxed kernel, search an uploaded knowledge base, and generate branded client
+                        reports. Works with Anthropic, OpenAI, Google (Gemini), Vertex AI, and local LM Studio
+                        language-model providers.
+                        <span class="also">See: <a href="platform-overview.html">Platform Overview</a></span>
                     </dd>
 
                     <dt id="term-pre-period">Pre-period</dt>

@@ -12,6 +12,7 @@
     const NAV_LINKS = [
         { href: 'index.html', label: 'Home' },
         { href: 'getting-started.html', label: 'Getting Started' },
+        { href: 'platform-overview.html', label: 'Platform' },
         { href: 'about.html', label: 'About' },
         { href: 'business-stakeholders.html', label: 'For Business' },
         { href: 'modeling-guide.html', label: 'Modeling Guide' },
@@ -283,6 +284,106 @@
     }
 
     // =========================================================================
+    // Plotly headroom guard
+    // -------------------------------------------------------------------------
+    // Many guide pages render Plotly charts with tight top margins. Two
+    // failure modes are handled after each plot mounts:
+    //   1. titles / top annotations clipping against the SVG edge, and
+    //   2. the title overlapping a top-anchored legend or annotation.
+    // Both are resolved by pinning the title to the container top and widening
+    // margin.t by exactly the measured shortfall. Re-runs converge and are
+    // capped so a pathological chart can never loop.
+    // =========================================================================
+
+    function ensurePlotHeadroom(gd) {
+        if (!window.Plotly || !gd._fullLayout) return;
+        if (gd.dataset.headroomOk === '1') return;
+        const tries = Number(gd.dataset.headroomTries || 0);
+        if (tries >= 4) return;
+        const rect = gd.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return; // hidden (e.g. inactive tab)
+
+        // 1. Clipping against the container top
+        let clip = 0;
+        let titleClipped = false;
+        gd.querySelectorAll('text.gtitle, g.annotation').forEach(node => {
+            const r = node.getBoundingClientRect();
+            if (r.height > 0 && r.top < rect.top) {
+                clip = Math.max(clip, rect.top - r.top);
+                if (node.classList.contains('gtitle')) titleClipped = true;
+            }
+        });
+
+        // 2. Title overlapping a legend or annotation in the top margin
+        let overlap = 0;
+        const title = gd.querySelector('text.gtitle');
+        if (title) {
+            const tr = title.getBoundingClientRect();
+            if (tr.height > 0) {
+                gd.querySelectorAll('g.legend, g.annotation').forEach(node => {
+                    const r = node.getBoundingClientRect();
+                    const intersects = tr.left < r.right && r.left < tr.right &&
+                                       tr.top < r.bottom && r.top < tr.bottom;
+                    if (r.height > 0 && intersects) {
+                        overlap = Math.max(overlap,
+                            Math.min(tr.bottom, r.bottom) - Math.max(tr.top, r.top));
+                    }
+                });
+            }
+        }
+
+        if (clip > 0.5 || overlap > 0.5) {
+            gd.dataset.headroomTries = String(tries + 1);
+            const fl = gd._fullLayout;
+            const t = (fl.margin && fl.margin.t) || 0;
+            const update = { 'margin.t': Math.ceil(t + clip + overlap + 6) };
+            if (overlap > 0.5) {
+                // Pin the title near the container top so the widened margin
+                // separates it from the legend instead of re-centering both.
+                update['title.y'] = 1 - 8 / rect.height;
+                update['title.yanchor'] = 'top';
+            }
+            // A title pinned at a numeric container y ignores margin changes —
+            // lower the title itself by the clipped amount instead.
+            const tt = fl.title || {};
+            if (titleClipped && typeof tt.y === 'number') {
+                update['title.y'] = Math.max(0, tt.y - (clip + 3) / rect.height);
+                update['title.yanchor'] = 'top';
+            }
+            try {
+                window.Plotly.relayout(gd, update);
+            } catch (e) { /* never break the page over a margin */ }
+        } else {
+            gd.dataset.headroomOk = '1';
+        }
+    }
+
+    function checkAllPlots() {
+        document.querySelectorAll('.js-plotly-plot').forEach(ensurePlotHeadroom);
+    }
+
+    function initPlotHeadroomGuard() {
+        // Initial passes: charts render at parse time and shortly after load
+        window.addEventListener('load', () => {
+            checkAllPlots();
+            setTimeout(checkAllPlots, 1200);
+            setTimeout(checkAllPlots, 3500);
+        });
+
+        // Lazily rendered charts (tabs, scroll-triggered draws) add DOM nodes;
+        // debounce a re-check whenever the document grows new plot content.
+        let pending = null;
+        const observer = new MutationObserver(() => {
+            if (pending) return;
+            pending = setTimeout(() => {
+                pending = null;
+                checkAllPlots();
+            }, 350);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // =========================================================================
     // Initialize
     // =========================================================================
 
@@ -323,6 +424,7 @@
         initScrollAnimations();
         initSidebarActiveState();
         initCollapsibleSidebar();
+        initPlotHeadroomGuard();
     }
 
     // Run when DOM is ready

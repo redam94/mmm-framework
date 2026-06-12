@@ -278,7 +278,7 @@
         /* Budget slider group */
         .budget-sliders {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 1rem;
             margin: 1rem 0;
         }
@@ -293,7 +293,7 @@
         }
         .budget-slider-item .channel-icon { font-size: 1.25rem; }
         .budget-slider-item label { min-width: 80px; font-weight: 500; }
-        .budget-slider-item input[type="range"] { flex: 1; }
+        .budget-slider-item input[type="range"] { flex: 1 1 60px; min-width: 0; }
         .budget-slider-item .value-display { min-width: 45px; }
 
         /* Scenario comparison */
@@ -407,6 +407,7 @@
             margin: 1.5rem 0;
             overflow-x: auto;
             line-height: 1.6;
+            white-space: pre;
         }
         .code-example .comment { color: #6a8d6a; }
         .code-example .keyword { color: #c792ea; }
@@ -827,8 +828,7 @@
 
         <h3>Computing Marginal Contributions</h3>
 
-        <div class="code-example">
-<span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
+        <div class="code-example"><span class="keyword">from</span> mmm_framework.analysis <span class="keyword">import</span> MMMAnalyzer
 
 analyzer = MMMAnalyzer(fitted_model)
 
@@ -843,13 +843,11 @@ marginal_df = analyzer.compute_marginal_contributions(
 <span class="comment"># Radio       $300K           $30K       $55.5K                  1.85</span>
 <span class="comment"># TV          $2.5M           $250K      $287.5K                 1.15</span>
 <span class="comment"># Display     $500K           $50K       $42.5K                  0.85</span>
-<span class="comment"># Search      $1.2M           $120K      $78K                    0.65</span>
-        </div>
+<span class="comment"># Search      $1.2M           $120K      $78K                    0.65</span></div>
 
         <h3>Running What-If Scenarios</h3>
 
-        <div class="code-example">
-<span class="comment"># Test a specific budget reallocation</span>
+        <div class="code-example"><span class="comment"># Test a specific budget reallocation</span>
 scenario_result = analyzer.what_if_scenario(
     spend_changes={
         <span class="string">'TV'</span>: <span class="number">1.0</span>,      <span class="comment"># Keep TV same</span>
@@ -867,13 +865,11 @@ scenario_result = analyzer.what_if_scenario(
 <span class="comment"># Output:</span>
 <span class="comment"># Baseline outcome: $18,400,000</span>
 <span class="comment"># Scenario outcome: $19,125,000</span>
-<span class="comment"># Change: +3.9%</span>
-        </div>
+<span class="comment"># Change: +3.9%</span></div>
 
         <h3>Computing Saturation Curves</h3>
 
-        <div class="code-example">
-<span class="keyword">from</span> mmm_framework.reporting.helpers <span class="keyword">import</span> compute_saturation_curves_with_uncertainty
+        <div class="code-example"><span class="keyword">from</span> mmm_framework.reporting.helpers <span class="keyword">import</span> compute_saturation_curves_with_uncertainty
 
 <span class="comment"># Get saturation curves for all channels</span>
 curves = compute_saturation_curves_with_uncertainty(
@@ -891,8 +887,7 @@ curves = compute_saturation_curves_with_uncertainty(
 
 <span class="keyword">for</span> channel, curve <span class="keyword">in</span> curves.items():
     <span class="function">print</span>(<span class="string">f"{channel}: {curve.saturation_level:.0%} saturated"</span>)
-    <span class="function">print</span>(<span class="string">f"  Marginal response at current: {curve.marginal_response_at_current:.3f}"</span>)
-        </div>
+    <span class="function">print</span>(<span class="string">f"  Marginal response at current: {curve.marginal_response_at_current:.3f}"</span>)</div>
     </section>
 
     <!-- Question Navigation -->

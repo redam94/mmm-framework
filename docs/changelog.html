@@ -149,7 +149,10 @@
                         <li><code>analysis</code> (counterfactual, marginal)</li>
                         <li><code>serialization</code> (<code>MMMSerializer</code>)</li>
                         <li>FastAPI endpoints (<code>api/</code>)</li>
-                        <li>React frontend (<code>frontend/</code>)</li>
+                        <li>React web UI &mdash; the modern frontend (Program, Experiments, Performance, Agent workspace, Knowledge, Team)</li>
+                        <li>Agent workspace (LLM providers: Anthropic, OpenAI, Google Gemini, Vertex AI, LM Studio)</li>
+                        <li>Measurement-loop planning engine (EIG/EVOI priorities, experiment lifecycle, calibration)</li>
+                        <li><code>eda</code> (pre-fit data quality: validation, EDA, outlier detection and treatment)</li>
                     </ul>
                 </div>
                 <div class="stability-card exp">
@@ -195,7 +198,10 @@
                     <li>HTML report generator with Plotly charts and design-token theming</li>
                     <li>Extension models (NestedMMM, MultivariateMMM, CombinedMMM) &mdash; experimental</li>
                     <li>FastAPI service + ARQ worker for async job execution</li>
-                    <li>React (TypeScript) frontend; legacy Streamlit UI retained</li>
+                    <li>React (TypeScript) web UI as the modern frontend &mdash; Program, Experiments, Performance, Agent workspace, Knowledge, and Team pages (Beta); Streamlit UI retained as a legacy surface</li>
+                    <li>AI agent workspace: an analyst-assistant with tools for data validation and EDA, model configuration and fitting, ROI and decomposition analysis, experiment planning, sandboxed Python execution, knowledge-base search, and branded client reports &mdash; with LLM providers Anthropic, OpenAI, Google (Gemini), Vertex AI (Anthropic &amp; Gemini via ADC), and local LM Studio</li>
+                    <li>Measurement-loop planning engine: EIG/EVOI experiment priorities, an experiment lifecycle (draft &rarr; pre-registered &rarr; running &rarr; completed &rarr; calibrated), and calibration of experiment readouts into the next model fit</li>
+                    <li>EDA / data-quality module for pre-fit validation, exploratory checks, and outlier detection and treatment</li>
                     <li>Sphinx-generated API reference + this static documentation site</li>
                 </ul>
             </div>

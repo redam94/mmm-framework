@@ -98,6 +98,11 @@
             <ul class="sidebar-nav">
                 <li><a href="#prior-explorer">Distribution Viewer</a></li>
             </ul>
+
+            <h3>Beyond the Core Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#beyond-core">Newer Subsystems</a></li>
+            </ul>
         </aside>
 
         <main class="main-content">
@@ -338,6 +343,17 @@ results = model.fit()</code></pre>
                 $$t_{1/2} = \frac{\log(0.5)}{\log(\alpha)} = \frac{-0.693}{\log(\alpha)}$$
             </div>
             <p>For $\alpha = 0.7$: half-life ≈ 1.9 periods. For $\alpha = 0.9$: half-life ≈ 6.6 periods.</p>
+
+            <div class="note">
+                <p style="margin-bottom: 0;">
+                    <strong>Reading the posterior:</strong> in the default implementation, the
+                    <code>adstock_&lt;CHANNEL&gt;</code> parameter is a <em>blend weight</em> over a fixed bank of
+                    candidate decay rates, not a decay rate itself — do not interpret its posterior as α directly.
+                    For a single continuously learned decay parameter, set
+                    <code>use_parametric_adstock=True</code>. The full derivation and the difference between the two
+                    mechanisms are covered in <a href="math-01-adstock.html">the adstock deep dive</a>.
+                </p>
+            </div>
 
             <h4>Weibull/Delayed Adstock</h4>
             <p>For channels where peak effect is delayed (e.g., brand campaigns, content marketing):</p>
@@ -1132,6 +1148,18 @@ model_config = (
                 </p>
             </div>
 
+            <p>
+                The classification has a formal basis: variable roles map onto a causal DAG over media, KPI, and
+                covariates. A <strong>confounder</strong> sits on a backdoor path (e.g., underlying demand driving
+                both spend and sales), so including it is an adjustment that blocks that path — shrinking it toward
+                zero reopens the path and biases media coefficients. A <strong>precision control</strong> affects only
+                the outcome, so selection over it trades a little bias for variance reduction without touching
+                identification. Observational adjustment alone, however, cannot resolve equifinality — distinct
+                parameter configurations that fit the data equally well; experiment calibration acts as
+                quasi-instrumental evidence that breaks these ties. See <a href="causal-inference.html">the causal
+                inference guide</a> for the full DAG treatment.
+            </p>
+
             <h3 id="vs-horseshoe">Regularized Horseshoe Prior</h3>
             <div class="math-block">
                 <span class="equation-label">(17)</span>
@@ -1370,6 +1398,47 @@ mff_config = (
                     <li><strong>Sensitivity check:</strong> If results change dramatically with different reasonable priors, your data is weakly informative</li>
                 </ul>
             </div>
+
+            <h2 id="beyond-core">Beyond the Core Model</h2>
+            <p>
+                The estimation machinery above sits inside a larger measurement system. Each subsystem below has its
+                own page; this section is a map, not a manual.
+            </p>
+            <ul>
+                <li>
+                    <strong>Experiment design &amp; priority engine:</strong> ranks channels by expected information
+                    gain — closed form $0.5\,\ln(1 + \sigma_{\text{post}}^2 / \sigma_{\text{exp}}^2)$ — and expected
+                    value of information (the preposterior dollar value of deciding the budget with vs without the
+                    experiment), then places them in test-now / learn-cheaply / monitor / deprioritize quadrants.
+                    See <a href="measurement-calibration.html">measurement &amp; calibration</a> and
+                    <a href="workflow-calibration-decisions.html">the calibration-decisions workflow</a>.
+                </li>
+                <li>
+                    <strong>Experiment calibration routes:</strong> lift tests enter the model either as a channel
+                    coefficient prior derived via a design factor, or as an in-graph
+                    <code>ExperimentMeasurement</code> likelihood on contribution, ROAS, or mROAS that updates
+                    β, saturation, and adstock jointly. Full math in
+                    <a href="math-05-calibration.html">the calibration deep dive</a>.
+                </li>
+                <li>
+                    <strong>Parameter-learning diagnostics:</strong> prior→posterior contraction, overlap, and shift
+                    metrics that flag prior-dominated posteriors — parameters the data never actually updated.
+                </li>
+                <li>
+                    <strong>EDA &amp; data-quality module:</strong> pre-fit validation, outlier detection and
+                    treatment, and structural checks on the input data before any sampling begins.
+                </li>
+                <li>
+                    <strong>Agent workspace &amp; platform:</strong> the React UI, LLM analyst-assistant, and
+                    measurement-loop surfaces that operate this framework end to end. See
+                    <a href="platform-overview.html">the platform overview</a>.
+                </li>
+                <li>
+                    <strong>Synthetic violation worlds:</strong> data-generating processes with known causal ground
+                    truth — confounding, collinearity, misspecified carryover and saturation, trend breaks — used to
+                    measure where the model silently fails. See <a href="pressure-testing.html">pressure testing</a>.
+                </li>
+            </ul>
 
         </main>
     </div>
