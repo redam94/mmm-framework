@@ -104,11 +104,75 @@ class TestParameterLearningCore:
         df = parameter_learning(prior, post)
         assert list(df.columns) == [
             "parameter", "prior_mean", "prior_sd", "post_mean", "post_sd",
-            "contraction", "overlap", "shift_z", "verdict",
+            "contraction", "contraction_robust", "overlap", "shift_z",
+            "post_ess_bulk", "verdict",
         ]
         # Ascending contraction -> the un-learned 'a' sorts first.
         assert df.iloc[0]["parameter"] == "a"
         assert (df["overlap"].between(0, 1) | df["overlap"].isna()).all()
+
+    def test_relocated_when_shifted_without_narrowing(self):
+        # THE mislabeled case: the posterior moved ~1.6 prior-sds and came out
+        # WIDER (e.g. a tight short-memory adstock prior vs data wanting long
+        # carryover). Evidence dominated the location -- this must NOT read as
+        # "weak" or "prior-dominated".
+        rng = np.random.default_rng(11)
+        prior = {"alpha": rng.beta(1, 3, 8000)}            # mean .25, sd ~.19
+        post = {"alpha": np.clip(rng.normal(0.55, 0.27, 8000), 0, 1)}
+        df = parameter_learning(prior, post).set_index("parameter")
+        row = df.loc["alpha"]
+        assert row["contraction"] < 0.1
+        assert abs(row["shift_z"]) >= 1.0
+        assert row["verdict"] == "relocated"
+
+    def test_small_shift_with_widening_stays_weak_or_tension(self):
+        # Below the relocation threshold the old semantics hold.
+        rng = np.random.default_rng(12)
+        prior = {"theta": _normal(rng, 0.0, 1.0)}
+        post = {"theta": _normal(rng, 0.5, 1.4)}  # wider, shifted only 0.5 sd
+        df = parameter_learning(prior, post).set_index("parameter")
+        assert df.loc["theta", "verdict"] == "weak"
+
+    def test_relocation_threshold_tunable(self):
+        rng = np.random.default_rng(13)
+        prior = {"theta": _normal(rng, 0.0, 1.0)}
+        post = {"theta": _normal(rng, 0.6, 1.2)}  # z = 0.6
+        strict = parameter_learning(prior, post).set_index("parameter")
+        loose = parameter_learning(prior, post, z_relocated=0.5).set_index("parameter")
+        assert strict.loc["theta", "verdict"] == "weak"
+        assert loose.loc["theta", "verdict"] == "relocated"
+
+    def test_strong_learning_not_demoted_by_relocation_rule(self):
+        # A posterior that shifted AND narrowed is learning, not relocation.
+        rng = np.random.default_rng(14)
+        prior = {"b": _normal(rng, 0.0, 1.0)}
+        post = {"b": _normal(rng, 3.0, 0.2)}
+        df = parameter_learning(prior, post).set_index("parameter")
+        assert df.loc["b", "verdict"] == "strong"
+
+    def test_robust_contraction_separates_tail_inflation(self):
+        # Same bulk width as the prior, but 5% of draws live in a far tail
+        # (the "sampler drifted there" signature): sd-contraction goes
+        # negative while the IQR-based robust contraction stays near zero.
+        rng = np.random.default_rng(15)
+        prior = {"theta": _normal(rng, 0.0, 1.0, 20000)}
+        bulk = rng.normal(0.0, 1.0, 19000)
+        tail = rng.normal(6.0, 1.0, 1000)
+        post = {"theta": np.concatenate([bulk, tail])}
+        df = parameter_learning(prior, post).set_index("parameter")
+        row = df.loc["theta"]
+        assert row["contraction"] < -0.5            # sd badly inflated by the tail
+        assert abs(row["contraction_robust"]) < 0.2  # bulk unchanged
+        # ESS is NaN for plain dicts (no chain structure) -- documented behavior.
+        assert np.isnan(row["post_ess_bulk"])
+
+    def test_ess_populated_from_inference_data(self):
+        az = pytest.importorskip("arviz")
+        rng = np.random.default_rng(16)
+        post = az.from_dict(posterior={"b": rng.normal(1.0, 0.5, (2, 500))})
+        prior = {"b": _normal(rng, 0.0, 1.0)}
+        df = parameter_learning(prior, post).set_index("parameter")
+        assert df.loc["b", "post_ess_bulk"] > 100
 
     def test_degenerate_prior_is_undetermined(self):
         df = parameter_learning({"c": np.full(500, 2.0)}, {"c": np.full(500, 2.0)})

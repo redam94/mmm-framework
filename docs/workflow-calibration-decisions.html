@@ -998,6 +998,9 @@
                         <div class="metric-value warning" id="lCovVal">68%</div>
                     </div>
                 </div>
+                <p style="font-size: 0.85rem; color: var(--color-text-muted); font-style: italic; margin: 0.5rem 0 0;">
+                    <strong>Simulated</strong> — these numbers come from the toy five-channel world generated in your browser, not from client data or measured results.
+                </p>
             </div>
 
             <div class="insight-box">
@@ -1189,9 +1192,11 @@
 
             <p>
                 Markets close in this metric will respond similarly to channel-$k$ perturbations even if their
-                raw revenue trajectories differ in level or seasonality. In typical retail and DTC datasets,
-                Mahalanobis matching on the MMM posterior reduces post-period control-group variance by 20–40%
-                versus correlation matching on the same pre-period.
+                raw revenue trajectories differ in level or seasonality. The heuristic expectation — not a measured
+                benchmark — is that Mahalanobis matching on the MMM posterior should cut post-period control-group
+                variance meaningfully versus correlation matching on the same pre-period, because it matches on the
+                dimensions that actually drive the channel's effect. Validate the gain on your own data before
+                counting on it in a power calculation.
             </p>
 
             <div class="concept-box">
@@ -1230,9 +1235,14 @@
 
             <div class="math-display">
                 $$\Delta\mathrm{spend}_g^* \;=\; \frac{\sigma_g}{S_k'(x_{k,g})} \cdot
-                  \sqrt{\frac{2\bigl(1+(T-1)\rho_g\bigr)}{GT} \cdot \frac{\eta}{1-\eta}} \cdot
+                  \sqrt{\frac{2\,D(T,\rho_g)}{GT} \cdot \frac{\eta}{1-\eta}} \cdot
                   \frac{1}{\sigma_{k,g}}$$
             </div>
+
+            <p style="font-size:0.92rem;">
+                Here $D(T,\rho_g)$ is the AR(1) design effect for a $T$-week mean, defined in
+                Step&nbsp;4 below.
+            </p>
 
             <p>
                 where $\sigma_g$ is the geo's residual standard deviation, $\rho_g$ its within-geo serial
@@ -1263,19 +1273,40 @@
                 observed for $T$ weeks, the naive standard error shrinks as $1/\sqrt{T}$.
                 Weekly KPI data within a geo are serially correlated, however: successive weeks share
                 common demand shocks, promotions, and seasonal patterns. The MMM residuals estimate the
-                within-geo AR(1) coefficient $\rho_g$, and the corrected standard error is:
+                within-geo AR(1) coefficient $\rho_g$. Under AR(1), the variance of a $T$-week mean is
+                inflated by the design effect
+            </p>
+
+            <div class="math-display">
+                $$D(T,\rho_g) \;=\; 1 + 2\sum_{k=1}^{T-1}\Bigl(1-\tfrac{k}{T}\Bigr)\rho_g^{\,k}
+                \;\;\xrightarrow[T\to\infty]{}\;\; \frac{1+\rho_g}{1-\rho_g},$$
+            </div>
+
+            <p>
+                and the corrected standard error is:
             </p>
 
             <div class="math-display">
                 $$\mathrm{SE}(\hat\tau) \;=\; \sigma_y\,\sqrt{\tfrac{1}{n_t} + \tfrac{1}{n_c}} \cdot
-                  \sqrt{\frac{1+(T-1)\rho_g}{T}}$$
+                  \sqrt{\frac{D(T,\rho_g)}{T}}$$
             </div>
+
+            <p style="font-size:0.92rem;">
+                (Do <em>not</em> use the exchangeable design effect $1+(T-1)\rho$ here — that formula
+                is for equicorrelated cluster data; under AR(1) the correlation decays with lag, and
+                the exchangeable factor badly overstates required duration. At $\rho_g=0.4$, $T=8$:
+                exchangeable $3.8$ vs AR(1) $\approx 2.1$.)
+            </p>
 
             <p>
                 When $\rho_g = 0$ this reduces to the familiar $1/\sqrt{T}$ formula. When $\rho_g > 0$
                 the denominator grows slower than $\sqrt{T}$, so each additional week adds less precision.
-                Empirically, Expected Information Gain (EIG) flattens after <strong>6–10 weeks</strong>
-                for geos with $\rho_g \in [0.2, 0.5]$ — common values in weekly retail or digital data.
+                Working that formula through for $\rho_g \in [0.2, 0.5]$ — plausible values for weekly retail
+                or digital data — Expected Information Gain (EIG) flattens after roughly <strong>6–10 weeks</strong>.
+                Treat that as a heuristic expectation from the serial-correlation math, not a measured benchmark.
+                (Note: the interactive calculator below uses the independent-weeks approximation —
+                it does not apply $D(T,\rho_g)$; for autocorrelated KPIs, inflate its required-weeks
+                output by roughly the Step-4 design effect.)
                 Running longer costs budget without proportionally improving power.
             </p>
 
@@ -1292,7 +1323,7 @@
             </p>
 
             <div class="math-display">
-                $$T^* \;=\; \frac{(z_{1-\alpha/2} + z_{1-\beta})^2\;\sigma_y^2\;(1/n_t + 1/n_c)\,(1+(T^*-1)\rho_g)}{\Delta y^2}$$
+                $$T^* \;=\; \frac{(z_{1-\alpha/2} + z_{1-\beta})^2\;\sigma_y^2\;(1/n_t + 1/n_c)\,D(T^*,\rho_g)}{\Delta y^2}$$
             </div>
 
             <p>
@@ -1387,8 +1418,9 @@
                 <li><strong>Sample a draw</strong> $\tilde\theta$ from the MMM channel posterior
                     $p(\theta \mid \mathcal{D})$.</li>
                 <li><strong>Simulate KPI</strong> for each geo under the proposed spend schedule
-                    using $\tilde\theta$ plus a draw from $\mathcal{N}(0, \sigma_g^2)$ scaled by
-                    the serial-correlation factor $\sqrt{1+(T-1)\rho_g}$.</li>
+                    using $\tilde\theta$ plus AR(1) noise with innovation variance $\sigma_g^2$ and
+                    coefficient $\rho_g$ — simulate the autocorrelated process itself rather than
+                    scaling i.i.d. noise by a design factor.</li>
                 <li><strong>Estimate treatment effect</strong> from the simulated data via the
                     same difference-in-differences estimator you plan to use on real data.</li>
                 <li><strong>Repeat 500–2,000 times</strong> and record the fraction of

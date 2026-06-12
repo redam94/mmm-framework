@@ -198,6 +198,25 @@
                 </div>
             </div>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>–<a href="workshop-01-priors.html">01</a>.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~90–120 min — the heaviest page in the series.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why grids die exponentially in high dimensions while Monte Carlo error stays 1/&radic;n — and why MCMC needs only the unnormalized posterior.</li>
+                    <li>How to read R-hat, ESS, and trace plots as the audit of your chains — and why a high acceptance rate is a warning sign, not a compliment.</li>
+                    <li>Why green sampler diagnostics validate the <em>computation</em>, never the model or the causal claim.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/workshop_02_sampling.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/workshop_02_sampling.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="grid">1 — Why grids die: count the cells</h2>
             <p>
                 A small MMM has a coefficient, a carryover rate, and a saturation parameter
@@ -535,7 +554,7 @@
                 alarm at any real separation.
             </p>
 
-            <h2 id="nuts">6 — NUTS: the engine PyMC actually uses</h2>
+            <h2 id="nuts">6 — NUTS: the engine PyMC actually uses (optional deep dive)</h2>
             <p>
                 Random-walk Metropolis is a blindfolded walker: every proposal is a guess. In 40
                 dimensions almost every direction is "downhill into the wasteland," so the walker must

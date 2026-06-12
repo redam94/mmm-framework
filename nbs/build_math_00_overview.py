@@ -188,9 +188,10 @@ data speak.
 | Parameter | Prior | Intuition |
 |---|---|---|
 | $\text{intercept}$ | $\mathrm{Normal}(0,\,0.5)$ | baseline near the KPI mean (data are standardized) |
-| $\beta_c$ (channel) | $\mathrm{Gamma}(\mu{=}1.5,\,\sigma{=}1.0)$ | **positive** effect, mass $>1$ (encourages ROI $>1\times$); or an experiment-calibrated prior |
+| $\beta_c$ (channel) | $\mathrm{Gamma}(\mu{=}1.5,\,\sigma{=}1.0)$ | **positive** effect with mass $>1$ on the *standardized max-contribution* scale — the channel's contribution ceiling, **not** its ROI; or an experiment-calibrated prior |
 | $\lambda_c$ (sat. rate) | $\mathrm{Exponential}(\lambda{=}0.5)$ | mostly gentle saturation; mean $1/0.5 = 2$ |
-| $m_c$ (adstock blend) | $\mathrm{Beta}(2,\,2)$ | **mix weight** between low/high carryover, centered at $0.5$ — *not* a decay rate |
+| $\alpha_c$ (adstock decay) | $\mathrm{Beta}(1,\,3)$ | **the default** (parametric, since June 2026): a real per-channel geometric decay rate, prior mean $0.25$; delayed/Weibull kernels add their own parameters |
+| $m_c$ (legacy adstock blend) | $\mathrm{Beta}(2,\,2)$ | **mix weight** between low/high carryover on the legacy path (`use_parametric_adstock=False`) — *not* a decay rate |
 | season coeffs | $\mathrm{Normal}(0,\,0.3)$ | small, symmetric Fourier amplitudes |
 | $\beta^{\text{ctrl}}_j$ | $\mathrm{Normal}(0,\,\sigma_{\text{ctrl}})$ | linear control; *wider* prior for a flagged confounder |
 | $\text{geo\_sigma}$ | $\mathrm{HalfNormal}(0.3)$ | spread of geo offsets (hierarchical scale) |
@@ -203,8 +204,10 @@ Two subtleties this overview wants you to leave with:
 
 - **$\beta_c$ is Gamma, hence strictly positive** — the framework assumes media cannot *hurt* the KPI.
   This is a strong, deliberate modeling choice (and the lever experiment-calibration tightens; notebook 05).
-- **$m_c$ is a Beta *blend weight*, not a decay rate.** By default the model precomputes geometric adstock
-  at two fixed decay rates and learns how much to lean on each. Notebook 01 dissects this in full.
+- **The default adstock now estimates a real decay rate.** Since June 2026 the model learns
+  $\alpha_c$ in-graph (`use_parametric_adstock=True`). On the *legacy* path the parameter $m_c$ is a
+  Beta *blend weight*, not a decay rate — the model precomputes geometric adstock at two fixed decay
+  rates and learns how much to lean on each. Notebook 01 dissects both in full.
 """))
 
     c.append(md(r"""
@@ -350,7 +353,7 @@ plt.tight_layout(); plt.show()
 This is the payoff of an overview notebook: *run the generative model once*. We will
 
 1. sample one value of every parameter from its **exact framework prior** (using the conversions above) —
-   $\beta_c\sim\mathrm{Gamma}(\mu{=}1.5,\sigma{=}1.0)$, $\lambda_c\sim\mathrm{Exponential}(0.5)$, intercept, trend slope, season coeffs, $\sigma$ — plus an *illustrative* per-channel geometric decay $\alpha_c\sim\mathrm{Beta}(2,2)$ (the default model learns a blend weight instead; notebook 01),
+   $\beta_c\sim\mathrm{Gamma}(\mu{=}1.5,\sigma{=}1.0)$, $\lambda_c\sim\mathrm{Exponential}(0.5)$, intercept, trend slope, season coeffs, $\sigma$ — plus a per-channel geometric decay $\alpha_c\sim\mathrm{Beta}(2,2)$ (illustratively wider than the shipped default prior $\mathrm{Beta}(1,3)$; the default model estimates exactly such an $\alpha_c$ in-graph since June 2026 — notebook 01),
 2. build a small synthetic **spend matrix** for 4 channels (`TV`, `Search`, `Social`, `Display`),
 3. push each channel through the **real framework transforms** — `geometric_adstock` then the framework's
    core saturation `logistic_saturation` ($1-e^{-\lambda u}$),
@@ -590,7 +593,7 @@ piece you need:
 | Notebook | Term in $\mu_t$ | What you'll derive |
 |---|---|---|
 | **00 — this one** | the whole model | the generative equation, priors, one prior draw |
-| **01 — adstock** | $\mathrm{adstock}_c(\cdot)$ | carryover: IIR recurrence, FIR kernels, the default **blend weight**, identifiability |
+| **01 — adstock** | $\mathrm{adstock}_c(\cdot)$ | carryover: IIR recurrence, FIR kernels, the parametric default vs the legacy **blend weight**, identifiability |
 | **02 — saturation** | $\mathrm{sat}_c,\ \lambda_c$ | diminishing returns: $1-e^{-\lambda u}$ vs Hill, half-saturation, marginal ROAS |
 | **03 — seasonality & trend** | $\text{trend}_t,\ \text{seasonality}_t$ | baseline structure: Fourier features, splines, piecewise trends |
 | **04 — the Bayesian model** | priors $+$ likelihood | $p(\theta\mid y)\propto p(y\mid\theta)p(\theta)$, NUTS / HMC, leapfrog, diagnostics |

@@ -235,6 +235,64 @@
 
     <div class="container" style="max-width: 1100px; margin: 0 auto;">
 
+        <!-- Recommended paths by audience and time budget -->
+        <div class="section-header">
+            <h2>Recommended Paths</h2>
+            <p>Where to spend your time, by who you are and how much of it you have</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr><th>You are…</th><th>30 minutes</th><th>Half a day</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>A skeptical evaluator</strong></td>
+                    <td><a href="pressure-testing.html">The scorecard</a> &rarr;
+                        <a href="stress-05-gauntlet.html">The Gauntlet</a> &rarr;
+                        <a href="aurora-05-unified-workflow.html">Aurora 05</a></td>
+                    <td>Add the <a href="workflow-forecasting.html#backtesting">measured backtest</a>,
+                        the <a href="evaluator.html">evaluator's guide</a>, and re-run the
+                        <a href="getting-started.html">quickstart</a> yourself</td>
+                </tr>
+                <tr>
+                    <td><strong>A business sponsor</strong></td>
+                    <td><a href="business-stakeholders.html">For Business</a> &rarr;
+                        <a href="mmm-example-report.html">the example report</a></td>
+                    <td>Add <a href="interpreting-results.html">Interpreting Results</a> and the
+                        <a href="measurement-calibration.html">calibration loop</a> overview</td>
+                </tr>
+                <tr>
+                    <td><strong>An analyst new to Bayes</strong></td>
+                    <td><a href="workshop-00-thinking-in-distributions.html">Workshop 00</a></td>
+                    <td>Workshop 00&ndash;03, then <a href="mmm-walkthrough.html">the walkthrough</a></td>
+                </tr>
+                <tr>
+                    <td><strong>A methodologist</strong></td>
+                    <td><a href="stress-00-rosy-picture.html">Stress 00</a> &rarr;
+                        <a href="identification-assumptions.html">the identification contract</a></td>
+                    <td>The stress series end-to-end, then the
+                        <a href="math-00-overview.html">math companion</a></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="section-header" style="margin-top: 1.5rem;">
+            <h2 style="font-size: 1.15rem;">Why synthetic ground truth?</h2>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.95rem; max-width: 880px;">
+            Most demos here run on synthetic worlds — deliberately. Real data cannot grade an MMM's
+            <em>attribution</em>, because the true causal effect is unobservable; only data with a
+            known answer key can measure the gap between "all diagnostics green" and "the answer is
+            right," which is precisely what the pressure-testing program does (including publishing
+            the failures). The objection "of course it works on data you generated" is answered two
+            ways: the stress worlds are built to <em>break</em> the model, not flatter it, and the
+            framework is also graded on real data — the
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb"
+               target="_blank" rel="noopener">Lydia Pinkham pressure test</a> against 50 years of
+            published econometrics.
+        </p>
+
         <!-- Workflow Demos Section -->
         <div class="section-header">
             <h2>Workflow Demonstrations</h2>
@@ -281,6 +339,22 @@
                 <div class="demo-card-meta">
                     <span class="demo-card-tag interactive">Interactive</span>
                     <span>9 steps &middot; ~20 min</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+
+            <a href="real-data-guide.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F9F9;</div>
+                <h3>Real-Data Onboarding</h3>
+                <p>
+                    A deliberately messy client CSV &mdash; mixed dates, a TOTAL row, missing spend,
+                    a negative refund &mdash; taken through cleaning, MFF assembly, the EDA gate,
+                    fitting, and the validation battery that substitutes for ground truth when none
+                    exists. Measured: MASE 0.25 out of time, &minus;6% vs the disclosed answer key.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Real-data path</span>
+                    <span>Messy CSV &middot; no-truth validation</span>
                     <span class="arrow">&rarr;</span>
                 </div>
             </a>
@@ -537,7 +611,7 @@
                 <div class="demo-card-icon scenario">&#x23F3;</div>
                 <h3>01 &middot; Adstock</h3>
                 <p>Carryover as convolution: geometric IIR vs normalized FIR kernels, the 1/(1&minus;&alpha;)
-                   multiplier, and what the default Beta(2,2) two-&alpha; blend can and cannot express.</p>
+                   multiplier, and what the legacy Beta(2,2) two-&alpha; blend (the pre-2026 default) can and cannot express.</p>
                 <div class="demo-card-meta">
                     <span class="demo-card-tag interactive">Interactive</span>
                     <span>Carryover</span>
@@ -710,6 +784,74 @@
             </a>
         </div>
 
+        <!-- Validation Evidence Section -->
+        <div class="section-header">
+            <h2>Validation Evidence</h2>
+            <p>Forecast accuracy, runtime, and a real-data pressure test — measured in baked, seeded
+               notebooks whose recorded artifacts the docs quote.</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/backtest_validation.ipynb" target="_blank" class="demo-card">
+                <div class="demo-card-icon report">&#x1F3AF;</div>
+                <h3>Forecast Accuracy Backtest</h3>
+                <p>Rolling-origin backtest: 52 out-of-time weekly forecasts, MAPE 3.0% vs 13.8%
+                   seasonal-naive (MASE 0.24), honest interval coverage — plus the trend-break
+                   negative control where the harness correctly reports failure.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Measured</span>
+                    <span>nbs/backtest_validation.ipynb</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/runtime_benchmark.ipynb" target="_blank" class="demo-card">
+                <div class="demo-card-icon report">&#x23F1;&#xFE0F;</div>
+                <h3>Runtime Benchmark</h3>
+                <p>Wall-clock by data shape, samplers, draws, geo panels, and extension models on
+                   disclosed hardware: a production-size national fit in ~17&nbsp;s, NumPyro 6.0&times;
+                   vs sequential PyMC — every docs runtime claim traced to this artifact.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Measured</span>
+                    <span>nbs/runtime_benchmark.ipynb</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb" target="_blank" class="demo-card">
+                <div class="demo-card-icon report">&#x1F4F0;</div>
+                <h3>Real Data: Lydia Pinkham, 1907&ndash;1960</h3>
+                <p>The framework on the most-studied real advertising series in econometrics, graded
+                   against 50 years of published estimates: carryover sides with Clarke/Hanssens over
+                   Palda, ROAS inside the literature bracket, and a forecast grade reported honestly.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Real data</span>
+                    <span>nbs/pinkham_real_data.ipynb</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Consultant Artifacts Section -->
+        <div class="section-header">
+            <h2>Consultant Artifacts</h2>
+            <p>Printable engagement documents, generated by the reporting module</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="artifacts/index.html" class="demo-card">
+                <div class="demo-card-icon report">&#x1F4CE;</div>
+                <h3>The Engagement Playbook</h3>
+                <p>Five downloadable one-pagers: the MMM diagnostic checklist (EDA pre-flight +
+                   symptom&rarr;action table + fix ladder), an experiment pre-registration memo,
+                   a client data-onboarding checklist, an honest exec-summary template, and a
+                   10&ndash;12 week engagement timeline mapped to the measurement loop.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Downloads</span>
+                    <span>Print-ready &middot; 1&ndash;2 pages each</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
         <!-- Example Report Section -->
         <div class="section-header">
             <h2>Example Report</h2>
@@ -739,49 +881,49 @@
         </div>
 
         <div class="report-gallery">
-            <a href="../examples/mmm_report_basic.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_basic.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview basic">&#x1F4D1;</div>
                 <div class="report-thumb-info">
                     <h4>Basic Report</h4>
                     <p>Standard full analysis</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_executive.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_executive.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview executive">&#x1F451;</div>
                 <div class="report-thumb-info">
                     <h4>Executive Summary</h4>
                     <p>High-level insights</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_corporate.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_corporate.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview corporate">&#x1F3E2;</div>
                 <div class="report-thumb-info">
                     <h4>Corporate</h4>
                     <p>Professional styling</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_sage.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_sage.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview sage">&#x1F33F;</div>
                 <div class="report-thumb-info">
                     <h4>Sage Theme</h4>
                     <p>Sage green palette</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_warm.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_warm.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview warm">&#x2600;&#xFE0F;</div>
                 <div class="report-thumb-info">
                     <h4>Warm Theme</h4>
                     <p>Warm color palette</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_minimal.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_minimal.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview minimal">&#x25CB;</div>
                 <div class="report-thumb-info">
                     <h4>Minimal</h4>
                     <p>Lightweight, core metrics</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_builder.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_builder.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview builder">&#x1F527;</div>
                 <div class="report-thumb-info">
                     <h4>Builder Pattern</h4>

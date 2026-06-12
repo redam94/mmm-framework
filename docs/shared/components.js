@@ -9,21 +9,70 @@
     // =========================================================================
     // Configuration
     // =========================================================================
-    const NAV_LINKS = [
+    // Grouped navigation: Learn / Methodology / Platform / Proof / Project.
+    // Top-level entries with `href` render as plain links; entries with
+    // `items` render as hover/click dropdowns (flattened in the mobile menu).
+    const NAV_GROUPS = [
         { href: 'index.html', label: 'Home' },
-        { href: 'getting-started.html', label: 'Getting Started' },
-        { href: 'platform-overview.html', label: 'Platform' },
-        { href: 'about.html', label: 'About' },
-        { href: 'business-stakeholders.html', label: 'For Business' },
-        { href: 'modeling-guide.html', label: 'Modeling Guide' },
-        { href: 'measurement-calibration.html', label: 'Calibration Loop' },
-        { href: 'interpreting-results.html', label: 'Interpreting Results' },
-        { href: 'demos.html', label: 'Demos & Reports' },
-        { href: 'technical-guide.html', label: 'Technical Guide' },
-        { href: 'glossary.html', label: 'Glossary' },
-        { href: 'faq.html', label: 'FAQ' },
-        { href: 'https://github.com/redam94/mmm-framework', label: 'GitHub', external: true }
+        {
+            label: 'Learn',
+            items: [
+                { href: 'getting-started.html', label: 'Getting Started' },
+                { href: 'modeling-guide.html', label: 'Modeling Guide' },
+                { href: 'real-data-guide.html', label: 'Real-Data Guide' },
+                { href: 'interpreting-results.html', label: 'Interpreting Results' },
+                { href: 'business-stakeholders.html', label: 'For Business' },
+                { href: 'glossary.html', label: 'Glossary' },
+                { href: 'faq.html', label: 'FAQ' }
+            ]
+        },
+        {
+            label: 'Methodology',
+            items: [
+                { href: 'causal-inference.html', label: 'Causal Inference' },
+                { href: 'bayesian-workflow.html', label: 'Bayesian Workflow' },
+                { href: 'variable-selection.html', label: 'Variable Selection' },
+                { href: 'scientific-modeling.html', label: 'Scientific Modeling' },
+                { href: 'measurement-calibration.html', label: 'Calibration Loop' },
+                { href: 'identification-assumptions.html', label: 'Identification Assumptions' },
+                { href: 'technical-guide.html', label: 'Technical Guide' }
+            ]
+        },
+        {
+            label: 'Platform',
+            items: [
+                { href: 'platform-overview.html', label: 'Platform Overview' },
+                { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
+                { href: 'security.html', label: 'Security & AI Governance' }
+            ]
+        },
+        {
+            label: 'Proof',
+            items: [
+                { href: 'demos.html', label: 'Demos & Reports' },
+                { href: 'pressure-testing.html', label: 'Pressure Testing' },
+                { href: 'mmm-walkthrough.html', label: 'MMM Walkthrough' },
+                { href: 'mmm-example-report.html', label: 'Example Report' },
+                { href: 'artifacts/index.html', label: 'Consultant Artifacts' }
+            ]
+        },
+        {
+            label: 'Project',
+            items: [
+                { href: 'about.html', label: 'About' },
+                { href: 'evaluator.html', label: 'For Evaluators' },
+                { href: 'changelog.html', label: 'Changelog' },
+                { href: 'https://github.com/redam94/mmm-framework', label: 'GitHub', external: true }
+            ]
+        }
     ];
+
+    // Flat list (footer + anything that wants one link per page)
+    const NAV_LINKS = NAV_GROUPS.reduce((acc, g) => {
+        if (g.href) acc.push(g);
+        else acc.push(...g.items);
+        return acc;
+    }, []);
 
     // =========================================================================
     // Utility Functions
@@ -100,14 +149,30 @@
     // Navigation Component
     // =========================================================================
     
+    function renderLink(link) {
+        const activeClass = isActive(link.href) ? ' class="active"' : '';
+        const target = link.external ? ' target="_blank" rel="noopener"' : '';
+        return `<li><a href="${link.href}"${activeClass}${target}>${link.label}</a></li>`;
+    }
+
+    function groupIsActive(group) {
+        return group.items.some(item => isActive(item.href));
+    }
+
     function createNavigation() {
         const nav = document.createElement('nav');
         nav.className = 'site-nav';
 
-        const linksHtml = NAV_LINKS.map(link => {
-            const activeClass = isActive(link.href) ? ' class="active"' : '';
-            const target = link.external ? ' target="_blank"' : '';
-            return `<li><a href="${link.href}"${activeClass}${target}>${link.label}</a></li>`;
+        const linksHtml = NAV_GROUPS.map(entry => {
+            if (entry.href) return renderLink(entry);
+            const activeClass = groupIsActive(entry) ? ' active' : '';
+            const itemsHtml = entry.items.map(renderLink).join('\n                    ');
+            return `<li class="nav-group">
+                <button class="nav-group-btn${activeClass}" aria-expanded="false" aria-haspopup="true">${entry.label}<span class="caret" aria-hidden="true">▾</span></button>
+                <ul class="nav-dropdown">
+                    ${itemsHtml}
+                </ul>
+            </li>`;
         }).join('\n                ');
 
         nav.innerHTML = `
@@ -127,10 +192,36 @@
         // Mobile menu toggle
         const menuBtn = nav.querySelector('.mobile-menu-btn');
         const navLinks = nav.querySelector('.nav-links');
-        
+
         menuBtn.addEventListener('click', () => {
             navLinks.classList.toggle('active');
             menuBtn.classList.toggle('active');
+        });
+
+        // Dropdown groups: click toggles (touch devices); hover/focus is CSS.
+        function closeGroups(except) {
+            nav.querySelectorAll('.nav-group.open').forEach(g => {
+                if (g !== except) {
+                    g.classList.remove('open');
+                    const b = g.querySelector('.nav-group-btn');
+                    if (b) b.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        nav.querySelectorAll('.nav-group-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const li = btn.parentElement;
+                const willOpen = !li.classList.contains('open');
+                closeGroups(li);
+                li.classList.toggle('open', willOpen);
+                btn.setAttribute('aria-expanded', String(willOpen));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!nav.contains(e.target)) closeGroups();
         });
 
         // Close menu when clicking a link
@@ -138,6 +229,7 @@
             link.addEventListener('click', () => {
                 navLinks.classList.remove('active');
                 menuBtn.classList.remove('active');
+                closeGroups();
             });
         });
 
@@ -162,6 +254,13 @@
             <div class="footer-links">
                 ${linksHtml}
             </div>
+        </div>
+        <div class="footer-meta">
+            <span>Apache-2.0 licensed</span>
+            <span>v0.1.0 (Beta, in development)</span>
+            <a href="changelog.html">Changelog &amp; API stability</a>
+            <a href="evaluator.html">For evaluators</a>
+            <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">Source on GitHub</a>
         </div>
         `;
 

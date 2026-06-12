@@ -362,6 +362,7 @@ class TestEstimandOracle:
                 n_chains=1,
                 n_draws=40,
                 n_tune=40,
+                use_parametric_adstock=False,  # exercise the legacy blend path
             )
             panel = _make_panel(periods)
         return BayesianMMM(

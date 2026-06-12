@@ -113,12 +113,16 @@ class ModelConfig(BaseModel):
     )
 
     # Adstock estimation strategy.
-    # False (default): fast two-point interpolation between fixed low/high
-    #   geometric adstock (legacy behavior).
-    # True: estimate a continuous adstock kernel in-graph per channel, honoring
-    #   each MediaChannelConfig.adstock (type/l_max/normalize and priors), which
-    #   enables geometric, delayed, and Weibull carryover shapes.
-    use_parametric_adstock: bool = False
+    # True (default since the 0.1.0 development line, 2026-06): estimate a
+    #   continuous adstock kernel in-graph per channel, honoring each
+    #   MediaChannelConfig.adstock (type/l_max/normalize and priors), which
+    #   enables geometric, delayed, and Weibull carryover shapes. Made the
+    #   default after the pressure-testing series measured the legacy blend at
+    #   ~28% attribution error vs ~7% parametric on carryover-sensitive worlds.
+    # False (legacy): fast two-point interpolation between fixed low/high
+    #   geometric adstock. Set explicitly to reproduce pre-change fits;
+    #   models pickled before this change keep their original behavior.
+    use_parametric_adstock: bool = True
 
     # Frequentist settings
     ridge_alpha: float = 1.0

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Data Onboarding | MMM Framework</title>
+    <meta name="description" content="The real-data path: a deliberately messy client CSV taken through cleaning, MFF assembly, the EDA gate, fitting, and the validation battery that substitutes for ground truth when none exists — every number measured from the baked notebook.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/real-data-guide.html">
+    <meta property="og:title" content="Real-Data Onboarding | MMM Framework">
+    <meta property="og:description" content="From a client export with mixed date formats, a TOTAL row, and a negative refund to a fitted, validated, reported model — and the battery of checks (learning, backtest, stability, lift tests) that replaces the truth column on real engagements.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/real-data-guide.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the guide series (subset of the
+           Pressure Tests block in mmm-walkthrough.html, kept coherent).
+           ------------------------------------------------------------------ */
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        .grade-table { font-size: 0.9rem; }
+        .grade-table td, .grade-table th { padding: 0.4rem 0.7rem; }
+        .grade-table .num { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; white-space: nowrap; }
+        .grade-table .bad { color: var(--color-danger); font-weight: 700; }
+        .grade-table .good { color: #3f7a58; font-weight: 600; }
+
+        /* The messy-CSV excerpt: a table that should look like a spreadsheet wound */
+        .csv-table { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+        .csv-table td, .csv-table th { padding: 0.3rem 0.55rem; white-space: nowrap; }
+        .csv-table .sick { color: var(--color-danger); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The missing on-ramp</a></li>
+                <li><a href="#mess">1 — The mess</a></li>
+                <li><a href="#cleaning">2 — Triage &amp; cleaning</a></li>
+                <li><a href="#mff">3 — MFF assembly</a></li>
+                <li><a href="#eda-gate">4 — The EDA gate</a></li>
+                <li><a href="#fit">5 — The fit</a></li>
+                <li><a href="#battery">6 — What replaces truth</a></li>
+                <li><a href="#reveal">7 — The reveal</a></li>
+                <li><a href="#report">8 — The deliverable</a></li>
+                <li><a href="#takeaways">What to take away</a></li>
+            </ul>
+
+            <h3>Related</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="mmm-walkthrough.html">The Walkthrough</a></li>
+                <li><a href="workflow-forecasting.html">Forecasting &amp; backtests</a></li>
+                <li><a href="measurement-calibration.html">Calibration Loop</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Real-Data Onboarding</h1>
+            <p class="lead">
+                Every other workflow on this site starts from a synthetic world with an answer key.
+                Real engagements start from a CSV export with three date formats, a duplicated week,
+                holes in the spend columns, a <code>TOTAL</code> row someone left in, and a negative
+                number nobody can explain. This page follows <strong>that file</strong> through
+                cleaning → MFF assembly → the pre-fit EDA gate → fitting → validation → report — and
+                spends most of its time on the question the rest of the site postpones:
+                <strong>which checks substitute for ground truth when none exists?</strong>
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">7</div>
+                    <div class="stat-label">distinct defect types in the 158-row export (158 → 156 usable weeks)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.25</div>
+                    <div class="stat-label">out-of-time MASE — the model's forecasts vs "copy last year" (1.19)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.89</div>
+                    <div class="stat-label">rank correlation of channel shares, 104-week fit vs full fit</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">−6%</div>
+                    <div class="stat-label">total-attribution error against the (disclosed) answer key</div>
+                </div>
+            </div>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — every number on this page comes from that notebook's executed run, recorded in
+                <code>nbs/artifacts/real_data_onboarding.json</code>. Nothing here is illustrative.
+            </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop&nbsp;03</a>
+                    or equivalent — this page assumes you know what a fit looks like.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~45–60 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How to take a genuinely broken client export to a model-ready
+                        <code>PanelDataset</code> — with every cleaning rule stated as a counted,
+                        logged <em>policy</em> rather than a silent fix.</li>
+                    <li>What the pre-fit EDA gate (<code>mmm_framework.eda</code>) flags on real-shaped
+                        data, and what acting on each flag concretely changes downstream.</li>
+                    <li>The no-truth-column validation battery — prior→posterior learning,
+                        rolling-origin backtesting, split-window stability, and the lift-test plan —
+                        what each check can and cannot catch, and where non-identification actually
+                        shows up (hint: not where you'd expect).</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/real_data_onboarding.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/real_data_onboarding.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <div class="warning">
+                <h4>⚖️ Honesty note: this "client file" is synthetic under the hood — disclosed, not hidden</h4>
+                <p>
+                    The messy CSV is manufactured in-notebook (seeded) from the <code>realistic</code>
+                    synthetic world used across the
+                    <a href="pressure-testing.html">pressure-testing series</a>, then damaged the way
+                    client files actually arrive. Why build it this way instead of using a public
+                    dataset? Because the entire point of the page is the validation battery — and only
+                    a world with a known answer key can <em>grade</em> that battery. The disclosure is
+                    structural: every check in §6 runs exactly as it would on your data, blind to the
+                    truth, and then §7 opens the answer key to show what the battery did and didn't
+                    catch. On your real data you will not get §7; everything before it is what you get
+                    instead. A pipeline demo that hides its synthetic origins is marketing; one that
+                    uses them to audit itself is method.
+                </p>
+            </div>
+
+            <h2 id="mess">1 — The mess (what the client actually sent)</h2>
+            <p>
+                158 rows × 16 columns, and almost every classic defect at once. The first six rows,
+                exactly as <code>pandas</code> reads them:
+            </p>
+            <table class="csv-table">
+                <thead><tr><th>Week Ending</th><th>TV&nbsp;</th><th>search_spend</th><th>Social Spend</th><th>display</th><th>Sales</th></tr></thead>
+                <tbody>
+                    <tr><td>2021-01-04</td><td class="sick">34,281.72</td><td>26.019952</td><td>9.935614</td><td class="sick">NaN</td><td>760.238575</td></tr>
+                    <tr><td class="sick">01/11/2021</td><td class="sick">16,945.31</td><td>12.217789</td><td>10.245149</td><td>4.923548</td><td>754.436412</td></tr>
+                    <tr><td class="sick">2021-Jan-18</td><td class="sick">19,841.66</td><td>21.369530</td><td>11.521636</td><td>13.463184</td><td>738.363872</td></tr>
+                    <tr><td>2021-01-25</td><td class="sick">142,611.61</td><td>106.968807</td><td>12.841576</td><td>17.022850</td><td>830.480108</td></tr>
+                    <tr><td class="sick">02/01/2021</td><td class="sick">109,300.22</td><td>98.626616</td><td>10.105508</td><td>8.132816</td><td>794.688187</td></tr>
+                    <tr><td class="sick">2021-Feb-08</td><td class="sick">144,591.95</td><td>20.396468</td><td>28.968467</td><td>20.895525</td><td>667.195161</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — the printed head of <code>artifacts/client_export_messy.csv</code>. Red cells are
+                defects pandas has already swallowed silently: dates in three formats, TV as
+                comma-separated <em>text</em> (and in dollars while every other channel is in $000s),
+                a blank spend cell.
+            </p>
+            <p>The full defect inventory, all of it visible in the file's dtypes and row count:</p>
+            <ul>
+                <li><strong>Mixed date formats</strong>, rotating row by row: ISO (53 rows), US
+                    <code>01/11/2021</code> (52), month-name <code>2021-Jan-18</code> (52);</li>
+                <li>a <strong>fully duplicated week</strong> (copy-paste artifact);</li>
+                <li><strong>~3% missing spend cells</strong> in Search and Display, and Social logging
+                    dark weeks <strong>inconsistently as 0 or blank</strong>;</li>
+                <li><strong>TV as text with thousands separators, in dollars</strong> (all 156 cells);</li>
+                <li>a trailing <strong><code>TOTAL</code> summary row</strong> and an
+                    <strong>unnamed junk column</strong> (<code>Unnamed: 15</code>);</li>
+                <li><strong>inconsistent headers</strong>: <code>'TV '</code> (trailing space),
+                    <code>'search_spend'</code>, <code>'Social Spend'</code>, <code>'display'</code>,
+                    <code>'VIDEO'</code>…;</li>
+                <li>one <strong>negative spend value</strong> — a refund booked as negative exposure.</li>
+            </ul>
+            <p>
+                One decision happens <em>before</em> cleaning: the client also offered a brand-tracker
+                awareness series, and we decline it. In this world <code>brand_awareness</code> is a
+                post-treatment <strong>mediator</strong> (media → awareness → sales); conditioning on it
+                blocks part of TV and Video's effect — the classic bad control. The
+                <a href="mmm-walkthrough.html">walkthrough</a> measures the damage of getting this
+                wrong; here we just get it right at the door. What stays: two
+                <strong>confounders</strong> (<code>category_demand</code>, <code>distribution</code>)
+                and four <strong>precision controls</strong> (<code>price</code>,
+                <code>competitor_promo</code>, <code>weather</code>, <code>holiday</code>).
+            </p>
+
+            <h2 id="cleaning">2 — Triage &amp; cleaning: every rule counted, every policy stated</h2>
+            <p>
+                Cleaning <em>is</em> modeling — each rule changes the data the model sees. So the
+                notebook prints each fix with the number of cells it touched, and the run records the
+                ledger:
+            </p>
+            <table class="grade-table">
+                <thead><tr><th>Fix</th><th>Rule / policy</th><th class="num">Touched</th></tr></thead>
+                <tbody>
+                    <tr><td>1</td><td>Drop unnamed junk column (<code>Unnamed: 15</code>)</td><td class="num">1 column</td></tr>
+                    <tr><td>2</td><td>Parse dates robustly (<code>format="mixed"</code>); rows that refuse to parse are not data → the <code>TOTAL</code> row drops out</td><td class="num">156 parsed, 1 row dropped</td></tr>
+                    <tr><td>3</td><td>De-duplicate weeks (keep first occurrence)</td><td class="num">1 row</td></tr>
+                    <tr><td>4</td><td>Normalize headers — strip whitespace, one explicit rename map to canonical names</td><td class="num">14 headers</td></tr>
+                    <tr><td>5</td><td>TV: strip thousands separators, coerce text→float, rescale dollars→$000s (unit mismatch confirmed with the client)</td><td class="num">156 cells</td></tr>
+                    <tr><td>6</td><td><strong>Policy:</strong> negative spend is a bookkeeping artifact (refund netted against exposure), not negative advertising → flag, then zero. Measured: Display @ 2022-09-26, −8.24</td><td class="num">1 cell</td></tr>
+                    <tr><td>7</td><td><strong>Policy:</strong> missing media spend = 0 (a blank almost always means "didn't buy"), with a logged caveat: if a blank hid real spend, that channel is under-credited</td><td class="num">14 cells (Search 5, Social 4, Display 5)</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — the cleaning ledger as recorded in <code>real_data_onboarding.json</code>. Exit
+                asserts: 156 unique, consecutive weekly rows; no NaNs; no negative spend.
+            </p>
+            <p>
+                And because this world has a (disclosed) answer key, the notebook can do something a
+                real engagement can't: <strong>price the cleaning itself</strong>. Comparing cleaned
+                spend to the file's secret generating spend, the policies perturbed Search by 3.1% of
+                its total, Display by 1.9%, Social by 0.9% — and every other channel by ~0%. Cleaning
+                policies are small interventions with quantifiable cost; on real data you can't
+                measure that cost, which is exactly why each policy gets logged rather than applied
+                silently.
+            </p>
+
+            <h2 id="mff">3 — Assemble the Master Flat File</h2>
+            <p>
+                The framework's loaders consume the <strong>MFF</strong> long format — one row per
+                <em>variable × period</em> (× geography × product when they exist).
+                <code>mff_from_wide_format</code> does the reshape; the head of the result:
+            </p>
+            <pre><code>      Period Geography Product Campaign Outlet Creative VariableName  VariableValue
+0 2021-01-04                                                      TV      34.281720
+1 2021-01-04                                                  Search      26.019952
+2 2021-01-04                                                  Social       9.935614
+3 2021-01-04                                                 Display       0.000000
+4 2021-01-04                                                   Video      57.246752</code></pre>
+            <p>
+                The <code>MFFConfig</code> declares what each variable <em>is</em> — including each
+                control's <strong>causal role</strong>, written down before the first fit:
+            </p>
+            <pre><code>mff_config = MFFConfig(
+    kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
+    media_channels=[MediaChannelConfig(name=c, dimensions=[DimensionType.PERIOD])
+                    for c in CHANNELS],
+    controls=[ControlVariableConfig(
+        name=c, dimensions=[DimensionType.PERIOD],
+        causal_role=ROLES.get(c, CausalControlRole.PRECISION_CONTROL))  # confounders: wide, un-shrunk priors
+        for c in CONTROLS],
+)
+panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 controls)</code></pre>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — the reshape is lossless: 14 variables × 156 weeks = 2,184 MFF rows; the panel sees
+                7 channels + 6 controls + the KPI (mean 814, sd 137). <code>category_demand</code> and
+                <code>distribution</code> carry <code>CausalControlRole.CONFOUNDER</code>, which routes
+                them to wide, un-shrunk coefficient priors — shrinking a confounder re-introduces the
+                bias it exists to remove (<a href="causal-inference.html">why</a>).
+            </p>
+
+            <h2 id="eda-gate">4 — The EDA gate: what it flagged, and what acting on it means</h2>
+            <p>
+                <code>mmm_framework.eda</code> is the pre-fit quality gate — validators, missingness,
+                collinearity, and robust outlier detection, all run before <code>BayesianMMM</code>
+                ever sees the data. On the cleaned panel it returned <strong>0 errors and exactly the
+                flags this data deserves</strong>:
+            </p>
+            <table class="grade-table">
+                <thead><tr><th>Finding</th><th>Measured</th><th>Action taken</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><span class="verdict-pill silent">warning</span> <code>short_history</code></td>
+                        <td class="num">156 periods vs ~42 effective parameters → 3.7 obs/param</td>
+                        <td>Don't "fix" — <em>verify</em>: the prior→posterior learning diagnostic in
+                            §6a checks whether thin data became prior-domination (measured: it didn't),
+                            and tempers how strongly channel claims are phrased.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="verdict-pill silent">warning</span> Radio ~ Print collinearity</td>
+                        <td class="num">r = 0.996, both VIF-flagged, condition number 747</td>
+                        <td>Keep both (dropping one silently credits it to the other); expect wide
+                            individual intervals (§6a confirms, precisely); put a Radio/Print
+                            <strong>lift test</strong> on the measurement docket (§6d).</td>
+                    </tr>
+                    <tr>
+                        <td><span class="verdict-pill expected">flags</span> outlier detector: 11 flags,
+                            9 of them <code>isolated_drop</code></td>
+                        <td class="num">the 9 drops are exactly the zero-filled cells from fix 7 (+ the zeroed refund)</td>
+                        <td>The detector is second-guessing <em>our own cleaning policy</em> — its job.
+                            Each flagged week was reviewed in §2; the fills stand with the caveat
+                            logged. If the client later confirms real spend there, the file changes,
+                            not the model.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="verdict-pill ok">pass</span> missingness</td>
+                        <td class="num">100% availability, 156 weeks × 14 variables</td>
+                        <td>Nothing — cleaning closed every hole, and the matrix proves it.</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — <code>validate_dataset</code> / <code>missingness_matrix</code> /
+                <code>collinearity_analysis</code> / <code>detect_outliers</code> on the assembled MFF.
+                A gate you don't act on is decoration; each row's third column is the acting.
+            </p>
+
+            <h2 id="fit">5 — The fit</h2>
+            <p>
+                The pre-specified configuration used across the series: parametric geometric adstock,
+                logistic saturation, yearly seasonality, linear trend, NumPyro NUTS — 4 chains × 500
+                draws after 500 tuning steps. Measured: <strong>r-hat max 1.006, 0 divergences,
+                20 s wall-clock</strong>. Convergence is the entry ticket for everything below, not
+                evidence of correct attribution — the
+                <a href="stress-00-rosy-picture.html">rosy-picture demo</a> exists because green
+                sampler diagnostics say nothing about whether the answer is right.
+            </p>
+
+            <h2 id="battery">6 — What replaces the truth column</h2>
+            <p>
+                On synthetic worlds we grade against a known answer key. Client data has no answer
+                key, so this is the battery that substitutes for one. None of these checks can
+                <em>prove</em> the attribution is right — that's what experiments are for — but each
+                catches a specific way of being wrong:
+            </p>
+            <table>
+                <thead><tr><th>Check</th><th>The failure it catches</th></tr></thead>
+                <tbody>
+                    <tr><td>(a) prior→posterior learning</td><td>a posterior that just re-states the prior</td></tr>
+                    <tr><td>(b) rolling-origin backtest</td><td>a model that can't predict data it hasn't seen</td></tr>
+                    <tr><td>(c) split-window stability</td><td>attributions that depend on <em>which</em> data you fit</td></tr>
+                    <tr><td>(d) lift-test calibration</td><td>confounding no observational check can see</td></tr>
+                </tbody>
+            </table>
+
+            <h3>6a — Did the data teach us anything — and where does non-identification actually show?</h3>
+            <table class="grade-table">
+                <thead><tr><th>Channel</th><th class="num">contraction</th><th>verdict</th><th class="num">90% CI width ÷ estimate</th></tr></thead>
+                <tbody>
+                    <tr><td>TV</td><td class="num">0.24</td><td><span class="verdict-pill expected">moderate</span></td><td class="num good">0.41×</td></tr>
+                    <tr><td>Search</td><td class="num">0.77</td><td><span class="verdict-pill ok">strong</span></td><td class="num good">0.67×</td></tr>
+                    <tr><td>Social</td><td class="num">0.69</td><td><span class="verdict-pill ok">strong</span></td><td class="num good">0.71×</td></tr>
+                    <tr><td>Display</td><td class="num">0.55</td><td><span class="verdict-pill ok">strong</span></td><td class="num">1.12×</td></tr>
+                    <tr><td>Video</td><td class="num">0.56</td><td><span class="verdict-pill ok">strong</span></td><td class="num good">0.57×</td></tr>
+                    <tr><td><strong>Radio</strong></td><td class="num">0.53</td><td><span class="verdict-pill ok">strong</span></td><td class="num bad">1.98×</td></tr>
+                    <tr><td><strong>Print</strong></td><td class="num">0.56</td><td><span class="verdict-pill ok">strong</span></td><td class="num bad">2.24×</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — <code>compute_parameter_learning</code> (contraction/verdict) next to each channel's
+                relative contribution-interval width.
+            </p>
+            <p>
+                Two verdicts, one of them counter-intuitive. First, the gate's short-history warning
+                did <strong>not</strong> become prior-domination: 7/7 channel betas landed
+                strong/moderate. Second — the instructive part — you might expect the collinear
+                Radio/Print pair to show up here as prior-dominated betas. <strong>It doesn't.</strong>
+                Their marginal posteriors contract respectably, because the likelihood does constrain
+                each coefficient through the pair's shared calendar. Marginal learning cannot see a
+                joint pathology. Where the non-identification <em>does</em> surface — with no truth
+                column needed — is interval width: Radio and Print's 90% contribution intervals run
+                <strong>2.0–2.2× their point estimates</strong>, against 0.4–0.7× for the
+                well-identified channels. The pair's <em>split</em> is unpinned, and the posterior
+                says so in width. Reporting their point ROIs without those intervals would be the lie.
+            </p>
+
+            <h3>6b — Can it predict data it has never seen?</h3>
+            <p>
+                Rolling-origin backtest (<a href="workflow-forecasting.html">protocol in depth</a>):
+                first training window 104 weeks, four refits at 13-week steps, 52 graded out-of-time
+                weekly forecasts. This check needs no ground truth — it runs on any engagement.
+            </p>
+            <table class="grade-table">
+                <thead><tr><th>Forecaster</th><th class="num">MAPE</th><th class="num">MASE</th><th class="num">80% PI coverage</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>MMM</strong></td><td class="num good">3.1%</td><td class="num good">0.25</td><td class="num">78.8%</td></tr>
+                    <tr><td>seasonal-naive (copy last year)</td><td class="num">13.8%</td><td class="num">1.19</td><td class="num">—</td></tr>
+                    <tr><td>naive (last value)</td><td class="num">13.2%</td><td class="num">1.07</td><td class="num">—</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — all four refits converged (r-hat ≤ 1.008, 0 divergences). MASE&nbsp;&lt;&nbsp;1 means
+                the model beats "copy last year" where that baseline is computable; the 80% interval
+                covering 78.8% of 52 held-out weeks is calibration checked where it counts, out of
+                time. Caveat from the doctrine: forecast skill validates the <em>predictive</em>
+                model, not the causal one — the confounded worlds in
+                <a href="stress-03-confounding-selection.html">stress&nbsp;03</a> forecast fine while
+                attributing wrongly.
+            </p>
+
+            <h3>6c — Does the story survive fitting on less data?</h3>
+            <p>
+                Refit the identical specification on the first 104 weeks only and compare channel
+                <em>shares</em> of total media contribution (graded over the same window) against the
+                full-156-week fit. Measured: rank correlation <strong>ρ = 0.89</strong>; the top-3
+                set kept 2 of 3 members (Video and TV held #1–#2 in both fits; Social and Search
+                traded the #3 spot); Radio and Print stayed #6–#7 in both. If the ranking had
+                reshuffled when a third of the data left, the "story" would have been a property of
+                the sample, not the market. Note what honest expectations look like here: the
+                <em>identified</em> channels hold steady, while the Radio/Print region — which §6a
+                showed the data never pinned down — is where wobble is allowed and expected.
+            </p>
+
+            <h3>6d — What only an experiment can add</h3>
+            <p>
+                Everything above checks internal consistency and predictive validity. None of it can
+                detect a confounder nobody measured: a model can learn sharply, forecast at 3% MAPE,
+                and replicate across windows <strong>while attributing demand to the channel that
+                merely chased it</strong>. The fix is randomized evidence, not more diagnostics:
+                a <strong>geo-lift test on Radio vs Print</strong> to resolve the split observational
+                data cannot; a <strong>holdout on TV or Search</strong> (the demand-chasing channels
+                in this world) to bound confounding no within-sample check sees. Measured lifts feed
+                back as coefficient-scale priors via <code>mmm_framework.calibration</code> — the
+                <a href="measurement-calibration.html">calibration loop</a>. On a real engagement this
+                subsection is not optional reading; it is the plan.
+            </p>
+
+            <h2 id="reveal">7 — The reveal: the cell your real data will not have</h2>
+            <p>
+                Because the file is (disclosed) synthetic, the notebook ends §6 by opening the answer
+                key and grading the <em>entire pipeline</em> — mess, cleaning policies, MFF, model —
+                against each channel's true causal contribution:
+            </p>
+            <table class="grade-table">
+                <thead><tr><th>Channel</th><th class="num">true</th><th class="num">estimated</th><th class="num">error</th><th>truth in 90% CI</th><th>§6a verdict</th></tr></thead>
+                <tbody>
+                    <tr><td>TV</td><td class="num">8,948</td><td class="num">7,430</td><td class="num">−17%</td><td class="good">✓</td><td><span class="verdict-pill expected">moderate</span></td></tr>
+                    <tr><td>Search</td><td class="num">3,978</td><td class="num">4,079</td><td class="num">+3%</td><td class="good">✓</td><td><span class="verdict-pill ok">strong</span></td></tr>
+                    <tr><td>Social</td><td class="num">3,948</td><td class="num">4,362</td><td class="num">+10%</td><td class="good">✓</td><td><span class="verdict-pill ok">strong</span></td></tr>
+                    <tr><td>Display</td><td class="num">3,090</td><td class="num">3,168</td><td class="num">+2%</td><td class="good">✓</td><td><span class="verdict-pill ok">strong</span></td></tr>
+                    <tr><td>Video</td><td class="num">8,286</td><td class="num">8,630</td><td class="num">+4%</td><td class="good">✓</td><td><span class="verdict-pill ok">strong</span></td></tr>
+                    <tr><td><strong>Radio</strong></td><td class="num">3,301</td><td class="num">2,059</td><td class="num bad">−38%</td><td class="good">✓</td><td><span class="verdict-pill ok">strong</span></td></tr>
+                    <tr><td><strong>Print</strong></td><td class="num">2,097</td><td class="num">1,867</td><td class="num">−11%</td><td class="good">✓</td><td><span class="verdict-pill ok">strong</span></td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                — total media contribution 31,595 vs true 33,648 (<strong>−6.1%</strong>); the 90%
+                intervals covered truth on <strong>7/7 channels</strong>. The biggest point-estimate
+                misses (Radio −38%, TV −17%) are exactly where the battery had already withdrawn
+                confidence: Radio sits inside a 2.0× interval the model refused to narrow, and TV was
+                the one channel §6a graded only <em>moderate</em>. Part of the residual error is the
+                cleaning itself — §2 measured up to 3.1% of a channel's spend perturbed by the
+                policies, and truth is computed on the undamaged spend.
+            </p>
+            <p>
+                <strong>On your real data you will not get this table.</strong> Sections 6a–6d are
+                what you get instead — and on this run, their verdicts pointed at the same channels
+                the answer key did.
+            </p>
+
+            <h2 id="report">8 — The deliverable</h2>
+            <p>
+                The run closes by rendering the client-facing artifact:
+                <code>MMMReportGenerator(model=mmm, panel=panel, results=results, config=ReportConfig(...))
+                .to_html(...)</code> produced a self-contained 2.0&nbsp;MB HTML report
+                (<code>artifacts/onboarding_report.html</code>) — decomposition, ROI, response curves,
+                diagnostics. It ships <em>alongside</em> the §6 battery, never instead of it: the
+                report states the answers; the battery delimits which answers the report is allowed
+                to state confidently. See the <a href="mmm-example-report.html">example report</a> for
+                what the rendered output looks like.
+            </p>
+
+            <h2 id="takeaways">What to take away</h2>
+            <ul>
+                <li><strong>Cleaning is modeling.</strong> Missing-spend→0, zeroing the refund, the
+                    unit fix — each changed the data the model saw, so each was a stated, counted
+                    policy. The honest pipeline logs its interventions and (here, uniquely) measures
+                    their cost: ≤3.1% of any channel's spend.</li>
+                <li><strong>The EDA gate earns its keep before the first fit</strong> — and its flags
+                    map to actions: the obs/param warning became §6a's verification, the collinearity
+                    warning became §6a's width finding plus §6d's lift test, and the outlier detector
+                    audited the cleaning policy itself.</li>
+                <li><strong>No truth column? Run the battery.</strong> Learning, backtest, stability —
+                    none proves causality; each catches a specific way of being wrong; together they
+                    delimit what the report may claim.</li>
+                <li><strong>Know where non-identification shows.</strong> Not in the collinear pair's
+                    beta marginals (they contracted fine) — in contribution intervals 2× the
+                    estimate. Wide intervals are the correct answer; the lift test is the fix.</li>
+                <li><strong>Experiments are the plan, not an appendix.</strong> Only randomized
+                    evidence catches unmeasured confounding; the
+                    <a href="measurement-calibration.html">calibration loop</a> turns measured lifts
+                    into priors for the next fit.</li>
+                <li><strong>The reveal is a luxury of synthetic data — disclosed, not hidden.</strong>
+                    Graded against the answer key: totals −6%, truth covered 7/7, and the misses
+                    concentrated exactly where the battery had already said "don't trust the point
+                    estimate."</li>
+            </ul>
+
+            <div class="note">
+                <h4>📓 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/real_data_onboarding.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/real_data_onboarding.ipynb</code></a>
+                    (authored by <code>nbs/build_real_data_onboarding.py</code>), built on
+                    <code>mmm_framework.data_loader</code>, <code>mmm_framework.eda</code>,
+                    <code>mmm_framework.validation.backtest</code>, and
+                    <code>mmm_framework.reporting</code>. Every computational cell ends in a seeded
+                    assert encoding the claim it demonstrates — if the notebook executes clean, the
+                    story on this page is still true. Measured headlines:
+                    <code>nbs/artifacts/real_data_onboarding.json</code>; the messy file itself:
+                    <code>nbs/artifacts/client_export_messy.csv</code>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

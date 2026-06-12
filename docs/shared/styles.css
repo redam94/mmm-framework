@@ -264,6 +264,123 @@ section {
     transform: scaleX(1);
 }
 
+/* Grouped nav dropdowns (Learn / Methodology / Platform / Proof / Project) */
+.nav-group {
+    position: relative;
+}
+
+.nav-group-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 0.89rem;
+    color: var(--color-text-muted);
+    padding: 0.3rem 0;
+    white-space: nowrap;
+    transition: var(--transition-smooth);
+}
+
+.nav-group-btn .caret {
+    font-size: 0.65em;
+    transform: translateY(1px);
+    transition: transform 0.2s ease;
+}
+
+.nav-group-btn::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-group:hover .nav-group-btn,
+.nav-group.open .nav-group-btn,
+.nav-group-btn.active {
+    color: var(--color-primary-dark);
+}
+
+.nav-group:hover .nav-group-btn::after,
+.nav-group.open .nav-group-btn::after,
+.nav-group-btn.active::after {
+    transform: scaleX(1);
+}
+
+.nav-group:hover .nav-group-btn .caret,
+.nav-group.open .nav-group-btn .caret {
+    transform: translateY(1px) rotate(180deg);
+}
+
+.nav-dropdown {
+    position: absolute;
+    top: calc(100% + 0.65rem);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    min-width: 240px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    padding: 0.5rem;
+    margin: 0;
+    list-style: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+    z-index: 1001;
+}
+
+/* Invisible bridge so the pointer can travel from button to panel */
+.nav-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -0.7rem;
+    left: 0;
+    right: 0;
+    height: 0.7rem;
+}
+
+.nav-group:hover .nav-dropdown,
+.nav-group:focus-within .nav-dropdown,
+.nav-group.open .nav-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.nav-dropdown li {
+    margin: 0;
+}
+
+.nav-dropdown a {
+    display: block;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+}
+
+.nav-dropdown a::after {
+    display: none;
+}
+
+.nav-dropdown a:hover,
+.nav-dropdown a.active {
+    background: var(--tint-primary-10, rgba(90, 124, 101, 0.1));
+    color: var(--color-primary-dark);
+}
+
 /* Mobile menu button */
 .mobile-menu-btn {
     display: none;
@@ -315,6 +432,27 @@ footer {
 }
 
 .footer-links a:hover {
+    color: var(--color-primary);
+}
+
+.footer-meta {
+    max-width: 1200px;
+    margin: 1.5rem auto 0;
+    padding: 1.25rem 2rem 0;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+}
+
+.footer-meta a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.footer-meta a:hover {
     color: var(--color-primary);
 }
 

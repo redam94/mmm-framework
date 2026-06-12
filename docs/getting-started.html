@@ -467,7 +467,12 @@
 
             <!-- Installation -->
             <h2 id="installation">Installation</h2>
-            
+
+            <p>
+                The package is not yet published to PyPI &mdash; installation is from source:
+                clone the repository, then install with <code>uv sync</code> or <code>pip install -e .</code>
+            </p>
+
             <h3>Clone the Repository</h3>
             <div class="terminal-block">
                 <div class="terminal-header">
@@ -639,7 +644,7 @@ print(f"  Controls: {panel.n_controls}")
 # Step 2c: Configure model inference
 model_config = (
     ModelConfigBuilder()
-    .bayesian_numpyro()       # Use JAX-based sampler (4-10x faster)
+    .bayesian_numpyro()       # JAX sampler (measured 7.9x faster than PyMC at equal draws)
     .with_chains(4)           # 4 parallel chains for convergence diagnostics
     .with_draws(2000)         # 2000 posterior draws
     .with_tune(1000)          # 1000 warmup iterations
@@ -674,8 +679,19 @@ trend_config = TrendConfig(
 
             <h3 id="step-3-fit">Step 3: Fit and Analyze</h3>
             <p>
-                Now we build the model, check our priors, fit it to data, and analyze the results 
+                Now we build the model, check our priors, fit it to data, and analyze the results
                 with proper uncertainty quantification.
+            </p>
+            <p>
+                <strong>How long should this take?</strong> Measured on an Apple M3 laptop
+                (16&nbsp;GB, NumPyro, baked in <code>nbs/runtime_benchmark.ipynb</code>): a
+                104-week, 2&ndash;3-channel quickstart model like this one fits in
+                <strong>roughly 10<strong>roughly 10&ndash;14 seconds</strong> at 4&nbsp;&times;&nbsp;500 drawsndash;14 seconds</strong> at 4<strong>roughly 10&ndash;14 seconds</strong> at 4&nbsp;&times;&nbsp;500 drawsnbsp;&times;&nbsp;500 draws, and a
+                production-size 156-week &times; 7-channel model in ~17&nbsp;s; doubling the draws
+                costs ~1.3&times; (extrapolating that measured rate, the 2000-draw configuration
+                above lands around half a minute).
+                If a national fit takes minutes instead, check that the NumPyro sampler is
+                actually selected (the PyMC sampler measured 6.0&times; slower at equal draws).
             </p>
 
             <div class="code-wrapper">
@@ -772,12 +788,12 @@ report = MMMReportGenerator(
     config=ReportConfig(
         title="Marketing Mix Model Analysis",
         client="Acme Consumer Products",
-        analysis_period="Jan 2023 - Dec 2025",
+        analysis_period="Jan 2023 - Dec 2024",
     ),
 )
 
 # Save to HTML
-report.to_html("mmm_report_q4_2025.html")
+report.to_html("mmm_report_q4_2024.html")
 
 # Option 2: Fluent builder pattern for customization
 report = (

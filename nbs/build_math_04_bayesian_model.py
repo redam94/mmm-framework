@@ -136,16 +136,18 @@ $$
 $$
 
 clipped via $\exp(\operatorname{clip}(-\lambda u, -20, 0))$ for numerical safety. The **default adstock**
-is a *blend of two fixed-$\alpha$ geometric adstocks* (endpoints $\alpha=0.0$ and $\alpha=0.9$ from the
-default `adstock_alphas`):
+(since June 2026) is a *parametric in-graph geometric kernel* with a learned per-channel decay rate:
 
 $$
-\operatorname{adstock}_c(x) \;=\; (1-m_c)\,x^{\text{low}} + m_c\,x^{\text{high}},
-\qquad m_c = \texttt{adstock\_}c \sim \mathrm{Beta}(2,2).
+\operatorname{adstock}_c(x)_t \;=\; \sum_{k=0}^{L-1} w_k\, x_{t-k},
+\qquad w_k \propto \alpha_c^{\,k},
+\qquad \alpha_c = \texttt{adstock\_alpha\_}c \sim \mathrm{Beta}(1,3).
 $$
 
-So $m_c$ is a **mix weight between two carryover settings, not a decay rate** (the central lesson of
-`math_01`). Controls enter linearly, $\text{controls}_t = \sum_j \beta^{\text{ctrl}}_j z_{j,t}$.
+So $\alpha_c$ **is a real decay rate** the sampler estimates (the legacy path's $m_c$ blend weight —
+*not* a decay rate — is the central lesson of `math_01`; it remains available via
+`use_parametric_adstock=False`). Controls enter linearly,
+$\text{controls}_t = \sum_j \beta^{\text{ctrl}}_j z_{j,t}$.
 
 Finally the **likelihood** — the probability of the data given the parameters — is Gaussian on the
 standardized KPI:
@@ -227,7 +229,7 @@ is bounded; effects are modest on the standardized scale). The exact priors `_bu
 | Intercept | $\text{intercept}$ | $\mathcal N(0,\ 0.5)$ | base level (std. scale) |
 | **Channel coefficient** | $\beta_c$ | $\mathrm{Gamma}(\mu{=}1.5,\ \sigma{=}1.0)$ | media effect $\ge 0$ |
 | Saturation rate | $\lambda_c=\texttt{sat\_lam}_c$ | $\mathrm{Exponential}(\text{lam}{=}0.5)$ | diminishing-returns speed |
-| Adstock **blend** weight | $m_c=\texttt{adstock\_}c$ | $\mathrm{Beta}(2,2)$ | short- vs. long-memory mix |
+| Adstock **decay** rate | $\alpha_c=\texttt{adstock\_alpha\_}c$ | $\mathrm{Beta}(1,3)$ | carryover per week, prior mean $0.25$ |
 | Seasonality coeffs | $\text{season}$ | $\mathcal N(0,\ 0.3)$ | Fourier amplitudes |
 | Control coeffs | $\beta^{\text{ctrl}}_j$ | $\mathcal N(0,\ \sigma_{\text{ctrl}})$ | wider for a confounder |
 | Geo scale / offset | $\sigma_g,\ u_g$ | $\text{HalfNormal}(0.3),\ \mathcal N(0,1)$ | non-centered: $\sigma_g u_g$ |
@@ -237,8 +239,9 @@ is bounded; effects are modest on the standardized scale). The exact priors `_bu
 Two choices deserve a second look. The **$\mathrm{Gamma}(\mu{=}1.5,\sigma{=}1.0)$** on $\beta_c$ is
 **positive-only** — it bakes in the prior belief that *more media does not reduce sales* — and places
 its mass above zero with a mode around $1$ (an experiment-calibrated prior would replace it; that is
-`math_05`). The **$\mathrm{Beta}(2,2)$** on the blend weight is symmetric, gently concentrated toward
-$m=0.5$: a-priori we are agnostic between short and long memory. Let's render the three media priors.
+`math_05`). The **$\mathrm{Beta}(1,3)$** on the decay rate is right-skewed with mean $0.25$:
+a-priori the model leans toward *short* memory and must be argued into long carryover by the data —
+a deliberate, conservative commitment. Let's render the three media priors.
 """))
     c.append(code(r"""
 from scipy import stats
@@ -265,13 +268,13 @@ axes[1].axvline(2.0, color=INK, ls="--", lw=1, label=r"mean $=1/\mathrm{lam}=2$"
 axes[1].set_title(r"$\lambda_c \sim \mathrm{Exponential}(\mathrm{lam}{=}0.5)$" + "\nsaturation speed")
 axes[1].set_xlabel(r"$\lambda_c$"); axes[1].legend()
 
-# adstock blend m_c ~ Beta(2,2)
+# adstock decay alpha_c ~ Beta(1,3)
 mx = np.linspace(0, 1, 400)
-axes[2].plot(mx, stats.beta.pdf(mx, 2, 2), color=PALETTE["berry"], lw=2.2)
-axes[2].fill_between(mx, stats.beta.pdf(mx, 2, 2), color=PALETTE["berry"], alpha=0.15)
-axes[2].axvline(0.5, color=INK, ls="--", lw=1, label=r"mode $=0.5$")
-axes[2].set_title(r"$m_c \sim \mathrm{Beta}(2,2)$" + "\nshort$\\leftrightarrow$long memory mix")
-axes[2].set_xlabel(r"$m_c$ (blend weight)"); axes[2].legend()
+axes[2].plot(mx, stats.beta.pdf(mx, 1, 3), color=PALETTE["berry"], lw=2.2)
+axes[2].fill_between(mx, stats.beta.pdf(mx, 1, 3), color=PALETTE["berry"], alpha=0.15)
+axes[2].axvline(0.25, color=INK, ls="--", lw=1, label=r"mean $=0.25$")
+axes[2].set_title(r"$\alpha_c \sim \mathrm{Beta}(1,3)$" + "\nshort-leaning carryover decay")
+axes[2].set_xlabel(r"$\alpha_c$ (decay rate)"); axes[2].legend()
 
 plt.tight_layout(); plt.show()
 """))
@@ -284,10 +287,11 @@ assert np.isclose(stats.gamma.std(a=k, scale=theta), 1.0, atol=1e-9)
 assert stats.gamma.cdf(0.0, a=k, scale=theta) == 0.0
 # Exponential(lam=0.5) has mean 1/0.5 = 2.
 assert np.isclose(stats.expon.mean(scale=1 / 0.5), 2.0)
-# Beta(2,2) is symmetric about 0.5 with mean 0.5.
-assert np.isclose(stats.beta.mean(2, 2), 0.5)
+# Beta(1,3) leans short-memory: mean 0.25 with most mass below 0.5.
+assert np.isclose(stats.beta.mean(1, 3), 0.25)
+assert stats.beta.cdf(0.5, 1, 3) > 0.8
 print("✓ Gamma(mu=1.5, sigma=1.0): mean 1.5, sd 1.0, zero mass below 0  (beta_c >= 0)")
-print("✓ Exponential(lam=0.5): mean 2.0   |   Beta(2,2): mean 0.5, symmetric")
+print("✓ Exponential(lam=0.5): mean 2.0   |   Beta(1,3): mean 0.25, short-leaning")
 """))
 
     c.append(md(r"""
@@ -308,7 +312,9 @@ exposes this as `mmm.sample_prior_predictive(samples=300)`; it stores an origina
 One subtlety to expect: because the media coefficients are **positive-only** ($\beta_c\sim\mathrm{Gamma}$)
 and saturated media only ever *adds*, the prior predictive sits **slightly above** the baseline — the
 prior's honest default belief is "media probably helps a bit." So the envelope **leans high** but still
-**covers the bulk** of the observed weeks and contains the data mean. We plot the wide 1–99% band (the
+**covers a substantial share** of the observed weeks and contains the data mean — under the
+parametric-adstock default (June 2026) the prior is noticeably more concentrated than the legacy
+blend's was, so expect bulk-not-blanket coverage. We plot the wide 1–99% band (the
 per-week 5–95% band is tighter than the data's full swing, which is fine).
 """))
     c.append(code(r"""
@@ -344,12 +350,17 @@ print(f"prior-pred 1–99% env range: [{lo.min():.0f}, {hi.max():.0f}]")
 # lives. Robust, directional checks (NOT "every week inside the band", and NOT keyed on
 # the data's extreme min/max: the prior is right-shifted with a thin lower tail, and
 # sample_prior_predictive is unseeded, so extreme-tail brackets are flaky). What IS always
-# true: the prior envelope contains the data MEAN, covers the bulk of weeks, and the prior
-# median is the same order of magnitude as the data mean.
+# true: the prior envelope contains the data MEAN, covers a substantial share of weeks,
+# and the prior median is the same order of magnitude as the data mean.
+# NOTE (June 2026): under the parametric-adstock default the prior predictive is more
+# CONCENTRATED than the old blend's (the Beta(1,3) decay prior commits to short memory,
+# where the blend smeared mass across the whole fixed-alpha bank), so per-week band
+# coverage sits near ~50-60%, down from >70% under the legacy blend. The check is
+# correspondingly directional: bulk coverage, not blanket coverage.
 band_lo, band_hi = np.percentile(ypp, [1, 99], axis=0)
 assert band_lo.min() < obs.mean() < band_hi.max(), "prior envelope should contain the data mean"
 frac_inside = np.mean((obs >= band_lo) & (obs <= band_hi))
-assert frac_inside > 0.7, f"prior predictive too tight: only {frac_inside:.0%} of weeks covered"
+assert frac_inside > 0.4, f"prior predictive too tight: only {frac_inside:.0%} of weeks covered"
 assert 0.5 * obs.mean() < np.median(ypp) < 2.0 * obs.mean(), "prior median wrong order of magnitude"
 print(f"✓ prior 1–99% envelope [{band_lo.min():.0f}, {band_hi.max():.0f}] contains data mean {obs.mean():.0f}")
 print(f"✓ {frac_inside:.0%} of observed weeks fall inside the prior 1–99% band")
@@ -443,7 +454,7 @@ ArviZ table.
 import pandas as pd
 beta_vars = [f"beta_{ch}" for ch in mmm.channel_names]
 satl_vars = [f"sat_lam_{ch}" for ch in mmm.channel_names]
-ad_vars   = [f"adstock_{ch}" for ch in mmm.channel_names]
+ad_vars   = [f"adstock_alpha_{ch}" for ch in mmm.channel_names]
 key_vars  = beta_vars + satl_vars + ad_vars + ["intercept", "sigma"]
 
 summ = mmm.summary(var_names=key_vars)
@@ -812,14 +823,16 @@ lrn.round(3)
 """))
 
     c.append(md(r"""
-The headline contrast is in the top vs. bottom of that table. The **`adstock_<CH>` $\mathrm{Beta}(2,2)$
-blend weights** sit at the top with contraction $\approx 0$ and overlap $\approx 0.87$: their posteriors
-are essentially their priors — **observational data barely identifies carryover**. That is not a bug; it
-is the **carryover/saturation equifinality** of `math_01`/`math_05` showing up as a *measurement*: many
-$(\text{adstock blend},\ \lambda,\ \beta)$ combinations fit the same series, so the likelihood is nearly
-flat in the blend weight and the prior carries the day.
+The headline contrast is in the top vs. bottom of that table. The **`adstock_alpha_<CH>` decay
+rates** sit at the top with **negative contraction** and substantial overlap: their posteriors come out
+*wider* than the short-memory $\mathrm{Beta}(1,3)$ prior — **prior–data tension**, with the likelihood
+arguing for longer carryover than the prior allows but lacking the strength to pin it down.
+**Observational data barely identifies carryover** either way. That is not a bug; it is the
+**carryover/saturation equifinality** of `math_01`/`math_05` showing up as a *measurement*: many
+$(\alpha,\ \lambda,\ \beta)$ combinations fit the same series, so the likelihood is nearly flat along
+that ridge and the posterior spreads rather than contracts.
 
-At the bottom — *strongly* learned — are `sat_lam_*`, the `intercept`, the control coefficients
+At the bottom — *strongly* learned — are the `intercept`, the control coefficients
 `beta_controls`, the seasonal Fourier amplitudes, and the noise scale `sigma` (contraction near $1$):
 these the data pins down hard. The bar chart colors each parameter by verdict; the dashed line is the
 $c = 0.1$ "barely-learned" threshold.
@@ -840,21 +853,26 @@ in a direction the prior resists, inflating its variance. A negative contraction
 **prior-data-tension** flag — the diagnostic surfacing identification trouble that a forest plot alone
 would hide.
 
-Finally, *see* a prior-dominated parameter directly. We overlay the prior and posterior sample
-histograms for `adstock_TV`: the two distributions sit nearly on top of each other — the data added
-almost nothing the $\mathrm{Beta}(2,2)$ prior did not already say. (Contrast this with what the same
-overlay would look like for the `MultivariateMMM` cannibalization $\psi$: despite its one-sided prior,
-the *data* there narrows the posterior by hundreds of times — contraction $\approx 1$, overlap
-$\approx 0.04$ — so that cross-effect is genuinely **identified**, not a prior artifact. The diagnostic
-is precisely what lets you *say which case you are in* instead of assuming.)
+Finally, *see* a parameter the data cannot pin down. We overlay the prior and posterior sample
+histograms for `adstock_alpha_TV`. Under the parametric default the story is **prior–data tension**,
+not prior-domination: the $\mathrm{Beta}(1,3)$ prior commits to short memory (mean $0.25$), the data
+argue for longer carryover, and the posterior comes out *wider* than the prior — measured contraction
+is **negative** for every channel's $\alpha_c$ on this world, with substantial overlap (verdict
+"weak"). A negative contraction means the likelihood is fighting the prior without winning: the
+carryover is only weakly identified, the equifinality catch from `math_01` showing up in the
+diagnostic. (Contrast this with what the same overlay would look like for the `MultivariateMMM`
+cannibalization $\psi$: despite its one-sided prior, the *data* there narrows the posterior by
+hundreds of times — contraction $\approx 1$, overlap $\approx 0.04$ — so that cross-effect is
+genuinely **identified**. The diagnostic is precisely what lets you *say which case you are in*
+instead of assuming.)
 """))
     c.append(code(r"""
 # Fresh prior draws (do not clobber prior_idata from §2). The posterior idata is mmm._trace.
 prior = mmm.sample_prior_predictive(samples=2000)
 
-ax = plot_prior_posterior_overlay(prior, mmm._trace, "adstock_TV")
-ax.set_xlabel(r"$m_{\mathrm{TV}}$  (adstock blend weight)")
-ax.set_title("adstock_TV: posterior ≈ prior — the data barely moved the carryover blend")
+ax = plot_prior_posterior_overlay(prior, mmm._trace, "adstock_alpha_TV")
+ax.set_xlabel(r"$\alpha_{\mathrm{TV}}$  (adstock decay rate)")
+ax.set_title("adstock_alpha_TV: posterior WIDER than the prior — prior–data tension, not learning")
 plt.tight_layout(); plt.show()
 """))
     c.append(code(r"""
@@ -865,13 +883,23 @@ expected_cols = {"parameter", "prior_mean", "prior_sd", "post_mean", "post_sd",
                  "contraction", "overlap", "shift_z", "verdict"}
 assert expected_cols.issubset(lrn.columns), f"missing columns: {expected_cols - set(lrn.columns)}"
 
-# (a) at least one adstock_<CH> blend weight is prior-dominated: contraction < 0.1 OR
-#     verdict == "prior-dominated" (the OR absorbs overlap wobble near the 0.85 threshold).
-adstock_rows = lrn[lrn["parameter"].str.startswith("adstock_")]
-assert len(adstock_rows) >= 1, "expected adstock_<CH> blend-weight rows in the frame"
-prior_dom = (adstock_rows["contraction"] < 0.1) | (adstock_rows["verdict"] == "prior-dominated")
-assert prior_dom.any(), \
-    f"expected >=1 prior-dominated adstock blend weight; got\n{adstock_rows[['parameter','contraction','overlap','verdict']]}"
+# (a) the adstock_alpha_<CH> decay rates are NOT cleanly learned under the parametric
+#     default: measured contraction is NEGATIVE (posterior wider than the short-memory
+#     Beta(1,3) prior) with the posterior mean pushed UP for every channel -- the data
+#     argue for longer carryover than the prior allows. Where that push exceeds one
+#     prior-sd (Search, shift_z ~ +1.6) the verdict is "relocated": the EVIDENCE
+#     dominated the location, and the width reflects likelihood flatness (and possibly
+#     tail inflation -- see contraction_robust / post_ess_bulk), not a failure to learn.
+#     The remaining channels sit below the relocation threshold: verdict "weak".
+#     Checks are generous to absorb the unseeded prior draw's wobble.
+adstock_rows = lrn[lrn["parameter"].str.startswith("adstock_alpha_")]
+assert len(adstock_rows) >= 1, "expected adstock_alpha_<CH> rows in the frame"
+assert (adstock_rows["contraction"] < 0.3).all(), \
+    f"expected non-narrowing adstock decays; got\n{adstock_rows[['parameter','contraction','shift_z','verdict']]}"
+assert (adstock_rows["shift_z"] > 0).all(), \
+    "every adstock decay should shift UP (data wants longer carryover than the prior)"
+assert adstock_rows["verdict"].isin(["weak", "relocated", "prior-dominated"]).all(), \
+    f"unexpected adstock verdicts:\n{adstock_rows[['parameter','contraction','shift_z','verdict']]}"
 
 # (b) sigma and intercept are clearly LEARNED: contraction > 0.5 (huge margin, ~0.99/~0.82).
 g = lrn.set_index("parameter")
@@ -879,10 +907,10 @@ assert g.loc["sigma", "contraction"] > 0.5,     f"sigma not learned: c={g.loc['s
 assert g.loc["intercept", "contraction"] > 0.5, f"intercept not learned: c={g.loc['intercept','contraction']:.3f}"
 
 print("✓ learning frame has all documented columns:", sorted(expected_cols))
-pd_rows = adstock_rows[prior_dom]
-for _, r in pd_rows.iterrows():
-    print(f"✓ PRIOR-DOMINATED  {r['parameter']:<14} contraction={r['contraction']:+.3f}  "
-          f"overlap={r['overlap']:.3f}  verdict={r['verdict']}")
+for _, r in adstock_rows.iterrows():
+    print(f"✓ {r['verdict'].upper():<9} {r['parameter']:<22} contraction={r['contraction']:+.3f}  "
+          f"robust={r['contraction_robust']:+.3f}  shift_z={r['shift_z']:+.2f}  "
+          f"overlap={r['overlap']:.3f}")
 print(f"✓ LEARNED          {'sigma':<14} contraction={g.loc['sigma','contraction']:+.3f}  "
       f"overlap={g.loc['sigma','overlap']:.3f}")
 print(f"✓ LEARNED          {'intercept':<14} contraction={g.loc['intercept','contraction']:+.3f}  "
@@ -918,16 +946,18 @@ identification that the data + single-equation structure do not contain.
 
 **Did the data teach us?** §8 added the honest sanity check a forest plot cannot give:
 `compute_parameter_learning()` measured **prior-to-posterior contraction / overlap / shift** per
-parameter. `sat_lam_*`, the intercept, controls and $\sigma$ were *strongly learned*; the
-`adstock_<CH>` $\mathrm{Beta}(2,2)$ blend weights were **prior-dominated** ($c \approx 0$,
-$\mathrm{OVL}\approx 0.87$) — observational data barely identifies carryover, the equifinality theme made
-quantitative — and `beta_Search` showed a **negative contraction** (posterior wider than its prior), the
-demand-confounded channel flagging prior-data tension. The lesson generalizes: a one-sided prior makes
+parameter. The intercept, controls and $\sigma$ were *strongly learned*; the
+`adstock_alpha_<CH>` decay rates showed **negative contraction** with high overlap (verdict *weak*) —
+the short-memory $\mathrm{Beta}(1,3)$ prior in tension with data that wants longer carryover, the
+posterior widening rather than narrowing: observational data barely identifies carryover, the
+equifinality theme made quantitative. `beta_Search` told the same tension story on the
+demand-confounded channel. The lesson generalizes: a one-sided prior makes
 $P(\psi<0)\approx 1$ vacuous, so always ask *contraction/overlap*, not *sign*.
 
 **Two things to keep straight here:**
-1. The core saturation is **$1-e^{-\lambda u}$**, not a Hill curve, and `adstock_<CH>` is a
-   **$\mathrm{Beta}(2,2)$ blend weight**, not a decay rate (see `math_01`).
+1. The core saturation is **$1-e^{-\lambda u}$**, not a Hill curve. The default
+   `adstock_alpha_<CH>` (since June 2026) **is** a real decay rate; on the legacy path,
+   `adstock_<CH>` is a **$\mathrm{Beta}(2,2)$ blend weight**, not a decay rate (see `math_01`).
 2. `compute_component_decomposition()` is **additive** to `predict()` — baseline (intercept + trend +
    seasonality + controls) plus the per-channel media stack reconstructs the fitted line (we verified
    $\mathrm{corr}\approx 1$ in §7). Read the mean-zero pieces (Fourier seasonality, centered controls) as

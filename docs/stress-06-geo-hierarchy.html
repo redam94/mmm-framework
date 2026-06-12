@@ -248,6 +248,26 @@
                 </tbody>
             </table>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why stacked panel observations are not a time axis — and how a five-minute impulse test caught a cross-geo adstock bleed that years of smoke tests missed.</li>
+                    <li>Why a model can be green and accurate nationally (5% median error) while its per-geo readouts reach +330% error and TV's regional ROI ranking comes out perfectly inverted — grade at the level the decisions are made.</li>
+                    <li>What an intercept-only hierarchy pools and what it cannot: level-shift vs effectiveness heterogeneity, the split-fit check before regional tables drive money, and why aggregating geo data away roughly doubles interval widths.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_06_geography_and_hierarchy.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_06_geography_and_hierarchy.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="act0">Act 0 — The bug the panel surfaced: carryover across the geo boundary</h2>
             <p>
                 A panel model receives its observations as <strong>one stacked vector</strong>.
@@ -325,7 +345,7 @@
 
             <h2 id="worlds">The panel worlds</h2>
             <p>
-                Worlds come from <code>tests/synth/dgp_geo.py</code> — balanced panels with the
+                Worlds come from <code>src/mmm_framework/synth/dgp_geo.py</code> — balanced panels with the
                 same estimand discipline as the rest of the series (see the
                 <a href="pressure-testing.html">hub page</a>), except the counterfactual ground
                 truth is recorded <strong>per geography / per cell</strong>
@@ -655,7 +675,7 @@
                 <p>
                     This guide mirrors <code>nbs/stress_06_geography_and_hierarchy.ipynb</code>
                     (authored by <code>nbs/build_stress_06_geo_hierarchy.py</code>), backed by the
-                    panel scenario harness in <code>tests/synth/dgp_geo.py</code> and the adstock
+                    panel scenario harness in <code>src/mmm_framework/synth/dgp_geo.py</code> and the adstock
                     isolation regression tests in <code>tests/test_panel_adstock.py</code>. Every
                     computational cell ends in a seeded assert encoding the claim it demonstrates —
                     if the notebook executes clean, the story on this page is still true. Source:
@@ -721,7 +741,7 @@
                            Social: PT.colors.social, Display: PT.colors.display };
 
         // ------------------------------------------------------------------
-        // DGP constants published in tests/synth/dgp_geo.py — these are the
+        // DGP constants published in src/mmm_framework/synth/dgp_geo.py — these are the
         // ground-truth design of the geo_heterogeneous world, not estimates.
         // ------------------------------------------------------------------
         const HET_MULT = {

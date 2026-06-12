@@ -110,6 +110,13 @@ from .results import (
     ValidationSummary,
     WAICResults,
 )
+from .backtest import (
+    BacktestConfig,
+    BacktestResult,
+    PosteriorForecaster,
+    rolling_origins,
+    run_backtest,
+)
 from .sensitivity_unobserved import UnobservedConfoundingAnalysis
 from .validator import ModelValidator
 
@@ -117,6 +124,12 @@ __all__ = [
     # Main classes
     "ModelValidator",
     "ValidationConfigBuilder",
+    # Backtesting / forecast accuracy
+    "BacktestConfig",
+    "BacktestResult",
+    "PosteriorForecaster",
+    "rolling_origins",
+    "run_backtest",
     # Validators
     "PPCValidator",
     "ResidualDiagnostics",

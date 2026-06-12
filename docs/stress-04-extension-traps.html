@@ -206,7 +206,7 @@
 
             <div class="stat-row">
                 <div class="stat-callout danger">
-                    <div class="stat-value">0.22</div>
+                    <div class="stat-value">0.33</div>
                     <div class="stat-label">base-model TV ROAS vs a true 2.14 — the brand channel simply vanishes</div>
                 </div>
                 <div class="stat-callout danger">
@@ -221,6 +221,26 @@
                     <div class="stat-value">≈ 1.0</div>
                     <div class="stat-label">proportion mediated reported for a <em>wrong</em> mediator — with clean sampling</div>
                 </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>When an extension model is a genuine cure — NestedMMM rescues a mediated brand channel (TV ROAS 0.33 vs a true 2.14) because the awareness survey adds new likelihood — and how the unidentifiable part relocates instead of disappearing.</li>
+                    <li>How to count data moments against structural parameters before trusting a new latent path, and why an under-identified ψ flips sign with the prior on the same data.</li>
+                    <li>Why the model cannot audit its own arrows: a wrong mediator fits as cleanly and confidently as the right one, so mediator validity is payable only in evidence from outside the model.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_04_extension_traps.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_04_extension_traps.ipynb</code></a> on GitHub.
+                </p>
             </div>
 
             <h2 id="mediation">Act 1 · The mediation problem: the channel the base model cannot see</h2>
@@ -271,11 +291,11 @@
             <p>
                 Fit the base <code>BayesianMMM</code> — with the demand confounder properly controlled, so
                 nothing from <a href="stress-03-confounding-selection.html">stress 03</a> is leaking in —
-                and TV comes back at <strong>ROAS 0.22 against a true 2.14</strong>, with Display likewise
+                and TV comes back at <strong>ROAS 0.33 against a true 2.14</strong>, with Display likewise
                 recovered at under half its truth. Where did the effect go? Not "into the missing mediator
                 variable". The mechanism is nastier: TV is an always-on channel with heavy carryover, so
                 its <em>saturated, adstocked exposure</em> — the regressor the coefficient actually
-                multiplies — barely moves week to week (measured CV ≲ 0.03 across every plausible
+                multiplies — barely moves week to week (measured CV ≤ 0.13 across every plausible
                 carryover value). A near-constant regressor is exchangeable with the intercept and trend:
                 the data cannot credit it, so <strong>the baseline absorbs the brand effect</strong>. No
                 amount of better priors fixes a constant regressor — this is an <em>information</em>
@@ -296,7 +316,7 @@
                 The naive "fix" — <em>"awareness predicts sales, add it as a control"</em> — is the
                 textbook <strong>bad-control trap</strong> (awareness is post-treatment; conditioning on
                 it blocks the indirect path). Measured here, though, it changes almost nothing: TV moves
-                by about −0.03 ROAS and the awareness control's coefficient is ≈ 0.08. The trap doesn't
+                by about −0.04 ROAS and the awareness control's coefficient is ≈ 0.12. The trap doesn't
                 visibly bite <em>because there was nothing left to steal</em> — the baseline had already
                 taken TV's effect. Two failures masking each other: an A/B "with vs without the control"
                 robustness check returns "no difference, the control is safe", and tells you nothing
@@ -328,11 +348,11 @@
             <div class="live-verdict" id="roasVerdict"></div>
             <p class="chart-note">
                 <strong>Measured in the notebook (seeded run)</strong> — true total-effect ROAS (dark)
-                vs each fit's estimate, for the two mediated channels. Base model: TV 0.22 vs true 2.14;
-                Display's bar is drawn at the measured bound (recovered below half its true 2.11).
+                vs each fit's estimate, for the two mediated channels. Base model: TV 0.33 vs true 2.14;
+                Display 0.67 vs true 2.11 (under a third of its truth).
                 Correct mediator: TV 2.29 [1.97, 2.62] — covers the truth; Display 5.47 [4.76, 6.15] —
-                ≈ 2.6× true, interval <em>excludes</em> the truth. Wrong mediator: TV 2.36, perfectly
-                plausible (Display similarly comes back plausible in the notebook). 94% HDIs where shown.
+                ≈ 2.6× true, interval <em>excludes</em> the truth. Wrong mediator: TV 2.36 and
+                Display 5.06 — each as plausible as the correct fit's. 94% HDIs where shown.
             </p>
 
             <p>
@@ -602,7 +622,7 @@
                         because the model grew more structure. Structure without new information is
                         priors with better marketing.</li>
                     <li><strong>The unidentifiable part doesn't disappear — it relocates.</strong> TV's
-                        flat exposure broke the base model (ROAS 0.22 vs 2.14); inside NestedMMM it broke
+                        flat exposure broke the base model (ROAS 0.33 vs 2.14); inside NestedMMM it broke
                         the TV/Display <em>split</em> instead, over-crediting Display ≈ 2.6× with an
                         interval that excludes the truth.</li>
                     <li><strong>Count moments before trusting a new latent path.</strong> ψ + ρ ask four
@@ -714,11 +734,11 @@
             base: {
                 title: 'Base model: the brand channels vanish into the baseline',
                 bars: [
-                    { ch: 'TV',      est: 0.22, label: '0.22' },
-                    { ch: 'Display', est: 1.05, label: '&lt; 1.06', bound: true }
+                    { ch: 'TV',      est: 0.33, label: '0.33' },
+                    { ch: 'Display', est: 0.67, label: '0.67' }
                 ],
-                verdict: '<strong>TV ROAS 0.22 vs true 2.14; Display under half of its true 2.11 ' +
-                         '(measured bound).</strong> r-hat &le; 1.02, 0 divergences, PPC fine — ' +
+                verdict: '<strong>TV ROAS 0.33 vs true 2.14; Display 0.67 vs its true 2.11 — ' +
+                         'under a third of truth.</strong> r-hat &le; 1.02, 0 divergences, PPC fine — ' +
                          'a channel worth a fifth of revenue is invisible and nothing fired.'
             },
             right: {
@@ -736,11 +756,12 @@
             wrong: {
                 title: 'NestedMMM, WRONG mediator (the confounder): nothing fires',
                 bars: [
-                    { ch: 'TV', est: 2.36, label: '2.36' }
+                    { ch: 'TV',      est: 2.36, label: '2.36' },
+                    { ch: 'Display', est: 5.06, label: '5.06' }
                 ],
-                verdict: '<strong>TV ROAS 2.36 — perfectly plausible.</strong> ' +
-                         'proportion_mediated &asymp; 1.0, sampling clean (Display likewise comes ' +
-                         'back plausible in the notebook — bar omitted: no recorded point value). ' +
+                verdict: '<strong>TV ROAS 2.36, Display 5.06 — each as plausible as the ' +
+                         'correct fit\'s.</strong> ' +
+                         'proportion_mediated &asymp; 1.0, sampling clean. ' +
                          'The causal story is backwards — it claims TV builds category demand — ' +
                          'and no model output says so.'
             }

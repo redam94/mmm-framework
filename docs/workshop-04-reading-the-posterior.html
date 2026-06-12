@@ -183,7 +183,7 @@
 
             <p>
                 Same world, same fit as workshop 03: the synthetic <strong>"clean" world</strong> from
-                <code>tests/synth/dgp.py</code> — four media channels (TV, Search, Social, Display)
+                <code>src/mmm_framework/synth/dgp.py</code> — four media channels (TV, Search, Social, Display)
                 driving 156 weeks of sales with carryover, diminishing returns, trend, seasonality, and
                 one control — fit with NUTS via numpyro at 500 draws × 2 chains. One fit; everything on
                 this page is <em>reading</em>, not refitting. And because the world is synthetic, the
@@ -219,6 +219,25 @@
                     <a href="workshop-03-first-mmm.html">03</a> first fit ·
                     <strong>04 reading the posterior (you are here)</strong> ·
                     <a href="workshop-05-from-draws-to-decisions.html">05</a> from draws to decisions.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>–<a href="workshop-03-first-mmm.html">03</a>.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~60–75 min
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>To read the posterior as a table of complete worlds — and to summarize its columns honestly (HDI over equal-tailed on skewed marginals, forest plots with intervals attached).</li>
+                    <li>Why joint correlations (β and λ trading off at r ≈ −0.8) make mixing point estimates illegal — derived quantities must be computed per draw.</li>
+                    <li>How to check whether the data actually taught you anything (prior → posterior contraction) and whether the model can fake your data (the posterior predictive check).</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/workshop_04_reading_the_posterior.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/workshop_04_reading_the_posterior.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -471,7 +490,8 @@
                 intercept 0.92) — while the channel betas span the whole range:
                 <code>beta_Search</code> 0.90 (strong), <code>beta_Display</code> 0.59 (strong),
                 <code>beta_TV</code> 0.46 (moderate), and <code>beta_Social</code>
-                <strong>0.08 — weak: barely updated from its prior</strong>.
+                <strong>0.08 — relocated: its center moved +1.5 prior-sd, but it barely
+                narrowed</strong>.
             </p>
 
             <p>
@@ -479,7 +499,7 @@
                 Search's posterior is dramatically narrower than its prior
                 (post sd / prior sd = <strong>0.32</strong>); Social's barely narrowed
                 (<strong>0.96</strong>) — though its center shifted (+1.5 prior sds), which is the only
-                learning it got.
+                learning it got: exactly the pattern the <em>relocated</em> verdict names.
             </p>
 
             <div class="controls-row">
@@ -495,7 +515,8 @@
                 means and standard deviations (and the contraction labels) are the notebook's measured
                 values from <code>compute_parameter_learning</code>; the curves are Gaussian-rendered
                 from those moments for display. Search: the data spoke loudly. Social: the posterior
-                still leans on the prior — contraction 0.08.
+                barely narrowed (contraction 0.08) — but its whole distribution slid right, the
+                <em>relocated</em> signature.
             </p>
 
             <div class="warning">
@@ -507,7 +528,7 @@
                     see <a href="pressure-testing.html">the pressure-testing scorecard</a> on calibration)
                     or report it explicitly as prior-driven.
                     <strong>2. Contraction measures informativeness, not importance.</strong>
-                    <code>beta_Social</code> learned almost nothing, yet Social's <em>contribution</em>
+                    <code>beta_Social</code> barely narrowed, yet Social's <em>contribution</em>
                     has the tightest CV of all four channels (0.09) — the joint trade-off above is
                     exactly why. Never rank channels by "which beta learned most".
                     <strong>3. Negative contraction is a smoke alarm</strong> — posterior wider than
@@ -608,6 +629,7 @@
                     <tr><td><strong>CV</strong></td><td>coefficient of variation — spread relative to the mean; lets you compare "how unsure" across quantities with different units</td></tr>
                     <tr><td><strong>contraction</strong></td><td>1 − posterior variance / prior variance: how much the data narrowed a parameter beyond the prior</td></tr>
                     <tr><td><strong>prior-dominated</strong></td><td>posterior ≈ prior: the data didn't speak — the number is your assumption wearing a lab coat</td></tr>
+                    <tr><td><strong>relocated</strong></td><td>posterior moved ≥ 1 prior-sd <em>without</em> narrowing: the evidence overruled the prior's location, and the width reflects the likelihood (or slow mixing into the new region) — the opposite of "didn't speak"</td></tr>
                     <tr><td><strong>posterior predictive</strong></td><td>data simulated from the posterior worlds, noise included; an adequate model should be able to fake your dataset</td></tr>
                     <tr><td><strong>spaghetti plot</strong></td><td>a few individual simulated paths drawn thin, so you see what single worlds look like, not just the band</td></tr>
                     <tr><td><strong>decomposition</strong></td><td>the predicted KPI split into additive layers: baseline, trend, seasonality, controls, each channel</td></tr>
@@ -909,7 +931,7 @@
         // 4. Contraction ladder — all 20 parameters (measured)
         // ------------------------------------------------------------------
         const LEARNING = [
-            { p: 'beta_Social',           c: 0.084, v: 'weak' },
+            { p: 'beta_Social',           c: 0.084, v: 'relocated' },
             { p: 'beta_TV',               c: 0.464, v: 'moderate' },
             { p: 'beta_Display',          c: 0.589, v: 'strong' },
             { p: 'sat_lam_Search',        c: 0.634, v: 'strong' },
@@ -931,7 +953,8 @@
             { p: 'sigma',                 c: 0.994, v: 'strong' }
         ];
         const VERDICT_COLOR = { strong: '#6abf8a', moderate: '#d4a86a',
-                                weak: '#c97067', 'prior-dominated': '#a44c43' };
+                                weak: '#c97067', 'prior-dominated': '#a44c43',
+                                relocated: '#7b5ea5' };
 
         function drawContractionChart() {
             const rows = LEARNING.slice().reverse(); // most-learned at top
@@ -967,7 +990,7 @@
         const OVERLAY = {
             TV:      { priorM: 1.51, priorS: 0.988, postM: 2.526, postS: 0.724, c: 0.464, v: 'moderate' },
             Search:  { priorM: 1.50, priorS: 1.038, postM: 1.426, postS: 0.336, c: 0.895, v: 'strong' },
-            Social:  { priorM: 1.45, priorS: 0.945, postM: 2.859, postS: 0.905, c: 0.084, v: 'weak' },
+            Social:  { priorM: 1.45, priorS: 0.945, postM: 2.859, postS: 0.905, c: 0.084, v: 'relocated' },
             Display: { priorM: 1.55, priorS: 1.038, postM: 1.570, postS: 0.666, c: 0.589, v: 'strong' }
         };
 

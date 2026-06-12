@@ -224,6 +224,25 @@
                 </div>
             </div>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00–05</a> (Bayesian fluency assumed) — or equivalent.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~35–45 min reading + fit time if running (full series ≈ 3.5–4.5 h reading-only)
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why correlation ranks Aurora's channels exactly backwards — the dashboard hero (Search, corr 0.85) truly returns $0.66 per $1, while the first cut (TV) returns $2.14.</li>
+                    <li>How three ordinary behaviors — demand-chasing spend, brand effects through awareness, and product cannibalization — mechanically manufacture misleading correlations.</li>
+                    <li>How the sealed synthetic answer key grades every estimate in the series, and why the causal-vs-naive gap is worth roughly $12M/year.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/00_overview.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/00_overview.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="business">Meet the business</h2>
             <p>
                 Two years (104 weeks) of weekly data: revenue in $000s by product, spend by channel, plus a few
@@ -285,8 +304,9 @@
                 The key says: <strong>Search is a demand-chasing mirage.</strong> Aurora's team bids harder on
                 Search when demand is already high, so Search spend rides the same wave as sales — the latent
                 demand signal and Search spend correlate at <strong>0.94</strong>. The credit belongs to demand,
-                not the channel. In notebook&nbsp;1, folding a geo-lift experiment into the likelihood collapses
-                Search's naive ROI of ~2.8 to <strong>~0.68</strong> — right on top of the true 0.66.
+                not the channel. In notebook&nbsp;1, an MMM reads Search at 2.51 demand-blind (still 1.04 even
+                after a demand control); folding a geo-lift experiment into the likelihood collapses it to
+                <strong>0.66</strong> — right on top of the true 0.66.
             </p>
             <p>
                 Meanwhile <strong>TV and Display are Aurora's brand engines</strong> — true ROAS 2.14 and 2.11 —
@@ -355,7 +375,8 @@
                         <td>Single-outcome models credit media for "growth" that is partly one product
                             eating the other; portfolio-level ROAS is overstated.</td>
                         <td><a href="aurora-03-extended-mmm.html">03 · Extended Models</a> — MultivariateMMM
-                            estimates the negative cross-effect.</td>
+                            tests the cross-effect directly; the verdict: direct cannibalization is
+                            negligible (ψ ≈ 0), and the co-movement is a shared demand wave.</td>
                     </tr>
                 </tbody>
             </table>
@@ -428,7 +449,7 @@
                     <p>Can we trust the number? The DAG, which controls close the back-door (and which
                     "controls" make things worse), bad-control detection, and folding a geo-lift experiment
                     into the likelihood.</p>
-                    <div class="guide-punchline">Search naive ROI ~2.8 &rarr; ~0.68 after calibration.</div>
+                    <div class="guide-punchline">Search ROAS 2.51 &rarr; 0.66 after calibration.</div>
                 </a>
                 <a class="guide-card" href="aurora-02-base-mmm.html">
                     <div class="guide-num">AURORA 02</div>
@@ -442,7 +463,9 @@
                     <div class="guide-num">AURORA 03</div>
                     <h3>Extended Models</h3>
                     <p>What is TV <em>really</em> doing? NestedMMM splits TV's effect into direct vs
-                    awareness-mediated; MultivariateMMM measures Cold Brew cannibalizing Original.</p>
+                    awareness-mediated; MultivariateMMM puts the Cold Brew cannibalization claim through
+                    an honesty test — and finds direct cannibalization negligible (ψ ≈ 0); the co-movement
+                    is a shared demand wave.</p>
                     <div class="guide-punchline">TV's value is real — one step upstream.</div>
                 </a>
                 <a class="guide-card" href="aurora-04-reporting.html">

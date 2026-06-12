@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FAQ — MMM Framework</title>
-    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <meta name="description" content="Frequently asked questions about the MMM Framework — answers to common objections and practical questions about Bayesian Marketing Mix Modeling, from data requirements to interpreting results.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/faq.html">
     <meta property="og:title" content="FAQ | MMM Framework">
-    <meta property="og:description" content="A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models. This guide covers mathematical foundations, model specifications, and practical considerations for each model type in the framework.">
+    <meta property="og:description" content="Frequently asked questions about the MMM Framework — answers to common objections and practical questions about Bayesian Marketing Mix Modeling, from data requirements to interpreting results.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/faq.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -170,6 +170,16 @@
                 <li><a href="#prior-specification">Prior Specification</a></li>
                 <li><a href="#validation-features">Validation Features</a></li>
                 <li><a href="#visualization">Uncertainty Visualization</a></li>
+            </ul>
+
+            <h3>Adoption &amp; Operations</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#license">What License?</a></li>
+                <li><a href="#installation">How Do I Install It?</a></li>
+                <li><a href="#fit-time">How Long Does a Fit Take?</a></li>
+                <li><a href="#data-needed">What Data Do I Need?</a></li>
+                <li><a href="#support">What Support Exists?</a></li>
+                <li><a href="#ols-migration">Migrating from OLS</a></li>
             </ul>
         </aside>
 
@@ -698,8 +708,8 @@
                 <div class="faq-question">How does this compare to other MMM approaches?</div>
                 <div class="faq-answer">
                     <p>
-                        Different approaches make different tradeoffs. Here's how to think about the major 
-                        distinctions:
+                        Different approaches make different tradeoffs. Here's how to think about the major
+                        distinctions—including the tools that earn checkmarks of their own:
                     </p>
 
                     <table class="comparison-table">
@@ -725,13 +735,32 @@
                                 <td class="cross">Often shopped</td>
                             </tr>
                             <tr>
+                                <td>Robyn (Meta)</td>
+                                <td class="cross">Bootstrap only</td>
+                                <td>Hyperparameter bounds; lift-test calibration</td>
+                                <td class="cross">Pareto-front selection—the analyst picks a finalist</td>
+                            </tr>
+                            <tr>
+                                <td>Meridian (Google)</td>
+                                <td class="check">Full posterior</td>
+                                <td class="check">Principled priors; lift-test calibration</td>
+                                <td>Analyst-specified; pre-registration not part of the workflow</td>
+                            </tr>
+                            <tr>
                                 <td>Bayesian (this framework)</td>
                                 <td class="check">Full posterior</td>
                                 <td class="check">Principled priors</td>
-                                <td class="check">Pre-specified</td>
+                                <td class="check">Pre-specified, enforced by the workflow</td>
                             </tr>
                         </tbody>
                     </table>
+
+                    <p>
+                        To be clear: Meridian earns its checkmarks—it is a serious Bayesian geo-MMM, and on
+                        these three columns it is closer to this framework than to OLS. The remaining
+                        differences are in the operating loop around the model, covered honestly in
+                        <a href="#vs-alternatives">the Robyn / Meridian / PyMC-Marketing comparison</a> below.
+                    </p>
 
                     <p>Key questions to ask about any MMM methodology:</p>
                     <ol>
@@ -840,11 +869,18 @@
                     </ul>
 
                     <pre><code class="python"># The framework computes full posterior distributions for business metrics
-contributions = model.compute_contributions()
+contrib = model.compute_counterfactual_contributions(
+    compute_uncertainty=True, hdi_prob=0.94
+)
 
-# Get probability that TV ROI exceeds threshold
-prob_profitable = (contributions["TV"]["roi"] > 1.0).mean()
-print(f"Probability TV is profitable: {prob_profitable:.1%}")</code></pre>
+# Per-channel contribution with uncertainty bounds
+print(contrib.summary())  # contribution, share, HDI low/high per channel
+
+# ROAS with its interval: contribution / spend
+tv_roas = contrib.total_contributions["TV"] / tv_spend_total
+print(f"TV ROAS: {tv_roas:.2f} "
+      f"[{contrib.contribution_hdi_low['TV'] / tv_spend_total:.2f}, "
+      f"{contrib.contribution_hdi_high['TV'] / tv_spend_total:.2f}]")</code></pre>
                 </div>
             </div>
 
@@ -917,10 +953,10 @@ print(f"Probability TV is profitable: {prob_profitable:.1%}")</code></pre>
                     </ul>
 
                     <pre><code class="python"># Generate posterior predictive samples
-ppc = model.sample_posterior_predictive(trace)
+pred = model.predict()  # PredictionResults with full posterior predictive
 
 # Compare to observed data
-az.plot_ppc(trace, observed=y_observed)</code></pre>
+az.plot_ppc(pred.posterior_predictive)</code></pre>
 
                     <p>
                         Validation doesn't prevent specification shopping, but it creates accountability: 
@@ -978,6 +1014,96 @@ az.plot_ppc(trace, observed=y_observed)</code></pre>
                             that honest measurement is the path of least resistance.
                         </p>
                     </div>
+                </div>
+            </div>
+
+            <!-- ================================================================== -->
+            <h2 id="adoption-operations">Adoption &amp; Operations</h2>
+            <!-- ================================================================== -->
+
+            <div class="faq-item" id="license">
+                <div class="faq-question">What license is this released under?</div>
+                <div class="faq-answer">
+                    <p>
+                        <strong>Apache-2.0.</strong> The <code>LICENSE</code> file sits at the repository
+                        root. It's a permissive license: commercial use, modification, redistribution, and
+                        forking are all allowed, with an explicit patent grant. There is no dual-license
+                        scheme and no proprietary tier holding features back.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="installation">
+                <div class="faq-question">How do I install it?</div>
+                <div class="faq-answer">
+                    <p>
+                        From source—the framework is <strong>not yet published to PyPI</strong>. Clone the
+                        repository and run <code>uv sync</code>, or pin a specific commit for production use:
+                    </p>
+                    <pre><code>pip install git+https://github.com/redam94/mmm-framework@&lt;commit&gt;</code></pre>
+                    <p>
+                        Python 3.12+ is required. The <a href="getting-started.html">getting started guide</a>
+                        walks through setup, and the <a href="changelog.html">changelog page</a> explains the
+                        pre-1.0 versioning policy and which modules are safe to depend on.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="fit-time">
+                <div class="faq-question">What does a model fit cost in time?</div>
+                <div class="faq-answer">
+                    <p>
+                        Measured, not estimated: a production-size national fit (156 weeks &times; 7 channels,
+                        NumPyro, 4 chains &times; 500 draws) completes in <strong>~14 seconds</strong> on an
+                        Apple M3 laptop, including compilation. Geo panels and extension models scale
+                        sub-linearly per row at that size. The full benchmark table—with the caveat that
+                        absolute seconds are machine-specific and the ratios are the transferable part—is in
+                        the <a href="technical-guide.html#diagnostics">technical guide's Computational
+                        Scaling section</a>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="data-needed">
+                <div class="faq-question">What data do I need?</div>
+                <div class="faq-answer">
+                    <p>
+                        Weekly data in the MFF (Master Flat File) long format, loaded and validated by
+                        <code>MFFLoader</code>. 104+ weeks of weekly history is the comfortable starting
+                        point—enough to separate seasonality from media effects. The
+                        <a href="data-requirements.html">data requirements page</a> covers granularity,
+                        history length, channel coverage, and what to do when your data falls short.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="support">
+                <div class="faq-question">What support exists if something breaks?</div>
+                <div class="faq-answer">
+                    <p>
+                        Honestly: <a href="https://github.com/redam94/mmm-framework/issues" target="_blank" rel="noopener">GitHub
+                        issues</a>, with no SLA. There is no commercial support contract currently offered,
+                        and the project has a single maintainer. If your procurement process requires a
+                        vendor organization, this project does not currently meet that bar; if it requires
+                        software your team can own and audit, the Apache-2.0 license and the 2,000+ test
+                        suite are designed for exactly that. The <a href="evaluator.html">Evaluator's
+                        Guide</a> lays out the full risk picture, including the bus-factor mitigations.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="ols-migration">
+                <div class="faq-question">How do we migrate from an OLS or legacy MMM?</div>
+                <div class="faq-answer">
+                    <p>
+                        Don't switch—<strong>run in parallel first</strong>. The recommended path is to fit
+                        the Bayesian MMM alongside your incumbent OLS model and only decommission the legacy
+                        model after two full modeling cycles of comparable answers under audit. That gives
+                        stakeholders a side-by-side record of where the two approaches agree, where they
+                        diverge, and why—rather than asking them to trust a discontinuous jump in
+                        methodology. See the <a href="glossary.html#term-ols">OLS entry in the glossary</a>
+                        for the framework's stance.
+                    </p>
                 </div>
             </div>
 

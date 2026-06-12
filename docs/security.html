@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security &amp; Deployment Posture | MMM Framework</title>
+    <meta name="description" content="InfoSec reference for the MMM Framework platform: which LLM providers see what data, code-execution sandboxing tiers, the hosted multi-user profile, authentication status, audit logging, data residency, and a full outbound-network inventory.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/security.html">
+    <meta property="og:title" content="Security &amp; Deployment Posture | MMM Framework">
+    <meta property="og:description" content="InfoSec reference for the MMM Framework platform: which LLM providers see what data, code-execution sandboxing tiers, the hosted multi-user profile, authentication status, audit logging, data residency, and a full outbound-network inventory.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/security.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Page-specific overrides for narrower content width */
+        .container { max-width: 960px; }
+        section { padding: 3rem 0; }
+        .hero { min-height: auto; padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        .hero::before { display: none; }
+        table code { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>Security &amp; Deployment Posture</h1>
+            <p class="lead">
+                This page answers the questions an information-security reviewer asks about a platform that ships an AI agent which executes code and calls large language models. Every claim below is tied to a specific file in the repository, and where the current state is weaker than a buyer would want, that is stated plainly along with the configuration that closes the gap.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>How to Read This Page</h2>
+            <p>
+                The platform is <strong>self-hosted software</strong> — there is no vendor-operated SaaS. Security posture is therefore a function of how you deploy it, and the platform exposes two named postures:
+            </p>
+            <ul>
+                <li><strong>Single-user development (the default).</strong> No environment flags set. The agent's Python runs in the API process, the API has no login, and the workspace directory is an organizational boundary, not a security one. This is the honest description of a default install, and the codebase says so itself (<code>technical-docs/agent-knowledge-workspace.md</code> §11: "Single-user / low-concurrency local tool… the workspace dir is an organizational boundary, not a security one").</li>
+                <li><strong>Hosted multi-user (<code>MMM_AGENT_HOSTED=1</code>).</strong> A single switch (<code>src/mmm_framework/agents/profile.py</code>) that fail-closes onto container-sandboxed kernels, denied egress, per-session report paths, and server-minted session IDs. It refuses to start if the sandbox is incomplete.</li>
+            </ul>
+            <p>
+                Between the two sits an intermediate hardening tier (<code>MMM_AGENT_KERNEL=subprocess</code> or <code>container</code>, set explicitly) that you can adopt piecewise. The status table at the bottom of this page lists every control with its state in each posture and the file where it is implemented.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>1. Which LLM Providers See What Data</h2>
+            <h3>Supported providers</h3>
+            <p>
+                The agent's chat model is selected by a configuration file plus environment overrides — never hard-coded. The full provider list, verified in <code>src/mmm_framework/agents/llm.py</code>:
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Provider</th><th>Backend</th><th>Authentication</th><th>Data leaves your network?</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>vertex_anthropic</code></td><td>Claude on Google Vertex AI</td><td>Application Default Credentials (no API key)</td><td>Yes — to your GCP project's Vertex endpoint</td></tr>
+                    <tr><td><code>vertex_gemini</code></td><td>Gemini on Google Vertex AI</td><td>Application Default Credentials</td><td>Yes — to your GCP project's Vertex endpoint</td></tr>
+                    <tr><td><code>anthropic</code></td><td>Anthropic API (direct)</td><td><code>ANTHROPIC_API_KEY</code></td><td>Yes — to Anthropic</td></tr>
+                    <tr><td><code>openai</code></td><td>OpenAI API (direct)</td><td><code>OPENAI_API_KEY</code></td><td>Yes — to OpenAI</td></tr>
+                    <tr><td><code>google_genai</code></td><td>Gemini Developer API (direct)</td><td><code>GOOGLE_API_KEY</code></td><td>Yes — to Google</td></tr>
+                    <tr><td><code>lmstudio</code></td><td>Any local model via LM Studio's OpenAI-compatible server</td><td>None (defaults to <code>http://localhost:1234/v1</code>)</td><td><strong>No</strong></td></tr>
+                </tbody>
+            </table>
+            <p>
+                Embeddings (used by the project knowledge base) are resolved <em>separately</em> from the chat model in <code>src/mmm_framework/agents/embeddings.py</code>, because Anthropic offers no embedding model: Vertex <code>text-embedding-005</code>, Google <code>text-embedding-004</code>, OpenAI <code>text-embedding-3-small</code>, or a local LM Studio embedding model (default <code>text-embedding-nomic-embed-text-v1.5</code>), overridable via <code>MMM_EMBED_PROVIDER</code> / <code>MMM_EMBED_MODEL</code>.
+            </p>
+
+            <h3>What is sent to the LLM provider</h3>
+            <ul>
+                <li><strong>Chat messages and the system prompt</strong> for each agent turn.</li>
+                <li><strong>Tool results</strong>, which return into model context. This includes the <code>stdout</code> of executed Python, knowledge-base snippets retrieved by <code>search_knowledge_base</code> (top-k chunks of documents you uploaded), and file excerpts the agent reads via <code>read_workspace_file</code> (truncated, 20&nbsp;KB default — <code>src/mmm_framework/agents/tools.py</code>).</li>
+                <li><strong>Knowledge-base document text</strong> at ingest time: uploading a document to a project KB chunks its full text (~1,200-character chunks) and sends every chunk to the configured <em>embedding</em> provider; search queries are embedded the same way (<code>src/mmm_framework/agents/knowledge_base.py</code>, <code>technical-docs/agent-knowledge-workspace.md</code> §5–6).</li>
+            </ul>
+
+            <h3>What does not leave</h3>
+            <p>
+                Raw datasets are <strong>not</strong> uploaded to any LLM provider as part of normal operation. Uploaded data files live on local disk (<code>uploads/</code>, the per-session workspace), and analysis runs against them inside the execution kernel on your machine. Captured Plotly figures and tabular tool output are content-addressed and streamed to the <em>browser</em> via <code>GET /plots/{id}</code> and <code>GET /tables/{id}</code> — they do not pass through the model context (<code>technical-docs/agent-knowledge-workspace.md</code> §11b; <code>src/mmm_framework/agents/workspace.py</code>).
+            </p>
+            <div class="warning-box">
+                <h4>⚠️ The precise nuance</h4>
+                <p>
+                    "Raw data stays local" holds <em>by architecture</em>, not by a hard filter: whatever the agent <em>prints</em> or <em>reads into context</em> — a <code>df.head()</code>, summary statistics, a 20&nbsp;KB file excerpt — does go to the LLM provider as a tool result, because the model must see output to reason about it. The system prompt forbids printing full DataFrames and tool output is byte-capped, but if individual rows contain sensitive values and the agent surfaces them, those rows reach the provider. If that is unacceptable, use the fully-local option below or pre-anonymize data before upload.
+                </p>
+            </div>
+            <div class="success-box">
+                <h4>✓ The fully-local option</h4>
+                <p>
+                    Setting <code>provider: lmstudio</code> with a locally loaded chat model <em>and</em> a local embedding model means <strong>no chat, tool-result, or embedding traffic leaves the machine</strong> — both the LLM and KB-embedding endpoints are <code>localhost</code> (<code>src/mmm_framework/agents/llm.py</code>, <code>embeddings.py</code>). No API key is needed or sent.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>2. Code-Execution Sandboxing</h2>
+            <p>
+                The agent executes LLM-authored Python through a <code>KernelManager</code> abstraction (<code>src/mmm_framework/agents/kernels.py</code>) with three implementations, selected by <code>MMM_AGENT_KERNEL</code>. Model fits also run inside the kernel (Phase 2 of <code>technical-docs/agent-session-kernels.md</code>), so the isolation tier covers all agent-driven computation, not just ad-hoc cells.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Tier</th><th>What it is</th><th>Isolation actually provided</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>inprocess</code><br><em>(dev default)</em></td>
+                        <td>A warm, per-session namespace executed <em>inside the API process</em>.</td>
+                        <td><strong>None.</strong> Code shares the API's memory, environment (including any API keys), and filesystem. Appropriate only for the single-user posture, where the operator and the user are the same person.</td>
+                    </tr>
+                    <tr>
+                        <td><code>subprocess</code></td>
+                        <td>One isolated <code>ipykernel</code> process per session (via <code>jupyter_client</code>; no extra service needed).</td>
+                        <td><strong>Process + secret isolation.</strong> Spawned with a <em>scrubbed environment</em>: a fail-closed allowlist (anything not explicitly allowed is dropped) plus a secret-pattern denylist applied on top — <code>*_API_KEY</code>, <code>*_TOKEN</code>, <code>*_SECRET</code>, <code>*_CREDENTIAL*</code>, <code>*_PASSWORD</code>, <code>*_PRIVATE_KEY</code>, <code>GOOGLE_APPLICATION_CREDENTIALS</code>, <code>AWS_*</code>, <code>AZURE_*</code> are removed even if allowlisted. The kernel never calls the LLM or embedder, so it needs no credentials. Per-cell wall-clock timeout (<code>MMM_CELL_TIMEOUT</code>, default 600&nbsp;s: SIGINT, then kill) and a live-kernel LRU cap (<code>MMM_MAX_KERNELS</code>, default 8). Verified in <code>kernels.py</code> and <code>technical-docs/agent-session-kernels-phase3.md</code> PR-E.1. <em>No filesystem or network isolation.</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>container</code></td>
+                        <td>Each session's kernel runs inside <code>podman run</code> on a pinned image (<code>deploy/kernel/Containerfile</code>; Docker-compatible via <code>MMM_KERNEL_RUNTIME</code>).</td>
+                        <td><strong>OS-level sandbox</strong> (<code>src/mmm_framework/agents/container_kernel.py</code>): read-only rootfs, <code>--cap-drop ALL</code> + <code>no-new-privileges</code>, default-deny seccomp, masked <code>/proc</code>/<code>/sys</code>, non-root UID, cgroup memory cap (default 2&nbsp;GB) + pids + CPU limits, size-quota'd tmpfs scratch, only the session's own workspace directory bind-mounted, <strong>egress denied by default</strong> (<code>MMM_KERNEL_EGRESS=deny</code>; the production <code>ipc</code> transport uses <code>--network none</code>, validated to make the internet, <code>169.254.169.254</code>, and <code>metadata.google.internal</code> unreachable — the chat-model API included), ephemeral writable overlay discarded on teardown, and the kernel's control directory (ZMQ HMAC key) wiped. With <code>MMM_KERNEL_REQUIRE_SANDBOX</code> on, <code>_verify_isolation</code> <em>refuses to spawn</em> unless every control is present.</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                Independent of tier, the plot channel is hardened at the single capture funnel: figure IDs are salted with the session's <code>thread_id</code> (not guessable from content across sessions), payloads are schema-validated and size-capped (<code>MMM_PLOT_MAX_BYTES</code>, default 5&nbsp;MiB), and rejected plots are dropped with an audit line rather than inlined (<code>technical-docs/agent-session-kernels-phase3.md</code> PR-E.3; <code>src/mmm_framework/agents/tools.py</code>).
+            </p>
+            <div class="warning-box">
+                <h4>⚠️ Honest caveats the design docs state themselves</h4>
+                <ul>
+                    <li><strong>Environment scrubbing does not stop cloud-credential theft on a cloud VM.</strong> On GCP, Application Default Credentials are obtainable from the metadata server (<code>169.254.169.254</code>), reachable from any same-host subprocess regardless of its environment. Blocking that is an <em>egress</em> control, which only the <code>container</code> tier provides (<code>agent-session-kernels-phase3.md</code> §1.2, PR-F.4). The <code>subprocess</code> tier is defense-in-depth, not a hosting green-light.</li>
+                    <li><strong>Python path guards are not the kernel's security boundary.</strong> <code>safe_join</code>/<code>is_within</code> run in the API process and gate <em>downloads</em>; what in-kernel code can read or write is constrained only by the container mount namespace (<code>agent-session-kernels.md</code> §4).</li>
+                    <li><strong>macOS development containers run with open egress.</strong> Rootless podman on macOS cannot combine port-forwarding with an internal network, so the <code>tcp</code> dev posture is recorded as <code>open:unenforced-macos-dev</code> and audited at WARNING level so it cannot be mistaken for production (<code>container_kernel.py</code>; PR-F.0/F.4 findings). Production egress-deny is the Linux <code>ipc</code> posture.</li>
+                    <li><strong>Stopping a compiled sampler means killing the kernel.</strong> A NumPyro fit compiled to one XLA program ignores SIGINT; cancellation escalates to killing the container/kernel and respawning, which loses the in-flight run (<code>agent-session-kernels.md</code> §3.4).</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>3. The Hosted Multi-User Posture</h2>
+            <p>
+                <code>MMM_AGENT_HOSTED=1</code> (<code>src/mmm_framework/agents/profile.py</code>) flips the deployment from single-user development to the hosted multi-user posture. When set:
+            </p>
+            <ul>
+                <li>The kernel <strong>defaults to <code>container</code></strong>, and an explicitly configured non-sandboxed kernel is force-upgraded to <code>container</code>; <code>assert_hosted_sandbox</code> is wired into app startup so a hosted server on a non-sandboxed kernel <strong>refuses to boot</strong> (<code>profile.py</code>; <code>src/mmm_framework/api/main.py</code>).</li>
+                <li><strong>Kernel egress is denied</strong> and <code>_verify_isolation</code> fail-closes any spawn missing read-only rootfs, dropped capabilities, a memory cap, or denied egress (<code>container_kernel.py</code>).</li>
+                <li><code>Path.cwd()</code> is <strong>dropped from the download allow-roots</strong>, so file serving is confined to the workspace, uploads, and model/config directories (<code>src/mmm_framework/agents/workspace.py:allowed_roots</code>).</li>
+                <li>Agent reports are written <strong>per-session under the workspace</strong> instead of a shared working directory.</li>
+                <li><code>/chat</code> <strong>refuses guessable or client-invented session IDs</strong> — only server-minted UUID4 sessions from <code>POST /sessions</code> are accepted (<code>main.py</code>, chat endpoint).</li>
+            </ul>
+            <div class="warning-box">
+                <h4>⚠️ Without this flag, the default is single-user development</h4>
+                <p>
+                    A default install runs agent code in-process, auto-creates any session ID a client supplies, and serves one trusted operator. Do not place a default install in front of multiple users or untrusted networks. Conversely, do not set <code>MMM_AGENT_HOSTED=1</code> without building the kernel image and having a container runtime present — the profile is deliberately fail-closed and the server will refuse to start rather than run half-sandboxed (<code>profile.py</code> docstring; design rule "a half-applied sandbox is more dangerous than an honest single-user posture", <code>agent-session-kernels.md</code> §4).
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>4. Authentication &amp; Authorization</h2>
+            <p>Stated plainly, because this is the area where current reality is weakest relative to enterprise expectations:</p>
+            <ul>
+                <li><strong>The agent API has no user authentication.</strong> The <code>X-API-Key</code> header on the agent app (<code>src/mmm_framework/api/main.py</code>) is a pass-through credential for <em>direct LLM providers</em>, not a server login; no route carries an auth dependency. In the hosted profile, the unguessable server-minted session ID acts as a <em>bearer capability</em> scoping plots, files, and kernels to a session — a deliberate, documented interim decision, with full multi-tenant auth named as a separate, explicitly deferred workstream (<code>agent-session-kernels-phase3.md</code> §1.1).</li>
+                <li><strong>The Models API has optional shared-key auth, disabled by default.</strong> <code>api/auth.py</code> validates <code>X-API-Key</code> against a configured list only when <code>api_keys_enabled</code> is true; the default is <code>False</code> (<code>api/config.py</code>). When enabled it is a shared key, not per-user identity.</li>
+                <li><strong>Team roles are attribution, not access control.</strong> The owner/analyst/viewer roster exists so experiments and budget decisions carry a name for accountability and sign-off. The platform documentation states this itself: "These roles are about accountability for decisions, not gatekeeping logins" (<code>docs/platform-overview.html</code>). A viewer role does not technically prevent any API action.</li>
+            </ul>
+            <div class="info-box">
+                <h4>Mitigation path</h4>
+                <p>
+                    Today: deploy behind your own perimeter — VPN or private network, plus a reverse proxy with SSO/OIDC in front of both APIs — and enable the Models-API key. The hosted profile's session-capability model plus per-session container mounts then provides session-to-session separation behind that perimeter. An identity layer with real per-user authorization is the named follow-on workstream; until it lands, the platform should be treated as trusting everyone who can reach its ports.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>5. Audit Logging</h2>
+            <p>
+                Kernel lifecycle and security events are emitted as structured <code>key=value</code> lines on the <code>mmm_audit</code> standard-library logger (stdout / container logs). Event names verified in code:
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Event</th><th>Meaning</th><th>Emitted from</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>kernel_spawn</code> / <code>kernel_respawn</code></td><td>Kernel started (container spawns include transport + egress posture)</td><td><code>agents/kernels.py</code>, <code>agents/container_kernel.py</code></td></tr>
+                    <tr><td><code>kernel_evict_lru</code></td><td>Idle kernel evicted at the live-kernel cap</td><td><code>agents/kernels.py</code></td></tr>
+                    <tr><td><code>kernel_died</code></td><td>Kernel died mid-execute (OOM/crash); error synthesized, respawn follows</td><td><code>agents/kernels.py</code></td></tr>
+                    <tr><td><code>kernel_timeout_interrupt</code> / <code>kernel_timeout_kill</code></td><td>Per-cell timeout: SIGINT, then kill after a grace period</td><td><code>agents/kernels.py</code></td></tr>
+                    <tr><td><code>kernel_fit_start</code> / <code>kernel_fit_done</code></td><td>Model fit lifecycle inside the kernel</td><td><code>agents/kernels.py</code></td></tr>
+                    <tr><td><code>kernel_egress</code></td><td>Per-spawn egress posture; logged at WARNING if open (dev-macOS)</td><td><code>agents/container_kernel.py</code></td></tr>
+                    <tr><td><code>spawn_refused</code></td><td>Fail-closed gate rejected an incomplete sandbox, with reasons</td><td><code>agents/container_kernel.py</code></td></tr>
+                    <tr><td><code>overlay_wiped</code></td><td>Container teardown wiped the ephemeral state + control dir</td><td><code>agents/container_kernel.py</code></td></tr>
+                    <tr><td><code>plot_rejected</code></td><td>Oversized or schema-invalid figure dropped at capture</td><td><code>agents/tools.py</code>, <code>agents/eda_tools.py</code></td></tr>
+                </tbody>
+            </table>
+            <p>
+                Known limits, per the design docs: the sink is a single stdout stream — there is no tamper-evident or off-host audit sink yet (planned as Phase 4d, <code>agent-session-kernels.md</code> §6). Under deny-all egress there are no per-packet drop logs to emit (nothing escapes to be dropped); per-drop logging belongs to a future allowlist-proxy model (<code>agent-session-kernels-phase3.md</code> PR-F.4).
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>6. Data Residency &amp; Tenancy</h2>
+            <ul>
+                <li><strong>There is no vendor SaaS.</strong> You run every component — API, worker, Redis, frontend, kernels — on infrastructure you control. The only data that leaves is the LLM/embedding traffic described in section 1, to the provider <em>you</em> configure.</li>
+                <li><strong>All agent state is on local disk.</strong> Per-session outputs under <code>$MMM_AGENT_WORKSPACE/threads/&lt;thread_id&gt;/</code>, per-project knowledge-base sources under <code>$MMM_AGENT_WORKSPACE/projects/&lt;project_id&gt;/kb/</code>, dataset uploads under <code>uploads/</code> (default workspace root: <code>./agent_workspace</code>) — <code>technical-docs/agent-knowledge-workspace.md</code> §2.</li>
+                <li><strong>KB text and its embedding vectors are stored locally</strong> in the SQLite sessions store (<code>kb_documents</code> / <code>kb_chunks</code> tables, embeddings as binary blobs) — not in any external vector database (<code>agent-knowledge-workspace.md</code> §4/§6).</li>
+                <li><strong>Tenancy is per-project (KB) and per-session (workspace, kernel, plots, tables).</strong> In the hosted posture, a session's container mounts only its own workspace directory, and the cross-session plot/table channels are closed by thread-salted IDs (<code>agent-session-kernels-phase3.md</code> PR-E.3/F.6). Cross-<em>user</em> tenancy ultimately rests on the session capability until the deferred auth workstream lands (section 4).</li>
+            </ul>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>7. Outbound Network Calls — Complete Inventory</h2>
+            <p>Everything a running deployment may initiate toward the outside world, with the originating process:</p>
+            <table>
+                <thead>
+                    <tr><th>Call</th><th>From</th><th>When</th><th>Control</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Chat LLM API (Anthropic / OpenAI / Google / Vertex)</td>
+                        <td>API process only — never the kernel</td>
+                        <td>Every agent turn</td>
+                        <td>Provider chosen in <code>config/model_config.yaml</code>; <code>lmstudio</code> keeps it on localhost. The kernel has no LLM credentials (env scrub) and, in the container tier, no route to the model API (egress deny).</td>
+                    </tr>
+                    <tr>
+                        <td>Embedding API</td>
+                        <td>API process</td>
+                        <td>KB document ingest and each KB search</td>
+                        <td>Same provider controls; local LM Studio embedder available (<code>agents/embeddings.py</code>).</td>
+                    </tr>
+                    <tr>
+                        <td>Vertex model discovery (<code>GET /vertex-models</code> backend call)</td>
+                        <td>API process</td>
+                        <td>On request, cached ~5 minutes</td>
+                        <td>Only when a Vertex provider is configured (<code>docs/model-configuration.md</code>).</td>
+                    </tr>
+                    <tr>
+                        <td>Brand-extraction website fetch (<code>extract_brand_from_website</code>)</td>
+                        <td>API process (server-side, never the kernel)</td>
+                        <td>Only when a user asks to extract branding from a URL</td>
+                        <td>SSRF-guarded in <code>agents/brand_extract.py</code>: resolves and blocks loopback, RFC&nbsp;1918, link-local <code>169.254.x</code> (the cloud-metadata vector), and ULA targets; at most 3 manually re-vetted redirects. <strong>Disabled in the hosted profile unless <code>MMM_BRAND_FETCH_ALLOW=1</code>.</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Agent kernel egress</td>
+                        <td>Kernel</td>
+                        <td>—</td>
+                        <td><code>inprocess</code>/<code>subprocess</code>: unrestricted (single-user posture). <code>container</code>: denied by default; production <code>ipc</code> posture is <code>--network none</code> (<code>agents/container_kernel.py</code>).</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                Nothing else phones home: no telemetry, no license checks, no auto-update calls exist in the codebase.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>8. Control Status Table</h2>
+            <p>One row per control: its state in the development default, its state under the hosted profile, and the file where the behavior is implemented and can be verified.</p>
+            <table>
+                <thead>
+                    <tr><th>Control</th><th>Dev default</th><th>Hosted profile (<code>MMM_AGENT_HOSTED=1</code>)</th><th>Verified in</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Kernel isolation</td><td><code>inprocess</code> — none</td><td><code>container</code> forced; fail-closed at startup and at spawn</td><td><code>src/mmm_framework/agents/profile.py</code>, <code>container_kernel.py</code></td></tr>
+                    <tr><td>Kernel secret/env scrub</td><td>On for <code>subprocess</code>/<code>container</code> kernels (n/a in-process); opt-out <code>MMM_KERNEL_SCRUB_ENV=0</code></td><td>On (container gets a config-only env subset)</td><td><code>src/mmm_framework/agents/kernels.py</code>; <code>technical-docs/agent-session-kernels-phase3.md</code> PR-E.1</td></tr>
+                    <tr><td>Kernel network egress</td><td>Unrestricted (in-process/subprocess)</td><td>Denied; metadata endpoints blocked (<code>--network none</code> / internal network)</td><td><code>src/mmm_framework/agents/container_kernel.py</code> (PR-F.4)</td></tr>
+                    <tr><td>Kernel resource caps</td><td>Cell timeout 600&nbsp;s + kernel LRU cap (subprocess); none in-process</td><td>cgroup memory (2&nbsp;GB default) / pids / CPU + ulimits + timeout</td><td><code>kernels.py</code>, <code>container_kernel.py</code> (PR-F.3)</td></tr>
+                    <tr><td>Plot/table channel hardening</td><td>Thread-salted IDs, schema validation, size caps (all tiers)</td><td>Same</td><td><code>src/mmm_framework/agents/tools.py</code>, <code>workspace.py</code> (PR-E.3)</td></tr>
+                    <tr><td>Session IDs</td><td>Client-supplied, auto-created</td><td>Server-minted UUID4 only; <code>/chat</code> rejects others</td><td><code>src/mmm_framework/api/main.py</code> (chat endpoint)</td></tr>
+                    <tr><td>File-serving path guards</td><td><code>is_within</code> allow-roots incl. <code>Path.cwd()</code>; <code>O_NOFOLLOW</code> TOCTOU guard</td><td><code>Path.cwd()</code> dropped from allow-roots</td><td><code>src/mmm_framework/agents/workspace.py:allowed_roots</code> (PR-E.2)</td></tr>
+                    <tr><td>Report output location</td><td>Shared working directory (legacy fixed names)</td><td>Per-session under the workspace</td><td><code>profile.py</code>, <code>workspace.py</code> (PR-F.6)</td></tr>
+                    <tr><td>Brand-extraction fetch</td><td>Enabled, SSRF-guarded</td><td>Disabled unless <code>MMM_BRAND_FETCH_ALLOW=1</code></td><td><code>src/mmm_framework/agents/brand_extract.py</code></td></tr>
+                    <tr><td>API authentication</td><td>Agent API: none. Models API: shared key, off by default</td><td>Unchanged — bring your own perimeter (SSO/reverse proxy); session ID is a bearer capability</td><td><code>api/auth.py</code>, <code>api/config.py</code>; <code>agent-session-kernels-phase3.md</code> §1.1</td></tr>
+                    <tr><td>User roles (owner/analyst/viewer)</td><td>Attribution and sign-off only — not access control</td><td>Unchanged; real RBAC is an explicitly deferred workstream</td><td><code>docs/platform-overview.html</code>; <code>agent-session-kernels-phase3.md</code> §1.1</td></tr>
+                    <tr><td>Audit logging</td><td><code>mmm_audit</code> logger → stdout</td><td>Same; off-host tamper-evident sink planned (Phase 4d)</td><td><code>kernels.py</code>, <code>container_kernel.py</code>, <code>tools.py</code></td></tr>
+                    <tr><td>Data residency</td><td colspan="2" style="text-align:center;">All state local in both postures; only configured LLM/embedding traffic leaves (none with LM Studio)</td><td><code>agents/workspace.py</code>; <code>technical-docs/agent-knowledge-workspace.md</code></td></tr>
+                </tbody>
+            </table>
+            <p>
+                Design history and validation evidence for the kernel controls — including the adversarial review that shaped them and the joint exit tests (a hostile cell cannot read host secrets, a sibling session's workspace, or the network; OOM is contained; the plot channel cannot cross sessions) — live in <code>technical-docs/agent-session-kernels.md</code> and its phase documents in the repository.
+            </p>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Questions From Your Security Review?</h2>
+            <p>Every control on this page traces to a file you can read. For anything not covered, open an issue or audit the source directly.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-white" target="_blank">Audit the Source</a>
+                <a href="platform-overview.html" class="btn btn-outline-white">Platform Overview</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

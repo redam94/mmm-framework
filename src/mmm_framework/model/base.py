@@ -205,10 +205,12 @@ class BayesianMMM:
 
     This implementation prioritizes numerical stability:
     - All data is standardized before modeling
-    - Adstock: by default pre-computed at fixed alphas and blended via a learned
-      mix (fast). Set ``ModelConfig.use_parametric_adstock=True`` to instead
-      estimate a continuous in-graph kernel per channel, honoring each
-      ``MediaChannelConfig.adstock`` (geometric, delayed, or Weibull).
+    - Adstock: by default a continuous in-graph kernel estimated per channel,
+      honoring each ``MediaChannelConfig.adstock`` (geometric, delayed, or
+      Weibull). Set ``ModelConfig.use_parametric_adstock=False`` for the legacy
+      fast path (fixed-alpha bank blended via a learned mix) — the previous
+      default, kept for reproducing older fits; deserialized pre-change models
+      retain their original behavior.
     - Saturation: logistic (``1 - exp(-lam * x)``) by default -- the most
       stable choice -- honoring each ``MediaChannelConfig.saturation`` type per
       channel (logistic, hill, michaelis_menten, tanh, or none)

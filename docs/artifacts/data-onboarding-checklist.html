@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Data Onboarding Checklist — MMM Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+
+        :root {
+            --color-primary: #8fa86a;
+            --color-primary-dark: #6d8a4a;
+            --color-accent: #6a8fa8;
+            --color-accent-dark: #4a6d8a;
+            --color-warning: #d4a86a;
+            --color-danger: #c97067;
+            --color-success: #6abf8a;
+            --color-text: #2d3a2d;
+            --color-text-muted: #5a6b5a;
+            --color-bg: #fafbf9;
+            --color-bg-alt: #f0f2ed;
+            --color-surface: #ffffff;
+            --color-border: #d4ddd4;
+            --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.6;
+        }
+
+        .report-container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2rem;
+            counter-reset: report-section;
+        }
+
+        /* Header — editorial masthead */
+        .report-header {
+            border-top: 4px solid var(--color-primary-dark);
+            border-bottom: 1px solid var(--color-border);
+            padding: 1.5rem 0 1.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .masthead-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        .report-header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.3rem;
+            font-weight: 400;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+            margin-bottom: 0.6rem;
+            max-width: 20em;
+        }
+
+        .report-header .subtitle {
+            font-size: 1rem;
+            color: var(--color-text-muted);
+            max-width: 44em;
+        }
+
+        /* Section styling — numbered, editorial */
+        .section {
+            background: var(--color-surface);
+            border-radius: 10px;
+            padding: 1.75rem 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--color-border);
+            counter-increment: report-section;
+        }
+
+        .section > h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: var(--color-text);
+            margin-bottom: 1.1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            position: relative;
+        }
+
+        .section > h2::before {
+            content: counter(report-section, decimal-leading-zero);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            color: var(--color-primary-dark);
+            display: block;
+            margin-bottom: 0.4rem;
+        }
+
+        .section > h2::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -1px;
+            width: 3.5rem;
+            height: 2px;
+            background: var(--color-primary);
+        }
+
+        .section h3 {
+            font-size: 1.05rem;
+            color: var(--color-text);
+            margin-top: 1.25rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .section p {
+            margin-bottom: 0.9rem;
+            color: var(--color-text);
+        }
+
+        .section-subtitle {
+            color: var(--color-text-muted);
+            font-size: 0.92rem;
+            margin-bottom: 1.25rem;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88em;
+            background: var(--color-bg-alt);
+            border-radius: 4px;
+            padding: 0.1em 0.35em;
+        }
+
+        /* Key metrics grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .metric-card {
+            display: flex;
+            flex-direction: column;
+            background: var(--color-surface);
+            border-radius: 8px;
+            padding: 1.2rem 1.3rem 1.1rem;
+            text-align: left;
+            border: 1px solid var(--color-border);
+            border-top: 3px solid var(--color-primary);
+            break-inside: avoid;
+        }
+
+        .metric-card .label {
+            order: -1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 0.6rem;
+        }
+
+        .metric-card .value {
+            font-size: 1.6rem;
+            font-weight: 600;
+            line-height: 1.2;
+            color: var(--color-text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-card .ci {
+            font-size: 0.78rem;
+            color: var(--color-text-muted);
+            margin-top: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-card.highlight {
+            border-top-color: var(--color-accent);
+            background: var(--color-bg-alt);
+        }
+
+        /* Callout boxes */
+        .callout {
+            border-radius: 8px;
+            padding: 1.1rem 1.3rem;
+            margin: 1.25rem 0;
+            break-inside: avoid;
+        }
+
+        .callout h4 {
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+            font-size: 0.93rem;
+        }
+
+        .callout.insight {
+            background: rgba(106, 143, 168, 0.1);
+            border: 1px solid rgba(106, 143, 168, 0.3);
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .callout.insight h4 { color: var(--color-accent-dark); }
+
+        .callout.warning {
+            background: rgba(212, 168, 106, 0.1);
+            border: 1px solid rgba(212, 168, 106, 0.3);
+            border-left: 4px solid var(--color-warning);
+        }
+
+        .callout.warning h4 { color: #b8860b; }
+
+        .callout.danger {
+            background: rgba(201, 112, 103, 0.08);
+            border: 1px solid rgba(201, 112, 103, 0.3);
+            border-left: 4px solid var(--color-danger);
+        }
+
+        .callout.danger h4 { color: var(--color-danger); }
+
+        /* Tables — editorial: rule-based, tabular numerals */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.25rem 0;
+            font-size: 0.88rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.55rem 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+
+        .data-table th {
+            background: transparent;
+            border-bottom: 2px solid var(--color-text);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            color: var(--color-text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .data-table tbody tr { break-inside: avoid; }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .data-table .mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82em;
+        }
+
+        /* Checklist rows — printable empty checkbox via bordered span */
+        .check-list { margin: 0.75rem 0 0.25rem; }
+
+        .check-item {
+            display: flex;
+            gap: 0.85rem;
+            align-items: baseline;
+            padding: 0.55rem 0.25rem;
+            border-bottom: 1px solid var(--color-border);
+            break-inside: avoid;
+        }
+
+        .check-item:last-child { border-bottom: none; }
+
+        .check-box {
+            flex: none;
+            display: inline-block;
+            width: 0.9em;
+            height: 0.9em;
+            border: 1.5px solid var(--color-text-muted);
+            border-radius: 2px;
+            background: var(--color-surface);
+            transform: translateY(0.12em);
+        }
+
+        .check-body { flex: 1; }
+
+        .check-what {
+            font-weight: 600;
+            font-size: 0.93rem;
+        }
+
+        .check-catches {
+            display: block;
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            margin-top: 0.1rem;
+        }
+
+        /* Fill-in fields — bottom-bordered blanks with mono placeholder */
+        .fill-field {
+            display: inline-block;
+            min-width: 11em;
+            margin: 0 0.3em;
+            padding: 0.05em 0.5em 0;
+            border-bottom: 1px solid var(--color-text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            line-height: 2.1;
+            vertical-align: baseline;
+        }
+
+        .fill-field.wide {
+            display: block;
+            width: 100%;
+            margin: 0.65rem 0;
+        }
+
+        .fill-field.tall { line-height: 3.2; }
+
+        .metric-card .ci .fill-field { min-width: 4em; margin: 0 0.15em; }
+
+        .fill-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 0.4rem 1.5rem;
+            margin: 0.75rem 0 1rem;
+        }
+
+        .fill-grid .fill-field { display: block; margin: 0.35rem 0; }
+
+        /* Signature block */
+        .signature-block {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 2rem;
+            margin-top: 2.25rem;
+            break-inside: avoid;
+        }
+
+        .signature-line {
+            border-top: 1px solid var(--color-text);
+            margin-top: 2.6rem;
+            padding-top: 0.4rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.66rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+        }
+
+        /* Index page artifact cards */
+        .artifact-card {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: 8px;
+            padding: 1.1rem 1.4rem;
+            margin: 0.9rem 0;
+            break-inside: avoid;
+        }
+
+        .artifact-card:hover { background: var(--color-bg-alt); }
+
+        .artifact-card .artifact-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.15rem;
+            color: var(--color-text);
+            margin-bottom: 0.25rem;
+        }
+
+        .artifact-card .artifact-desc {
+            color: var(--color-text-muted);
+            font-size: 0.92rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .artifact-card .artifact-file {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--color-primary-dark);
+        }
+
+        ol.fix-ladder { margin: 0.75rem 0 0.5rem 1.4rem; }
+
+        ol.fix-ladder li {
+            margin-bottom: 0.7rem;
+            break-inside: avoid;
+        }
+
+        /* Footer — colophon */
+        .report-footer {
+            text-align: left;
+            border-top: 1px solid var(--color-border);
+            margin-top: 2rem;
+            padding: 1.25rem 0 2rem;
+            color: var(--color-text-muted);
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .report-container { padding: 1rem; }
+            .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .report-header h1 { font-size: 1.7rem; }
+        }
+
+        /* Print styles — these are printed and filled in by hand */
+        @page {
+            margin: 14mm 15mm;
+        }
+
+        @media print {
+            /* rem-based sizes scale from the root: shrink it once, everything follows */
+            html { font-size: 10.5px; }
+            body { background: white; font-size: 0.85rem; line-height: 1.4; }
+            .report-container { max-width: none; padding: 0; margin: 0; }
+            .report-header {
+                border-top-width: 5px;
+                padding: 0.6rem 0 0.9rem;
+                margin-bottom: 1.1rem;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .report-header h1 { font-size: 1.7rem; }
+            .masthead-meta { margin-bottom: 0.8rem; }
+            .section {
+                box-shadow: none;
+                border: none;
+                border-top: 1px solid #ddd;
+                border-radius: 0;
+                padding: 0.6rem 0;
+                margin-bottom: 0.15rem;
+            }
+            .section > h2 { font-size: 1.15rem; margin-bottom: 0.5rem; padding-bottom: 0.35rem; }
+            .section > h2::before { margin-bottom: 0.15rem; }
+            .section > h2::before,
+            .section > h2::after,
+            .metric-card,
+            .check-box,
+            .callout {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .data-table { font-size: 0.7rem; margin: 0.7rem 0; }
+            .data-table th, .data-table td { padding: 0.28rem 0.4rem; }
+            .data-table tbody tr:hover { background: transparent; }
+            .check-item { padding: 0.25rem 0.1rem; }
+            .check-catches { font-size: 0.78rem; }
+            .callout { padding: 0.6rem 0.85rem; margin: 0.7rem 0; }
+            .metrics-grid { gap: 0.7rem; margin: 0.8rem 0; }
+            .metric-card { padding: 0.7rem 0.85rem 0.6rem; }
+            .fill-field { line-height: 1.9; }
+            .fill-field.tall { line-height: 2.6; }
+            .fill-grid { gap: 0.2rem 1.2rem; margin: 0.5rem 0 0.7rem; }
+            .signature-block { margin-top: 1.2rem; }
+            .signature-line { margin-top: 1.8rem; }
+            ol.fix-ladder li { margin-bottom: 0.35rem; }
+            .section p { margin-bottom: 0.55rem; }
+            .section-subtitle { margin-bottom: 0.7rem; }
+            .signature-block { page-break-inside: avoid; }
+            .artifact-card { box-shadow: none; }
+            .report-footer { page-break-inside: avoid; padding-bottom: 0; margin-top: 1.25rem; }
+            a { color: inherit; text-decoration: none; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <header class="report-header">
+            <div class="masthead-meta">
+                <span class="masthead-kind">MMM Framework — Consultant Artifact</span>
+                <span class="masthead-date">v0.1.0 · 2026-06-12</span>
+            </div>
+            <h1>Client Data Onboarding Checklist</h1>
+            <div class="subtitle">Data inventory, MFF format and hygiene, sufficiency gates, and governance — what must be true of the data before anything is fit.</div>
+        </header>
+        <section class="section"><h2>Data inventory</h2><p class="section-subtitle">What must arrive before anything is modeled.</p><div class="check-list"><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">KPI series — revenue or units, covering the full modeling window.</span><span class="check-catches">One series per outcome; weekly is the reference frequency.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Media spend by channel — every channel, full window.</span><span class="check-catches">Prefer spend over impressions when ROI and budget-allocation readouts are wanted directly (contributions-per-dollar need dollars in the denominator); use impressions/GRPs when CPMs shifted materially, then convert with cost data.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Controls — price, distribution, promotions, and a category-demand proxy.</span><span class="check-catches">If spend chases demand, the demand proxy is a mandatory confounder control, not optional.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Experiment history — past geo lift tests / RCTs with estimates and intervals.</span><span class="check-catches">These become calibration anchors; even old tests narrow the right posteriors.</span></span></div></div></section><section class="section"><h2>Format &amp; hygiene</h2><p class="section-subtitle">The Master Flat File (MFF) contract the loader validates.</p><div class="check-list"><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Long-format MFF — eight columns: <code>Period</code>, <code>Geography</code>, <code>Product</code>, <code>Campaign</code>, <code>Outlet</code>, <code>Creative</code>, <code>VariableName</code>, <code>VariableValue</code>.</span><span class="check-catches">All eight columns must exist; the five dimension columns may be blank for data that doesn't use them. One numeric value per row.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Dates parse — default format <code>%Y-%m-%d</code>; consistent frequency (W weekly / D daily / M monthly).</span><span class="check-catches">Unparseable dates fail loading. Weekly (weeks ending Sunday) is the default and what the published benchmarks use.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Deduplicated — one row per period × dimensions × variable.</span><span class="check-catches">Duplicate rows silently double values when pivoted.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">NaN-vs-0 policy confirmed with the client.</span><span class="check-catches">Default: missing media values fill with 0.0 (no record of spend = no spend); missing control values forward-fill. Confirm this matches reality before loading.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Currency and units consistent across the window and across channels.</span><span class="check-catches">Mixed currencies or a mid-window unit change corrupts ROI denominators.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Sanity — no negative spend, declared variables all present.</span><span class="check-catches">Undeclared names are ignored with a warning; missing declared names fail loading. The loader and EDA module catch most structural errors.</span></span></div></div></section><section class="section"><h2>Sufficiency gates</h2><p class="section-subtitle">Minimums below which estimates are priors wearing a model.</p><div class="check-list"><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">History length — 104+ weekly observations (2 years) preferred.</span><span class="check-catches">Two full seasonal cycles are needed to separate seasonality from trend and from media timing; one cycle leaves them confounded.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Zero-spend share — under 50% zero-spend weeks per channel.</span><span class="check-catches">A channel that's almost always dark carries too little signal to estimate a response curve.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Spend variation &amp; positivity — channels sometimes go dark or near-dark, and channels do not all flight together.</span><span class="check-catches">ROI is a do(spend = 0) counterfactual: a channel that never goes dark gives the model no observations near zero, so the answer is extrapolated from the prior. Synchronized flighting makes the split between channels unidentifiable.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Controls cover the entire series.</span><span class="check-catches">Gaps in confounders (price, distribution, promo) become gaps in causal adjustment exactly where you need it.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Geo counts, if hierarchical — at least 2 geographies, and per-geo spend variation (CoV across geos ≥ ~0.15 per channel).</span><span class="check-catches">The binding constraint is not the count but per-geo spend variation; channels spent uniformly across geos carry no geo-level identifying information.</span></span></div></div></section><section class="section"><h2>Governance</h2><div class="check-list"><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Data dictionary received and reconciled against the declared variables.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Refresh cadence agreed — who delivers, how often, in what format.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">PII confirmation — none needed for MMM.</span><span class="check-catches">The model consumes aggregate spend and KPI series only; confirm no user-level data is in the delivery.</span></span></div><div class="check-item"><span class="check-box"></span><span class="check-body"><span class="check-what">Named contact for data anomalies, with an agreed turnaround.</span></span></div></div></section><div class="callout insight"><h4>The gate</h4><p>Onboarding ends with the EDA pre-flight (see the MMM Diagnostic Checklist): outlier screen, CoV screen, collinearity screen, demand-chasing screen, causal-role classification. Fitting starts only after this page and that pre-flight are signed.</p></div>
+        <footer class="report-footer">
+            <p>Built with the MMM Framework · Apache-2.0 · github.com/redam94/mmm-framework
+               — re-generate via <code>python -m mmm_framework.reporting.consultant_artifacts</code></p>
+        </footer>
+    </div>
+</body>
+</html>

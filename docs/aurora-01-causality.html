@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aurora 01: Causality | MMM Framework</title>
-    <meta name="description" content="Chapter 1 of the Aurora Coffee Co. showcase: the causal DAG behind the data, back-door identification, automatic bad-control detection, and why a geo-lift experiment — not more controls — is what finally pulls Search ROAS from 5.70 down to its true 0.66.">
+    <meta name="description" content="Chapter 1 of the Aurora Coffee Co. showcase: the causal DAG behind the data, back-door identification, automatic bad-control detection, and why a geo-lift experiment — not more controls — is what finally pulls Search ROAS from 2.51 down to its true 0.66.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-01-causality.html">
     <meta property="og:title" content="Aurora 01: Causality | MMM Framework">
-    <meta property="og:description" content="Can we trust the number? The Aurora causal map, identification analysis, bad-control detection, and the measured ROAS ladder: demand-blind 5.70 → demand-controlled 2.82 → experiment-calibrated 0.68 (truth 0.66).">
+    <meta property="og:description" content="Can we trust the number? The Aurora causal map, identification analysis, bad-control detection, and the measured ROAS ladder: demand-blind 2.51 → demand-controlled 1.04 → experiment-calibrated 0.66 (truth 0.66).">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-01-causality.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -233,21 +233,40 @@
 
             <div class="stat-row">
                 <div class="stat-callout danger">
-                    <div class="stat-value">5.70</div>
+                    <div class="stat-value">2.51</div>
                     <div class="stat-label">Search ROAS from a demand-blind MMM fit (measured)</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">2.82</div>
+                    <div class="stat-value">1.04</div>
                     <div class="stat-label">Search ROAS even after controlling for demand (measured)</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">0.68</div>
+                    <div class="stat-value">0.66</div>
                     <div class="stat-label">Search ROAS once a geo-lift experiment enters the likelihood</div>
                 </div>
                 <div class="stat-callout">
                     <div class="stat-value">0.66</div>
                     <div class="stat-label">the true Search ROAS (known by construction)</div>
                 </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00–05</a> (Bayesian fluency assumed) — or equivalent.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~35–45 min reading + fit time if running
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How to state Aurora's causal assumptions as a DAG and turn them into an adjustment set — condition on Demand, never on Awareness (a mediator the config builder refuses to admit).</li>
+                    <li>Why adjustment alone isn't enough: demand-blind Search ROAS reads 2.51, demand-controlled still 1.04, against a sealed truth of 0.66.</li>
+                    <li>How folding a randomized geo-lift experiment into the likelihood pulls Search and Social onto the answer key when observational adjustment can't.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/01_causality.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/01_causality.ipynb</code></a> on GitHub.
+                </p>
             </div>
 
             <h2 id="dag">Step 1 — Draw the causal map (a DAG)</h2>
@@ -361,7 +380,7 @@
             </div>
             <div class="dag-readout">
                 <div class="stat-callout" id="dagRoasCallout">
-                    <div class="stat-value" id="dagRoas">5.70</div>
+                    <div class="stat-value" id="dagRoas">2.51</div>
                     <div class="stat-label" id="dagRoasLabel">Search ROAS under this specification (measured; truth 0.66)</div>
                 </div>
                 <div class="stat-callout">
@@ -372,8 +391,8 @@
             <div id="dagStatus"></div>
             <p class="chart-note">
                 ROAS readouts are <strong>measured</strong> — hardcoded from the baked outputs of
-                <code>nbs/01_causality.ipynb</code> (demand-blind 5.70, demand-controlled 2.82,
-                experiment-calibrated 0.68). The {Demand, Awareness} option has no number because the
+                <code>nbs/01_causality.ipynb</code> (demand-blind 2.51, demand-controlled 1.04,
+                experiment-calibrated 0.66). The {Demand, Awareness} option has no number because the
                 framework <em>refuses to fit it</em> — see Step 3.
             </p>
 
@@ -484,8 +503,8 @@ Back-door paths found:
             <p class="chart-note">
                 <strong>Measured</strong> — hardcoded from the baked outputs of
                 <code>nbs/01_causality.ipynb</code> (Step 5 table). Controlling for demand shrinks every
-                bar of bias, but Search's stays stubbornly positive: 5.70 → 2.82 against a truth of
-                0.66 (+2.16 of leftover bias). TV and Display are <em>understated</em> either way —
+                bar of bias, but Search's stays stubbornly positive: 2.51 → 1.04 against a truth of
+                0.66 (+0.38 of leftover bias). TV and Display are <em>understated</em> either way —
                 their value hides one step upstream, behind Awareness.
             </p>
 
@@ -526,8 +545,8 @@ m_cal = BayesianMMM(panel, base_config(), TrendConfig(type=TrendType.LINEAR),
                 \(\widehat{\text{ROAS}}_{\text{exp}} \sim \mathcal{N}(\text{ROAS}_{\text{model}},
                 \text{se}^2)\). The notebook's measured result:
             </p>
-            <pre><code>Search: observational 2.82  →  calibrated 0.68   (true 0.66)
-Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
+            <pre><code>Search: observational 1.04  →  calibrated 0.66   (true 0.66)
+Social: observational 0.70  →  calibrated 0.48   (true 0.49)</code></pre>
 
             <div class="chart-container short" id="punchlineChart"></div>
             <p class="chart-note">
@@ -542,9 +561,9 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
             <h2 id="ladder">The whole chapter in one chart: the ROAS ladder</h2>
             <p>
                 Three specifications, one truth. Naively, Search was the dashboard's hero (spend–sales
-                correlation ≈ 0.85, naive ROI ≈ 2.8 in <a href="aurora-00-overview.html">chapter 00</a>).
-                A demand-blind MMM makes it look even better. Each rung of the ladder removes one layer
-                of self-deception:
+                correlation ≈ 0.85 in <a href="aurora-00-overview.html">chapter 00</a>).
+                A demand-blind MMM gives the mirage a number: ROAS 2.51, nearly four times the truth.
+                Each rung of the ladder removes one layer of self-deception:
             </p>
 
             <div class="chart-container tall" id="ladderChart"></div>
@@ -556,10 +575,10 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
             <p class="chart-note">
                 <strong>Measured</strong> — every point is from the baked Step-5/Step-6 tables of
                 <code>nbs/01_causality.ipynb</code>; dashed lines are the known true ROAS. Search:
-                5.70 → 2.82 → 0.68 (truth 0.66). Social: 0.69 → 0.90 → 0.50 (truth 0.49). Switch to
+                2.51 → 1.04 → 0.66 (truth 0.66). Social: 1.14 → 0.70 → 0.48 (truth 0.49). Switch to
                 "All four" and note that TV (truth 2.14) and Display (truth 2.11) stay
-                <em>understated</em> at every rung — calibrating Search/Social frees up credit
-                (TV 0.22 → 0.68, Display 0.45 → 1.64) but can't reveal effects that flow through an
+                <em>understated</em> at every rung — calibrating Search/Social frees up a little credit
+                (TV 0.33 → 0.42, Display 0.67 → 0.78) but can't reveal effects that flow through an
                 unmodeled mediator. That's chapter <a href="aurora-03-extended-mmm.html">03</a>.
             </p>
 
@@ -584,11 +603,11 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
                     <li><strong>Bad controls are auto-detected and enforced</strong> —
                         <code>classify_dag_roles</code> labels Awareness a mediator, and the config
                         builder raises rather than letting it into the likelihood.</li>
-                    <li>Adjustment alone is not enough: demand-blind Search ROAS 5.70; demand-controlled
-                        still 2.82 against a truth of 0.66 (collinearity between the proxy and
+                    <li>Adjustment alone is not enough: demand-blind Search ROAS 2.51; demand-controlled
+                        still 1.04 against a truth of 0.66 (collinearity between the proxy and
                         demand-chasing spend).</li>
-                    <li>A geo-lift experiment folded into the likelihood pulls Search → 0.68 and
-                        Social → 0.50, matching truth (0.66 / 0.49). Randomized evidence fixes what
+                    <li>A geo-lift experiment folded into the likelihood pulls Search → 0.66 and
+                        Social → 0.48, matching truth (0.66 / 0.49). Randomized evidence fixes what
                         observational adjustment can't.</li>
                     <li>TV and Display remain understated at every rung — mediation is the next
                         problem, and the next notebook but one.</li>
@@ -673,10 +692,10 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
             Social: PT.colors.social, Display: PT.colors.display
         };
         const ROAS = {
-            TV:      { truth: 2.14, blind: 0.12, ctrl: 0.22, cal: 0.68 },
-            Search:  { truth: 0.66, blind: 5.70, ctrl: 2.82, cal: 0.68 },
-            Social:  { truth: 0.49, blind: 0.69, ctrl: 0.90, cal: 0.50 },
-            Display: { truth: 2.11, blind: 0.29, ctrl: 0.45, cal: 1.64 }
+            TV:      { truth: 2.14, blind: 0.19, ctrl: 0.33, cal: 0.42 },
+            Search:  { truth: 0.66, blind: 2.51, ctrl: 1.04, cal: 0.66 },
+            Social:  { truth: 0.49, blind: 1.14, ctrl: 0.70, cal: 0.48 },
+            Display: { truth: 2.11, blind: 0.48, ctrl: 0.67, cal: 0.78 }
         };
         const SPECS = ['demand-blind', 'demand-controlled', 'experiment-calibrated'];
 
@@ -691,25 +710,25 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
                 conditioned: [],
                 backdoorOpen: true,
                 mediatorBlocked: false,
-                roas: '5.70',
+                roas: '2.51',
                 roasLabel: 'Search ROAS under this specification (measured; truth 0.66)',
                 paths: '1 open',
                 bad: true,
                 status: '<strong>Back-door OPEN.</strong> Nothing blocks <em>Search ← Demand → Sales</em>; ' +
-                        'Search inherits demand’s credit and the fit reports 5.70 against a true 0.66. ' +
+                        'Search inherits demand’s credit and the fit reports 2.51 against a true 0.66. ' +
                         'This is the demand-blind fit from Step 4.'
             },
             demand: {
                 conditioned: ['n-demand'],
                 backdoorOpen: false,
                 mediatorBlocked: false,
-                roas: '2.82',
+                roas: '1.04',
                 roasLabel: 'Search ROAS under this specification (measured; truth 0.66)',
                 paths: '0 open (on paper)',
                 bad: true,
                 status: '<strong>Back-door closed on paper — but the bias survives.</strong> The demand ' +
                         'proxy is collinear with demand-chasing Search spend, so the regression cannot fully ' +
-                        'separate them: measured ROAS 2.82, still 4× the truth. Adjustment alone is not enough.'
+                        'separate them: measured ROAS 1.04, still ~60% above the truth. Adjustment alone is not enough.'
             },
             demand_aware: {
                 conditioned: ['n-demand', 'n-aware'],
@@ -729,13 +748,13 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
                 conditioned: ['n-demand'],
                 backdoorOpen: false,
                 mediatorBlocked: false,
-                roas: '0.68',
+                roas: '0.66',
                 roasLabel: 'Search ROAS under this specification (measured; truth 0.66)',
                 paths: '0 open + likelihood anchored',
                 bad: false,
                 status: '<strong>Anchored to randomized evidence.</strong> The geo-lift experiment enters ' +
-                        'the likelihood as a measurement the model must agree with. Search snaps to 0.68 ' +
-                        '(truth 0.66) and Social to 0.50 (truth 0.49). This is the chapter’s answer: ' +
+                        'the likelihood as a measurement the model must agree with. Search snaps to 0.66 ' +
+                        '(truth 0.66) and Social to 0.48 (truth 0.49). This is the chapter’s answer: ' +
                         'adjust where you can, calibrate where you can’t.'
             }
         };
@@ -875,7 +894,7 @@ Social: observational 0.90  →  calibrated 0.50   (true 0.49)</code></pre>
             });
             const layout = PT.layout({
                 title: { text: 'Experiment calibration pulls observational ROAS onto the truth', font: { size: 15 }, x: 0.02 },
-                xaxis: { title: { text: 'ROAS (revenue per $1 spend)' }, range: [0, 3.35] },
+                xaxis: { title: { text: 'ROAS (revenue per $1 spend)' }, range: [0, 1.45] },
                 yaxis: { tickvals: [0, 1], ticktext: ['Search', 'Social'], range: [-0.6, 1.6] },
                 legend: { orientation: 'h', y: -0.28 },
                 margin: { l: 70, r: 30, t: 50, b: 60 },

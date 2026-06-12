@@ -232,6 +232,26 @@
                 </tbody>
             </table>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why unmodeled time structure always lands somewhere — on media exactly when spend correlates with it — and why the sign of the resulting bias follows the geometry, not your intuition.</li>
+                    <li>How time-resolved checks (residuals against the calendar, split-window refits) catch what twelve green convergence reports cannot.</li>
+                    <li>Why cheap, dated knowledge — a step-plus-ramp event control or a one-column holiday dummy — beats flexible machinery like a higher Fourier order.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_02_time_structure.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_02_time_structure.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="act1">Act 1 — A structural break the brand <em>reacted to</em></h2>
             <p>
                 Mid-series the category takes a level shock — think COVID, a distribution loss, a PR
@@ -538,7 +558,7 @@
                     <code>nbs/stress_02_time_structure.ipynb</code> (authored by
                     <code>nbs/build_stress_02_time_structure.py</code>), backed by the scenario harness in
                     <code>tests/synth/</code> — the <code>trend_break</code> and
-                    <code>seasonality_misspec</code> worlds were added to <code>tests/synth/dgp.py</code>
+                    <code>seasonality_misspec</code> worlds were added to <code>src/mmm_framework/synth/dgp.py</code>
                     for this notebook, and it validates their internals before fitting anything. Every
                     computational cell ends in a seeded assert encoding the claim it demonstrates, so if
                     the notebook executes clean, the story on this page is still true. Continue with

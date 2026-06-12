@@ -205,7 +205,7 @@
             </div>
 
             <p>
-                Every world below comes from <code>tests/synth/dgp.py</code>: a clean core world drawn
+                Every world below comes from <code>src/mmm_framework/synth/dgp.py</code>: a clean core world drawn
                 from the model's exact structural family plus exactly one causal violation, with the
                 true counterfactual contribution of every channel recorded. The arc per act is the
                 series template — <em>world → naive fit → truth gap → diagnostics → pivot → measured
@@ -213,6 +213,26 @@
                 <a href="stress-00-rosy-picture.html">stress 00</a>: green diagnostics validate the
                 computation, never the causal claim.
             </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why confounding is silent — a demand-chasing channel reports roughly double its true effect while convergence, PPC, and the RV screen all stay quiet — and why the only EDA tell is spend-vs-demand-proxy correlation.</li>
+                    <li>Why "we controlled for it" is a spectrum, not a checkbox: a noisy proxy still leaves ~+35% residual bias, and causal roles (confounder, mediator, precision control) are spec decisions no correlation screen can make.</li>
+                    <li>Why collinear channels and confounded channels need experiments, not tighter priors — one lift test pulls Search from +110% to +14%.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_03_confounding_and_selection.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_03_confounding_and_selection.ipynb</code></a> on GitHub.
+                </p>
+            </div>
 
             <h2 id="act1">Act 1 — Demand-chasing: the #1 silent failure</h2>
             <p>

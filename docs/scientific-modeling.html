@@ -157,9 +157,18 @@
             <div class="note">
                 <h4>Core Insight</h4>
                 <p style="margin-bottom: 0;">
-                    Scientific modeling is not about finding "the correct model." It is about building useful 
-                    representations of reality, understanding their limitations, and honestly communicating 
+                    Scientific modeling is not about finding "the correct model." It is about building useful
+                    representations of reality, understanding their limitations, and honestly communicating
                     what they can and cannot tell us about the questions we care about.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>📜 The identification contract</h4>
+                <p style="margin-bottom: 0;">
+                    For MMM specifically, "understanding the limitations" has a concrete form: seven identification
+                    assumptions, stated formally, labeled testable or untestable, and priced against the
+                    pressure-testing scorecard — <a href="identification-assumptions.html">the identification contract</a>.
                 </p>
             </div>
 
@@ -682,8 +691,10 @@
             <h2 id="predictive-checks">Predictive Checking</h2>
 
             <p>
-                The primary tool for evaluating models is <strong>predictive checking</strong>: comparing 
-                model predictions to observed data. There are two forms:
+                The primary tool for evaluating models is <strong>predictive checking</strong>: comparing
+                model predictions to observed data. One caveat before the mechanics: predictive adequacy is
+                not causal adequacy&mdash;a model can reproduce the KPI perfectly while misattributing it
+                (see <a href="pressure-testing.html">Pressure Testing</a>). There are two forms:
             </p>
 
             <div class="three-col">
@@ -802,8 +813,10 @@ y_obs = data["sales"].values
                 <p style="margin-bottom: 0;">
                     Observational models can fit historical data well while producing biased causal estimates.
                     Experimental validation provides ground truth against which to calibrate model predictions.
-                    Industry studies suggest two-thirds of uncalibrated MMM estimates require significant adjustment
-                    when compared to experimental results.
+                    In this framework&rsquo;s own pressure tests&mdash;synthetic worlds with known causal truth&mdash;8
+                    of 16 stress scenarios produced materially wrong attribution while every convergence diagnostic
+                    stayed green (see <a href="pressure-testing.html">Pressure Testing</a>). Only evidence from
+                    outside the observational data can catch that failure mode.
                 </p>
             </div>
 
@@ -841,8 +854,11 @@ y_obs = data["sales"].values
             </ul>
 
             <p>
-                Importantly, stopping is not the same as claiming the model is "correct." It means 
-                the model is adequate for current purposes, given current constraints.
+                Importantly, stopping is not the same as claiming the model is "correct." It means
+                the model is adequate for current purposes, given current constraints. And predictive
+                adequacy is not causal adequacy&mdash;a model can reproduce the KPI perfectly while
+                misattributing it (see <a href="pressure-testing.html">Pressure Testing</a>)&mdash;so a
+                stopped model still owes its causal claims to external validation.
             </p>
 
             <!-- ================================================================== -->

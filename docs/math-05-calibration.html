@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Math 05: Calibration | MMM Framework</title>
-    <meta name="description" content="Identifiability and experiment calibration in the MMM Framework: the equifinality trap, the design-factor algebra that turns a lift test into a prior, the in-graph likelihood route, and the measured Aurora demo where calibration pulls Search ROAS from 2.83 to its true 0.66.">
+    <meta name="description" content="Identifiability and experiment calibration in the MMM Framework: the equifinality trap, the design-factor algebra that turns a lift test into a prior, the in-graph likelihood route, and the measured Aurora demo where calibration pulls Search ROAS from 1.04 toward its true 0.66.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-05-calibration.html">
     <meta property="og:title" content="Math 05: Calibration | MMM Framework">
-    <meta property="og:description" content="Why observational data alone cannot pin down per-channel ROI, and the exact algebra — design factor, Gamma moment-matching, in-graph estimand likelihoods — that folds a randomized experiment in. Measured: Search ROAS 2.83 → 0.59 against a truth of 0.66.">
+    <meta property="og:description" content="Why observational data alone cannot pin down per-channel ROI, and the exact algebra — design factor, Gamma moment-matching, in-graph estimand likelihoods — that folds a randomized experiment in. Measured: Search ROAS 1.04 → 0.64 against a truth of 0.66.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-05-calibration.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -175,8 +175,8 @@
                 with a randomized experiment — the <strong>prior route</strong> (design factor
                 \(K_c\) + Gamma moment-matching) and the <strong>likelihood route</strong> (an
                 in-graph estimand term) — and shows the measured result: calibration pulls
-                Aurora&rsquo;s Search ROAS from an overstated <strong>2.83</strong> down to
-                <strong>0.59</strong>, against a known truth of <strong>0.66</strong>. It mirrors
+                Aurora&rsquo;s Search ROAS from an overstated <strong>1.04</strong> down to
+                <strong>0.64</strong>, against a known truth of <strong>0.66</strong>. It mirrors
                 <code>nbs/math_05_calibration.ipynb</code>, where every identity below is
                 assert-encoded against the framework&rsquo;s real calibration code.
             </p>
@@ -187,17 +187,37 @@
                     <div class="stat-label">shape correlation between two regimes whose decay rates differ by 0.20</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">2.83</div>
-                    <div class="stat-label">uncalibrated Search ROAS — demand-controlled, converged, and 4.3&times; too high</div>
+                    <div class="stat-value">1.04</div>
+                    <div class="stat-label">uncalibrated Search ROAS — demand-controlled, converged, and 1.6&times; the truth</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">0.59</div>
+                    <div class="stat-value">0.64</div>
                     <div class="stat-label">calibrated Search ROAS after one in-graph lift test (truth: 0.66)</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">0.076</div>
-                    <div class="stat-label">distance to truth after calibration, down from 2.163</div>
+                    <div class="stat-value">0.024</div>
+                    <div class="stat-label">distance to truth after calibration, down from 0.376</div>
                 </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why an observational MMM cannot pin down per-channel ROI on its own — the equifinality trap, where different (adstock, saturation, \(\beta_c\)) triples fit near-identically but imply opposite budget advice.</li>
+                    <li>The exact algebra of both calibration routes: the prior route (per-draw design factor \(K_c\) + Gamma moment-matching) and the likelihood route (an in-graph estimand term that updates all three pieces jointly).</li>
+                    <li>The doctrine: experiments calibrate what structure cannot identify — and only what they tested; untested channels keep their bias.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_05_calibration.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_05_calibration.ipynb</code></a> on GitHub.
+                </p>
             </div>
 
             <h2 id="trap">1 · The equifinality trap</h2>
@@ -288,8 +308,10 @@
             </div>
             <p>
                 Saturation is the exponential form \(\mathrm{sat}(u) = 1 - e^{-\lambda u}\)
-                (<a href="math-02-saturation.html">math&nbsp;02</a>); default adstock is a
-                \(\mathrm{Beta}(2,2)\)-weighted blend of two fixed-\(\alpha\) geometric kernels
+                (<a href="math-02-saturation.html">math&nbsp;02</a>); default adstock (since
+                June 2026) is a parametric in-graph geometric kernel with learned decay
+                \(\alpha_c \sim \mathrm{Beta}(1,3)\) — the legacy path blends two fixed-\(\alpha\)
+                kernels with a \(\mathrm{Beta}(2,2)\) mix weight
                 (<a href="math-01-adstock.html">math&nbsp;01</a>); the coefficient prior is
                 \(\beta_c \sim \mathrm{Gamma}(\mu{=}1.5,\ \sigma{=}1.0)\) — positive by construction.
                 Because the model is additive and \(\mathrm{sat}(0) = 0\), the decomposition
@@ -421,7 +443,7 @@
             </div>
             <p>
                 where \(\theta\) are the channel&rsquo;s live in-graph parameters
-                \((\beta_c,\ \lambda_c,\ m_c)\). Because the estimand is a function of the live
+                \((\beta_c,\ \lambda_c,\ \alpha_c)\). Because the estimand is a function of the live
                 graph, this single fit updates \(\beta_c\), <strong>the s-curve, and the adstock
                 kernel jointly</strong> — the posterior is forced to find parameter combinations that
                 explain the time series <em>and</em> reproduce the experiment, which collapses the
@@ -484,28 +506,28 @@
                 Search&rsquo;s true ROAS is <strong>0.664</strong>. The notebook fits an uncalibrated
                 demand-controlled model, then refits with one in-graph ROAS experiment
                 (value \(= 0.664\), \(\mathrm{se} = 0.07\), a 38-week window) and compares. Both fits
-                converge (max \(\widehat R = 1.01\)); the uncalibrated fit tracks the data at
-                correlation 0.959. The diagnostics cannot tell them apart — the attribution can:
+                converge (max \(\widehat R = 1.00\)); the uncalibrated fit tracks the data at
+                correlation 0.961. The diagnostics cannot tell them apart — the attribution can:
             </p>
 
             <div class="chart-container" id="demoChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — baked outputs of <code>math_05_calibration.ipynb</code>
-                (seeded, 400 draws, 2 chains). Uncalibrated Search ROAS <strong>2.827</strong> with a
-                94% contribution-HDI band of [1.07,&nbsp;4.27] in ROAS units (contribution HDI
-                divided by window spend); experiment-calibrated point estimate <strong>0.588</strong>
+                (seeded, 400 draws, 2 chains). Uncalibrated Search ROAS <strong>1.040</strong> with a
+                94% contribution-HDI band of [0.01,&nbsp;2.76] in ROAS units (contribution HDI
+                divided by window spend); experiment-calibrated point estimate <strong>0.639</strong>
                 (the calibrated run&rsquo;s interval is not printed in the baked outputs, so no band
-                is drawn). Dashed line: true ROAS 0.664. Distance to truth: 2.163 → 0.076. The
+                is drawn). Dashed line: true ROAS 0.664. Distance to truth: 0.376 → 0.024. The
                 model-implied ROAS estimand node (<code>experiment_Search_roas_0_model_estimand</code>)
-                concentrates at posterior mean <strong>0.671</strong> against the measured 0.664 —
+                concentrates at posterior mean <strong>0.661</strong> against the measured 0.664 —
                 the likelihood term doing its job.
             </p>
 
             <p>
                 Under the hood, the decomposition shows <em>where</em> the correction lands. Search&rsquo;s
-                mean per-week contribution collapses from <strong>89.96 to 18.78</strong>; the credit it
-                was stealing gets re-allocated, mostly into Social (26.90 → 78.85), with TV and Display
-                drifting up modestly:
+                mean per-week contribution drops from <strong>33.14 to 20.49</strong>; the credit it
+                was stealing spreads modestly across TV (19.45 → 22.92), Social (21.12 → 22.38), and
+                Display (18.42 → 19.99):
             </p>
 
             <div class="chart-container" id="contribChart"></div>
@@ -520,11 +542,14 @@
             <div class="note">
                 <h4>💡 Reading the calibrated fit honestly</h4>
                 <p>
-                    The calibrated point estimate (0.588) slightly <em>overshoots</em> the truth
+                    The calibrated point estimate (0.639) lands slightly <em>below</em> the truth
                     (0.664) on this small 400-draw run, while the in-graph estimand node sits at
-                    0.671. The assert in the notebook is deliberately directional: calibrated ROI
+                    0.661. The assert in the notebook is deliberately directional: calibrated ROI
                     must move <em>below</em> the uncalibrated value and <em>closer to truth</em> —
-                    never tight equality on an 800-draw fit. Both hold, with room to spare.
+                    never tight equality on an 800-draw fit. Both hold, with room to spare. (One
+                    honesty footnote: the calibrated run logs <strong>2 divergences after tuning</strong>
+                    in the baked sampler output — noted, not alarming at this draw count, and the
+                    uncommented warning is left visible in the notebook.)
                 </p>
             </div>
 
@@ -540,7 +565,7 @@
                    \Big(\tfrac{1}{\tau^2} + \tfrac{1}{\mathrm{se}^2}\Big)^{-1} \right). \]
             </div>
             <p>
-                Set \(\mu_0 = 2.83\) (the overstated observational estimate) and
+                Set \(\mu_0 = 1.04\) (the overstated observational estimate) and
                 \(\widehat L = 0.664\) (what a clean lift test measures), and drag the experiment&rsquo;s
                 standard error from sloppy to sharp:
             </p>
@@ -615,7 +640,7 @@
                     <li><strong>The trap:</strong> different (adstock, saturation, \(\beta\)) triples fit near-identically (measured shape correlation 0.951 across a 0.20 decay gap) but imply different attributions and opposite budget advice.</li>
                     <li><strong>Route 1 (prior):</strong> \(\beta^{\text{target}} = \widehat L / K_c\) with the per-draw design factor \(K_c = \mathbb E[\text{contrib}/\beta]\) — assert-encoded as \(\beta^{\text{target}} \cdot K_c = \widehat L\) exactly — then inverse-variance pooling and Gamma moment-matching \(\alpha = (m/s)^2\), rate \(= m/s^2\).</li>
                     <li><strong>Route 2 (likelihood):</strong> \(\text{value} \sim \mathcal N(\text{estimand}(\theta), \mathrm{se})\) inside the graph updates \(\beta\), the s-curve, and the adstock jointly, and supports contribution / ROAS / mROAS estimands the prior route cannot express.</li>
-                    <li><strong>Measured:</strong> one in-graph ROAS experiment pulls Search from 2.827 to 0.588 against a truth of 0.664 (distance to truth 2.163 → 0.076); the model-implied estimand lands at 0.671.</li>
+                    <li><strong>Measured:</strong> one in-graph ROAS experiment pulls Search from 1.040 to 0.639 against a truth of 0.664 (distance to truth 0.376 → 0.024); the model-implied estimand lands at 0.661.</li>
                     <li><strong>Doctrine:</strong> experiments calibrate what structure cannot identify — and only what they tested. Untested channels keep their bias.</li>
                 </ul>
             </div>
@@ -938,14 +963,14 @@
         // ------------------------------------------------------------------
         // Chart 4 (centerpiece): measured before/after Search ROAS vs truth.
         // Numbers from the baked notebook outputs:
-        //   uncalibrated ROI 2.827, contribution HDI [3553.648, 14148.227],
-        //   window spend 3312.382 -> ROAS band [1.073, 4.271];
-        //   calibrated ROI 0.588; truth 0.664; estimand posterior mean 0.671.
+        //   uncalibrated ROI 1.040, contribution HDI [42.178, 9127.819],
+        //   window spend 3312.382 -> ROAS band [0.013, 2.756];
+        //   calibrated ROI 0.639; truth 0.664; estimand posterior mean 0.661.
         // ------------------------------------------------------------------
         function drawDemoChart() {
             const TRUTH = 0.664;
-            const uncal = 2.827, uncalLo = 3553.648 / 3312.382, uncalHi = 14148.227 / 3312.382;
-            const cal = 0.588;
+            const uncal = 1.040, uncalLo = 42.178 / 3312.382, uncalHi = 9127.819 / 3312.382;
+            const cal = 0.639;
 
             const traces = [
                 {
@@ -985,17 +1010,17 @@
                     line: { color: PT.colors.truth, width: 2, dash: 'dash' }
                 }],
                 annotations: [{
-                    x: 1, y: 0.671, xanchor: 'left', xshift: 28,
-                    text: 'model-implied ROAS estimand:<br>posterior mean 0.671',
+                    x: 1, y: 0.661, xanchor: 'left', xshift: 28,
+                    text: 'model-implied ROAS estimand:<br>posterior mean 0.661',
                     showarrow: true, arrowhead: 0, ax: 60, ay: -55,
                     font: { size: 11, color: '#5a6b5a' }
                 }, {
-                    x: 0, y: 4.35, xanchor: 'center',
-                    text: 'distance to truth: 2.163', showarrow: false,
+                    x: 0, y: 2.92, xanchor: 'center',
+                    text: 'distance to truth: 0.376', showarrow: false,
                     font: { size: 11, color: '#a44c43' }
                 }, {
-                    x: 1, y: 1.55, xanchor: 'center',
-                    text: 'distance to truth: 0.076', showarrow: false,
+                    x: 1, y: 0.95, xanchor: 'center',
+                    text: 'distance to truth: 0.024', showarrow: false,
                     font: { size: 11, color: '#3f7a58' }
                 }]
             });
@@ -1007,8 +1032,8 @@
         // ------------------------------------------------------------------
         function drawContribChart() {
             const channels = ['TV', 'Search', 'Social', 'Display'];
-            const uncal = [12.527, 89.958, 26.901, 12.232];
-            const cal   = [19.272, 18.778, 78.848, 19.157];
+            const uncal = [19.445, 33.136, 21.117, 18.418];
+            const cal   = [22.918, 20.494, 22.380, 19.988];
             const traces = [
                 {
                     type: 'bar', x: channels, y: uncal, name: 'uncalibrated',
@@ -1027,8 +1052,8 @@
                 legend: { orientation: 'h', y: 1.12 },
                 margin: { l: 70, r: 30, t: 40, b: 55 },
                 annotations: [{
-                    x: 'Search', y: 89.958, yanchor: 'bottom',
-                    text: '89.96 → 18.78', showarrow: false, yshift: 6,
+                    x: 'Search', y: 33.136, yanchor: 'bottom',
+                    text: '33.14 → 20.49', showarrow: false, yshift: 6,
                     font: { size: 12, color: '#a44c43' }
                 }]
             });
@@ -1037,9 +1062,10 @@
 
         // ------------------------------------------------------------------
         // Chart 6 (interactive): conjugate pull toward the experiment.
-        // Toy Normal–Normal: prior N(2.83, 0.85²), experiment N(0.664, se²).
+        // Toy Normal–Normal: prior N(1.04, 0.73²), experiment N(0.664, se²).
+        // (0.73 ≈ the sd implied by the measured uncalibrated 94% ROAS band [0.01, 2.76].)
         // ------------------------------------------------------------------
-        const MU0 = 2.83, TAU = 0.85, LHAT = 0.664, TRUTH = 0.664;
+        const MU0 = 1.04, TAU = 0.73, LHAT = 0.664, TRUTH = 0.664;
 
         function sliderToSe(v) {
             // log-scale map: 0 -> 2.0 (sloppy), 100 -> 0.04 (sharp)
@@ -1048,7 +1074,7 @@
         }
 
         function drawConj(se) {
-            const grid = linspace(-0.6, 5.2, 700);
+            const grid = linspace(-0.6, 3.2, 700);
             const wPrior = 1 / (TAU * TAU), wExp = 1 / (se * se);
             const postMu = (MU0 * wPrior + LHAT * wExp) / (wPrior + wExp);
             const postSd = Math.sqrt(1 / (wPrior + wExp));
@@ -1061,7 +1087,7 @@
             const traces = [
                 {
                     type: 'scatter', mode: 'lines', x: grid, y: prior,
-                    name: 'observational evidence  N(2.83, 0.85²)',
+                    name: 'observational evidence  N(1.04, 0.73²)',
                     line: { color: PT.colors.display, width: 2.2, dash: 'dash' },
                     hovertemplate: 'ROAS %{x:.2f}<br>density %{y:.2f}<extra>observational</extra>'
                 },
@@ -1080,7 +1106,7 @@
                 }
             ];
             const layout = PT.layout({
-                xaxis: { title: 'Search ROAS', range: [-0.6, 5.2] },
+                xaxis: { title: 'Search ROAS', range: [-0.6, 3.2] },
                 yaxis: { title: 'density' },
                 legend: { orientation: 'h', y: 1.16 },
                 margin: { l: 70, r: 30, t: 40, b: 55 },

@@ -187,8 +187,19 @@
             \[
             u_{c,t} \;=\; f_{\mathrm{sat}}\!\Big(\mathrm{adstock}_{\alpha_c}\!\big(x_{c,t}/s_c\big)\Big),
             \qquad
-            f_{\mathrm{sat}}(z) = \frac{1}{1+e^{-\lambda_c z}}\ \ (\text{logistic}),
+            f_{\mathrm{sat}}(z) = 1 - e^{-\lambda_c z}\ \ (\text{config name “logistic”}),
             \]
+
+            <p style="font-size:0.92rem;">
+                Same form as the core model (<code>mmm_extensions/components/transforms.py</code>:
+                <code>logistic_saturation_pt</code> returns \(1-e^{-\lambda x}\)): exponential
+                saturation with \(f_{\mathrm{sat}}(0)=0\), so a zero-spend week contributes
+                exactly nothing — consistent with the
+                <a href="math-05-calibration.html">notebook 05</a> estimand identity that powers
+                the calibration math. (An earlier version of this page wrote the logistic sigmoid
+                \(1/(1+e^{-\lambda z})\) here, which would have implied \(f(0)=\tfrac12\) and an
+                offset in every contribution; the shipped code has no such offset.)
+            </p>
 
             <p>
                 with \(\alpha_c \sim \mathrm{Beta}(2,2)\) and \(\lambda_c \sim \mathrm{Gamma}(3,1)\)
@@ -213,9 +224,29 @@
                     <div class="stat-label">residual correlation between products (the shared demand wave)</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">15 / 19</div>
+                    <div class="stat-value">13 / 19</div>
                     <div class="stat-label">MV free parameters the data barely narrowed (contraction &lt; 0.1)</div>
                 </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How <code>NestedMMM</code>, <code>MultivariateMMM</code>, and <code>CombinedMMM</code> share one media transform and differ only in how the saturated effective exposure \(u_{c,t}\) is wired to the outcome(s): mediator paths, cross-effects, or both with routing.</li>
+                    <li>How mediation recovers direct vs indirect effects the base model is blind to, and why a directed cross-effect (\(\psi\) in the mean) and shared demand (\(\rho\) in the noise) are different links.</li>
+                    <li>Why extension structure adds parameters faster than data adds moments — and how to count parameters against moments before trusting an extension.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_06_extensions.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_06_extensions.ipynb</code></a> on GitHub.
+                </p>
             </div>
 
             <h2 id="structures">Three causal structures, side by side</h2>
@@ -545,11 +576,12 @@
                 <strong>Measured</strong> — per-parameter contraction from the baked
                 <code>compute_parameter_learning(prior_samples=2000, random_seed=0)</code> run.
                 ψ is the outlier: contraction <strong>1.000</strong>, overlap 0.052, the data did the
-                work. But <strong>15 of the model's 19 free parameters sit below the 0.1 line</strong>
-                (the three not shown in the notebook's tail table fall in between), and 9 of those are
+                work. But <strong>13 of the model's 19 free parameters sit below the 0.1 line</strong>
+                (the five not shown in the notebook's tail table fall in between), and 6 of those are
                 <em>negative</em> — posterior wider than prior, i.e. prior–data tension, not mere
-                prior-domination (worst: <code>Y_obs_chol_cov[1]</code> at −0.656 with shift 56 prior
-                sds). The diagnostic discriminates: the data spoke about ψ; about most of the
+                prior-domination (worst: <code>Y_obs_chol_cov[1]</code> at −0.713 with shift 56 prior
+                sds — verdict <em>relocated</em>: the evidence moved it without narrowing it). The
+                diagnostic discriminates: the data spoke about ψ; about most of the
                 multivariate machinery it did not.
             </p>
 
@@ -672,7 +704,7 @@
 
             <p>
                 The measured fits confirm the count. The multivariate model's learning audit left
-                <strong>15 of 19 free parameters at contraction &lt; 0.1</strong> — the data could not
+                <strong>13 of 19 free parameters at contraction &lt; 0.1</strong> — the data could not
                 narrow most of the machinery it bought. The ψ/ρ split resolved the way the priors said it
                 should (sign-constrained arrow → boundary spike at 0; LKJ correlation → +0.41); the
                 shared-mediator allocation resolved because the survey anchored it. Change those priors or
@@ -823,25 +855,25 @@
             contraction: 1.000, overlap: 0.052, shiftZ: -1.338
         };
         const RESID_CORR = 0.407;         // Y_obs_correlation off-diagonal
-        // Per-parameter contraction (psi + the measured c < 0.1 tail; the 3
+        // Per-parameter contraction (psi + the measured c < 0.1 tail; the 5
         // remaining free params fall between and are not tabled in the notebook).
+        // The bake's verdict column reads "relocated" for every tail row (huge
+        // shift_z with no narrowing — scale tension, not prior-domination).
         const LEARNING = [
             { p: 'psi_1_0_raw',       c:  1.000 },
-            { p: 'alpha[1]',          c:  0.070 },
-            { p: 'beta_media[1,1]',   c:  0.052 },
-            { p: 'beta_media[1,0]',   c:  0.035 },
-            { p: 'lambda_Display',    c:  0.032 },
-            { p: 'beta_media[0,0]',   c:  0.028 },
-            { p: 'beta_media[0,2]',   c:  0.028 },
-            { p: 'lambda_TV',         c: -0.014 },
-            { p: 'beta_media[1,2]',   c: -0.018 },
-            { p: 'beta_media[0,3]',   c: -0.046 },
-            { p: 'beta_media[1,3]',   c: -0.049 },
-            { p: 'beta_media[0,1]',   c: -0.072 },
-            { p: 'alpha[0]',          c: -0.086 },
-            { p: 'lambda_Search',     c: -0.200 },
-            { p: 'lambda_Social',     c: -0.269 },
-            { p: 'Y_obs_chol_cov[1]', c: -0.656 }
+            { p: 'beta_media[1,0]',   c:  0.090 },
+            { p: 'beta_media[0,0]',   c:  0.075 },
+            { p: 'alpha[1]',          c:  0.053 },
+            { p: 'lambda_Display',    c:  0.048 },
+            { p: 'beta_media[0,3]',   c:  0.028 },
+            { p: 'beta_media[1,1]',   c:  0.018 },
+            { p: 'alpha[0]',          c:  0.003 },
+            { p: 'beta_media[1,3]',   c: -0.009 },
+            { p: 'lambda_Social',     c: -0.010 },
+            { p: 'beta_media[0,2]',   c: -0.012 },
+            { p: 'beta_media[0,1]',   c: -0.100 },
+            { p: 'lambda_Search',     c: -0.322 },
+            { p: 'Y_obs_chol_cov[1]', c: -0.713 }
         ];
 
         // ==================================================================
@@ -933,7 +965,7 @@
             for (let t = 0; t < N; t++) {
                 carry = spend[t] / mx + alpha * carry;
                 const ad = (1 - alpha) * carry;
-                u.push(1 / (1 + Math.exp(-lam * ad)));     // logistic saturation
+                u.push(1 - Math.exp(-lam * ad));           // exponential saturation, f(0)=0 (matches code)
             }
             return u;
         }

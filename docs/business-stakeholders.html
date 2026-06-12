@@ -281,7 +281,7 @@
 
             <div class="quote-block">
                 When everyone uses the same biased methods, an entire industry can be confidently wrong. The first firms to break this cycle will have a significant competitive advantage.
-                <div class="quote-attribution">&mdash; The case for rigorous measurement</div>
+                <div class="quote-attribution">&mdash; the framework&rsquo;s design principle</div>
             </div>
 
             <h3>Common Specification Shopping Practices</h3>
@@ -346,29 +346,33 @@
 
             <!-- Financial Risk -->
             <h2 id="financial-risk">Financial Consequences</h2>
+            <p>
+                We will not quote industry-wide loss statistics here&mdash;we have no source we could defend, and inventing one is exactly what this page warns against. What we can show is what happens on synthetic markets where the true ROI is known in advance, from the framework&rsquo;s own pressure-testing program:
+            </p>
 
             <div class="metric-grid">
                 <div class="metric-card">
-                    <div class="metric-value gradient-text">30-50%</div>
-                    <div class="metric-label">ROI Overestimation</div>
-                    <div class="metric-context">Typical upward bias from zeroing out negative effects</div>
+                    <div class="metric-value gradient-text-warm">8 of 16</div>
+                    <div class="metric-label">Silent Failures</div>
+                    <div class="metric-context">Synthetic stress worlds where attribution was materially wrong while every standard check looked healthy</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value gradient-text-warm">5-15%</div>
-                    <div class="metric-label">Budget Misallocation</div>
-                    <div class="metric-context">Share of budget directed to wrong channels</div>
+                    <div class="metric-value gradient-text-warm">+69%</div>
+                    <div class="metric-label">Worst Channel Error</div>
+                    <div class="metric-context">In the hidden-confounder world, one channel&rsquo;s contribution was overstated by 69% (median error across channels: 23%)</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value gradient-text">100%</div>
-                    <div class="metric-label">Reported Accuracy</div>
-                    <div class="metric-context">From models selected to show high fit</div>
+                    <div class="metric-value gradient-text">&le;1.02</div>
+                    <div class="metric-label">R-hat on Every Silent Failure</div>
+                    <div class="metric-context">Convergence diagnostics stayed green on every one of those wrong answers</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value gradient-text-warm">&lt;50%</div>
-                    <div class="metric-label">Actual Reliability</div>
-                    <div class="metric-context">When validated against holdout experiments</div>
+                    <div class="metric-value gradient-text">0</div>
+                    <div class="metric-label">Divergences</div>
+                    <div class="metric-context">The sampler raised no alarm&mdash;a model can be confidently, quietly wrong</div>
                 </div>
             </div>
+            <p class="bs-demo-note"><strong>Measured</strong> on synthetic worlds with known ground truth &mdash; see <a href="pressure-testing.html">Pressure Testing</a> for the full scorecard.</p>
 
             <div class="warning-box">
                 <h4>The Compounding Effect</h4>
@@ -377,35 +381,28 @@
                 </p>
             </div>
 
+            <div class="highlight-box">
+                <h4>Case Study: What the Gap Is Worth</h4>
+                <p>
+                    In the Aurora Coffee Co. engagement&mdash;a synthetic brand whose true channel effects are on file&mdash;two planners split the same budget. The dashboard-style plan funded the channels that <em>looked</em> best; the experiment-anchored causal plan funded the channels that <em>were</em> best. Scored against the known ground truth, the causal plan was worth <strong>&asymp; +$11.9M of revenue per year on the same budget</strong> ($11,884k/yr; a first-order estimate whose direction is verified against ground truth).
+                </p>
+                <p class="bs-demo-note" style="margin-bottom: 0;"><strong>Measured</strong> on the Aurora synthetic engagement (known ground truth) &mdash; see <a href="aurora-05-unified-workflow.html">the Aurora finale</a> for the full reallocation.</p>
+            </div>
+
             <!-- Credibility Risk -->
             <h2 id="credibility-risk">Credibility Risk</h2>
             <p>
                 The marketing measurement industry faces a growing credibility crisis. As data science matures in other domains and clients become more sophisticated, the gap between standard practice and scientific rigor becomes harder to ignore.
             </p>
 
-            <div class="risk-meter">
-                <span style="font-weight: 600; min-width: 180px;">Client trust erosion</span>
-                <div class="risk-bar">
-                    <div class="risk-bar-fill high" style="width: 85%;"></div>
-                </div>
-                <span class="risk-label high">High</span>
-            </div>
-
-            <div class="risk-meter">
-                <span style="font-weight: 600; min-width: 180px;">Regulatory scrutiny</span>
-                <div class="risk-bar">
-                    <div class="risk-bar-fill medium" style="width: 55%;"></div>
-                </div>
-                <span class="risk-label medium">Growing</span>
-            </div>
-
-            <div class="risk-meter">
-                <span style="font-weight: 600; min-width: 180px;">Competitive displacement</span>
-                <div class="risk-bar">
-                    <div class="risk-bar-fill high" style="width: 70%;"></div>
-                </div>
-                <span class="risk-label high">High</span>
-            </div>
+            <p>
+                We won&rsquo;t put percentages on these risks&mdash;no one has measured them, and a progress bar with an invented number is the same false precision this page argues against. Qualitatively, the exposures are real:
+            </p>
+            <ul>
+                <li><strong>Client trust:</strong> every contradictory year-over-year result, and every pair of model shops delivering opposite answers from the same data, erodes the credibility of the whole category.</li>
+                <li><strong>Scrutiny:</strong> as procurement and finance teams grow more data-literate, unvalidated causal claims invite harder questions&mdash;and harder audits.</li>
+                <li><strong>Competitive displacement:</strong> firms that can point to experimental validation of their estimates have a straightforward way to take business from firms that cannot.</li>
+            </ul>
 
             <!-- How to Detect It -->
             <h2 id="how-to-detect">How to Detect Specification Shopping</h2>
@@ -522,7 +519,7 @@
                 <div class="icon-circle">&#8987;</div>
                 <div>
                     <h4>Calibration Has a Shelf Life</h4>
-                    <p>Markets shift, creative wears out, competitors react&mdash;so a lift test from two years ago is a memory, not a measurement. Learnings on fast-moving digital channels typically fade within about six months; slower brand and TV effects hold for about a year. The measurement loop treats this like creative rotation: it tracks how stale each channel&rsquo;s evidence is and schedules the re-test before decisions start leaning on expired knowledge.</p>
+                    <p>Markets shift, creative wears out, competitors react&mdash;so a lift test from two years ago is a memory, not a measurement. The platform&rsquo;s default decay assumptions&mdash;modeling priors you can change, not measured industry facts&mdash;treat digital learnings as fading with a half-life of about six months, and slower brand and TV learnings about a year. The measurement loop treats this like creative rotation: it tracks how stale each channel&rsquo;s evidence is and schedules the re-test before decisions start leaning on expired knowledge.</p>
                 </div>
             </div>
 
@@ -577,7 +574,7 @@
             <div class="accordion-item">
                 <button class="accordion-header">7. Which channels are calibrated against experiments&mdash;and when do those results expire?</button>
                 <div class="accordion-body">
-                    <p>A strong answer names specific channels, specific tests, and dates. Calibration is perishable: digital learnings typically fade within about six months and brand or TV learnings within about a year, so &ldquo;we ran a lift test once&rdquo; is not a standing guarantee. Ask for the re-test schedule. A partner running a genuine measurement loop will have one; a partner who validated once and moved on is presenting a snapshot as a system.</p>
+                    <p>A strong answer names specific channels, specific tests, and dates. Calibration is perishable&mdash;this platform&rsquo;s default working assumption (a configurable prior, not an industry statistic) is that digital learnings fade within about six months and brand or TV learnings within about a year&mdash;so &ldquo;we ran a lift test once&rdquo; is not a standing guarantee. Ask for the re-test schedule. A partner running a genuine measurement loop will have one; a partner who validated once and moved on is presenting a snapshot as a system.</p>
                 </div>
             </div>
 
@@ -622,7 +619,7 @@
             <div class="takeaway-box">
                 <h4>Key Takeaway</h4>
                 <p>
-                    The marketing measurement industry is moving toward greater rigor. Organizations that lead this transition will build differentiated capabilities and client relationships grounded in demonstrated rather than asserted credibility. The MMM Framework provides the tools&mdash;the rest is organizational commitment to honesty.
+                    Marketing measurement is getting more rigorous, and clients are learning to tell the difference. The organizations that move first won&rsquo;t just have better models&mdash;they&rsquo;ll have client relationships built on validated results instead of confident presentation. The MMM Framework provides the tools&mdash;the rest is organizational commitment to honesty.
                 </p>
             </div>
 
@@ -672,22 +669,6 @@
         document.querySelectorAll('.fade-in, .fade-in-up, .slide-in-left, .slide-in-right, .scale-in').forEach(el => {
             animObserver.observe(el);
         });
-
-        // Animate risk bars on scroll
-        const riskObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const fill = entry.target.querySelector('.risk-bar-fill');
-                    if (fill) {
-                        const width = fill.style.width;
-                        fill.style.width = '0%';
-                        setTimeout(() => { fill.style.width = width; }, 100);
-                    }
-                }
-            });
-        }, { threshold: 0.5 });
-
-        document.querySelectorAll('.risk-meter').forEach(el => riskObserver.observe(el));
 
         // =====================================================================
         // Shared helpers for the interactive demos

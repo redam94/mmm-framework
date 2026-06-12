@@ -219,7 +219,7 @@
             <div class="glossary-grid">
                 <div class="glossary-item">
                     <dt>ROI (Return on Investment)</dt>
-                    <dd>For every $1 spent on a channel, how many dollars of incremental revenue does it generate? ROI of 1.5 means $1.50 back for each $1 spent.</dd>
+                    <dd>For every $1 spent on a channel, how many dollars of incremental revenue does it generate? ROI of 1.5 means $1.50 back for each $1 spent. Note this is revenue-based (ROAS): ROAS above 1.0 means more incremental revenue than spend, but profitability depends on margin&mdash;breakeven ROAS = 1/margin (at a 40% margin, breakeven is 2.5).</dd>
                 </div>
                 <div class="glossary-item">
                     <dt>Credible Interval (CI)</dt>
@@ -231,15 +231,15 @@
                 </div>
                 <div class="glossary-item">
                     <dt>Contribution</dt>
-                    <dd>The portion of your total outcome (revenue, sales) that is attributed to each channel or factor. Contributions sum to 100% of the modeled outcome.</dd>
+                    <dd>The portion of your total outcome (revenue, sales) that is attributed to each channel or factor. By convention, the <em>normalized</em> decomposition sums to the modeled outcome by construction; raw counterfactual (zero-out) contributions of saturating channels typically do <em>not</em> sum to total-minus-baseline&mdash;overlap between channels is expected. See <a href="causal-inference.html">causal inference</a> for the counterfactual convention.</dd>
                 </div>
                 <div class="glossary-item">
                     <dt>Saturation</dt>
-                    <dd>The point of diminishing returns. A channel at 80% saturation has used most of its potential&mdash;additional spend yields rapidly diminishing incremental returns.</dd>
+                    <dd>The point of diminishing returns. &ldquo;80% saturated&rdquo; means current adstocked spend produces 80% of the channel&rsquo;s modeled maximum (asymptotic) effect&mdash;additional spend yields rapidly diminishing incremental returns.</dd>
                 </div>
                 <div class="glossary-item">
                     <dt>Adstock (Carryover)</dt>
-                    <dd>How long media effects persist. TV might have 6-8 weeks of carryover; a digital display ad might have 1-2 weeks. This affects how you evaluate timing.</dd>
+                    <dd>How long media effects persist. As a rule of thumb&mdash;not a measured fact&mdash;TV might carry over for 6-8 weeks and a digital display ad for 1-2 weeks; the model estimates the actual carryover from your data. This affects how you evaluate timing.</dd>
                 </div>
             </div>
 
@@ -257,7 +257,7 @@
                     <div class="range">90% Credible Interval: 1.1 &ndash; 1.8</div>
                 </div>
                 <p>
-                    <strong>What this means:</strong> For every $1 spent on TV, the model estimates you earned $1.40 in incremental revenue. The true value is very likely between $1.10 and $1.80. We are confident TV is profitable (the entire range is above 1.0).
+                    <strong>What this means:</strong> For every $1 spent on TV, the model estimates you earned $1.40 in incremental revenue. The true value is very likely between $1.10 and $1.80. We are confident TV returns more revenue than it costs (the entire range is above 1.0)&mdash;whether that clears <em>profitability</em> depends on your margin, since breakeven ROAS = 1/margin.
                 </p>
             </div>
 
@@ -471,16 +471,16 @@
             <div class="icon-box">
                 <div class="icon-circle">&#128250;</div>
                 <div>
-                    <h4>TV: Long Carryover (6&ndash;8 weeks typical)</h4>
-                    <p>Effects persist for weeks after airing. Sustained flight patterns maintain steady awareness. Gaps in TV advertising take weeks to recover from.</p>
+                    <h4>TV: Long Carryover (heuristic rule of thumb: 6&ndash;8 weeks)</h4>
+                    <p>Effects persist for weeks after airing&mdash;your fitted adstock estimate supersedes the rule of thumb. Sustained flight patterns maintain steady awareness. Gaps in TV advertising take weeks to recover from.</p>
                 </div>
             </div>
 
             <div class="icon-box">
                 <div class="icon-circle">&#128187;</div>
                 <div>
-                    <h4>Digital: Short Carryover (1&ndash;3 weeks typical)</h4>
-                    <p>Effects are more immediate but fade quickly. Concentrated bursts around key periods (promotions, holidays) can be effective. Always-on at lower levels maintains baseline presence.</p>
+                    <h4>Digital: Short Carryover (heuristic rule of thumb: 1&ndash;3 weeks)</h4>
+                    <p>Effects are more immediate but fade quickly&mdash;again, read the carryover your model actually estimated. Concentrated bursts around key periods (promotions, holidays) can be effective. Always-on at lower levels maintains baseline presence.</p>
                 </div>
             </div>
 
@@ -593,7 +593,7 @@
             <div class="accordion-item">
                 <button class="accordion-header">The model shows a negative ROI for a channel. Is that possible?</button>
                 <div class="accordion-body">
-                    <p>Yes, in certain situations. Over-saturated channels can have negative marginal returns. Poorly targeted or poorly timed campaigns can create backlash. However, a negative ROI estimate could also indicate confounding that the model has not fully accounted for. Before acting, check whether the negative estimate is robust across model specifications.</p>
+                    <p>Yes, in certain situations. Over-saturated channels can have negative marginal returns. Poorly targeted or poorly timed campaigns can create backlash. However, a negative ROI estimate could also indicate confounding that the model has not fully accounted for. Before acting, run the pre-specified sensitivity analysis&mdash;the robustness checks declared before fitting&mdash;rather than trying alternative specifications until the sign changes.</p>
                 </div>
             </div>
 

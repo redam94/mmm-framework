@@ -212,6 +212,26 @@
                 </tbody>
             </table>
 
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How one basis-expansion recipe builds both seasonality (truncated Fourier series, zero-mean interleaved sin/cos columns) and trend (linear, piecewise, B-spline families).</li>
+                    <li>Why Fourier order \( K \) is a bias–variance dial, why the piecewise trend changes slope rather than level, and why B-spline rows form a partition of unity.</li>
+                    <li>Why baseline structure is an attribution control, not a fit knob — motions the model has no language for leak into the media coefficients.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_03_seasonality_trend.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_03_seasonality_trend.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
             <h2 id="fourier">Part I — Seasonality via Fourier features</h2>
 
             <p>

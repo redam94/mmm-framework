@@ -148,15 +148,17 @@ $$
 \qquad \lambda = \texttt{sat\_lam}_c > 0 .
 $$
 
-**Adstock**, by default, is a **blend of two fixed-$\alpha$ geometric adstocks** (endpoints $\alpha=0.0$
-and $\alpha=0.9$ from `adstock_alphas`):
+**Adstock**, by default (since June 2026), is a **parametric in-graph geometric kernel** with a
+learned per-channel decay rate:
 
 $$
-x^{\text{adstock}}_c \;=\; (1-m_c)\,x^{\text{low}}_c + m_c\,x^{\text{high}}_c,
-\qquad m_c = \texttt{adstock}_c \sim \mathrm{Beta}(2,2).
+x^{\text{adstock}}_{c,t} \;=\; \sum_{k=0}^{L-1} w_k\, x_{c,t-k},
+\qquad w_k \propto \alpha_c^{\,k},
+\qquad \alpha_c = \texttt{adstock\_alpha}_c \sim \mathrm{Beta}(1,3).
 $$
 
-Here $m_c$ is a **mix weight** between two carryover settings, *not* a decay rate (notebook 01). The
+(The legacy path, `use_parametric_adstock=False`, blends two fixed-$\alpha$ geometric adstocks with a
+$\mathrm{Beta}(2,2)$ mix weight $m_c$ that is *not* a decay rate — notebook 01 covers both.) The
 **priors** are exact framework values:
 
 $$
@@ -164,7 +166,7 @@ $$
 \text{intercept} &\sim \mathcal N(0,\,0.5), &
 \beta_c &\sim \mathrm{Gamma}(\mu{=}1.5,\ \sigma{=}1.0)\ \ \text{[or an experiment-calibrated prior]},\\
 \lambda_c = \texttt{sat\_lam}_c &\sim \mathrm{Exponential}(0.5), &
-m_c = \texttt{adstock}_c &\sim \mathrm{Beta}(2,2),\\
+\alpha_c = \texttt{adstock\_alpha}_c &\sim \mathrm{Beta}(1,3),\\
 \text{season} &\sim \mathcal N(0,\,0.3), &
 \beta^{\text{ctrl}} &\sim \mathcal N(0,\,\sigma_{\text{ctrl}})\ \text{(wider for a confounder)},\\
 \texttt{geo\_sigma} &\sim \mathrm{HalfNormal}(0.3), &
@@ -643,7 +645,7 @@ print("uncalibrated fit complete.")
 """))
     c.append(code(r"""
 # Sanity-check the uncalibrated fit: convergence + a sensible in-sample fit.
-summ = mmm.summary(var_names=["beta_Search", "beta_TV", "sat_lam_Search", "adstock_Search", "sigma"])
+summ = mmm.summary(var_names=["beta_Search", "beta_TV", "sat_lam_Search", "adstock_alpha_Search", "sigma"])
 display(summ[["mean", "sd", "r_hat", "ess_bulk"]].round(3))
 
 pred = mmm.predict(return_original_scale=True, hdi_prob=0.9)
@@ -715,7 +717,7 @@ print("calibrated fit complete.")
 """))
     c.append(code(r"""
 # Calibrated Search ROI, and convergence of the calibrated fit.
-summ_cal = m_cal.summary(var_names=["beta_Search", "sat_lam_Search", "adstock_Search", "sigma"])
+summ_cal = m_cal.summary(var_names=["beta_Search", "sat_lam_Search", "adstock_alpha_Search", "sigma"])
 roi_cal_table = MMMAnalyzer(m_cal).compute_channel_roi().set_index("Channel")
 roi_cal = float(roi_cal_table.loc["Search", "ROI"])
 print(f"max r_hat (calibrated) = {summ_cal['r_hat'].max():.3f}")

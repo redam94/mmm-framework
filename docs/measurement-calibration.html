@@ -372,6 +372,7 @@
                 <li><a href="#rollout">90-Day Rollout</a></li>
                 <li><a href="#metrics">Success Metrics</a></li>
                 <li><a href="#antipatterns">Anti-Patterns</a></li>
+                <li><a href="#references">References</a></li>
             </ul>
         </aside>
 
@@ -456,7 +457,8 @@
             <p>
                 Once you accept that experiments are the calibration tool, you still face the question of <em>which</em>
                 experiments. Two distinct objectives emerge - they are correlated but not identical, and a good framework
-                integrates both.
+                integrates both. The split mirrors the two families of design utilities - information-based and
+                decision-based - unified in Chaloner &amp; Verdinelli's (1995) review of Bayesian experimental design.
             </p>
 
             <div class="two-col">
@@ -571,13 +573,28 @@
                 experimental noise.
             </p>
 
+            <p style="font-size:0.92rem;">
+                Where Eq. (4) comes from, and its limits: it is the variance of a two-arm DiD
+                mean contrast ($2 s^2_{\text{geo},k}/nT$ for independent geo-weeks), divided by
+                $\Delta^2_{\text{spend},k}$ to convert a KPI-scale lift into a per-dollar effect.
+                It assumes independent geo-week residuals — under serial correlation, multiply by
+                the AR(1) design effect $D(T,\rho_g)$ defined in the design section below. The
+                shipped designer (<code>planning/design.py</code>) handles the same problem
+                empirically rather than analytically: it calibrates its analytic DiD power curve
+                against a sliding-window placebo distribution from the pre-period, which absorbs
+                the realized autocorrelation. Treat Eq. (4) as a planning approximation; the
+                placebo calibration and the pre-experiment simulation in Step 5 are the checks
+                that catch what it misses.
+            </p>
+
             <!-- ================================================================== -->
             <h2 id="eig">Expected Information Gain (EIG)</h2>
 
             <p>
                 For a given channel $k$ and design $d$, the <strong>Expected Information Gain</strong> is the expected
                 KL divergence from the prior to the updated posterior, integrated over what experimental outcome we
-                might see. Equivalently, it is the mutual information between the unknown parameter and the
+                might see - Lindley's (1956) classical measure of the information provided by an experiment.
+                Equivalently, it is the mutual information between the unknown parameter and the
                 experimental outcome:
             </p>
 
@@ -630,6 +647,8 @@
                 EIG treats every bit of uncertainty reduction as equally valuable. But uncertainty about a channel
                 receiving 1% of spend is far less <em>costly</em> than equivalent uncertainty about a channel receiving
                 40% of spend. EVOI prices uncertainty in dollars by accounting for the asymmetric cost of being wrong.
+                This is preposterior analysis in the sense of Raiffa &amp; Schlaifer (1961): value the experiment by
+                the decisions it would improve, before running it.
             </p>
 
             <p>
@@ -655,6 +674,20 @@
                 $$\mathrm{EVOI}(k) \;\approx\; B \cdot s_k \cdot \mathbb{E}\!\left[\,\big|\hat{\theta}_{k,\text{post}} - \hat{\theta}_{k,\text{prior}}\big|\,\right] \cdot \mathbb{P}(\text{decision flips})$$
                 <span class="equation-label">(8)</span>
             </div>
+
+            <p style="font-size:0.92rem;">
+                Status of Eq. (8): a <em>heuristic linearization</em>, not a derived bound. It
+                approximates the value integral by assuming (i) utility is locally linear in the
+                reallocated budget $B \cdot s_k$, (ii) reallocation only happens when the
+                posterior mean crosses the decision threshold, and (iii) the size of the
+                post-decision gain scales with the posterior-mean shift. Each assumption fails in
+                identifiable cases (strongly concave response near saturation; multi-channel
+                rebalancing where several thresholds interact), and the units are only
+                consistent when $\hat\theta$ is a per-dollar ROI applied to the dollars at stake.
+                The shipped implementation (<code>planning/evoi.py</code>) computes EVOI by
+                Monte&nbsp;Carlo over posterior draws and the explicit decision rule instead of
+                Eq. (8); use the formula for intuition and the simulation for numbers.
+            </p>
 
             <div class="intuition">
                 <div class="intuition-label">Plain English</div>
@@ -748,7 +781,8 @@
             <p>
                 Submodularity has a major practical payoff: <strong>greedy selection is provably near-optimal</strong>.
                 The Nemhauser-Wolsey-Fisher (1978) result says greedy attains at least
-                $(1 - 1/e) \approx 63\%$ of the optimum under cardinality constraints. The pseudocode is trivial:
+                $(1 - 1/e) \approx 63\%$ of the optimum under cardinality constraints. Krause &amp; Golovin (2014)
+                survey this style of greedy information-gathering portfolio selection. The pseudocode is trivial:
             </p>
 
 <pre><code># Greedy portfolio construction
@@ -847,10 +881,21 @@ while len(A) &lt; C_ops:
             <p>
                 Selecting <em>which</em> channel to test is a prioritization problem (EIG, EVOI, §3–4).
                 Specifying <em>how</em> to run the test — which geos to treat, how much to spend, how long
-                to run — is a distinct design problem. A geo-level Bayesian MMM provides the inputs needed
+                to run — is a distinct design problem, in the geo-experiment tradition of
+                Vaver &amp; Koehler (2011). A geo-level Bayesian MMM provides the inputs needed
                 to answer every design question rigorously, replacing heuristic defaults with posterior-derived
                 quantities.
             </p>
+
+            <div class="note">
+                <h4>Printable artifact</h4>
+                <p style="margin-bottom: 0;">
+                    The outputs of this design section — estimand, geos, dose, duration, power (with the
+                    power-ceiling check), stopping rule, decision rule — are the fields of the
+                    <a href="artifacts/preregistration-memo.html">Experiment Pre-Registration Memo</a>,
+                    a fill-in one-pager signed before launch.
+                </p>
+            </div>
 
             <h3>Quantities the MMM Provides</h3>
 
@@ -944,8 +989,11 @@ while len(A) &lt; C_ops:
                 where $\boldsymbol{\mu}_{u,g}$ is the posterior mean of geo $g$'s random-effect vector
                 and $\boldsymbol{\Sigma}_u$ is the posterior covariance matrix of those effects.
                 Matching on Mahalanobis distance over the full posterior — rather than on raw KPI
-                correlation — accounts for parameter uncertainty and produces 20–40% lower residual
-                variance in synthetic studies. Exclude any control candidate with cross-geo posterior
+                correlation — accounts for parameter uncertainty and should reduce residual
+                control-group variance (a heuristic expectation, not a measured benchmark —
+                validate the gain on your own panel). The construction is Mahalanobis-metric matching
+                (cf. Imbens &amp; Rubin 2015, who match on raw covariates rather than posterior random
+                effects). Exclude any control candidate with cross-geo posterior
                 correlation $|\mathrm{Cor}(\beta_{k,g},\beta_{k,g'})| > 0.5$ (spillover screen; see
                 Step 6).
             </p>
@@ -958,9 +1006,14 @@ while len(A) &lt; C_ops:
 
             <div class="math-block">
                 $$\Delta\mathrm{spend}_g^* \;=\; \frac{\sigma_g}{S_k'(x_{k,g})} \cdot
-                  \sqrt{\frac{2\bigl(1+(T-1)\rho_g\bigr)}{GT} \cdot \frac{\eta}{1-\eta}} \cdot
+                  \sqrt{\frac{2\,D(T,\rho_g)}{GT} \cdot \frac{\eta}{1-\eta}} \cdot
                   \frac{1}{\sigma_{k,g}}$$
             </div>
+
+            <p style="font-size:0.92rem;">
+                Here $D(T,\rho_g)$ is the AR(1) design effect for a $T$-week mean, defined in
+                Step 4 below.
+            </p>
 
             <p>
                 where $\eta$ is target power, $G$ is the number of treatment geos, and $T$ is
@@ -975,29 +1028,51 @@ while len(A) &lt; C_ops:
 
             <p>
                 Weekly KPI within a geo is serially correlated with AR(1) coefficient $\rho_g$,
-                estimated from the MMM residuals. The corrected standard error for the
-                difference-in-differences estimator is:
+                estimated from the MMM residuals. Ignoring this serial correlation is the classic
+                way to overstate the precision of difference-in-differences estimates (Bertrand,
+                Duflo &amp; Mullainathan 2004). Under AR(1), the variance of a $T$-week mean is
+                inflated by the design effect
+            </p>
+
+            <div class="math-block">
+                $$D(T,\rho_g) \;=\; 1 + 2\sum_{k=1}^{T-1}\Bigl(1-\tfrac{k}{T}\Bigr)\rho_g^{\,k}
+                \;\;\xrightarrow[T\to\infty]{}\;\; \frac{1+\rho_g}{1-\rho_g},$$
+            </div>
+
+            <p>
+                so the corrected standard error for the difference-in-differences estimator is:
             </p>
 
             <div class="math-block">
                 $$\mathrm{SE}(\hat\tau) \;=\; \sigma_y\,\sqrt{\tfrac{1}{n_t} + \tfrac{1}{n_c}}
-                  \cdot \sqrt{\frac{1+(T-1)\rho_g}{T}}$$
+                  \cdot \sqrt{\frac{D(T,\rho_g)}{T}}$$
             </div>
 
             <p>
-                When $\rho_g = 0$ this reduces to the familiar $\sigma/\sqrt{T}$ form. The minimum
-                duration $T^*$ for target power $1-\beta$ solves:
+                When $\rho_g = 0$ this reduces to the familiar $\sigma/\sqrt{T}$ form. A common
+                mistake — and one an earlier version of this page made — is to use the
+                <em>exchangeable</em> design effect $1+(T-1)\rho$ here. That formula is correct
+                for equicorrelated (cluster-randomized) observations, but under AR(1) the
+                correlation decays with lag, so the exchangeable factor badly overstates the
+                variance and hence the required duration: at $\rho_g=0.4$, $T=8$, the
+                exchangeable factor is $3.8$ while the AR(1) design effect is $\approx 2.1$ —
+                nearly double the implied test length for no reason. The minimum duration $T^*$
+                for target power $1-\beta$ solves:
             </p>
 
             <div class="math-block">
                 $$T^* \;=\; \frac{(z_{1-\alpha/2} + z_{1-\beta})^2\;\sigma_y^2\;(n_t^{-1}+n_c^{-1})
-                  \,\bigl(1+(T^*-1)\rho_g\bigr)}{\Delta y^2}$$
+                  \,D(T^*,\rho_g)}{\Delta y^2}$$
             </div>
 
             <p>
-                The implicit equation is solved by one-dimensional search. For empirically common
-                values $\rho_g \in [0.2, 0.5]$, EIG flattens after <strong>6–10 weeks</strong> —
-                running longer accumulates cost with minimal additional information.
+                The implicit equation is solved by one-dimensional search. Because
+                $D(T,\rho_g)$ saturates toward $(1+\rho_g)/(1-\rho_g)$, the marginal information
+                from each additional week falls off quickly — for $\rho_g \in [0.2, 0.5]$ the
+                formula implies most designs stop earning meaningful EIG within roughly 6–10
+                weeks (a consequence of this math, not an empirical benchmark; the calculator
+                recomputes it for your inputs). Running longer accumulates cost with minimal
+                additional information.
             </p>
 
             <div class="definition">
@@ -1019,8 +1094,9 @@ while len(A) &lt; C_ops:
             <ol style="line-height:1.8; padding-left:1.4rem;">
                 <li>Sample $\tilde\theta$ from the posterior $p(\theta \mid \mathcal{D})$.</li>
                 <li>Generate simulated KPI for each geo under the proposed spend schedule,
-                    adding noise $\mathcal{N}(0,\sigma_g^2)$ scaled by the serial-correlation
-                    factor $\sqrt{1+(T-1)\rho_g}$.</li>
+                    adding AR(1) noise with innovation variance $\sigma_g^2$ and coefficient
+                    $\rho_g$ (simulate the process itself rather than scaling i.i.d. noise by a
+                    design factor — the simulation should carry the true autocorrelation).</li>
                 <li>Fit the planned estimator (DiD, SCM, etc.) to the simulated data and record
                     whether it reaches significance at $\alpha$.</li>
                 <li>Repeat 500–2,000 times; the fraction of significant replicates is the
@@ -1589,6 +1665,52 @@ while len(A) &lt; C_ops:
                     <a href="demos.html">Demos &amp; Reports</a>.
                 </p>
             </div>
+
+            <!-- ================================================================== -->
+            <h2 id="references">References</h2>
+
+            <ul>
+                <li>
+                    Chaloner, K., &amp; Verdinelli, I. (1995).
+                    <em>Bayesian Experimental Design: A Review.</em>
+                    Statistical Science, 10(3), 273-304.
+                </li>
+                <li>
+                    Lindley, D. V. (1956).
+                    <em>On a Measure of the Information Provided by an Experiment.</em>
+                    Annals of Mathematical Statistics, 27(4), 986-1005.
+                </li>
+                <li>
+                    Raiffa, H., &amp; Schlaifer, R. (1961).
+                    <em>Applied Statistical Decision Theory.</em>
+                    Division of Research, Harvard Business School.
+                </li>
+                <li>
+                    Nemhauser, G. L., Wolsey, L. A., &amp; Fisher, M. L. (1978).
+                    <em>An analysis of approximations for maximizing submodular set functions&mdash;I.</em>
+                    Mathematical Programming, 14, 265-294.
+                </li>
+                <li>
+                    Krause, A., &amp; Golovin, D. (2014).
+                    <em>Submodular Function Maximization.</em>
+                    In Tractability: Practical Approaches to Hard Problems. Cambridge University Press.
+                </li>
+                <li>
+                    Vaver, J., &amp; Koehler, J. (2011).
+                    <em>Measuring Ad Effectiveness Using Geo Experiments.</em>
+                    Google Research.
+                </li>
+                <li>
+                    Bertrand, M., Duflo, E., &amp; Mullainathan, S. (2004).
+                    <em>How Much Should We Trust Differences-in-Differences Estimates?</em>
+                    Quarterly Journal of Economics, 119(1), 249-275.
+                </li>
+                <li>
+                    Imbens, G. W., &amp; Rubin, D. B. (2015).
+                    <em>Causal Inference for Statistics, Social, and Biomedical Sciences: An Introduction.</em>
+                    Cambridge University Press.
+                </li>
+            </ul>
         </main>
     </div>
 
