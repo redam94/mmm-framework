@@ -1286,7 +1286,7 @@ tbody tr:last-child td {
 .main-content > p,
 .main-content > ul,
 .main-content > ol {
-    max-width: 70ch;
+    max-width: 100ch;
 }
 
 .main-content h1 {
