@@ -120,3 +120,11 @@ class AgentState(TypedDict):
 
     # Structured data for the frontend dashboard
     dashboard_data: Annotated[dict[str, Any], _merge_dashboard]
+
+    # Context-management cache (see mmm_framework.agents.context). The agent
+    # folds the oldest turns into ``context_summary`` once and keeps recent turns
+    # verbatim, so the per-request token budget is enforced without
+    # re-summarizing the whole backlog every turn. ``context_summary_count`` is
+    # the number of leading (non-system) messages already folded in.
+    context_summary: Annotated[str | None, _last]
+    context_summary_count: Annotated[int, _last]

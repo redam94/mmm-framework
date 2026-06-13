@@ -198,9 +198,14 @@ class NestedMMM(BaseExtendedMMM):
         channel_tx: dict = {}
 
         with pm.Model(coords=coords) as model:
-            # Data
+            # Data. The likelihood operates on the standardized outcome so the
+            # fixed effect/noise priors are well-calibrated for any KPI scale;
+            # report-consumed deterministics are registered in original units.
             X_media = pm.Data("X_media", self.X_media, dims=("obs", "channel"))
-            y = pm.Data("y", self.y, dims="obs")
+            y_standardized = (np.asarray(self.y, dtype=float) - self.y_mean) / (
+                self.y_std
+            )
+            y = pm.Data("y", y_standardized, dims="obs")
 
             # Media transformations: normalize -> geometric adstock -> logistic
             # saturation (the previously-unused ``alpha`` is now the carryover).
@@ -244,7 +249,10 @@ class NestedMMM(BaseExtendedMMM):
                 med_effect = gamma * mediator_values[med_name]
                 mediator_contrib = mediator_contrib + med_effect
 
-                pm.Deterministic(f"effect_{med_name}_on_y", med_effect, dims="obs")
+                # Original-unit deviation contribution (reports consume this)
+                pm.Deterministic(
+                    f"effect_{med_name}_on_y", med_effect * self.y_std, dims="obs"
+                )
 
             # Direct media effects
             direct_contrib = pt.zeros(self.n_obs)
@@ -261,19 +269,23 @@ class NestedMMM(BaseExtendedMMM):
                     delta = pm.Normal(f"delta_direct_{channel}", mu=0, sigma=0.5)
                     deltas[channel] = delta
                     direct_contrib = direct_contrib + delta * media_transformed[:, i]
+                    # Original-unit deviation contribution
                     pm.Deterministic(
                         f"direct_effect_{channel}",
-                        delta * media_transformed[:, i],
+                        delta * media_transformed[:, i] * self.y_std,
                         dims="obs",
                     )
 
-            # Combine
-            mu = alpha_y + mediator_contrib + direct_contrib
-            pm.Deterministic("mu", mu, dims="obs")
+            # Combine (standardized scale for the likelihood; ``mu`` is
+            # registered in original units for reporting/oracles)
+            mu_standardized = alpha_y + mediator_contrib + direct_contrib
+            pm.Deterministic(
+                "mu", mu_standardized * self.y_std + self.y_mean, dims="obs"
+            )
 
             # Likelihood
             sigma = pm.HalfNormal("sigma_y", sigma=0.5)
-            pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y, dims="obs")
+            pm.Normal("y_obs", mu=mu_standardized, sigma=sigma, observed=y, dims="obs")
 
             # Derived: indirect effects
             self._add_indirect_effect_deterministics(model, media_transformed)
@@ -281,13 +293,15 @@ class NestedMMM(BaseExtendedMMM):
             # Experiment calibration: a channel's total effect on the outcome is
             # its mediated path(s) plus any direct effect --
             # coef_c = sum_m beta_{c->m} * gamma_m + delta_c -- applied to the
-            # channel's saturated spend. Single outcome on its raw scale (=1.0).
+            # channel's saturated spend. The coefficient lives on the
+            # standardized-outcome scale, so ``y_std`` converts the estimand
+            # back to original units.
             if self.experiments:
                 self._add_experiment_likelihoods(
                     self._build_experiment_handles(
                         channel_tx, gammas, deltas, channel_mediator_betas
                     ),
-                    scale=1.0,
+                    scale=self.y_std,
                 )
 
         return model
@@ -350,7 +364,9 @@ class NestedMMM(BaseExtendedMMM):
                 if gamma_name not in model.named_vars:
                     continue
 
-                indirect = model[beta_name] * model[gamma_name]
+                # Original-unit coefficient: effect on y (KPI units) per unit
+                # of saturated spend, matching direct_effect_*/mu scaling
+                indirect = model[beta_name] * model[gamma_name] * self.y_std
                 pm.Deterministic(f"indirect_{channel}_via_{med_name}", indirect)
 
     def get_mediation_effects(self) -> pd.DataFrame:
@@ -360,12 +376,16 @@ class NestedMMM(BaseExtendedMMM):
         results = []
         posterior = self._trace.posterior
 
+        # ``delta_direct_*`` are free RVs on the standardized-outcome scale;
+        # the ``indirect_*`` deterministics are already in original units.
+        y_std = getattr(self, "y_std", 1.0)
+
         for channel in self.channel_names:
             # Direct effect
             direct_var = f"delta_direct_{channel}"
             if direct_var in posterior:
-                direct = float(posterior[direct_var].mean())
-                direct_sd = float(posterior[direct_var].std())
+                direct = float(posterior[direct_var].mean()) * y_std
+                direct_sd = float(posterior[direct_var].std()) * y_std
             else:
                 direct, direct_sd = 0.0, 0.0
 

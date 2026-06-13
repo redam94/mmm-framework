@@ -99,6 +99,41 @@ function RunCard({ run, isLatest }: { run: RunInfo; isLatest: boolean }) {
           <div className="px-5 pb-4 pt-1 border-t border-line-200 space-y-3">
             {run.summary && <p className="text-xs text-ink-600 leading-relaxed">{run.summary}</p>}
 
+            {run.diagnostics?.convergence && (
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="text-ink-400 uppercase text-[10px] tracking-wide">Model health</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full font-medium ${
+                    run.diagnostics.convergence.ok
+                      ? 'bg-sage-100 text-sage-800'
+                      : 'bg-rust-100 text-rust-700'
+                  }`}
+                >
+                  {run.diagnostics.convergence.ok
+                    ? 'converged'
+                    : `convergence: ${run.diagnostics.convergence.flags.join(', ')}`}
+                </span>
+                <span className="num text-ink-600">
+                  {run.diagnostics.convergence.divergences ?? '—'} div · R̂{' '}
+                  {run.diagnostics.convergence.rhat_max?.toFixed(3) ?? '—'} · ESS{' '}
+                  {run.diagnostics.convergence.ess_bulk_min != null
+                    ? Math.round(run.diagnostics.convergence.ess_bulk_min)
+                    : '—'}
+                </span>
+                {(run.diagnostics.learning?.verdict_counts['prior-dominated'] ?? 0) > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-rust-100 text-rust-700 font-medium">
+                    {run.diagnostics.learning!.verdict_counts['prior-dominated']} prior-dominated
+                  </span>
+                )}
+                <button
+                  onClick={() => navigate('/performance/health')}
+                  className="text-sage-700 font-medium hover:underline"
+                >
+                  details
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
                 <p className="text-ink-400 uppercase text-[10px] tracking-wide mb-0.5">Data</p>

@@ -136,6 +136,13 @@ async def lifespan(app: FastAPI):
         logger.exception("audit sink install failed")
 
     _aiosqlite_conn = await aiosqlite.connect(str(DB_PATH))
+    # sessions.db is shared with the synchronous sessions_store (see
+    # api/sessions.py:_conn). WAL + a busy timeout let the checkpointer and the
+    # artifact/session writes coexist instead of racing into "database is locked".
+    await _aiosqlite_conn.execute("PRAGMA busy_timeout=30000")
+    await _aiosqlite_conn.execute("PRAGMA journal_mode=WAL")
+    await _aiosqlite_conn.execute("PRAGMA synchronous=NORMAL")
+    await _aiosqlite_conn.commit()
     memory = AsyncSqliteSaver(_aiosqlite_conn)
     await memory.setup()
     sessions_store.init_db()
@@ -348,7 +355,28 @@ async def chat_endpoint(
 
         user_text = request.message
         if request.page_context:
+            # page_context is set only by the floating project guide (the
+            # workspace chat never sends it), so its presence marks a guide
+            # turn. Steer the guide to GROUND answers in the project knowledge
+            # base — the onboarding brief, uploaded data dictionaries, and
+            # prior analyses are ingested there — rather than answering project
+            # questions from generic MMM knowledge alone.
+            guide_directive = (
+                "You are this project's guide. Before answering anything about "
+                "the client, their goals, KPIs, channels, data definitions, "
+                "constraints, or prior work, call `search_knowledge_base` to "
+                "ground the answer in the project's documents (the onboarding "
+                "brief and any uploaded files live there) and cite the source "
+                "document(s). For pure UI/orientation questions ('what is this "
+                "page?') the app context below is enough — no search needed. If "
+                "the knowledge base has nothing relevant, say so briefly and "
+                "answer from general MMM expertise. Keep answers concise. Stay "
+                "on the project and the platform: if asked something unrelated "
+                "to marketing measurement or this project, decline in one "
+                "sentence and point back to what you can help with."
+            )
             user_text = (
+                f"[Guide instructions — not typed by the user: {guide_directive}]\n\n"
                 f"[App context — not typed by the user: {request.page_context}]\n\n"
                 f"{request.message}"
             )

@@ -134,6 +134,14 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
               />
             </Field>
           </div>
+          {(status === 'running' || status === 'completed') && (
+            <p className="rounded-md bg-gold-100 px-3 py-2 text-xs text-gold-700">
+              You're logging a test that skipped pre-registration — its design and analysis plan
+              weren't locked before {status === 'completed' ? 'the readout' : 'launch'}, so the
+              result is open to specification shopping. It still counts as evidence, but for the
+              next test use the Design studio: lock the plan first, then run.
+            </p>
+          )}
           {measured && (
             <div className="grid grid-cols-3 gap-3">
               <Field label="Estimand">

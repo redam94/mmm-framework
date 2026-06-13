@@ -598,3 +598,324 @@ class TestCreateExtractor:
 
         assert extractor.panel == panel
         assert extractor.ci_prob == 0.95
+
+
+# =============================================================================
+# Decomposition scaling (original KPI units)
+# =============================================================================
+
+
+class _FakeMMMWithDecomposition:
+    """Minimal stand-in for a fitted BayesianMMM exposing the canonical
+    decomposition. Plain class (not MagicMock) so hasattr checks are honest."""
+
+    y_mean = 1000.0
+    y_std = 100.0
+    n_obs = 4
+    _trace = None
+    _results = None
+
+    def compute_component_decomposition(self):
+        from mmm_framework.model.results import ComponentDecomposition
+
+        intercept = np.full(self.n_obs, 950.0)  # y_mean already folded in
+        trend = np.array([0.0, 10.0, 20.0, 30.0])
+        seasonality = np.array([5.0, -5.0, 5.0, -5.0])
+        media = pd.DataFrame(
+            {"TV": [10.0, 20.0, 30.0, 40.0], "Digital": [1.0, 2.0, 3.0, 4.0]}
+        )
+        controls = pd.DataFrame({"Price": [-2.0, -1.0, 1.0, 2.0]})
+        return ComponentDecomposition(
+            intercept=intercept,
+            trend=trend,
+            seasonality=seasonality,
+            media_total=media.sum(axis=1).to_numpy(),
+            media_by_channel=media,
+            controls_total=controls.sum(axis=1).to_numpy(),
+            controls_by_var=controls,
+            geo_effects=None,
+            product_effects=None,
+            total_intercept=float(intercept.sum()),
+            total_trend=float(trend.sum()),
+            total_seasonality=float(seasonality.sum()),
+            total_media=float(media.to_numpy().sum()),
+            total_controls=float(controls.to_numpy().sum()),
+            total_geo=None,
+            total_product=None,
+            y_mean=self.y_mean,
+            y_std=self.y_std,
+        )
+
+
+class TestDecompositionOriginalScale:
+    """Component time series / totals must be in original KPI units.
+
+    Regression test: the extractor previously rebuilt components from the raw
+    trace scaled by y_std only, dropping the y_mean location shift — so the
+    decomposition chart sat near zero while the fit chart showed the real KPI.
+    """
+
+    def test_time_series_uses_canonical_decomposition(self):
+        extractor = BayesianMMMExtractor(_FakeMMMWithDecomposition())
+
+        components = extractor._get_component_time_series()
+
+        assert components is not None
+        # Baseline carries the y_mean location shift (original units)
+        np.testing.assert_allclose(components["Baseline"], 950.0)
+        assert set(components) == {
+            "Baseline",
+            "Trend",
+            "Seasonality",
+            "TV",
+            "Digital",
+            "Control: Price",
+        }
+        # Stacked components reproduce the prediction in original units
+        stacked = np.sum(list(components.values()), axis=0)
+        expected = 950.0 + np.array(
+            [
+                0.0 + 5.0 + 10.0 + 1.0 - 2.0,
+                10.0 - 5.0 + 20.0 + 2.0 - 1.0,
+                20.0 + 5.0 + 30.0 + 3.0 + 1.0,
+                30.0 - 5.0 + 40.0 + 4.0 + 2.0,
+            ]
+        )
+        np.testing.assert_allclose(stacked, expected)
+
+    def test_totals_match_time_series_sums(self):
+        extractor = BayesianMMMExtractor(_FakeMMMWithDecomposition())
+
+        totals = extractor._get_component_totals()
+
+        assert totals is not None
+        np.testing.assert_allclose(totals["Baseline"], 950.0 * 4)
+        np.testing.assert_allclose(totals["TV"], 100.0)
+        np.testing.assert_allclose(totals["Trend"], 60.0)
+
+    def test_fallback_baseline_includes_y_mean(self):
+        """Trace-poking fallback must also put the baseline in original units."""
+
+        class _TraceOnlyMMM:
+            y_mean = 1000.0
+            y_std = 100.0
+            n_obs = 4
+            channel_names = []
+            _results = None
+
+        mmm = _TraceOnlyMMM()
+        posterior = {"intercept": MagicMock(values=np.full((2, 10), -0.5))}
+        trace = MagicMock()
+        trace.posterior = posterior
+        mmm._trace = trace
+
+        extractor = BayesianMMMExtractor(mmm)
+        components = extractor._get_component_time_series()
+
+        # -0.5 standardized * 100 + 1000 = 950 in original units
+        np.testing.assert_allclose(components["Baseline"], 950.0)
+
+        totals = extractor._get_component_totals()
+        np.testing.assert_allclose(totals["Baseline"], 950.0 * 4)
+
+
+# =============================================================================
+# ExtendedMMMExtractor (NestedMMM / MultivariateMMM)
+# =============================================================================
+
+
+class _FakeVar:
+    def __init__(self, values):
+        self.values = np.asarray(values, dtype=float)
+
+
+class _FakeTrace:
+    def __init__(self, posterior: dict):
+        self.posterior = {k: _FakeVar(v) for k, v in posterior.items()}
+
+
+class _FakeNestedMMM:
+    """Stand-in for a fitted NestedMMM with one mediator and two channels.
+
+    Mirrors the post-standardization convention: free RVs (delta_direct_*,
+    gamma/beta) are on the standardized-y scale, while the registered
+    deterministics (mu, effect_*_on_y, direct_effect_*, indirect_*) are in
+    original units.
+    """
+
+    def __init__(self):
+        rng = np.random.default_rng(0)
+        self.n_obs = 20
+        self.channel_names = ["TV", "Search"]
+        self.mediator_names = ["awareness"]
+        self.X_media = rng.uniform(10.0, 100.0, size=(self.n_obs, 2))
+        self._media_scale = self.X_media.max(axis=0) + 1e-8
+        self.y = rng.normal(100.0, 5.0, self.n_obs)
+        self.y_mean = 10.0
+        self.y_std = 2.0
+        self.index = pd.RangeIndex(self.n_obs)
+
+        scalar = (2, 5)  # (chain, draw)
+        obs = (2, 5, self.n_obs)
+        self._trace = _FakeTrace(
+            {
+                "mu": rng.normal(100.0, 1.0, obs),
+                "alpha_y": rng.normal(90.0, 1.0, scalar),
+                "delta_direct_TV": rng.normal(0.5, 0.05, scalar),
+                "gamma_awareness": rng.normal(2.0, 0.1, scalar),
+                "beta_TV_to_awareness": rng.normal(1.0, 0.1, scalar),
+                "beta_Search_to_awareness": rng.normal(0.5, 0.1, scalar),
+                "indirect_TV_via_awareness": rng.normal(2.0, 0.1, scalar),
+                "awareness_latent": rng.normal(1.0, 0.1, obs),
+                "effect_awareness_on_y": rng.normal(2.0, 0.1, obs),
+                "direct_effect_TV": rng.normal(0.3, 0.05, obs),
+                "alpha_TV": np.full(scalar, 0.5),
+                "alpha_Search": np.full(scalar, 0.4),
+                "lambda_TV": np.full(scalar, 3.0),
+                "lambda_Search": np.full(scalar, 2.0),
+            }
+        )
+
+    def _get_affecting_channels(self, mediator):
+        return ["TV", "Search"]
+
+
+class _FakeCrossSpec:
+    source_idx = 1
+    target_idx = 0
+    effect_type = "cannibalization"
+
+
+class _FakeMultivariateMMM:
+    """Stand-in for a fitted MultivariateMMM with two outcomes."""
+
+    def __init__(self):
+        rng = np.random.default_rng(1)
+        self.n_obs = 20
+        self.channel_names = ["TV", "Search"]
+        self.outcome_names = ["original", "coldbrew"]
+        self.X_media = rng.uniform(10.0, 100.0, size=(self.n_obs, 2))
+        self._media_scale = self.X_media.max(axis=0) + 1e-8
+        self.outcome_data = {
+            "original": rng.normal(100.0, 5.0, self.n_obs),
+            "coldbrew": rng.normal(50.0, 3.0, self.n_obs),
+        }
+        self.y = self.outcome_data["original"]
+        self.outcome_means = {"original": 10.0, "coldbrew": 5.0}
+        self.outcome_stds = {"original": 2.0, "coldbrew": 4.0}
+        self.index = pd.RangeIndex(self.n_obs)
+        self._cross_effect_specs = [_FakeCrossSpec()]
+
+        scalar = (2, 5)
+        psi = np.zeros((2, 5, 2, 2))
+        psi[:, :, 1, 0] = -0.02  # coldbrew -> original cannibalization
+        corr = np.tile(np.array([[1.0, 0.4], [0.4, 1.0]]), (2, 5, 1, 1))
+        self._trace = _FakeTrace(
+            {
+                "mu": rng.normal(75.0, 1.0, (2, 5, self.n_obs, 2)),
+                "alpha": rng.normal(70.0, 1.0, (2, 5, 2)),
+                "beta_media": rng.normal(0.5, 0.05, (2, 5, 2, 2)),
+                "psi_matrix": psi,
+                "Y_obs_correlation": corr,
+                "alpha_TV": np.full(scalar, 0.5),
+                "alpha_Search": np.full(scalar, 0.4),
+                "lambda_TV": np.full(scalar, 3.0),
+                "lambda_Search": np.full(scalar, 2.0),
+            }
+        )
+
+
+class TestExtendedMMMExtractorNested:
+    """ExtendedMMMExtractor must populate everything MediatorSection needs."""
+
+    @pytest.fixture
+    def bundle(self):
+        return ExtendedMMMExtractor(_FakeNestedMMM()).extract()
+
+    def test_fit_extraction(self, bundle):
+        assert bundle.predicted is not None
+        assert len(bundle.predicted["mean"]) == 20
+        assert bundle.fit_statistics is not None
+
+    def test_mediator_pathways(self, bundle):
+        assert set(bundle.mediator_pathways) == {"TV", "Search"}
+        tv = bundle.mediator_pathways["TV"]
+        # total = direct + indirect; delta_direct (~0.5, standardized) is
+        # scaled by y_std=2; the indirect deterministic (~2.0) is already raw
+        assert tv["_total"]["mean"] == pytest.approx(
+            tv["_direct"]["mean"] + tv["_indirect"]["mean"]
+        )
+        assert tv["_direct"]["mean"] == pytest.approx(1.0, abs=0.2)
+        assert "awareness" in tv
+        # Search has no direct effect and no registered indirect deterministic:
+        # the extractor reconstructs beta * gamma * y_std (~0.5 * 2.0 * 2.0)
+        search = bundle.mediator_pathways["Search"]
+        assert search["_direct"]["mean"] == 0.0
+        assert search["_indirect"]["mean"] == pytest.approx(2.0, abs=0.5)
+
+    def test_total_indirect_share(self, bundle):
+        assert bundle.total_indirect_effect is not None
+        assert 0.5 < bundle.total_indirect_effect["mean"] <= 1.0
+
+    def test_mediator_time_series(self, bundle):
+        assert list(bundle.mediator_time_series) == ["awareness"]
+        assert len(bundle.mediator_time_series["awareness"]) == 20
+
+    def test_decomposition_components(self, bundle):
+        assert "Baseline" in bundle.component_time_series
+        assert "Via awareness" in bundle.component_time_series
+        assert "TV (direct)" in bundle.component_time_series
+        # alpha_y (~90, standardized) * y_std + y_mean = 190 in original units
+        np.testing.assert_allclose(
+            bundle.component_time_series["Baseline"],
+            90.0 * 2.0 + 10.0,
+            rtol=0.05,
+        )
+        np.testing.assert_allclose(
+            bundle.component_totals["Baseline"],
+            bundle.component_time_series["Baseline"].sum(),
+        )
+
+    def test_curves_and_spend(self, bundle):
+        assert set(bundle.saturation_curves) == {"TV", "Search"}
+        assert set(bundle.adstock_curves) == {"TV", "Search"}
+        # geometric kernel decays monotonically
+        assert np.all(np.diff(bundle.adstock_curves["TV"]) <= 0)
+        assert set(bundle.current_spend) == {"TV", "Search"}
+
+
+class TestExtendedMMMExtractorMultivariate:
+    """Per-outcome fit/decomposition plus cross-effect extraction."""
+
+    @pytest.fixture
+    def bundle(self):
+        return ExtendedMMMExtractor(_FakeMultivariateMMM()).extract()
+
+    def test_outcomes_exposed_as_products(self, bundle):
+        assert bundle.product_names == ["original", "coldbrew"]
+        assert set(bundle.actual_by_product) == {"original", "coldbrew"}
+        assert set(bundle.predicted_by_product) == {"original", "coldbrew"}
+        assert set(bundle.fit_statistics_by_product) == {"original", "coldbrew"}
+        # primary outcome doubles as the aggregate view
+        np.testing.assert_allclose(bundle.actual, bundle.actual_by_product["original"])
+
+    def test_per_outcome_decomposition(self, bundle):
+        assert set(bundle.component_time_series_by_product) == {
+            "original",
+            "coldbrew",
+        }
+        components = bundle.component_time_series_by_product["original"]
+        assert "Baseline" in components
+        assert "TV" in components and "Search" in components
+        # components (incl. the cross-effect remainder) stack to mu exactly
+        stacked = np.sum(list(components.values()), axis=0)
+        np.testing.assert_allclose(stacked, bundle.predicted["mean"], rtol=1e-9)
+
+    def test_cannibalization_matrix(self, bundle):
+        effect = bundle.cannibalization_matrix["coldbrew"]["original"]
+        assert effect["mean"] == pytest.approx(-0.02)
+        assert bundle.net_product_effects["original"]["cannibalization"] < 0
+
+    def test_outcome_correlations(self, bundle):
+        assert bundle.outcome_correlations.shape == (2, 2)
+        assert bundle.outcome_correlations[0, 1] == pytest.approx(0.4)

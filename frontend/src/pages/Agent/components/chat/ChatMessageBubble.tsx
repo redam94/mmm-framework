@@ -49,7 +49,7 @@ export const ChatMessageBubble = React.memo(function ChatMessageBubble({
           )}
           {(msg.content || (pending && msg.type === 'ai')) && (
             <div className={`rounded-2xl p-4 ${msg.type === 'human'
-              ? 'bg-blue-600 text-white rounded-br-none'
+              ? 'bg-rust-600 text-white rounded-br-none'
               : 'bg-white text-ink-900 rounded-bl-none border border-line-200 shadow-sm'}`}>
               {msg.type === 'human'
                 ? <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -63,7 +63,7 @@ export const ChatMessageBubble = React.memo(function ChatMessageBubble({
         </div>
       )}
       {msg.type === 'human' && (
-        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-1">
+        <div className="w-8 h-8 rounded-full bg-rust-600 flex items-center justify-center shrink-0 mt-1">
           <User size={16} className="text-white" />
         </div>
       )}

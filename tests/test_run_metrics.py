@@ -50,7 +50,9 @@ class TestComputeRunMetrics:
     def test_snapshot_shape_and_json_safety(self, metrics):
         import json
 
-        assert metrics["schema_version"] == 1
+        from mmm_framework.planning.history import RUN_METRICS_SCHEMA_VERSION
+
+        assert metrics["schema_version"] == RUN_METRICS_SCHEMA_VERSION
         assert set(metrics["channels"]) == {"TV", "Digital"}
         tv = metrics["channels"]["TV"]
         for key in (
@@ -71,6 +73,21 @@ class TestComputeRunMetrics:
         assert p["mean_ci_width"] > 0
         assert p["evpi"] >= 0
         json.dumps(metrics)  # must round-trip without numpy leakage
+
+    def test_response_curves_block(self, metrics):
+        rc = metrics["response_curves"]
+        mults = rc["multipliers"]
+        assert mults[rc["current_index"]] == pytest.approx(1.0)
+        assert set(rc["channels"]) == {"TV", "Digital"}
+        tv = rc["channels"]["TV"]
+        G = len(mults)
+        assert (
+            len(tv["spend"]) == len(tv["mean"]) == len(tv["p5"]) == len(tv["p95"]) == G
+        )
+        # monotone spend grid, band brackets the mean, sqrt response is increasing
+        assert tv["spend"] == sorted(tv["spend"])
+        assert all(lo <= m <= hi for lo, m, hi in zip(tv["p5"], tv["mean"], tv["p95"]))
+        assert tv["mean"][-1] > tv["mean"][0]
 
     def test_uncertain_channel_has_wider_ci_and_higher_priority(self, metrics):
         tv, dig = metrics["channels"]["TV"], metrics["channels"]["Digital"]

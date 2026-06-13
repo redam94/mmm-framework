@@ -111,6 +111,7 @@ def build_run_timeline(project_id: str | None = None) -> list[dict[str, Any]]:
                     "report_path": p.get("report_path"),
                     "model_path": p.get("model_path"),
                     "data_fingerprint": p.get("data_fingerprint"),
+                    "diagnostics": p.get("diagnostics"),
                     "spec_hash": p.get("spec_hash"),
                     "parent_run_id": p.get("parent_run_id"),
                     "assumptions": p.get("assumptions") or [],
@@ -149,12 +150,30 @@ def build_run_timeline(project_id: str | None = None) -> list[dict[str, Any]]:
     return runs
 
 
-def run_timeline_markdown(project_id: str | None = None) -> str:
-    """The timeline as markdown — the provenance section of a final report."""
+def run_timeline_markdown(
+    project_id: str | None = None, max_runs: int | None = None
+) -> str:
+    """The timeline as markdown — the provenance section of a final report.
+
+    ``max_runs`` keeps only the most recent N runs (used by the agent tool to
+    bound how much lands in the LLM's context); ``None`` returns the full
+    lineage (used for reports).
+    """
     runs = build_run_timeline(project_id)
     if not runs:
         return "No model runs recorded yet."
+    omitted = 0
+    if max_runs is not None and len(runs) > max_runs:
+        # build_run_timeline returns newest-first; keep the most recent N.
+        omitted = len(runs) - max_runs
+        runs = runs[:max_runs]
     lines = ["### Model Run Lineage", ""]
+    if omitted:
+        lines.append(
+            f"_Showing the {max_runs} most recent runs; {omitted} earlier "
+            f"run(s) omitted._"
+        )
+        lines.append("")
     for r in reversed(runs):  # chronological for a report
         when = r.get("timestamp_iso") or ""
         lines.append(f"**{r.get('run_name') or r.get('run_id')}** ({when})")

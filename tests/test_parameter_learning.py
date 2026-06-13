@@ -103,9 +103,17 @@ class TestParameterLearningCore:
         post = {"a": _normal(rng, 0, 1), "b": _normal(rng, 5, 0.1)}  # b learned, a not
         df = parameter_learning(prior, post)
         assert list(df.columns) == [
-            "parameter", "prior_mean", "prior_sd", "post_mean", "post_sd",
-            "contraction", "contraction_robust", "overlap", "shift_z",
-            "post_ess_bulk", "verdict",
+            "parameter",
+            "prior_mean",
+            "prior_sd",
+            "post_mean",
+            "post_sd",
+            "contraction",
+            "contraction_robust",
+            "overlap",
+            "shift_z",
+            "post_ess_bulk",
+            "verdict",
         ]
         # Ascending contraction -> the un-learned 'a' sorts first.
         assert df.iloc[0]["parameter"] == "a"
@@ -117,7 +125,7 @@ class TestParameterLearningCore:
         # carryover). Evidence dominated the location -- this must NOT read as
         # "weak" or "prior-dominated".
         rng = np.random.default_rng(11)
-        prior = {"alpha": rng.beta(1, 3, 8000)}            # mean .25, sd ~.19
+        prior = {"alpha": rng.beta(1, 3, 8000)}  # mean .25, sd ~.19
         post = {"alpha": np.clip(rng.normal(0.55, 0.27, 8000), 0, 1)}
         df = parameter_learning(prior, post).set_index("parameter")
         row = df.loc["alpha"]
@@ -161,7 +169,7 @@ class TestParameterLearningCore:
         post = {"theta": np.concatenate([bulk, tail])}
         df = parameter_learning(prior, post).set_index("parameter")
         row = df.loc["theta"]
-        assert row["contraction"] < -0.5            # sd badly inflated by the tail
+        assert row["contraction"] < -0.5  # sd badly inflated by the tail
         assert abs(row["contraction_robust"]) < 0.2  # bulk unchanged
         # ESS is NaN for plain dicts (no chain structure) -- documented behavior.
         assert np.isnan(row["post_ess_bulk"])
@@ -193,7 +201,10 @@ class TestParameterLearningIntegration:
 
     def _panel(self):
         from mmm_framework.config import (
-            ControlVariableConfig, DimensionType, KPIConfig, MediaChannelConfig,
+            ControlVariableConfig,
+            DimensionType,
+            KPIConfig,
+            MediaChannelConfig,
             MFFConfig,
         )
         from mmm_framework.data_loader import PanelCoordinates, PanelDataset
@@ -207,8 +218,11 @@ class TestParameterLearningIntegration:
         # TV genuinely drives sales; Digital is near-noise -> different learning.
         y = 1000 + 4.0 * tv + 25 * (price - price.mean()) + rng.normal(0, 60, n)
         coords = PanelCoordinates(
-            periods=periods, geographies=None, products=None,
-            channels=["TV", "Digital"], controls=["Price"],
+            periods=periods,
+            geographies=None,
+            products=None,
+            channels=["TV", "Digital"],
+            controls=["Price"],
         )
         config = MFFConfig(
             kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
@@ -216,24 +230,33 @@ class TestParameterLearningIntegration:
                 MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD]),
                 MediaChannelConfig(name="Digital", dimensions=[DimensionType.PERIOD]),
             ],
-            controls=[ControlVariableConfig(name="Price", dimensions=[DimensionType.PERIOD])],
+            controls=[
+                ControlVariableConfig(name="Price", dimensions=[DimensionType.PERIOD])
+            ],
         )
         return PanelDataset(
             y=pd.Series(y, name="Sales"),
             X_media=pd.DataFrame({"TV": tv, "Digital": digital}),
             X_controls=pd.DataFrame({"Price": price}),
-            coords=coords, index=periods, config=config,
+            coords=coords,
+            index=periods,
+            config=config,
         )
 
     def test_bayesian_mmm_parameter_learning(self):
-        from mmm_framework import BayesianMMM, ModelConfigBuilder, TrendConfig, TrendType
+        from mmm_framework import (
+            BayesianMMM,
+            ModelConfigBuilder,
+            TrendConfig,
+            TrendType,
+        )
 
         mmm = BayesianMMM(
             self._panel(),
             ModelConfigBuilder().bayesian_pymc().build(),
             TrendConfig(type=TrendType.LINEAR),
         )
-        mmm.fit(draws=200, tune=200, chains=2, cores=1, random_seed=0)
+        results = mmm.fit(draws=200, tune=200, chains=2, cores=1, random_seed=0)
         df = mmm.compute_parameter_learning(prior_samples=800)
         assert not df.empty
         assert {"contraction", "overlap", "shift_z", "verdict"} <= set(df.columns)
@@ -243,8 +266,30 @@ class TestParameterLearningIntegration:
         assert df["contraction"].notna().any()
         assert (df["overlap"].dropna().between(0, 1)).all()
 
+        # The fit-time model-health snapshot rides the same fitted model and
+        # must be JSON-safe (it travels inside the model_run artifact).
+        import json
+
+        from mmm_framework.diagnostics import compute_fit_diagnostics
+
+        snap = compute_fit_diagnostics(mmm, results, max_parameters=5)
+        conv = snap["convergence"]
+        assert {"divergences", "rhat_max", "ess_bulk_min", "flags", "ok"} <= set(conv)
+        assert conv["ok"] == (not conv["flags"])
+        learning = snap["learning"]
+        assert learning is not None
+        assert len(learning["parameters"]) <= 5
+        assert learning["truncated"] == (learning["n_parameters"] > 5)
+        assert sum(learning["verdict_counts"].values()) == learning["n_parameters"]
+        json.dumps(snap)  # no NaN/numpy leakage
+
     def test_requires_fit(self):
-        from mmm_framework import BayesianMMM, ModelConfigBuilder, TrendConfig, TrendType
+        from mmm_framework import (
+            BayesianMMM,
+            ModelConfigBuilder,
+            TrendConfig,
+            TrendType,
+        )
 
         mmm = BayesianMMM(
             self._panel(),

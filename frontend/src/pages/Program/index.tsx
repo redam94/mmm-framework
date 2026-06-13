@@ -12,6 +12,7 @@ import { HeadlineKPIs } from './HeadlineKPIs';
 import { NextBestActions } from './NextBestActions';
 import { CoverageMap } from './CoverageMap';
 import { RecentActivity } from './RecentActivity';
+import { IdentificationContract } from './IdentificationContract';
 
 /**
  * Infer where the program sits in the T₀–T₅ loop from observable state.
@@ -86,6 +87,7 @@ export function ProgramPage() {
             <CoverageMap projectId={currentProjectId} />
             <RecentActivity projectId={currentProjectId} />
           </div>
+          <IdentificationContract projectId={currentProjectId} />
         </>
       )}
     </div>
