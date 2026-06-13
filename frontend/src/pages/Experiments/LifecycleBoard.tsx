@@ -1,6 +1,15 @@
 import { clsx } from 'clsx';
+import { LockClosedIcon } from '@heroicons/react/24/outline';
 import { StatusChip } from '../../components/ui';
 import type { ExperimentRecord, LifecycleStatus } from '../../api/services/measurementService';
+
+/** Past planning without a locked design = vulnerable to specification shopping. */
+function isAdHoc(exp: ExperimentRecord): boolean {
+  return (
+    exp.preregistered_at == null &&
+    ['running', 'completed', 'calibrated'].includes(exp.status)
+  );
+}
 
 const COLUMNS: { id: LifecycleStatus; label: string }[] = [
   { id: 'draft', label: 'Draft' },
@@ -37,6 +46,18 @@ function ExperimentCard({
         <StatusChip status={exp.status} />
       </div>
       {exp.design_type && <p className="mt-1 text-xs text-ink-400">{exp.design_type}</p>}
+      {exp.preregistered_at != null ? (
+        <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-sage-700">
+          <LockClosedIcon className="h-3 w-3" /> pre-registered
+        </p>
+      ) : isAdHoc(exp) ? (
+        <p
+          className="mt-1 inline-block rounded-full bg-gold-100 px-1.5 py-0.5 text-[10px] font-medium text-gold-700"
+          title="Design was never locked before the readout — treat the result as observational evidence"
+        >
+          ad-hoc (no locked design)
+        </p>
+      ) : null}
       {window && <p className="mt-1 text-xs text-ink-600 num">{window}</p>}
       {readoutValue != null && (
         <p className="mt-1.5 text-xs text-ink-700">

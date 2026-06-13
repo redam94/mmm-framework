@@ -13,23 +13,23 @@ import type { GuideMessage } from './useGuideChat';
 
 function pageContextFor(pathname: string): string {
   if (pathname.startsWith('/program')) {
-    return 'The user is viewing the Program page: measurement-cycle stage (T0–T5), headline KPIs (portfolio mROI, misallocation, % spend experiment-backed, mean ROI CI width), next-best-actions, calibration coverage map, recent activity.';
+    return 'The user is viewing the Orrery page (the measurement-program home): measurement-cycle stage (T0–T5), headline KPIs (portfolio mROI, misallocation, % spend experiment-backed, mean ROI CI width), next-best-actions, calibration coverage map, identification contract, recent activity.';
   }
   if (pathname.startsWith('/experiments')) {
-    return 'The user is viewing the Experiments page: EIG/EVOI priority matrix, experiment lifecycle board (draft→planned→running→completed→calibrated), re-test schedule with information decay, and the experiment design studio (randomized geo lift, matched-market DiD, randomized flighting).';
+    return 'The user is viewing the Auspices page (experiments): EIG/EVOI priority matrix, experiment lifecycle board (draft→planned→running→completed→calibrated), re-test schedule with information decay, and the experiment design studio (randomized geo lift, matched-market DiD, randomized flighting).';
   }
   if (pathname.startsWith('/performance')) {
-    return 'The user is viewing the Performance page: cycle-over-cycle trajectories (ROI CI contraction, budget share migration, misallocation, portfolio mROI), the model–experiment agreement log, and the run lineage timeline.';
+    return 'The user is viewing the Chronicle page (performance): cycle-over-cycle trajectories (ROI CI contraction, budget share migration, misallocation, portfolio mROI), saturation & avg-vs-marginal ROAS curves, the model–experiment agreement log, model health diagnostics, and the run lineage timeline.';
   }
   if (pathname.startsWith('/team')) {
-    return "The user is viewing the Team page: the project's user roster and roles.";
+    return "The user is viewing the College page (team): the project's user roster and roles.";
   }
-  return 'The user is in the MMM Studio measurement app.';
+  return 'The user is in Augur, the causal marketing-measurement app.';
 }
 
 function quickPromptsFor(pathname: string): string[] {
   if (pathname.startsWith('/program')) {
-    return ['What am I looking at?', 'What should we do next?'];
+    return ["What are this client's goals?", 'What should we do next?'];
   }
   if (pathname.startsWith('/experiments')) {
     return ['Explain the priority matrix', 'Which experiment should we run next and why?'];
@@ -37,7 +37,17 @@ function quickPromptsFor(pathname: string): string[] {
   if (pathname.startsWith('/performance')) {
     return ['Summarize how measurement improved', 'Explain the agreement log'];
   }
-  return ['How does the measurement loop work?'];
+  return ['How does the measurement loop work?', "What's in the project brief?"];
+}
+
+/** Friendly labels for the tool-activity line (raw tool names read poorly). */
+const TOOL_LABELS: Record<string, string> = {
+  search_knowledge_base: 'searching project docs',
+  list_knowledge_base: 'checking project docs',
+};
+
+function toolLabel(name: string): string {
+  return TOOL_LABELS[name] ?? name.replace(/_/g, ' ');
 }
 
 // ─── Markdown styling (compact, bubble-sized) ────────────────────────────────
@@ -163,7 +173,7 @@ export function GuideBubble() {
             <div className="min-w-0">
               <h2 className="font-display text-base font-semibold text-ink-900">Project guide</h2>
               <p className="mt-0.5 text-xs text-ink-600">
-                Ask about this page or the measurement loop
+                Grounded in this page and your project docs
               </p>
             </div>
             {threadId && (
@@ -193,8 +203,8 @@ export function GuideBubble() {
               <div className="flex-1 space-y-3 overflow-y-auto bg-cream-50 p-4 scrollbar-thin">
                 {messages.length === 0 && !streaming && (
                   <p className="px-2 pt-4 text-center text-xs leading-relaxed text-ink-400">
-                    Ask what a chart means, what to do next, or how the measurement loop fits
-                    together.
+                    Ask what a chart means, what to do next, or about this client's brief and
+                    goals — the guide draws on your project's knowledge base.
                   </p>
                 )}
                 {messages.map((m) => (
@@ -208,7 +218,7 @@ export function GuideBubble() {
                       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sage-600 [animation-delay:300ms]" />
                     </span>
                     <span className="animate-pulse">
-                      {activeTool ? `⚙ ${activeTool}…` : 'thinking…'}
+                      {activeTool ? `⚙ ${toolLabel(activeTool)}…` : 'thinking…'}
                     </span>
                   </div>
                 )}

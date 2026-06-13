@@ -76,6 +76,18 @@ class CombinedMMM(BaseExtendedMMM):
         self.n_mediators = len(self.mediator_names)
         self.n_outcomes = len(self.outcome_names)
 
+        # Per-outcome standardization (same convention as MultivariateMMM):
+        # raw data attributes, standardized likelihood, original-unit
+        # deterministics.
+        self.outcome_means = {
+            name: float(np.asarray(outcome_data[name], dtype=float).mean())
+            for name in self.outcome_names
+        }
+        self.outcome_stds = {
+            name: float(np.asarray(outcome_data[name], dtype=float).std()) + 1e-8
+            for name in self.outcome_names
+        }
+
         # Build cross-effect structure (same machinery as MultivariateMMM).
         self._cross_effect_specs = self._build_cross_effect_specs()
 
@@ -157,6 +169,11 @@ class CombinedMMM(BaseExtendedMMM):
             Y_matrix = np.column_stack(
                 [self.outcome_data[name] for name in self.outcome_names]
             )
+            # ``Y`` stays raw (cross-effects act on the raw source outcome);
+            # the likelihood fits standardized outcomes.
+            means = np.array([self.outcome_means[n] for n in self.outcome_names])
+            stds = np.array([self.outcome_stds[n] for n in self.outcome_names])
+            Y_standardized = (Y_matrix - means) / stds
             Y = pm.Data("Y", Y_matrix, dims=("obs", "outcome"))
 
             # Media transformations: normalize -> geometric adstock -> logistic
@@ -272,22 +289,33 @@ class CombinedMMM(BaseExtendedMMM):
                         mu_k = mu_k + gamma[k, m] * mediator_values[med_name]
 
                 # Cross-effects: psi_matrix[source, target] * Y[:, source],
-                # added to target k (same orientation as MultivariateMMM).
+                # added to target k (same orientation as MultivariateMMM). The
+                # raw-scale contribution is divided by the target's std so psi
+                # keeps its raw source->target interpretation in the
+                # standardized-mu graph.
                 if psi_matrix is not None:
-                    mu_k = mu_k + compute_cross_effect_contribution(
-                        Y, psi_matrix, k, self.n_outcomes, modulation
+                    mu_k = mu_k + (
+                        compute_cross_effect_contribution(
+                            Y, psi_matrix, k, self.n_outcomes, modulation
+                        )
+                        / stds[k]
                     )
 
                 mu_list.append(mu_k)
 
-            mu = pt.stack(mu_list, axis=1)
-            pm.Deterministic("mu", mu, dims=("obs", "outcome"))
+            mu_standardized = pt.stack(mu_list, axis=1)
+            # Original-unit predictions (reports and oracles consume this)
+            pm.Deterministic(
+                "mu",
+                mu_standardized * stds[None, :] + means[None, :],
+                dims=("obs", "outcome"),
+            )
 
-            # Multivariate likelihood
+            # Multivariate likelihood (standardized scale)
             build_multivariate_likelihood(
                 "Y_obs",
-                mu,
-                Y_matrix,
+                mu_standardized,
+                Y_standardized,
                 self.n_outcomes,
                 self.config.multivariate.lkj_eta,
                 dims=("obs", "outcome"),
@@ -295,9 +323,10 @@ class CombinedMMM(BaseExtendedMMM):
 
             # Derived quantities. ``indirect`` respects the mediator->outcome
             # routing (``_get_affected_outcomes``) so it matches ``mu`` exactly.
+            # Registered in original units (x outcome std), matching ``mu``.
             for i, channel in enumerate(self.channel_names):
                 for k, outcome_name in enumerate(self.outcome_names):
-                    direct = beta_direct[k, i]
+                    direct = beta_direct[k, i] * stds[k]
 
                     indirect = pt.zeros(())
                     for m, med_name in enumerate(self.mediator_names):
@@ -305,7 +334,7 @@ class CombinedMMM(BaseExtendedMMM):
                             continue
                         beta = channel_mediator_betas.get(med_name, {}).get(channel)
                         if beta is not None:
-                            indirect = indirect + beta * gamma[k, m]
+                            indirect = indirect + beta * gamma[k, m] * stds[k]
 
                     pm.Deterministic(f"direct_{channel}_{outcome_name}", direct)
                     pm.Deterministic(f"indirect_{channel}_{outcome_name}", indirect)
@@ -337,8 +366,9 @@ class CombinedMMM(BaseExtendedMMM):
                             "apply": apply,
                             "x_input": x_input,
                             "spend_obs": self.X_media[:, c],
+                            "scale": self.outcome_stds[outcome_name],
                         }
-                self._add_experiment_likelihoods(handles, scale=1.0)
+                self._add_experiment_likelihoods(handles)
 
         return model
 

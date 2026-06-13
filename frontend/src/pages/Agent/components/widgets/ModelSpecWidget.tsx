@@ -114,6 +114,14 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
     setNewControl('');
   };
 
+  const setControlRole = (idx: number, role: string) =>
+    setDraft((prev: any) => ({
+      ...prev,
+      control_variables: prev.control_variables.map((c: any, i: number) =>
+        i === idx ? { ...c, role: role || undefined } : c,
+      ),
+    }));
+
   const removeControl = (idx: number) =>
     setDraft((prev: any) => ({ ...prev, control_variables: prev.control_variables.filter((_: any, i: number) => i !== idx) }));
 
@@ -175,8 +183,26 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       {displaySpec.control_variables?.length > 0 && (
         <SpecSection title="Controls" icon={<Layers size={13} />}>
           <div className="flex flex-wrap gap-1.5 py-1">
-            {displaySpec.control_variables.map((c: any) => <Badge key={c.name} label={c.name} />)}
+            {displaySpec.control_variables.map((c: any) => (
+              <span key={c.name} className="flex items-center gap-1">
+                <Badge label={c.name} />
+                {c.role === 'confounder' ? (
+                  <Badge label="confounder" color="indigo" />
+                ) : c.role === 'precision' ? (
+                  <Badge label="precision" color="gray" />
+                ) : (
+                  <Badge label="role?" color="amber" />
+                )}
+              </span>
+            ))}
           </div>
+          {displaySpec.control_variables.some((c: any) => !c.role) && (
+            <p className="text-[11px] text-amber-700 py-1">
+              Declare each control's causal role: confounders (drive both spend and the KPI)
+              block back-door paths and must always stay in the model; precision controls only
+              reduce noise. The distinction decides what may ever be shrunk or dropped.
+            </p>
+          )}
         </SpecSection>
       )}
     </div>
@@ -358,14 +384,27 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
 
       {/* Controls */}
       <EditSection title="Control Variables" icon={<Layers size={13} />}>
-        <div className="flex flex-wrap gap-1.5">
+        <p className="text-[11px] text-ink-400 -mb-1">
+          Confounders (drive both spend and the KPI) carry the identification — never shrink or
+          drop one. Precision controls only soak up outcome noise and are safe to regularize.
+        </p>
+        <div className="space-y-1.5">
           {draft.control_variables.map((c: any, idx: number) => (
-            <span key={idx} className="flex items-center gap-1 px-2.5 py-1 bg-cream-100 text-ink-700 text-xs rounded-full border border-line-200">
-              {c.name}
-              <button onClick={() => removeControl(idx)} className="text-ink-300 hover:text-red-500 transition-colors ml-0.5">
+            <div key={idx} className="flex items-center gap-2 bg-cream-50 rounded-lg px-2.5 py-1.5 border border-line-200">
+              <span className="flex-1 text-xs text-ink-700 truncate">{c.name}</span>
+              <select
+                className={sCls + ' w-44'}
+                value={c.role ?? ''}
+                onChange={e => setControlRole(idx, e.target.value)}
+              >
+                <option value="">Role not declared</option>
+                <option value="confounder">Confounder (identification)</option>
+                <option value="precision">Precision control (noise)</option>
+              </select>
+              <button onClick={() => removeControl(idx)} className="text-ink-300 hover:text-red-500 transition-colors shrink-0">
                 <X size={11} />
               </button>
-            </span>
+            </div>
           ))}
         </div>
         <div className="flex gap-2 mt-1">

@@ -12,8 +12,10 @@ from .learning import (
     plot_parameter_learning,
     plot_prior_posterior_overlay,
 )
+from .snapshot import compute_fit_diagnostics
 
 __all__ = [
+    "compute_fit_diagnostics",
     "parameter_learning",
     "plot_parameter_learning",
     "plot_prior_posterior_overlay",

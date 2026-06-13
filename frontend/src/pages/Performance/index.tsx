@@ -6,17 +6,23 @@ import { useProjectHistory } from '../../api/hooks/useMeasurement';
 import { TrajectoryPanels } from './TrajectoryPanels';
 import { AgreementLog } from './AgreementLog';
 import { RunsTimeline } from './RunsTimeline';
+import { ModelHealthPanel } from './ModelHealthPanel';
+import { ResponseCurvesPanel } from './ResponseCurvesPanel';
 
-type TabId = 'trajectories' | 'agreement' | 'runs';
+type TabId = 'trajectories' | 'saturation' | 'agreement' | 'health' | 'runs';
 
 const TABS = [
   { id: 'trajectories', label: 'Trajectories' },
+  { id: 'saturation', label: 'Saturation & ROAS' },
   { id: 'agreement', label: 'Agreement' },
+  { id: 'health', label: 'Model health' },
   { id: 'runs', label: 'Runs' },
 ];
 
 function tabFromPath(pathname: string): TabId {
+  if (pathname.endsWith('/saturation')) return 'saturation';
   if (pathname.endsWith('/agreement')) return 'agreement';
+  if (pathname.endsWith('/health')) return 'health';
   if (pathname.endsWith('/runs')) return 'runs';
   return 'trajectories';
 }
@@ -55,6 +61,11 @@ export function PerformancePage() {
       ) : active === 'runs' ? (
         // The runs timeline handles its own loading and empty states.
         <RunsTimeline />
+      ) : active === 'health' ? (
+        // Model health reads the runs lineage directly (own loading/empty states).
+        <ModelHealthPanel />
+      ) : active === 'saturation' ? (
+        <ResponseCurvesPanel projectId={currentProjectId} />
       ) : isLoading ? (
         <p className="text-sm text-ink-400">Loading history…</p>
       ) : noHistory || !history ? (

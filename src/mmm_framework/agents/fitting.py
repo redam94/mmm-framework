@@ -525,6 +525,16 @@ def build_and_fit(spec: dict, dataset_path: str):
         except Exception as metrics_err:  # noqa: BLE001
             model_run["metrics_error"] = str(metrics_err)
 
+    # 8c. Model-health snapshot (best-effort, same contract as 8b): sampler
+    # convergence + prior→posterior learning verdicts, so the UI can show
+    # whether to believe the fit — not just what it estimated.
+    try:
+        from mmm_framework.diagnostics import compute_fit_diagnostics
+
+        model_run["diagnostics"] = compute_fit_diagnostics(mmm, results)
+    except Exception as diag_err:  # noqa: BLE001
+        model_run["diagnostics_error"] = str(diag_err)
+
     if model_saved:
         try:
             with open(_os.path.join(model_path, "run_metadata.json"), "w") as f:

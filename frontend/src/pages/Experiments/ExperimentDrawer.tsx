@@ -41,15 +41,22 @@ function MonoChip({ value }: { value: string }) {
 function ReadoutForm({
   onSubmit,
   pending,
+  targetSe,
 }: {
   onSubmit: (body: ExperimentTransition) => void;
   pending: boolean;
+  /** the design's pre-registered precision target, when one was locked */
+  targetSe?: number | null;
 }) {
   const [value, setValue] = useState('');
   const [se, setSe] = useState('');
   const [estimand, setEstimand] = useState('roas');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  const seNum = se !== '' ? Number(se) : null;
+  const underPowered =
+    targetSe != null && seNum != null && Number.isFinite(seNum) && seNum > targetSe;
 
   return (
     <div className="space-y-2.5 rounded-lg border border-line-200 bg-cream-100 p-3">
@@ -81,6 +88,15 @@ function ReadoutForm({
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
         </div>
       </div>
+      {underPowered && (
+        <p className="rounded-md bg-gold-100 px-2.5 py-1.5 text-xs text-gold-700">
+          Measured SE <span className="num">{seNum!.toFixed(2)}</span> exceeds the design's
+          target SE <span className="num">{targetSe!.toFixed(2)}</span> — the test came in
+          under-powered vs its pre-registered MDE, so calibration will move the posterior less
+          than planned. Record it anyway (it's still evidence), but don't read a null as proof
+          of no effect.
+        </p>
+      )}
       <div className="flex justify-end">
         <Button
           size="sm"
@@ -164,12 +180,18 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
             )}
             {design.why != null && <DefRow term="Why">{String(design.why)}</DefRow>}
           </dl>
-          {exp.preregistered_at != null && (
+          {exp.preregistered_at != null ? (
             <p className="mt-2 flex items-center gap-1.5 border-t border-line-200 pt-2 text-xs text-sage-700">
               <Lock className="h-3.5 w-3.5" />
               Design locked (pre-registered) <span className="num">{fmtUnix(exp.preregistered_at)}</span>
             </p>
-          )}
+          ) : ['running', 'completed', 'calibrated'].includes(exp.status) ? (
+            <p className="mt-2 border-t border-line-200 pt-2 text-xs text-gold-700">
+              No locked design — this test went live without pre-registration, so its analysis
+              plan wasn't fixed before the readout. Treat the result as observational evidence
+              and pre-register the next test in the design studio.
+            </p>
+          ) : null}
         </Card>
       </div>
 
@@ -274,7 +296,11 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
         )}
 
         {exp.status === 'running' && showReadoutForm && (
-          <ReadoutForm onSubmit={doTransition} pending={transition.isPending} />
+          <ReadoutForm
+            onSubmit={doTransition}
+            pending={transition.isPending}
+            targetSe={design.target_se != null ? Number(design.target_se) : null}
+          />
         )}
 
         <div className="flex flex-wrap items-center gap-2">

@@ -3798,7 +3798,12 @@ def get_run_history(
         project_id = (sess or {}).get("project_id")
     except Exception:
         pass
-    md = _runs.run_timeline_markdown(project_id)
+    # Cap how many runs land in the LLM's context; this ToolMessage rides along
+    # in history for the rest of the conversation.
+    import os as _os
+
+    _max_runs = int(_os.environ.get("MMM_AGENT_MAX_HISTORY_RUNS", "20"))
+    md = _runs.run_timeline_markdown(project_id, max_runs=_max_runs)
     return Command(
         update={"messages": [ToolMessage(content=md, tool_call_id=tool_call_id)]}
     )

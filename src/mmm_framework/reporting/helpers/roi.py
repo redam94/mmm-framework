@@ -344,7 +344,7 @@ def compute_marginal_roi(
         scale_factor = model._media_max[channel] + 1e-8
     else:
         scale_factor = 1.0
-        
+
     scaled_high = spend_high / scale_factor
     scaled_low = spend_low / scale_factor
 

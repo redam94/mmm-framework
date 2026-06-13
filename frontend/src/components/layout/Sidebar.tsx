@@ -2,20 +2,21 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
+  Bird,
   BookOpen,
   ChevronDown,
-  Compass,
-  FlaskConical,
   LogOut,
   MessageSquareText,
+  Orbit,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Plus,
+  ScrollText,
   Trash2,
-  TrendingUp,
   Users,
 } from 'lucide-react';
+import { APP_NAME, APP_TAGLINE, PAGES } from '../../appIdentity';
 import { useAuthStore } from '../../stores/authStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUiStore } from '../../stores/uiStore';
@@ -33,18 +34,27 @@ interface NavItem {
   hint: string;
 }
 
-// IA mirrors the measurement loop: Program (where are we) → Experiments
-// (what to learn next) → Performance (how measurement improved) → Workspace
-// (the chat-aided way work gets done) → Knowledge (what the copilot grounds
-// on) → Team (who does it).
-const navigation: NavItem[] = [
-  { name: 'Program', href: '/program', icon: Compass, hint: 'Measurement cycle home' },
-  { name: 'Experiments', href: '/experiments', icon: FlaskConical, hint: 'Plan · run · calibrate' },
-  { name: 'Performance', href: '/performance', icon: TrendingUp, hint: 'Cycle-over-cycle history' },
-  { name: 'Workspace', href: '/workspace', icon: MessageSquareText, hint: 'Chat-aided modeling' },
-  { name: 'Knowledge', href: '/knowledge', icon: BookOpen, hint: 'Reports & reference docs' },
-  { name: 'Team', href: '/team', icon: Users, hint: 'Roster & roles' },
-];
+// IA mirrors the measurement loop: Orrery (where the cycle stands) → Auspices
+// (what to test next) → Chronicle (how measurement improved) → Oracle (the
+// chat-aided way work gets done) → Codex (what the copilot grounds on) →
+// College (who does it). Names + hints live in appIdentity.ts; icons match
+// the augury theme (an orrery's orbits, the auspices' birds, the chronicle's
+// scroll).
+const NAV_ICONS: Record<string, NavItem['icon']> = {
+  '/program': Orbit,
+  '/experiments': Bird,
+  '/performance': ScrollText,
+  '/workspace': MessageSquareText,
+  '/knowledge': BookOpen,
+  '/team': Users,
+};
+
+const navigation: NavItem[] = PAGES.map((p) => ({
+  name: p.name,
+  href: p.path,
+  icon: NAV_ICONS[p.path] ?? BookOpen,
+  hint: p.hint,
+}));
 
 /** Sessions of the current project, nested under the Workspace nav item —
  * the single navigation surface for sessions (the workspace's own rail is
@@ -182,16 +192,18 @@ export function Sidebar() {
           collapsed ? 'justify-center px-0' : 'px-6',
         )}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sage-600/30 ring-1 ring-sage-300/40">
-          <span className="font-display text-base font-bold text-sage-300">M</span>
-        </div>
+        <img
+          src="/augur.svg"
+          alt=""
+          className="h-8 w-8 shrink-0 rounded-md ring-1 ring-sage-300/40"
+        />
         {!collapsed && (
           <div className="leading-tight">
             <span className="font-display text-lg font-semibold tracking-tight text-cream-50">
-              MMM Studio
+              {APP_NAME}
             </span>
             <div className="text-[10px] uppercase tracking-[0.18em] text-sage-300/80">
-              Causal measurement
+              {APP_TAGLINE}
             </div>
           </div>
         )}

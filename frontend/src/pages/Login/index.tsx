@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Cloud, KeyRound } from 'lucide-react';
+import { APP_NAME } from '../../appIdentity';
 import { useAuthStore } from '../../stores/authStore';
 import { checkApiHealth, getModelConfig, getVertexModels, getLmStudioModels, SERVER_MANAGED_KEY, type ServerModelConfig, type VertexModel, type LmStudioModel } from '../../api/client';
 import { MODELS, PROVIDER_LABELS, getModelsByProvider, type Provider } from '../../constants/models';
@@ -37,6 +38,10 @@ export function LoginPage() {
   // endpoint): either a discovered id or a free-text id.
   const [vertexModel, setVertexModel] = useState<string>('');
   const [customModel, setCustomModel] = useState<string>('');
+
+  useEffect(() => {
+    document.title = `Sign in · ${APP_NAME}`;
+  }, []);
 
   const {
     register,
@@ -162,11 +167,13 @@ export function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         {/* Wordmark */}
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-sage-100 ring-1 ring-sage-300">
-            <span className="font-display text-2xl font-bold text-sage-800">M</span>
-          </div>
+          <img
+            src="/augur.svg"
+            alt=""
+            className="mx-auto h-14 w-14 rounded-xl ring-1 ring-sage-300"
+          />
           <h1 className="mt-5 font-display text-3xl font-semibold tracking-tight text-ink-900">
-            MMM Studio
+            {APP_NAME}
           </h1>
           <p className="mt-2 text-sm text-ink-400">
             Causality-centered marketing mix modeling — measure, experiment, calibrate.

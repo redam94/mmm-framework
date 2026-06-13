@@ -1,7 +1,9 @@
-import { useState, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
+import { documentTitle } from '../../appIdentity';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { GuideBubble } from '../guide';
@@ -17,6 +19,12 @@ interface AppShellProps {
 export function AppShell({ children, fullBleed = false }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
+  const location = useLocation();
+
+  // Browser-tab title tracks the page: "Oracle · Augur", "Auspices · Augur", …
+  useEffect(() => {
+    document.title = documentTitle(location.pathname);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-cream-50">

@@ -47,6 +47,16 @@ class Section:
     def render(self) -> str:
         raise NotImplementedError
 
+    def _format_currency(self, value: float) -> str:
+        """Format a value as currency via the report config."""
+        if hasattr(self.config, "format_currency"):
+            return self.config.format_currency(value)
+        return f"{value:,.0f}"
+
+    def _format_percentage(self, value: float) -> str:
+        """Format a proportion (0-1) as a percentage."""
+        return f"{value:.1%}"
+
     def _render_section_wrapper(self, content: str) -> str:
         """Wrap content in section div with title."""
         subtitle = ""
@@ -485,8 +495,27 @@ class DecompositionSection(Section):
             height=self.section_config.chart_height or 450,
         )
 
-        # Determine if we have geo-level decomposition
+        # Determine the selector dimension: geo when available, otherwise
+        # product/outcome (multi-product and multi-outcome models reuse the
+        # same selector machinery with different labels).
         has_geo = self.data.has_geo_decomposition
+        has_product = (
+            not has_geo
+            and self.data.product_names is not None
+            and len(self.data.product_names) > 1
+            and self.data.component_time_series_by_product is not None
+        )
+
+        if has_geo:
+            dim_series = self.data.component_time_series_by_geo
+            dim_totals = self.data.component_totals_by_geo
+            dim_names = self.data.geo_names
+        elif has_product:
+            dim_series = self.data.component_time_series_by_product
+            dim_totals = self.data.component_totals_by_product
+            dim_names = self.data.product_names
+        else:
+            dim_series = dim_totals = dim_names = None
 
         content_parts = []
 
@@ -494,60 +523,77 @@ class DecompositionSection(Section):
         content_parts.append(
             """
             <p>
-                Revenue decomposition breaks down the predicted outcome into component contributions: 
-                baseline, trend, seasonality, media channels, and control variables. Each component's 
+                Revenue decomposition breaks down the predicted outcome into component contributions:
+                baseline, trend, seasonality, media channels, and control variables. Each component's
                 contribution sums to the total predicted revenue.
             </p>
         """
         )
 
-        # Aggregation note for geo models
+        # Aggregation note for multi-dimensional models
         if has_geo:
             content_parts.append(
                 """
             <div class="callout insight">
-                <p><strong>Multi-geography model:</strong> The default view shows contributions 
-                aggregated across all geographies. Use the dropdown selectors to examine 
+                <p><strong>Multi-geography model:</strong> The default view shows contributions
+                aggregated across all geographies. Use the dropdown selectors to examine
                 contribution patterns for individual regions.</p>
+            </div>
+            """
+            )
+        elif has_product:
+            content_parts.append(
+                """
+            <div class="callout insight">
+                <p><strong>Multi-outcome model:</strong> The default view shows the primary
+                outcome. Use the dropdown selectors to examine contribution patterns for each
+                outcome.</p>
             </div>
             """
             )
 
         # =====================================================================
-        # STACKED AREA CHART (Time Series View)
+        # TABBED VIEWS: stacked area (time series) + waterfall (totals)
         # =====================================================================
-
-        content_parts.append("<h3>Component Contributions Over Time</h3>")
 
         stacked_chart = charts.create_stacked_area_chart_with_geo_selector(
             dates=self.data.dates,
             components_agg=self.data.component_time_series,
-            components_by_geo=(
-                self.data.component_time_series_by_geo if has_geo else None
-            ),
-            geo_names=self.data.geo_names if has_geo else None,
+            components_by_geo=dim_series,
+            geo_names=dim_names,
             config=self.config,
             chart_config=chart_config,
         )
-        content_parts.append(stacked_chart)
-
-        # =====================================================================
-        # WATERFALL CHART (Total Contribution View)
-        # =====================================================================
 
         if self.data.component_totals is not None:
-            content_parts.append("<h3>Total Contribution Breakdown</h3>")
-
             waterfall_chart = charts.create_waterfall_chart_with_geo_selector(
                 component_totals_agg=self.data.component_totals,
-                component_totals_by_geo=(
-                    self.data.component_totals_by_geo if has_geo else None
-                ),
-                geo_names=self.data.geo_names if has_geo else None,
+                component_totals_by_geo=dim_totals,
+                geo_names=dim_names,
                 config=self.config,
                 chart_config=ChartConfig(height=400),
             )
-            content_parts.append(waterfall_chart)
+            content_parts.append(
+                f"""
+                <div class="tab-container">
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" onclick="showTab('decomp-tab-area')">Over Time</button>
+                        <button class="tab-btn" onclick="showTab('decomp-tab-waterfall')">Total Breakdown</button>
+                    </div>
+                    <div id="decomp-tab-area" class="tab-content active">
+                        <h3>Component Contributions Over Time</h3>
+                        {stacked_chart}
+                    </div>
+                    <div id="decomp-tab-waterfall" class="tab-content">
+                        <h3>Total Contribution Breakdown</h3>
+                        {waterfall_chart}
+                    </div>
+                </div>
+            """
+            )
+        else:
+            content_parts.append("<h3>Component Contributions Over Time</h3>")
+            content_parts.append(stacked_chart)
 
         # =====================================================================
         # CONTRIBUTION SUMMARY TABLE
@@ -1459,14 +1505,14 @@ class CannibalizationSection(Section):
             insights = []
             if significant_cannib:
                 top_cannib = sorted(significant_cannib, key=lambda x: x[2])[:3]
-                cannib_items = [f"{s} → {t} ({m:.1%})" for s, t, m in top_cannib]
+                cannib_items = [f"{s} → {t} ({m:.2f})" for s, t, m in top_cannib]
                 insights.append(
                     f"<strong>Strongest cannibalization:</strong> {', '.join(cannib_items)}"
                 )
 
             if significant_synergy:
                 top_synergy = sorted(significant_synergy, key=lambda x: -x[2])[:3]
-                synergy_items = [f"{s} → {t} (+{m:.1%})" for s, t, m in top_synergy]
+                synergy_items = [f"{s} → {t} (+{m:.2f})" for s, t, m in top_synergy]
                 insights.append(
                     f"<strong>Strongest synergies:</strong> {', '.join(synergy_items)}"
                 )
@@ -1479,7 +1525,41 @@ class CannibalizationSection(Section):
             """
             )
 
+        content_parts.append(self._render_outcome_correlations())
+
         return self._render_section_wrapper("\n".join(content_parts))
+
+    def _render_outcome_correlations(self) -> str:
+        """Residual correlation matrix between outcomes (multivariate models)."""
+        corr = self.data.outcome_correlations
+        names = self.data.product_names
+        if corr is None or names is None:
+            return ""
+
+        corr = np.asarray(corr, dtype=float)
+        if corr.ndim != 2 or corr.shape[0] != len(names):
+            return ""
+
+        header_cells = "<th></th>" + "".join(f"<th>{n}</th>" for n in names)
+        rows = []
+        for i, source in enumerate(names):
+            cells = [f"<td><strong>{source}</strong></td>"]
+            for j in range(len(names)):
+                value = corr[i, j]
+                cls = "muted" if i == j else ("mono")
+                cells.append(f'<td class="mono {cls}">{value:.2f}</td>')
+            rows.append(f'<tr>{"".join(cells)}</tr>')
+
+        return f"""
+            <h3>Residual Correlation Between Outcomes</h3>
+            <p>Correlation of the outcomes' unexplained variation (e.g., shared demand
+            shocks). High residual correlation means the outcomes move together beyond
+            what media and cross-effects explain.</p>
+            <table class="data-table matrix-table">
+                <thead><tr>{header_cells}</tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+        """
 
 
 # Registry of available sections

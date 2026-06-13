@@ -48,6 +48,8 @@ export interface PriorityChannel {
   roi_hdi_low: number | null;
   roi_hdi_high: number | null;
   sigma_exp: number | null;
+  /** ∂contribution/∂spend at current spend — compare to roi_mean (average) */
+  marginal_roi: number | null;
   eig: number | null;
   evoi: number | null;
   priority: number | null;
@@ -58,12 +60,29 @@ export interface PriorityChannel {
   retest_due: boolean;
 }
 
+/** One channel's saturation curve over the spend-multiplier grid. */
+export interface ResponseCurve {
+  spend: number[];
+  mean: number[];
+  p5: number[];
+  p95: number[];
+}
+
+export interface ResponseCurves {
+  multipliers: number[];
+  /** index of the 1.0× (current spend) grid point */
+  current_index: number;
+  channels: Record<string, ResponseCurve>;
+}
+
 export interface PrioritiesPayload {
   run_id: string;
   computed_at: number;
   as_of: string;
   channels: PriorityChannel[];
   portfolio: Record<string, number>;
+  /** present from run-metrics schema v2 onward (older runs: null) */
+  response_curves?: ResponseCurves | null;
   matrix: Partial<Record<Quadrant, string[]>>;
   stale: boolean;
 }

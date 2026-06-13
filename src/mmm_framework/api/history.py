@@ -340,6 +340,7 @@ def build_priorities_payload(
             "roi_hdi_low": ch.get("roi_hdi_low"),
             "roi_hdi_high": ch.get("roi_hdi_high"),
             "sigma_exp": ch.get("sigma_exp"),
+            "marginal_roi": ch.get("marginal_roi"),
             "eig": ch.get("eig"),
             "evoi": ch.get("evoi"),
             "priority": ch.get("priority"),
@@ -368,6 +369,7 @@ def build_priorities_payload(
         "as_of": as_of_date.isoformat(),
         "channels": channels,
         "portfolio": metrics.get("portfolio") or {},
+        "response_curves": metrics.get("response_curves"),
         "matrix": matrix,
         "stale": bool(
             newest_run_ts is not None and newest_run_ts > latest["created_at"] + 1.0

@@ -602,7 +602,7 @@ def create_model_fit_chart_with_dimension_filter(
             prod_pred_mean = prod_pred.get("mean", [])
             prod_pred_lower = prod_pred.get("lower", [])
             prod_pred_upper = prod_pred.get("upper", [])
-            prod_color = product_colors.get(product, colors.secondary)
+            prod_color = product_colors.get(product, colors.accent)
 
             if len(prod_pred_mean) == 0:
                 for _ in range(3):
@@ -794,7 +794,8 @@ def create_fit_statistics_with_geo_selector(
         elif key == "rmse":
             return f"{value:,.2f}"
         elif key == "mape":
-            return f"{value:.2f}%"
+            # _compute_fit_statistics returns MAPE as a fraction
+            return f"{value:.2%}"
         else:
             return f"{value:.4f}"
 

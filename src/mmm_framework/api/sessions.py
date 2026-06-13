@@ -30,8 +30,18 @@ def _now() -> float:
 
 @contextmanager
 def _conn() -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(DB_PATH)
+    # ``sessions.db`` is shared with the LangGraph AsyncSqliteSaver checkpointer
+    # (see api/main.py), which writes a checkpoint on every graph step during a
+    # chat stream. WAL mode lets a reader and a single writer coexist and avoids
+    # the rollback-journal lock-escalation deadlock that surfaced as
+    # "database is locked"; ``timeout`` makes a contending writer wait for the
+    # lock instead of failing immediately. WAL is a persistent DB-level property,
+    # so setting it here also covers the async checkpointer connection.
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     try:
         yield conn
         conn.commit()

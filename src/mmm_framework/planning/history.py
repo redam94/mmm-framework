@@ -19,7 +19,7 @@ import numpy as np
 from .budget import compute_response_curves, optimize_budget
 from .priority import compute_experiment_priorities
 
-RUN_METRICS_SCHEMA_VERSION = 1
+RUN_METRICS_SCHEMA_VERSION = 2
 
 
 def compute_run_metrics(
@@ -29,14 +29,16 @@ def compute_run_metrics(
     n_outcomes: int = 48,
     random_seed: int | None = 42,
 ) -> dict[str, Any]:
-    """JSON-safe per-run metrics snapshot (schema v1).
+    """JSON-safe per-run metrics snapshot (schema v2).
 
     Per channel: spend & share, ROI posterior (mean/sd/5–95% interval/width),
     marginal ROI at current spend, optimal-vs-current share gap, allocation
     instability, and the EIG/EVOI priority fields. Portfolio: total spend,
     portfolio marginal ROI, the misallocation proxy (median uplift of the
     optimal vs current allocation), v_current/EVPI, and the mean CI width
-    (the contraction series).
+    (the contraction series). Schema v2 adds ``response_curves``: the compact
+    per-channel saturation curve (spend grid × mean/5–95% contribution) the UI
+    needs to show *why* average and marginal ROAS diverge.
     """
     curves = compute_response_curves(mmm, max_draws=max_draws, random_seed=random_seed)
     optimization = optimize_budget(curves=curves, random_seed=random_seed)
@@ -108,9 +110,30 @@ def compute_run_metrics(
             "quadrant": g.quadrant,
         }
 
+    # Compact saturation curves: small (C × ~10 grid points), but enough for
+    # the UI to draw each channel's response curve with its 5–95% band and
+    # mark current spend — the visual case for marginal ≠ average ROAS.
+    spend_grid = curves.spend_grid  # (C, G)
+    p5_curves = np.percentile(curves.contributions, 5, axis=0)  # (C, G)
+    p95_curves = np.percentile(curves.contributions, 95, axis=0)
+    response_curves = {
+        "multipliers": [float(m) for m in mults],
+        "current_index": g1,
+        "channels": {
+            name: {
+                "spend": [float(s) for s in spend_grid[c]],
+                "mean": [float(v) for v in mean_curves[c]],
+                "p5": [float(v) for v in p5_curves[c]],
+                "p95": [float(v) for v in p95_curves[c]],
+            }
+            for c, name in enumerate(names)
+        },
+    }
+
     metrics = {
         "schema_version": RUN_METRICS_SCHEMA_VERSION,
         "n_draws": int(curves.contributions.shape[0]),
+        "response_curves": response_curves,
         "channels": channels,
         "portfolio": {
             "total_spend": total_spend,

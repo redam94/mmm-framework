@@ -231,8 +231,8 @@ class MMMReportGenerator:
         """Assemble complete HTML document."""
         generated_date = self.config.generated_date or datetime.now().strftime("%B %Y")
 
-        # Build header: an editorial masthead — meta row (document kind,
-        # confidentiality, dates), serif title, client line, accent rule.
+        # Build header: gradient hero — serif title, client/subtitle line,
+        # analysis-period and generation dates, confidentiality badge.
         subtitle = ""
         if self.config.client:
             subtitle = f'<div class="subtitle">{html.escape(self.config.client)}'
@@ -240,11 +240,11 @@ class MMMReportGenerator:
                 subtitle += f" — {html.escape(self.config.subtitle)}"
             subtitle += "</div>"
 
-        meta_right = f"Generated {generated_date}"
+        date_line = f"Generated: {generated_date}"
         if self.config.analysis_period:
-            meta_right = (
-                f"Analysis period {html.escape(self.config.analysis_period)}"
-                f'<span class="meta-sep">·</span>{meta_right}'
+            date_line = (
+                f"Analysis Period: {html.escape(self.config.analysis_period)}"
+                f'<span class="meta-sep">|</span>{date_line}'
             )
 
         conf_tag = ""
@@ -253,12 +253,9 @@ class MMMReportGenerator:
 
         header = f"""
         <header class="report-header">
-            <div class="masthead-meta">
-                <span class="masthead-kind">Marketing Mix Model Report{conf_tag}</span>
-                <span class="masthead-date">{meta_right}</span>
-            </div>
             <h1>{html.escape(self.config.title)}</h1>
             {subtitle}
+            <div class="date">{date_line}{conf_tag}</div>
         </header>
         """
 
@@ -324,7 +321,7 @@ class MMMReportGenerator:
     <title>{html.escape(self.config.title)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     {plotly_script}
     <style>
 {css}
@@ -333,6 +330,25 @@ class MMMReportGenerator:
 <body>
     {content_wrap}
     {scrollspy}
+    <script>
+    function showTab(tabId) {{
+        var pane = document.getElementById(tabId);
+        if (!pane) return;
+        var container = pane.closest('.tab-container') || document;
+        container.querySelectorAll('.tab-btn').forEach(function(b) {{ b.classList.remove('active'); }});
+        container.querySelectorAll('.tab-content').forEach(function(c) {{ c.classList.remove('active'); }});
+        var btn = (typeof event !== 'undefined' && event) ? event.target : null;
+        if (btn) btn.classList.add('active');
+        pane.classList.add('active');
+        if (window.Plotly) {{
+            setTimeout(function() {{
+                pane.querySelectorAll('.js-plotly-plot').forEach(function(p) {{
+                    Plotly.Plots.resize(p);
+                }});
+            }}, 10);
+        }}
+    }}
+    </script>
 </body>
 </html>"""
 
@@ -381,104 +397,70 @@ class MMMReportGenerator:
             padding: 2rem;
         }}
 
-        /* Header — editorial masthead */
+        /* Header — gradient hero */
         .report-header {{
-            border-top: 4px solid var(--color-primary-dark);
-            border-bottom: 1px solid var(--color-border);
-            padding: 1.5rem 0 2rem;
-            margin-bottom: 2.5rem;
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-dark) 100%);
+            color: white;
+            border-radius: 16px;
+            margin-bottom: 2rem;
         }}
 
-        .masthead-meta {{
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            flex-wrap: wrap;
-            gap: 0.5rem 1.5rem;
-            font-family: {self.config.font_family_mono};
-            font-size: 0.72rem;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--color-text-muted);
-            margin-bottom: 1.75rem;
+        .report-header h1 {{
+            font-family: {self.config.font_family_serif};
+            font-size: 2.5rem;
+            font-weight: 400;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
         }}
 
-        .masthead-meta .meta-sep {{
+        .report-header .subtitle {{
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }}
+
+        .report-header .date {{
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }}
+
+        .report-header .meta-sep {{
             margin: 0 0.6em;
-            opacity: 0.5;
+            opacity: 0.6;
         }}
 
         .masthead-tag {{
             display: inline-block;
             margin-left: 0.9em;
             padding: 0.15em 0.7em;
-            border: 1px solid var(--color-danger);
-            border-radius: 3px;
-            color: var(--color-danger);
-            font-size: 0.92em;
+            border: 1px solid rgba(255, 255, 255, 0.65);
+            border-radius: 4px;
+            color: white;
+            font-size: 0.85em;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }}
 
-        .report-header h1 {{
-            font-family: {self.config.font_family_serif};
-            font-size: 2.6rem;
-            font-weight: 400;
-            line-height: 1.15;
-            letter-spacing: -0.01em;
-            color: var(--color-text);
-            margin-bottom: 0.6rem;
-            max-width: 18em;
-        }}
-
-        .report-header .subtitle {{
-            font-size: 1.05rem;
-            color: var(--color-text-muted);
-        }}
-
-        /* Section styling — numbered, editorial */
-        .report-container {{
-            counter-reset: report-section;
-        }}
-
+        /* Section styling — modern cards */
         .section {{
             background: var(--color-surface);
-            border-radius: 10px;
-            padding: 2.25rem 2.5rem;
+            border-radius: 16px;
+            padding: 2rem;
             margin-bottom: 2rem;
             box-shadow: var(--shadow-sm);
             border: 1px solid var(--color-border);
-            counter-increment: report-section;
         }}
 
         .section > h2 {{
             font-family: {self.config.font_family_serif};
-            font-size: 1.55rem;
+            font-size: 1.6rem;
             font-weight: 400;
             color: var(--color-text);
-            margin-bottom: 1.25rem;
-            padding-bottom: 0.85rem;
-            border-bottom: 1px solid var(--color-border);
-            position: relative;
-        }}
-
-        .section > h2::before {{
-            content: counter(report-section, decimal-leading-zero);
-            font-family: {self.config.font_family_mono};
-            font-size: 0.7rem;
-            font-weight: 500;
-            letter-spacing: 0.14em;
-            color: var(--color-primary-dark);
-            display: block;
-            margin-bottom: 0.4rem;
-        }}
-
-        .section > h2::after {{
-            content: '';
-            position: absolute;
-            left: 0;
-            bottom: -1px;
-            width: 3.5rem;
-            height: 2px;
-            background: var(--color-primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--color-primary);
         }}
 
         .section h3 {{
@@ -508,38 +490,30 @@ class MMMReportGenerator:
         }}
 
         .metric-card {{
-            display: flex;
-            flex-direction: column;
-            background: var(--color-surface);
-            border-radius: 8px;
-            padding: 1.4rem 1.5rem 1.25rem;
-            text-align: left;
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
             border: 1px solid var(--color-border);
-            border-top: 3px solid var(--color-primary);
-        }}
-
-        .metric-card .label {{
-            order: -1;
-            font-family: {self.config.font_family_mono};
-            font-size: 0.68rem;
-            font-weight: 500;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: var(--color-text-muted);
-            margin-bottom: 0.6rem;
         }}
 
         .metric-card .value {{
-            font-size: 2.1rem;
-            font-weight: 600;
-            line-height: 1.1;
-            color: var(--color-text);
-            font-family: {self.config.font_family_sans};
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.15;
+            color: var(--color-primary-dark);
+            font-family: {self.config.font_family_mono};
             font-variant-numeric: tabular-nums;
         }}
 
+        .metric-card .label {{
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.25rem;
+        }}
+
         .metric-card .ci {{
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             color: var(--color-text-muted);
             margin-top: 0.5rem;
             font-family: {self.config.font_family_mono};
@@ -547,16 +521,15 @@ class MMMReportGenerator:
         }}
 
         .metric-card.highlight {{
-            border-top-color: var(--color-accent);
-            background: var(--color-bg-alt);
+            border-left: 4px solid var(--color-primary);
         }}
 
         .metric-card.warning {{
-            border-top-color: var(--color-warning);
+            border-left: 4px solid var(--color-warning);
         }}
 
         .metric-card.danger {{
-            border-top-color: var(--color-danger);
+            border-left: 4px solid var(--color-danger);
         }}
 
         /* Charts */
@@ -566,34 +539,131 @@ class MMMReportGenerator:
             margin: 1.5rem 0;
         }}
 
+        .chart-container-sm {{
+            min-height: 250px;
+        }}
+
+        .chart-container-lg {{
+            min-height: 450px;
+        }}
+
         .chart-grid {{
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
+            gap: 2rem;
             margin: 1.5rem 0;
         }}
 
         .chart-box {{
             background: var(--color-bg-alt);
             border-radius: 12px;
-            padding: 1rem;
+            padding: 1.5rem;
             border: 1px solid var(--color-border);
+        }}
+
+        .chart-box h4 {{
+            font-size: 1rem;
+            color: var(--color-text);
+            margin-bottom: 1rem;
+            text-align: center;
+        }}
+
+        /* Interactive controls */
+        .control-panel {{
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+        }}
+
+        .control-panel h4 {{
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }}
+
+        .control-row {{
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }}
+
+        .control-row label {{
+            font-weight: 500;
+            min-width: 150px;
+            font-size: 0.95rem;
+        }}
+
+        .control-row select {{
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+            min-width: 200px;
+            background: var(--color-surface);
+            color: var(--color-text);
+        }}
+
+        /* Tabs */
+        .tab-container {{
+            margin: 1.5rem 0;
+        }}
+
+        .tab-buttons {{
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--color-border);
+            padding-bottom: 0.5rem;
+        }}
+
+        .tab-btn {{
+            padding: 0.5rem 1.25rem;
+            border: none;
+            background: transparent;
+            color: var(--color-text-muted);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-radius: 6px 6px 0 0;
+            transition: all 0.2s;
+        }}
+
+        .tab-btn:hover {{
+            color: var(--color-primary);
+            background: var(--color-bg-alt);
+        }}
+
+        .tab-btn.active {{
+            color: var(--color-primary-dark);
+            background: var(--color-bg-alt);
+            border-bottom: 2px solid var(--color-primary);
+            margin-bottom: -2px;
+        }}
+
+        .tab-content {{
+            display: none;
+        }}
+
+        .tab-content.active {{
+            display: block;
         }}
 
         /* Callout boxes */
         .callout {{
-            border-radius: 8px;
-            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            padding: 1.5rem;
             margin: 1.5rem 0;
         }}
 
         .callout h4 {{
-            margin-bottom: 0.6rem;
-            font-family: {self.config.font_family_mono};
-            font-size: 0.72rem;
-            font-weight: 600;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
         }}
 
         .callout p {{
@@ -659,34 +729,28 @@ class MMMReportGenerator:
             border-radius: 50%;
         }}
 
-        /* Tables — editorial: rule-based, tabular numerals */
+        /* Tables */
         .data-table {{
             width: 100%;
             border-collapse: collapse;
             margin: 1.5rem 0;
-            font-size: 0.92rem;
+            font-size: 0.95rem;
             font-variant-numeric: tabular-nums;
         }}
 
         .data-table th, .data-table td {{
-            padding: 0.65rem 1rem;
+            padding: 0.75rem 1rem;
             text-align: left;
             border-bottom: 1px solid var(--color-border);
         }}
 
         .data-table th {{
-            background: transparent;
-            border-bottom: 2px solid var(--color-text);
-            font-family: {self.config.font_family_mono};
-            font-weight: 500;
+            background: var(--color-bg-alt);
+            font-weight: 600;
             color: var(--color-text-muted);
-            font-size: 0.72rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }}
-
-        .data-table tbody tr:last-child td {{
-            border-bottom: 2px solid var(--color-border);
+            letter-spacing: 0.03em;
         }}
 
         .data-table tbody tr:hover {{
@@ -697,6 +761,7 @@ class MMMReportGenerator:
             font-family: {self.config.font_family_mono};
         }}
 
+        .data-table .muted {{ color: var(--color-text-muted); }}
         .data-table .positive {{ color: var(--color-success); }}
         .data-table .negative {{ color: var(--color-danger); }}
         .data-table .uncertain {{ color: var(--color-warning); }}
@@ -720,14 +785,13 @@ class MMMReportGenerator:
             margin: 0.5rem 0 0 1.5rem;
         }}
 
-        /* Footer — colophon */
+        /* Footer */
         .report-footer {{
-            text-align: left;
-            border-top: 1px solid var(--color-border);
+            text-align: center;
             margin-top: 2.5rem;
-            padding: 1.5rem 0 2.5rem;
+            padding: 2rem;
             color: var(--color-text-muted);
-            font-size: 0.82rem;
+            font-size: 0.85rem;
             line-height: 1.6;
         }}
 
@@ -760,7 +824,7 @@ class MMMReportGenerator:
             .report-body.has-nav .report-container {{ padding-left: 0; }}
             .report-container {{ max-width: none; padding: 0; margin: 0; }}
             .report-header {{
-                border-top-width: 6px;
+                border-radius: 0;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }}
@@ -772,8 +836,6 @@ class MMMReportGenerator:
                 border-radius: 0;
                 padding: 1.5rem 0;
             }}
-            .section > h2::before,
-            .section > h2::after,
             .metric-card,
             .callout {{
                 -webkit-print-color-adjust: exact;

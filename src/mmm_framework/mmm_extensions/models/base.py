@@ -69,6 +69,15 @@ class BaseExtendedMMM:
         self.n_obs = len(y)
         self.n_channels = len(channel_names)
 
+        # Outcome standardization. ``self.y`` stays on the caller's raw scale;
+        # subclasses fit the likelihood on ``(y - y_mean) / y_std`` so the fixed
+        # effect/noise priors (Normal(0, ~0.5-2)) are well-calibrated regardless
+        # of the KPI's units. Report-consumed deterministics are registered back
+        # in original units.
+        y_arr = np.asarray(y, dtype=float)
+        self.y_mean = float(y_arr.mean())
+        self.y_std = float(y_arr.std()) + 1e-8
+
         # Per-channel scale (raw spend max) used to normalize media before the
         # adstock+saturation transform so the logistic curve operates in a
         # meaningful range rather than the flat (~1) tail.
@@ -268,7 +277,10 @@ class BaseExtendedMMM:
         channel's media transform (for the marginal-ROAS perturbation),
         ``x_input`` is the channel's raw spend tensor, and ``spend_obs`` is its
         raw spend series. ``scale`` converts the contribution to the estimand's
-        natural scale (``1.0`` for the raw-``y`` extension models).
+        natural (original-KPI) scale — the outcome's ``y_std`` when the model
+        fits standardized outcomes. A handle may carry its own ``"scale"`` entry
+        (multi-outcome models, where each outcome has its own std), which
+        overrides the argument.
         """
         import pytensor.tensor as pt
 
@@ -297,6 +309,7 @@ class BaseExtendedMMM:
                 continue
             mask_idx = np.flatnonzero(mask)
 
+            handle_scale = float(handle.get("scale", scale))
             coef = handle["coef"]
             contrib_window = (coef * handle["x_sat"])[mask_idx].sum()
 
@@ -326,7 +339,7 @@ class BaseExtendedMMM:
                     ExperimentEstimand.MROAS,
                     contrib_window=contrib_window,
                     spend_window=spend_window,
-                    scale=scale,
+                    scale=handle_scale,
                     contrib_window_pert=contrib_pert_window,
                     lift=lift,
                 )
@@ -342,14 +355,14 @@ class BaseExtendedMMM:
                     ExperimentEstimand.ROAS,
                     contrib_window=contrib_window,
                     spend_window=spend_window,
-                    scale=scale,
+                    scale=handle_scale,
                 )
             else:
                 estimand = build_estimand_expr(
                     ExperimentEstimand.CONTRIBUTION,
                     contrib_window=contrib_window,
                     spend_window=spend_window,
-                    scale=scale,
+                    scale=handle_scale,
                 )
 
             base_name = exp.default_node_name(i)

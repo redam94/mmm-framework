@@ -12,6 +12,12 @@ import type { EdaFindings, EdaIssue, OutlierAction, TableRef } from '../../types
 
 const SEVERITY_ORDER = ['error', 'warning', 'info'] as const;
 
+// Checks that are causal-identification screens, not generic data hygiene:
+// each one threatens the positivity/overlap assumption (enough spend variation
+// — including dark periods — to identify the zero-out counterfactual) or
+// flags posteriors that will lean on priors instead of data.
+const IDENTIFICATION_CHECKS = new Set(['constant_series', 'zero_inflation', 'short_history']);
+
 const SEVERITY_BADGE: Record<string, 'red' | 'amber' | 'blue'> = {
   error: 'red',
   warning: 'amber',
@@ -110,11 +116,13 @@ export function EdaTab({
   onResolveAction: (action: OutlierAction) => Promise<string | null>;
   onNavigate: (tab: string) => void;
 }) {
-  const issues = eda?.issues ?? [];
+  const allIssues = eda?.issues ?? [];
+  const identIssues = allIssues.filter(i => IDENTIFICATION_CHECKS.has(i.check));
+  const issues = allIssues.filter(i => !IDENTIFICATION_CHECKS.has(i.check));
   const actions = eda?.outlier_actions ?? [];
   const damaged = eda?.normalization_damaged ?? [];
 
-  if (issues.length === 0 && actions.length === 0 && damaged.length === 0 && tables.length === 0) {
+  if (allIssues.length === 0 && actions.length === 0 && damaged.length === 0 && tables.length === 0) {
     return (
       <EmptyTabState
         icon={<FlaskConical size={28} />}
@@ -134,6 +142,25 @@ export function EdaTab({
 
   return (
     <>
+      {identIssues.length > 0 && (
+        <DashWidget
+          title={`Identification Risks (${identIssues.length})`}
+          dotColor="bg-amber-500"
+          color="amber"
+        >
+          <div className="space-y-1.5">
+            <p className="text-xs text-ink-400 px-0.5 pb-1">
+              These aren't hygiene problems — they threaten <em>positivity</em>: a channel
+              needs real variation (including dark or near-dark periods) for the data to
+              identify its zero-out counterfactual. Where variation is missing, the fitted ROI
+              is extrapolated from the prior, not measured — a calibration experiment is the
+              honest fix, not a tighter prior.
+            </p>
+            {identIssues.map((issue, i) => <IssueRow key={`ident-${i}`} issue={issue} />)}
+          </div>
+        </DashWidget>
+      )}
+
       {issues.length > 0 && (
         <DashWidget title={`Data Quality Issues (${issues.length})`} dotColor="bg-red-500" color="red">
           <div className="space-y-3">
