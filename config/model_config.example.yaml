@@ -81,3 +81,41 @@ base_url:
 
 # Extra kwargs passed straight through to the underlying LangChain chat model.
 model_kwargs: {}
+
+# ============================================================================
+# Optional second tier: a stronger "expert" model
+# ============================================================================
+# Everything above configures the fast "chat" tier that runs the conversation.
+# The agent's `delegate_to_expert` tool hands hard work — model fitting, prior/
+# posterior checks, custom analysis code, budget optimization, marginal analysis,
+# experiment design — to a stronger model that shares the SAME session (dataset,
+# spec, kernel, fitted model, workspace). The fast tier is structurally barred
+# from those heavy tools, so it MUST delegate them (set
+# MMM_AGENT_ORCHESTRATOR_FULL_TOOLS=1 to give it every tool and rely on the
+# prompt instead).
+#
+# The `expert:` block below is a FULL provider spec with the same fields as the
+# top level, so you can mix providers freely (e.g. a Gemini-flash chat tier and a
+# Claude-Sonnet expert tier). Unset Vertex fields (project/location/
+# credentials_path) are inherited from the chat tier above, so you needn't repeat
+# them. OMIT the whole block to run a single model — delegation then just reuses
+# the chat model and everything still works.
+#
+# Override per field with MMM_LLM_EXPERT_* env vars, e.g.:
+#   export MMM_LLM_EXPERT_PROVIDER=vertex_anthropic
+#   export MMM_LLM_EXPERT_MODEL=claude-sonnet-4-5@20250929
+#
+# Tune the expert's max tool-loop depth with MMM_AGENT_EXPERT_RECURSION_LIMIT
+# (default 60).
+#
+# Example — fast Gemini Flash chat + strong Claude Sonnet expert, both on Vertex:
+#   provider: vertex_gemini
+#   model: gemini-2.5-flash
+#   project: my-gcp-project
+#   location: us-central1
+#   expert:
+#     provider: vertex_anthropic
+#     model: claude-sonnet-4-5@20250929
+#     location: us-east5            # project/credentials inherited from above
+#     max_tokens: 8192
+# expert:

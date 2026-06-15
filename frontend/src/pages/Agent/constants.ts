@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../../api/client';
+import { API_BASE_URL, expertHeaders } from '../../api/client';
 import type { TableRef } from './types';
 
 // Mapping: tool name → tab it produced an artifact in. Only tools that mutate
@@ -52,6 +52,8 @@ export function authHeaders(apiKey: string | null, modelName: string | null): He
   const provider = (typeof localStorage !== 'undefined' && localStorage.getItem('mmm_provider')) || '';
   if (baseUrl) h['X-Base-Url'] = baseUrl;
   if (provider) h['X-Provider'] = provider;
+  // Expert (strong) tier selection for delegate_to_expert.
+  Object.assign(h, expertHeaders());
   return h;
 }
 

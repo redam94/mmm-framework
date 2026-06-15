@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { clsx } from 'clsx';
 import { Lock } from 'lucide-react';
 import { Button, Card, Drawer, StatusChip } from '../../components/ui';
 import { useExperimentRecord, useTransitionExperiment } from '../../api/hooks/useMeasurement';
+import { FlightingScheduleChart, flightingSchedule } from './FlightingSchedule';
+import { designMDE, designPower, powerBasisLabel, powerTextColor } from './designSummary';
 import type {
   ExperimentRecord,
   ExperimentTransition,
@@ -136,6 +139,10 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
   };
 
   const design = exp.design ?? {};
+  const schedule = flightingSchedule(design);
+  const mde = designMDE(design);
+  const power = designPower(design);
+  const hasDesign = Object.keys(design).length > 0;
   const readout = exp.readout ?? null;
   const priority = exp.priority ?? null;
   const active = ['draft', 'planned', 'running'].includes(exp.status);
@@ -178,8 +185,46 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
                 <span className="num">{Number(design.target_se).toFixed(2)}</span>
               </DefRow>
             )}
+            {mde != null && (
+              <DefRow term="MDE (ROAS)">
+                <span className="num">{mde.toFixed(2)}</span>
+                <span className="ml-1.5 text-ink-400">@ 80% power</span>
+              </DefRow>
+            )}
+            {power.power != null && (
+              <DefRow term="Power vs expected">
+                <span
+                  className={clsx('num', powerTextColor(power.power, power.verdict))}
+                  title={powerBasisLabel(power.basis)}
+                >
+                  {Math.round(power.power * 100)}%
+                </span>
+                {power.verdict && (
+                  <span className="ml-1.5 text-ink-400">{power.verdict}</span>
+                )}
+                {/* The assurance fallback is a different quantity from the MDE
+                    indicator — qualify it so the % isn't read as the same thing. */}
+                {power.basis === 'assurance' && (
+                  <span className="ml-1.5 text-ink-400">(assurance)</span>
+                )}
+                {power.recommendedDuration != null && (
+                  <span className="ml-1.5 text-ink-400">
+                    · reaches power ≈ <span className="num">{power.recommendedDuration}</span>w
+                  </span>
+                )}
+              </DefRow>
+            )}
             {design.why != null && <DefRow term="Why">{String(design.why)}</DefRow>}
           </dl>
+          {mde != null && power.power == null && hasDesign && (
+            <p className="mt-2 border-t border-line-200 pt-2 text-xs text-ink-400">
+              MDE is the smallest ROAS effect detectable at 80% power. Power vs the model's
+              expected effect wasn't captured —{' '}
+              {exp.preregistered_at != null
+                ? 're-run the model-backed simulation in the design studio to anchor the next test.'
+                : 'run the model-backed simulation in the design studio before pre-registering to anchor it.'}
+            </p>
+          )}
           {exp.preregistered_at != null ? (
             <p className="mt-2 flex items-center gap-1.5 border-t border-line-200 pt-2 text-xs text-sage-700">
               <Lock className="h-3.5 w-3.5" />
@@ -194,6 +239,26 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
           ) : null}
         </Card>
       </div>
+
+      {/* Planned flighting schedule */}
+      {schedule && (
+        <div>
+          <Label>Planned flighting pattern</Label>
+          <Card padding="sm">
+            <FlightingScheduleChart
+              schedule={schedule}
+              identification={
+                (design.identification as { exogenous_share?: number } | undefined) ?? null
+              }
+            />
+            <p className="mt-1 text-xs text-ink-400">
+              Budget-neutral spend pulses locked at pre-registration —{' '}
+              <span className="num">{schedule.length}</span> test weeks. Sage bars scale
+              spend up, steel bars pull it down.
+            </p>
+          </Card>
+        </div>
+      )}
 
       {/* Priority snapshot */}
       {priority && (

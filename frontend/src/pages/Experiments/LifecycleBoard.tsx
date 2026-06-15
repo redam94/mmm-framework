@@ -1,6 +1,8 @@
 import { clsx } from 'clsx';
 import { LockClosedIcon } from '@heroicons/react/24/outline';
 import { StatusChip } from '../../components/ui';
+import { FlightingStrip, flightingSchedule } from './FlightingSchedule';
+import { designMDE, designPower, powerBasisLabel, powerTextColor } from './designSummary';
 import type { ExperimentRecord, LifecycleStatus } from '../../api/services/measurementService';
 
 /** Past planning without a locked design = vulnerable to specification shopping. */
@@ -28,6 +30,9 @@ function ExperimentCard({
 }) {
   const readoutValue = (exp.readout?.value ?? exp.value) as number | null | undefined;
   const readoutSe = (exp.readout?.se ?? exp.se) as number | null | undefined;
+  const schedule = flightingSchedule(exp.design);
+  const mde = designMDE(exp.design);
+  const power = designPower(exp.design);
   const window =
     exp.start_date || exp.end_date
       ? `${exp.start_date ?? '?'} → ${exp.end_date ?? '?'}`
@@ -58,6 +63,29 @@ function ExperimentCard({
           ad-hoc (no locked design)
         </p>
       ) : null}
+      {schedule && <FlightingStrip schedule={schedule} />}
+      {(mde != null || power.power != null) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+          {mde != null && (
+            <span className="text-ink-500">
+              MDE <span className="num font-medium text-ink-800">{mde.toFixed(2)}</span>
+            </span>
+          )}
+          {power.power != null && (
+            <span className="text-ink-500" title={powerBasisLabel(power.basis)}>
+              power{' '}
+              <span
+                className={clsx('num font-medium', powerTextColor(power.power, power.verdict))}
+              >
+                {Math.round(power.power * 100)}%
+              </span>
+              {/* Show the verdict word so a verdict-colored % (e.g. a rust-red high
+                  prob_detectable on an inconclusive HDI) isn't read without context. */}
+              {power.verdict && <span className="ml-0.5 text-ink-400">{power.verdict}</span>}
+            </span>
+          )}
+        </div>
+      )}
       {window && <p className="mt-1 text-xs text-ink-600 num">{window}</p>}
       {readoutValue != null && (
         <p className="mt-1.5 text-xs text-ink-700">

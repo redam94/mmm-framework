@@ -182,6 +182,8 @@ export interface DesignRequest {
   duration?: number;
   amplitude_pct?: number;
   block_weeks?: number;
+  /** multi-level flighting spend multipliers (≥3 distinct levels trace the curve) */
+  levels?: number[];
   seed?: number;
 }
 
@@ -225,6 +227,8 @@ export interface ExperimentDesignPayload {
   weekly_spend_delta: number;
   analysis_plan: string;
   seed: number;
+  /** model-anchored expected effect + verdict, attached when a fit is available */
+  model_anchor?: Record<string, unknown>;
   se_source?: 'placebo_calibrated' | 'analytic';
   balance?: BalanceRow[];
   // geo designs
@@ -256,6 +260,301 @@ export interface ExperimentDesignPayload {
     scheduled_window_cv: number;
     exogenous_share: number;
   };
+}
+
+// ── Model-anchored experiment economics (simulate) ────────────────────────────
+
+export type ExperimentVerdict =
+  | 'powered'
+  | 'underpowered'
+  | 'overpowered'
+  | 'inconclusive';
+
+/** Model's expected-effect anchor + powered-to-detect verdict (nullable). */
+export interface ExperimentAnchor {
+  roas_at_current_median: number;
+  incremental_roas_median: number;
+  incremental_roas_hdi: [number, number];
+  expected_incremental_kpi_median: number;
+  verdict: ExperimentVerdict;
+  assurance: number | null;
+  prob_detectable: number | null;
+  recommended_duration: number | null;
+  extrapolation_warning: boolean;
+  /** present only when the EIG/EVOI loopback succeeds */
+  eig?: number;
+  evoi?: number;
+  quadrant?: Quadrant;
+  loopback_error?: string;
+}
+
+/** Short-term opportunity cost of deviating from BAU (nullable). */
+export interface OpportunityCost {
+  channel: string;
+  kpi: string;
+  design_key: string;
+  design_type: string;
+  duration_requested: number;
+  duration_effective: number;
+  n_treated_cells: number;
+  n_test_rows: number;
+  n_draws: number;
+  carryover_basis: string;
+  // KPI-unit risk (always present)
+  expected_kpi_delta: number;
+  kpi_delta_median: number;
+  kpi_delta_p5: number;
+  kpi_delta_p95: number;
+  kpi_delta_with_carryover_median: number;
+  forgone_kpi_median: number;
+  forgone_kpi_p95: number;
+  prob_kpi_loss: number;
+  pct_of_window_kpi: number | null;
+  // spend (deterministic, signed)
+  spend_delta: number;
+  abs_spend_change: number;
+  spend_at_risk: number;
+  // net-$ risk (null unless a margin resolves)
+  margin_per_kpi: number | null;
+  margin_source: string;
+  kpi_kind: string;
+  net_profit_impact_median: number | null;
+  net_profit_impact_p5: number | null;
+  net_profit_impact_p95: number | null;
+  opportunity_cost_dollar_median: number | null;
+  opportunity_cost_dollar_p95: number | null;
+  prob_net_loss: number | null;
+  prob_loss_over_threshold: number | null;
+  loss_threshold: number | null;
+  // learning-vs-cost
+  evoi_kpi_units: number | null;
+  evoi_per_week: number | null;
+  cost_per_week: number | null;
+  learning_to_cost_ratio: number | null;
+  learning_to_cost_basis: string;
+  response_horizon_weeks: number | null;
+  // status / honesty
+  low_information: boolean;
+  extrapolation_warning: boolean;
+  warnings: string[];
+  notes: string[];
+}
+
+export interface PowerCurvePoint {
+  effect: number;
+  power: number;
+  scale: number;
+}
+
+/** One estimator's A/A · A/B scorecard. */
+export interface MethodologyRow {
+  key: string;
+  label: string;
+  valid: boolean;
+  fpr: number | null;
+  fpr_tolerance: number;
+  fpr_ci: [number, number];
+  fpr_inflated: boolean;
+  fpr_at_crit: number;
+  n_eff_windows: number;
+  null_method: string;
+  null_sd: number;
+  crit_value: number;
+  empirical_mde: number | null;
+  empirical_mde_roas: number | null;
+  mde_method: string;
+  power_at_expected_effect: number;
+  powered: boolean;
+  aa_status: string;
+  ab_status: string;
+  power_curve: PowerCurvePoint[];
+}
+
+/** A/A·A/B methodology leaderboard (nullable). */
+export interface ExperimentSimulation {
+  alpha: number;
+  duration: number;
+  kind: string;
+  injection_basis: string;
+  expected_effect: number;
+  spend_delta_window: number;
+  chosen_key: string | null;
+  caveats: string[];
+  methodologies: MethodologyRow[];
+}
+
+/** Full result of POST …/simulate → poll …/simulate/{jobId}. */
+export interface ExperimentEconomicsPayload {
+  channel: string;
+  kpi: string;
+  design_key: DesignKey | null;
+  design_type: string | null;
+  duration: number;
+  randomized?: boolean;
+  se_roas: number | null;
+  mde_roas: number | null;
+  se_source?: 'placebo_calibrated' | 'analytic' | null;
+  model_anchored: boolean;
+  anchor: ExperimentAnchor | null;
+  opportunity_cost: OpportunityCost | null;
+  simulation: ExperimentSimulation | null;
+  // surfaced when a sub-step fails but the overall job succeeds
+  note?: string;
+  anchor_error?: string;
+  opportunity_cost_error?: string;
+  simulation_error?: string;
+  design?: ExperimentDesignPayload;
+}
+
+export interface SimulateRequest {
+  channel: string;
+  design_key?: DesignKey;
+  design?: 'holdout' | 'scaling';
+  intensity_pct?: number;
+  n_pairs?: number;
+  duration?: number;
+  amplitude_pct?: number;
+  block_weeks?: number;
+  /** multi-level flighting multipliers — keeps the sim on the same basis as a loaded candidate */
+  levels?: number[];
+  margin?: number;
+  price?: number;
+  kpi_kind?: string;
+  seed?: number;
+  max_draws?: number;
+}
+
+/** The polled job record from GET …/simulate/{jobId}. */
+export interface SimulationJob {
+  status: 'pending' | 'running' | 'done' | 'error';
+  project_id: string;
+  channel: string;
+  result: ExperimentEconomicsPayload | null;
+  error: string | null;
+}
+
+// ── Experiment-setup optimizer (Pareto front) ─────────────────────────────────
+
+/** One evaluated design on the three Pareto objectives + its runnable setup. */
+export interface CandidateEval {
+  index: number;
+  design_key: string;
+  mode: 'holdout' | 'scaling' | 'flighting';
+  footprint: 'full' | 'half' | 'national';
+  n_pairs: number | null;
+  intensity_pct: number;
+  duration: number;
+  // objectives (all "lower is better")
+  mde_roas: number;
+  power_shortfall: number;
+  tradeoff: number;
+  tradeoff_basis: 'net_dollar' | 'forgone_kpi' | 'spend_at_risk';
+  // statistical power to detect the model's expected effect (null if unknown)
+  power: number | null;
+  // conservative power at the model's lower 95% effect bound (null if unknown)
+  power_lower: number | null;
+  power_target: number;
+  // flighting only: power per estimand (ROAS, contribution, mROAS); the
+  // `_lower` variants are the power at the model's lower 95% bound for each.
+  power_breakdown: {
+    roas: number | null;
+    contribution: number | null;
+    mroas: number | null;
+    roas_lower: number | null;
+    contribution_lower: number | null;
+    mroas_lower: number | null;
+    lower_quantile: number;
+    mroas_identified: boolean;
+    n_levels: number;
+    min: number | null;
+    min_lower: number | null;
+    target: number;
+  } | null;
+  // supporting risk detail
+  forgone_kpi_median: number;
+  opportunity_cost_dollar_median: number | null;
+  net_profit_impact_median: number | null;
+  spend_at_risk: number;
+  pct_of_window_kpi: number | null;
+  duration_effective: number;
+  // verdict
+  powered: boolean;
+  on_pareto: boolean;
+  is_recommended: boolean;
+  // runnable setup
+  treatment_geos: string[];
+  control_geos: string[];
+  schedule: SchedulePoint[] | null;
+  block_weeks: number | null;
+  duration_requested: number | null;
+  warnings: string[];
+}
+
+/** Adstock-derived washout period before treated cells are back to BAU. */
+export interface Cooldown {
+  cooldown_weeks: number;
+  alpha: number | null;
+  half_life: number | null;
+  basis: string;
+  threshold: number;
+}
+
+/** Full result of POST …/optimize → poll …/optimize/{jobId}. */
+export interface ExperimentOptimizationPayload {
+  channel: string;
+  kpi: string;
+  kind: 'geo' | 'national';
+  cooldown: Cooldown;
+  suggested_block_weeks: number;
+  expected_incremental_roas: number | null;
+  expected_incremental_kpi: number | null;
+  margin_known: boolean;
+  tradeoff_label: string;
+  mixed_tradeoff_units: boolean;
+  power_target: number;
+  design_space: {
+    duration_min: number;
+    duration_max: number;
+    durations: number[];
+    intensity_min: number;
+    intensity_max: number;
+    scaling_intensities: number[];
+    include_holdout: boolean;
+  };
+  n_candidates: number;
+  pareto_indices: number[];
+  recommended_index: number | null;
+  notes: string[];
+  candidates: CandidateEval[];
+  pareto: CandidateEval[];
+  recommended: CandidateEval | null;
+}
+
+export interface OptimizeRequest {
+  channel: string;
+  margin?: number;
+  price?: number;
+  kpi_kind?: string;
+  // design-space ranges (the optimizer auto-samples within each)
+  duration_min?: number;
+  duration_max?: number;
+  intensity_min?: number;
+  intensity_max?: number;
+  include_holdout?: boolean;
+  // explicit overrides (optional)
+  durations?: number[];
+  scaling_intensities?: number[];
+  max_draws?: number;
+  seed?: number;
+}
+
+/** The polled job record from GET …/optimize/{jobId}. */
+export interface OptimizationJob {
+  status: 'pending' | 'running' | 'done' | 'error';
+  project_id: string;
+  channel: string;
+  result: ExperimentOptimizationPayload | null;
+  error: string | null;
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -322,6 +621,46 @@ export const measurementService = {
     const { data } = await apiClient.post<ExperimentDesignPayload>(
       `/projects/${projectId}/experiment-design`,
       body,
+    );
+    return data;
+  },
+
+  /** Kick off the non-blocking model-anchored economics + A/A·A/B job (HTTP 202). */
+  async startSimulation(
+    projectId: string,
+    body: SimulateRequest,
+  ): Promise<{ job_id: string; status: string }> {
+    const { data } = await apiClient.post<{ job_id: string; status: string }>(
+      `/projects/${projectId}/experiment-design/simulate`,
+      body,
+    );
+    return data;
+  },
+
+  /** Poll a simulation job; resolves to {status, result|null, error|null}. */
+  async pollSimulation(projectId: string, jobId: string): Promise<SimulationJob> {
+    const { data } = await apiClient.get<SimulationJob>(
+      `/projects/${projectId}/experiment-design/simulate/${jobId}`,
+    );
+    return data;
+  },
+
+  /** Kick off the non-blocking Pareto-front design optimizer (HTTP 202). */
+  async startOptimization(
+    projectId: string,
+    body: OptimizeRequest,
+  ): Promise<{ job_id: string; status: string }> {
+    const { data } = await apiClient.post<{ job_id: string; status: string }>(
+      `/projects/${projectId}/experiment-design/optimize`,
+      body,
+    );
+    return data;
+  },
+
+  /** Poll an optimization job; resolves to {status, result|null, error|null}. */
+  async pollOptimization(projectId: string, jobId: string): Promise<OptimizationJob> {
+    const { data } = await apiClient.get<OptimizationJob>(
+      `/projects/${projectId}/experiment-design/optimize/${jobId}`,
     );
     return data;
   },

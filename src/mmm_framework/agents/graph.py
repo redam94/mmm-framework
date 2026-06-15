@@ -12,29 +12,98 @@ from mmm_framework.agents.tools import TOOLS
 
 # Per-turn caps on the state blobs re-injected into the system message every
 # turn. These don't accumulate, but unbounded they can each dominate a request.
-_DATASET_INFO_MAX_CHARS = int(os.environ.get("MMM_AGENT_DATASET_INFO_MAX_CHARS", "4000"))
+_DATASET_INFO_MAX_CHARS = int(
+    os.environ.get("MMM_AGENT_DATASET_INFO_MAX_CHARS", "4000")
+)
 _MODEL_SPEC_MAX_CHARS = int(os.environ.get("MMM_AGENT_MODEL_SPEC_MAX_CHARS", "16000"))
 
 
-def create_agent_graph(llm, checkpointer=None):
+# Prepended to the shared methodology prompt for the fast "chat" ORCHESTRATOR
+# tier. The orchestrator is deliberately NOT bound to the heavy tools, so it
+# must delegate any code generation / fitting / optimization to the expert.
+_DELEGATION_PREAMBLE = """## Two-tier execution — YOU ARE THE ORCHESTRATOR (READ FIRST)
+
+You run on a fast, lightweight model and handle the conversation, planning, cheap
+look-ups, and configuration. You do **not** have direct access to the heavy tools
+— model fitting, prior-predictive checks, custom analysis code (`execute_python`),
+budget optimization, or marginal analysis. For ANY such task — and for any
+genuinely hard, multi-step quantitative reasoning — call
+`delegate_to_expert(task=...)` with a single, precise, self-contained instruction.
+
+(Experiment design IS available to you directly: call `design_experiment_plan`,
+`simulate_experiment` and `suggest_experiment` yourself, then `plan_experiment` /
+`preregister_experiment` — do NOT delegate or improvise around these.)
+
+The expert is a stronger model that shares THIS EXACT session: the same dataset,
+the same model specification, the same warm `execute_python` kernel, the same
+fitted model, and the same workspace files. So you do not pass data to it — only a
+clear description of what to do (e.g. "Fit the configured model, then report R-hat,
+ESS and divergences and flag any convergence problems"). It runs its own tool loop
+and returns a summary; relay that summary to the user and do NOT try to redo its
+work. In the workflow below, wherever a step names a tool you don't have, delegate
+that step rather than attempting it yourself.
+
+---
+
+"""
+
+# Prepended to the shared methodology prompt for the strong "expert" tier invoked
+# by `delegate_to_expert`. The expert has the full heavy toolset but NOT the
+# delegate tool (no recursion).
+_EXPERT_PREAMBLE = """## You are the EXPERT execution sub-agent (READ FIRST)
+
+A fast orchestrator model has handed you ONE specific task. You run on a stronger
+model and have the FULL toolset and the **shared live session**: the same dataset,
+model specification, warm `execute_python` kernel (with `mmm`/`results` available
+after a fit), fitted model, and workspace as the orchestrator. Execute the task
+rigorously and end-to-end — fit, run prior/posterior checks, write and run code,
+diagnose convergence, optimize — iterating with the tools to self-correct errors
+(e.g. fix a `NameError` and re-run) rather than giving up.
+
+When the task is complete, return a CONCISE, information-dense summary as your
+final message: what you ran, the key numbers (ROI, R-hat/ESS, allocations, etc.),
+and any caveats or follow-ups. Your final message is handed back to the orchestrator
+verbatim, so make it self-contained. Do not ask the orchestrator clarifying
+questions — make a sensible decision, act, and note the assumption in the summary.
+
+---
+
+"""
+
+
+def create_agent_graph(
+    llm, checkpointer=None, *, tools=None, system_prompt=None, role=None
+):
     """
     Create and compile the LangGraph for the MMM Agent.
 
     Args:
         llm: A LangChain chat model instance (e.g. ChatGoogleGenerativeAI)
         checkpointer: Optional LangGraph checkpointer for state memory
+        tools: Tool list to bind. Defaults to the full ``TOOLS`` list. The
+            orchestrator passes ``ORCHESTRATOR_TOOLS`` (no heavy tools) and the
+            expert sub-agent passes ``EXPERT_TOOLS`` (full power, no delegate).
+        system_prompt: Explicit system-prompt override. When ``None`` the prompt
+            is derived from ``role`` (see below).
+        role: ``"orchestrator"`` prepends the delegation preamble, ``"expert"``
+            prepends the expert preamble, ``None`` uses the bare shared prompt.
+            Ignored when ``system_prompt`` is given.
 
     Returns:
         Compiled StateGraph
     """
 
+    bound_tools = tools if tools is not None else TOOLS
+
     # Bind tools to the LLM
-    llm_with_tools = llm.bind_tools(TOOLS)
+    llm_with_tools = llm.bind_tools(bound_tools)
 
     # System prompt: the agent does ONLY what the user asks (no auto-running the
     # whole pipeline), using the 9-step scientific causal workflow as a reference
     # for *how* to do each step (docs/scientific-workflow-demo.html, mmm-methodology.tex).
-    system_prompt = """You are an expert Marketing Mix Modeling (MMM) assistant
+    # This shared core is reused by both tiers; role-specific preambles are
+    # prepended below.
+    default_system_prompt = """You are an expert Marketing Mix Modeling (MMM) assistant
 focused on **causal**, **pre-specified**, **scientifically defensible** modeling.
 
 ## Scope — stay on task (READ FIRST)
@@ -260,13 +329,22 @@ If a user tries to skip a step (e.g. "just fit it"), do it — but explicitly no
 in your reply which steps were skipped and what risk that creates.
 """
 
+    # Resolve the effective prompt: an explicit override wins; otherwise the
+    # role preamble (if any) is prepended to the shared core.
+    if system_prompt is not None:
+        effective_system_prompt = system_prompt
+    elif role == "orchestrator":
+        effective_system_prompt = _DELEGATION_PREAMBLE + default_system_prompt
+    elif role == "expert":
+        effective_system_prompt = _EXPERT_PREAMBLE + default_system_prompt
+    else:
+        effective_system_prompt = default_system_prompt
+
     def agent_node(state: AgentState):
         """The LLM reasoning node."""
         # State never persists SystemMessages; filter defensively so the running
         # history (and the summary_count index into it) stays consistent.
-        history = [
-            m for m in state["messages"] if not isinstance(m, SystemMessage)
-        ]
+        history = [m for m in state["messages"] if not isinstance(m, SystemMessage)]
 
         # We want to give the LLM context of the current state so it can pass
         # `dataset_path` and `model_spec` to tools. Large blobs are capped: they
@@ -275,9 +353,7 @@ in your reply which steps were skipped and what risk that creates.
         if state.get("dataset_path"):
             state_context += f"Dataset Path: {state['dataset_path']}\n"
         if state.get("dataset_info"):
-            state_context += (
-                f"Dataset Info: {cap_text(state['dataset_info'], _DATASET_INFO_MAX_CHARS)}\n"
-            )
+            state_context += f"Dataset Info: {cap_text(state['dataset_info'], _DATASET_INFO_MAX_CHARS)}\n"
         if state.get("model_spec"):
             try:
                 state_context += (
@@ -296,7 +372,7 @@ in your reply which steps were skipped and what risk that creates.
 
         # State context lives on the system message to avoid "multiple
         # non-consecutive system messages" errors.
-        system_message = SystemMessage(content=system_prompt + state_context)
+        system_message = SystemMessage(content=effective_system_prompt + state_context)
 
         # Budget the request: summarize old turns + hard-trim to a token cap so a
         # long conversation can't exceed the model's per-request limit.
@@ -329,7 +405,7 @@ in your reply which steps were skipped and what risk that creates.
     workflow = StateGraph(AgentState)
 
     workflow.add_node("agent", agent_node)
-    workflow.add_node("tools", ToolNode(TOOLS))
+    workflow.add_node("tools", ToolNode(bound_tools))
 
     workflow.add_edge(START, "agent")
     workflow.add_conditional_edges("agent", should_continue)

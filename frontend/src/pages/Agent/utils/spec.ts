@@ -11,6 +11,28 @@ export function normalizeTrendType(raw: any): string {
   return TREND_TYPE_ALIASES[t] ?? t;
 }
 
+/**
+ * Normalize a spec variable collection to an array of `{ name, ... }` objects.
+ * The agent / backend may serialize media_channels / control_variables as an
+ * array of objects, an array of bare-string names, OR a dict keyed by name —
+ * calling `.map` / `for...of` on the dict form throws ("not a function" /
+ * "object is not iterable"). This coerces all three shapes to one array.
+ */
+export function asVarArray(v: any): any[] {
+  if (Array.isArray(v)) {
+    return v
+      .map((item) => (typeof item === 'string' ? { name: item } : item))
+      .filter((x) => x && x.name);
+  }
+  if (v && typeof v === 'object') {
+    return Object.entries(v).map(([name, val]) => ({
+      name,
+      ...(val && typeof val === 'object' ? (val as object) : {}),
+    }));
+  }
+  return [];
+}
+
 // Normalize an incoming (possibly minimal) spec into a full editable form
 export function specWithDefaults(raw: any) {
   return {
@@ -36,14 +58,12 @@ export function specWithDefaults(raw: any) {
       monthly: raw?.seasonality?.monthly ?? 0,
       weekly: raw?.seasonality?.weekly ?? 0,
     },
-    media_channels: (raw?.media_channels ?? []).map((ch: any) => ({
+    media_channels: asVarArray(raw?.media_channels).map((ch: any) => ({
       name: ch.name,
       adstock: { type: ch.adstock?.type ?? 'geometric', l_max: ch.adstock?.l_max ?? 8 },
       saturation: { type: ch.saturation?.type ?? 'hill' },
     })),
-    control_variables: (raw?.control_variables ?? []).map((c: any) =>
-      typeof c === 'string' ? { name: c } : c
-    ),
+    control_variables: asVarArray(raw?.control_variables),
   };
 }
 

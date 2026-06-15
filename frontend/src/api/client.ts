@@ -27,6 +27,10 @@ const MODEL_NAME_STORAGE_KEY = 'mmm_model_name';
 const PROVIDER_KEYS_STORAGE_KEY = 'mmm_provider_keys';
 const BASE_URL_STORAGE_KEY = 'mmm_base_url';
 const PROVIDER_STORAGE_KEY = 'mmm_provider';
+// Strong "expert" tier selection (delegate_to_expert). Sent as X-Expert-* headers.
+const EXPERT_MODEL_STORAGE_KEY = 'mmm_expert_model';
+const EXPERT_PROVIDER_STORAGE_KEY = 'mmm_expert_provider';
+const EXPERT_BASE_URL_STORAGE_KEY = 'mmm_expert_base_url';
 
 // Get API key and model from localStorage
 export function getStoredApiKey(): string | null {
@@ -60,6 +64,58 @@ export function setStoredBaseUrl(baseUrl: string | null): void {
   } else {
     localStorage.removeItem(BASE_URL_STORAGE_KEY);
   }
+}
+
+// Expert (strong) tier selection. Each is optional; when unset the server's
+// configured expert (or the chat model) is used. The expert's API key reuses the
+// per-provider bucket (getStoredKeyForProvider), so there is no separate store.
+export function getStoredExpertModel(): string | null {
+  return localStorage.getItem(EXPERT_MODEL_STORAGE_KEY);
+}
+export function getStoredExpertProvider(): string | null {
+  return localStorage.getItem(EXPERT_PROVIDER_STORAGE_KEY);
+}
+export function getStoredExpertBaseUrl(): string | null {
+  return localStorage.getItem(EXPERT_BASE_URL_STORAGE_KEY);
+}
+export function setStoredExpert(
+  model: string | null,
+  provider: string | null,
+  baseUrl: string | null,
+): void {
+  const put = (k: string, v: string | null) =>
+    v && v.trim() ? localStorage.setItem(k, v.trim()) : localStorage.removeItem(k);
+  put(EXPERT_MODEL_STORAGE_KEY, model);
+  put(EXPERT_PROVIDER_STORAGE_KEY, provider);
+  put(EXPERT_BASE_URL_STORAGE_KEY, baseUrl);
+}
+
+// Map a backend provider id to the UI provider bucket used for per-provider keys.
+// Vertex (ADC) and LM Studio (local) need no key, so they map to null.
+function uiProviderFor(backendProvider: string | null): string | null {
+  if (backendProvider === 'anthropic') return 'anthropic';
+  if (backendProvider === 'openai') return 'openai';
+  if (backendProvider === 'google_genai') return 'google';
+  return null;
+}
+
+// Build the X-Expert-* headers from the stored expert selection. The expert's API
+// key is pulled from the per-provider bucket for its provider (direct providers
+// only; Vertex/LM Studio need none). Returns {} when no expert override is set.
+export function expertHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  const model = getStoredExpertModel();
+  const provider = getStoredExpertProvider();
+  const baseUrl = getStoredExpertBaseUrl();
+  if (model) h['X-Expert-Model'] = model;
+  if (provider) {
+    h['X-Expert-Provider'] = provider;
+    const ui = uiProviderFor(provider);
+    const key = ui ? getStoredKeyForProvider(ui) : null;
+    if (key) h['X-Expert-Api-Key'] = key;
+  }
+  if (baseUrl) h['X-Expert-Base-Url'] = baseUrl;
+  return h;
 }
 
 // Per-provider key storage
@@ -114,6 +170,9 @@ apiClient.interceptors.request.use(
     }
     if (provider) {
       config.headers['X-Provider'] = provider;
+    }
+    for (const [k, v] of Object.entries(expertHeaders())) {
+      config.headers[k] = v;
     }
     return config;
   },
@@ -205,6 +264,10 @@ export interface ServerModelConfig {
   // (e.g. LM Studio); base_url is that endpoint.
   is_local_endpoint?: boolean;
   base_url?: string | null;
+  // The strong "expert" tier used by delegate_to_expert. `configured` is false
+  // when no expert block is set (delegation reuses the chat model); in that case
+  // provider/model mirror the resolved chat tier.
+  expert?: { provider: string; model: string; configured: boolean };
 }
 
 // Fetch the server's active model configuration, or null if unavailable.

@@ -544,6 +544,21 @@ def delete_artifact(artifact_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def update_artifact_payload(
+    artifact_id: str, payload: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Overwrite an artifact's payload (used by the async experiment-simulation
+    job to flip status pending → running → done/error in place)."""
+    with _conn() as c:
+        cur = c.execute(
+            "UPDATE artifacts SET payload_json = ? WHERE id = ?",
+            (json.dumps(payload, default=str), artifact_id),
+        )
+        if cur.rowcount == 0:
+            return None
+    return get_artifact(artifact_id)
+
+
 # ── Assumptions log ───────────────────────────────────────────────────────────
 
 ASSUMPTION_CATEGORIES = {

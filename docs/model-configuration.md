@@ -9,7 +9,12 @@ no API key anywhere.
 
 The configuration layer lives in
 [`src/mmm_framework/agents/llm.py`](../src/mmm_framework/agents/llm.py):
-`ModelConfig`, `load_model_config()`, `build_llm()`, and `describe_active_config()`.
+`ModelConfig`, `load_model_config()`, `build_llm()`, `build_expert_llm()`, and
+`describe_active_config()`.
+
+> **Two tiers (optional).** You can run a fast/cheap model for chat and a
+> stronger model for the hard work (fitting, code, optimization). See
+> [Two model tiers](#two-model-tiers-fast-chat--strong-expert) below.
 
 ## Quick start
 
@@ -78,6 +83,74 @@ For each field: **`MMM_LLM_*` env var → config file → built-in default.**
 - Per-field env overrides (handy on a VM): `MMM_LLM_PROVIDER`, `MMM_LLM_MODEL`,
   `MMM_LLM_PROJECT`, `MMM_LLM_LOCATION`, `MMM_LLM_MAX_TOKENS`, `MMM_LLM_TEMPERATURE`,
   `MMM_LLM_CREDENTIALS_PATH`, `MMM_LLM_API_KEY`.
+- The same fields on the **expert** tier take a `MMM_LLM_EXPERT_` prefix, e.g.
+  `MMM_LLM_EXPERT_PROVIDER`, `MMM_LLM_EXPERT_MODEL`, `MMM_LLM_EXPERT_LOCATION`
+  (see below).
+
+## Two model tiers (fast chat + strong expert)
+
+The agent can split work across **two** models: a fast/cheap **chat** tier that
+runs the conversation, planning, cheap look-ups, and configuration, and a
+stronger **expert** tier that does the hard, expensive work. The chat model never
+fits a model or runs code itself — it calls a `delegate_to_expert` tool, and a
+sub-agent on the strong model runs its own tool loop and returns a summary
+("call Sonnet from Flash").
+
+**What gets delegated.** The chat tier is *structurally* barred from the heavy /
+code-gen tools — `fit_mmm_model`, `prior_predictive_check`, `execute_python`,
+`run_budget_optimizer`, `run_marginal_analysis`, `run_budget_scenario`,
+`design_experiment_plan` — so it must hand them to the expert. Everything else
+(inspect/EDA, config, ROI/decomposition read-outs, knowledge base, reporting)
+stays on the fast tier.
+
+**Shared session.** The expert sub-agent runs against the *same* `thread_id`, so
+it shares the live session — the same dataset, model specification, warm
+`execute_python` kernel, fitted model, and workspace files. The orchestrator only
+passes it a task description, never the data. Plots, tables, and the resulting
+model state the expert produces are folded back into the session.
+
+**Configure it** with an `expert:` block — a full provider spec with the same
+fields as the top level, so you can mix providers freely:
+
+```yaml
+# config/model_config.yaml — fast Gemini Flash chat + strong Claude Sonnet expert
+provider: vertex_gemini
+model:    gemini-2.5-flash
+project:  my-gcp-project
+location: us-central1
+expert:
+  provider: vertex_anthropic
+  model:    claude-sonnet-4-5@20250929
+  location: us-east5      # project / credentials_path inherited from the chat tier
+  max_tokens: 8192
+```
+
+- Unset Vertex fields on the expert (`project`, `location`, `credentials_path`)
+  are **inherited** from the chat tier, so you needn't repeat them.
+- **Omit the `expert:` block** to run a single model — delegation then reuses the
+  chat model, and every workflow still works.
+- Override per field with `MMM_LLM_EXPERT_*` env vars (e.g.
+  `MMM_LLM_EXPERT_PROVIDER`, `MMM_LLM_EXPERT_MODEL`).
+- The expert tier is **server-config only**: per-request `X-Model-Name` /
+  `X-API-Key` headers override the *chat* tier, never the expert.
+
+**Knobs.**
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `MMM_AGENT_EXPERT_RECURSION_LIMIT` | `60` | Max tool-loop depth for one delegation. |
+| `MMM_AGENT_ORCHESTRATOR_FULL_TOOLS` | unset | `=1` gives the chat tier every tool (heavy ones included) and relies on the prompt to delegate, instead of the structural split. |
+
+`GET /model-config` includes an `expert` summary (`{provider, model, configured}`)
+so the UI can show which strong tier is active.
+
+**Picking both models from the UI.** The Header's **Model settings** modal
+(`ModelSwitcher`) has two sections — *Chat model* and *Expert model*. The expert
+selection is sent on `/chat` as `X-Expert-Model` / `X-Expert-Provider` /
+`X-Expert-Api-Key` / `X-Expert-Base-Url`, resolved by `build_expert_llm` with the
+**same** precedence as the chat tier (below). On a Vertex-locked server the expert
+provider is fixed to ADC and only the model id is sent (routed Claude/Gemini by
+family); on a direct-key server the expert may use its own provider + key.
 
 ## Per-request headers vs. server config
 

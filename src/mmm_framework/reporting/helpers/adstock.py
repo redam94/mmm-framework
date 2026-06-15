@@ -103,11 +103,21 @@ def compute_adstock_weights(
 
 
 def _get_adstock_alpha(posterior: Any, channel: str) -> np.ndarray | None:
-    """Extract adstock alpha parameter for a channel."""
+    """Extract the adstock decay ``alpha`` for a channel.
+
+    The parametric path writes ``adstock_alpha_<ch>`` (geometric/delayed decay),
+    so try that FIRST — otherwise the bare ``adstock_<ch>`` prefix would miss it
+    and the cool-down would silently fall back to a default. ``adstock_<ch>`` is
+    only the *legacy* non-parametric mixing weight (a Beta mix between two fixed
+    alphas, NOT a decay rate); it stays last so a parametric fit never reads a
+    mix weight as decay. Weibull (``adstock_shape_``/``adstock_scale_``) has no
+    single alpha and correctly returns ``None`` (caller uses a conservative
+    washout).
+    """
     if posterior is None:
         return None
 
-    for prefix in ["adstock_", "alpha_", "decay_"]:
+    for prefix in ["adstock_alpha_", "alpha_", "decay_", "adstock_"]:
         name = f"{prefix}{channel}"
         if name in posterior:
             return _flatten_samples(posterior[name].values)

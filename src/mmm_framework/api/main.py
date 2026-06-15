@@ -35,7 +35,14 @@ def _payload_hash(p: dict) -> str:
 
 
 def safe_json_dumps(obj: dict) -> str:
-    """JSON serializer that handles NaN/Inf, numpy scalars, and numpy arrays."""
+    """JSON serializer that handles NaN/Inf, numpy scalars, and numpy arrays.
+
+    Emits STRICT JSON (``allow_nan=False``): ``default`` only fires for objects
+    json can't natively serialize, so a NATIVE ``float('nan')`` would otherwise
+    slip through as the ``NaN`` token and make ``JSONResponse(allow_nan=False)``
+    raise on render. We normalize via ``default`` first, then recursively coerce
+    any remaining non-finite floats to None before the final strict dump.
+    """
     try:
         import numpy as np
 
@@ -67,7 +74,17 @@ def safe_json_dumps(obj: dict) -> str:
             pass
         raise TypeError(f"Object of type {type(o)} is not JSON serializable")
 
-    return json.dumps(obj, default=_default)
+    def _strip_nonfinite(o):
+        if isinstance(o, float):
+            return o if math.isfinite(o) else None
+        if isinstance(o, dict):
+            return {k: _strip_nonfinite(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [_strip_nonfinite(v) for v in o]
+        return o
+
+    normalized = json.loads(json.dumps(obj, default=_default))
+    return json.dumps(_strip_nonfinite(normalized), allow_nan=False)
 
 
 # Ref-list dashboard keys are stripped from per-message SSE events (the full
@@ -305,6 +322,10 @@ async def chat_endpoint(
     x_model_name: str | None = Header(None),
     x_base_url: str | None = Header(None),
     x_provider: str | None = Header(None),
+    x_expert_model: str | None = Header(None),
+    x_expert_provider: str | None = Header(None),
+    x_expert_api_key: str | None = Header(None),
+    x_expert_base_url: str | None = Header(None),
 ):
     # Hosted (PR-F.6): thread_id is a bearer capability, so it must be a
     # server-minted session — reject the guessable default and any client-invented
@@ -323,14 +344,33 @@ async def chat_endpoint(
                 detail="hosted mode requires a server-minted session (POST /sessions)",
             )
 
-    config = {"configurable": {"thread_id": request.thread_id}}
+    # The expert override rides in `configurable` alongside thread_id; LangGraph
+    # propagates it to delegate_to_expert via the injected RunnableConfig, where it
+    # builds the expert sub-agent's LLM (X-Expert-* headers, chat-tier precedence).
+    config = {
+        "configurable": {
+            "thread_id": request.thread_id,
+            "expert_model": x_expert_model,
+            "expert_provider": x_expert_provider,
+            "expert_api_key": x_expert_api_key,
+            "expert_base_url": x_expert_base_url,
+        }
+    }
     # Mark this session active so the thread-scoped model cache + workspace dir
     # resolve correctly for tools run during this request.
     from mmm_framework.agents.runtime import set_current_thread
 
     set_current_thread(request.thread_id)
     llm = get_llm(x_model_name, x_api_key, x_base_url, x_provider)
-    agent_graph = create_agent_graph(llm, checkpointer=memory)
+    # The fast "chat" tier orchestrates: it gets the orchestrator toolset (heavy /
+    # code-gen tools removed) and must delegate hard work to the expert tier via
+    # the delegate_to_expert tool. The expert sub-agent (strong model, full
+    # toolset) is built lazily inside that tool, sharing this thread's session.
+    from mmm_framework.agents.tools import ORCHESTRATOR_TOOLS
+
+    agent_graph = create_agent_graph(
+        llm, checkpointer=memory, tools=ORCHESTRATOR_TOOLS, role="orchestrator"
+    )
 
     # The "400 => corrupted history => hard reset" recovery is an Anthropic
     # behaviour (its API 400s when the message list ends on an unanswered
@@ -1871,6 +1911,7 @@ class ExperimentDesignRequest(BaseModel):
     # flighting
     amplitude_pct: float = 50.0
     block_weeks: int = 2
+    levels: list[float] | None = None  # multi-level spend multipliers (curve)
     seed: int = 42
 
 
@@ -1897,6 +1938,8 @@ async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequ
                 "amplitude_pct": body.amplitude_pct,
                 "block_weeks": int(body.block_weeks),
             }
+            if body.levels:
+                kwargs["levels"] = tuple(float(m) for m in body.levels)
         else:
             kwargs = {
                 "duration": int(body.duration),
@@ -1912,6 +1955,312 @@ async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequ
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=safe_json_dumps_load(design))
+
+
+# ── Model-anchored experiment economics (async; loads the latest model) ───────
+
+
+class ExperimentSimulateRequest(BaseModel):
+    channel: str
+    design_key: str | None = None
+    design: str = "scaling"  # holdout | scaling
+    intensity_pct: float = 50.0
+    n_pairs: int | None = None
+    duration: int = 8
+    amplitude_pct: float = 50.0
+    block_weeks: int = 2
+    levels: list[float] | None = None  # multi-level flighting multipliers
+    margin: float | None = None
+    price: float | None = None
+    kpi_kind: str = "revenue"
+    seed: int = 42
+    max_draws: int = 100
+
+
+# Strong refs to in-flight jobs so a bare create_task can't be GC'd mid-run.
+_SIM_TASKS: set = set()
+
+
+def _sim_job_patch(job_id: str, **patch) -> None:
+    art = sessions_store.get_artifact(job_id)
+    if art is None:
+        return
+    payload = dict(art.get("payload") or {})
+    payload.update(patch)
+    sessions_store.update_artifact_payload(job_id, payload)
+
+
+def _resolve_project_margin(
+    project_id: str, body_margin: float | None, body_price: float | None
+) -> tuple[float | None, float | None]:
+    """(margin, price) — explicit body wins, else the project's saved economics
+    preference (set via the preferences store), else (None, None)."""
+    if body_margin is not None:
+        return body_margin, body_price
+    try:
+        econ = sessions_store.get_preference(project_id, "economics")
+        if isinstance(econ, dict):
+            return econ.get("gross_margin"), econ.get("price", body_price)
+    except Exception:
+        pass
+    return None, body_price
+
+
+def _load_and_run_op(
+    synthetic_tid: str,
+    run_name: str,
+    spec: dict | None,
+    dataset_path: str | None,
+    op_name: str,
+    op_kwargs: dict,
+) -> dict:
+    """SYNC worker (one asyncio.to_thread call): set the thread, load the latest
+    saved model into the in-process cache, and run the named model op DIRECTLY
+    against it. All three MUST share one worker context (F11: to_thread copies
+    the caller context; a ContextVar set in a separate call won't survive). The
+    ops are pure read-only compute, so a direct call is safe and avoids the
+    kernel-impl ambiguity (the model lives in the in-process MODEL_CACHE)."""
+    from mmm_framework.agents import model_ops
+    from mmm_framework.agents.runtime import MODEL_CACHE, set_current_thread
+    from mmm_framework.agents.tools import load_model_core
+
+    set_current_thread(synthetic_tid)
+    load_res = load_model_core(synthetic_tid, run_name, spec, dataset_path)
+    if not load_res.get("ok"):
+        return {"error": load_res.get("message", "Could not load the saved model.")}
+    mmm = MODEL_CACHE.get("fitted_model")
+    results = MODEL_CACHE.get("fit_results")
+    op = model_ops.OPS.get(op_name)
+    if op is None:
+        return {"error": f"Unknown model op: {op_name}"}
+    return op(mmm, results, **op_kwargs)
+
+
+async def _run_model_op_job(
+    job_id: str,
+    synthetic_tid: str,
+    run: dict | None,
+    op_name: str,
+    op_kwargs: dict,
+    result_key: str,
+) -> None:
+    """Run a model op in the background and persist its result_key projection
+    onto the job artifact (pending → running → done/error). Never lets the job
+    vanish: a raising worker writes status='error'."""
+    try:
+        _sim_job_patch(job_id, status="running")
+        if not run or not run.get("run_name"):
+            _sim_job_patch(
+                job_id,
+                status="error",
+                error="No saved model run for this project — fit a model first.",
+            )
+            return
+        res = await asyncio.to_thread(
+            _load_and_run_op,
+            synthetic_tid,
+            run.get("run_name"),
+            run.get("spec"),
+            run.get("dataset_path"),
+            op_name,
+            op_kwargs,
+        )
+        if res.get("error"):
+            _sim_job_patch(job_id, status="error", error=res["error"])
+            return
+        out = (res.get("dashboard") or {}).get(result_key)
+        _sim_job_patch(
+            job_id,
+            status="done",
+            result=safe_json_dumps_load(out) if out else None,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Model-op job failed (%s): %s", op_name, job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+def _spawn_job_task(coro) -> None:
+    """Fire-and-forget a background job with a strong ref (a bare create_task
+    can be GC'd mid-run) and crash logging."""
+    task = asyncio.create_task(coro)
+    _SIM_TASKS.add(task)
+    task.add_done_callback(
+        lambda f: (
+            _SIM_TASKS.discard(f),
+            f.cancelled()
+            or (f.exception() and logger.error("Job crashed: %s", f.exception())),
+        )
+    )
+
+
+async def _run_simulation_job(
+    job_id: str, synthetic_tid: str, run: dict | None, op_kwargs: dict
+) -> None:
+    await _run_model_op_job(
+        job_id,
+        synthetic_tid,
+        run,
+        "experiment_economics",
+        op_kwargs,
+        "experiment_economics",
+    )
+
+
+@app.post("/projects/{project_id}/experiment-design/simulate")
+async def start_experiment_simulation(project_id: str, body: ExperimentSimulateRequest):
+    """Start a NON-BLOCKING model-anchored economics + A/A·A/B simulation. Loads
+    the project's latest saved model in the background and runs the
+    experiment_economics op; poll the returned job_id for the result."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, body.channel)
+    run = latest_model_run_payload(project_id)
+
+    margin, price = _resolve_project_margin(project_id, body.margin, body.price)
+    design_params = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": body.channel,
+        "design_key": body.design_key,
+        "duration": int(body.duration),
+        "design": body.design,
+        "intensity_pct": float(body.intensity_pct),
+        "amplitude_pct": float(body.amplitude_pct),
+        "block_weeks": int(body.block_weeks),
+        "seed": int(body.seed),
+    }
+    if body.n_pairs is not None:
+        design_params["n_pairs"] = int(body.n_pairs)
+    if body.levels:
+        design_params["levels"] = [float(m) for m in body.levels]
+    op_kwargs = {
+        "design_params": design_params,
+        "run_simulation": True,
+        "margin": margin,
+        "price": price,
+        "kpi_kind": body.kpi_kind,
+        "max_draws": int(body.max_draws),
+    }
+
+    # Server-minted, project-scoped thread id (never client-supplied → hosted-safe).
+    synthetic_tid = f"__simjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "experiment_simulation",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "channel": body.channel,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(_run_simulation_job(job_id, synthetic_tid, run, op_kwargs))
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+@app.get("/projects/{project_id}/experiment-design/simulate/{job_id}")
+async def get_experiment_simulation(project_id: str, job_id: str):
+    """Poll an experiment-simulation job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Simulation job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+class ExperimentOptimizeRequest(BaseModel):
+    channel: str
+    margin: float | None = None
+    price: float | None = None
+    kpi_kind: str = "revenue"
+    # design-space ranges (the optimizer auto-samples a few points within each)
+    duration_min: int = 4
+    duration_max: int = 12
+    intensity_min: float = 50.0
+    intensity_max: float = 100.0
+    include_holdout: bool = True
+    # explicit overrides for the auto-sampling (optional)
+    durations: list[int] | None = None
+    scaling_intensities: list[float] | None = None
+    max_draws: int = 80
+    seed: int = 42
+
+
+@app.post("/projects/{project_id}/experiment-design/optimize")
+async def start_experiment_optimization(
+    project_id: str, body: ExperimentOptimizeRequest
+):
+    """Start a NON-BLOCKING experiment-setup optimization: explores the design
+    grid and returns the Pareto front (MDE × short-term cost × duration) + a
+    recommended setup with cool-down. Poll the returned job_id."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, body.channel)
+    run = latest_model_run_payload(project_id)
+    margin, price = _resolve_project_margin(project_id, body.margin, body.price)
+
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": body.channel,
+        "margin": margin,
+        "price": price,
+        "kpi_kind": body.kpi_kind,
+        "duration_min": int(body.duration_min),
+        "duration_max": int(body.duration_max),
+        "intensity_min": float(body.intensity_min),
+        "intensity_max": float(body.intensity_max),
+        "include_holdout": bool(body.include_holdout),
+        "max_draws": int(body.max_draws),
+        "random_seed": int(body.seed),
+    }
+    if body.durations:
+        op_kwargs["durations"] = [int(d) for d in body.durations]
+    if body.scaling_intensities:
+        op_kwargs["scaling_intensities"] = [float(x) for x in body.scaling_intensities]
+
+    synthetic_tid = f"__simjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "experiment_optimization",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "channel": body.channel,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(
+        _run_model_op_job(
+            job_id,
+            synthetic_tid,
+            run,
+            "experiment_optimizer",
+            op_kwargs,
+            "experiment_optimization",
+        )
+    )
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+@app.get("/projects/{project_id}/experiment-design/optimize/{job_id}")
+async def get_experiment_optimization(project_id: str, job_id: str):
+    """Poll an experiment-optimization job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Optimization job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
 # ── Artifacts ─────────────────────────────────────────────────────────────────

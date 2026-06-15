@@ -3,6 +3,7 @@ import copy
 import json
 import logging
 import importlib
+import threading
 from pathlib import Path
 from typing import Annotated, Any, Optional
 import io
@@ -11,6 +12,8 @@ import traceback
 
 from langchain_core.tools import tool, InjectedToolCallId, InjectedToolArg
 from langchain_core.messages import ToolMessage
+
+logger = logging.getLogger(__name__)
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from langgraph.prebuilt import InjectedState
@@ -3892,7 +3895,11 @@ def design_experiment_plan(
     amplitude_pct: float = 50.0,
     block_weeks: int = 2,
     n_pairs: int = None,
+    levels: list = None,
     seed: int = 42,
+    margin: float = None,
+    kpi_kind: str = "revenue",
+    include_economics: bool = True,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3912,8 +3919,13 @@ def design_experiment_plan(
       `block_weeks` weeks) that manufactures the exogenous variance the spend
       history lacks, with the identification gain quantified.
 
-    Omit design_key to auto-pick from the data. Pure data computation — works
-    PRE-FIT (no fitted model needed). Follow with `plan_experiment` to
+    Omit design_key to auto-pick from the data. The design itself is pure data
+    (works PRE-FIT). When a model IS fitted and `include_economics=True`, the
+    plan is enriched with the model's expected-effect anchor (is the test
+    powered to detect the effect we EXPECT?) and the short-term opportunity cost
+    of deviating from business-as-usual (forgone KPI, spend at risk, net $ when
+    `margin` is given, learning-vs-cost). For the full A/A·A/B methodology
+    comparison use `simulate_experiment`. Follow with `plan_experiment` to
     register + pre-register the design.
     """
     import os as _os
@@ -3937,15 +3949,17 @@ def design_experiment_plan(
     try:
         key = design_key or design_options(dataset_path, kpi, channel)["recommended"]
         if key == "national_flighting":
-            design = design_experiment(
-                dataset_path,
-                kpi,
-                channel,
-                design_key=key,
+            _fl_kw: dict = dict(
                 duration=int(duration),
                 amplitude_pct=float(amplitude_pct),
                 block_weeks=int(block_weeks),
                 seed=int(seed),
+            )
+            if levels:
+                # multi-level spend schedule (>=3 distinct levels traces the curve)
+                _fl_kw["levels"] = tuple(float(m) for m in levels)
+            design = design_experiment(
+                dataset_path, kpi, channel, design_key=key, **_fl_kw
             )
         else:
             kwargs: dict = dict(
@@ -4019,6 +4033,72 @@ def design_experiment_plan(
 
     dashboard_data = dict(state.get("dashboard_data") or {})
     dashboard_data["experiment_design_plan"] = design
+
+    # Model-anchored enrichment: when a model is fitted, add the expected-effect
+    # anchor + short-term opportunity cost via the kernel op (no-op pre-fit, so
+    # this only costs posterior passes when there is a model to anchor to).
+    if include_economics:
+        try:
+            design_params = {
+                "dataset_path": dataset_path,
+                "kpi": kpi,
+                "channel": channel,
+                "design_key": key,
+                "duration": int(duration),
+                "design": geo_design,
+                "intensity_pct": float(intensity_pct),
+                "amplitude_pct": float(amplitude_pct),
+                "block_weeks": int(block_weeks),
+                "seed": int(seed),
+            }
+            if n_pairs is not None:
+                design_params["n_pairs"] = int(n_pairs)
+            if levels:
+                design_params["levels"] = [float(m) for m in levels]
+            eco_res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+                "experiment_economics",
+                {
+                    "design_params": design_params,
+                    "run_simulation": False,
+                    "margin": margin,
+                    "kpi_kind": kpi_kind,
+                },
+            )
+            eco = (eco_res.get("dashboard") or {}).get("experiment_economics")
+            if eco and eco.get("model_anchored"):
+                dashboard_data["experiment_economics"] = eco
+                anc = eco.get("anchor") or {}
+                oc = eco.get("opportunity_cost") or {}
+                if anc.get("verdict"):
+                    design["model_anchor"] = (eco.get("design") or {}).get(
+                        "model_anchor"
+                    )
+                    lines += [
+                        "",
+                        f"**Model anchor** — expected incremental ROAS ≈ "
+                        f"{anc.get('incremental_roas_median', 0):.2f}; design is "
+                        f"**{str(anc['verdict']).upper()}** "
+                        f"(assurance {(anc.get('assurance') or 0):.0%}).",
+                    ]
+                if oc:
+                    net = oc.get("net_profit_impact_median")
+                    lines.append(
+                        f"- Short-term cost of running it: forgo ≈ "
+                        f"{oc.get('forgone_kpi_median', 0):,.0f} KPI, spend Δ "
+                        f"{oc.get('spend_delta', 0):+,.0f}"
+                        + (
+                            f", net ${net:+,.0f}."
+                            if net is not None
+                            else " (give a margin for net-$ impact)."
+                        )
+                    )
+                lines.append(
+                    "\nRun `simulate_experiment` for the full A/A·A/B methodology "
+                    "comparison (power, MDE, false-positive rate by method)."
+                )
+        except Exception:  # noqa: BLE001 — enrichment is additive, never blocks
+            logger.exception("design_experiment_plan economics enrichment failed")
+
     return Command(
         update={
             "messages": [
@@ -4029,7 +4109,439 @@ def design_experiment_plan(
     )
 
 
+@tool
+def simulate_experiment(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    design_key: str = None,
+    duration: int = 8,
+    intensity_pct: float = 50.0,
+    geo_design: str = "scaling",
+    amplitude_pct: float = 50.0,
+    block_weeks: int = 2,
+    n_pairs: int = None,
+    margin: float = None,
+    kpi_kind: str = "revenue",
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Run A/A and A/B simulations on the project's HISTORICAL data to compare
+    experiment methodologies for `channel` — the rigorous "will this test
+    actually work, and which estimator should we trust?" check.
+
+    For each candidate methodology (pooled DiD, per-pair DiD, synthetic-control
+    geo, or national on/off) it reports:
+    - **A/A false-positive rate** — slide the estimator over no-treatment
+      windows; an estimator whose FPR far exceeds 5% is INVALID for this data
+      (its analytic SE is fooled by autocorrelation), no matter its nominal power.
+    - **A/B empirical power & MDE** — inject the model's predicted lift (or a
+      fixed lift pre-fit) onto real history and measure detection at the
+      size-calibrated threshold.
+    - the design's **opportunity cost** and the model's **expected-effect
+      anchor**, when a model is fitted.
+
+    It then recommends the methodology that is valid AND powered AND cheapest.
+    Heavier than `design_experiment_plan` (many estimator passes over history +
+    posterior passes); use it once a design is worth committing to.
+    """
+    import os as _os
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before simulating.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the simulator knows "
+            "the outcome series.",
+            tool_call_id,
+        )
+    design_params = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": channel,
+        "design_key": design_key,
+        "duration": int(duration),
+        "design": geo_design,
+        "intensity_pct": float(intensity_pct),
+        "amplitude_pct": float(amplitude_pct),
+        "block_weeks": int(block_weeks),
+        "seed": int(seed),
+    }
+    if n_pairs is not None:
+        design_params["n_pairs"] = int(n_pairs)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "experiment_economics",
+        {
+            "design_params": design_params,
+            "run_simulation": True,
+            "margin": margin,
+            "kpi_kind": kpi_kind,
+        },
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def suggest_experiment(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    margin: float = None,
+    price: float = None,
+    kpi_kind: str = "revenue",
+    duration_min: int = 4,
+    duration_max: int = 12,
+    intensity_min: float = 50.0,
+    intensity_max: float = 100.0,
+    include_holdout: bool = True,
+    durations: list = None,
+    scaling_intensities: list = None,
+    footprints: list = None,
+    max_draws: int = 80,
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Suggest a runnable experiment SETUP for `channel` from the fitted model,
+    and compute the PARETO FRONT of designs.
+
+    Explores a grid of designs (holdout vs scaling, footprint, duration — or
+    national flighting) bounded by the caller's RANGES and ranks them on four
+    objectives the client trades off: **lowest MDE** (precision), **highest
+    statistical power** (target 80%), **smallest short-term cost** (opportunity
+    cost of deviating from business-as-usual), and **shortest duration**. It
+    returns the non-dominated Pareto front plus a single recommended setup —
+    test/control groups (or a flighting schedule), intensity, duration, and a
+    **cool-down period** derived from the channel's fitted adstock (the washout
+    before the treated cells return to BAU).
+
+    Bound the search with `duration_min`/`duration_max` (weeks) and
+    `intensity_min`/`intensity_max` (signed spend-variation %, e.g. -100 go dark
+    … +150 scale up; the optimizer auto-samples a few points in each range).
+    `include_holdout` adds a go-dark baseline. Pass a `margin` (profit per KPI
+    unit) for a complete net-$ cost comparison. Requires a fitted model.
+
+    Heavy (a posterior pass per candidate); use it to choose a design to commit
+    to. Follow with `plan_experiment` / `preregister_experiment`.
+    """
+    import os as _os
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before optimizing.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the optimizer knows "
+            "the outcome series.",
+            tool_call_id,
+        )
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": channel,
+        "margin": margin,
+        "price": price,
+        "kpi_kind": kpi_kind,
+        "duration_min": int(duration_min),
+        "duration_max": int(duration_max),
+        "intensity_min": float(intensity_min),
+        "intensity_max": float(intensity_max),
+        "include_holdout": bool(include_holdout),
+        "max_draws": int(max_draws),
+        "random_seed": int(seed),
+    }
+    if durations:
+        op_kwargs["durations"] = [int(d) for d in durations]
+    if scaling_intensities:
+        op_kwargs["scaling_intensities"] = [float(x) for x in scaling_intensities]
+    if footprints:
+        op_kwargs["footprints"] = [str(f) for f in footprints]
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "experiment_optimizer", op_kwargs
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def identify_structural_parameters(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    levels: list = None,
+    block_weeks: int = None,
+    duration: int = 12,
+    max_draws: int = 200,
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Design a MULTI-LEVEL flighting test for `channel` and report how well its
+    refit would identify the channel's STRUCTURAL model parameters — the
+    saturation curve (ψ), the adstock carryover (α), and the coefficient (β) —
+    using the fitted model as the anchor.
+
+    Pass `levels` as ≥3 distinct spend multipliers (e.g. `[0.5, 1.0, 1.5]`) so
+    the schedule spans the response curve (curvature → ψ); the block length
+    defaults to the channel's adstock washout so sharp pulses identify the
+    carryover (α). Returns per-parameter identification **power**, **MDE**, and
+    posterior **contraction**, plus a binding (worst-parameter) power.
+
+    This is an OPTIMISTIC UPPER BOUND on what the next refit achieves (a local
+    design calculation), not a guarantee — the recommended readout is a full
+    structural refit with the experiment weeks appended. Requires a parametric
+    geometric-adstock + logistic-saturation national fit; otherwise it returns
+    the reduced-form curve/marginal-ROAS identification only. Single-call kernel
+    op — follow with `plan_experiment` / `preregister_experiment` to lock it.
+    """
+    import os as _os
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before designing a test.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the design knows the "
+            "outcome series.",
+            tool_call_id,
+        )
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": channel,
+        "duration": int(duration),
+        "max_draws": int(max_draws),
+        "random_seed": int(seed),
+    }
+    if levels:
+        op_kwargs["levels"] = [float(m) for m in levels]
+    if block_weeks is not None:
+        op_kwargs["block_weeks"] = int(block_weeks)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "identify_structural_parameters", op_kwargs
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
 from mmm_framework.agents.eda_tools import EDA_TOOLS
+
+
+# ── Two-tier delegation: orchestrator (fast) → expert (strong) ──────────────
+
+# Compute/code-gen-heavy tools removed from the fast chat tier so it must
+# delegate them to the expert. Tunable; the escape hatch
+# MMM_AGENT_ORCHESTRATOR_FULL_TOOLS=1 restores them on the orchestrator.
+#
+# NB: the experiment-design tools (design_experiment_plan / simulate_experiment /
+# suggest_experiment) are deliberately NOT here — they are single-call kernel ops
+# that return a result in one shot (the heavy compute runs in the kernel either
+# way), so they don't need the expert's iterative tool loop the way fitting and
+# code-gen do. Keeping them on the orchestrator means the chat tier can actually
+# run the experiment-planning flow (design → plan → preregister) directly instead
+# of failing when a weak orchestrator model doesn't reliably delegate.
+HEAVY_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "fit_mmm_model",
+        "prior_predictive_check",
+        "execute_python",
+        "run_marginal_analysis",
+        "run_budget_optimizer",
+        "run_budget_scenario",
+    }
+)
+
+# Lazily-built, cached expert sub-agent graph (strong model, full toolset, NO
+# checkpointer). Building reads the server model config once; the server config
+# is static for the process, so a single cached instance is correct.
+_EXPERT_GRAPH = None
+_EXPERT_GRAPH_LOCK = threading.Lock()
+
+
+def _get_expert_graph(override: dict | None = None):
+    """Build (and, for the server default, cache) the expert sub-agent graph.
+
+    Imports are function-local to break the ``graph`` ↔ ``tools`` module cycle
+    (``graph`` imports ``TOOLS`` from here at import time). The expert graph is
+    compiled WITHOUT a checkpointer: it shares the live session via the same
+    ``thread_id`` (kernel/workspace/model cache), but must not write to the
+    orchestrator's conversation checkpoint.
+
+    ``override`` carries the per-request ``X-Expert-*`` selection (model/provider/
+    api_key/base_url). With no override we build once and cache the server-default
+    graph as a singleton. With an override present we build a FRESH graph each call
+    and do NOT cache it — a delegation always precedes seconds-to-minutes of heavy
+    work, so the ~ms build is negligible, and not caching per-key avoids any
+    cross-user key bleed in hosted mode.
+    """
+    from mmm_framework.agents.graph import create_agent_graph
+    from mmm_framework.agents.llm import build_expert_llm
+
+    override = {k: v for k, v in (override or {}).items() if v}
+    if override:
+        expert_llm = build_expert_llm(
+            provider=override.get("provider"),
+            model_name=override.get("model"),
+            api_key=override.get("api_key"),
+            base_url=override.get("base_url"),
+        )
+        return create_agent_graph(
+            expert_llm, checkpointer=None, tools=EXPERT_TOOLS, role="expert"
+        )
+
+    global _EXPERT_GRAPH
+    if _EXPERT_GRAPH is not None:
+        return _EXPERT_GRAPH
+    with _EXPERT_GRAPH_LOCK:
+        if _EXPERT_GRAPH is None:
+            expert_llm = build_expert_llm()
+            _EXPERT_GRAPH = create_agent_graph(
+                expert_llm, checkpointer=None, tools=EXPERT_TOOLS, role="expert"
+            )
+    return _EXPERT_GRAPH
+
+
+def _final_message_text(messages: list) -> str:
+    """Extract the expert's final assistant text (skipping trailing tool msgs).
+
+    Handles both plain-string content and the list-of-content-blocks shape that
+    Anthropic/Vertex return.
+    """
+    for m in reversed(messages or []):
+        if isinstance(m, ToolMessage):
+            continue
+        content = getattr(m, "content", None)
+        if isinstance(content, str):
+            if content.strip():
+                return content
+            continue
+        if isinstance(content, list):
+            parts = [
+                (blk.get("text", "") if isinstance(blk, dict) else str(blk))
+                for blk in content
+                if (isinstance(blk, dict) and blk.get("type") == "text")
+                or isinstance(blk, str)
+            ]
+            text = "\n".join(p for p in parts if p).strip()
+            if text:
+                return text
+    return ""
+
+
+@tool
+def delegate_to_expert(
+    state: Annotated[dict, InjectedState],
+    task: str,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Delegate a hard task to the expert sub-agent (a stronger model).
+
+    Use this for model fitting, prior/posterior predictive checks, writing and
+    running custom analysis code, budget optimization, marginal analysis,
+    experiment design, or any multi-step quantitative reasoning the fast chat
+    tier should not attempt itself. The expert shares THIS session — the same
+    dataset, model specification, warm ``execute_python`` kernel, fitted model,
+    and workspace — so pass only a clear, self-contained description of what to
+    do, never the data or the spec JSON. The expert runs its own tool loop and
+    returns a summary; relay that summary to the user rather than redoing it.
+
+    Args:
+        task: A single, precise, self-contained instruction for the expert
+            (e.g. "Fit the configured model, then report R-hat, ESS and
+            divergences and flag any convergence problems").
+
+    Returns:
+        A Command whose message is the expert's summary, with any model or
+        dashboard state the expert produced folded back into the session.
+    """
+    from langchain_core.messages import HumanMessage
+
+    thread_id = _activate_thread(config)
+    # The frontend's X-Expert-* selection rides in the injected RunnableConfig's
+    # `configurable` (set by /chat). An empty/absent override falls back to the
+    # server-configured expert (or the chat model) inside _get_expert_graph.
+    configurable = (config or {}).get("configurable") or {}
+    expert_override = {
+        "model": configurable.get("expert_model"),
+        "provider": configurable.get("expert_provider"),
+        "api_key": configurable.get("expert_api_key"),
+        "base_url": configurable.get("expert_base_url"),
+    }
+    try:
+        recursion_limit = int(os.environ.get("MMM_AGENT_EXPERT_RECURSION_LIMIT", "60"))
+    except ValueError:
+        recursion_limit = 60
+
+    # Seed the expert with a full AgentState mirror of the current session, so it
+    # can read the dataset/spec/status. No checkpointer => these values are the
+    # starting state (not loaded from a checkpoint).
+    init_state = {
+        "messages": [HumanMessage(content=task)],
+        "dataset_path": state.get("dataset_path"),
+        "dataset_info": state.get("dataset_info"),
+        "model_spec": state.get("model_spec") or {},
+        "locked_fields": state.get("locked_fields") or [],
+        "pending_spec_changes": state.get("pending_spec_changes") or [],
+        "model_status": state.get("model_status") or "not_started",
+        "fit_results_summary": state.get("fit_results_summary"),
+        "report_path": state.get("report_path"),
+        "dashboard_data": {},
+        "context_summary": None,
+        "context_summary_count": 0,
+    }
+
+    try:
+        expert_graph = _get_expert_graph(expert_override)
+        result = expert_graph.invoke(
+            init_state,
+            config={
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": recursion_limit,
+            },
+        )
+    except Exception as e:
+        logger.exception("delegate_to_expert failed for thread %s", thread_id)
+        err = f"Expert delegation failed: {e}"
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content=err, tool_call_id=tool_call_id, status="error")
+                ],
+            }
+        )
+
+    summary = _final_message_text(result.get("messages") or [])
+    if not summary:
+        summary = "The expert completed the task but returned no summary text."
+
+    update: dict[str, Any] = {
+        "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+    }
+    # Fold back the session-level state the expert may have mutated. model_spec is
+    # a full dict (not a patch envelope), so _merge_spec replaces it; dashboard
+    # plot/table refs union via _merge_dashboard.
+    if result.get("dashboard_data"):
+        update["dashboard_data"] = result["dashboard_data"]
+    if result.get("model_spec"):
+        update["model_spec"] = result["model_spec"]
+    for key in ("model_status", "fit_results_summary", "report_path"):
+        if result.get(key) is not None:
+            update[key] = result[key]
+    return Command(update=update)
+
 
 # List of all tools
 TOOLS = [
@@ -4076,6 +4588,9 @@ TOOLS = [
     recommend_lift_experiments,
     compute_experiment_priorities,
     design_experiment_plan,
+    simulate_experiment,
+    suggest_experiment,
+    identify_structural_parameters,
     plan_experiment,
     preregister_experiment,
     record_experiment_readout,
@@ -4124,3 +4639,18 @@ TOOLS = [
     generate_client_report,
     generate_client_slides,
 ]
+
+
+# Two-tier toolsets derived from TOOLS:
+#   EXPERT_TOOLS       — full power for the strong sub-agent, minus delegate
+#                        (the expert must not recurse into itself).
+#   ORCHESTRATOR_TOOLS — the fast chat tier: TOOLS + delegate_to_expert, with the
+#                        heavy/code-gen tools removed so it must delegate them.
+#                        MMM_AGENT_ORCHESTRATOR_FULL_TOOLS=1 keeps every tool on
+#                        the orchestrator (prompt-driven delegation instead).
+EXPERT_TOOLS = list(TOOLS)
+TOOLS = TOOLS + [delegate_to_expert]
+if os.environ.get("MMM_AGENT_ORCHESTRATOR_FULL_TOOLS") == "1":
+    ORCHESTRATOR_TOOLS = list(TOOLS)
+else:
+    ORCHESTRATOR_TOOLS = [t for t in TOOLS if t.name not in HEAVY_TOOL_NAMES]

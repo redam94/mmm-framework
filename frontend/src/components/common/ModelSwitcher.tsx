@@ -51,19 +51,207 @@ function dotFor(provider: string | undefined): string {
   return 'bg-amber-500'; // anthropic
 }
 
-export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
-  const { provider, modelName, baseUrl, setApiKey, setBaseUrl, setProvider } = useAuthStore();
-  const [open, setOpen] = useState(false);
-  const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
+// One tier's editable selection. Held in the parent and rendered by <TierFields>.
+interface TierForm {
+  provider: string;
+  model: string; // dropdown selection
+  customModel: string; // free-text override
+  key: string;
+  baseUrl: string;
+}
+
+function TierFields({
+  form,
+  setForm,
+  serverVertexLocked,
+  currentModel,
+  open,
+}: {
+  form: TierForm;
+  setForm: (patch: Partial<TierForm>) => void;
+  serverVertexLocked: boolean;
+  currentModel: string | null;
+  open: boolean;
+}) {
   const [vertexModels, setVertexModels] = useState<VertexModel[]>([]);
   const [lmStudioModels, setLmStudioModels] = useState<LmStudioModel[]>([]);
 
-  // Modal form state
-  const [selProvider, setSelProvider] = useState('anthropic');
-  const [selModel, setSelModel] = useState('');
-  const [customModel, setCustomModel] = useState('');
-  const [keyInput, setKeyInput] = useState('');
-  const [baseUrlInput, setBaseUrlInput] = useState('http://localhost:1234/v1');
+  // Discover models for the selected provider.
+  useEffect(() => {
+    if (!open || !form.provider.startsWith('vertex')) return;
+    getVertexModels().then((res) => setVertexModels(res?.models ?? []));
+  }, [open, form.provider]);
+
+  useEffect(() => {
+    if (!open || form.provider !== 'lmstudio') return;
+    const t = setTimeout(() => {
+      getLmStudioModels(form.baseUrl || undefined).then((res) =>
+        setLmStudioModels(res?.models ?? []),
+      );
+    }, 300);
+    return () => clearTimeout(t);
+  }, [open, form.provider, form.baseUrl]);
+
+  const needs = metaFor(form.provider)?.needs ?? 'key';
+
+  const modelOptions: { id: string; label: string }[] = (() => {
+    const out: { id: string; label: string }[] = [];
+    const ids = new Set<string>();
+    const push = (id: string, label: string) => {
+      if (!id || ids.has(id)) return;
+      ids.add(id);
+      out.push({ id, label });
+    };
+    if (currentModel) push(currentModel, `${currentModel} (current)`);
+    if (needs === 'key') {
+      const ui = metaFor(form.provider)?.ui;
+      MODELS.filter((m) => m.provider === ui).forEach((m) => push(m.id, m.label));
+    } else if (needs === 'adc') {
+      const fam = form.provider === 'vertex_anthropic' ? 'claude' : 'gemini';
+      vertexModels.filter((m) => m.family === fam).forEach((m) => push(m.id, m.display_name));
+    } else {
+      lmStudioModels.forEach((m) => push(m.id, m.display_name));
+    }
+    return out;
+  })();
+
+  return (
+    <div className="space-y-3">
+      {/* Provider */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+        <select
+          value={form.provider}
+          disabled={serverVertexLocked}
+          onChange={(e) => {
+            const p = e.target.value;
+            const m = metaFor(p);
+            setForm({
+              provider: p,
+              model: '',
+              customModel: '',
+              key: m?.ui ? getStoredKeyForProvider(m.ui) || '' : '',
+            });
+          }}
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600 disabled:bg-gray-100 disabled:text-gray-500"
+        >
+          {PROVIDERS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        {serverVertexLocked && (
+          <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
+            <CloudIcon className="h-3 w-3" />
+            Provider is locked to Vertex AI / ADC on this server; you can still change the model.
+          </p>
+        )}
+      </div>
+
+      {/* LM Studio server URL */}
+      {needs === 'baseUrl' && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            <ComputerDesktopIcon className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+            LM Studio server URL
+          </label>
+          <input
+            type="text"
+            placeholder="http://localhost:1234/v1"
+            value={form.baseUrl}
+            onChange={(e) => setForm({ baseUrl: e.target.value })}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            {lmStudioModels.length > 0
+              ? `${lmStudioModels.length} model(s) loaded at this URL.`
+              : 'Start LM Studio’s server (Developer → Start Server) and load a model.'}
+          </p>
+        </div>
+      )}
+
+      {/* Model */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+        <select
+          value={form.customModel ? '' : form.model}
+          onChange={(e) => setForm({ model: e.target.value, customModel: '' })}
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600"
+        >
+          <option value="" disabled>
+            {modelOptions.length ? 'Select a model…' : 'No models discovered — type one below'}
+          </option>
+          {modelOptions.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          placeholder="…or type a model id"
+          value={form.customModel}
+          onChange={(e) => setForm({ customModel: e.target.value })}
+          className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
+        />
+      </div>
+
+      {/* API key (direct providers) */}
+      {needs === 'key' && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            <KeyIcon className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+            API key
+          </label>
+          <input
+            type="password"
+            placeholder="sk-…"
+            value={form.key}
+            onChange={(e) => setForm({ key: e.target.value })}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            Stored locally in your browser and sent as an X-API-Key header.
+          </p>
+        </div>
+      )}
+
+      {needs === 'adc' && (
+        <p className="text-[11px] text-gray-400">
+          Vertex AI authenticates with the server’s Application Default Credentials — no key needed.
+        </p>
+      )}
+    </div>
+  );
+}
+
+const EMPTY_TIER: TierForm = {
+  provider: 'anthropic',
+  model: '',
+  customModel: '',
+  key: '',
+  baseUrl: 'http://localhost:1234/v1',
+};
+
+export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
+  const {
+    provider,
+    modelName,
+    baseUrl,
+    expertModel,
+    expertProvider,
+    expertBaseUrl,
+    setApiKey,
+    setBaseUrl,
+    setProvider,
+    setExpert,
+  } = useAuthStore();
+  const [open, setOpen] = useState(false);
+  const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
+
+  const [chat, setChat] = useState<TierForm>(EMPTY_TIER);
+  const [expert, setExpertForm] = useState<TierForm>(EMPTY_TIER);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,90 +262,88 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
       ? modelName
       : getModelLabel(modelName)
     : 'No model';
+  const expertLabel = expertModel || serverConfig?.expert?.model || null;
 
   useEffect(() => {
     getModelConfig().then(setServerConfig);
   }, []);
 
-  // Initialise the form whenever the modal opens.
+  // Initialise both tier forms whenever the modal opens.
   useEffect(() => {
     if (!open) return;
-    const p = effectiveProvider;
-    setSelProvider(p);
-    setSelModel(modelName || serverConfig?.model || '');
-    setCustomModel('');
-    setBaseUrlInput(baseUrl || serverConfig?.base_url || 'http://localhost:1234/v1');
-    const m = metaFor(p);
-    setKeyInput(m?.ui ? getStoredKeyForProvider(m.ui) || '' : '');
+    const chatProvider = effectiveProvider;
+    const chatMeta = metaFor(chatProvider);
+    setChat({
+      provider: chatProvider,
+      model: modelName || serverConfig?.model || '',
+      customModel: '',
+      key: chatMeta?.ui ? getStoredKeyForProvider(chatMeta.ui) || '' : '',
+      baseUrl: baseUrl || serverConfig?.base_url || 'http://localhost:1234/v1',
+    });
+
+    // Expert defaults: stored selection → server's configured expert → chat tier.
+    const xProvider =
+      expertProvider ||
+      (serverVertexLocked ? chatProvider : serverConfig?.expert?.provider) ||
+      chatProvider;
+    const xMeta = metaFor(xProvider);
+    setExpertForm({
+      provider: xProvider,
+      model: expertModel || serverConfig?.expert?.model || '',
+      customModel: '',
+      key: xMeta?.ui ? getStoredKeyForProvider(xMeta.ui) || '' : '',
+      baseUrl: expertBaseUrl || 'http://localhost:1234/v1',
+    });
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Discover models for the selected provider (in the modal).
-  useEffect(() => {
-    if (!open) return;
-    if (selProvider.startsWith('vertex')) {
-      getVertexModels().then((res) => setVertexModels(res?.models ?? []));
-    }
-  }, [open, selProvider]);
-
-  useEffect(() => {
-    if (!open || selProvider !== 'lmstudio') return;
-    const t = setTimeout(() => {
-      getLmStudioModels(baseUrlInput || undefined).then((res) => setLmStudioModels(res?.models ?? []));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [open, selProvider, baseUrlInput]);
-
-  const needs = metaFor(selProvider)?.needs ?? 'key';
-
-  // Model options for the selected provider.
-  const modelOptions: { id: string; label: string }[] = (() => {
-    const out: { id: string; label: string }[] = [];
-    const ids = new Set<string>();
-    const push = (id: string, label: string) => {
-      if (!id || ids.has(id)) return;
-      ids.add(id);
-      out.push({ id, label });
-    };
-    if (modelName && selProvider === effectiveProvider) push(modelName, `${modelName} (current)`);
-    if (needs === 'key') {
-      const ui = metaFor(selProvider)?.ui;
-      MODELS.filter((m) => m.provider === ui).forEach((m) => push(m.id, m.label));
-    } else if (needs === 'adc') {
-      const fam = selProvider === 'vertex_anthropic' ? 'claude' : 'gemini';
-      vertexModels.filter((m) => m.family === fam).forEach((m) => push(m.id, m.display_name));
-    } else {
-      lmStudioModels.forEach((m) => push(m.id, m.display_name));
-    }
-    return out;
-  })();
-
   async function handleSave() {
-    const model = (customModel.trim() || selModel).trim();
-    if (!model) {
-      setError('Pick or enter a model id.');
+    const chatModel = (chat.customModel.trim() || chat.model).trim();
+    if (!chatModel) {
+      setError('Pick or enter a chat model.');
       return;
     }
+    const xModel = (expert.customModel.trim() || expert.model).trim();
     setSaving(true);
     setError(null);
 
-    // Provider override is ignored by a Vertex-locked server, so don't set it there.
-    setProvider(serverVertexLocked ? null : selProvider);
-    setBaseUrl(needs === 'baseUrl' ? baseUrlInput.trim() || null : null);
+    // ── Chat tier ───────────────────────────────────────────────────────────
+    setProvider(serverVertexLocked ? null : chat.provider);
+    const chatNeeds = metaFor(chat.provider)?.needs ?? 'key';
+    setBaseUrl(chatNeeds === 'baseUrl' ? chat.baseUrl.trim() || null : null);
 
-    let key = SERVER_MANAGED_KEY;
-    if (needs === 'key') {
-      const ui = metaFor(selProvider)?.ui;
-      key = keyInput.trim() || (ui ? getStoredKeyForProvider(ui) || '' : '');
-      if (!key) {
+    let chatKey = SERVER_MANAGED_KEY;
+    if (chatNeeds === 'key') {
+      const ui = metaFor(chat.provider)?.ui;
+      chatKey = chat.key.trim() || (ui ? getStoredKeyForProvider(ui) || '' : '');
+      if (!chatKey) {
         setSaving(false);
-        setError('This provider needs an API key.');
+        setError('The chat provider needs an API key.');
         return;
       }
     }
 
-    const ok = await setApiKey(key, model);
+    // ── Expert tier ───────────────────────────────────────────────────────────
+    // On a Vertex-locked server the provider is fixed to ADC; we send only the
+    // model id (the backend routes Claude/Gemini by family). On direct servers
+    // the expert may use its own provider + key.
+    const xNeeds = metaFor(expert.provider)?.needs ?? 'key';
+    const xKey =
+      !serverVertexLocked && xNeeds === 'key'
+        ? expert.key.trim() ||
+          (metaFor(expert.provider)?.ui
+            ? getStoredKeyForProvider(metaFor(expert.provider)!.ui!) || ''
+            : '')
+        : null;
+    setExpert({
+      model: xModel || null,
+      provider: serverVertexLocked ? null : xModel ? expert.provider : null,
+      baseUrl: !serverVertexLocked && xNeeds === 'baseUrl' ? expert.baseUrl.trim() || null : null,
+      apiKey: xKey,
+    });
+
+    const ok = await setApiKey(chatKey, chatModel);
     setSaving(false);
     if (ok) {
       setOpen(false);
@@ -176,6 +362,11 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
       <button className={triggerClass} onClick={() => setOpen(true)} title="Model settings">
         <span className={`h-1.5 w-1.5 rounded-full ${dotFor(effectiveProvider)}`} />
         <span className="truncate max-w-40">{currentLabel}</span>
+        {expertLabel && (
+          <span className="truncate max-w-32 opacity-60" title={`Expert: ${expertLabel}`}>
+            · ⤳ {expertLabel}
+          </span>
+        )}
         <ChevronDownIcon className="h-3 w-3 shrink-0" />
       </button>
 
@@ -198,112 +389,47 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
               </button>
             </div>
 
-            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Provider */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
-                <select
-                  value={selProvider}
-                  disabled={serverVertexLocked}
-                  onChange={(e) => {
-                    setSelProvider(e.target.value);
-                    setSelModel('');
-                    setCustomModel('');
-                    const m = metaFor(e.target.value);
-                    setKeyInput(m?.ui ? getStoredKeyForProvider(m.ui) || '' : '');
-                  }}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600 disabled:bg-gray-100 disabled:text-gray-500"
-                >
-                  {PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-                {serverVertexLocked && (
-                  <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
-                    <CloudIcon className="h-3 w-3" />
-                    Provider is locked to Vertex AI / ADC on this server; you can still change the model.
-                  </p>
-                )}
-              </div>
-
-              {/* LM Studio server URL */}
-              {needs === 'baseUrl' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    <ComputerDesktopIcon className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
-                    LM Studio server URL
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="http://localhost:1234/v1"
-                    value={baseUrlInput}
-                    onChange={(e) => setBaseUrlInput(e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    {lmStudioModels.length > 0
-                      ? `${lmStudioModels.length} model(s) loaded at this URL.`
-                      : 'Start LM Studio’s server (Developer → Start Server) and load a model.'}
+            <div className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+              {/* Chat tier */}
+              <section>
+                <div className="mb-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">
+                    Chat model · fast
+                  </h4>
+                  <p className="text-[11px] text-gray-400">
+                    Handles the conversation, planning, and cheap look-ups.
                   </p>
                 </div>
-              )}
-
-              {/* Model */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
-                <select
-                  value={customModel ? '' : selModel}
-                  onChange={(e) => {
-                    setSelModel(e.target.value);
-                    setCustomModel('');
-                  }}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600"
-                >
-                  <option value="" disabled>
-                    {modelOptions.length ? 'Select a model…' : 'No models discovered — type one below'}
-                  </option>
-                  {modelOptions.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  placeholder="…or type a model id"
-                  value={customModel}
-                  onChange={(e) => setCustomModel(e.target.value)}
-                  className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
+                <TierFields
+                  form={chat}
+                  setForm={(patch) => setChat((f) => ({ ...f, ...patch }))}
+                  serverVertexLocked={serverVertexLocked}
+                  currentModel={modelName}
+                  open={open}
                 />
-              </div>
+              </section>
 
-              {/* API key (direct providers) */}
-              {needs === 'key' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    <KeyIcon className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
-                    API key
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="sk-…"
-                    value={keyInput}
-                    onChange={(e) => setKeyInput(e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
-                  />
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    Stored locally in your browser and sent as the X-API-Key header.
+              {/* Expert tier */}
+              <section className="border-t border-gray-100 pt-4">
+                <div className="mb-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">
+                    Expert model · strong
+                  </h4>
+                  <p className="text-[11px] text-gray-400">
+                    Used for model fitting, code, and optimization (delegated work).
+                    {serverConfig?.expert && !serverConfig.expert.configured && (
+                      <> Server default: <span className="text-gray-500">{serverConfig.expert.model}</span>.</>
+                    )}
                   </p>
                 </div>
-              )}
-
-              {needs === 'adc' && (
-                <p className="text-[11px] text-gray-400">
-                  Vertex AI authenticates with the server’s Application Default Credentials — no key needed.
-                </p>
-              )}
+                <TierFields
+                  form={expert}
+                  setForm={(patch) => setExpertForm((f) => ({ ...f, ...patch }))}
+                  serverVertexLocked={serverVertexLocked}
+                  currentModel={expertModel}
+                  open={open}
+                />
+              </section>
 
               {error && <p className="text-xs text-red-600">{error}</p>}
             </div>

@@ -23,7 +23,10 @@ kernel too.
 
 from __future__ import annotations
 
+import math
 from typing import Any
+
+import numpy as np
 
 from mmm_framework.agents.tables import df_to_table_json, records_to_table_json
 
@@ -772,6 +775,902 @@ def experiment_priorities(
     return out
 
 
+def _design_from_params(design_params: dict) -> dict:
+    """Run the PURE designer from a params dict carried across the kernel
+    boundary (the kernel has no host state, so dataset_path/kpi/channel must
+    travel in design_params)."""
+    from mmm_framework.planning.design import design_experiment, design_options
+
+    dataset_path = design_params.get("dataset_path")
+    kpi = design_params.get("kpi")
+    channel = design_params.get("channel")
+    if not (dataset_path and kpi and channel):
+        raise ValueError(
+            "design_params must carry dataset_path, kpi and channel "
+            "(the kernel cannot read host state)."
+        )
+    key = (
+        design_params.get("design_key")
+        or design_options(dataset_path, kpi, channel)["recommended"]
+    )
+    if key == "national_flighting":
+        kw = dict(
+            duration=int(design_params.get("duration", 12)),
+            amplitude_pct=float(design_params.get("amplitude_pct", 50.0)),
+            block_weeks=int(design_params.get("block_weeks", 2)),
+            seed=int(design_params.get("seed", 42)),
+        )
+        _levels = design_params.get("levels")
+        if _levels:
+            kw["levels"] = tuple(float(m) for m in _levels)
+    else:
+        kw = dict(
+            duration=int(design_params.get("duration", 8)),
+            design=design_params.get("design", "scaling"),
+            intensity_pct=float(design_params.get("intensity_pct", 50.0)),
+            seed=int(design_params.get("seed", 42)),
+        )
+        if design_params.get("n_pairs") is not None:
+            kw["n_pairs"] = int(design_params["n_pairs"])
+    return design_experiment(dataset_path, kpi, channel, design_key=key, **kw)
+
+
+def experiment_economics(
+    mmm: Any,
+    results: Any = None,
+    *,
+    design_params: dict,
+    run_simulation: bool = True,
+    include_loopback: bool | None = None,
+    margin: float | None = None,
+    price: float | None = None,
+    kpi_kind: str = "revenue",
+    loss_threshold: float | None = None,
+    max_draws: int = 200,
+    random_seed: int = 42,
+) -> dict:
+    """Model-anchored experiment economics: the pure design, the model's
+    expected-effect anchor + powered-to-detect verdict, the short-term
+    opportunity cost of deviating from BAU (with posterior uncertainty), and an
+    A/A·A/B methodology comparison. Runs design-only when no model is fitted."""
+    try:
+        design = _design_from_params(design_params)
+    except ValueError as e:
+        return _err(f"Could not design the experiment: {e}")
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Experiment design failed: {e}")
+
+    channel = design["channel"]
+    kpi = design.get("kpi", "")
+    duration = int(design.get("duration", 8) or 8)
+    dataset_path = design_params.get("dataset_path")
+    if include_loopback is None:
+        include_loopback = bool(run_simulation)
+
+    payload: dict[str, Any] = {
+        "channel": channel,
+        "kpi": kpi,
+        "design_key": design.get("design_key"),
+        "design_type": design.get("design_type"),
+        "duration": duration,
+        "randomized": design.get("randomized", True),
+        "se_roas": design.get("se_roas"),
+        "mde_roas": design.get("mde_roas"),
+        "se_source": design.get("se_source"),
+        "model_anchored": mmm is not None,
+        "anchor": None,
+        "opportunity_cost": None,
+        "simulation": None,
+    }
+    lines = [
+        f"### Experiment economics — `{channel}` ({design.get('design_type')})",
+        "",
+    ]
+
+    if mmm is None:
+        payload["note"] = (
+            "No fitted model — analytic design plus the A/A·A/B methodology check on "
+            "historical data (which needs no model). Fit a model to add the "
+            "expected-effect anchor and opportunity cost."
+        )
+        lines.append(
+            f"- {duration}-week test → SE(ROAS) ≈ {design.get('se_roas', 0):.2f}, "
+            f"MDE ≈ {design.get('mde_roas', 0):.2f} (analytic; fit a model for the "
+            "expected-effect anchor and opportunity cost)."
+        )
+
+    # ── Model-anchored expected effect, powered-to-detect verdict, OC (need a fit) ──
+    evoi_channel: float | None = None
+    if mmm is not None:
+        from mmm_framework.planning import (
+            compute_experiment_priorities,
+            compute_opportunity_cost,
+            model_anchored_effect,
+            powered_to_detect,
+            realized_sigma_exp_for_anchor,
+        )
+
+        # The anchor and the opportunity cost both need the SAME paired BAU /
+        # experiment posterior passes (the dominant cost). Compute them once and
+        # share, so the op runs 2 passes instead of 4. Falls back to per-call
+        # sampling if the shared build fails.
+        _bau = _exp = None
+        try:
+            from mmm_framework.planning.opportunity_cost import (
+                _resolve_treated_rows,
+                build_experiment_media,
+            )
+
+            _tmask, _tcodes, _wc, _deff, _w = _resolve_treated_rows(
+                mmm, design, duration=duration
+            )
+            _x_exp, _chi, _nr = build_experiment_media(
+                mmm, design, treated_mask=_tmask, window_codes=_wc
+            )
+            _x_bau = np.asarray(getattr(mmm, "X_media_raw"), dtype=float)
+            _bau = mmm.sample_channel_contributions(
+                X_media=_x_bau, max_draws=max_draws, random_seed=random_seed
+            )
+            _exp = mmm.sample_channel_contributions(
+                X_media=_x_exp, max_draws=max_draws, random_seed=random_seed
+            )
+        except Exception:  # noqa: BLE001 — sharing is an optimization only
+            _bau = _exp = None
+
+        try:
+            anchor = model_anchored_effect(
+                mmm,
+                design,
+                max_draws=max_draws,
+                random_seed=random_seed,
+                contrib_bau=_bau,
+                contrib_exp=_exp,
+            )
+            verdict = powered_to_detect(
+                anchor,
+                design.get("power_curve"),
+                duration,
+                float(design.get("se_roas") or 0.0),
+            )
+            sigma_exp, incr_draws = realized_sigma_exp_for_anchor(
+                np.asarray(anchor["incremental_roas_draws"], dtype=float),
+                float(design.get("se_roas") or 0.0),
+            )
+            design["model_anchor"] = {
+                "expected_effect": anchor,
+                "verdict": verdict,
+                "realized_sigma_exp": sigma_exp,
+                "roas_units": "incremental ROAS (KPI per $) over the treated cells",
+            }
+            payload["anchor"] = {
+                "roas_at_current_median": anchor["roas_at_current_median"],
+                "incremental_roas_median": anchor["incremental_roas_median"],
+                "incremental_roas_hdi": anchor["incremental_roas_hdi"],
+                "expected_incremental_kpi_median": anchor[
+                    "expected_incremental_kpi_median"
+                ],
+                "verdict": verdict["verdict"],
+                "assurance": verdict["assurance"],
+                "prob_detectable": verdict["prob_detectable"],
+                "recommended_duration": verdict["recommended_duration"],
+                "extrapolation_warning": anchor["extrapolation_warning"],
+            }
+            lines += [
+                f"- Model expects incremental ROAS ≈ "
+                f"{anchor['incremental_roas_median']:.2f} "
+                f"(90% HDI [{anchor['incremental_roas_hdi'][0]:.2f}, "
+                f"{anchor['incremental_roas_hdi'][1]:.2f}]); "
+                f"MDE ≈ {design.get('mde_roas', 0):.2f}.",
+                f"- **{verdict['verdict'].upper()}** — assurance "
+                f"{(verdict['assurance'] or 0):.0%} of detecting the expected effect"
+                + (
+                    f"; reach power at ≈ {verdict['recommended_duration']} weeks."
+                    if verdict.get("recommended_duration")
+                    else "."
+                ),
+            ]
+
+            # Loopback: feed the realized precision + incremental estimand into
+            # the EIG/EVOI grid (draw-paired with the curves at the same max_draws).
+            if include_loopback:
+                try:
+                    grid, _portfolio = compute_experiment_priorities(
+                        mmm,
+                        sigma_exp_overrides={channel: sigma_exp},
+                        roi_draws_overrides={channel: incr_draws},
+                        max_draws=max_draws,
+                        random_seed=random_seed,
+                    )
+                    row = next((g for g in grid if g.channel == channel), None)
+                    if row is not None:
+                        evoi_channel = float(row.evoi)
+                        payload["anchor"]["eig"] = float(row.eig)
+                        payload["anchor"]["evoi"] = evoi_channel
+                        payload["anchor"]["quadrant"] = row.quadrant
+                except Exception as e:  # noqa: BLE001 — loopback is a refinement
+                    payload["anchor"]["loopback_error"] = str(e)
+        except Exception as e:  # noqa: BLE001
+            design["model_anchor_error"] = str(e)
+            payload["anchor_error"] = str(e)
+
+        # ── Opportunity cost / short-term risk ──
+        try:
+            oc = compute_opportunity_cost(
+                mmm,
+                design,
+                margin_per_kpi=margin,
+                price=price,
+                kpi_kind=kpi_kind,
+                loss_threshold=loss_threshold,
+                evoi_kpi_units=evoi_channel,
+                response_horizon_weeks=int(getattr(mmm, "n_periods", 0) or 0) or None,
+                max_draws=max_draws,
+                random_seed=random_seed,
+                contrib_bau=_bau,
+                contrib_exp=_exp,
+            )
+            payload["opportunity_cost"] = oc.to_dict()
+            lines.append(
+                f"- Short-term risk: forgo ≈ {oc.forgone_kpi_median:,.0f} KPI "
+                f"({(oc.pct_of_window_kpi or 0):.1%} of the treated window), "
+                f"spend Δ {oc.spend_delta:+,.0f}"
+                + (
+                    f"; net ${oc.net_profit_impact_median:+,.0f} "
+                    f"(downside ${oc.opportunity_cost_dollar_median:,.0f})."
+                    if oc.net_profit_impact_median is not None
+                    else " (supply a margin for net-$ impact)."
+                )
+            )
+            if oc.learning_to_cost_ratio is not None:
+                lines.append(
+                    f"- Learning-vs-cost: {oc.learning_to_cost_ratio:.2f} "
+                    "(EVOI per week ÷ KPI cost per week)."
+                )
+        except Exception as e:  # noqa: BLE001
+            payload["opportunity_cost_error"] = str(e)
+
+    # ── A/A & A/B methodology comparison (runs pre-fit too — needs no model) ──
+    if run_simulation:
+        try:
+            from mmm_framework.planning import methodology_leaderboard
+
+            expected_total = None
+            if payload.get("anchor"):
+                expected_total = abs(
+                    float(payload["anchor"]["expected_incremental_kpi_median"])
+                )
+            spend_window = None
+            if payload.get("opportunity_cost"):
+                spend_window = float(payload["opportunity_cost"]["abs_spend_change"])
+            elif design.get("weekly_spend_delta"):
+                # Pre-fit fallback: realized $ change ≈ weekly delta × test weeks.
+                spend_window = float(design["weekly_spend_delta"]) * duration
+            sim = methodology_leaderboard(
+                dataset_path,
+                kpi,
+                channel,
+                mmm=mmm,
+                design=design,
+                duration=duration,
+                target_mde_roas=float(design.get("mde_roas") or 0.0) or None,
+                spend_delta_window=spend_window or 0.0,
+                expected_effect_total=expected_total,
+                seed=int(design_params.get("seed", 42)),
+            )
+            payload["simulation"] = sim
+            chosen = sim.get("chosen_key")
+            invalid = [m["key"] for m in sim["methodologies"] if not m["valid"]]
+            lines.append(
+                "- Methodology check: "
+                + (
+                    f"recommend `{chosen}`"
+                    if chosen
+                    else "no methodology cleared the validity bar on this data"
+                )
+                + (
+                    "; flagged (inflated false-positive rate): "
+                    f"{', '.join('`%s`' % k for k in invalid)}."
+                    if invalid
+                    else "."
+                )
+            )
+        except Exception as e:  # noqa: BLE001
+            payload["simulation_error"] = str(e)
+
+    payload["design"] = design
+    out = _ok(
+        "\n".join(lines),
+        {"experiment_economics": payload, "experiment_design_plan": design},
+    )
+
+    # Tables: methodology comparison + opportunity-cost metrics.
+    tables = []
+    sim = payload.get("simulation")
+    if sim and sim.get("methodologies"):
+        tables.append(
+            records_to_table_json(
+                [
+                    {
+                        "methodology": m["label"],
+                        "valid": m["valid"],
+                        "fpr": m["fpr"],
+                        "fpr_tolerance": m["fpr_tolerance"],
+                        "n_eff_windows": m["n_eff_windows"],
+                        "empirical_mde_roas": m["empirical_mde_roas"],
+                        "power_at_expected": m["power_at_expected_effect"],
+                        "recommended": m["key"] == sim.get("chosen_key"),
+                    }
+                    for m in sim["methodologies"]
+                ],
+                title="Experiment methodology comparison (A/A · A/B)",
+                source="experiment_economics",
+                group="results",
+            )
+        )
+    oc = payload.get("opportunity_cost")
+    if oc:
+        oc_rows = [
+            ("Forgone KPI (median)", oc.get("forgone_kpi_median")),
+            ("Forgone KPI (p95 worst case)", oc.get("forgone_kpi_p95")),
+            ("% of treated-window KPI", oc.get("pct_of_window_kpi")),
+            ("Spend Δ (signed)", oc.get("spend_delta")),
+            ("Spend at risk", oc.get("spend_at_risk")),
+            ("Net $ impact (median)", oc.get("net_profit_impact_median")),
+            ("Opportunity cost $ (p95)", oc.get("opportunity_cost_dollar_median")),
+            ("Learning-vs-cost ratio", oc.get("learning_to_cost_ratio")),
+        ]
+        tables.append(
+            records_to_table_json(
+                [{"metric": k, "value": v} for k, v in oc_rows if v is not None],
+                title="Short-term risk / opportunity cost",
+                source="experiment_economics",
+                group="results",
+            )
+        )
+    if tables:
+        out["tables"] = tables
+    return out
+
+
+experiment_economics.allow_unfitted = True  # design-only path works pre-fit
+
+
+def experiment_optimizer(
+    mmm: Any,
+    results: Any = None,
+    *,
+    dataset_path: str,
+    kpi: str,
+    channel: str,
+    margin: float | None = None,
+    price: float | None = None,
+    kpi_kind: str = "revenue",
+    duration_min: int = 4,
+    duration_max: int = 12,
+    intensity_min: float = 50.0,
+    intensity_max: float = 100.0,
+    durations: list[int] | None = None,
+    scaling_intensities: list[float] | None = None,
+    include_holdout: bool = True,
+    footprints: list[str] | None = None,
+    max_draws: int = 80,
+    random_seed: int = 42,
+) -> dict:
+    """Suggest a runnable experiment setup for ``channel`` and the Pareto front
+    of designs (MDE × power × short-term cost × duration), over the duration and
+    spend-variation ranges — using the fitted model for the opportunity cost,
+    statistical power, and the adstock-derived cool-down."""
+    if mmm is None:
+        return _err(NO_MODEL_MSG)
+    if not (dataset_path and kpi and channel):
+        return _err(
+            "optimizer params must carry dataset_path, kpi and channel "
+            "(the kernel cannot read host state)."
+        )
+    try:
+        from mmm_framework.planning import suggest_experiment
+
+        out = suggest_experiment(
+            mmm,
+            dataset_path,
+            kpi,
+            channel,
+            margin=margin,
+            price=price,
+            kpi_kind=kpi_kind,
+            duration_min=int(duration_min),
+            duration_max=int(duration_max),
+            intensity_min=float(intensity_min),
+            intensity_max=float(intensity_max),
+            durations=tuple(durations) if durations else None,
+            scaling_intensities=(
+                tuple(scaling_intensities) if scaling_intensities else None
+            ),
+            include_holdout=bool(include_holdout),
+            footprints=tuple(footprints) if footprints else ("full", "half"),
+            max_draws=int(max_draws),
+            random_seed=int(random_seed),
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Experiment optimization failed: {e}")
+
+    rec = out.get("recommended")
+    cool = out.get("cooldown") or {}
+    lines = [f"### Suggested experiment for `{channel}`", ""]
+    if rec:
+        # to_dict() maps non-finite floats to None; coerce before formatting.
+        _intensity = rec.get("intensity_pct") or 0.0
+        _mde = rec.get("mde_roas") or 0.0
+        _tradeoff = rec.get("tradeoff") or 0.0
+        groups = (
+            f"test {rec.get('treatment_geos')} vs control {rec.get('control_geos')}"
+            if rec.get("treatment_geos")
+            else f"national flighting (±{_intensity:.0f}%, "
+            f"{rec.get('block_weeks')}-week blocks)"
+        )
+        lines += [
+            f"- **{rec.get('design_key')} / {rec.get('mode')}** — "
+            f"{_intensity:+.0f}% spend, {rec.get('footprint')} footprint, "
+            f"**{rec.get('duration')}-week** test.",
+            f"- MDE ≈ {_mde:.2f} ROAS; short-term tradeoff ≈ "
+            f"{_tradeoff:,.0f} ({rec.get('tradeoff_basis')}).",
+            (
+                f"- **Power {rec['power']:.0%}** to detect the expected effect "
+                f"(target {float(out.get('power_target') or 0.8):.0%}) — "
+                f"{'meets' if rec.get('powered') else 'BELOW'} the bar."
+                if rec.get("power") is not None
+                else "- Power: not available (no model effect estimate)."
+            ),
+        ]
+        _pb = rec.get("power_breakdown")
+        if _pb:
+
+            def _pp(x):
+                return f"{x:.0%}" if isinstance(x, (int, float)) else "n/a"
+
+            lines.append(
+                f"- Flighting power by estimand ({_pb.get('n_levels')} spend "
+                f"levels): ROAS {_pp(_pb.get('roas'))}, contribution "
+                f"{_pp(_pb.get('contribution'))}, **mROAS {_pp(_pb.get('mroas'))}** "
+                + (
+                    "(curve identified — multi-level)."
+                    if _pb.get("mroas_identified")
+                    else "(on/off: mROAS is a secant, not the curve — add spend "
+                    "levels to identify it)."
+                )
+            )
+        lines += [
+            f"- Setup: {groups}.",
+            f"- **Cool-down: {cool.get('cooldown_weeks')} weeks** "
+            f"({cool.get('basis')}) before the treated cells are back to BAU.",
+        ]
+        if rec.get("duration_requested") and rec["duration_requested"] != rec.get(
+            "duration"
+        ):
+            lines.append(
+                f"- ⚠️ Realized window {rec.get('duration')}w (requested "
+                f"{rec['duration_requested']}w) — ragged panel / adstock memory."
+            )
+    else:
+        lines.append("No feasible design found for this channel/data.")
+    for _note in out.get("notes") or []:
+        lines.append(f"- _{_note}_")
+    lines.append(
+        f"\nPareto front: {len(out.get('pareto_indices') or [])} non-dominated of "
+        f"{out.get('n_candidates')} designs (lowest MDE × highest power "
+        f"[target {float(out.get('power_target') or 0.8):.0%}] × smallest "
+        "short-term cost × shortest duration). See the table for the full front."
+    )
+
+    op_out = _ok("\n".join(lines), {"experiment_optimization": out})
+    pareto = out.get("pareto") or []
+    if pareto:
+        op_out["tables"] = [
+            records_to_table_json(
+                [
+                    {
+                        "design": f"{c['design_key']}/{c['mode']}",
+                        "footprint": c["footprint"],
+                        "intensity_pct": c["intensity_pct"],
+                        "duration": c["duration"],
+                        "mde_roas": c["mde_roas"],
+                        "power": c["power"],
+                        "power_roas": (c.get("power_breakdown") or {}).get("roas"),
+                        "power_mroas": (c.get("power_breakdown") or {}).get("mroas"),
+                        "n_levels": (c.get("power_breakdown") or {}).get("n_levels"),
+                        "tradeoff": c["tradeoff"],
+                        "tradeoff_basis": c["tradeoff_basis"],
+                        "forgone_kpi": c["forgone_kpi_median"],
+                        "powered": c["powered"],
+                        "recommended": c["is_recommended"],
+                    }
+                    for c in pareto
+                ],
+                title="Experiment Pareto front (MDE × power × cost × duration)",
+                source="experiment_optimizer",
+                group="results",
+            )
+        ]
+    return op_out
+
+
+# ── Structural-parameter identification (multi-level flighting) ────────────────
+
+
+def _structural_anchor(mmm: Any, channel: str) -> tuple[dict | None, str]:
+    """Extract the v1-gated structural anchor for ``channel`` from a fitted model,
+    or ``(None, reason)`` when the gate fails (Tier 2 refuses; Tier 1 still runs).
+
+    Gate (locked design): national single cell, PARAMETRIC geometric adstock +
+    logistic saturation, with ``beta_<ch>``/``adstock_alpha_<ch>``/``sat_lam_<ch>``
+    present. The legacy path has only a Beta mix weight, not a decay ``alpha`` —
+    so it refuses rather than read a mix weight as carryover.
+    """
+    try:
+        from mmm_framework.config.enums import AdstockType, SaturationType
+        from mmm_framework.reporting.helpers.utils import (
+            _flatten_samples,
+            _get_posterior,
+        )
+    except Exception as e:  # noqa: BLE001
+        return None, f"import failed: {e}"
+
+    names = list(getattr(mmm, "channel_names", []) or [])
+    if channel not in names:
+        return None, f"channel {channel!r} not in the fitted model"
+    c = names.index(channel)
+    if not bool(getattr(mmm, "use_parametric_adstock", False)):
+        return None, (
+            "the fit uses legacy non-parametric adstock (a Beta mix weight, not a "
+            "decay alpha) — structural identification needs a parametric geometric fit"
+        )
+    n_cells = int(getattr(mmm, "n_cells", 1) or 1)
+    if n_cells > 1:
+        return None, "structural identification v1 is national (single-cell) only"
+    try:
+        a_cfg = mmm._get_adstock_config(channel)
+        s_cfg = mmm._get_saturation_config(channel)
+    except Exception as e:  # noqa: BLE001
+        return None, f"could not read the channel transform config: {e}"
+    if a_cfg.type != AdstockType.GEOMETRIC:
+        return None, f"v1 supports geometric adstock only (got {a_cfg.type})"
+    if s_cfg.type != SaturationType.LOGISTIC:
+        return None, f"v1 supports logistic saturation only (got {s_cfg.type})"
+
+    post = _get_posterior(mmm)
+    if post is None:
+        return None, "no posterior on the fitted model"
+    keys = {"beta": f"beta_{channel}", "alpha": f"adstock_alpha_{channel}", "lam": f"sat_lam_{channel}"}
+    draws: dict[str, np.ndarray] = {}
+    for p, k in keys.items():
+        if k not in post:
+            return None, f"posterior is missing {k!r}"
+        draws[p] = np.asarray(_flatten_samples(post[k].values), dtype=float)
+
+    try:
+        x_media = np.asarray(getattr(mmm, "X_media_raw"), dtype=float)
+        op_spend = float(x_media[:, c].mean())
+        raw_max = float(mmm._media_raw_max[channel])
+        y_std = float(mmm.y_std)
+        n_periods = int(getattr(mmm, "n_periods", x_media.shape[0]) or x_media.shape[0])
+        sigma_lo = float(np.median(_flatten_samples(post["sigma"].values))) * y_std
+    except Exception as e:  # noqa: BLE001
+        return None, f"could not read model scaling/sigma: {e}"
+
+    # pessimistic noise = response-regression residual SD (demand-detrended).
+    try:
+        from mmm_framework.planning.design import _regression_residual_sd
+
+        sigma_hi = float(
+            _regression_residual_sd(np.asarray(mmm.y_raw, dtype=float), x_media[:, c])
+        )
+    except Exception:  # noqa: BLE001
+        sigma_hi = sigma_lo
+    if not (math.isfinite(sigma_hi) and sigma_hi > 0):
+        sigma_hi = sigma_lo
+
+    return (
+        {
+            "channel_index": c,
+            "draws": draws,
+            "op_spend": op_spend,
+            "raw_max": raw_max,
+            "y_std": y_std,
+            "n_periods": n_periods,
+            "l_max": int(a_cfg.l_max),
+            "normalize": bool(a_cfg.normalize),
+            "sigma_lo": float(sigma_lo),
+            "sigma_hi": float(sigma_hi),
+            "x_media": x_media,
+        },
+        "ok",
+    )
+
+
+def _structural_self_check(
+    mmm: Any, anchor: dict, *, n_draws: int, random_seed: int
+) -> tuple[bool, str]:
+    """Fail-closed check that the numpy forward op byte-mirrors the fitted graph:
+    compare the median channel contribution from ``sample_channel_contributions``
+    to the numpy forward op evaluated over the same historical series across a
+    posterior sample. Mismatch → Tier 2 is disabled (Tier 1 still runs)."""
+    try:
+        from mmm_framework.planning.identification import _forward_contribution
+
+        c = anchor["channel_index"]
+        x_media = anchor["x_media"]
+        model_contrib = mmm.sample_channel_contributions(
+            X_media=x_media, max_draws=int(n_draws), random_seed=int(random_seed)
+        )
+        model_med = np.median(np.asarray(model_contrib)[:, :, c], axis=0)
+
+        # numpy forward op median over a posterior subsample of the same size.
+        rng = np.random.default_rng(int(random_seed))
+        d = anchor["draws"]
+        n = min(d["beta"].size, d["alpha"].size, d["lam"].size)
+        idx = rng.choice(n, size=min(int(n_draws), n), replace=False)
+        hist_mults = x_media[:, c] / max(anchor["op_spend"], 1e-12)
+        series = []
+        for i in idx:
+            ci, _ = _forward_contribution(
+                hist_mults,
+                anchor["op_spend"],
+                anchor["raw_max"],
+                anchor["y_std"],
+                float(d["beta"][i]),
+                float(d["alpha"][i]),
+                float(d["lam"][i]),
+                l_max=anchor["l_max"],
+                normalize=anchor["normalize"],
+            )
+            series.append(ci)
+        mine_med = np.median(np.asarray(series), axis=0)
+
+        scale = float(np.median(np.abs(model_med))) or 1.0
+        rrmse = float(np.sqrt(np.mean((mine_med - model_med) ** 2)) / scale)
+        if model_med.std() > 0 and mine_med.std() > 0:
+            corr = float(np.corrcoef(mine_med, model_med)[0, 1])
+        else:
+            corr = 0.0
+        ok = bool(np.isfinite(rrmse) and rrmse < 0.15 and corr > 0.9)
+        return ok, f"rRMSE={rrmse:.3f}, corr={corr:.3f}"
+    except Exception as e:  # noqa: BLE001
+        return False, f"self-check raised: {e}"
+
+
+def identify_structural_parameters(
+    mmm: Any,
+    results: Any = None,
+    *,
+    dataset_path: str,
+    kpi: str,
+    channel: str,
+    levels: list[float] | None = None,
+    block_weeks: int | None = None,
+    duration: int = 12,
+    max_draws: int = 200,
+    self_check_draws: int = 60,
+    random_seed: int = 42,
+) -> dict:
+    """Design a multi-level flighting schedule and report how well its refit
+    would identify the channel's STRUCTURAL parameters — saturation curve
+    (``psi``), adstock carryover (``alpha``), and coefficient (``beta``).
+
+    An OPTIMISTIC UPPER BOUND (local Laplace design over the manufactured
+    exogenous variance) on what the next refit achieves — never a guarantee. The
+    recommended estimator is the full structural refit with the experiment weeks
+    appended. Requires a parametric geometric + logistic national fit; otherwise
+    reports the reduced-form curve/marginal power only."""
+    if mmm is None:
+        return _err(NO_MODEL_MSG)
+    if not (dataset_path and kpi and channel):
+        return _err(
+            "identification params must carry dataset_path, kpi and channel "
+            "(the kernel cannot read host state)."
+        )
+
+    from mmm_framework.planning import identification as _ident
+    from mmm_framework.planning.design import flighting_design
+    from mmm_framework.planning.experiment_optimizer import cooldown_weeks
+
+    # Cool-down (= adstock washout) sets the minimum block so carryover doesn't
+    # smear the contrast — the design must clear it to identify alpha.
+    cool = cooldown_weeks(mmm, channel)
+    blk = int(block_weeks or cool.get("cooldown_weeks") or 2)
+
+    anchor, reason = _structural_anchor(mmm, channel)
+
+    # In-support clamp on the requested levels (curvature credit needs the top
+    # level within historical per-period spend support).
+    lv = list(levels) if levels else [0.5, 1.0, 1.5]
+    extrap = False
+    if anchor is not None:
+        top_in_support = 0.98 * anchor["raw_max"] / max(anchor["op_spend"], 1e-12)
+        clamped = [min(float(m), top_in_support) for m in lv]
+        extrap = any(float(m) > top_in_support + 1e-9 for m in lv)
+        lv = clamped
+
+    try:
+        design = flighting_design(
+            dataset_path,
+            kpi,
+            channel,
+            levels=tuple(lv),
+            block_weeks=blk,
+            duration=int(duration),
+            seed=int(random_seed),
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Could not build the flighting schedule: {e}")
+
+    schedule = design.get("schedule") or []
+    mults = np.array([s["multiplier"] for s in schedule], dtype=float)
+    n_levels = int(design.get("n_levels", 0))
+
+    payload: dict[str, Any] = {
+        "channel": channel,
+        "kpi": kpi,
+        "design_key": "national_flighting",
+        "block_weeks": blk,
+        "duration": int(design.get("duration", duration) or duration),
+        "n_levels": n_levels,
+        "schedule": schedule,
+        "cooldown_weeks": cool.get("cooldown_weeks"),
+        "block_ge_cooldown": blk >= int(cool.get("cooldown_weeks") or 0),
+        "reduced_form": design.get("estimand_ses"),
+        "extrapolation_warning": bool(extrap),
+        "structural": None,
+        "structural_gated": anchor is not None,
+        "structural_gate_reason": reason,
+    }
+    lines = [
+        f"### Structural identification — `{channel}` (multi-level flighting)",
+        "",
+        f"- {payload['duration']}-week budget-neutral schedule, {n_levels} spend "
+        f"levels, {blk}-week blocks "
+        f"({'>=' if payload['block_ge_cooldown'] else '<'} {cool.get('cooldown_weeks')}w "
+        "adstock washout"
+        + ("" if payload["block_ge_cooldown"] else " — block too short, carryover smears the contrast")
+        + ").",
+    ]
+    if extrap:
+        lines.append(
+            "- ⚠️ Requested a spend level beyond the channel's observed per-period "
+            "range — clamped to in-support; curve identification cannot rest on "
+            "extrapolation."
+        )
+
+    if anchor is None:
+        payload["note"] = (
+            "Structural (beta/alpha/psi) identification is unavailable for this "
+            f"fit ({reason}). The reduced-form curve / marginal-ROAS power is "
+            "still computed (multi-level flighting traces the saturation curve)."
+        )
+        lines += ["", f"- Structural block skipped: _{reason}_."]
+        if n_levels >= 3:
+            lines.append(
+                "- The schedule's ≥3 spend levels still let the next fit trace the "
+                "saturation curve (reduced-form marginal-ROAS identification)."
+            )
+        return _ok("\n".join(lines), {"structural_identification": payload})
+
+    ok, detail = _structural_self_check(
+        mmm, anchor, n_draws=int(self_check_draws), random_seed=int(random_seed)
+    )
+    payload["self_check"] = {"passed": ok, "detail": detail}
+    if not ok:
+        payload["note"] = (
+            "The numpy forward op did not byte-mirror the fitted graph "
+            f"({detail}); structural identification is withheld (fail-closed). "
+            "Reduced-form curve power still applies."
+        )
+        lines += ["", f"- ⚠️ Structural self-check failed ({detail}); withheld."]
+        return _ok("\n".join(lines), {"structural_identification": payload})
+
+    in_support = not extrap and (
+        max(mults) * anchor["op_spend"] <= anchor["raw_max"] + 1e-9
+    )
+    struct = _ident.structural_identification(
+        mults,
+        anchor["op_spend"],
+        anchor["raw_max"],
+        anchor["y_std"],
+        anchor["draws"],
+        sigma_lo=anchor["sigma_lo"],
+        sigma_hi=anchor["sigma_hi"],
+        l_max=anchor["l_max"],
+        normalize=anchor["normalize"],
+        in_support=in_support,
+    )
+    if struct is None:
+        payload["note"] = "structural design degenerate (near-singular / no contrast)."
+        lines += ["", "- Structural design degenerate — no identifiable contrast."]
+        return _ok("\n".join(lines), {"structural_identification": payload})
+
+    payload["structural"] = struct
+    p = struct["params"]
+
+    def _pct(x):
+        return f"{x:.0%}" if isinstance(x, (int, float)) else "n/a"
+
+    def _row(name, key):
+        d = p[key]
+        if not d["claimed"]:
+            hint = (
+                "add ≥3 in-support spend levels"
+                if key == "lam"
+                else "sharpen / lengthen the spend pulses"
+                if key == "alpha"
+                else "widen the spend contrast"
+            )
+            return f"- **{name}**: not identified by this design — {hint}."
+        # Lead with contraction (the honest experiment-driven identification
+        # axis); power is the resolve-from-0 number (UI-consistent, prior-heavy).
+        return (
+            f"- **{name}**: contraction {_pct(d['contraction'])} of the prior "
+            f"(MDE {d['mde']:.3g}"
+            + (f" = {_pct(d['mde_relative'])} of the estimate" if d.get("mde_relative") else "")
+            + f"; power {_pct(d['power'])} to resolve from 0)."
+        )
+
+    lines += [
+        "",
+        "**Structural identification (optimistic upper bound on the refit):**",
+        _row("Coefficient β", "beta"),
+        _row("Adstock α (carryover)", "alpha"),
+        _row("Saturation curve ψ", "lam"),
+    ]
+    if not struct.get("identifies_anything"):
+        payload["note"] = (
+            "this schedule contributes no structural information (flat / collinear "
+            "contrast) — the reduced-form curve power still applies."
+        )
+        lines.append(
+            "- This schedule does not move the structural parameters off their "
+            "priors — add spend levels and sharpen the pulses."
+        )
+        return _ok("\n".join(lines), {"structural_identification": payload})
+    binding = struct.get("binding_power")
+    binding_c = struct.get("binding_contraction")
+    lines.append(
+        f"- **Binding identification: contraction {_pct(binding_c)}** "
+        f"(power {_pct(binding)} to resolve from 0, target {_pct(struct['power_target'])}) "
+        "— the worst-identified claimed parameter; recommended estimator: a full "
+        "structural refit with the experiment weeks appended."
+    )
+    if struct.get("n_clamped"):
+        lines.append(
+            f"- {struct['n_clamped']} test week(s) are fully saturated (no marginal "
+            "info there) — keep levels in the responsive range."
+        )
+
+    op_out = _ok("\n".join(lines), {"structural_identification": payload})
+    rows = []
+    for name, key in (("beta", "beta"), ("alpha", "alpha"), ("lam", "lam")):
+        d = p[key]
+        rows.append(
+            {
+                "parameter": {"beta": "coefficient", "alpha": "adstock", "lam": "saturation"}[key],
+                "claimed": d["claimed"],
+                "identified": d["identified"],
+                "power": d["power"],
+                "contraction": d["contraction"],
+                "mde": d["mde"],
+                "prior_sd": d["prior_sd"],
+                "post_sd": d["post_sd"],
+            }
+        )
+    op_out["tables"] = [
+        records_to_table_json(
+            rows,
+            title="Structural identification by parameter (β, α, ψ)",
+            source="identify_structural_parameters",
+            group="results",
+        )
+    ]
+    return op_out
+
+
 # Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
 OPS = {
     "roi_metrics": roi_metrics,
@@ -787,4 +1686,7 @@ OPS = {
     "optimize_budget": optimize_budget,
     "experiment_design": experiment_design,
     "experiment_priorities": experiment_priorities,
+    "experiment_economics": experiment_economics,
+    "experiment_optimizer": experiment_optimizer,
+    "identify_structural_parameters": identify_structural_parameters,
 }
