@@ -286,6 +286,33 @@ def _diff_noise_sd(series: pd.Series | np.ndarray) -> float:
     return float(np.std(np.diff(x)) / math.sqrt(2.0))
 
 
+def _regression_residual_sd(kpi_series: np.ndarray, spend: np.ndarray) -> float:
+    """Residual sd of KPI after removing the design's own baseline structure
+    (intercept + trend + yearly Fourier + the channel's standardized spend) — the
+    OLS noise sd for the flighting response regression ``y = g(spend) + noise``,
+    not the full national KPI innovation (which over-states the residual via
+    promos/other channels → pessimistic power). Falls back to the robust
+    first-difference estimator when the regression degenerates."""
+    y = np.asarray(kpi_series, dtype=float)
+    n = y.size
+    if n < 12 or not np.all(np.isfinite(y)):
+        return _diff_noise_sd(y)
+    xb = _baseline_design_matrix(n)
+    s = np.asarray(spend, dtype=float)
+    if s.size == n and s.std() > 0:
+        xb = np.column_stack([xb, (s - s.mean()) / s.std()])
+    try:
+        beta, *_ = np.linalg.lstsq(xb, y, rcond=None)
+        resid = y - xb @ beta
+        dof = max(n - xb.shape[1], 1)
+        sd = float(np.sqrt(float(np.sum(resid**2)) / dof))
+    except np.linalg.LinAlgError:
+        return _diff_noise_sd(y)
+    if not math.isfinite(sd) or sd <= 0:
+        return _diff_noise_sd(y)
+    return sd
+
+
 def _did_se_total_kpi(sigma_d: float, t_test: int, t_pre: int) -> float:
     """SE of the TOTAL incremental KPI over the test window for a DiD on the
     pooled treatment-minus-control series: the estimate is
@@ -521,6 +548,95 @@ def geo_lift_design(
 # ── Randomized flighting (national) ───────────────────────────────────────────
 
 
+# Minimum multiplier separation (fraction of mean spend) for a level grid to be
+# non-degenerate: closer levels make the response regression ill-conditioned and
+# the SEs meaningless even though np.linalg.inv won't raise.
+_MIN_LEVEL_SEP = 0.02
+
+
+def flighting_estimand_ses(
+    mults: np.ndarray,
+    mean_spend: float,
+    sigma_y: float,
+    *,
+    x0: float | None = None,
+) -> dict[str, Any] | None:
+    """SEs of a flighting design's three estimands from its spend levels.
+
+    Models the local channel response as ``y_t = g(x_t) + noise`` and fits
+    ``g`` with the design's spend regressors (a quadratic ``[1, x, x²]`` when ≥3
+    distinct levels are present, else a line). From the OLS covariance
+    ``σ²(XᵀX)⁻¹`` it reads off the SE of:
+
+    - the LEVEL ``g(x₀)`` at the operating point → the **contribution** SE (and,
+      divided by ``x₀``, the **average ROAS** SE — the same estimate rescaled);
+    - the SLOPE ``g'(x₀)`` → the **mROAS** SE.
+
+    The marginal (tangent) ``g'(x₀)`` is only identifiable with ≥3 distinct
+    levels; a binary on/off yields a secant slope (``se_mroas`` is still returned
+    but ``mroas_identified=False``). Returns ``None`` for a degenerate design
+    (too few / near-collinear levels, non-finite inputs, ill-conditioned fit) so
+    a meaningless SE never reaches the power math. ``x0`` overrides the operating
+    point (pass the MODEL's per-week spend so the ROAS/contribution posteriors
+    and these SEs share one basis).
+    """
+    mults = np.asarray(mults, dtype=float)
+    op = float(mean_spend if x0 is None else x0)
+    if (
+        not np.all(np.isfinite(mults))
+        or not math.isfinite(sigma_y)
+        or sigma_y <= 0
+        or not math.isfinite(op)
+        or op <= 0
+        or mults.size < 3
+    ):
+        return None
+    x = op * mults
+    distinct = sorted({round(float(m), 6) for m in mults})
+    n_distinct = len(distinct)
+    # genuine separation between levels (else XᵀX is near-singular → garbage SEs)
+    if n_distinct < 2 or min(np.diff(distinct)) < _MIN_LEVEL_SEP:
+        return None
+    quad = n_distinct >= 3
+    if quad:
+        des = np.column_stack([np.ones_like(x), x, x * x])
+        c_level = np.array([1.0, op, op * op])
+        c_slope = np.array([0.0, 1.0, 2.0 * op])
+    else:
+        des = np.column_stack([np.ones_like(x), x])
+        c_level = np.array([1.0, op])
+        c_slope = np.array([0.0, 1.0])
+    xtx = des.T @ des
+    # near-singular: a finite-but-garbage inverse (inv only raises when EXACTLY
+    # singular), so reject on the condition number too.
+    if not np.all(np.isfinite(xtx)) or np.linalg.cond(xtx) > 1.0 / np.finfo(float).eps:
+        return None
+    try:
+        cov = sigma_y**2 * np.linalg.inv(xtx)
+    except np.linalg.LinAlgError:
+        return None
+    q_level = float(c_level @ cov @ c_level)
+    q_slope = float(c_slope @ cov @ c_slope)
+    # a negative quadratic form (beyond rounding) signals an ill-conditioned fit
+    if q_level < -1e-9 or q_slope < -1e-9:
+        return None
+    se_level = math.sqrt(max(q_level, 0.0))  # SE of g(x0)
+    se_slope = math.sqrt(max(q_slope, 0.0))  # SE of g'(x0)
+    if se_level <= 0 or se_slope <= 0:
+        return None  # a 0 SE would masquerade as perfect (100%) power
+    return {
+        # contribution (per-week g(x0)) and avg-ROAS (g(x0)/x0) are the SAME
+        # estimate rescaled by the known spend, so their detection power is
+        # identical — paired with per-week posteriors so the powers coincide.
+        "se_contribution": float(se_level),
+        "se_roas": float(se_level / op),
+        "se_mroas": float(se_slope),
+        "n_distinct_levels": int(n_distinct),
+        "mroas_identified": bool(quad),
+        "window_weeks": int(x.size),
+    }
+
+
 def flighting_design(
     dataset_path: str,
     kpi: str,
@@ -530,44 +646,70 @@ def flighting_design(
     block_weeks: int = 2,
     duration: int = 12,
     budget_neutral: bool = True,
+    levels: tuple[float, ...] | None = None,
+    x0: float | None = None,
     seed: int = 42,
 ) -> dict[str, Any]:
-    """Block-randomized on/off flighting schedule for a national series.
+    """Block-randomized flighting schedule for a national series.
 
     Historical spend is usually smooth and co-moves with demand — the model
-    cannot tell the channel from the season. A budget-neutral high/low pulse
-    schedule (randomized block order, amplitude ±a%) manufactures exogenous
-    variance: identification the data finally pays for. Block length should be
-    >= the channel's adstock memory so carryover doesn't smear the contrast.
+    cannot tell the channel from the season. A budget-neutral pulse schedule
+    (randomized block order) manufactures exogenous variance: identification the
+    data finally pays for. Block length should be >= the channel's adstock
+    memory so carryover doesn't smear the contrast.
+
+    ``levels`` (spend multipliers, e.g. ``(0.5, 1.0, 1.5, 2.0)``) gives a
+    MULTI-LEVEL schedule — ≥3 distinct levels let the experiment trace the
+    response CURVE (so the marginal ROAS / saturation is identified), not just a
+    single on/off contrast. Default (``None``) is the binary high/low pulse at
+    ``±amplitude_pct``.
     """
-    if not 0 < amplitude_pct <= 100:
-        raise ValueError("amplitude_pct must be in (0, 100]")
     frame = load_design_frame(dataset_path, kpi, channel)
     spend = frame["spend_national"].to_numpy(float)
     kpi_series = frame["kpi_national"].to_numpy(float)
 
     rng = np.random.default_rng(seed)
-    n_blocks = max(2, math.ceil(duration / block_weeks))
-    if n_blocks % 2:
-        n_blocks += 1  # balanced high/low when budget-neutral
-    a = amplitude_pct / 100.0
+    levels_requested = list(levels) if levels is not None else None
+    multi_requested = False
+    if levels is not None and len(levels) >= 2:
+        lv = [max(0.0, float(m)) for m in levels]
+        if not any(m > 0 for m in lv):
+            raise ValueError("levels must include at least one positive multiplier")
+        multi_requested = len({round(m, 6) for m in lv}) >= 3
+        k = len(lv)
+        n_blocks = max(k, math.ceil(duration / block_weeks))
+        if n_blocks % k:
+            n_blocks += k - (n_blocks % k)  # multiple of K for a balanced design
+        block_mults = lv * (n_blocks // k)
+        rng.shuffle(block_mults)  # randomize block order
+    else:
+        if not 0 < amplitude_pct <= 100:
+            raise ValueError("amplitude_pct must be in (0, 100]")
+        a = amplitude_pct / 100.0
+        n_blocks = max(2, math.ceil(duration / block_weeks))
+        if n_blocks % 2:
+            n_blocks += 1  # balanced high/low
+        # Randomize block order in balanced (high, low) pairs — local balance
+        # keeps the contrast orthogonal to slow trend while staying unpredictable.
+        block_mults = []
+        for _ in range(n_blocks // 2):
+            hi_first = rng.random() < 0.5
+            block_mults.extend([1 + a, 1 - a] if hi_first else [1 - a, 1 + a])
 
-    # Randomize block order in balanced (high, low) pairs: every consecutive
-    # pair contains one high and one low block, coin-flipped — local balance
-    # keeps the contrast orthogonal to slow trend while staying unpredictable.
-    block_mults: list[float] = []
-    for _ in range(n_blocks // 2):
-        hi_first = rng.random() < 0.5
-        block_mults.extend([1 + a, 1 - a] if hi_first else [1 - a, 1 + a])
+    # A multi-level schedule must keep at least one full K-balanced cycle, else
+    # truncation silently drops levels and downgrades it to a binary on/off.
+    min_len = (n_blocks * block_weeks) if multi_requested else (block_weeks * 2)
     schedule = [
         {"week_offset": w, "multiplier": float(block_mults[w // block_weeks])}
         for w in range(n_blocks * block_weeks)
-    ][: max(duration, block_weeks * 2)]
+    ][: max(duration, min_len)]
     mults = np.array([s["multiplier"] for s in schedule])
     if budget_neutral:
-        mults = mults / mults.mean()  # exact neutrality after truncation
-        for s, m in zip(schedule, mults):
-            s["multiplier"] = float(round(m, 4))
+        _mean = mults.mean()
+        if _mean > 1e-12:
+            mults = mults / _mean  # exact neutrality after truncation
+            for s, m in zip(schedule, mults):
+                s["multiplier"] = float(round(m, 4))
 
     # Identification gain. Historical spend variance is mostly ENDOGENOUS
     # (planned around demand/seasonality — the model can't separate it from
@@ -579,34 +721,79 @@ def flighting_design(
     window_cv = float(mults.std())  # multiplier sd ≈ induced CV around the mean
     exogenous_share = float(window_cv**2 / max(window_cv**2 + hist_cv**2, 1e-12))
 
+    # Regression-residual noise: remove the SAME baseline the design models
+    # (trend + yearly seasonality + the channel's own spend) so sigma_y is the
+    # residual of y = g(spend) + noise, NOT the full national KPI innovation
+    # (which is inflated by promos/other channels → pessimistic power). Falls
+    # back to the raw first-difference estimator if the regression degenerates.
+    sigma_y = _regression_residual_sd(kpi_series, spend)
+
     # On/off contrast power: ROAS estimated as ΔKPI/Δspend between high and
-    # low weeks; KPI noise from the detrended national series.
-    sigma_y = _diff_noise_sd(kpi_series)
+    # low weeks. The per-week spend swing uses the MODEL's operating spend (x0)
+    # when supplied — the SAME basis the estimand SEs/MDE use — so the reported
+    # weekly Δspend reconciles with them even when the model was fit on a
+    # different window than the full dataset (else they silently diverge).
+    op_spend = float(mean_spend if x0 is None else x0)
     t_hi = int((mults > 1).sum())
     t_lo = int((mults < 1).sum())
-    spread = float(mults[mults > 1].mean() - mults[mults < 1].mean())
-    weekly_spend_delta = mean_spend * spread
+    _hi = mults[mults > 1]
+    _lo = mults[mults < 1]
+    spread = float(
+        (_hi.mean() if _hi.size else 1.0) - (_lo.mean() if _lo.size else 1.0)
+    )
+    weekly_spend_delta = op_spend * abs(spread)
     se_roas = (
         sigma_y
         * math.sqrt(1.0 / max(t_hi, 1) + 1.0 / max(t_lo, 1))
         / max(weekly_spend_delta, 1e-12)
     )
 
-    analysis_plan = (
-        f"Estimator: on/off contrast (high-block vs low-block weeks) or "
-        f"interrupted time-series regression with the schedule as the "
-        f"instrument; intention-to-treat on the PLANNED schedule. "
-        f"Pre-register: {len(schedule)}-week window, ±{amplitude_pct:.0f}% "
-        f"amplitude in {block_weeks}-week blocks, budget-neutral. Leave a "
-        f"washout of one adstock window after each block boundary when "
-        f"estimating, or model the carryover explicitly. The same weeks feed "
-        f"the next MMM fit, where the manufactured variance tightens the "
-        f"channel's posterior directly."
+    # Distinct spend levels + the three-estimand SEs (contribution / ROAS / mROAS).
+    # Filter non-finite (a degenerate schedule must not report phantom levels).
+    distinct_levels = sorted({round(float(m), 4) for m in mults if math.isfinite(m)})
+    n_levels = len(distinct_levels)
+    multi_level = n_levels >= 3
+    levels_truncated = bool(
+        levels_requested is not None
+        and n_levels < len({round(max(0.0, float(m)), 6) for m in levels_requested})
     )
+    # SEs at the model's operating point (x0) when supplied, so the design SEs
+    # and the model ROAS/contribution posteriors share one per-week spend basis.
+    estimand_ses = flighting_estimand_ses(mults, mean_spend, sigma_y, x0=x0)
+
+    if multi_level:
+        analysis_plan = (
+            f"Estimator: regress KPI on the (adstocked, saturated) spend across "
+            f"the {n_levels} scheduled spend levels — a multi-level design that "
+            f"traces the response CURVE, so the average ROAS, the channel "
+            f"contribution, AND the marginal ROAS (curve slope at current spend) "
+            f"are each identified. Pre-register: {len(schedule)}-week window, "
+            f"levels {distinct_levels} of mean spend in {block_weeks}-week blocks, "
+            f"budget-neutral. Leave a washout of one adstock window after each "
+            f"block boundary, or model carryover explicitly. The manufactured "
+            f"curve variance tightens the channel's saturation posterior directly."
+        )
+    else:
+        analysis_plan = (
+            f"Estimator: on/off contrast (high-block vs low-block weeks) or "
+            f"interrupted time-series regression with the schedule as the "
+            f"instrument; intention-to-treat on the PLANNED schedule. "
+            f"Pre-register: {len(schedule)}-week window, ±{amplitude_pct:.0f}% "
+            f"amplitude in {block_weeks}-week blocks, budget-neutral. Leave a "
+            f"washout of one adstock window after each block boundary when "
+            f"estimating, or model the carryover explicitly. A binary on/off "
+            f"identifies the average ROAS but NOT the curve — add spend levels "
+            f"(>=3) to estimate the marginal ROAS / saturation. The same weeks "
+            f"feed the next MMM fit, tightening the channel's posterior directly."
+        )
 
     return {
         "design_key": "national_flighting",
-        "design_type": "randomized flighting (budget-neutral spend pulses)",
+        "design_type": (
+            "randomized multi-level flighting (curve evidence)"
+            if multi_level
+            else "randomized flighting (budget-neutral spend pulses)"
+        ),
         "channel": channel,
         "kpi": kpi,
         "amplitude_pct": float(amplitude_pct),
@@ -614,6 +801,12 @@ def flighting_design(
         "duration": int(len(schedule)),
         "budget_neutral": bool(budget_neutral),
         "schedule": schedule,
+        "levels": distinct_levels,
+        "n_levels": n_levels,
+        "multi_level": multi_level,
+        "levels_requested": levels_requested,
+        "levels_truncated": levels_truncated,
+        "estimand_ses": estimand_ses,
         "identification": {
             "historical_spend_cv": hist_cv,
             "scheduled_window_cv": window_cv,

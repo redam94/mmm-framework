@@ -17,7 +17,16 @@ from schemas import (
     ProjectUpdateRequest,
     SuccessResponse,
 )
-from storage import StorageError, StorageService, get_storage
+from storage import (
+    StorageError,
+    StorageService,
+    assert_org_owns as _assert_org_owns,
+    get_storage,
+    org_scope as _org_scope,
+)
+
+from mmm_framework.auth.deps import get_current_principal
+from mmm_framework.auth.models import AuthContext
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -51,11 +60,13 @@ def _project_to_response(
 async def create_project(
     request: ProjectCreateRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Create a new project."""
     project = storage.save_project(
         name=request.name,
         description=request.description,
+        org_id=_org_scope(principal),
     )
     return _project_to_response(project, storage)
 
@@ -66,9 +77,10 @@ async def create_project(
 )
 async def list_projects(
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List all projects with resource counts."""
-    projects = storage.list_projects()
+    projects = storage.list_projects(org_id=_org_scope(principal))
     items = [_project_to_response(p, storage, include_counts=True) for p in projects]
     return ProjectListResponse(projects=items, total=len(items))
 
@@ -81,12 +93,14 @@ async def list_projects(
 async def get_project(
     project_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get a project by ID with resource counts."""
     try:
         project = storage.get_project_metadata(project_id)
     except StorageError:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    _assert_org_owns(project.get("org_id"), _org_scope(principal))
     return _project_to_response(project, storage, include_counts=True)
 
 
@@ -99,10 +113,17 @@ async def update_project(
     project_id: str,
     request: ProjectUpdateRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Update project name or description."""
     if not storage.project_exists(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    # IDOR: 404 unless owned. ``update_project_metadata`` merges onto the loaded
+    # record (which keeps ``org_id``), so the org stamp is preserved.
+    _assert_org_owns(
+        storage.get_project_metadata(project_id).get("org_id"),
+        _org_scope(principal),
+    )
     updates = request.model_dump(exclude_none=True)
     project = storage.update_project_metadata(project_id, updates)
     return _project_to_response(project, storage, include_counts=True)
@@ -116,6 +137,7 @@ async def update_project(
 async def delete_project(
     project_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Delete a project record.
@@ -123,6 +145,12 @@ async def delete_project(
     Member resources (data, configs, models) are NOT deleted — they become
     unassigned. To delete them, use the respective resource endpoints.
     """
+    if not storage.project_exists(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    _assert_org_owns(
+        storage.get_project_metadata(project_id).get("org_id"),
+        _org_scope(principal),
+    )
     if not storage.delete_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return SuccessResponse(message=f"Project {project_id} deleted")

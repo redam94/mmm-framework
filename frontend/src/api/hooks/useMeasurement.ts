@@ -1,6 +1,12 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { measurementService } from '../services/measurementService';
-import type { DesignRequest, ExperimentTransition } from '../services/measurementService';
+import type {
+  DesignRequest,
+  ExperimentTransition,
+  OptimizeRequest,
+  SimulateRequest,
+} from '../services/measurementService';
 import { portfolioKeys } from './usePortfolio';
 
 export const measurementKeys = {
@@ -12,6 +18,10 @@ export const measurementKeys = {
     [...measurementKeys.all, 'priorities', projectId] as const,
   history: (projectId: string | null) => [...measurementKeys.all, 'history', projectId] as const,
   coverage: (projectId: string | null) => [...measurementKeys.all, 'coverage', projectId] as const,
+  simulation: (projectId: string | null, jobId: string | null) =>
+    [...measurementKeys.all, 'simulation', projectId, jobId] as const,
+  optimization: (projectId: string | null, jobId: string | null) =>
+    [...measurementKeys.all, 'optimization', projectId, jobId] as const,
 };
 
 export function useExperimentRegistry(projectId: string | null, status?: string) {
@@ -84,6 +94,65 @@ export function useComputeDesign(projectId: string | null) {
   return useMutation({
     mutationFn: (body: DesignRequest) => measurementService.computeDesign(projectId!, body),
   });
+}
+
+/**
+ * Model-anchored economics + A/A·A/B simulation. `start` POSTs the design and
+ * stores the returned job_id; `job` polls until the job reaches done/error.
+ * Call `reset` to clear the in-flight job (e.g. when studio inputs change).
+ */
+export function useExperimentSimulation(projectId: string | null) {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: (body: SimulateRequest) => measurementService.startSimulation(projectId!, body),
+    onSuccess: (data) => setJobId(data.job_id),
+  });
+
+  const job = useQuery({
+    queryKey: measurementKeys.simulation(projectId, jobId),
+    queryFn: () => measurementService.pollSimulation(projectId!, jobId!),
+    enabled: !!projectId && !!jobId,
+    refetchInterval: (q) =>
+      ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2500,
+  });
+
+  const reset = () => {
+    setJobId(null);
+    start.reset();
+  };
+
+  return { start, job, reset, jobId };
+}
+
+/**
+ * Experiment-setup optimizer. `start` POSTs the channel and stores the returned
+ * job_id; `job` polls until the Pareto-front job reaches done/error. Call
+ * `reset` to clear the in-flight job (e.g. when studio inputs change).
+ */
+export function useExperimentOptimization(projectId: string | null) {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: (body: OptimizeRequest) =>
+      measurementService.startOptimization(projectId!, body),
+    onSuccess: (data) => setJobId(data.job_id),
+  });
+
+  const job = useQuery({
+    queryKey: measurementKeys.optimization(projectId, jobId),
+    queryFn: () => measurementService.pollOptimization(projectId!, jobId!),
+    enabled: !!projectId && !!jobId,
+    refetchInterval: (q) =>
+      ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2500,
+  });
+
+  const reset = () => {
+    setJobId(null);
+    start.reset();
+  };
+
+  return { start, job, reset, jobId };
 }
 
 export function useCalibrationCoverage(projectId: string | null) {

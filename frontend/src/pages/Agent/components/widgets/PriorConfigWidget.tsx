@@ -5,7 +5,7 @@ import { DashWidget } from '../common/DashWidget';
 import { FLabel, iCls } from '../common/form';
 import {
   ANY_DISTS, DIST_DEFS, POSITIVE_DISTS, PRIOR_DEFAULTS, UNIT_DISTS,
-  computeDensity, initPriors,
+  asVarArray, computeDensity, initPriors,
 } from '../../utils/priors';
 import type { DistKey, PriorValue } from '../../utils/priors';
 import { normalizeTrendType } from '../../utils/spec';
@@ -140,8 +140,10 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
     onApplySpec({ ...spec, priors: { media: priors.media, controls: priors.controls, trend: trendPriors, seasonality: seasPriors } });
   };
 
-  const channels = spec?.media_channels ?? [];
-  const ctrls = spec?.control_variables ?? [];
+  // Normalize to arrays: the spec may carry these as a dict keyed by name, an
+  // array of objects, or an array of bare strings (see asVarArray).
+  const channels = asVarArray(spec?.media_channels);
+  const ctrls = asVarArray(spec?.control_variables);
   const trendType = normalizeTrendType(spec?.trend?.type);
   const seasonalityComponents = (['yearly', 'monthly', 'weekly'] as const)
     .filter(c => (spec?.seasonality?.[c] ?? 0) > 0);
@@ -154,9 +156,9 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
   ];
 
   const adstockType = (chName: string) =>
-    (spec?.media_channels?.find((c: any) => c.name === chName)?.adstock?.type ?? 'geometric').toLowerCase();
+    (channels.find((c: any) => c.name === chName)?.adstock?.type ?? 'geometric').toLowerCase();
   const satType = (chName: string) =>
-    (spec?.media_channels?.find((c: any) => c.name === chName)?.saturation?.type ?? 'hill').toLowerCase();
+    (channels.find((c: any) => c.name === chName)?.saturation?.type ?? 'hill').toLowerCase();
 
   const content = (
     <div className="space-y-3">

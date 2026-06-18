@@ -3,14 +3,17 @@ import copy
 import json
 import logging
 import importlib
+import threading
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Union
 import io
 import contextlib
 import traceback
 
 from langchain_core.tools import tool, InjectedToolCallId, InjectedToolArg
 from langchain_core.messages import ToolMessage
+
+logger = logging.getLogger(__name__)
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from langgraph.prebuilt import InjectedState
@@ -691,13 +694,15 @@ def fit_mmm_model(
     }
 
     # Calibrated-fit close-out (host-side, best-effort): the spec's experiment
-    # likelihoods are now folded into THIS run, so transition the registry
-    # entries completed → calibrated with the run link, and clear the spec's
-    # experiments so the NEXT fit isn't silently double-calibrated.
+    # likelihoods were folded into THIS run, so transition the registry entries
+    # completed → calibrated with the run link. The experiments STAY in the spec:
+    # each fit rebuilds the model fresh from ``spec["experiments"]``, so clearing
+    # them would make the next refit silently drop every prior calibration.
+    # (Re-folding the same set is not double-counting — a fit includes each
+    # experiment exactly once; double-counting would require a duplicate entry.)
     if spec.get("experiments"):
         try:
             from mmm_framework.api import sessions as _sessions
-            from mmm_framework.agents.spec_locks import make_spec_patch
 
             run_id = (info.get("model_run") or {}).get("run_id")
             done = 0
@@ -712,14 +717,6 @@ def fit_mmm_model(
                     done += 1
                 except ValueError:
                     pass  # already calibrated / deleted — not this fit's problem
-            patch = make_spec_patch(
-                [
-                    {"path": "experiments", "value": []},
-                    {"path": "experiment_ids", "value": []},
-                ]
-            )
-            update["model_spec"] = patch
-            dashboard_data["model_spec"] = patch
             if done:
                 summary += f" Registry updated: {done} experiment(s) marked calibrated."
                 update["fit_results_summary"] = summary
@@ -1779,7 +1776,12 @@ def get_current_config(
 def update_model_setting(
     state: Annotated[dict, InjectedState],
     setting_path: str,
-    value: Any,
+    # A bare ``Any`` produces an untyped JSON schema that Google Gemini's
+    # function-declaration validator rejects (it cannot represent "any type" and
+    # emits a null property schema, breaking tool-binding for the WHOLE agent).
+    # A scalar union is Gemini-valid (rendered as ``anyOf``) and pydantic's
+    # smart-union keeps each JSON value's native type, so behavior is unchanged.
+    value: Union[str, int, float, bool],
     reason: str = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3580,6 +3582,9 @@ def record_experiment_readout(
     end_date: str = None,
     method: str = None,
     notes: str = None,
+    spend_per_period: float = None,
+    n_treated_units: int = 1,
+    adstock_state: str = "steady_state",
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3589,6 +3594,17 @@ def record_experiment_readout(
     method (e.g. 'geo holdout DiD', 'synthetic control'). A planned experiment
     is moved through 'running' automatically.
 
+    Off-panel calibration (experiment ran OUTSIDE the model's fitted date
+    range): also pass `spend_per_period` — the channel's spend per period per
+    treated unit during the test, on the same scale as the dataset's spend
+    column — plus `n_treated_units` (number of treated geos/units, default 1)
+    and `adstock_state` ('steady_state' for an always-on/sustained test,
+    'cold_start' for a burst launched from dark). With these, the calibration
+    evaluates the channel's response curve at the test's spend level instead of
+    requiring the window to overlap the data, so an experiment from a different
+    period can still be folded in (assuming the response curve is stable across
+    the two periods). Not needed when the window falls inside the data.
+
     'completed' means measured but NOT yet in the model — follow with
     apply_experiment_calibration + fit_mmm_model to close the loop.
     """
@@ -3597,34 +3613,63 @@ def record_experiment_readout(
     exp = sessions_store.get_experiment(experiment_id)
     if exp is None:
         return _simple_msg(f"Unknown experiment id '{experiment_id}'.", tool_call_id)
-    try:
-        if exp["status"] == "planned":
-            exp = sessions_store.transition_experiment(
-                experiment_id, "running", note="auto-advanced at readout"
-            )
-        readout = {
-            "value": value,
-            "se": se,
-            "estimand": estimand,
-            "method": method,
-            "notes": notes,
-        }
-        exp = sessions_store.transition_experiment(
-            experiment_id,
-            "completed",
-            value=float(value),
-            se=float(se),
-            estimand=estimand,
-            start_date=start_date,
-            end_date=end_date,
-            readout=readout,
-            note=method,
+    if adstock_state not in ("steady_state", "cold_start"):
+        return _simple_msg(
+            "adstock_state must be 'steady_state' or 'cold_start'.", tool_call_id
         )
+    try:
+        # Merge onto any existing readout so re-recording (e.g. adding a spend
+        # level for off-panel calibration) only adds fields rather than wiping
+        # method/notes that weren't re-passed.
+        readout = dict(exp.get("readout") or {})
+        readout.update({"value": value, "se": se, "estimand": estimand})
+        if method is not None:
+            readout["method"] = method
+        if notes is not None:
+            readout["notes"] = notes
+        # Off-panel calibration inputs (used when the test window is outside the
+        # dataset): the response curve is evaluated at this spend level.
+        if spend_per_period is not None:
+            readout["spend_per_period"] = float(spend_per_period)
+            readout["n_treated_units"] = int(n_treated_units or 1)
+            readout["adstock_state"] = adstock_state
+
+        if exp["status"] in ("completed", "calibrated"):
+            # Already measured: update the readout in place. A completed->completed
+            # transition is illegal (and we must not bounce a calibrated experiment
+            # back), so re-recording is an idempotent self-update — this is exactly
+            # the path the off-panel advisory tells the user to take to attach a
+            # spend level after the fact.
+            exp = sessions_store.upsert_experiment(
+                experiment_id=experiment_id,
+                value=float(value),
+                se=float(se),
+                estimand=estimand,
+                start_date=start_date,
+                end_date=end_date,
+                readout=readout,
+            )
+        else:
+            if exp["status"] == "planned":
+                exp = sessions_store.transition_experiment(
+                    experiment_id, "running", note="auto-advanced at readout"
+                )
+            exp = sessions_store.transition_experiment(
+                experiment_id,
+                "completed",
+                value=float(value),
+                se=float(se),
+                estimand=estimand,
+                start_date=start_date,
+                end_date=end_date,
+                readout=readout,
+                note=method,
+            )
     except ValueError as exc:
         return _simple_msg(f"Could not record readout: {exc}", tool_call_id)
     return _simple_msg(
         f"Readout recorded for **{exp['channel']}**: {value:g} ± {se:g} "
-        f"({estimand}). Status **completed** — not yet in the model. Next: "
+        f"({estimand}). Status **{exp['status']}** — not yet in the model. Next: "
         "apply_experiment_calibration, then fit_mmm_model for the calibrated "
         "refit.",
         tool_call_id,
@@ -3643,9 +3688,11 @@ def apply_experiment_calibration(
     model spec. The next fit_mmm_model folds them into the model as in-graph
     likelihood terms and marks the registry entries 'calibrated'.
 
-    Uses every 'completed' experiment in the project unless `experiment_ids`
-    narrows it. Each experiment needs value, se, estimand, and a test window
-    (start/end dates) inside the dataset's date range.
+    Uses every measured experiment in the project — 'completed' AND already
+    'calibrated' (from earlier fits) — unless `experiment_ids` narrows it, so a
+    refit that adds one experiment keeps all the prior calibrations. Each
+    experiment needs value, se, estimand, and a test window (start/end dates);
+    out-of-window experiments calibrate off-panel from their recorded spend.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -3664,28 +3711,43 @@ def apply_experiment_calibration(
     except Exception:
         pass
 
-    completed = sessions_store.list_experiments(
-        project_id=project_id, status="completed"
-    )
+    # Stage the FULL measured set — newly 'completed' AND already 'calibrated'
+    # (from prior fits). The spec is rebuilt from scratch each fit, so staging
+    # only the new batch would drop every previously-calibrated experiment and
+    # silently lose its calibration on the next refit.
+    completed = [
+        e
+        for e in sessions_store.list_experiments(project_id=project_id)
+        if e.get("status") in ("completed", "calibrated")
+    ]
     if experiment_ids:
         wanted = set(experiment_ids)
         missing = wanted - {e["id"] for e in completed}
         if missing:
             return _simple_msg(
-                f"Not in 'completed' status (or unknown): {', '.join(sorted(missing))}. "
-                "Only completed experiments can be calibrated.",
+                f"Not measured yet (or unknown): {', '.join(sorted(missing))}. "
+                "Only completed or already-calibrated experiments can be staged.",
                 tool_call_id,
             )
         completed = [e for e in completed if e["id"] in wanted]
     if not completed:
         return _simple_msg(
-            "No completed experiments to calibrate. Record results first with "
+            "No measured experiments to calibrate. Record results first with "
             "record_experiment_readout.",
             tool_call_id,
         )
 
     channels = {m.get("name") for m in spec.get("media_channels", [])}
-    measurements, problems = [], []
+
+    # Dataset date range + period cadence: an experiment whose window lies inside
+    # the range calibrates in-panel (sum the contribution over the fitted rows);
+    # one outside calibrates *off-panel* (evaluate the response curve at the
+    # test's spend level). Best-effort — None when the file can't be read.
+    dataset_path = state.get("dataset_path")
+    bounds = _dataset_date_bounds(dataset_path)
+    freq_days = _dataset_period_freq_days(dataset_path)
+
+    measurements, problems, needs_spend = [], [], []
     for e in completed:
         errs = []
         if e["channel"] not in channels:
@@ -3697,44 +3759,59 @@ def apply_experiment_calibration(
         if errs:
             problems.append(f"`{e['id'][:8]}` ({e['channel']}): {'; '.join(errs)}")
             continue
-        measurements.append(
-            {
-                "experiment_id": e["id"],
-                "channel": e["channel"],
-                "test_period": [e["start_date"], e["end_date"]],
-                "value": float(e["value"]),
-                "se": float(e["se"]),
-                "estimand": e.get("estimand") or "roas",
-            }
-        )
+
+        start, end = e["start_date"], e["end_date"]
+        estimand = (e.get("estimand") or "roas").lower()
+        m = {
+            "experiment_id": e["id"],
+            "channel": e["channel"],
+            "test_period": [start, end],
+            "value": float(e["value"]),
+            "se": float(e["se"]),
+            "estimand": estimand,
+        }
+
+        if not _window_within_bounds(start, end, bounds):
+            # Off-panel: needs the test's spend level (recorded on the readout).
+            readout = e.get("readout") or {}
+            spend_pp = readout.get("spend_per_period")
+            if spend_pp is None:
+                needs_spend.append(
+                    f"`{e['id'][:8]}` ({e['channel']}) [{start} → {end}]"
+                )
+                continue
+            if estimand == "mroas":
+                problems.append(
+                    f"`{e['id'][:8]}` ({e['channel']}): off-panel calibration "
+                    "supports 'contribution'/'roas' only (not 'mroas') — re-run "
+                    "the test inside the data window for an mROAS estimand."
+                )
+                continue
+            m["eval_spend"] = float(spend_pp)
+            m["eval_periods"] = _periods_in_window(start, end, freq_days)
+            m["eval_units"] = int(readout.get("n_treated_units") or 1)
+            m["adstock_state"] = readout.get("adstock_state") or "steady_state"
+        measurements.append(m)
+
     if problems:
         return _simple_msg(
             "Cannot stage calibration — fix these first:\n- " + "\n- ".join(problems),
             tool_call_id,
         )
 
-    # Window validation against the loaded dataset (best-effort: skip when the
-    # date range can't be read).
-    dataset_path = state.get("dataset_path")
-    bounds = _dataset_date_bounds(dataset_path)
-    if bounds:
-        lo, hi = bounds
-        outside = [
-            m
-            for m in measurements
-            if m["test_period"][0] < lo or m["test_period"][1] > hi
-        ]
-        if outside:
-            desc = ", ".join(
-                f"{m['channel']} [{m['test_period'][0]} → {m['test_period'][1]}]"
-                for m in outside
-            )
-            return _simple_msg(
-                f"Experiment window(s) outside the dataset's date range "
-                f"[{lo} → {hi}]: {desc}. Extend the dataset (the window must be "
-                "observed data) or fix the recorded dates.",
-                tool_call_id,
-            )
+    if needs_spend and not measurements:
+        rng = f"[{bounds[0]} → {bounds[1]}]" if bounds else "the fitted window"
+        return _simple_msg(
+            f"These experiments ran outside the dataset's date range {rng}, so "
+            "they calibrate **off-panel** — evaluating the channel's response "
+            "curve at the test's spend level (valid as long as that curve is "
+            "stable between the test period and your data). I just need the spend "
+            "level: re-run `record_experiment_readout` with `spend_per_period` "
+            "(the channel's spend per period per treated unit during the test), "
+            "plus `n_treated_units` / `adstock_state` if relevant, then call "
+            "apply_experiment_calibration again.\n- " + "\n- ".join(needs_spend),
+            tool_call_id,
+        )
 
     new_spec = copy.deepcopy(dict(spec))
     new_spec["experiments"] = [
@@ -3742,14 +3819,23 @@ def apply_experiment_calibration(
     ]
     new_spec["experiment_ids"] = [m["experiment_id"] for m in measurements]
     chs = ", ".join(sorted({m["channel"] for m in measurements}))
+    n_off = sum(1 for m in measurements if "eval_spend" in m)
+    detail = f" ({n_off} off-panel)" if n_off else ""
+    tail = ""
+    if needs_spend:
+        tail = (
+            f" Skipped {len(needs_spend)} out-of-window experiment(s) missing a "
+            "test spend level — add `spend_per_period` via record_experiment_readout "
+            "to calibrate those off-panel."
+        )
     return _commit_spec(
         state,
         new_spec,
         tool_call_id,
         success_msg=(
-            f"Staged {len(measurements)} experiment likelihood(s) ({chs}) into "
-            "the spec. Now call fit_mmm_model — the refit folds them into the "
-            "model and marks the registry entries calibrated."
+            f"Staged {len(measurements)} experiment likelihood(s){detail} ({chs}) "
+            "into the spec. Now call fit_mmm_model — the refit folds them into the "
+            "model and marks the registry entries calibrated." + tail
         ),
         patch_paths=["experiments", "experiment_ids"],
     )
@@ -3773,6 +3859,66 @@ def _dataset_date_bounds(dataset_path: str | None) -> tuple[str, str] | None:
         )
     except Exception:
         return None
+
+
+def _dataset_period_freq_days(dataset_path: str | None) -> float | None:
+    """Median spacing (in days) between the dataset's unique periods, used to
+    size an off-panel experiment window into a number of periods. None when the
+    file/column can't be read or has fewer than two periods."""
+    if not dataset_path or not os.path.exists(dataset_path):
+        return None
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(dataset_path, usecols=["Period"])
+        period = pd.to_datetime(df["Period"], errors="coerce").dropna().unique()
+        if len(period) < 2:
+            return None
+        diffs = pd.Series(pd.to_datetime(period)).sort_values().diff().dropna()
+        days = float(diffs.dt.days.median())
+        return days if days > 0 else None
+    except Exception:
+        return None
+
+
+def _window_within_bounds(start: str, end: str, bounds: tuple[str, str] | None) -> bool:
+    """Whether ``[start, end]`` lies inside the dataset's date range.
+
+    Parses with ``pd.to_datetime`` (matching the model's own window resolver in
+    ``BayesianMMM._period_to_indices``) so unpadded / non-ISO dates compare
+    correctly rather than by lexicographic string order. ``None`` bounds (date
+    range unreadable) is treated as in-window — the model layer is the backstop.
+    """
+    if not bounds:
+        return True
+    try:
+        import pandas as pd
+
+        s, e = pd.to_datetime(start), pd.to_datetime(end)
+        lo, hi = pd.to_datetime(bounds[0]), pd.to_datetime(bounds[1])
+        return bool(s >= lo and e <= hi)
+    except Exception:
+        # Unparseable dates: fall back to lexicographic ISO comparison.
+        return start >= bounds[0] and end <= bounds[1]
+
+
+def _periods_in_window(start: str, end: str, freq_days: float | None) -> int:
+    """Number of periods spanned by ``[start, end]`` at the dataset's cadence.
+
+    Inclusive of both endpoints. Falls back to a weekly cadence when the
+    dataset frequency can't be inferred, and never returns less than 1. A
+    reversed or zero-length window collapses to a single period.
+    """
+    try:
+        import pandas as pd
+
+        span_days = (pd.to_datetime(end) - pd.to_datetime(start)).days
+    except Exception:
+        return 1
+    if span_days <= 0:
+        return 1
+    step = freq_days if (freq_days and freq_days > 0) else 7.0
+    return max(1, int(round(span_days / step)) + 1)
 
 
 @tool
@@ -3892,7 +4038,11 @@ def design_experiment_plan(
     amplitude_pct: float = 50.0,
     block_weeks: int = 2,
     n_pairs: int = None,
+    levels: list[float] = None,
     seed: int = 42,
+    margin: float = None,
+    kpi_kind: str = "revenue",
+    include_economics: bool = True,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3912,8 +4062,13 @@ def design_experiment_plan(
       `block_weeks` weeks) that manufactures the exogenous variance the spend
       history lacks, with the identification gain quantified.
 
-    Omit design_key to auto-pick from the data. Pure data computation — works
-    PRE-FIT (no fitted model needed). Follow with `plan_experiment` to
+    Omit design_key to auto-pick from the data. The design itself is pure data
+    (works PRE-FIT). When a model IS fitted and `include_economics=True`, the
+    plan is enriched with the model's expected-effect anchor (is the test
+    powered to detect the effect we EXPECT?) and the short-term opportunity cost
+    of deviating from business-as-usual (forgone KPI, spend at risk, net $ when
+    `margin` is given, learning-vs-cost). For the full A/A·A/B methodology
+    comparison use `simulate_experiment`. Follow with `plan_experiment` to
     register + pre-register the design.
     """
     import os as _os
@@ -3937,15 +4092,17 @@ def design_experiment_plan(
     try:
         key = design_key or design_options(dataset_path, kpi, channel)["recommended"]
         if key == "national_flighting":
-            design = design_experiment(
-                dataset_path,
-                kpi,
-                channel,
-                design_key=key,
+            _fl_kw: dict = dict(
                 duration=int(duration),
                 amplitude_pct=float(amplitude_pct),
                 block_weeks=int(block_weeks),
                 seed=int(seed),
+            )
+            if levels:
+                # multi-level spend schedule (>=3 distinct levels traces the curve)
+                _fl_kw["levels"] = tuple(float(m) for m in levels)
+            design = design_experiment(
+                dataset_path, kpi, channel, design_key=key, **_fl_kw
             )
         else:
             kwargs: dict = dict(
@@ -4019,6 +4176,72 @@ def design_experiment_plan(
 
     dashboard_data = dict(state.get("dashboard_data") or {})
     dashboard_data["experiment_design_plan"] = design
+
+    # Model-anchored enrichment: when a model is fitted, add the expected-effect
+    # anchor + short-term opportunity cost via the kernel op (no-op pre-fit, so
+    # this only costs posterior passes when there is a model to anchor to).
+    if include_economics:
+        try:
+            design_params = {
+                "dataset_path": dataset_path,
+                "kpi": kpi,
+                "channel": channel,
+                "design_key": key,
+                "duration": int(duration),
+                "design": geo_design,
+                "intensity_pct": float(intensity_pct),
+                "amplitude_pct": float(amplitude_pct),
+                "block_weeks": int(block_weeks),
+                "seed": int(seed),
+            }
+            if n_pairs is not None:
+                design_params["n_pairs"] = int(n_pairs)
+            if levels:
+                design_params["levels"] = [float(m) for m in levels]
+            eco_res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+                "experiment_economics",
+                {
+                    "design_params": design_params,
+                    "run_simulation": False,
+                    "margin": margin,
+                    "kpi_kind": kpi_kind,
+                },
+            )
+            eco = (eco_res.get("dashboard") or {}).get("experiment_economics")
+            if eco and eco.get("model_anchored"):
+                dashboard_data["experiment_economics"] = eco
+                anc = eco.get("anchor") or {}
+                oc = eco.get("opportunity_cost") or {}
+                if anc.get("verdict"):
+                    design["model_anchor"] = (eco.get("design") or {}).get(
+                        "model_anchor"
+                    )
+                    lines += [
+                        "",
+                        f"**Model anchor** — expected incremental ROAS ≈ "
+                        f"{anc.get('incremental_roas_median', 0):.2f}; design is "
+                        f"**{str(anc['verdict']).upper()}** "
+                        f"(assurance {(anc.get('assurance') or 0):.0%}).",
+                    ]
+                if oc:
+                    net = oc.get("net_profit_impact_median")
+                    lines.append(
+                        f"- Short-term cost of running it: forgo ≈ "
+                        f"{oc.get('forgone_kpi_median', 0):,.0f} KPI, spend Δ "
+                        f"{oc.get('spend_delta', 0):+,.0f}"
+                        + (
+                            f", net ${net:+,.0f}."
+                            if net is not None
+                            else " (give a margin for net-$ impact)."
+                        )
+                    )
+                lines.append(
+                    "\nRun `simulate_experiment` for the full A/A·A/B methodology "
+                    "comparison (power, MDE, false-positive rate by method)."
+                )
+        except Exception:  # noqa: BLE001 — enrichment is additive, never blocks
+            logger.exception("design_experiment_plan economics enrichment failed")
+
     return Command(
         update={
             "messages": [
@@ -4029,7 +4252,439 @@ def design_experiment_plan(
     )
 
 
+@tool
+def simulate_experiment(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    design_key: str = None,
+    duration: int = 8,
+    intensity_pct: float = 50.0,
+    geo_design: str = "scaling",
+    amplitude_pct: float = 50.0,
+    block_weeks: int = 2,
+    n_pairs: int = None,
+    margin: float = None,
+    kpi_kind: str = "revenue",
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Run A/A and A/B simulations on the project's HISTORICAL data to compare
+    experiment methodologies for `channel` — the rigorous "will this test
+    actually work, and which estimator should we trust?" check.
+
+    For each candidate methodology (pooled DiD, per-pair DiD, synthetic-control
+    geo, or national on/off) it reports:
+    - **A/A false-positive rate** — slide the estimator over no-treatment
+      windows; an estimator whose FPR far exceeds 5% is INVALID for this data
+      (its analytic SE is fooled by autocorrelation), no matter its nominal power.
+    - **A/B empirical power & MDE** — inject the model's predicted lift (or a
+      fixed lift pre-fit) onto real history and measure detection at the
+      size-calibrated threshold.
+    - the design's **opportunity cost** and the model's **expected-effect
+      anchor**, when a model is fitted.
+
+    It then recommends the methodology that is valid AND powered AND cheapest.
+    Heavier than `design_experiment_plan` (many estimator passes over history +
+    posterior passes); use it once a design is worth committing to.
+    """
+    import os as _os
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before simulating.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the simulator knows "
+            "the outcome series.",
+            tool_call_id,
+        )
+    design_params = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": channel,
+        "design_key": design_key,
+        "duration": int(duration),
+        "design": geo_design,
+        "intensity_pct": float(intensity_pct),
+        "amplitude_pct": float(amplitude_pct),
+        "block_weeks": int(block_weeks),
+        "seed": int(seed),
+    }
+    if n_pairs is not None:
+        design_params["n_pairs"] = int(n_pairs)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "experiment_economics",
+        {
+            "design_params": design_params,
+            "run_simulation": True,
+            "margin": margin,
+            "kpi_kind": kpi_kind,
+        },
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def suggest_experiment(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    margin: float = None,
+    price: float = None,
+    kpi_kind: str = "revenue",
+    duration_min: int = 4,
+    duration_max: int = 12,
+    intensity_min: float = 50.0,
+    intensity_max: float = 100.0,
+    include_holdout: bool = True,
+    durations: list[int] = None,
+    scaling_intensities: list[float] = None,
+    footprints: list[str] = None,
+    max_draws: int = 80,
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Suggest a runnable experiment SETUP for `channel` from the fitted model,
+    and compute the PARETO FRONT of designs.
+
+    Explores a grid of designs (holdout vs scaling, footprint, duration — or
+    national flighting) bounded by the caller's RANGES and ranks them on four
+    objectives the client trades off: **lowest MDE** (precision), **highest
+    statistical power** (target 80%), **smallest short-term cost** (opportunity
+    cost of deviating from business-as-usual), and **shortest duration**. It
+    returns the non-dominated Pareto front plus a single recommended setup —
+    test/control groups (or a flighting schedule), intensity, duration, and a
+    **cool-down period** derived from the channel's fitted adstock (the washout
+    before the treated cells return to BAU).
+
+    Bound the search with `duration_min`/`duration_max` (weeks) and
+    `intensity_min`/`intensity_max` (signed spend-variation %, e.g. -100 go dark
+    … +150 scale up; the optimizer auto-samples a few points in each range).
+    `include_holdout` adds a go-dark baseline. Pass a `margin` (profit per KPI
+    unit) for a complete net-$ cost comparison. Requires a fitted model.
+
+    Heavy (a posterior pass per candidate); use it to choose a design to commit
+    to. Follow with `plan_experiment` / `preregister_experiment`.
+    """
+    import os as _os
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before optimizing.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the optimizer knows "
+            "the outcome series.",
+            tool_call_id,
+        )
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": channel,
+        "margin": margin,
+        "price": price,
+        "kpi_kind": kpi_kind,
+        "duration_min": int(duration_min),
+        "duration_max": int(duration_max),
+        "intensity_min": float(intensity_min),
+        "intensity_max": float(intensity_max),
+        "include_holdout": bool(include_holdout),
+        "max_draws": int(max_draws),
+        "random_seed": int(seed),
+    }
+    if durations:
+        op_kwargs["durations"] = [int(d) for d in durations]
+    if scaling_intensities:
+        op_kwargs["scaling_intensities"] = [float(x) for x in scaling_intensities]
+    if footprints:
+        op_kwargs["footprints"] = [str(f) for f in footprints]
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "experiment_optimizer", op_kwargs
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def identify_structural_parameters(
+    channel: str,
+    state: Annotated[dict, InjectedState],
+    levels: list[float] = None,
+    block_weeks: int = None,
+    duration: int = 12,
+    max_draws: int = 200,
+    seed: int = 42,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Design a MULTI-LEVEL flighting test for `channel` and report how well its
+    refit would identify the channel's STRUCTURAL model parameters — the
+    saturation curve (ψ), the adstock carryover (α), and the coefficient (β) —
+    using the fitted model as the anchor.
+
+    Pass `levels` as ≥3 distinct spend multipliers (e.g. `[0.5, 1.0, 1.5]`) so
+    the schedule spans the response curve (curvature → ψ); the block length
+    defaults to the channel's adstock washout so sharp pulses identify the
+    carryover (α). Returns per-parameter identification **power**, **MDE**, and
+    posterior **contraction**, plus a binding (worst-parameter) power.
+
+    This is an OPTIMISTIC UPPER BOUND on what the next refit achieves (a local
+    design calculation), not a guarantee — the recommended readout is a full
+    structural refit with the experiment weeks appended. Requires a parametric
+    geometric-adstock + logistic-saturation national fit; otherwise it returns
+    the reduced-form curve/marginal-ROAS identification only. Single-call kernel
+    op — follow with `plan_experiment` / `preregister_experiment` to lock it.
+    """
+    import os as _os
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — load or generate one before designing a test.",
+            tool_call_id,
+        )
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if not kpi:
+        return _simple_msg(
+            "No KPI configured — configure_model first so the design knows the "
+            "outcome series.",
+            tool_call_id,
+        )
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": channel,
+        "duration": int(duration),
+        "max_draws": int(max_draws),
+        "random_seed": int(seed),
+    }
+    if levels:
+        op_kwargs["levels"] = [float(m) for m in levels]
+    if block_weeks is not None:
+        op_kwargs["block_weeks"] = int(block_weeks)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "identify_structural_parameters", op_kwargs
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
 from mmm_framework.agents.eda_tools import EDA_TOOLS
+
+
+# ── Two-tier delegation: orchestrator (fast) → expert (strong) ──────────────
+
+# Compute/code-gen-heavy tools removed from the fast chat tier so it must
+# delegate them to the expert. Tunable; the escape hatch
+# MMM_AGENT_ORCHESTRATOR_FULL_TOOLS=1 restores them on the orchestrator.
+#
+# NB: the experiment-design tools (design_experiment_plan / simulate_experiment /
+# suggest_experiment) are deliberately NOT here — they are single-call kernel ops
+# that return a result in one shot (the heavy compute runs in the kernel either
+# way), so they don't need the expert's iterative tool loop the way fitting and
+# code-gen do. Keeping them on the orchestrator means the chat tier can actually
+# run the experiment-planning flow (design → plan → preregister) directly instead
+# of failing when a weak orchestrator model doesn't reliably delegate.
+HEAVY_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "fit_mmm_model",
+        "prior_predictive_check",
+        "execute_python",
+        "run_marginal_analysis",
+        "run_budget_optimizer",
+        "run_budget_scenario",
+    }
+)
+
+# Lazily-built, cached expert sub-agent graph (strong model, full toolset, NO
+# checkpointer). Building reads the server model config once; the server config
+# is static for the process, so a single cached instance is correct.
+_EXPERT_GRAPH = None
+_EXPERT_GRAPH_LOCK = threading.Lock()
+
+
+def _get_expert_graph(override: dict | None = None):
+    """Build (and, for the server default, cache) the expert sub-agent graph.
+
+    Imports are function-local to break the ``graph`` ↔ ``tools`` module cycle
+    (``graph`` imports ``TOOLS`` from here at import time). The expert graph is
+    compiled WITHOUT a checkpointer: it shares the live session via the same
+    ``thread_id`` (kernel/workspace/model cache), but must not write to the
+    orchestrator's conversation checkpoint.
+
+    ``override`` carries the per-request ``X-Expert-*`` selection (model/provider/
+    api_key/base_url). With no override we build once and cache the server-default
+    graph as a singleton. With an override present we build a FRESH graph each call
+    and do NOT cache it — a delegation always precedes seconds-to-minutes of heavy
+    work, so the ~ms build is negligible, and not caching per-key avoids any
+    cross-user key bleed in hosted mode.
+    """
+    from mmm_framework.agents.graph import create_agent_graph
+    from mmm_framework.agents.llm import build_expert_llm
+
+    override = {k: v for k, v in (override or {}).items() if v}
+    if override:
+        expert_llm = build_expert_llm(
+            provider=override.get("provider"),
+            model_name=override.get("model"),
+            api_key=override.get("api_key"),
+            base_url=override.get("base_url"),
+        )
+        return create_agent_graph(
+            expert_llm, checkpointer=None, tools=EXPERT_TOOLS, role="expert"
+        )
+
+    global _EXPERT_GRAPH
+    if _EXPERT_GRAPH is not None:
+        return _EXPERT_GRAPH
+    with _EXPERT_GRAPH_LOCK:
+        if _EXPERT_GRAPH is None:
+            expert_llm = build_expert_llm()
+            _EXPERT_GRAPH = create_agent_graph(
+                expert_llm, checkpointer=None, tools=EXPERT_TOOLS, role="expert"
+            )
+    return _EXPERT_GRAPH
+
+
+def _final_message_text(messages: list) -> str:
+    """Extract the expert's final assistant text (skipping trailing tool msgs).
+
+    Handles both plain-string content and the list-of-content-blocks shape that
+    Anthropic/Vertex return.
+    """
+    for m in reversed(messages or []):
+        if isinstance(m, ToolMessage):
+            continue
+        content = getattr(m, "content", None)
+        if isinstance(content, str):
+            if content.strip():
+                return content
+            continue
+        if isinstance(content, list):
+            parts = [
+                (blk.get("text", "") if isinstance(blk, dict) else str(blk))
+                for blk in content
+                if (isinstance(blk, dict) and blk.get("type") == "text")
+                or isinstance(blk, str)
+            ]
+            text = "\n".join(p for p in parts if p).strip()
+            if text:
+                return text
+    return ""
+
+
+@tool
+def delegate_to_expert(
+    state: Annotated[dict, InjectedState],
+    task: str,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Delegate a hard task to the expert sub-agent (a stronger model).
+
+    Use this for model fitting, prior/posterior predictive checks, writing and
+    running custom analysis code, budget optimization, marginal analysis,
+    experiment design, or any multi-step quantitative reasoning the fast chat
+    tier should not attempt itself. The expert shares THIS session — the same
+    dataset, model specification, warm ``execute_python`` kernel, fitted model,
+    and workspace — so pass only a clear, self-contained description of what to
+    do, never the data or the spec JSON. The expert runs its own tool loop and
+    returns a summary; relay that summary to the user rather than redoing it.
+
+    Args:
+        task: A single, precise, self-contained instruction for the expert
+            (e.g. "Fit the configured model, then report R-hat, ESS and
+            divergences and flag any convergence problems").
+
+    Returns:
+        A Command whose message is the expert's summary, with any model or
+        dashboard state the expert produced folded back into the session.
+    """
+    from langchain_core.messages import HumanMessage
+
+    thread_id = _activate_thread(config)
+    # The frontend's X-Expert-* selection rides in the injected RunnableConfig's
+    # `configurable` (set by /chat). An empty/absent override falls back to the
+    # server-configured expert (or the chat model) inside _get_expert_graph.
+    configurable = (config or {}).get("configurable") or {}
+    expert_override = {
+        "model": configurable.get("expert_model"),
+        "provider": configurable.get("expert_provider"),
+        "api_key": configurable.get("expert_api_key"),
+        "base_url": configurable.get("expert_base_url"),
+    }
+    try:
+        recursion_limit = int(os.environ.get("MMM_AGENT_EXPERT_RECURSION_LIMIT", "60"))
+    except ValueError:
+        recursion_limit = 60
+
+    # Seed the expert with a full AgentState mirror of the current session, so it
+    # can read the dataset/spec/status. No checkpointer => these values are the
+    # starting state (not loaded from a checkpoint).
+    init_state = {
+        "messages": [HumanMessage(content=task)],
+        "dataset_path": state.get("dataset_path"),
+        "dataset_info": state.get("dataset_info"),
+        "model_spec": state.get("model_spec") or {},
+        "locked_fields": state.get("locked_fields") or [],
+        "pending_spec_changes": state.get("pending_spec_changes") or [],
+        "model_status": state.get("model_status") or "not_started",
+        "fit_results_summary": state.get("fit_results_summary"),
+        "report_path": state.get("report_path"),
+        "dashboard_data": {},
+        "context_summary": None,
+        "context_summary_count": 0,
+    }
+
+    try:
+        expert_graph = _get_expert_graph(expert_override)
+        result = expert_graph.invoke(
+            init_state,
+            config={
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": recursion_limit,
+            },
+        )
+    except Exception as e:
+        logger.exception("delegate_to_expert failed for thread %s", thread_id)
+        err = f"Expert delegation failed: {e}"
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content=err, tool_call_id=tool_call_id, status="error")
+                ],
+            }
+        )
+
+    summary = _final_message_text(result.get("messages") or [])
+    if not summary:
+        summary = "The expert completed the task but returned no summary text."
+
+    update: dict[str, Any] = {
+        "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+    }
+    # Fold back the session-level state the expert may have mutated. model_spec is
+    # a full dict (not a patch envelope), so _merge_spec replaces it; dashboard
+    # plot/table refs union via _merge_dashboard.
+    if result.get("dashboard_data"):
+        update["dashboard_data"] = result["dashboard_data"]
+    if result.get("model_spec"):
+        update["model_spec"] = result["model_spec"]
+    for key in ("model_status", "fit_results_summary", "report_path"):
+        if result.get(key) is not None:
+            update[key] = result[key]
+    return Command(update=update)
+
 
 # List of all tools
 TOOLS = [
@@ -4076,6 +4731,9 @@ TOOLS = [
     recommend_lift_experiments,
     compute_experiment_priorities,
     design_experiment_plan,
+    simulate_experiment,
+    suggest_experiment,
+    identify_structural_parameters,
     plan_experiment,
     preregister_experiment,
     record_experiment_readout,
@@ -4124,3 +4782,18 @@ TOOLS = [
     generate_client_report,
     generate_client_slides,
 ]
+
+
+# Two-tier toolsets derived from TOOLS:
+#   EXPERT_TOOLS       — full power for the strong sub-agent, minus delegate
+#                        (the expert must not recurse into itself).
+#   ORCHESTRATOR_TOOLS — the fast chat tier: TOOLS + delegate_to_expert, with the
+#                        heavy/code-gen tools removed so it must delegate them.
+#                        MMM_AGENT_ORCHESTRATOR_FULL_TOOLS=1 keeps every tool on
+#                        the orchestrator (prompt-driven delegation instead).
+EXPERT_TOOLS = list(TOOLS)
+TOOLS = TOOLS + [delegate_to_expert]
+if os.environ.get("MMM_AGENT_ORCHESTRATOR_FULL_TOOLS") == "1":
+    ORCHESTRATOR_TOOLS = list(TOOLS)
+else:
+    ORCHESTRATOR_TOOLS = [t for t in TOOLS if t.name not in HEAVY_TOOL_NAMES]

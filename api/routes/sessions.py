@@ -13,9 +13,26 @@ from pydantic import BaseModel, Field
 
 from auth import verify_api_key
 from mmm_framework.api import sessions as session_store
+from mmm_framework.auth import store as auth_store
+from mmm_framework.auth.deps import ensure_project_access, get_current_principal
+from mmm_framework.auth.models import AuthContext, Role
 from schemas import ErrorResponse, SuccessResponse
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
+
+
+def _ensure_session_org(
+    thread_id: str, principal: AuthContext, min_role: Role = Role.VIEWER
+) -> None:
+    """404 unless the principal's org owns the session's project. Dev principal
+    (auth off) is a no-op. Fail-closed: a project-less session is unreachable
+    under real auth (sessions must be org-attributed in a multi-tenant deploy)."""
+    if principal.is_dev:
+        return
+    sess = session_store.get_session(thread_id)
+    if sess is None or not sess.get("project_id"):
+        raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+    ensure_project_access(principal, sess["project_id"], min_role)
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -84,10 +101,16 @@ async def list_sessions(
     project_id: str | None = Query(None, description="Filter sessions by project"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List all agent chat sessions, optionally filtered by project."""
     session_store.init_db()
     rows = session_store.list_sessions(project_id=project_id)
+    # When auth is enabled, restrict to sessions whose project belongs to the
+    # principal's org (sessions with no project are owner-only / not surfaced).
+    if not principal.is_dev:
+        owned = auth_store.list_org_project_ids(principal.org_id)
+        rows = [r for r in rows if r.get("project_id") in owned]
     # Enrich with artifact_count for each session
     enriched = []
     for row in rows:
@@ -97,7 +120,7 @@ async def list_sessions(
         else:
             enriched.append(row)
     total = len(enriched)
-    page = enriched[skip: skip + limit]
+    page = enriched[skip : skip + limit]
     return SessionListResponse(
         sessions=[_to_session_info(r) for r in page],
         total=total,
@@ -105,9 +128,14 @@ async def list_sessions(
 
 
 @router.post("", response_model=SessionInfo, status_code=status.HTTP_201_CREATED)
-async def create_session(request: SessionCreateRequest):
+async def create_session(
+    request: SessionCreateRequest,
+    principal: AuthContext = Depends(get_current_principal),
+):
     """Create a new agent session."""
     session_store.init_db()
+    if not principal.is_dev and request.project_id is not None:
+        ensure_project_access(principal, request.project_id, Role.ANALYST)
     row = session_store.create_session(
         name=request.name,
         project_id=request.project_id,
@@ -120,9 +148,12 @@ async def create_session(request: SessionCreateRequest):
     response_model=SessionDetailResponse,
     responses={404: {"model": ErrorResponse}},
 )
-async def get_session(thread_id: str):
+async def get_session(
+    thread_id: str, principal: AuthContext = Depends(get_current_principal)
+):
     """Get a session with its artifacts, assumptions, and workflow status."""
     session_store.init_db()
+    _ensure_session_org(thread_id, principal, Role.VIEWER)
     session = session_store.get_session(thread_id)
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
@@ -147,9 +178,17 @@ async def get_session(thread_id: str):
     response_model=SessionInfo,
     responses={404: {"model": ErrorResponse}},
 )
-async def update_session(thread_id: str, request: SessionUpdateRequest):
+async def update_session(
+    thread_id: str,
+    request: SessionUpdateRequest,
+    principal: AuthContext = Depends(get_current_principal),
+):
     """Rename a session or reassign it to a project."""
     session_store.init_db()
+    _ensure_session_org(thread_id, principal, Role.ANALYST)
+    # Reassigning to a project must target one the caller's org owns.
+    if not principal.is_dev and request.project_id is not None:
+        ensure_project_access(principal, request.project_id, Role.ANALYST)
     updated = session_store.update_session(
         thread_id=thread_id,
         name=request.name,
@@ -166,9 +205,12 @@ async def update_session(thread_id: str, request: SessionUpdateRequest):
     response_model=SuccessResponse,
     responses={404: {"model": ErrorResponse}},
 )
-async def delete_session(thread_id: str):
+async def delete_session(
+    thread_id: str, principal: AuthContext = Depends(get_current_principal)
+):
     """Delete a session and its artifacts."""
     session_store.init_db()
+    _ensure_session_org(thread_id, principal, Role.ANALYST)
     deleted = session_store.delete_session(thread_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
@@ -208,9 +250,13 @@ analysis_plans_router = APIRouter(prefix="/analysis-plans", tags=["Analysis Plan
     response_model=AnalysisPlanInfo,
     status_code=status.HTTP_201_CREATED,
 )
-async def lock_analysis_plan(request: LockPlanRequest):
+async def lock_analysis_plan(
+    request: LockPlanRequest,
+    principal: AuthContext = Depends(get_current_principal),
+):
     """Lock the current DAG + research question + assumptions into a named analysis plan."""
     session_store.init_db()
+    _ensure_session_org(request.thread_id, principal, Role.ANALYST)
     payload: dict[str, Any] = {}
     if request.dag is not None:
         payload["dag"] = request.dag
@@ -233,10 +279,21 @@ async def lock_analysis_plan(request: LockPlanRequest):
 async def list_analysis_plans(
     thread_id: str | None = Query(None, description="Filter by session thread ID"),
     limit: int = Query(20, ge=1, le=100),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List locked analysis plans, optionally filtered by session."""
     session_store.init_db()
+    if thread_id is not None:
+        _ensure_session_org(thread_id, principal, Role.VIEWER)
     plans = session_store.list_analysis_plans(thread_id=thread_id)
+    if thread_id is None and not principal.is_dev:
+        owned = auth_store.list_org_project_ids(principal.org_id)
+        plans = [
+            p
+            for p in plans
+            if (_s := session_store.get_session(p.get("thread_id")))
+            and _s.get("project_id") in owned
+        ]
     page = plans[:limit]
     return AnalysisPlanListResponse(
         plans=[AnalysisPlanInfo(**p) for p in page],
@@ -249,12 +306,15 @@ async def list_analysis_plans(
     response_model=AnalysisPlanInfo,
     responses={404: {"model": ErrorResponse}},
 )
-async def get_analysis_plan(plan_id: str):
+async def get_analysis_plan(
+    plan_id: str, principal: AuthContext = Depends(get_current_principal)
+):
     """Get a single analysis plan by ID."""
     session_store.init_db()
     plan = session_store.get_analysis_plan(plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail=f"Plan not found: {plan_id}")
+    _ensure_session_org(plan.get("thread_id"), principal, Role.VIEWER)
     return AnalysisPlanInfo(**plan)
 
 
@@ -263,9 +323,15 @@ async def get_analysis_plan(plan_id: str):
     response_model=SuccessResponse,
     responses={404: {"model": ErrorResponse}},
 )
-async def delete_analysis_plan(plan_id: str):
+async def delete_analysis_plan(
+    plan_id: str, principal: AuthContext = Depends(get_current_principal)
+):
     """Delete a locked analysis plan."""
     session_store.init_db()
+    plan = session_store.get_analysis_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"Plan not found: {plan_id}")
+    _ensure_session_org(plan.get("thread_id"), principal, Role.ANALYST)
     if not session_store.delete_analysis_plan(plan_id):
         raise HTTPException(status_code=404, detail=f"Plan not found: {plan_id}")
     return SuccessResponse(message=f"Plan {plan_id} deleted")

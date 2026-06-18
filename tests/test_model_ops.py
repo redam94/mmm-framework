@@ -6,6 +6,8 @@ dispatch path, and the save_fitted_model latent-bug fix (correct serializer
 call signature).
 """
 
+import inspect
+
 from mmm_framework.agents import model_ops as M
 
 
@@ -24,7 +26,25 @@ def test_ops_registry_complete():
         "optimize_budget",
         "experiment_design",
         "experiment_priorities",
+        # Parameterized ops (need design/dataset params, not just a model);
+        # exercised in their own wiring tests.
+        "experiment_economics",
+        "experiment_optimizer",
+        "identify_structural_parameters",
     }
+
+
+def _is_model_only_op(op) -> bool:
+    """An op callable as ``op(model)`` — its only required parameter is the
+    model. Parameterized ops (which also require design/dataset params) take a
+    different calling convention and are covered by their own wiring tests."""
+    required = [
+        p
+        for p in inspect.signature(op).parameters.values()
+        if p.default is p.empty
+        and p.kind in (p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY, p.KEYWORD_ONLY)
+    ]
+    return len(required) <= 1
 
 
 def test_analysis_tools_no_model_message():
@@ -49,12 +69,18 @@ def test_analysis_tools_no_model_message():
 
 def test_ops_return_error_as_data_on_bad_model():
     """An op never raises for a compute failure — it returns the error as data so
-    it can cross the future kernel boundary (PR-B)."""
+    it can cross the future kernel boundary (PR-B). Checked for the model-only
+    ops; parameterized ops have their own wiring tests."""
+    checked = 0
     for name, op in M.OPS.items():
+        if not _is_model_only_op(op):
+            continue
         r = op(object())  # not a real model -> compute fails inside
         assert r["content"] is None, name
         assert r["dashboard"] == {}, name
         assert isinstance(r["error"], str) and r["error"], name
+        checked += 1
+    assert checked >= 10  # guard against the filter silently skipping everything
 
 
 def test_modelop_command_success_merges_dashboard():

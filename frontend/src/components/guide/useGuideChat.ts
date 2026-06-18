@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE_URL } from '../../api/client';
+import { API_BASE_URL, expertHeaders, bearerHeader } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 
 export interface GuideMessage {
@@ -41,7 +41,8 @@ function normalizeContent(content: unknown): string {
  * session on first open, hydrates its history, and streams /chat turns.
  */
 export function useGuideChat(projectId: string | null) {
-  const { apiKey, modelName, baseUrl, provider } = useAuthStore();
+  const { apiKey, modelName, baseUrl, provider, expertModel, expertProvider, expertBaseUrl } =
+    useAuthStore();
   const [messages, setMessages] = useState<GuideMessage[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -57,8 +58,10 @@ export function useGuideChat(projectId: string | null) {
     };
     if (baseUrl) h['X-Base-Url'] = baseUrl;
     if (provider) h['X-Provider'] = provider;
+    Object.assign(h, expertHeaders());
+    Object.assign(h, bearerHeader());
     return h;
-  }, [apiKey, modelName, baseUrl, provider]);
+  }, [apiKey, modelName, baseUrl, provider, expertModel, expertProvider, expertBaseUrl]);
 
   // Re-hydrate when the project changes.
   useEffect(() => {

@@ -34,7 +34,16 @@ from schemas import (
     CrossEffectResultSchema,
     CrossEffectType,
 )
-from storage import StorageError, StorageService, get_storage
+from storage import (
+    StorageError,
+    StorageService,
+    assert_org_owns as _assert_org_owns,
+    get_storage,
+    org_scope as _org_scope,
+)
+
+from mmm_framework.auth.deps import get_current_principal
+from mmm_framework.auth.models import AuthContext
 
 router = APIRouter(prefix="/extended-models", tags=["Extended Models"])
 
@@ -94,19 +103,28 @@ def _sanitize_for_json(obj: Any) -> Any:
     return obj
 
 
-def _check_extended_model_exists(storage: StorageService, model_id: str) -> dict:
-    """Check that an extended model exists and return metadata."""
+def _check_extended_model_exists(
+    storage: StorageService, model_id: str, org_id: str | None = None
+) -> dict:
+    """Check that an extended model exists and return metadata.
+
+    404s on cross-org access when ``org_id`` is set (auth enabled).
+    """
     if not storage.model_exists(model_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Model not found: {model_id}",
         )
-    return storage.get_model_metadata(model_id)
+    metadata = storage.get_model_metadata(model_id)
+    _assert_org_owns(metadata.get("org_id"), org_id)
+    return metadata
 
 
-def _check_extended_model_completed(storage: StorageService, model_id: str) -> dict:
+def _check_extended_model_completed(
+    storage: StorageService, model_id: str, org_id: str | None = None
+) -> dict:
     """Check that an extended model exists and is completed."""
-    metadata = _check_extended_model_exists(storage, model_id)
+    metadata = _check_extended_model_exists(storage, model_id, org_id)
     if metadata.get("status") != JobStatus.COMPLETED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -133,6 +151,7 @@ async def get_arq_pool(settings: Settings = Depends(get_settings)) -> ArqRedis:
 async def create_extended_config(
     request: ExtendedConfigCreateRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Create a new extended model configuration.
@@ -151,7 +170,7 @@ async def create_extended_config(
         "model_settings": request.model_settings.model_dump(),
     }
 
-    saved = storage.save_config(config_data)
+    saved = storage.save_config(config_data, org_id=_org_scope(principal))
 
     return ExtendedConfigResponse(
         config_id=saved["config_id"],
@@ -173,10 +192,12 @@ async def create_extended_config(
 async def get_extended_config(
     config_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get an extended model configuration."""
     try:
         config = storage.load_config(config_id)
+        _assert_org_owns(config.get("org_id"), _org_scope(principal))
 
         # Determine model type
         model_type = config.get("model_type", "standard")
@@ -217,6 +238,7 @@ async def fit_extended_model(
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
     arq_pool: ArqRedis = Depends(get_arq_pool),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Start fitting an extended model asynchronously.
@@ -229,6 +251,8 @@ async def fit_extended_model(
 
     Returns a model_id that can be used to track progress and retrieve results.
     """
+    org = _org_scope(principal)
+
     # Validate data exists
     if not storage.data_exists(request.data_id):
         raise HTTPException(
@@ -243,8 +267,10 @@ async def fit_extended_model(
             detail=f"Configuration not found: {request.config_id}",
         )
 
-    # Load config to get model type
+    # Both the dataset and config must belong to the principal's org.
+    _assert_org_owns(storage.get_data_info(request.data_id).get("org_id"), org)
     config = storage.load_config(request.config_id)
+    _assert_org_owns(config.get("org_id"), org)
     model_type = config.get("model_type", "standard")
 
     # Validate mediator data if provided
@@ -252,6 +278,10 @@ async def fit_extended_model(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Mediator dataset not found: {request.mediator_data_id}",
+        )
+    if request.mediator_data_id:
+        _assert_org_owns(
+            storage.get_data_info(request.mediator_data_id).get("org_id"), org
         )
 
     # Generate model ID
@@ -273,7 +303,7 @@ async def fit_extended_model(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    storage.save_model_metadata(model_id, metadata)
+    storage.save_model_metadata(model_id, metadata, org_id=org)
 
     # Prepare overrides
     overrides = {}
@@ -325,9 +355,10 @@ async def get_extended_model(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get information about an extended model."""
-    metadata = _check_extended_model_exists(storage, model_id)
+    metadata = _check_extended_model_exists(storage, model_id, _org_scope(principal))
 
     # Try to get real-time status from Redis
     redis_status = await redis.get_job_status(model_id)
@@ -380,9 +411,10 @@ async def get_extended_model_status(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get real-time status of an extended model fitting job."""
-    _check_extended_model_exists(storage, model_id)
+    _check_extended_model_exists(storage, model_id, _org_scope(principal))
 
     redis_status = await redis.get_job_status(model_id)
     if redis_status:
@@ -422,6 +454,7 @@ async def get_extended_model_status(
 async def get_mediation_effects(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get mediation effects for a NestedMMM model.
@@ -431,7 +464,7 @@ async def get_mediation_effects(
 
     Only available for **nested** and **combined** model types.
     """
-    metadata = _check_extended_model_completed(storage, model_id)
+    metadata = _check_extended_model_completed(storage, model_id, _org_scope(principal))
 
     model_type = metadata.get("model_type", "standard")
     if model_type not in ["nested", "combined"]:
@@ -506,6 +539,7 @@ async def get_mediation_effects(
 async def get_multivariate_results(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get multivariate results for a MultivariateMMM model.
@@ -515,7 +549,7 @@ async def get_multivariate_results(
 
     Only available for **multivariate** and **combined** model types.
     """
-    metadata = _check_extended_model_completed(storage, model_id)
+    metadata = _check_extended_model_completed(storage, model_id, _org_scope(principal))
 
     model_type = metadata.get("model_type", "standard")
     if model_type not in ["multivariate", "combined"]:
@@ -614,9 +648,10 @@ async def get_multivariate_results(
 async def get_extended_model_results(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get comprehensive results for an extended model."""
-    metadata = _check_extended_model_completed(storage, model_id)
+    metadata = _check_extended_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         summary = storage.load_results(model_id, "summary")
@@ -655,9 +690,10 @@ async def delete_extended_model(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Delete an extended model and its artifacts."""
-    _check_extended_model_exists(storage, model_id)
+    _check_extended_model_exists(storage, model_id, _org_scope(principal))
 
     storage.delete_model(model_id)
     await redis.delete_job_status(model_id)

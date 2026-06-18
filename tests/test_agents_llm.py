@@ -18,6 +18,7 @@ from mmm_framework.agents.llm import (
     infer_provider_from_model,
     list_vertex_models,
     load_model_config,
+    resolve_expert_config,
 )
 
 
@@ -146,6 +147,149 @@ def test_non_mapping_yaml_raises(tmp_path):
 )
 def test_infer_provider_from_model(name, expected):
     assert infer_provider_from_model(name) == expected
+
+
+# ── Expert (strong) tier ──────────────────────────────────────────────────────
+
+
+def test_expert_block_parses_and_inherits_gcp_fields(tmp_path):
+    # A Gemini-flash chat tier + a Claude-Sonnet expert tier on Vertex. The expert
+    # leaves project/credentials unset, so they inherit from the chat tier.
+    p = _write_cfg(
+        tmp_path,
+        """
+        provider: vertex_gemini
+        model: gemini-2.5-flash
+        project: proj-x
+        location: us-central1
+        expert:
+          provider: vertex_anthropic
+          model: claude-sonnet-4-5@20250929
+          location: us-east5
+        """,
+    )
+    cfg = load_model_config(p)
+    assert cfg.expert is not None
+    expert = resolve_expert_config(cfg)
+    assert expert.provider == "vertex_anthropic"
+    assert expert.model == "claude-sonnet-4-5@20250929"
+    assert expert.location == "us-east5"  # own value preserved
+    assert expert.project == "proj-x"  # inherited from chat tier
+    assert expert.expert is None  # no self-recursion carried around
+
+
+def test_resolve_expert_falls_back_to_chat_when_unconfigured():
+    cfg = ModelConfig(provider="anthropic", model="claude-haiku-4-5")
+    expert = resolve_expert_config(cfg)
+    assert expert.provider == "anthropic"
+    assert expert.model == "claude-haiku-4-5"
+
+
+def test_expert_env_overrides_build_nested_block(tmp_path, monkeypatch):
+    p = _write_cfg(
+        tmp_path,
+        """
+        provider: anthropic
+        model: claude-sonnet-4-6
+        """,
+    )
+    monkeypatch.setenv("MMM_LLM_PROVIDER", "vertex_gemini")
+    monkeypatch.setenv("MMM_LLM_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("MMM_LLM_EXPERT_PROVIDER", "vertex_anthropic")
+    monkeypatch.setenv("MMM_LLM_EXPERT_MODEL", "claude-sonnet-4-5@20250929")
+    cfg = load_model_config(p)
+    # Generic MMM_LLM_* overrides apply to the chat tier...
+    assert cfg.provider == "vertex_gemini"
+    assert cfg.model == "gemini-2.5-flash"
+    # ...and MMM_LLM_EXPERT_* lands on the nested expert block, not the chat tier.
+    assert cfg.expert is not None
+    assert cfg.expert.provider == "vertex_anthropic"
+    assert cfg.expert.model == "claude-sonnet-4-5@20250929"
+
+
+def test_apply_request_overrides_shared_by_both_tiers():
+    # The expert tier reuses the chat tier's override precedence
+    # (_apply_request_overrides), so behavior must match.
+    from mmm_framework.agents.llm import _apply_request_overrides
+
+    # Direct provider: a client provider+model+key switches the tier entirely.
+    cfg = ModelConfig(provider="anthropic", model="claude-haiku-4-5")
+    out = _apply_request_overrides(
+        cfg, provider="openai", model_name="gpt-4o", api_key="sk-test"
+    )
+    assert out.provider == "openai"
+    assert out.model == "gpt-4o"
+    assert out.api_key == "sk-test"
+
+    # Vertex: ADC authoritative — a client key is ignored, model routed by family.
+    vcfg = ModelConfig(
+        provider="vertex_gemini",
+        model="gemini-2.5-flash",
+        project="p",
+        location="us-central1",
+    )
+    vout = _apply_request_overrides(
+        vcfg, provider="openai", model_name="claude-opus-4-5", api_key="sk-x"
+    )
+    assert (
+        vout.provider == "vertex_anthropic"
+    )  # routed by family, not the client provider
+    assert vout.model == "claude-opus-4-5"
+    assert vout.api_key is None  # client key never hijacks Vertex
+
+
+def test_build_expert_llm_honors_overrides(monkeypatch):
+    # build_expert_llm should fold X-Expert-* overrides through the same path.
+    captured = {}
+
+    def fake_build_from_config(cfg):
+        captured["cfg"] = cfg
+        return object()
+
+    monkeypatch.setattr(llm_mod, "_build_from_config", fake_build_from_config)
+
+    base = ModelConfig(provider="anthropic", model="claude-haiku-4-5")
+    llm_mod.build_expert_llm(
+        base, provider="openai", model_name="gpt-4o", api_key="sk-expert"
+    )
+    assert captured["cfg"].provider == "openai"
+    assert captured["cfg"].model == "gpt-4o"
+    assert captured["cfg"].api_key == "sk-expert"
+
+
+def test_build_expert_llm_no_override_uses_configured_expert(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        llm_mod, "_build_from_config", lambda cfg: captured.update(cfg=cfg)
+    )
+    base = ModelConfig(
+        provider="vertex_gemini",
+        model="gemini-2.5-flash",
+        expert=ModelConfig(provider="vertex_anthropic", model="claude-sonnet-4-6"),
+    )
+    llm_mod.build_expert_llm(base)
+    assert captured["cfg"].provider == "vertex_anthropic"
+    assert captured["cfg"].model == "claude-sonnet-4-6"
+
+
+def test_describe_active_config_includes_expert_summary():
+    cfg = ModelConfig(
+        provider="vertex_gemini",
+        model="gemini-2.5-flash",
+        expert=ModelConfig(provider="vertex_anthropic", model="claude-sonnet-4-6"),
+    )
+    desc = describe_active_config(cfg)
+    assert desc["expert"] == {
+        "provider": "vertex_anthropic",
+        "model": "claude-sonnet-4-6",
+        "configured": True,
+    }
+    # No expert block => summary reports the resolved (chat) model, configured=False.
+    desc2 = describe_active_config(
+        ModelConfig(provider="anthropic", model="claude-haiku-4-5")
+    )
+    assert desc2["expert"]["configured"] is False
+    assert desc2["expert"]["model"] == "claude-haiku-4-5"
 
 
 # ── build_llm precedence (the critical ADC-vs-client-key logic) ─────────────

@@ -15,7 +15,7 @@ import {
   CheckCircle2, Circle, Clock, XCircle, ChevronDown, ChevronRight,
   History, FileText, Database, Trash2, Network, BookOpen,
 } from 'lucide-react';
-import { API_BASE_URL } from '../../api/client';
+import { API_BASE_URL, bearerHeader } from '../../api/client';
 import { NODE_STYLE, classifyNodes, computeDAGLayout } from './dagDisplay';
 
 // Same origin as the app: relative "/api" in dev (proxied via vite.config.ts),
@@ -189,7 +189,7 @@ export function AssumptionsLog({ threadId, assumptions, onRefresh }: {
       return;
     }
     try {
-      const hist: Assumption[] = await fetch(`${API_BASE}/assumption_history/${threadId}/${encodeURIComponent(key)}`).then(r => r.json());
+      const hist: Assumption[] = await fetch(`${API_BASE}/assumption_history/${threadId}/${encodeURIComponent(key)}`, { headers: bearerHeader() }).then(r => r.json());
       setHistoryByKey(prev => ({ ...prev, [key]: hist }));
       setExpandedKey(key);
     } catch (e) { console.error(e); }
@@ -200,7 +200,7 @@ export function AssumptionsLog({ threadId, assumptions, onRefresh }: {
     const reason = prompt(`Retract assumption "${key}"? Enter reason for the change log:`);
     if (!reason) return;
     await fetch(`${API_BASE}/assumption/${threadId}/${encodeURIComponent(key)}`, {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      method: 'DELETE', headers: { 'Content-Type': 'application/json', ...bearerHeader() },
       body: JSON.stringify({ reason }),
     });
     setHistoryByKey(prev => { const c = { ...prev }; delete c[key]; return c; });
@@ -612,10 +612,10 @@ export function useCausalPanels(threadId: string | null) {
     }
     try {
       const [w, a, f, d] = await Promise.all([
-        fetch(`${API_BASE}/workflow/${threadId}`).then(r => r.json()),
-        fetch(`${API_BASE}/assumptions/${threadId}`).then(r => r.json()),
-        fetch(`${API_BASE}/files/${threadId}`).then(r => r.json()),
-        fetch(`${API_BASE}/dag/${threadId}`).then(r => r.json()),
+        fetch(`${API_BASE}/workflow/${threadId}`, { headers: bearerHeader() }).then(r => r.json()),
+        fetch(`${API_BASE}/assumptions/${threadId}`, { headers: bearerHeader() }).then(r => r.json()),
+        fetch(`${API_BASE}/files/${threadId}`, { headers: bearerHeader() }).then(r => r.json()),
+        fetch(`${API_BASE}/dag/${threadId}`, { headers: bearerHeader() }).then(r => r.json()),
       ]);
       setWorkflow(Array.isArray(w) ? w : []);
       setAssumptions(Array.isArray(a) ? a : []);
@@ -630,14 +630,14 @@ export function useCausalPanels(threadId: string | null) {
   const overrideWorkflow = useCallback(async (step: number, status: WorkflowStep['status'], notes?: string) => {
     if (!threadId) return;
     await fetch(`${API_BASE}/workflow/${threadId}/${step}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', ...bearerHeader() },
       body: JSON.stringify({ status, notes: notes ?? null }),
     });
     refresh();
   }, [threadId, refresh]);
 
   const deleteFile = useCallback(async (id: string) => {
-    await fetch(`${API_BASE}/files/${id}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/files/${id}`, { method: 'DELETE', headers: bearerHeader() });
     refresh();
   }, [refresh]);
 

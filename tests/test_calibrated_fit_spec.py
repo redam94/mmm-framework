@@ -200,7 +200,13 @@ class TestLifecycleTools:
         assert folded["experiments"][0]["test_period"] == [lo, hi]
         assert "experiment_id" not in folded["experiments"][0]
 
-    def test_apply_calibration_rejects_out_of_window(self, store, tmp_path):
+    def test_apply_calibration_out_of_window_without_spend_advises_offpanel(
+        self, store, tmp_path
+    ):
+        # An out-of-window experiment with no recorded spend level can't be
+        # placed on the response curve yet — instead of falsely claiming it's
+        # impossible, the tool asks for the spend level (off-panel route) and
+        # does not commit a (silently no-op) spec.
         from mmm_framework.agents import tools as T
 
         pid, tid, cfg = self._session(store)
@@ -226,7 +232,142 @@ class TestLifecycleTools:
         )
         msg = cmd.update["messages"][0].content
         assert "outside the dataset's date range" in msg
+        assert "off-panel" in msg and "spend_per_period" in msg
         assert "model_spec" not in cmd.update
+
+    def test_rerecord_adds_spend_to_completed_experiment(self, store, tmp_path):
+        # The off-panel advisory tells the user to re-run record_experiment_readout
+        # with a spend level. That must work on an ALREADY-completed experiment
+        # (a completed->completed transition is illegal), so re-recording is an
+        # idempotent in-place update of the readout.
+        from mmm_framework.agents import tools as T
+
+        pid, tid, cfg = self._session(store)
+        exp = store.upsert_experiment(
+            channel="TV",
+            project_id=pid,
+            status="completed",
+            start_date="2030-01-06",
+            end_date="2030-03-03",
+            value=2.0,
+            se=0.25,
+            estimand="roas",
+            readout={"value": 2.0, "se": 0.25, "estimand": "roas", "method": "DiD"},
+        )
+        cmd = T.record_experiment_readout.func(
+            experiment_id=exp["id"],
+            value=2.0,
+            se=0.25,
+            estimand="roas",
+            spend_per_period=5000.0,
+            n_treated_units=2,
+            adstock_state="cold_start",
+            config=cfg,
+            tool_call_id="t",
+        )
+        msg = cmd.update["messages"][0].content
+        assert "Could not record readout" not in msg  # no illegal-transition error
+        after = store.get_experiment(exp["id"])
+        assert after["status"] == "completed"
+        assert after["readout"]["spend_per_period"] == 5000.0
+        assert after["readout"]["n_treated_units"] == 2
+        assert after["readout"]["adstock_state"] == "cold_start"
+        # Pre-existing readout fields are preserved through the merge.
+        assert after["readout"]["method"] == "DiD"
+
+    def test_apply_calibration_offpanel_with_spend_stages_eval_fields(
+        self, store, tmp_path
+    ):
+        # With a recorded spend level, an out-of-window experiment stages as an
+        # off-panel measurement (eval_spend / eval_periods) and commits.
+        from mmm_framework.agents import tools as T
+        from mmm_framework.agents.spec_locks import is_spec_patch
+        from mmm_framework.agents.state import _merge_spec
+
+        pid, tid, cfg = self._session(store)
+        path = _write_synth_mff(tmp_path)
+        e = store.upsert_experiment(
+            channel="TV",
+            project_id=pid,
+            status="completed",
+            start_date="2030-01-06",
+            end_date="2030-03-03",  # ~8 weeks, far past the synthetic panel
+            value=2.0,
+            se=0.25,
+            estimand="roas",
+            readout={
+                "spend_per_period": 5000.0,
+                "n_treated_units": 2,
+                "adstock_state": "cold_start",
+            },
+        )
+        spec = {"kpi": "Sales", "media_channels": [{"name": "TV"}]}
+        state = {
+            "model_spec": spec,
+            "dataset_path": path,
+            "locked_fields": [],
+            "dashboard_data": {},
+        }
+        cmd = T.apply_experiment_calibration.func(
+            state=state, config=cfg, tool_call_id="t"
+        )
+        msg = cmd.update["messages"][0].content
+        assert "off-panel" in msg and "fit_mmm_model" in msg
+        assert is_spec_patch(cmd.update["model_spec"])
+        folded = _merge_spec(spec, cmd.update["model_spec"])
+        assert folded["experiment_ids"] == [e["id"]]
+        staged = folded["experiments"][0]
+        assert staged["channel"] == "TV"
+        assert staged["eval_spend"] == 5000.0
+        assert staged["eval_units"] == 2
+        assert staged["adstock_state"] == "cold_start"
+        assert staged["eval_periods"] >= 7  # ~8 weeks inferred from the window
+
+    def test_apply_calibration_retains_already_calibrated(self, store, tmp_path):
+        # Regression: a refit that adds a new experiment must NOT drop the
+        # experiments calibrated in earlier fits. apply stages the full measured
+        # set (completed + already-calibrated), since the model is rebuilt from
+        # spec["experiments"] each fit.
+        from mmm_framework.agents import tools as T
+        from mmm_framework.agents.state import _merge_spec
+
+        pid, tid, cfg = self._session(store)
+        path = _write_synth_mff(tmp_path)
+        lo, hi = _period_bounds(path)
+        a = store.upsert_experiment(
+            channel="TV",
+            project_id=pid,
+            status="calibrated",  # folded into a previous fit
+            start_date=lo,
+            end_date=hi,
+            value=2.0,
+            se=0.2,
+            estimand="roas",
+        )
+        b = store.upsert_experiment(
+            channel="TV",
+            project_id=pid,
+            status="completed",  # the newly-measured one
+            start_date=lo,
+            end_date=hi,
+            value=1.5,
+            se=0.2,
+            estimand="roas",
+        )
+        spec = {"kpi": "Sales", "media_channels": [{"name": "TV"}]}
+        state = {
+            "model_spec": spec,
+            "dataset_path": path,
+            "locked_fields": [],
+            "dashboard_data": {},
+        }
+        cmd = T.apply_experiment_calibration.func(
+            state=state, config=cfg, tool_call_id="t"
+        )
+        folded = _merge_spec(spec, cmd.update["model_spec"])
+        # BOTH experiments staged, not just the freshly-completed one.
+        assert set(folded["experiment_ids"]) == {a["id"], b["id"]}
+        assert len(folded["experiments"]) == 2
 
     def test_apply_calibration_requires_completed_and_fields(self, store, tmp_path):
         from mmm_framework.agents import tools as T
@@ -243,7 +384,7 @@ class TestLifecycleTools:
         cmd = T.apply_experiment_calibration.func(
             state=state, config=cfg, tool_call_id="t"
         )
-        assert "No completed experiments" in cmd.update["messages"][0].content
+        assert "No measured experiments" in cmd.update["messages"][0].content
 
         # completed but missing the window -> named problem
         store.upsert_experiment(

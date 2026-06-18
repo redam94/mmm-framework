@@ -73,6 +73,10 @@ _DEFAULT_CONFIG_PATHS: tuple[str, ...] = (
 # Environment-variable prefix for per-field overrides (e.g. MMM_LLM_PROVIDER).
 _ENV_PREFIX = "MMM_LLM_"
 
+# Prefix for overrides targeting the nested "expert" (strong) tier, e.g.
+# MMM_LLM_EXPERT_PROVIDER / MMM_LLM_EXPERT_MODEL.
+_EXPERT_ENV_PREFIX = "MMM_LLM_EXPERT_"
+
 # Placeholder "keys" the frontend may send when the server manages credentials
 # itself (Vertex/ADC or a server-side env key). They must NOT override server
 # config — a blank or sentinel client key is treated as "no client key".
@@ -168,6 +172,17 @@ class ModelConfig(BaseModel):
     # Free-form passthrough to the underlying LangChain constructor.
     model_kwargs: dict[str, Any] = Field(default_factory=dict)
 
+    # --- Optional strong/"expert" tier ---
+    # A second, fully-specified provider block used by the agent's
+    # ``delegate_to_expert`` tool for code generation, model fitting,
+    # optimization, and other hard tasks. The top-level block above stays the
+    # fast "chat" tier. When this is ``None`` the expert tier reuses the chat
+    # model, so single-model deployments are unaffected. The expert block may
+    # mix providers freely (e.g. a Gemini-flash chat tier + a Claude-Sonnet
+    # expert tier). Unset Vertex fields (project/location/credentials_path) are
+    # inherited from the chat tier at build time (see :func:`build_expert_llm`).
+    expert: "ModelConfig | None" = None
+
     @property
     def uses_vertex(self) -> bool:
         """True when the active provider is served through Google Vertex AI."""
@@ -182,6 +197,10 @@ class ModelConfig(BaseModel):
         attached service account.
         """
         return self.uses_vertex and not self.credentials_path
+
+
+# Resolve the ``expert: "ModelConfig | None"`` forward reference (self-recursive).
+ModelConfig.model_rebuild()
 
 
 # ── Config loading ─────────────────────────────────────────────────────────
@@ -203,9 +222,26 @@ def _resolve_config_path(path: str | os.PathLike[str] | None) -> Path | None:
 
 
 def _apply_env_overrides(data: dict[str, Any]) -> dict[str, Any]:
-    """Overlay ``MMM_LLM_*`` environment variables onto a config dict in place."""
+    """Overlay ``MMM_LLM_*`` environment variables onto a config dict in place.
+
+    ``MMM_LLM_EXPERT_*`` keys map onto the nested ``expert`` block (the strong
+    tier), e.g. ``MMM_LLM_EXPERT_PROVIDER`` / ``MMM_LLM_EXPERT_MODEL``. They are
+    handled first so the generic loop's stripped field name (``expert_provider``)
+    — which isn't in ``_ENV_OVERRIDABLE`` — is simply ignored there.
+    """
+    expert: dict[str, Any] = {}
     for key, value in os.environ.items():
-        if not key.startswith(_ENV_PREFIX):
+        if not key.startswith(_EXPERT_ENV_PREFIX):
+            continue
+        field = key[len(_EXPERT_ENV_PREFIX) :].lower()
+        if field in _ENV_OVERRIDABLE and value != "":
+            expert[field] = value
+    if expert:
+        merged = {**(data.get("expert") or {}), **expert}
+        data["expert"] = merged
+
+    for key, value in os.environ.items():
+        if not key.startswith(_ENV_PREFIX) or key.startswith(_EXPERT_ENV_PREFIX):
             continue
         field = key[len(_ENV_PREFIX) :].lower()
         if field in _ENV_OVERRIDABLE and value != "":
@@ -434,7 +470,37 @@ def build_llm(
         A LangChain chat model ready for ``.bind_tools(...)``.
     """
     cfg = config or load_model_config()
+    cfg = _apply_request_overrides(
+        cfg,
+        provider=provider,
+        model_name=model_name,
+        api_key=api_key,
+        base_url=base_url,
+    )
+    return _build_from_config(cfg)
 
+
+def _apply_request_overrides(
+    cfg: ModelConfig,
+    *,
+    provider: str | None = None,
+    model_name: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+) -> ModelConfig:
+    """Fold per-request UI overrides into a base config, returning the result.
+
+    This is the shared precedence logic for BOTH model tiers — :func:`build_llm`
+    (chat tier, ``X-*`` headers) and :func:`build_expert_llm` (expert tier,
+    ``X-Expert-*`` headers) — so the security properties are identical:
+
+    * **Vertex provider** → ADC is authoritative; a client key is ignored, and a
+      client model is honored only when its family maps to a Vertex backend
+      (routes ``vertex_gemini`` ↔ ``vertex_anthropic``, never off Vertex).
+    * **Non-Vertex** → a valid ``X-Provider`` may switch provider entirely; an
+      endpoint provider (LM Studio) swaps only the model/base_url on the same
+      endpoint; otherwise a direct provider is inferred from the model name.
+    """
     # Treat a blank/sentinel client key as absent so it can't clobber a
     # server-side credential (Vertex/ADC or a provider env key).
     if api_key is not None and api_key.strip().lower() in _SENTINEL_API_KEYS:
@@ -451,7 +517,7 @@ def build_llm(
             if target:
                 cfg = cfg.model_copy(update={"provider": target, "model": model_name})
             # Unknown family (e.g. an OpenAI id) is ignored: keep server config.
-        return _build_from_config(cfg)
+        return cfg
 
     # Non-Vertex server: a client may switch the provider entirely (X-Provider),
     # e.g. to reach LM Studio or OpenAI from a default-Anthropic deployment. The
@@ -467,8 +533,7 @@ def build_llm(
             update["api_key"] = api_key
         if base_url:
             update["base_url"] = base_url
-        cfg = cfg.model_copy(update=update)
-        return _build_from_config(cfg)
+        return cfg.model_copy(update=update)
 
     if cfg.provider in _ENDPOINT_PROVIDERS:
         # OpenAI-compatible local endpoint (LM Studio): a model_name override
@@ -485,7 +550,7 @@ def build_llm(
             update["base_url"] = base_url
         if update:
             cfg = cfg.model_copy(update=update)
-        return _build_from_config(cfg)
+        return cfg
 
     # Direct provider: honor per-request UI overrides.
     if api_key or model_name:
@@ -497,6 +562,65 @@ def build_llm(
                 "api_key": api_key or cfg.api_key,
             }
         )
+    return cfg
+
+
+# Vertex/GCP fields the expert block inherits from the chat tier when left unset,
+# so a Vertex deployment needn't repeat project/region/credentials twice.
+_EXPERT_INHERITED_FIELDS: tuple[str, ...] = ("project", "location", "credentials_path")
+
+
+def resolve_expert_config(config: ModelConfig | None = None) -> ModelConfig:
+    """Return the fully-resolved strong/"expert" tier configuration.
+
+    Falls back to the chat tier (the top-level block) when no ``expert`` block is
+    configured, so single-model deployments keep a working delegate path. When an
+    ``expert`` block is present, any unset Vertex/GCP fields are inherited from the
+    chat tier (see :data:`_EXPERT_INHERITED_FIELDS`).
+    """
+    cfg = config or load_model_config()
+    if cfg.expert is None:
+        # No second tier: the expert reuses the chat model. Drop the (absent)
+        # nested field so we don't carry a self-reference around.
+        return cfg.model_copy(update={"expert": None})
+    inherited = {
+        field: getattr(cfg, field)
+        for field in _EXPERT_INHERITED_FIELDS
+        if getattr(cfg.expert, field) is None and getattr(cfg, field) is not None
+    }
+    expert = cfg.expert.model_copy(update={**inherited, "expert": None})
+    return expert
+
+
+def build_expert_llm(
+    config: ModelConfig | None = None,
+    *,
+    provider: str | None = None,
+    model_name: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+):
+    """Construct the LangChain chat model for the strong/"expert" tier.
+
+    Used by the agent's ``delegate_to_expert`` tool. Starts from the configured
+    expert block (or the chat tier when none is configured) and folds in any
+    per-request overrides from the ``X-Expert-*`` headers via the SAME precedence
+    rules as the chat tier (:func:`_apply_request_overrides`) — so a Vertex/ADC
+    deployment stays ADC-authoritative for the expert too, while a direct-provider
+    deployment may point the expert at a different provider + key.
+
+    Returns a model ready for ``.bind_tools(...)``. With no expert block and no
+    overrides this returns the chat model, so delegation degrades gracefully to a
+    single-model deployment.
+    """
+    cfg = resolve_expert_config(config)
+    cfg = _apply_request_overrides(
+        cfg,
+        provider=provider,
+        model_name=model_name,
+        api_key=api_key,
+        base_url=base_url,
+    )
     return _build_from_config(cfg)
 
 
@@ -524,6 +648,15 @@ def describe_active_config(config: ModelConfig | None = None) -> dict[str, Any]:
         and not cfg.api_key
         and not _provider_env_key_present(cfg.provider)
     )
+    # Non-secret summary of the strong tier (provider + model only). When no
+    # expert block is configured the delegate path reuses the chat model, so we
+    # report that resolved (chat) provider/model.
+    expert_cfg = resolve_expert_config(cfg)
+    expert_summary = {
+        "provider": expert_cfg.provider,
+        "model": expert_cfg.model,
+        "configured": cfg.expert is not None,
+    }
     return {
         "provider": cfg.provider,
         "model": cfg.model,
@@ -538,6 +671,7 @@ def describe_active_config(config: ModelConfig | None = None) -> dict[str, Any]:
         "temperature": cfg.temperature,
         "max_tokens": cfg.max_tokens,
         "requires_api_key": requires_api_key,
+        "expert": expert_summary,
     }
 
 

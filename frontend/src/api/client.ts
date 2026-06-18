@@ -27,6 +27,46 @@ const MODEL_NAME_STORAGE_KEY = 'mmm_model_name';
 const PROVIDER_KEYS_STORAGE_KEY = 'mmm_provider_keys';
 const BASE_URL_STORAGE_KEY = 'mmm_base_url';
 const PROVIDER_STORAGE_KEY = 'mmm_provider';
+// Strong "expert" tier selection (delegate_to_expert). Sent as X-Expert-* headers.
+const EXPERT_MODEL_STORAGE_KEY = 'mmm_expert_model';
+const EXPERT_PROVIDER_STORAGE_KEY = 'mmm_expert_provider';
+const EXPERT_BASE_URL_STORAGE_KEY = 'mmm_expert_base_url';
+
+// JWT bearer auth (optional, additive). When present, sent as an Authorization
+// header alongside the existing X-API-Key flow. Absent => header omitted, so
+// behavior is unchanged when JWT auth is disabled / the user is not logged in.
+const ACCESS_TOKEN_STORAGE_KEY = 'mmm_access_token';
+const REFRESH_TOKEN_STORAGE_KEY = 'mmm_refresh_token';
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+}
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+export function setStoredTokens(access: string | null, refresh: string | null): void {
+  if (access && access.trim()) {
+    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, access.trim());
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  }
+  if (refresh && refresh.trim()) {
+    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refresh.trim());
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  }
+}
+export function clearStoredTokens(): void {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+// Authorization header for raw fetch() sites. Returns {} when no token is
+// stored, so it can be spread/merged unconditionally without changing behavior.
+export function bearerHeader(): Record<string, string> {
+  const t = getAccessToken();
+  return t ? { Authorization: 'Bearer ' + t } : {};
+}
 
 // Get API key and model from localStorage
 export function getStoredApiKey(): string | null {
@@ -60,6 +100,58 @@ export function setStoredBaseUrl(baseUrl: string | null): void {
   } else {
     localStorage.removeItem(BASE_URL_STORAGE_KEY);
   }
+}
+
+// Expert (strong) tier selection. Each is optional; when unset the server's
+// configured expert (or the chat model) is used. The expert's API key reuses the
+// per-provider bucket (getStoredKeyForProvider), so there is no separate store.
+export function getStoredExpertModel(): string | null {
+  return localStorage.getItem(EXPERT_MODEL_STORAGE_KEY);
+}
+export function getStoredExpertProvider(): string | null {
+  return localStorage.getItem(EXPERT_PROVIDER_STORAGE_KEY);
+}
+export function getStoredExpertBaseUrl(): string | null {
+  return localStorage.getItem(EXPERT_BASE_URL_STORAGE_KEY);
+}
+export function setStoredExpert(
+  model: string | null,
+  provider: string | null,
+  baseUrl: string | null,
+): void {
+  const put = (k: string, v: string | null) =>
+    v && v.trim() ? localStorage.setItem(k, v.trim()) : localStorage.removeItem(k);
+  put(EXPERT_MODEL_STORAGE_KEY, model);
+  put(EXPERT_PROVIDER_STORAGE_KEY, provider);
+  put(EXPERT_BASE_URL_STORAGE_KEY, baseUrl);
+}
+
+// Map a backend provider id to the UI provider bucket used for per-provider keys.
+// Vertex (ADC) and LM Studio (local) need no key, so they map to null.
+function uiProviderFor(backendProvider: string | null): string | null {
+  if (backendProvider === 'anthropic') return 'anthropic';
+  if (backendProvider === 'openai') return 'openai';
+  if (backendProvider === 'google_genai') return 'google';
+  return null;
+}
+
+// Build the X-Expert-* headers from the stored expert selection. The expert's API
+// key is pulled from the per-provider bucket for its provider (direct providers
+// only; Vertex/LM Studio need none). Returns {} when no expert override is set.
+export function expertHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  const model = getStoredExpertModel();
+  const provider = getStoredExpertProvider();
+  const baseUrl = getStoredExpertBaseUrl();
+  if (model) h['X-Expert-Model'] = model;
+  if (provider) {
+    h['X-Expert-Provider'] = provider;
+    const ui = uiProviderFor(provider);
+    const key = ui ? getStoredKeyForProvider(ui) : null;
+    if (key) h['X-Expert-Api-Key'] = key;
+  }
+  if (baseUrl) h['X-Expert-Base-Url'] = baseUrl;
+  return h;
 }
 
 // Per-provider key storage
@@ -115,6 +207,13 @@ apiClient.interceptors.request.use(
     if (provider) {
       config.headers['X-Provider'] = provider;
     }
+    for (const [k, v] of Object.entries(expertHeaders())) {
+      config.headers[k] = v;
+    }
+    const accessToken = getAccessToken();
+    if (accessToken) {
+      config.headers['Authorization'] = 'Bearer ' + accessToken;
+    }
     return config;
   },
   (error) => {
@@ -122,17 +221,88 @@ apiClient.interceptors.request.use(
   }
 );
 
+// ── JWT bearer login / refresh ──────────────────────────────────────────────
+
+interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+}
+
+// Password sign-in. Stores nothing itself — the caller (authStore) persists the
+// returned tokens via setStoredTokens.
+export async function loginWithPassword(email: string, password: string): Promise<TokenPair> {
+  const response = await axios.post<TokenPair>(
+    `${API_BASE_URL}/auth/login`,
+    { email, password },
+    { timeout: 15000 },
+  );
+  return response.data;
+}
+
+// Single-flight refresh: concurrent 401s share one /auth/refresh call. On
+// success the new tokens are stored; on failure the tokens are cleared and the
+// error re-thrown (callers fall back to the unauthorized path).
+let _refreshInFlight: Promise<string> | null = null;
+export function refreshAccessToken(): Promise<string> {
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) throw new Error('No refresh token');
+    try {
+      const response = await axios.post<TokenPair>(
+        `${API_BASE_URL}/auth/refresh`,
+        { refresh_token: refreshToken },
+        { timeout: 15000 },
+      );
+      const { access_token, refresh_token } = response.data;
+      setStoredTokens(access_token, refresh_token ?? refreshToken);
+      return access_token;
+    } catch (e) {
+      clearStoredTokens();
+      throw e;
+    } finally {
+      _refreshInFlight = null;
+    }
+  })();
+  return _refreshInFlight;
+}
+
 // Response interceptor - handle errors
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    const original = error.config as
+      | (InternalAxiosRequestConfig & { _retried?: boolean })
+      | undefined;
+
+    // JWT expiry: try a one-time silent refresh + retry before giving up. Only
+    // when we actually have a refresh token and this request wasn't already a
+    // retry. Does NOT clear the LLM API key — only the JWT tokens.
+    if (error.response?.status === 401 && original && !original._retried && getRefreshToken()) {
+      original._retried = true;
+      try {
+        const newToken = await refreshAccessToken();
+        original.headers = original.headers ?? {};
+        (original.headers as Record<string, string>)['Authorization'] = 'Bearer ' + newToken;
+        return apiClient(original);
+      } catch {
+        clearStoredTokens();
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        return Promise.reject({
+          status: 401,
+          message: getErrorMessage(error),
+          details: error.response?.data,
+        } as ApiError);
+      }
+    }
+
     const apiError: ApiError = {
       status: error.response?.status || 500,
       message: getErrorMessage(error),
       details: error.response?.data,
     };
 
-    // Handle 401 - clear API key and redirect to login
+    // Handle 401 (no JWT refresh path) - clear API key and redirect to login
     if (error.response?.status === 401) {
       clearStoredAuth();
       // Dispatch event for auth state listeners
@@ -205,6 +375,10 @@ export interface ServerModelConfig {
   // (e.g. LM Studio); base_url is that endpoint.
   is_local_endpoint?: boolean;
   base_url?: string | null;
+  // The strong "expert" tier used by delegate_to_expert. `configured` is false
+  // when no expert block is set (delegation reuses the chat model); in that case
+  // provider/model mirror the resolved chat tier.
+  expert?: { provider: string; model: string; configured: boolean };
 }
 
 // Fetch the server's active model configuration, or null if unavailable.

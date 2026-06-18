@@ -1,6 +1,9 @@
 // ─── Prior Configuration ──────────────────────────────────────────────────────
 
-import { normalizeTrendType } from './spec';
+import { normalizeTrendType, asVarArray } from './spec';
+
+// Re-exported for widgets that already import it from this module.
+export { asVarArray } from './spec';
 
 // --- Math helpers ---
 
@@ -105,7 +108,7 @@ export const PRIOR_DEFAULTS = {
 
 export function initPriors(spec: any): any {
   const media: Record<string, any> = {};
-  for (const ch of (spec?.media_channels ?? [])) {
+  for (const ch of asVarArray(spec?.media_channels)) {
     const name = ch.name;
     const existing = spec?.priors?.media?.[name] ?? {};
     media[name] = {
@@ -117,7 +120,7 @@ export function initPriors(spec: any): any {
   }
 
   const controls: Record<string, any> = {};
-  for (const cv of (spec?.control_variables ?? [])) {
+  for (const cv of asVarArray(spec?.control_variables)) {
     const name = cv.name;
     const existing = spec?.priors?.controls?.[name] ?? {};
     controls[name] = {

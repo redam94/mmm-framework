@@ -7,10 +7,19 @@ import os
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import aiosqlite
-from fastapi import FastAPI, Form, Request, UploadFile, File, Header, HTTPException
+from fastapi import (
+    FastAPI,
+    Form,
+    Request,
+    UploadFile,
+    File,
+    Header,
+    HTTPException,
+    Depends,
+)
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -20,6 +29,16 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from mmm_framework.agents.graph import create_agent_graph
 from mmm_framework.agents.spec_locks import apply_spec_patch, is_spec_patch
 from mmm_framework.api import sessions as sessions_store
+from mmm_framework.auth import store as auth_store
+from mmm_framework.auth.deps import (
+    ensure_project_access,
+    get_current_principal,
+    require_project_access,
+)
+from mmm_framework.auth.models import AuthContext, Role
+from mmm_framework.auth.ratelimit import require_org_rate_limit
+from mmm_framework.auth.routes import create_auth_router
+from mmm_framework.auth.service import initialize_auth
 
 logger = logging.getLogger("mmm_api")
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +54,14 @@ def _payload_hash(p: dict) -> str:
 
 
 def safe_json_dumps(obj: dict) -> str:
-    """JSON serializer that handles NaN/Inf, numpy scalars, and numpy arrays."""
+    """JSON serializer that handles NaN/Inf, numpy scalars, and numpy arrays.
+
+    Emits STRICT JSON (``allow_nan=False``): ``default`` only fires for objects
+    json can't natively serialize, so a NATIVE ``float('nan')`` would otherwise
+    slip through as the ``NaN`` token and make ``JSONResponse(allow_nan=False)``
+    raise on render. We normalize via ``default`` first, then recursively coerce
+    any remaining non-finite floats to None before the final strict dump.
+    """
     try:
         import numpy as np
 
@@ -67,7 +93,17 @@ def safe_json_dumps(obj: dict) -> str:
             pass
         raise TypeError(f"Object of type {type(o)} is not JSON serializable")
 
-    return json.dumps(obj, default=_default)
+    def _strip_nonfinite(o):
+        if isinstance(o, float):
+            return o if math.isfinite(o) else None
+        if isinstance(o, dict):
+            return {k: _strip_nonfinite(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [_strip_nonfinite(v) for v in o]
+        return o
+
+    normalized = json.loads(json.dumps(obj, default=_default))
+    return json.dumps(_strip_nonfinite(normalized), allow_nan=False)
 
 
 # Ref-list dashboard keys are stripped from per-message SSE events (the full
@@ -146,6 +182,14 @@ async def lifespan(app: FastAPI):
     memory = AsyncSqliteSaver(_aiosqlite_conn)
     await memory.setup()
     sessions_store.init_db()
+    # Org/tenant auth: schema + optional bootstrap owner + one-time backfill of
+    # pre-existing projects/users into the primary org. Inert (single dev org)
+    # until MMM_AUTH_ENABLED=1; never blocks startup.
+    try:
+        sessions_store.ensure_default_project()
+        initialize_auth()
+    except Exception:
+        logger.exception("auth initialization failed (continuing unauthenticated)")
     yield
     try:  # reap any per-session subprocess kernels on graceful shutdown
         from mmm_framework.agents.tools import _KERNELS
@@ -166,6 +210,103 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Auth router: /auth/signup, /auth/login, /auth/refresh, /auth/me.
+# Additive and inert until MMM_AUTH_ENABLED=1.
+app.include_router(create_auth_router())
+
+# Tenant-access guards for /projects/{project_id}/... routes, mounted via each
+# route's `dependencies=[...]` (read=viewer, write=analyst, admin=owner-ish).
+# Cross-tenant access 404s; dev principal (auth off) bypasses. See Phase 1.3.
+_proj_read = Depends(require_project_access(Role.VIEWER))
+_proj_write = Depends(require_project_access(Role.ANALYST))
+_proj_admin = Depends(require_project_access(Role.ADMIN))
+
+# Default principal for handlers invoked directly (unit tests / internal calls):
+# FastAPI overrides it with the resolved principal over HTTP; a direct Python
+# call gets this dev principal (is_dev → tenant checks bypass, pre-1.2 behavior).
+_DEV_PRINCIPAL = AuthContext(
+    user_id="dev-user",
+    org_id="dev-org",
+    email="dev@localhost",
+    org_role=Role.OWNER,
+    is_dev=True,
+)
+PrincipalDep = Annotated[AuthContext, Depends(get_current_principal)]
+
+
+def _ensure_session_access(
+    principal: AuthContext, thread_id: str | None, min_role: Role = Role.VIEWER
+) -> None:
+    """Tenant guard for routes keyed by a session ``thread_id`` (not a project
+    path param).
+
+    Resolves the session's owning ``project_id`` (``sessions_store.get_session``)
+    and delegates to ``ensure_project_access`` — so a missing session, or one
+    owned by another org, raises **404** (ids can't be probed across tenants).
+    The dev principal (auth disabled) is a no-op. A legacy *unattributed* session
+    (``project_id`` IS NULL) is allowed in the single-tenant posture but denied
+    under hosted mode, where every session must be org-attributed.
+    """
+    if principal.is_dev:
+        return
+    if not thread_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    sess = sessions_store.get_session(thread_id)
+    if sess is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    pid = sess.get("project_id")
+    if pid is None:
+        from mmm_framework.agents.profile import is_hosted
+
+        if is_hosted():
+            raise HTTPException(status_code=404, detail="Not found")
+        return
+    ensure_project_access(principal, pid, min_role)
+
+
+def require_session_access(min_role: Role = Role.VIEWER, *, deny_missing: bool = False):
+    """Dependency factory guarding a route keyed by a session ``thread_id``.
+
+    ``thread_id`` binds from the route's path param (always present) OR, for
+    report-style routes, from the query string (may be None). Mount via the
+    decorator's ``dependencies=[...]`` so no handler body changes are needed::
+
+        @app.get("/state/{thread_id}", dependencies=[_sess_read])
+
+    ``deny_missing`` 404s a missing thread_id under real auth (used by the report
+    routes, whose legacy thread-less CWD artifact is not tenant-scoped).
+    """
+
+    async def _dep(
+        thread_id: str | None = None,
+        principal: AuthContext = Depends(get_current_principal),
+    ) -> AuthContext:
+        if thread_id:
+            _ensure_session_access(principal, thread_id, min_role)
+        elif deny_missing and not principal.is_dev:
+            raise HTTPException(status_code=404, detail="Not found")
+        return principal
+
+    return _dep
+
+
+# Session/thread tenant guards (mounted via route-level dependencies=[...]).
+_sess_read = Depends(require_session_access(Role.VIEWER))
+_sess_write = Depends(require_session_access(Role.ANALYST))
+_rep_read = Depends(require_session_access(Role.VIEWER, deny_missing=True))
+
+# Per-org rate limits (abuse protection; off until MMM_RATELIMIT_ENABLED=1).
+_rl_chat = Depends(require_org_rate_limit("chat"))
+_rl_heavy = Depends(require_org_rate_limit("heavy"))
+
+
+def _org_project_ids(principal: AuthContext) -> set[str] | None:
+    """The set of project ids the principal's org owns, or ``None`` for the dev
+    principal (meaning 'no scoping' — used to filter cross-session aggregates)."""
+    if principal.is_dev:
+        return None
+    return set(auth_store.list_org_project_ids(principal.org_id))
 
 
 class _StubLLM:
@@ -297,7 +438,7 @@ class ChatRequest(BaseModel):
     page_context: str | None = None
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[_rl_chat])
 async def chat_endpoint(
     request: ChatRequest,
     raw_request: Request,
@@ -305,6 +446,11 @@ async def chat_endpoint(
     x_model_name: str | None = Header(None),
     x_base_url: str | None = Header(None),
     x_provider: str | None = Header(None),
+    x_expert_model: str | None = Header(None),
+    x_expert_provider: str | None = Header(None),
+    x_expert_api_key: str | None = Header(None),
+    x_expert_base_url: str | None = Header(None),
+    principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
     # Hosted (PR-F.6): thread_id is a bearer capability, so it must be a
     # server-minted session — reject the guessable default and any client-invented
@@ -323,14 +469,41 @@ async def chat_endpoint(
                 detail="hosted mode requires a server-minted session (POST /sessions)",
             )
 
-    config = {"configurable": {"thread_id": request.thread_id}}
+    # Tenant guard: you may start a NEW thread, but not drive an EXISTING session
+    # owned by another org. New/unattributed threads stay allowed (so chat-create
+    # works); hosted mode already requires a server-minted session above.
+    if not principal.is_dev:
+        _sess = sessions_store.get_session(request.thread_id)
+        if _sess is not None and _sess.get("project_id"):
+            ensure_project_access(principal, _sess["project_id"], Role.ANALYST)
+
+    # The expert override rides in `configurable` alongside thread_id; LangGraph
+    # propagates it to delegate_to_expert via the injected RunnableConfig, where it
+    # builds the expert sub-agent's LLM (X-Expert-* headers, chat-tier precedence).
+    config = {
+        "configurable": {
+            "thread_id": request.thread_id,
+            "expert_model": x_expert_model,
+            "expert_provider": x_expert_provider,
+            "expert_api_key": x_expert_api_key,
+            "expert_base_url": x_expert_base_url,
+        }
+    }
     # Mark this session active so the thread-scoped model cache + workspace dir
     # resolve correctly for tools run during this request.
     from mmm_framework.agents.runtime import set_current_thread
 
     set_current_thread(request.thread_id)
     llm = get_llm(x_model_name, x_api_key, x_base_url, x_provider)
-    agent_graph = create_agent_graph(llm, checkpointer=memory)
+    # The fast "chat" tier orchestrates: it gets the orchestrator toolset (heavy /
+    # code-gen tools removed) and must delegate hard work to the expert tier via
+    # the delegate_to_expert tool. The expert sub-agent (strong model, full
+    # toolset) is built lazily inside that tool, sharing this thread's session.
+    from mmm_framework.agents.tools import ORCHESTRATOR_TOOLS
+
+    agent_graph = create_agent_graph(
+        llm, checkpointer=memory, tools=ORCHESTRATOR_TOOLS, role="orchestrator"
+    )
 
     # The "400 => corrupted history => hard reset" recovery is an Anthropic
     # behaviour (its API 400s when the message list ends on an unanswered
@@ -695,7 +868,7 @@ def _serialize_state(values: dict) -> dict:
     }
 
 
-@app.get("/state/{thread_id}")
+@app.get("/state/{thread_id}", dependencies=[_sess_read])
 async def get_state(thread_id: str):
     config = {"configurable": {"thread_id": thread_id}}
     try:
@@ -715,7 +888,7 @@ def safe_json_dumps_load(obj):
     return json.loads(safe_json_dumps(obj))
 
 
-@app.delete("/state/{thread_id}")
+@app.delete("/state/{thread_id}", dependencies=[_sess_write])
 async def clear_state(thread_id: str):
     config = {"configurable": {"thread_id": thread_id}}
     try:
@@ -729,7 +902,7 @@ async def clear_state(thread_id: str):
 # ── History / Rewind (back & retry) ───────────────────────────────────────────
 
 
-@app.get("/history/{thread_id}")
+@app.get("/history/{thread_id}", dependencies=[_sess_read])
 async def get_history(thread_id: str):
     """Return the checkpoint timeline for this thread, newest first.
 
@@ -774,7 +947,7 @@ class RewindRequest(BaseModel):
     checkpoint_id: str
 
 
-@app.post("/rewind/{thread_id}")
+@app.post("/rewind/{thread_id}", dependencies=[_sess_write])
 async def rewind(thread_id: str, body: RewindRequest):
     """Fork the thread back to an earlier checkpoint.
 
@@ -830,8 +1003,14 @@ async def list_sessions_endpoint(
     project_id: str | None = None,
     skip: int = 0,
     limit: int = 50,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
+    if not principal.is_dev and project_id is not None:
+        ensure_project_access(principal, project_id, Role.VIEWER)
     rows = sessions_store.list_sessions(project_id=project_id)
+    if not principal.is_dev:
+        allowed = auth_store.list_org_project_ids(principal.org_id)
+        rows = [r for r in rows if r.get("project_id") in allowed]
     enriched = []
     for row in rows:
         detail = sessions_store.get_session(row["thread_id"])
@@ -842,13 +1021,18 @@ async def list_sessions_endpoint(
 
 
 @app.post("/sessions")
-async def create_session_endpoint(body: CreateSessionRequest):
+async def create_session_endpoint(
+    body: CreateSessionRequest, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    # Can't plant a session inside another org's project.
+    if not principal.is_dev and body.project_id is not None:
+        ensure_project_access(principal, body.project_id, Role.ANALYST)
     return JSONResponse(
         content=sessions_store.create_session(body.name, project_id=body.project_id)
     )
 
 
-@app.get("/sessions/{thread_id}")
+@app.get("/sessions/{thread_id}", dependencies=[_sess_read])
 async def get_session_endpoint(thread_id: str):
     session = sessions_store.get_session(thread_id)
     if session is None:
@@ -866,14 +1050,14 @@ async def get_session_endpoint(thread_id: str):
     )
 
 
-@app.patch("/sessions/{thread_id}")
+@app.patch("/sessions/{thread_id}", dependencies=[_sess_write])
 async def rename_session_endpoint(thread_id: str, body: RenameSessionRequest):
     if not sessions_store.rename_session(thread_id, body.name):
         raise HTTPException(status_code=404, detail="session not found")
     return JSONResponse(content={"status": "ok"})
 
 
-@app.delete("/sessions/{thread_id}")
+@app.delete("/sessions/{thread_id}", dependencies=[_sess_write])
 async def delete_session_endpoint(thread_id: str):
     sessions_store.delete_session(thread_id)
     return JSONResponse(content={"status": "ok"})
@@ -895,22 +1079,39 @@ class LockPlanRequest(BaseModel):
 async def list_analysis_plans_endpoint(
     thread_id: str | None = None,
     limit: int = 20,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
+    if thread_id is not None:
+        _ensure_session_access(principal, thread_id, Role.VIEWER)
     plans = sessions_store.list_analysis_plans(thread_id=thread_id)
+    if thread_id is None and not principal.is_dev:
+        allowed = _org_project_ids(principal) or set()
+        plans = [
+            pl
+            for pl in plans
+            if (_s := sessions_store.get_session(pl.get("thread_id")))
+            and _s.get("project_id") in allowed
+        ]
     page = plans[:limit]
     return JSONResponse(content={"plans": page, "total": len(plans)})
 
 
 @app.get("/analysis-plans/{plan_id}")
-async def get_analysis_plan_endpoint(plan_id: str):
+async def get_analysis_plan_endpoint(
+    plan_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
     plan = sessions_store.get_analysis_plan(plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail="plan not found")
+    _ensure_session_access(principal, plan.get("thread_id"), Role.VIEWER)
     return JSONResponse(content=plan)
 
 
 @app.post("/analysis-plans")
-async def lock_analysis_plan_endpoint(body: LockPlanRequest):
+async def lock_analysis_plan_endpoint(
+    body: LockPlanRequest, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    _ensure_session_access(principal, body.thread_id, Role.ANALYST)
     payload: dict = {}
     if body.dag is not None:
         payload["dag"] = body.dag
@@ -929,7 +1130,13 @@ async def lock_analysis_plan_endpoint(body: LockPlanRequest):
 
 
 @app.delete("/analysis-plans/{plan_id}")
-async def delete_analysis_plan_endpoint(plan_id: str):
+async def delete_analysis_plan_endpoint(
+    plan_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    plan = sessions_store.get_analysis_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="plan not found")
+    _ensure_session_access(principal, plan.get("thread_id"), Role.ANALYST)
     if not sessions_store.delete_analysis_plan(plan_id):
         raise HTTPException(status_code=404, detail="plan not found")
     return JSONResponse(content={"status": "ok"})
@@ -943,13 +1150,19 @@ async def list_models_endpoint(
     limit: int = 8,
     status: str | None = None,
     project_id: str | None = None,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
     """Return model_run artifacts from all sessions as lightweight ModelInfo stubs."""
     import time as _time
 
+    if project_id is not None and not principal.is_dev:
+        ensure_project_access(principal, project_id, Role.VIEWER)
+    allowed = _org_project_ids(principal)
     all_sessions = sessions_store.list_sessions()
     models = []
     for s in all_sessions:
+        if allowed is not None and s.get("project_id") not in allowed:
+            continue
         tid = s["thread_id"]
         for art in sessions_store.list_artifacts(tid):
             if art["kind"] != "model_run":
@@ -990,12 +1203,13 @@ def _find_model_artifact(model_id: str) -> tuple[dict | None, str | None]:
 
 
 @app.get("/models/{model_id}")
-async def get_model_endpoint(model_id: str):
+async def get_model_endpoint(model_id: str, principal: PrincipalDep = _DEV_PRINCIPAL):
     import time as _time
 
     art, tid = _find_model_artifact(model_id)
     if art is None:
         raise HTTPException(status_code=404, detail="model not found")
+    _ensure_session_access(principal, tid, Role.VIEWER)
     p = art["payload"]
     run_id = p.get("run_id") or art["id"]
     ts = art.get("created_at", _time.time())
@@ -1015,11 +1229,14 @@ async def get_model_endpoint(model_id: str):
 
 
 @app.get("/models/{model_id}/dashboard")
-async def get_model_dashboard_endpoint(model_id: str):
+async def get_model_dashboard_endpoint(
+    model_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
     """Return roi_metrics + decomposition + summary from the model's LangGraph thread."""
     art, tid = _find_model_artifact(model_id)
     if art is None:
         raise HTTPException(status_code=404, detail="model not found")
+    _ensure_session_access(principal, tid, Role.VIEWER)
     try:
         g = _admin_graph()
         snap = await g.aget_state({"configurable": {"thread_id": tid}})
@@ -1066,19 +1283,36 @@ class ProjectUpdateRequest(BaseModel):
 
 
 @app.get("/projects")
-async def list_projects_endpoint():
-    projects = sessions_store.list_projects()
+async def list_projects_endpoint(
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    # Dev principal (auth disabled) sees all projects; a real tenant is scoped.
+    org_id = None if principal.is_dev else principal.org_id
+    projects = sessions_store.list_projects(org_id=org_id)
     return JSONResponse(content={"projects": projects, "total": len(projects)})
 
 
 @app.post("/projects")
-async def create_project_endpoint(body: ProjectCreateRequest):
+async def create_project_endpoint(
+    body: ProjectCreateRequest,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    org_id = None if principal.is_dev else principal.org_id
+    if org_id is not None:
+        from mmm_framework.auth.plans import PlanLimitError, assert_within_project_limit
+
+        try:
+            assert_within_project_limit(org_id)
+        except PlanLimitError as exc:
+            raise HTTPException(status_code=402, detail=str(exc))
     return JSONResponse(
-        content=sessions_store.create_project(body.name, body.description)
+        content=sessions_store.create_project(
+            body.name, body.description, org_id=org_id
+        )
     )
 
 
-@app.get("/projects/{project_id}")
+@app.get("/projects/{project_id}", dependencies=[_proj_read])
 async def get_project_endpoint(project_id: str):
     proj = sessions_store.get_project(project_id)
     if proj is None:
@@ -1086,14 +1320,14 @@ async def get_project_endpoint(project_id: str):
     return JSONResponse(content=proj)
 
 
-@app.patch("/projects/{project_id}")
+@app.patch("/projects/{project_id}", dependencies=[_proj_write])
 async def update_project_endpoint(project_id: str, body: ProjectUpdateRequest):
     if not sessions_store.update_project(project_id, body.name, body.description):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return JSONResponse(content=sessions_store.get_project(project_id))
 
 
-@app.delete("/projects/{project_id}")
+@app.delete("/projects/{project_id}", dependencies=[_proj_admin])
 async def delete_project_endpoint(project_id: str):
     if not sessions_store.delete_project(project_id):
         raise HTTPException(
@@ -1152,7 +1386,7 @@ def _project_brief_md(project: dict, meta: dict) -> str:
     return "\n".join(lines)
 
 
-@app.post("/projects/{project_id}/onboarding")
+@app.post("/projects/{project_id}/onboarding", dependencies=[_proj_write])
 async def project_onboarding_endpoint(project_id: str, body: OnboardingRequest):
     """Save the client/project profile, assign team members, and render the
     profile into a `project_brief.md` in the project's knowledge base — so
@@ -1219,7 +1453,7 @@ async def project_onboarding_endpoint(project_id: str, body: OnboardingRequest):
 GUIDE_SESSION_NAME = "✦ Project guide"
 
 
-@app.post("/projects/{project_id}/guide")
+@app.post("/projects/{project_id}/guide", dependencies=[_proj_read])
 async def project_guide_session_endpoint(project_id: str):
     """The project's global guide thread: one persistent session per project
     that the floating chat bubble talks to (full agent + project KB). Created
@@ -1290,7 +1524,7 @@ async def delete_user_endpoint(user_id: str):
     return JSONResponse(content={"status": "ok"})
 
 
-@app.get("/projects/{project_id}/members")
+@app.get("/projects/{project_id}/members", dependencies=[_proj_read])
 async def list_members_endpoint(project_id: str):
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -1298,7 +1532,7 @@ async def list_members_endpoint(project_id: str):
     return JSONResponse(content={"members": members, "total": len(members)})
 
 
-@app.put("/projects/{project_id}/members")
+@app.put("/projects/{project_id}/members", dependencies=[_proj_admin])
 async def set_members_endpoint(project_id: str, body: MembersRequest):
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -1354,14 +1588,14 @@ async def put_preferences_endpoint(body: PreferenceUpdateRequest):
     )
 
 
-@app.get("/projects/{project_id}/branding")
+@app.get("/projects/{project_id}/branding", dependencies=[_proj_read])
 async def get_branding_endpoint(project_id: str):
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return JSONResponse(content=sessions_store.get_project_branding(project_id) or {})
 
 
-@app.put("/projects/{project_id}/branding")
+@app.put("/projects/{project_id}/branding", dependencies=[_proj_admin])
 async def put_branding_endpoint(project_id: str, body: dict):
     """Validate + save project branding. A manual PUT counts as confirmation
     unless the payload explicitly says otherwise."""
@@ -1386,7 +1620,10 @@ class BrandingExtractRequest(BaseModel):
     save: bool = True
 
 
-@app.post("/projects/{project_id}/branding/extract")
+@app.post(
+    "/projects/{project_id}/branding/extract",
+    dependencies=[_proj_write, _rl_heavy],
+)
 async def extract_branding_endpoint(project_id: str, body: BrandingExtractRequest):
     """Extract a branding proposal from a client website (SSRF-guarded,
     server-side). Saved with confirmed=false — the UI/user must confirm
@@ -1461,23 +1698,38 @@ async def list_experiments_endpoint(
     project_id: str | None = None,
     status: str | None = None,
     channel: str | None = None,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
+    if not principal.is_dev and project_id is not None:
+        ensure_project_access(principal, project_id, Role.VIEWER)
     exps = sessions_store.list_experiments(
         project_id=project_id, status=status, channel=channel
     )
+    if not principal.is_dev:
+        allowed = auth_store.list_org_project_ids(principal.org_id)
+        exps = [e for e in exps if e.get("project_id") in allowed]
     return JSONResponse(content={"experiments": exps, "total": len(exps)})
 
 
 @app.get("/experiments/{experiment_id}")
-async def get_experiment_endpoint(experiment_id: str):
+async def get_experiment_endpoint(
+    experiment_id: str,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
     exp = sessions_store.get_experiment(experiment_id)
     if exp is None:
         raise HTTPException(status_code=404, detail="experiment not found")
+    ensure_project_access(principal, exp.get("project_id"), Role.VIEWER)
     return JSONResponse(content=exp)
 
 
 @app.post("/experiments")
-async def upsert_experiment_endpoint(body: ExperimentUpsertRequest):
+async def upsert_experiment_endpoint(
+    body: ExperimentUpsertRequest,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    if not principal.is_dev and body.project_id:
+        ensure_project_access(principal, body.project_id, Role.ANALYST)
     try:
         exp = sessions_store.upsert_experiment(
             experiment_id=body.id,
@@ -1504,13 +1756,17 @@ async def upsert_experiment_endpoint(body: ExperimentUpsertRequest):
 
 @app.post("/experiments/{experiment_id}/transition")
 async def transition_experiment_endpoint(
-    experiment_id: str, body: ExperimentTransitionRequest
+    experiment_id: str,
+    body: ExperimentTransitionRequest,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
     """Validated lifecycle move (draft→planned→running→completed→calibrated,
     abandoned from any active state). 409 on an illegal transition so the UI
     can distinguish state-machine conflicts from bad input."""
-    if sessions_store.get_experiment(experiment_id) is None:
+    _exp = sessions_store.get_experiment(experiment_id)
+    if _exp is None:
         raise HTTPException(status_code=404, detail="experiment not found")
+    ensure_project_access(principal, _exp.get("project_id"), Role.ANALYST)
     try:
         exp = sessions_store.transition_experiment(
             experiment_id,
@@ -1533,7 +1789,14 @@ async def transition_experiment_endpoint(
 
 
 @app.delete("/experiments/{experiment_id}")
-async def delete_experiment_endpoint(experiment_id: str):
+async def delete_experiment_endpoint(
+    experiment_id: str,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    _exp = sessions_store.get_experiment(experiment_id)
+    if _exp is None:
+        raise HTTPException(status_code=404, detail="experiment not found")
+    ensure_project_access(principal, _exp.get("project_id"), Role.ANALYST)
     if not sessions_store.delete_experiment(experiment_id):
         raise HTTPException(status_code=404, detail="experiment not found")
     return JSONResponse(content={"status": "ok"})
@@ -1546,7 +1809,7 @@ class LoadModelRequest(BaseModel):
     name: str
 
 
-@app.post("/sessions/{thread_id}/load-model")
+@app.post("/sessions/{thread_id}/load-model", dependencies=[_sess_write, _rl_heavy])
 async def load_model_endpoint(thread_id: str, body: LoadModelRequest):
     """Load a saved fitted model into the session directly. UI buttons call
     this instead of asking the agent to run the load_fitted_model tool."""
@@ -1582,13 +1845,20 @@ async def load_model_endpoint(thread_id: str, body: LoadModelRequest):
 
 
 @app.get("/runs")
-async def list_runs_endpoint(project_id: str | None = None):
+async def list_runs_endpoint(
+    project_id: str | None = None, principal: PrincipalDep = _DEV_PRINCIPAL
+):
     """The model-run lineage timeline: every fit with dataset fingerprint,
     spec diff vs the previous run, and the assumptions added/revised (the
     versioned data + model + rationale record)."""
     from mmm_framework.api.runs import build_run_timeline
 
+    if project_id is not None and not principal.is_dev:
+        ensure_project_access(principal, project_id, Role.VIEWER)
     runs = build_run_timeline(project_id)
+    allowed = _org_project_ids(principal)
+    if allowed is not None:
+        runs = [r for r in runs if r.get("project_id") in allowed]
     return JSONResponse(
         content=safe_json_dumps_load({"runs": runs, "total": len(runs)})
     )
@@ -1598,14 +1868,23 @@ async def list_runs_endpoint(project_id: str | None = None):
 
 
 @app.get("/portfolio")
-async def portfolio_endpoint(project_id: str | None = None, stale_after_days: int = 90):
+async def portfolio_endpoint(
+    project_id: str | None = None,
+    stale_after_days: int = 90,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
     """Everything the home page tracks in one call: model-run history, the
     experiment log, the latest budget/experiment-design recommendations, and
     computed next actions (calibrate completed experiments / refresh a stale
     model / run the recommended next experiment)."""
     import time as _time
 
+    if project_id is not None and not principal.is_dev:
+        ensure_project_access(principal, project_id, Role.VIEWER)
+    _allowed = _org_project_ids(principal)
     sessions = sessions_store.list_sessions(project_id=project_id)
+    if _allowed is not None:
+        sessions = [s for s in sessions if s.get("project_id") in _allowed]
     model_runs: list[dict] = []
     latest_design: dict | None = None
     latest_budget: dict | None = None
@@ -1758,7 +2037,7 @@ async def portfolio_endpoint(project_id: str | None = None, stale_after_days: in
 # ── Measurement-program history (per-project, from run_metrics snapshots) ─────
 
 
-@app.get("/projects/{project_id}/history")
+@app.get("/projects/{project_id}/history", dependencies=[_proj_read])
 async def project_history_endpoint(project_id: str):
     """Cycle-over-cycle trajectory series for the Performance page: per-channel
     ROI posteriors (CI contraction), spend shares (allocation migration),
@@ -1772,7 +2051,7 @@ async def project_history_endpoint(project_id: str):
     return JSONResponse(content=safe_json_dumps_load(build_history_series(project_id)))
 
 
-@app.get("/projects/{project_id}/calibration-coverage")
+@app.get("/projects/{project_id}/calibration-coverage", dependencies=[_proj_read])
 async def calibration_coverage_endpoint(project_id: str, as_of: str | None = None):
     """Channels × evidence tier (calibrated / stale / model_only) with
     information decay applied at read time, plus coverage percentages."""
@@ -1787,7 +2066,7 @@ async def calibration_coverage_endpoint(project_id: str, as_of: str | None = Non
     )
 
 
-@app.get("/projects/{project_id}/experiment-priorities")
+@app.get("/projects/{project_id}/experiment-priorities", dependencies=[_proj_read])
 async def experiment_priorities_endpoint(project_id: str, as_of: str | None = None):
     """The latest EIG/EVOI priority grid with decay + registry state applied
     at read time. 404 when the project has no run metrics yet (fit a model
@@ -1844,7 +2123,7 @@ def _design_inputs(project_id: str, channel: str) -> tuple[str, str]:
     return dataset_path, kpi
 
 
-@app.get("/projects/{project_id}/experiment-design/options")
+@app.get("/projects/{project_id}/experiment-design/options", dependencies=[_proj_read])
 async def experiment_design_options_endpoint(project_id: str, channel: str):
     """What designs the project's data supports (geo designs need >= 4 geos),
     plus the recommended one."""
@@ -1871,10 +2150,13 @@ class ExperimentDesignRequest(BaseModel):
     # flighting
     amplitude_pct: float = 50.0
     block_weeks: int = 2
+    levels: list[float] | None = None  # multi-level spend multipliers (curve)
     seed: int = 42
 
 
-@app.post("/projects/{project_id}/experiment-design")
+@app.post(
+    "/projects/{project_id}/experiment-design", dependencies=[_proj_write, _rl_heavy]
+)
 async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequest):
     """Compute a runnable experiment design: randomized matched-pair geo lift
     (or observational matched-market DiD) with DiD power/MDE curves, or a
@@ -1897,6 +2179,8 @@ async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequ
                 "amplitude_pct": body.amplitude_pct,
                 "block_weeks": int(body.block_weeks),
             }
+            if body.levels:
+                kwargs["levels"] = tuple(float(m) for m in body.levels)
         else:
             kwargs = {
                 "duration": int(body.duration),
@@ -1914,21 +2198,344 @@ async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequ
     return JSONResponse(content=safe_json_dumps_load(design))
 
 
+# ── Model-anchored experiment economics (async; loads the latest model) ───────
+
+
+class ExperimentSimulateRequest(BaseModel):
+    channel: str
+    design_key: str | None = None
+    design: str = "scaling"  # holdout | scaling
+    intensity_pct: float = 50.0
+    n_pairs: int | None = None
+    duration: int = 8
+    amplitude_pct: float = 50.0
+    block_weeks: int = 2
+    levels: list[float] | None = None  # multi-level flighting multipliers
+    margin: float | None = None
+    price: float | None = None
+    kpi_kind: str = "revenue"
+    seed: int = 42
+    max_draws: int = 100
+
+
+# Strong refs to in-flight jobs so a bare create_task can't be GC'd mid-run.
+_SIM_TASKS: set = set()
+
+
+def _sim_job_patch(job_id: str, **patch) -> None:
+    art = sessions_store.get_artifact(job_id)
+    if art is None:
+        return
+    payload = dict(art.get("payload") or {})
+    payload.update(patch)
+    sessions_store.update_artifact_payload(job_id, payload)
+
+
+def _resolve_project_margin(
+    project_id: str, body_margin: float | None, body_price: float | None
+) -> tuple[float | None, float | None]:
+    """(margin, price) — explicit body wins, else the project's saved economics
+    preference (set via the preferences store), else (None, None)."""
+    if body_margin is not None:
+        return body_margin, body_price
+    try:
+        econ = sessions_store.get_preference(project_id, "economics")
+        if isinstance(econ, dict):
+            return econ.get("gross_margin"), econ.get("price", body_price)
+    except Exception:
+        pass
+    return None, body_price
+
+
+def _load_and_run_op(
+    synthetic_tid: str,
+    run_name: str,
+    spec: dict | None,
+    dataset_path: str | None,
+    op_name: str,
+    op_kwargs: dict,
+) -> dict:
+    """SYNC worker (one asyncio.to_thread call): set the thread, load the latest
+    saved model into the in-process cache, and run the named model op DIRECTLY
+    against it. All three MUST share one worker context (F11: to_thread copies
+    the caller context; a ContextVar set in a separate call won't survive). The
+    ops are pure read-only compute, so a direct call is safe and avoids the
+    kernel-impl ambiguity (the model lives in the in-process MODEL_CACHE)."""
+    from mmm_framework.agents import model_ops
+    from mmm_framework.agents.runtime import MODEL_CACHE, set_current_thread
+    from mmm_framework.agents.tools import load_model_core
+
+    set_current_thread(synthetic_tid)
+    load_res = load_model_core(synthetic_tid, run_name, spec, dataset_path)
+    if not load_res.get("ok"):
+        return {"error": load_res.get("message", "Could not load the saved model.")}
+    mmm = MODEL_CACHE.get("fitted_model")
+    results = MODEL_CACHE.get("fit_results")
+    op = model_ops.OPS.get(op_name)
+    if op is None:
+        return {"error": f"Unknown model op: {op_name}"}
+    return op(mmm, results, **op_kwargs)
+
+
+async def _run_model_op_job(
+    job_id: str,
+    synthetic_tid: str,
+    run: dict | None,
+    op_name: str,
+    op_kwargs: dict,
+    result_key: str,
+) -> None:
+    """Run a model op in the background and persist its result_key projection
+    onto the job artifact (pending → running → done/error). Never lets the job
+    vanish: a raising worker writes status='error'."""
+    try:
+        _sim_job_patch(job_id, status="running")
+        if not run or not run.get("run_name"):
+            _sim_job_patch(
+                job_id,
+                status="error",
+                error="No saved model run for this project — fit a model first.",
+            )
+            return
+        res = await asyncio.to_thread(
+            _load_and_run_op,
+            synthetic_tid,
+            run.get("run_name"),
+            run.get("spec"),
+            run.get("dataset_path"),
+            op_name,
+            op_kwargs,
+        )
+        if res.get("error"):
+            _sim_job_patch(job_id, status="error", error=res["error"])
+            return
+        out = (res.get("dashboard") or {}).get(result_key)
+        _sim_job_patch(
+            job_id,
+            status="done",
+            result=safe_json_dumps_load(out) if out else None,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Model-op job failed (%s): %s", op_name, job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+def _spawn_job_task(coro) -> None:
+    """Fire-and-forget a background job with a strong ref (a bare create_task
+    can be GC'd mid-run) and crash logging."""
+    task = asyncio.create_task(coro)
+    _SIM_TASKS.add(task)
+    task.add_done_callback(
+        lambda f: (
+            _SIM_TASKS.discard(f),
+            f.cancelled()
+            or (f.exception() and logger.error("Job crashed: %s", f.exception())),
+        )
+    )
+
+
+async def _run_simulation_job(
+    job_id: str, synthetic_tid: str, run: dict | None, op_kwargs: dict
+) -> None:
+    await _run_model_op_job(
+        job_id,
+        synthetic_tid,
+        run,
+        "experiment_economics",
+        op_kwargs,
+        "experiment_economics",
+    )
+
+
+@app.post(
+    "/projects/{project_id}/experiment-design/simulate",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_experiment_simulation(project_id: str, body: ExperimentSimulateRequest):
+    """Start a NON-BLOCKING model-anchored economics + A/A·A/B simulation. Loads
+    the project's latest saved model in the background and runs the
+    experiment_economics op; poll the returned job_id for the result."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, body.channel)
+    run = latest_model_run_payload(project_id)
+
+    margin, price = _resolve_project_margin(project_id, body.margin, body.price)
+    design_params = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": body.channel,
+        "design_key": body.design_key,
+        "duration": int(body.duration),
+        "design": body.design,
+        "intensity_pct": float(body.intensity_pct),
+        "amplitude_pct": float(body.amplitude_pct),
+        "block_weeks": int(body.block_weeks),
+        "seed": int(body.seed),
+    }
+    if body.n_pairs is not None:
+        design_params["n_pairs"] = int(body.n_pairs)
+    if body.levels:
+        design_params["levels"] = [float(m) for m in body.levels]
+    op_kwargs = {
+        "design_params": design_params,
+        "run_simulation": True,
+        "margin": margin,
+        "price": price,
+        "kpi_kind": body.kpi_kind,
+        "max_draws": int(body.max_draws),
+    }
+
+    # Server-minted, project-scoped thread id (never client-supplied → hosted-safe).
+    synthetic_tid = f"__simjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "experiment_simulation",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "channel": body.channel,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(_run_simulation_job(job_id, synthetic_tid, run, op_kwargs))
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+@app.get(
+    "/projects/{project_id}/experiment-design/simulate/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_experiment_simulation(project_id: str, job_id: str):
+    """Poll an experiment-simulation job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Simulation job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+class ExperimentOptimizeRequest(BaseModel):
+    channel: str
+    margin: float | None = None
+    price: float | None = None
+    kpi_kind: str = "revenue"
+    # design-space ranges (the optimizer auto-samples a few points within each)
+    duration_min: int = 4
+    duration_max: int = 12
+    intensity_min: float = 50.0
+    intensity_max: float = 100.0
+    include_holdout: bool = True
+    # explicit overrides for the auto-sampling (optional)
+    durations: list[int] | None = None
+    scaling_intensities: list[float] | None = None
+    max_draws: int = 80
+    seed: int = 42
+
+
+@app.post(
+    "/projects/{project_id}/experiment-design/optimize",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_experiment_optimization(
+    project_id: str, body: ExperimentOptimizeRequest
+):
+    """Start a NON-BLOCKING experiment-setup optimization: explores the design
+    grid and returns the Pareto front (MDE × short-term cost × duration) + a
+    recommended setup with cool-down. Poll the returned job_id."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, body.channel)
+    run = latest_model_run_payload(project_id)
+    margin, price = _resolve_project_margin(project_id, body.margin, body.price)
+
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": body.channel,
+        "margin": margin,
+        "price": price,
+        "kpi_kind": body.kpi_kind,
+        "duration_min": int(body.duration_min),
+        "duration_max": int(body.duration_max),
+        "intensity_min": float(body.intensity_min),
+        "intensity_max": float(body.intensity_max),
+        "include_holdout": bool(body.include_holdout),
+        "max_draws": int(body.max_draws),
+        "random_seed": int(body.seed),
+    }
+    if body.durations:
+        op_kwargs["durations"] = [int(d) for d in body.durations]
+    if body.scaling_intensities:
+        op_kwargs["scaling_intensities"] = [float(x) for x in body.scaling_intensities]
+
+    synthetic_tid = f"__simjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "experiment_optimization",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "channel": body.channel,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(
+        _run_model_op_job(
+            job_id,
+            synthetic_tid,
+            run,
+            "experiment_optimizer",
+            op_kwargs,
+            "experiment_optimization",
+        )
+    )
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+@app.get(
+    "/projects/{project_id}/experiment-design/optimize/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_experiment_optimization(project_id: str, job_id: str):
+    """Poll an experiment-optimization job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Optimization job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
 # ── Artifacts ─────────────────────────────────────────────────────────────────
 
 
-@app.get("/artifacts/{thread_id}")
+@app.get("/artifacts/{thread_id}", dependencies=[_sess_read])
 async def list_artifacts_endpoint(thread_id: str):
     return JSONResponse(content=sessions_store.list_artifacts(thread_id))
 
 
 @app.delete("/artifacts/{artifact_id}")
-async def delete_artifact_endpoint(artifact_id: str):
+async def delete_artifact_endpoint(
+    artifact_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    art = sessions_store.get_artifact(artifact_id)
+    if art is not None:
+        _ensure_session_access(principal, art.get("thread_id"), Role.ANALYST)
     sessions_store.delete_artifact(artifact_id)
     return JSONResponse(content={"status": "ok"})
 
 
-@app.get("/sessions/{thread_id}/export")
+@app.get("/sessions/{thread_id}/export", dependencies=[_sess_read])
 async def export_session_endpoint(thread_id: str, format: str = "py"):
     """Download the session's Python work as a standalone, runnable script.
 
@@ -1965,14 +2572,14 @@ class RecordAssumptionBody(BaseModel):
     change_note: str | None = None
 
 
-@app.get("/assumptions/{thread_id}")
+@app.get("/assumptions/{thread_id}", dependencies=[_sess_read])
 async def list_assumptions_endpoint(thread_id: str, history: bool = False):
     return JSONResponse(
         content=sessions_store.list_assumptions(thread_id, include_history=history)
     )
 
 
-@app.get("/assumption_history/{thread_id}/{key:path}")
+@app.get("/assumption_history/{thread_id}/{key:path}", dependencies=[_sess_read])
 async def get_assumption_history_endpoint(thread_id: str, key: str):
     """Distinct route prefix so {key:path} can't shadow the list endpoint."""
     history = sessions_store.get_assumption_history(thread_id, key)
@@ -1981,7 +2588,7 @@ async def get_assumption_history_endpoint(thread_id: str, key: str):
     return JSONResponse(content=history)
 
 
-@app.post("/assumptions/{thread_id}")
+@app.post("/assumptions/{thread_id}", dependencies=[_sess_write])
 async def record_assumption_endpoint(thread_id: str, body: RecordAssumptionBody):
     rec = sessions_store.record_assumption(
         thread_id=thread_id,
@@ -1998,7 +2605,7 @@ class RetractAssumptionBody(BaseModel):
     reason: str
 
 
-@app.delete("/assumption/{thread_id}/{key:path}")
+@app.delete("/assumption/{thread_id}/{key:path}", dependencies=[_sess_write])
 async def retract_assumption_endpoint(
     thread_id: str, key: str, body: RetractAssumptionBody
 ):
@@ -2092,7 +2699,7 @@ async def _infer_workflow_status(thread_id: str) -> list[dict[str, Any]]:
     return out
 
 
-@app.get("/workflow/{thread_id}")
+@app.get("/workflow/{thread_id}", dependencies=[_sess_read])
 async def workflow_status_endpoint(thread_id: str):
     return JSONResponse(content=await _infer_workflow_status(thread_id))
 
@@ -2102,7 +2709,7 @@ class WorkflowStepBody(BaseModel):
     notes: str | None = None
 
 
-@app.patch("/workflow/{thread_id}/{step}")
+@app.patch("/workflow/{thread_id}/{step}", dependencies=[_sess_write])
 async def update_workflow_step_endpoint(
     thread_id: str, step: int, body: WorkflowStepBody
 ):
@@ -2115,13 +2722,16 @@ async def update_workflow_step_endpoint(
 # ── Files registry ───────────────────────────────────────────────────────────
 
 
-@app.get("/files/{thread_id}")
+@app.get("/files/{thread_id}", dependencies=[_sess_read])
 async def list_files_endpoint(thread_id: str):
     return JSONResponse(content=sessions_store.list_files(thread_id))
 
 
 @app.delete("/files/{file_id}")
-async def delete_file_endpoint(file_id: str):
+async def delete_file_endpoint(file_id: str, principal: PrincipalDep = _DEV_PRINCIPAL):
+    rec = sessions_store.get_file(file_id)
+    if rec is not None:
+        _ensure_session_access(principal, rec.get("thread_id"), Role.ANALYST)
     sessions_store.delete_file(file_id)
     return JSONResponse(content={"status": "ok"})
 
@@ -2256,7 +2866,7 @@ async def get_table_endpoint(table_id: str):
     )
 
 
-@app.get("/workspace/{thread_id}/files")
+@app.get("/workspace/{thread_id}/files", dependencies=[_sess_read])
 async def workspace_files_endpoint(thread_id: str):
     """List the session's registered files (uploads + generated), each with a
     download id."""
@@ -2265,20 +2875,26 @@ async def workspace_files_endpoint(thread_id: str):
 
 
 @app.get("/files/{file_id}/download")
-async def download_file_endpoint(file_id: str):
+async def download_file_endpoint(
+    file_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
     rec = sessions_store.get_file(file_id)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"File not found: {file_id}")
+    _ensure_session_access(principal, rec.get("thread_id"), Role.VIEWER)
     return _guarded_file_response(rec["path"], rec.get("name"))
 
 
 @app.get("/artifacts/{artifact_id}/download")
-async def download_artifact_endpoint(artifact_id: str):
+async def download_artifact_endpoint(
+    artifact_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
     art = sessions_store.get_artifact(artifact_id)
     if art is None:
         raise HTTPException(
             status_code=404, detail=f"Artifact not found: {artifact_id}"
         )
+    _ensure_session_access(principal, art.get("thread_id"), Role.VIEWER)
     p = art.get("payload", {})
     # Resolve a downloadable path from whatever kind of artifact this is
     path = p.get("path") or p.get("report_path") or p.get("model_path")
@@ -2305,7 +2921,7 @@ async def download_artifact_endpoint(artifact_id: str):
 # ── Knowledge base (req 2/3 — project-level RAG) ─────────────────────────────
 
 
-@app.post("/projects/{project_id}/kb")
+@app.post("/projects/{project_id}/kb", dependencies=[_proj_write, _rl_heavy])
 async def kb_upload_endpoint(
     project_id: str,
     file: UploadFile = File(...),
@@ -2345,13 +2961,13 @@ async def kb_upload_endpoint(
     return JSONResponse(content=doc)
 
 
-@app.get("/projects/{project_id}/kb")
+@app.get("/projects/{project_id}/kb", dependencies=[_proj_read])
 async def kb_list_endpoint(project_id: str):
     docs = sessions_store.list_kb_documents(project_id)
     return JSONResponse(content={"documents": docs, "total": len(docs)})
 
 
-@app.get("/projects/{project_id}/kb/search")
+@app.get("/projects/{project_id}/kb/search", dependencies=[_proj_read])
 async def kb_search_endpoint(project_id: str, q: str, k: int = 6):
     from fastapi.concurrency import run_in_threadpool
     from mmm_framework.agents import knowledge_base as kb
@@ -2366,12 +2982,16 @@ async def kb_search_endpoint(project_id: str, q: str, k: int = 6):
 
 
 @app.delete("/kb/{document_id}")
-async def kb_delete_endpoint(document_id: str):
+async def kb_delete_endpoint(
+    document_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
     doc = sessions_store.get_kb_document(document_id)
     if doc is None:
         raise HTTPException(
             status_code=404, detail=f"Document not found: {document_id}"
         )
+    if not principal.is_dev:
+        ensure_project_access(principal, doc.get("project_id"), Role.ANALYST)
     sessions_store.delete_kb_document(document_id)
     # best-effort remove the file on disk
     try:
@@ -2385,7 +3005,7 @@ async def kb_delete_endpoint(document_id: str):
 # ── DAG endpoint (read current DAG from state, return React Flow JSON) ───────
 
 
-@app.get("/dag/{thread_id}")
+@app.get("/dag/{thread_id}", dependencies=[_sess_read])
 async def dag_endpoint(thread_id: str):
     """Return the current DAG (if any) plus a fresh identifiability report.
     Pulls DAG from dashboard_data['dag']['spec'] which `propose_dag` writes.
@@ -2409,7 +3029,7 @@ class DAGUpdateRequest(BaseModel):
     edges: list[dict]
 
 
-@app.put("/dag/{thread_id}")
+@app.put("/dag/{thread_id}", dependencies=[_sess_write])
 async def update_dag(thread_id: str, body: DAGUpdateRequest):
     """Manually update the DAG for a session.
 
@@ -2458,7 +3078,7 @@ class OutlierApplyRequest(BaseModel):
     reason: str | None = None
 
 
-@app.post("/outliers/{thread_id}/apply")
+@app.post("/outliers/{thread_id}/apply", dependencies=[_sess_write])
 async def apply_outliers_endpoint(thread_id: str, body: OutlierApplyRequest):
     """Apply confirmed outlier-treatment actions from the UI (EDA tab confirm
     buttons), without a chat round-trip.
@@ -2527,7 +3147,7 @@ def _mirror_spec_dashboard(
     return dashboard
 
 
-@app.patch("/spec/{thread_id}")
+@app.patch("/spec/{thread_id}", dependencies=[_sess_write])
 async def update_spec(thread_id: str, body: SpecUpdateRequest):
     """Server-authoritative manual edit of the model configuration.
 
@@ -2597,7 +3217,7 @@ async def update_spec(thread_id: str, body: SpecUpdateRequest):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.post("/spec/{thread_id}/resolve")
+@app.post("/spec/{thread_id}/resolve", dependencies=[_sess_write])
 async def resolve_spec_change(thread_id: str, body: SpecResolveRequest):
     """Confirm or decline an LLM-proposed change to a user-locked field.
 
@@ -2682,7 +3302,7 @@ async def resolve_spec_change(thread_id: str, body: SpecResolveRequest):
 # ── Dataset preview ─────────────────────────────────────────────────────────
 
 
-@app.get("/dataset/preview/{thread_id}")
+@app.get("/dataset/preview/{thread_id}", dependencies=[_sess_read])
 async def dataset_preview(
     thread_id: str,
     variable: str,
@@ -2768,7 +3388,7 @@ async def dataset_preview(
 # ── Misc ──────────────────────────────────────────────────────────────────────
 
 
-@app.post("/upload")
+@app.post("/upload", dependencies=[_sess_write, _rl_heavy])
 async def upload_file(file: UploadFile = File(...), thread_id: str | None = None):
     """Upload a file scoped to a session. Files land in the session WORKSPACE
     directory (so execute_python and the Files tab share one location), are
@@ -2972,7 +3592,7 @@ def _serve_report(
     return _safe_serve(p, media_type, download_name=download_name)
 
 
-@app.get("/report")
+@app.get("/report", dependencies=[_rep_read])
 async def view_report(thread_id: str | None = None):
     """Serve the generated HTML report inline for embedding."""
     return _serve_report(
@@ -2982,7 +3602,7 @@ async def view_report(thread_id: str | None = None):
     )
 
 
-@app.get("/report/download")
+@app.get("/report/download", dependencies=[_rep_read])
 async def download_report(thread_id: str | None = None):
     """Download the generated HTML report."""
     return _serve_report(
@@ -2994,7 +3614,7 @@ async def download_report(thread_id: str | None = None):
     )
 
 
-@app.get("/project-report")
+@app.get("/project-report", dependencies=[_rep_read])
 async def view_project_report(thread_id: str | None = None):
     """Serve the project findings HTML report."""
     return _serve_report(
@@ -3004,7 +3624,7 @@ async def view_project_report(thread_id: str | None = None):
     )
 
 
-@app.get("/project-report/download")
+@app.get("/project-report/download", dependencies=[_rep_read])
 async def download_project_report(thread_id: str | None = None):
     return _serve_report(
         "agent_project_report.html",
@@ -3015,7 +3635,7 @@ async def download_project_report(thread_id: str | None = None):
     )
 
 
-@app.get("/project-slides")
+@app.get("/project-slides", dependencies=[_rep_read])
 async def view_project_slides(thread_id: str | None = None):
     """Serve the Reveal.js project slideshow."""
     return _serve_report(
@@ -3025,7 +3645,7 @@ async def view_project_slides(thread_id: str | None = None):
     )
 
 
-@app.get("/project-slides/download")
+@app.get("/project-slides/download", dependencies=[_rep_read])
 async def download_project_slides(thread_id: str | None = None):
     return _serve_report(
         "agent_project_slides.html",
@@ -3036,7 +3656,7 @@ async def download_project_slides(thread_id: str | None = None):
     )
 
 
-@app.get("/client-report")
+@app.get("/client-report", dependencies=[_rep_read])
 async def view_client_report(thread_id: str | None = None):
     """Serve the client-ready HTML report (no diagnostics, with nav + confidentiality notice)."""
     return _serve_report(
@@ -3046,7 +3666,7 @@ async def view_client_report(thread_id: str | None = None):
     )
 
 
-@app.get("/client-report/download")
+@app.get("/client-report/download", dependencies=[_rep_read])
 async def download_client_report(thread_id: str | None = None):
     return _serve_report(
         "agent_client_report.html",
@@ -3057,7 +3677,7 @@ async def download_client_report(thread_id: str | None = None):
     )
 
 
-@app.get("/client-slides")
+@app.get("/client-slides", dependencies=[_rep_read])
 async def view_client_slides(thread_id: str | None = None):
     """Serve the client-ready Reveal.js slideshow (no MCMC stats, with confidentiality footer)."""
     return _serve_report(
@@ -3067,7 +3687,7 @@ async def view_client_slides(thread_id: str | None = None):
     )
 
 
-@app.get("/client-slides/download")
+@app.get("/client-slides/download", dependencies=[_rep_read])
 async def download_client_slides(thread_id: str | None = None):
     return _serve_report(
         "agent_client_slides.html",

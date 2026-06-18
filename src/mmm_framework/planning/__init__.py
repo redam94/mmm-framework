@@ -31,6 +31,24 @@ from .design import (
 from .evoi import EvoiResult, compute_evoi_for_channel, compute_evpi
 from .experiments import recommend_experiments
 from .priority import ChannelPriority, compute_experiment_priorities
+from .opportunity_cost import OpportunityCostResult, compute_opportunity_cost
+from .design_anchor import (
+    model_anchored_effect,
+    powered_to_detect,
+    realized_sigma_exp_for_anchor,
+)
+from .simulation import (
+    build_sim_panel,
+    methodology_leaderboard,
+    run_aa_simulation,
+    run_ab_simulation,
+)
+from .experiment_optimizer import (
+    cooldown_weeks,
+    evaluate_experiment_grid,
+    pareto_front,
+    suggest_experiment,
+)
 
 __all__ = [
     "design_experiment",
@@ -56,4 +74,17 @@ __all__ = [
     "reexperiment_due",
     "DESIGN_PRECISION",
     "DEFAULT_HALF_LIVES_WEEKS",
+    "OpportunityCostResult",
+    "compute_opportunity_cost",
+    "model_anchored_effect",
+    "powered_to_detect",
+    "realized_sigma_exp_for_anchor",
+    "build_sim_panel",
+    "methodology_leaderboard",
+    "run_aa_simulation",
+    "run_ab_simulation",
+    "cooldown_weeks",
+    "evaluate_experiment_grid",
+    "pareto_front",
+    "suggest_experiment",
 ]

@@ -97,6 +97,7 @@ def compute_experiment_priorities(
     as_of: str | None = None,
     design_type: str | None = None,
     sigma_exp_overrides: dict[str, float] | None = None,
+    roi_draws_overrides: dict[str, np.ndarray] | None = None,
     half_life_overrides: dict[str, float] | None = None,
     eig_threshold: float | None = None,
     evoi_threshold: float | None = None,
@@ -162,10 +163,25 @@ def compute_experiment_priorities(
 
     as_of_date = _parse_date(as_of) or date.today()
 
+    # Channels whose anchored override could not be applied (draw-count mismatch
+    # with the curves, so it can't pair for the EVOI reweighting).
+    override_skipped: list[str] = []
+
     raw: list[dict[str, Any]] = []
     for c, name in enumerate(names):
         spend = float(base[c])
         roi_draws = contrib_at_current[:, c] / max(spend, 1e-12)
+        # Loopback: a design-anchored INCREMENTAL-ROAS posterior (the estimand the
+        # experiment actually measures) replaces the average-ROAS draws when the
+        # caller supplies one computed at the same max_draws (so it is draw-paired
+        # with the curves — F1). Length mismatch → keep the average-ROAS draws.
+        ov = (roi_draws_overrides or {}).get(name)
+        if ov is not None:
+            ov = np.asarray(ov, dtype=float)
+            if ov.shape[0] == D:
+                roi_draws = ov
+            else:
+                override_skipped.append(name)
         roi_mean = float(np.mean(roi_draws))
         roi_sd = float(np.std(roi_draws))
         p5, p95 = (float(np.percentile(roi_draws, q)) for q in (5, 95))
@@ -271,4 +287,6 @@ def compute_experiment_priorities(
         "retest_threshold_nats": retest_threshold_nats,
         "as_of": as_of_date.isoformat(),
     }
+    if override_skipped:
+        portfolio["roi_draws_override_skipped"] = override_skipped
     return grid, portfolio

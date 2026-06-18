@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import Plot from 'react-plotly.js';
 import { DashWidget } from '../common/DashWidget';
 import { API_BASE } from '../../constants';
+import { bearerHeader } from '../../../../api/client';
 import { applyLightModeLayout } from '../../utils/plotly';
 import type { DatasetInfo } from '../../types';
 
@@ -24,7 +25,7 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
       params.set('dim', activeDimFilters[0]);
       params.set('value', dimFilters[activeDimFilters[0]]);
     }
-    fetch(`${API_BASE}/dataset/preview/${encodeURIComponent(threadId ?? "")}?${params}`)
+    fetch(`${API_BASE}/dataset/preview/${encodeURIComponent(threadId ?? "")}?${params}`, { headers: bearerHeader() })
       .then(r => r.json())
       .then(data => { setSeries(data.series ?? null); })
       .catch(() => setSeries(null))

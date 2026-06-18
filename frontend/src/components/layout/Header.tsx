@@ -12,8 +12,10 @@ export function Header({ onMenuClick }: HeaderProps) {
   const location = useLocation();
   const page = pageForPath(location.pathname);
 
+  // z-30: above the workspace tab bar (sticky z-10) so the project/model
+  // dropdowns overlay the tabs, and below the sidebar/modals (z-50).
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-x-4 border-b border-line-200 bg-cream-50/90 px-4 backdrop-blur sm:gap-x-6 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-x-4 border-b border-line-200 bg-cream-50/90 px-4 backdrop-blur sm:gap-x-6 sm:px-6 lg:px-8">
       {/* Mobile menu button */}
       <button
         type="button"

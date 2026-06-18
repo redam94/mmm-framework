@@ -18,8 +18,17 @@ from schemas import (
     ErrorResponse,
     SuccessResponse,
 )
-from storage import StorageError, StorageService, get_storage
+from storage import (
+    StorageError,
+    StorageService,
+    assert_org_owns as _assert_org_owns,
+    get_storage,
+    org_scope as _org_scope,
+)
 import io
+
+from mmm_framework.auth.deps import get_current_principal
+from mmm_framework.auth.models import AuthContext
 
 router = APIRouter(prefix="/data", tags=["Data"])
 
@@ -37,6 +46,7 @@ async def upload_data(
     file: UploadFile = File(..., description="MFF data file (CSV, Parquet, or Excel)"),
     storage: StorageService = Depends(get_storage),
     settings: Settings = Depends(get_settings),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Upload a dataset in MFF format.
@@ -75,7 +85,9 @@ async def upload_data(
         )
 
     try:
-        metadata = storage.save_data(content, file.filename)
+        metadata = storage.save_data(
+            content, file.filename, org_id=_org_scope(principal)
+        )
 
         return DataUploadResponse(
             data_id=metadata["data_id"],
@@ -109,9 +121,10 @@ async def list_data(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum items to return"),
     project_id: str | None = Query(None, description="Filter by project"),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List all uploaded datasets."""
-    datasets = storage.list_data(project_id=project_id)
+    datasets = storage.list_data(project_id=project_id, org_id=_org_scope(principal))
 
     # Apply pagination
     total = len(datasets)
@@ -146,10 +159,12 @@ async def get_data(
     include_preview: bool = Query(False, description="Include data preview"),
     preview_rows: int = Query(10, ge=1, le=100, description="Number of preview rows"),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get information about a specific dataset."""
     try:
         metadata = storage.get_data_info(data_id)
+        _assert_org_owns(metadata.get("org_id"), _org_scope(principal))
 
         preview = None
         if include_preview:
@@ -183,6 +198,7 @@ async def get_data(
 async def delete_data(
     data_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Delete a dataset."""
     if not storage.data_exists(data_id):
@@ -190,6 +206,10 @@ async def delete_data(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dataset not found: {data_id}",
         )
+
+    _assert_org_owns(
+        storage.get_data_info(data_id).get("org_id"), _org_scope(principal)
+    )
 
     storage.delete_data(data_id)
 
@@ -206,9 +226,13 @@ async def delete_data(
 async def get_data_variables(
     data_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get variable names and summary statistics from a dataset."""
     try:
+        _assert_org_owns(
+            storage.get_data_info(data_id).get("org_id"), _org_scope(principal)
+        )
         df = storage.load_data(data_id)
 
         if "VariableName" not in df.columns or "VariableValue" not in df.columns:
@@ -244,6 +268,7 @@ async def download_data(
     data_id: str,
     format: str = Query("csv", description="Download format: csv, parquet, or excel"),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Download a dataset in the specified format.
@@ -254,9 +279,10 @@ async def download_data(
     - excel
     """
     try:
+        metadata = storage.get_data_info(data_id)
+        _assert_org_owns(metadata.get("org_id"), _org_scope(principal))
         # Load the data
         df = storage.load_data(data_id)
-        metadata = storage.get_data_info(data_id)
         filename = metadata.get("filename", f"{data_id}")
 
         # Remove extension from filename if present
