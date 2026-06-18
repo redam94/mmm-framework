@@ -1946,6 +1946,42 @@ async def list_runs_endpoint(
 # ── Portfolio (home page aggregation) ─────────────────────────────────────────
 
 
+@app.get("/portfolio-benchmark")
+async def portfolio_benchmark_endpoint(
+    stale_after_days: int = 90,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    """Cross-brand benchmarking + governance over the org's projects' run metrics
+    (the agency/holding-co view: rank a brand's channel ROIs against the
+    portfolio, see model freshness + calibration coverage)."""
+    import time as _t
+
+    from mmm_framework.api.portfolio_benchmark import build_portfolio_benchmark
+
+    org_id = None if principal.is_dev else principal.org_id
+    projects = sessions_store.list_projects(org_id=org_id)
+    runs_by_project = {
+        p["project_id"]: sessions_store.list_run_metrics(project_id=p["project_id"])
+        for p in projects
+    }
+    calibrated_by_project = {
+        p["project_id"]: len(
+            sessions_store.list_experiments(
+                project_id=p["project_id"], status="calibrated"
+            )
+        )
+        for p in projects
+    }
+    payload = build_portfolio_benchmark(
+        projects,
+        runs_by_project,
+        now_ts=_t.time(),
+        calibrated_by_project=calibrated_by_project,
+        stale_after_days=stale_after_days,
+    )
+    return JSONResponse(content=safe_json_dumps_load(payload))
+
+
 @app.get("/portfolio")
 async def portfolio_endpoint(
     project_id: str | None = None,
