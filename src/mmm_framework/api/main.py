@@ -1298,6 +1298,13 @@ async def create_project_endpoint(
     principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
     org_id = None if principal.is_dev else principal.org_id
+    if org_id is not None:
+        from mmm_framework.auth.plans import PlanLimitError, assert_within_project_limit
+
+        try:
+            assert_within_project_limit(org_id)
+        except PlanLimitError as exc:
+            raise HTTPException(status_code=402, detail=str(exc))
     return JSONResponse(
         content=sessions_store.create_project(
             body.name, body.description, org_id=org_id

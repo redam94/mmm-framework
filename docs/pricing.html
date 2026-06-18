@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing | MMM Framework</title>
+    <meta name="description" content="Open-core pricing for the MMM Framework: a free, self-hosted OSS core with no limits, plus paid managed tiers (Free / Team / Business / Enterprise) whose seat, project, and monthly-fit limits and feature gates are exactly the ones enforced in code. Dollar prices are proposed and illustrative; billing is per-seat plus metered fits.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/pricing.html">
+    <meta property="og:title" content="Pricing | MMM Framework">
+    <meta property="og:description" content="Free, self-hosted OSS core with no limits — plus managed Team / Business / Enterprise tiers. Limits and feature gates match the code; dollar prices are proposed and illustrative.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/pricing.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .container { max-width: 1100px; }
+        section { padding: 3rem 0; }
+        .hero { min-height: auto; padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        .hero::before { display: none; }
+
+        /* Illustrative banner */
+        .illus-banner { border: 1px solid var(--color-border); border-left: 4px solid var(--color-accent); background: var(--color-bg-alt); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; font-size: .95rem; }
+        .illus-banner strong { color: var(--color-accent-dark); }
+
+        /* Open-core callout */
+        .opencore { border: 1px solid var(--color-border); border-radius: 12px; padding: 1.75rem 2rem; background: var(--color-bg-alt); margin: 1.5rem 0; }
+        .opencore h3 { margin-top: 0; }
+
+        /* Tier cards */
+        .tier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin: 2rem 0; align-items: stretch; }
+        .tier { border: 1px solid var(--color-border); border-radius: 14px; padding: 1.5rem 1.4rem; background: var(--color-bg); display: flex; flex-direction: column; }
+        .tier.featured { border-color: var(--color-primary); box-shadow: 0 6px 24px rgba(143,168,106,.18); position: relative; }
+        .tier-badge { position: absolute; top: -.7rem; right: 1.1rem; font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: var(--color-primary); color: #fff; padding: .2rem .6rem; border-radius: 999px; }
+        .tier h3 { margin: 0 0 .25rem; font-size: 1.4rem; }
+        .tier .blurb { font-size: .9rem; color: var(--color-text-muted); margin: 0 0 1rem; min-height: 2.6em; }
+        .tier .price { font-size: 1.9rem; font-weight: 700; color: var(--color-text); line-height: 1.1; font-family: 'DM Serif Display', serif; }
+        .tier .price .unit { font-size: .8rem; font-weight: 400; color: var(--color-text-muted); font-family: 'Source Sans 3', sans-serif; display: block; margin-top: .15rem; }
+        .tier .price-note { font-size: .72rem; color: var(--color-text-muted); margin: .35rem 0 1rem; font-style: italic; }
+        .tier .limits { list-style: none; padding: 0; margin: 0 0 1rem; border-top: 1px solid var(--color-border); }
+        .tier .limits li { display: flex; justify-content: space-between; gap: .5rem; padding: .45rem 0; border-bottom: 1px solid var(--color-border); font-size: .9rem; }
+        .tier .limits li .k { color: var(--color-text-muted); }
+        .tier .limits li .v { font-weight: 600; }
+        .tier .features { list-style: none; padding: 0; margin: 0 0 1.25rem; font-size: .88rem; flex-grow: 1; }
+        .tier .features li { padding: .3rem 0; padding-left: 1.5rem; position: relative; }
+        .tier .features li.yes::before { content: "✓"; position: absolute; left: 0; color: var(--color-primary-dark); font-weight: 700; }
+        .tier .features li.no::before { content: "–"; position: absolute; left: 0; color: var(--color-border); }
+        .tier .features li.no { color: var(--color-text-muted); }
+        .tier .btn { width: 100%; text-align: center; margin-top: auto; }
+
+        /* COGS / compute table */
+        table.compute code { white-space: nowrap; }
+        .assumption-tag { display: inline-block; font-size: .68rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; padding: .1rem .45rem; border-radius: 999px; background: #fdf0e2; color: #8a5413; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>Pricing</h1>
+            <p class="lead">
+                The MMM Framework is <strong>open-core</strong>. The full modeling library and the platform are free and open source under Apache&nbsp;2.0 — you can self-host the whole thing, with no seat, project, or fit limits, forever. The paid tiers below are for the <strong>managed multi-tenant</strong> posture: a hosted workspace where the differentiators are exactly the multi-tenancy, SSO, sandboxed-execution, and branding capabilities a single-tenant self-host doesn't need.
+            </p>
+            <div class="illus-banner">
+                <strong>Dollar prices on this page are proposed and illustrative — final pricing is TBD.</strong>
+                The seat / project / monthly-fit <em>limits</em> and the <em>feature gates</em> are the real, enforceable contract (they come straight from <code>src/mmm_framework/auth/plans.py</code>). The dollar figures are a starting point the founder will set; treat them as a sketch, not a quote.
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Open core: free and unlimited when self-hosted</h2>
+            <div class="opencore">
+                <h3>The "open" in open-core is not a billed plan</h3>
+                <p>
+                    Plan limits only apply in <strong>hosted multi-tenant mode</strong> (auth enabled). When you self-host the OSS core with authentication <strong>off</strong> — the default install — it runs as a single-tenant dev principal with <strong>no seat, project, or fit limits at all</strong> (<code>auth/plans.py</code> lines 51–53). That is a separate thing from the <em>Free</em> billed plan below: the Free plan is the entry point on the <em>managed</em> platform; self-hosting is the unlimited open-source path.
+                </p>
+                <p style="margin-bottom:0;">
+                    So the decision is simple: <strong>run it yourself for free with no limits</strong>, or <strong>let us run the multi-tenant platform for you</strong> and pay for the managed capabilities and the compute. Everything below is about the second path.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Managed tiers</h2>
+            <p>
+                Four tiers, mapped one-to-one to <code>PLANS</code> in <code>auth/plans.py</code>. The limits and feature checklist on each card are exactly what the code enforces — seat cap at invite-accept, project cap at project create, and each premium feature gated by <code>require_plan_feature</code> (HTTP&nbsp;402 when your plan lacks it).
+            </p>
+
+            <div class="tier-grid">
+
+                <!-- FREE -->
+                <div class="tier">
+                    <h3>Free</h3>
+                    <p class="blurb">Get started on the managed platform — or self-host the OSS core with no limits.</p>
+                    <div class="price">$0<span class="unit">forever, on the managed platform</span></div>
+                    <p class="price-note">Proposed / illustrative</p>
+                    <ul class="limits">
+                        <li><span class="k">Seats</span><span class="v">2</span></li>
+                        <li><span class="k">Projects</span><span class="v">3</span></li>
+                        <li><span class="k">Model fits / month</span><span class="v">20</span></li>
+                    </ul>
+                    <ul class="features">
+                        <li class="no">Multi-tenant org + RBAC</li>
+                        <li class="no">Hosted sandboxed agent execution</li>
+                        <li class="no">Client branding &amp; branded reports</li>
+                        <li class="no">SSO (OIDC / SAML)</li>
+                        <li class="no">Audit-log export</li>
+                        <li class="no">Priority support &amp; SLA</li>
+                    </ul>
+                    <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline" target="_blank" rel="noopener">Self-host the core</a>
+                </div>
+
+                <!-- TEAM -->
+                <div class="tier featured">
+                    <span class="tier-badge">Most popular</span>
+                    <h3>Team</h3>
+                    <p class="blurb">Managed multi-tenant workspace for a single team.</p>
+                    <div class="price">~$X<span class="unit">per seat / month</span></div>
+                    <p class="price-note">Proposed / illustrative — final per-seat price TBD</p>
+                    <ul class="limits">
+                        <li><span class="k">Seats</span><span class="v">5</span></li>
+                        <li><span class="k">Projects</span><span class="v">10</span></li>
+                        <li><span class="k">Model fits / month</span><span class="v">200</span></li>
+                    </ul>
+                    <ul class="features">
+                        <li class="yes">Multi-tenant org + RBAC</li>
+                        <li class="yes">Hosted sandboxed agent execution</li>
+                        <li class="yes">Client branding &amp; branded reports</li>
+                        <li class="no">SSO (OIDC / SAML)</li>
+                        <li class="no">Audit-log export</li>
+                        <li class="no">Priority support &amp; SLA</li>
+                    </ul>
+                    <a href="about.html" class="btn btn-primary">Talk to us</a>
+                </div>
+
+                <!-- BUSINESS -->
+                <div class="tier">
+                    <h3>Business</h3>
+                    <p class="blurb">SSO, audit export, and headroom for an agency or larger org.</p>
+                    <div class="price">~$Y<span class="unit">per seat / month</span></div>
+                    <p class="price-note">Proposed / illustrative — higher per-seat than Team; final TBD</p>
+                    <ul class="limits">
+                        <li><span class="k">Seats</span><span class="v">25</span></li>
+                        <li><span class="k">Projects</span><span class="v">50</span></li>
+                        <li><span class="k">Model fits / month</span><span class="v">1,000</span></li>
+                    </ul>
+                    <ul class="features">
+                        <li class="yes">Multi-tenant org + RBAC</li>
+                        <li class="yes">Hosted sandboxed agent execution</li>
+                        <li class="yes">Client branding &amp; branded reports</li>
+                        <li class="yes">SSO (OIDC / SAML)</li>
+                        <li class="yes">Audit-log export</li>
+                        <li class="yes">Priority support &amp; SLA</li>
+                    </ul>
+                    <a href="about.html" class="btn btn-secondary">Talk to us</a>
+                </div>
+
+                <!-- ENTERPRISE -->
+                <div class="tier">
+                    <h3>Enterprise</h3>
+                    <p class="blurb">Unlimited scale, custom SLAs, on-prem / VPC, dedicated support.</p>
+                    <div class="price">Contact us<span class="unit">custom</span></div>
+                    <p class="price-note">Custom — priced to scope</p>
+                    <ul class="limits">
+                        <li><span class="k">Seats</span><span class="v">Unlimited</span></li>
+                        <li><span class="k">Projects</span><span class="v">Unlimited</span></li>
+                        <li><span class="k">Model fits / month</span><span class="v">Unlimited</span></li>
+                    </ul>
+                    <ul class="features">
+                        <li class="yes">Multi-tenant org + RBAC</li>
+                        <li class="yes">Hosted sandboxed agent execution</li>
+                        <li class="yes">Client branding &amp; branded reports</li>
+                        <li class="yes">SSO (OIDC / SAML)</li>
+                        <li class="yes">Audit-log export</li>
+                        <li class="yes">Priority support &amp; SLA + custom SLA / on-prem</li>
+                    </ul>
+                    <a href="about.html" class="btn btn-secondary">Contact us</a>
+                </div>
+
+            </div>
+
+            <p style="font-size:.85rem; color:var(--color-text-muted);">
+                Feature flags are the six in <code>auth/plans.py:FEATURES</code> — <code>multi_tenant</code>, <code>hosted_sandbox</code>, <code>branding</code>, <code>sso</code>, <code>audit_export</code>, <code>priority_support</code>. Free has none; Team adds the first three; Business adds the last three; Enterprise has all six plus a custom SLA / on-prem deployment.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>How billing works</h2>
+            <p>
+                Billing is <strong>per-seat plus metered fits</strong>. Each org is metered against its plan in three dimensions — <strong>seats</strong> (org members), <strong>projects</strong>, and <strong>fits this month</strong> (rows in the <code>run_metrics</code> table since the first of the month) — and you can see your live usage versus your limits any time at <code>GET&nbsp;/auth/usage</code> (<code>auth/plans.py:org_usage</code>). The seat cap is enforced at invite-accept, the project cap at project create, and premium features return <strong>HTTP&nbsp;402</strong> if your plan doesn't include them.
+            </p>
+            <div class="info-box">
+                <h4>What a "fit" is, and why fits cost money</h4>
+                <p style="margin-bottom:0;">
+                    A <em>fit</em> is one Bayesian model run. A national NUTS fit completes in <strong>~17&nbsp;seconds</strong>, and the NumPyro sampler runs <strong>6.0×&nbsp;faster</strong> than stock PyMC at equal draws — so a single national model is cheap. But extension models (nested mediation, multivariate, combined) and larger geo / geo×product panels do more work per fit and cost more, which is why fits are metered rather than flat-rated. The monthly fit quota on each tier is the metered envelope; Enterprise removes the cap.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>What drives the price (COGS)</h2>
+            <p>
+                The platform is open source and self-hosted by default, so on the managed tiers the real cost driver is <strong>hosted compute</strong> — running your fits and the sandboxed agent on infrastructure we operate. The figures below are what we actually measured for runtime; the per-vCPU dollar figure is a representative <em>assumption</em>, not a quote, because it depends entirely on your instance type and region.
+            </p>
+            <table class="compute">
+                <thead>
+                    <tr><th>Item</th><th>Figure</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>National NUTS fit (wall-clock)</td>
+                        <td>~17&nbsp;seconds</td>
+                        <td>Measured</td>
+                    </tr>
+                    <tr>
+                        <td>NumPyro vs. stock PyMC, equal draws</td>
+                        <td>6.0× faster</td>
+                        <td>Measured</td>
+                    </tr>
+                    <tr>
+                        <td>Extension models (nested / multivariate / combined) &amp; larger geo panels</td>
+                        <td>Cost more per fit (more work)</td>
+                        <td>Directional</td>
+                    </tr>
+                    <tr>
+                        <td>Cloud compute rate</td>
+                        <td>~$0.10–0.50 / vCPU-hr depending on instance / region</td>
+                        <td><span class="assumption-tag">Assumption</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:.9rem; color:var(--color-text-muted);">
+                The <code>~$0.10–0.50 / vCPU-hr</code> band is a representative assumption for sizing the managed COGS — it is <strong>not</strong> a benchmarked or contracted rate. The actual rate is set by whatever cloud, instance family, and region the managed deployment runs on. If the compute economics don't work for you, self-host: the core is free and you bring your own infrastructure.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <div class="warning-box">
+                <h4>Honest footnotes (this is the whole pitch)</h4>
+                <ul>
+                    <li><strong>Dollar prices are proposed / illustrative.</strong> The <code>~$X</code> / <code>~$Y</code> per-seat figures and the "$0 Free" are a starting sketch; the founder sets the finals. The enforceable contract is the limits and feature gates in <code>auth/plans.py</code>, which this page mirrors exactly.</li>
+                    <li><strong>Self-hosting is free and unlimited.</strong> The OSS core under Apache&nbsp;2.0 has no seat, project, or fit limits when you run it yourself with auth off. The billed Free plan is the managed-platform entry point, a different thing.</li>
+                    <li><strong>SOC&nbsp;2: readiness, not certified.</strong> The control set is built toward SOC&nbsp;2-style expectations (access control, audit, isolation), but the platform is <strong>not SOC&nbsp;2 certified</strong> and no audit has been performed — see the <a href="trust.html#main-content">Trust &amp; Security</a> page. Treat it as readiness evidence, not an attestation.</li>
+                    <li><strong>Compute rates are assumptions.</strong> The runtime numbers (~17&nbsp;s fit, 6.0× NumPyro) are measured; the per-vCPU-hour dollar band is a representative assumption that depends on your instance and region.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Run it your way</h2>
+            <p>Self-host the open-source core for free with no limits, or talk to us about a managed multi-tenant workspace. Either way, the limits and gates are in the source you can read.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-white" target="_blank" rel="noopener">Self-host (free, OSS)</a>
+                <a href="about.html" class="btn btn-outline-white">Talk about the managed platform</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

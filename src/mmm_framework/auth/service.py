@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import store
+from . import plans, store
 from .audit import audit_event
 from .config import AuthSettings, get_auth_settings
 from .models import AuthContext, Role, TokenResponse, normalize_email
@@ -276,6 +276,12 @@ def accept_invite(
         )
     if store.get_user_by_email(inv["email"], db_path=db_path):
         raise AuthServiceError("a user with that email already exists")
+    # Seats are consumed on JOIN — enforce the plan cap here (the invite itself is
+    # free; an over-cap invite simply can't be redeemed until the org upgrades).
+    try:
+        plans.assert_within_seat_limit(inv["org_id"], db_path=db_path)
+    except plans.PlanLimitError as exc:
+        raise AuthServiceError(str(exc)) from exc
     user = store.create_user(
         email=inv["email"],
         password_hash=hash_password(password),

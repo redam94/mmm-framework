@@ -526,3 +526,52 @@ def get_password_reset(
 def mark_reset_used(token: str, db_path: Path | str | None = None) -> None:
     with _conn(db_path) as c:
         c.execute("UPDATE password_resets SET used_at=? WHERE token=?", (_now(), token))
+
+
+# ----- org plan + usage metering ---------------------------------------------
+
+
+def set_org_plan(org_id: str, plan: str, db_path: Path | str | None = None) -> None:
+    with _conn(db_path) as c:
+        c.execute(
+            "UPDATE organizations SET plan=?, updated_at=? WHERE org_id=?",
+            (plan, _now(), org_id),
+        )
+
+
+def count_org_members(org_id: str, db_path: Path | str | None = None) -> int:
+    with _conn(db_path) as c:
+        row = c.execute(
+            "SELECT COUNT(*) AS n FROM org_members WHERE org_id=?", (org_id,)
+        ).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def count_org_projects(org_id: str, db_path: Path | str | None = None) -> int:
+    with _conn(db_path) as c:
+        try:
+            row = c.execute(
+                "SELECT COUNT(*) AS n FROM projects WHERE org_id=?", (org_id,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return 0
+    return int(row["n"]) if row else 0
+
+
+def count_org_fits_since(
+    org_id: str, since_ts: float, db_path: Path | str | None = None
+) -> int:
+    """Fits (run_metrics rows) for the org's projects since ``since_ts``.
+
+    Reads the agent app's ``run_metrics`` table; returns 0 if it doesn't exist
+    (e.g. a fresh DB or the classic-API-only deployment)."""
+    with _conn(db_path) as c:
+        try:
+            row = c.execute(
+                "SELECT COUNT(*) AS n FROM run_metrics WHERE created_at >= ?"
+                " AND project_id IN (SELECT project_id FROM projects WHERE org_id=?)",
+                (since_ts, org_id),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return 0
+    return int(row["n"]) if row else 0

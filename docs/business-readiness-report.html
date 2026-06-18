@@ -161,7 +161,7 @@
   <p>The MMM Framework is built around the one thing those tools quietly skip: <strong>causal rigor you can audit</strong>. Pre-registered analyses, experiments folded directly into the model's posterior, a fit-based refutation suite, and a structural-identification tool that proves an experiment will actually sharpen the answer before you spend a dollar on it. Wrapped around that engine is an <strong>adaptive measurement loop</strong> (fit → prioritize → experiment → recalibrate → reallocate → re-test) and a <strong>conversational analyst agent</strong> that operates the whole workflow — collapsing the "you need a Bayesian statistician on staff" barrier that keeps rigorous MMM out of the mid-market.</p>
   <div class="box tldr">
     <h4>Readiness in one line</h4>
-    <p style="margin-bottom:0">The hardest, riskiest part of becoming a multi-tenant SaaS — <strong>real authentication, tenant isolation, and a buyer-facing security posture</strong> — is <span class="chip shipped">Shipped</span>. What remains is commercial packaging (pricing, metering) and the go-to-market proof a first design partner provides. In other words: the science and the security are de-risked; the work ahead is business, not research.</p>
+    <p style="margin-bottom:0">The hardest, riskiest part of becoming a multi-tenant SaaS — <strong>real authentication, tenant isolation, and a buyer-facing security posture</strong> — is <span class="chip shipped">Shipped</span>. All four P0 table-stakes are shipped (auth/tenancy, trust collateral, security hardening, and pricing/packaging); what remains is billing integration and the go-to-market proof a first design partner provides. In other words: the science and the security are de-risked; the work ahead is business, not research.</p>
   </div>
 </section>
 
@@ -283,7 +283,7 @@
   <h2>Commercial readiness scorecard</h2>
   <p>Three priority tiers, from "can't sell to one company without it" (P0) to "accelerates growth once selling" (P2). Status reflects work shipped through this assessment.</p>
   <div class="score">
-    <div class="s green"><div class="n">P0</div><div class="l">Table stakes · mostly shipped</div></div>
+    <div class="s green"><div class="n">P0</div><div class="l">Table stakes · shipped</div></div>
     <div class="s amber"><div class="n">P1</div><div class="l">Makes it stick · seeded</div></div>
     <div class="s gray"><div class="n">P2</div><div class="l">Accelerates growth · planned</div></div>
   </div>
@@ -294,7 +294,7 @@
         <td>Auth, multi-tenancy &amp; RBAC</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>Security &amp; trust collateral</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>Security-hardening tail (rate limits, token kill, ship sandbox image)</td><td><span class="chip shipped">Shipped</span></td></tr>
-      <tr><td>Pricing &amp; packaging</td><td><span class="chip planned">Planned</span></td></tr>
+      <tr><td>Pricing &amp; packaging</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td rowspan="3"><b>P1</b><br><span class="small muted">make it stick</span></td>
         <td>Self-serve onboarding &amp; data validation</td><td><span class="chip partial">Partial</span></td></tr>
       <tr><td>Reliability &amp; observability (SLAs, retries, surfaced audit)</td><td><span class="chip partial">Partial</span></td></tr>
@@ -330,12 +330,12 @@
     <li class="muted">Hardened against an adversarial review that found (and we fixed) the brute-force gap and missed expensive routes.</li>
   </ul>
 
-  <h3>P0.4 · Pricing &amp; packaging <span class="chip planned">Planned</span></h3>
+  <h3>P0.4 · Pricing &amp; packaging <span class="chip shipped">Shipped</span></h3>
+  <p class="small muted">Open-core model: a free, self-hosted OSS core; paid managed tiers whose differentiators are exactly the multi-tenancy / SSO / hosted-sandbox capabilities already built — so the security investment <em>is</em> the monetization.</p>
   <ul class="tight">
-    <li>Tier definition (e.g. Team / Business / Enterprise) + a feature-gating map.</li>
-    <li>A <b>per-fit cost model</b> — Bayesian compute is the COGS driver — with margin guardrails.</li>
-    <li>Per-org metering of fits / models / seats for billing.</li>
-    <li>A pricing page and a one-page packaging doc.</li>
+    <li><b>Enforceable entitlements, not just a doc:</b> four tiers (Free / Team / Business / Enterprise) with seat/project/monthly-fit limits and a feature-gating map; per-org usage metering (<code>GET /auth/usage</code>); limits enforced (seats at invite-accept, projects at create, premium features → 402). Tested.</li>
+    <li><b>Collateral:</b> a <a href="pricing.html">pricing page</a> (tiers match the code exactly), a per-fit <b>cost model</b> grounded in the measured ~17 s national fit (≈$0.011 COGS/fit → 80%-margin price floors), and a packaging one-pager.</li>
+    <li><b>Remaining (Track 3):</b> billing integration (Stripe/webhook → plan changes) and hard fit-quota enforcement — today fits are metered, not blocked.</li>
   </ul>
 </section>
 

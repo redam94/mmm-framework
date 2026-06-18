@@ -177,11 +177,33 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       publishing. The collateral cites source file:line (NDA/reviewer-grade);
       consider a lighter first-touch handout for prospects.
 
-## Track 3 — Pricing & packaging (strategy)  `[ ]`
-- [ ] Tier definition (e.g. Team / Business / Enterprise) + feature gating map
-- [ ] Per-fit cost model (PyMC compute is the COGS driver) → margin guardrails
-- [ ] Metering: count fits / models / seats per org for billing
-- [ ] Pricing page + one-page packaging doc
+## Track 3 / P0.4 — Pricing & packaging  `[x]`
+**Engineering done** (enforceable entitlements, not just a doc):
+- [x] **Tier definition + feature-gating map** — `auth/plans.py`: Free / Team /
+      Business / Enterprise with seats/projects/monthly-fit limits + a `FEATURES`
+      flag set (multi_tenant, hosted_sandbox, branding, sso, audit_export,
+      priority_support). Open-core: plan limits apply only in hosted/auth-on mode;
+      self-host (auth off) = dev principal = no limits.
+- [x] **Metering** — per-org usage computed from `org_members` / `projects` /
+      `run_metrics` (`store.count_org_*`); `GET /auth/usage` returns plan + used/
+      limit/remaining for seats, projects, monthly fits.
+- [x] **Enforcement** — seat cap at **invite-accept** (`service.accept_invite`),
+      project cap at **create** (agent `POST /projects` → 402), feature gates via
+      `deps.require_plan_feature` (402). Plan set via `store.set_org_plan` (ops/
+      billing-driven; no insecure self-upgrade endpoint). Tests:
+      `tests/test_auth_plans.py` (5) — 41 auth tests total green.
+**Collateral** (grounded workflow; I verified manually — the verify agent died):
+- [x] `docs/pricing.html` — 4 tiers matching `plans.py` **exactly** (seats/
+      projects/fits + 6-feature checklist), prices labeled illustrative, open-core
+      story, nav wired, HTML clean, links valid (`about.html`), docs-gate 76/76.
+- [x] `technical-docs/cost-model.md` — per-fit COGS from the measured ~17 s fit
+      (17×4/3600 = 0.0189 vCPU-hr → ≈$0.011/fit w/ 2× envelope) → per-tier monthly
+      COGS + 80%-margin floors (Team ≥~$26–34, Business ≥~$117–155/mo). All cloud
+      rates labeled assumptions; uses 6.0× not 7.9×.
+- [x] `technical-docs/packaging.md` — open-core packaging one-pager, code-verified.
+- [ ] **Remaining (Track 3, not P0):** billing integration (Stripe/webhook →
+      `set_org_plan`); per-fit hard quota enforcement (today fits are metered, not
+      blocked). Pricing placeholders `~$X`/`~$Y` for the founder to set.
 
 ---
 

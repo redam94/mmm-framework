@@ -42,6 +42,7 @@
             label: 'Platform',
             items: [
                 { href: 'platform-overview.html', label: 'Platform Overview' },
+                { href: 'pricing.html', label: 'Pricing' },
                 { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
                 { href: 'trust.html', label: 'Trust & Security' },
                 { href: 'security.html', label: 'Security & AI Governance' },

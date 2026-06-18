@@ -172,3 +172,25 @@ def require_project_access(min_role: Role = Role.VIEWER) -> Callable:
         return principal
 
     return _dep
+
+
+def require_plan_feature(feature: str) -> Callable:
+    """Dependency factory: 402 unless the principal's org plan includes ``feature``.
+
+    Dev principal (auth off) is a no-op. See ``auth.plans.FEATURES``.
+    """
+
+    async def _dep(
+        principal: AuthContext = Depends(get_current_principal),
+    ) -> AuthContext:
+        if not principal.is_dev:
+            from .plans import entitlements_for_org
+
+            if not entitlements_for_org(principal.org_id).has(feature):
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=f"Your plan does not include '{feature}'. Upgrade to enable it.",
+                )
+        return principal
+
+    return _dep

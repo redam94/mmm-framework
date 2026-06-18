@@ -104,6 +104,15 @@ def create_auth_router() -> APIRouter:
             org_role=principal.org_role,
         )
 
+    @router.get("/usage")
+    async def usage(
+        principal: AuthContext = Depends(get_current_principal),
+    ) -> dict:
+        # The org's current plan + usage vs. limits (seats / projects / monthly fits).
+        from .plans import org_usage
+
+        return org_usage(principal.org_id)
+
     @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
     async def logout(
         body: LogoutRequest,
