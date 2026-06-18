@@ -258,6 +258,25 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
 
 ---
 
+## P2 — Accelerate growth  `[~]` (started 2026-06-18)
+### "Model-defense" report  `[~]`
+- [x] **Generator** — `reporting/model_defense.py`: `build_model_defense`
+      (pure: refutation + sampler convergence + calibration count → a verdict
+      ladder Robust/Qualified/Needs-scrutiny [non-convergence dominates], per-test
+      plain-English explanations, honest caveats) + `render_model_defense_html`
+      (self-contained, brandable via `apply_branding_html`) + `model_defense_report`
+      one-call convenience. Exported from `mmm_framework.reporting`. Tests:
+      `tests/test_model_defense.py` (9, incl. HTML well-formedness).
+- [ ] One-click agent tool / endpoint: run the refutation suite on a fitted model
+      → emit the defense report (needs the heavy model-op + ModelValidator wiring).
+### Portfolio benchmarking & governance  `[ ]`
+- [ ] Cross-brand benchmarking + governance over `run_metrics` (land-and-expand
+      surface for agencies/holding-cos).
+### Integrations  `[ ]`
+- [ ] Ad-platform connectors + warehouse sync (auto data ingest).
+
+---
+
 ## How to enable (once 1.2/1.3 land)
 
 ```bash
