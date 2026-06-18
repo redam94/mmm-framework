@@ -27,3 +27,5 @@ node_modules/
 # Local LLM/model configuration (copy of config/model_config.example.yaml)
 config/model_config.yaml
 model_config.yaml
+
+agent_workspace/
