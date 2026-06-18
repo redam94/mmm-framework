@@ -26,7 +26,7 @@ export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onAr
     try {
       const [stateRes, artRes] = await Promise.all([
         fetch(`${API_BASE}/state/${tid}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json()),
-        fetch(`${API_BASE}/artifacts/${tid}`).then(r => r.json()),
+        fetch(`${API_BASE}/artifacts/${tid}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json()),
       ]);
 
       // Build messages, pairing AI tool_calls with their ToolMessage results.

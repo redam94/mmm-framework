@@ -18,7 +18,17 @@ from config import Settings, get_settings
 from middleware import RequestLoggingMiddleware
 from rate_limiter import limiter, rate_limit_exceeded_handler
 from redis_service import RedisService, get_redis
-from routes import analysis_plans_router, budget_plans_router, configs_router, data_router, extended_models_router, models_router, projects_router, sessions_router, templates_router
+from routes import (
+    analysis_plans_router,
+    budget_plans_router,
+    configs_router,
+    data_router,
+    extended_models_router,
+    models_router,
+    projects_router,
+    sessions_router,
+    templates_router,
+)
 from schemas import ErrorResponse, HealthResponse
 from storage import get_storage
 
@@ -122,6 +132,19 @@ A comprehensive API for building, fitting, and analyzing Marketing Mix Models.
         logger.info(
             f"Rate limiting enabled: {settings.rate_limit_requests}/{settings.rate_limit_period}"
         )
+
+    # Org/user authentication router (signup/login/refresh/me). Additive and
+    # inert until MMM_AUTH_ENABLED=1; see technical-docs/business-readiness-p0.md.
+    try:
+        from mmm_framework.auth.routes import create_auth_router
+        from mmm_framework.auth.service import initialize_auth
+
+        initialize_auth()
+        app.include_router(create_auth_router())
+    except (
+        Exception
+    ) as exc:  # pragma: no cover - never block app startup on auth wiring
+        logger.warning(f"auth router not mounted: {exc}")
 
     # Include routers with API key authentication
     # All data-modifying endpoints require authentication when enabled

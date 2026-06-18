@@ -32,6 +32,42 @@ const EXPERT_MODEL_STORAGE_KEY = 'mmm_expert_model';
 const EXPERT_PROVIDER_STORAGE_KEY = 'mmm_expert_provider';
 const EXPERT_BASE_URL_STORAGE_KEY = 'mmm_expert_base_url';
 
+// JWT bearer auth (optional, additive). When present, sent as an Authorization
+// header alongside the existing X-API-Key flow. Absent => header omitted, so
+// behavior is unchanged when JWT auth is disabled / the user is not logged in.
+const ACCESS_TOKEN_STORAGE_KEY = 'mmm_access_token';
+const REFRESH_TOKEN_STORAGE_KEY = 'mmm_refresh_token';
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+}
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+export function setStoredTokens(access: string | null, refresh: string | null): void {
+  if (access && access.trim()) {
+    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, access.trim());
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  }
+  if (refresh && refresh.trim()) {
+    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refresh.trim());
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  }
+}
+export function clearStoredTokens(): void {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+// Authorization header for raw fetch() sites. Returns {} when no token is
+// stored, so it can be spread/merged unconditionally without changing behavior.
+export function bearerHeader(): Record<string, string> {
+  const t = getAccessToken();
+  return t ? { Authorization: 'Bearer ' + t } : {};
+}
+
 // Get API key and model from localStorage
 export function getStoredApiKey(): string | null {
   return localStorage.getItem(API_KEY_STORAGE_KEY);
@@ -174,6 +210,10 @@ apiClient.interceptors.request.use(
     for (const [k, v] of Object.entries(expertHeaders())) {
       config.headers[k] = v;
     }
+    const accessToken = getAccessToken();
+    if (accessToken) {
+      config.headers['Authorization'] = 'Bearer ' + accessToken;
+    }
     return config;
   },
   (error) => {
@@ -181,17 +221,88 @@ apiClient.interceptors.request.use(
   }
 );
 
+// ── JWT bearer login / refresh ──────────────────────────────────────────────
+
+interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+}
+
+// Password sign-in. Stores nothing itself — the caller (authStore) persists the
+// returned tokens via setStoredTokens.
+export async function loginWithPassword(email: string, password: string): Promise<TokenPair> {
+  const response = await axios.post<TokenPair>(
+    `${API_BASE_URL}/auth/login`,
+    { email, password },
+    { timeout: 15000 },
+  );
+  return response.data;
+}
+
+// Single-flight refresh: concurrent 401s share one /auth/refresh call. On
+// success the new tokens are stored; on failure the tokens are cleared and the
+// error re-thrown (callers fall back to the unauthorized path).
+let _refreshInFlight: Promise<string> | null = null;
+export function refreshAccessToken(): Promise<string> {
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) throw new Error('No refresh token');
+    try {
+      const response = await axios.post<TokenPair>(
+        `${API_BASE_URL}/auth/refresh`,
+        { refresh_token: refreshToken },
+        { timeout: 15000 },
+      );
+      const { access_token, refresh_token } = response.data;
+      setStoredTokens(access_token, refresh_token ?? refreshToken);
+      return access_token;
+    } catch (e) {
+      clearStoredTokens();
+      throw e;
+    } finally {
+      _refreshInFlight = null;
+    }
+  })();
+  return _refreshInFlight;
+}
+
 // Response interceptor - handle errors
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    const original = error.config as
+      | (InternalAxiosRequestConfig & { _retried?: boolean })
+      | undefined;
+
+    // JWT expiry: try a one-time silent refresh + retry before giving up. Only
+    // when we actually have a refresh token and this request wasn't already a
+    // retry. Does NOT clear the LLM API key — only the JWT tokens.
+    if (error.response?.status === 401 && original && !original._retried && getRefreshToken()) {
+      original._retried = true;
+      try {
+        const newToken = await refreshAccessToken();
+        original.headers = original.headers ?? {};
+        (original.headers as Record<string, string>)['Authorization'] = 'Bearer ' + newToken;
+        return apiClient(original);
+      } catch {
+        clearStoredTokens();
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        return Promise.reject({
+          status: 401,
+          message: getErrorMessage(error),
+          details: error.response?.data,
+        } as ApiError);
+      }
+    }
+
     const apiError: ApiError = {
       status: error.response?.status || 500,
       message: getErrorMessage(error),
       details: error.response?.data,
     };
 
-    // Handle 401 - clear API key and redirect to login
+    // Handle 401 (no JWT refresh path) - clear API key and redirect to login
     if (error.response?.status === 401) {
       clearStoredAuth();
       // Dispatch event for auth state listeners

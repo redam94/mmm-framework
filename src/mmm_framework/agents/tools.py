@@ -5,7 +5,7 @@ import logging
 import importlib
 import threading
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Union
 import io
 import contextlib
 import traceback
@@ -694,13 +694,15 @@ def fit_mmm_model(
     }
 
     # Calibrated-fit close-out (host-side, best-effort): the spec's experiment
-    # likelihoods are now folded into THIS run, so transition the registry
-    # entries completed → calibrated with the run link, and clear the spec's
-    # experiments so the NEXT fit isn't silently double-calibrated.
+    # likelihoods were folded into THIS run, so transition the registry entries
+    # completed → calibrated with the run link. The experiments STAY in the spec:
+    # each fit rebuilds the model fresh from ``spec["experiments"]``, so clearing
+    # them would make the next refit silently drop every prior calibration.
+    # (Re-folding the same set is not double-counting — a fit includes each
+    # experiment exactly once; double-counting would require a duplicate entry.)
     if spec.get("experiments"):
         try:
             from mmm_framework.api import sessions as _sessions
-            from mmm_framework.agents.spec_locks import make_spec_patch
 
             run_id = (info.get("model_run") or {}).get("run_id")
             done = 0
@@ -715,14 +717,6 @@ def fit_mmm_model(
                     done += 1
                 except ValueError:
                     pass  # already calibrated / deleted — not this fit's problem
-            patch = make_spec_patch(
-                [
-                    {"path": "experiments", "value": []},
-                    {"path": "experiment_ids", "value": []},
-                ]
-            )
-            update["model_spec"] = patch
-            dashboard_data["model_spec"] = patch
             if done:
                 summary += f" Registry updated: {done} experiment(s) marked calibrated."
                 update["fit_results_summary"] = summary
@@ -1782,7 +1776,12 @@ def get_current_config(
 def update_model_setting(
     state: Annotated[dict, InjectedState],
     setting_path: str,
-    value: Any,
+    # A bare ``Any`` produces an untyped JSON schema that Google Gemini's
+    # function-declaration validator rejects (it cannot represent "any type" and
+    # emits a null property schema, breaking tool-binding for the WHOLE agent).
+    # A scalar union is Gemini-valid (rendered as ``anyOf``) and pydantic's
+    # smart-union keeps each JSON value's native type, so behavior is unchanged.
+    value: Union[str, int, float, bool],
     reason: str = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3583,6 +3582,9 @@ def record_experiment_readout(
     end_date: str = None,
     method: str = None,
     notes: str = None,
+    spend_per_period: float = None,
+    n_treated_units: int = 1,
+    adstock_state: str = "steady_state",
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3592,6 +3594,17 @@ def record_experiment_readout(
     method (e.g. 'geo holdout DiD', 'synthetic control'). A planned experiment
     is moved through 'running' automatically.
 
+    Off-panel calibration (experiment ran OUTSIDE the model's fitted date
+    range): also pass `spend_per_period` — the channel's spend per period per
+    treated unit during the test, on the same scale as the dataset's spend
+    column — plus `n_treated_units` (number of treated geos/units, default 1)
+    and `adstock_state` ('steady_state' for an always-on/sustained test,
+    'cold_start' for a burst launched from dark). With these, the calibration
+    evaluates the channel's response curve at the test's spend level instead of
+    requiring the window to overlap the data, so an experiment from a different
+    period can still be folded in (assuming the response curve is stable across
+    the two periods). Not needed when the window falls inside the data.
+
     'completed' means measured but NOT yet in the model — follow with
     apply_experiment_calibration + fit_mmm_model to close the loop.
     """
@@ -3600,34 +3613,63 @@ def record_experiment_readout(
     exp = sessions_store.get_experiment(experiment_id)
     if exp is None:
         return _simple_msg(f"Unknown experiment id '{experiment_id}'.", tool_call_id)
-    try:
-        if exp["status"] == "planned":
-            exp = sessions_store.transition_experiment(
-                experiment_id, "running", note="auto-advanced at readout"
-            )
-        readout = {
-            "value": value,
-            "se": se,
-            "estimand": estimand,
-            "method": method,
-            "notes": notes,
-        }
-        exp = sessions_store.transition_experiment(
-            experiment_id,
-            "completed",
-            value=float(value),
-            se=float(se),
-            estimand=estimand,
-            start_date=start_date,
-            end_date=end_date,
-            readout=readout,
-            note=method,
+    if adstock_state not in ("steady_state", "cold_start"):
+        return _simple_msg(
+            "adstock_state must be 'steady_state' or 'cold_start'.", tool_call_id
         )
+    try:
+        # Merge onto any existing readout so re-recording (e.g. adding a spend
+        # level for off-panel calibration) only adds fields rather than wiping
+        # method/notes that weren't re-passed.
+        readout = dict(exp.get("readout") or {})
+        readout.update({"value": value, "se": se, "estimand": estimand})
+        if method is not None:
+            readout["method"] = method
+        if notes is not None:
+            readout["notes"] = notes
+        # Off-panel calibration inputs (used when the test window is outside the
+        # dataset): the response curve is evaluated at this spend level.
+        if spend_per_period is not None:
+            readout["spend_per_period"] = float(spend_per_period)
+            readout["n_treated_units"] = int(n_treated_units or 1)
+            readout["adstock_state"] = adstock_state
+
+        if exp["status"] in ("completed", "calibrated"):
+            # Already measured: update the readout in place. A completed->completed
+            # transition is illegal (and we must not bounce a calibrated experiment
+            # back), so re-recording is an idempotent self-update — this is exactly
+            # the path the off-panel advisory tells the user to take to attach a
+            # spend level after the fact.
+            exp = sessions_store.upsert_experiment(
+                experiment_id=experiment_id,
+                value=float(value),
+                se=float(se),
+                estimand=estimand,
+                start_date=start_date,
+                end_date=end_date,
+                readout=readout,
+            )
+        else:
+            if exp["status"] == "planned":
+                exp = sessions_store.transition_experiment(
+                    experiment_id, "running", note="auto-advanced at readout"
+                )
+            exp = sessions_store.transition_experiment(
+                experiment_id,
+                "completed",
+                value=float(value),
+                se=float(se),
+                estimand=estimand,
+                start_date=start_date,
+                end_date=end_date,
+                readout=readout,
+                note=method,
+            )
     except ValueError as exc:
         return _simple_msg(f"Could not record readout: {exc}", tool_call_id)
     return _simple_msg(
         f"Readout recorded for **{exp['channel']}**: {value:g} ± {se:g} "
-        f"({estimand}). Status **completed** — not yet in the model. Next: "
+        f"({estimand}). Status **{exp['status']}** — not yet in the model. Next: "
         "apply_experiment_calibration, then fit_mmm_model for the calibrated "
         "refit.",
         tool_call_id,
@@ -3646,9 +3688,11 @@ def apply_experiment_calibration(
     model spec. The next fit_mmm_model folds them into the model as in-graph
     likelihood terms and marks the registry entries 'calibrated'.
 
-    Uses every 'completed' experiment in the project unless `experiment_ids`
-    narrows it. Each experiment needs value, se, estimand, and a test window
-    (start/end dates) inside the dataset's date range.
+    Uses every measured experiment in the project — 'completed' AND already
+    'calibrated' (from earlier fits) — unless `experiment_ids` narrows it, so a
+    refit that adds one experiment keeps all the prior calibrations. Each
+    experiment needs value, se, estimand, and a test window (start/end dates);
+    out-of-window experiments calibrate off-panel from their recorded spend.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -3667,28 +3711,43 @@ def apply_experiment_calibration(
     except Exception:
         pass
 
-    completed = sessions_store.list_experiments(
-        project_id=project_id, status="completed"
-    )
+    # Stage the FULL measured set — newly 'completed' AND already 'calibrated'
+    # (from prior fits). The spec is rebuilt from scratch each fit, so staging
+    # only the new batch would drop every previously-calibrated experiment and
+    # silently lose its calibration on the next refit.
+    completed = [
+        e
+        for e in sessions_store.list_experiments(project_id=project_id)
+        if e.get("status") in ("completed", "calibrated")
+    ]
     if experiment_ids:
         wanted = set(experiment_ids)
         missing = wanted - {e["id"] for e in completed}
         if missing:
             return _simple_msg(
-                f"Not in 'completed' status (or unknown): {', '.join(sorted(missing))}. "
-                "Only completed experiments can be calibrated.",
+                f"Not measured yet (or unknown): {', '.join(sorted(missing))}. "
+                "Only completed or already-calibrated experiments can be staged.",
                 tool_call_id,
             )
         completed = [e for e in completed if e["id"] in wanted]
     if not completed:
         return _simple_msg(
-            "No completed experiments to calibrate. Record results first with "
+            "No measured experiments to calibrate. Record results first with "
             "record_experiment_readout.",
             tool_call_id,
         )
 
     channels = {m.get("name") for m in spec.get("media_channels", [])}
-    measurements, problems = [], []
+
+    # Dataset date range + period cadence: an experiment whose window lies inside
+    # the range calibrates in-panel (sum the contribution over the fitted rows);
+    # one outside calibrates *off-panel* (evaluate the response curve at the
+    # test's spend level). Best-effort — None when the file can't be read.
+    dataset_path = state.get("dataset_path")
+    bounds = _dataset_date_bounds(dataset_path)
+    freq_days = _dataset_period_freq_days(dataset_path)
+
+    measurements, problems, needs_spend = [], [], []
     for e in completed:
         errs = []
         if e["channel"] not in channels:
@@ -3700,44 +3759,59 @@ def apply_experiment_calibration(
         if errs:
             problems.append(f"`{e['id'][:8]}` ({e['channel']}): {'; '.join(errs)}")
             continue
-        measurements.append(
-            {
-                "experiment_id": e["id"],
-                "channel": e["channel"],
-                "test_period": [e["start_date"], e["end_date"]],
-                "value": float(e["value"]),
-                "se": float(e["se"]),
-                "estimand": e.get("estimand") or "roas",
-            }
-        )
+
+        start, end = e["start_date"], e["end_date"]
+        estimand = (e.get("estimand") or "roas").lower()
+        m = {
+            "experiment_id": e["id"],
+            "channel": e["channel"],
+            "test_period": [start, end],
+            "value": float(e["value"]),
+            "se": float(e["se"]),
+            "estimand": estimand,
+        }
+
+        if not _window_within_bounds(start, end, bounds):
+            # Off-panel: needs the test's spend level (recorded on the readout).
+            readout = e.get("readout") or {}
+            spend_pp = readout.get("spend_per_period")
+            if spend_pp is None:
+                needs_spend.append(
+                    f"`{e['id'][:8]}` ({e['channel']}) [{start} → {end}]"
+                )
+                continue
+            if estimand == "mroas":
+                problems.append(
+                    f"`{e['id'][:8]}` ({e['channel']}): off-panel calibration "
+                    "supports 'contribution'/'roas' only (not 'mroas') — re-run "
+                    "the test inside the data window for an mROAS estimand."
+                )
+                continue
+            m["eval_spend"] = float(spend_pp)
+            m["eval_periods"] = _periods_in_window(start, end, freq_days)
+            m["eval_units"] = int(readout.get("n_treated_units") or 1)
+            m["adstock_state"] = readout.get("adstock_state") or "steady_state"
+        measurements.append(m)
+
     if problems:
         return _simple_msg(
             "Cannot stage calibration — fix these first:\n- " + "\n- ".join(problems),
             tool_call_id,
         )
 
-    # Window validation against the loaded dataset (best-effort: skip when the
-    # date range can't be read).
-    dataset_path = state.get("dataset_path")
-    bounds = _dataset_date_bounds(dataset_path)
-    if bounds:
-        lo, hi = bounds
-        outside = [
-            m
-            for m in measurements
-            if m["test_period"][0] < lo or m["test_period"][1] > hi
-        ]
-        if outside:
-            desc = ", ".join(
-                f"{m['channel']} [{m['test_period'][0]} → {m['test_period'][1]}]"
-                for m in outside
-            )
-            return _simple_msg(
-                f"Experiment window(s) outside the dataset's date range "
-                f"[{lo} → {hi}]: {desc}. Extend the dataset (the window must be "
-                "observed data) or fix the recorded dates.",
-                tool_call_id,
-            )
+    if needs_spend and not measurements:
+        rng = f"[{bounds[0]} → {bounds[1]}]" if bounds else "the fitted window"
+        return _simple_msg(
+            f"These experiments ran outside the dataset's date range {rng}, so "
+            "they calibrate **off-panel** — evaluating the channel's response "
+            "curve at the test's spend level (valid as long as that curve is "
+            "stable between the test period and your data). I just need the spend "
+            "level: re-run `record_experiment_readout` with `spend_per_period` "
+            "(the channel's spend per period per treated unit during the test), "
+            "plus `n_treated_units` / `adstock_state` if relevant, then call "
+            "apply_experiment_calibration again.\n- " + "\n- ".join(needs_spend),
+            tool_call_id,
+        )
 
     new_spec = copy.deepcopy(dict(spec))
     new_spec["experiments"] = [
@@ -3745,14 +3819,23 @@ def apply_experiment_calibration(
     ]
     new_spec["experiment_ids"] = [m["experiment_id"] for m in measurements]
     chs = ", ".join(sorted({m["channel"] for m in measurements}))
+    n_off = sum(1 for m in measurements if "eval_spend" in m)
+    detail = f" ({n_off} off-panel)" if n_off else ""
+    tail = ""
+    if needs_spend:
+        tail = (
+            f" Skipped {len(needs_spend)} out-of-window experiment(s) missing a "
+            "test spend level — add `spend_per_period` via record_experiment_readout "
+            "to calibrate those off-panel."
+        )
     return _commit_spec(
         state,
         new_spec,
         tool_call_id,
         success_msg=(
-            f"Staged {len(measurements)} experiment likelihood(s) ({chs}) into "
-            "the spec. Now call fit_mmm_model — the refit folds them into the "
-            "model and marks the registry entries calibrated."
+            f"Staged {len(measurements)} experiment likelihood(s){detail} ({chs}) "
+            "into the spec. Now call fit_mmm_model — the refit folds them into the "
+            "model and marks the registry entries calibrated." + tail
         ),
         patch_paths=["experiments", "experiment_ids"],
     )
@@ -3776,6 +3859,66 @@ def _dataset_date_bounds(dataset_path: str | None) -> tuple[str, str] | None:
         )
     except Exception:
         return None
+
+
+def _dataset_period_freq_days(dataset_path: str | None) -> float | None:
+    """Median spacing (in days) between the dataset's unique periods, used to
+    size an off-panel experiment window into a number of periods. None when the
+    file/column can't be read or has fewer than two periods."""
+    if not dataset_path or not os.path.exists(dataset_path):
+        return None
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(dataset_path, usecols=["Period"])
+        period = pd.to_datetime(df["Period"], errors="coerce").dropna().unique()
+        if len(period) < 2:
+            return None
+        diffs = pd.Series(pd.to_datetime(period)).sort_values().diff().dropna()
+        days = float(diffs.dt.days.median())
+        return days if days > 0 else None
+    except Exception:
+        return None
+
+
+def _window_within_bounds(start: str, end: str, bounds: tuple[str, str] | None) -> bool:
+    """Whether ``[start, end]`` lies inside the dataset's date range.
+
+    Parses with ``pd.to_datetime`` (matching the model's own window resolver in
+    ``BayesianMMM._period_to_indices``) so unpadded / non-ISO dates compare
+    correctly rather than by lexicographic string order. ``None`` bounds (date
+    range unreadable) is treated as in-window — the model layer is the backstop.
+    """
+    if not bounds:
+        return True
+    try:
+        import pandas as pd
+
+        s, e = pd.to_datetime(start), pd.to_datetime(end)
+        lo, hi = pd.to_datetime(bounds[0]), pd.to_datetime(bounds[1])
+        return bool(s >= lo and e <= hi)
+    except Exception:
+        # Unparseable dates: fall back to lexicographic ISO comparison.
+        return start >= bounds[0] and end <= bounds[1]
+
+
+def _periods_in_window(start: str, end: str, freq_days: float | None) -> int:
+    """Number of periods spanned by ``[start, end]`` at the dataset's cadence.
+
+    Inclusive of both endpoints. Falls back to a weekly cadence when the
+    dataset frequency can't be inferred, and never returns less than 1. A
+    reversed or zero-length window collapses to a single period.
+    """
+    try:
+        import pandas as pd
+
+        span_days = (pd.to_datetime(end) - pd.to_datetime(start)).days
+    except Exception:
+        return 1
+    if span_days <= 0:
+        return 1
+    step = freq_days if (freq_days and freq_days > 0) else 7.0
+    return max(1, int(round(span_days / step)) + 1)
 
 
 @tool
@@ -3895,7 +4038,7 @@ def design_experiment_plan(
     amplitude_pct: float = 50.0,
     block_weeks: int = 2,
     n_pairs: int = None,
-    levels: list = None,
+    levels: list[float] = None,
     seed: int = 42,
     margin: float = None,
     kpi_kind: str = "revenue",
@@ -4199,9 +4342,9 @@ def suggest_experiment(
     intensity_min: float = 50.0,
     intensity_max: float = 100.0,
     include_holdout: bool = True,
-    durations: list = None,
-    scaling_intensities: list = None,
-    footprints: list = None,
+    durations: list[int] = None,
+    scaling_intensities: list[float] = None,
+    footprints: list[str] = None,
     max_draws: int = 80,
     seed: int = 42,
     config: InjectedConfig = None,
@@ -4276,7 +4419,7 @@ def suggest_experiment(
 def identify_structural_parameters(
     channel: str,
     state: Annotated[dict, InjectedState],
-    levels: list = None,
+    levels: list[float] = None,
     block_weeks: int = None,
     duration: int = 12,
     max_draws: int = 200,

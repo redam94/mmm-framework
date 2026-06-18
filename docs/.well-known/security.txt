@@ -1,0 +1,13 @@
+# MMM Framework — Security Policy (RFC 9116)
+#
+# This file follows RFC 9116. It points security researchers at where to
+# report vulnerabilities and how disclosure is handled. The MMM Framework is
+# self-hosted, open-source software; there is no vendor-operated SaaS to attack.
+# See the responsible-disclosure page for the full policy and scope.
+
+Contact: https://github.com/redam94/mmm-framework/security/advisories/new
+Contact: mailto:m.reda94@gmail.com
+Policy: https://redam94.github.io/mmm-framework/responsible-disclosure.html
+Preferred-Languages: en
+Canonical: https://redam94.github.io/mmm-framework/.well-known/security.txt
+Expires: 2027-06-17T00:00:00.000Z

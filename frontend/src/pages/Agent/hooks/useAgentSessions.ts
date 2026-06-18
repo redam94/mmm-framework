@@ -68,12 +68,12 @@ export function useAgentSessions({ apiKey, modelName }: {
         const url = projectId
           ? `${API_BASE}/sessions?project_id=${encodeURIComponent(projectId)}`
           : `${API_BASE}/sessions`;
-        const raw = await fetch(url).then(r => r.json());
+        const raw = await fetch(url, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
         let list: Session[] = Array.isArray(raw) ? raw : (raw?.sessions ?? []);
         if (list.length === 0) {
           const created = await fetch(`${API_BASE}/sessions`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
             body: JSON.stringify(projectId ? { project_id: projectId } : {}),
           }).then(r => r.json());
           list = [created];
@@ -91,10 +91,10 @@ export function useAgentSessions({ apiKey, modelName }: {
       const url = projectId
         ? `${API_BASE}/sessions?project_id=${encodeURIComponent(projectId)}`
         : `${API_BASE}/sessions`;
-      const raw = await fetch(url).then(r => r.json());
+      const raw = await fetch(url, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
       setSessions(Array.isArray(raw) ? raw : (raw?.sessions ?? []));
     } catch (e) { console.error(e); }
-  }, [projectId]);
+  }, [projectId, apiKey, modelName]);
 
   // Project actions
   const handleProjectSelect = useCallback((id: string) => {
@@ -118,7 +118,7 @@ export function useAgentSessions({ apiKey, modelName }: {
   // ── Session actions ────────────────────────────────────────────────────────
   const handleCreateSession = async () => {
     const created: Session = await fetch(`${API_BASE}/sessions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
       body: JSON.stringify(projectId ? { project_id: projectId } : {}),
     }).then(r => r.json());
     await refreshSessions();
@@ -127,13 +127,13 @@ export function useAgentSessions({ apiKey, modelName }: {
 
   const handleRenameSession = async (id: string, name: string) => {
     await fetch(`${API_BASE}/sessions/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) }, body: JSON.stringify({ name }),
     });
     refreshSessions();
   };
 
   const handleDeleteSession = async (id: string) => {
-    await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE', headers: authHeaders(apiKey, modelName) });
     const remaining = sessions.filter(s => s.thread_id !== id);
     setSessions(remaining);
     if (id === threadId) {

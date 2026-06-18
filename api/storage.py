@@ -20,6 +20,11 @@ import pandas as pd
 
 from config import Settings, get_settings
 
+# Mirrors mmm_framework.auth.store.DEFAULT_ORG_ID. Records written before tenant
+# scoping existed (or while auth was disabled) have no ``org_id`` and are treated
+# as belonging to this default org.
+DEFAULT_ORG_ID = "org_default"
+
 
 class StorageError(Exception):
     """Storage operation error."""
@@ -41,7 +46,14 @@ class StorageService:
     def _ensure_dirs(self):
         """Ensure storage directories exist."""
         if self.settings.storage_backend == "local":
-            for subdir in ["data", "configs", "models", "results", "projects", "budget_plans"]:
+            for subdir in [
+                "data",
+                "configs",
+                "models",
+                "results",
+                "projects",
+                "budget_plans",
+            ]:
                 (self.settings.storage_path / subdir).mkdir(parents=True, exist_ok=True)
 
     def _get_path(self, category: str, item_id: str, ext: str = "") -> Path:
@@ -75,6 +87,7 @@ class StorageService:
         description: str | None = None,
         project_id: str | None = None,
         plan_id: str | None = None,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
         """Save a named budget plan with its scenario result."""
         plan_id = plan_id or self.generate_id()
@@ -93,6 +106,8 @@ class StorageService:
             "created_at": now,
             "project_id": project_id,
         }
+        if org_id is not None:
+            metadata["org_id"] = org_id
         meta_path = self._get_path("budget_plans", f"{plan_id}", ".json")
         meta_path.write_text(json.dumps(metadata, indent=2, default=str))
         return metadata
@@ -108,8 +123,9 @@ class StorageService:
         self,
         model_id: str | None = None,
         project_id: str | None = None,
+        org_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List budget plans, optionally filtered by model or project."""
+        """List budget plans, optionally filtered by model, project, or org."""
         plans_dir = self.settings.storage_path / "budget_plans"
         plans = []
         for plan_file in plans_dir.glob("*.json"):
@@ -118,6 +134,11 @@ class StorageService:
                 if model_id is not None and plan.get("model_id") != model_id:
                     continue
                 if project_id is not None and plan.get("project_id") != project_id:
+                    continue
+                if (
+                    org_id is not None
+                    and (plan.get("org_id") or DEFAULT_ORG_ID) != org_id
+                ):
                     continue
                 plans.append(plan)
             except Exception:
@@ -145,6 +166,7 @@ class StorageService:
         name: str,
         description: str | None = None,
         project_id: str | None = None,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
         """Create or overwrite a project record."""
         project_id = project_id or self.generate_id()
@@ -156,6 +178,8 @@ class StorageService:
             "created_at": now,
             "updated_at": now,
         }
+        if org_id is not None:
+            metadata["org_id"] = org_id
         meta_path = self._get_path("projects", f"{project_id}_meta", ".json")
         meta_path.write_text(json.dumps(metadata, indent=2))
         return metadata
@@ -180,13 +204,19 @@ class StorageService:
         meta_path.write_text(json.dumps(metadata, indent=2))
         return metadata
 
-    def list_projects(self) -> list[dict[str, Any]]:
-        """List all projects."""
+    def list_projects(self, org_id: str | None = None) -> list[dict[str, Any]]:
+        """List all projects, optionally filtered by org."""
         projects_dir = self.settings.storage_path / "projects"
         projects = []
         for meta_file in projects_dir.glob("*_meta.json"):
             try:
-                projects.append(json.loads(meta_file.read_text()))
+                meta = json.loads(meta_file.read_text())
+                if (
+                    org_id is not None
+                    and (meta.get("org_id") or DEFAULT_ORG_ID) != org_id
+                ):
+                    continue
+                projects.append(meta)
             except Exception:
                 continue
         return sorted(projects, key=lambda x: x.get("updated_at", ""), reverse=True)
@@ -227,6 +257,7 @@ class StorageService:
         filename: str,
         data_id: str | None = None,
         project_id: str | None = None,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Save uploaded data file.
@@ -293,6 +324,8 @@ class StorageService:
             "hash": self.compute_hash(file_content),
             "project_id": project_id,
         }
+        if org_id is not None:
+            metadata["org_id"] = org_id
 
         meta_path = self._get_path("data", f"{data_id}_meta", ".json")
         meta_path.write_text(json.dumps(metadata, indent=2))
@@ -321,8 +354,10 @@ class StorageService:
             raise StorageError(f"Data not found: {data_id}")
         return json.loads(meta_path.read_text())
 
-    def list_data(self, project_id: str | None = None) -> list[dict[str, Any]]:
-        """List stored datasets, optionally filtered by project."""
+    def list_data(
+        self, project_id: str | None = None, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """List stored datasets, optionally filtered by project or org."""
         data_dir = self.settings.storage_path / "data"
         datasets = []
 
@@ -330,6 +365,11 @@ class StorageService:
             try:
                 metadata = json.loads(meta_file.read_text())
                 if project_id is not None and metadata.get("project_id") != project_id:
+                    continue
+                if (
+                    org_id is not None
+                    and (metadata.get("org_id") or DEFAULT_ORG_ID) != org_id
+                ):
                     continue
                 datasets.append(metadata)
             except Exception:
@@ -370,6 +410,7 @@ class StorageService:
         config_data: dict[str, Any],
         config_id: str | None = None,
         project_id: str | None = None,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
         """Save model configuration."""
         config_id = config_id or self.generate_id()
@@ -382,6 +423,8 @@ class StorageService:
         config_data["config_id"] = config_id
         if project_id is not None:
             config_data["project_id"] = project_id
+        if org_id is not None:
+            config_data["org_id"] = org_id
 
         # Save config
         config_path = self._get_path("configs", config_id, ".json")
@@ -410,8 +453,10 @@ class StorageService:
 
         return self.save_config(config, config_id)
 
-    def list_configs(self, project_id: str | None = None) -> list[dict[str, Any]]:
-        """List configurations, optionally filtered by project."""
+    def list_configs(
+        self, project_id: str | None = None, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """List configurations, optionally filtered by project or org."""
         config_dir = self.settings.storage_path / "configs"
         configs = []
 
@@ -419,6 +464,11 @@ class StorageService:
             try:
                 config = json.loads(config_file.read_text())
                 if project_id is not None and config.get("project_id") != project_id:
+                    continue
+                if (
+                    org_id is not None
+                    and (config.get("org_id") or DEFAULT_ORG_ID) != org_id
+                ):
                     continue
                 configs.append(config)
             except Exception:
@@ -448,11 +498,14 @@ class StorageService:
         model_id: str,
         metadata: dict[str, Any],
         project_id: str | None = None,
+        org_id: str | None = None,
     ) -> None:
         """Save model metadata."""
         metadata["model_id"] = model_id
         if project_id is not None:
             metadata["project_id"] = project_id
+        if org_id is not None:
+            metadata["org_id"] = org_id
         meta_path = self._get_path("models", f"{model_id}_meta", ".json")
         meta_path.write_text(json.dumps(metadata, indent=2, default=str))
 
@@ -508,8 +561,10 @@ class StorageService:
             raise StorageError(f"Artifact not found: {model_id}/{artifact_name}")
         return artifact_path
 
-    def list_models(self, project_id: str | None = None) -> list[dict[str, Any]]:
-        """List models, optionally filtered by project."""
+    def list_models(
+        self, project_id: str | None = None, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """List models, optionally filtered by project or org."""
         models_dir = self.settings.storage_path / "models"
         models = []
 
@@ -517,6 +572,11 @@ class StorageService:
             try:
                 metadata = json.loads(meta_file.read_text())
                 if project_id is not None and metadata.get("project_id") != project_id:
+                    continue
+                if (
+                    org_id is not None
+                    and (metadata.get("org_id") or DEFAULT_ORG_ID) != org_id
+                ):
                     continue
                 models.append(metadata)
             except Exception:
@@ -572,6 +632,68 @@ class StorageService:
         if not results_path.exists():
             raise StorageError(f"Results not found: {model_id}/{results_type}")
         return json.loads(results_path.read_text())
+
+
+def org_scope(principal) -> str | None:
+    """Return the org id to scope a query to, or None for the dev principal.
+
+    ``principal`` is an ``mmm_framework.auth.models.AuthContext``. When auth is
+    disabled (dev/single-tenant) ``is_dev`` is True and scoping is skipped so
+    existing flows are unchanged.
+    """
+    return None if getattr(principal, "is_dev", False) else principal.org_id
+
+
+def assert_org_owns(stored_org: str | None, org: str | None) -> None:
+    """Raise 404 unless ``org`` (when set) owns the record.
+
+    Records with no ``org_id`` are treated as belonging to ``DEFAULT_ORG_ID``.
+    Imported lazily so ``storage`` stays importable without fastapi at module
+    load if ever needed; fastapi is already a hard dep of the API though.
+    """
+    if org is not None and (stored_org or DEFAULT_ORG_ID) != org:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
+def backfill_org_id(storage: "StorageService", org_id: str) -> dict[str, int]:
+    """Stamp ``org_id`` into every org-less on-disk record.
+
+    One-time migration to run BEFORE enabling auth on an existing single-tenant
+    install, so its pre-existing data stays visible to its tenant org (records
+    written before tenant scoping have no ``org_id`` and otherwise default to
+    ``DEFAULT_ORG_ID``). Idempotent: only records missing an ``org_id`` are
+    touched. Returns a per-category count of records stamped.
+
+    Run via: ``python api/backfill_org.py <org_id>`` (from the api/ dir).
+    """
+    sp = storage.settings.storage_path
+    # (subdir, glob) — data/models/projects keep metadata in *_meta.json;
+    # configs/budget_plans are the JSON record itself.
+    specs = [
+        ("data", "*_meta.json"),
+        ("configs", "*.json"),
+        ("models", "*_meta.json"),
+        ("projects", "*_meta.json"),
+        ("budget_plans", "*.json"),
+    ]
+    counts: dict[str, int] = {}
+    for sub, pat in specs:
+        d = sp / sub
+        n = 0
+        if d.exists():
+            for f in sorted(d.glob(pat)):
+                try:
+                    meta = json.loads(f.read_text())
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if isinstance(meta, dict) and not meta.get("org_id"):
+                    meta["org_id"] = org_id
+                    f.write_text(json.dumps(meta, indent=2, default=str))
+                    n += 1
+        counts[sub] = n
+    return counts
 
 
 # Global storage instance

@@ -12,7 +12,7 @@ includes `configurable.thread_id`.
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Union
 
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -610,7 +610,14 @@ VALID_CATEGORIES = sorted(sessions_store.ASSUMPTION_CATEGORIES)
 @tool
 def record_assumption(
     key: str,
-    value: Any,
+    # A bare ``Any`` yields an untyped JSON schema that Google Gemini's
+    # function-declaration validator rejects (null property schema → tool-binding
+    # fails for the whole agent). A bare ``list`` is also rejected server-side
+    # (an ``array`` schema must declare ``items``). This union is Gemini-valid
+    # (rendered as ``anyOf``) and still covers any JSON-able value: ``dict``
+    # carries arbitrary nested structure (including lists) for the rare
+    # structured assumption. Pydantic's smart-union keeps the native type.
+    value: Union[str, int, float, bool, dict],
     rationale: str,
     category: str = "other",
     change_note: str = "",

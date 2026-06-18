@@ -56,7 +56,7 @@ export function AgentPage() {
     // snippets, assumptions, files, DAG, and workflow status all show up.
     onTurnSettled: async () => {
       try {
-        const arts = await fetch(`${API_BASE}/artifacts/${threadId}`).then(r => r.json());
+        const arts = await fetch(`${API_BASE}/artifacts/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
         if (Array.isArray(arts)) setArtifacts(arts);
       } catch { /* ignore */ }
       causal.refresh();
@@ -77,7 +77,7 @@ export function AgentPage() {
     if (!threadId || loading) return;
     // Fetch timeline, find a checkpoint before the latest human message
     try {
-      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`).then(r => r.json());
+      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
       if (!Array.isArray(timeline) || timeline.length < 2) return;
       // timeline is newest-first. Find checkpoints in chronological order
       // and rewind to the one before the latest user-visible state change.
@@ -93,7 +93,7 @@ export function AgentPage() {
       }
       if (!target) target = timeline[timeline.length - 1];
       await fetch(`${API_BASE}/rewind/${threadId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
         body: JSON.stringify({ checkpoint_id: target.checkpoint_id }),
       });
       await loadThreadState(threadId);
@@ -106,7 +106,7 @@ export function AgentPage() {
     const lastHuman = [...messages].reverse().find(m => m.type === 'human');
     if (!lastHuman) return;
     try {
-      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`).then(r => r.json());
+      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
       if (!Array.isArray(timeline)) return;
       // Rewind to the checkpoint with the smallest message_count that is
       // still ≥ (messages_before_last_human). That's the state right before
@@ -122,7 +122,7 @@ export function AgentPage() {
       }
       if (!chosen) chosen = ordered[0];
       await fetch(`${API_BASE}/rewind/${threadId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
         body: JSON.stringify({ checkpoint_id: chosen.checkpoint_id }),
       });
       await loadThreadState(threadId);
@@ -249,7 +249,7 @@ export function AgentPage() {
       setDashboardData(prev => ({ ...prev, eda: data.eda ?? prev.eda }));
       // Same refresh as onTurnSettled: artifacts + causal panels + workspace files.
       try {
-        const arts = await fetch(`${API_BASE}/artifacts/${threadId}`).then(r => r.json());
+        const arts = await fetch(`${API_BASE}/artifacts/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
         if (Array.isArray(arts)) setArtifacts(arts);
       } catch { /* ignore */ }
       causal.refresh();
@@ -270,7 +270,7 @@ export function AgentPage() {
   };
 
   const handleDeleteArtifact = async (id: string) => {
-    await fetch(`${API_BASE}/artifacts/${id}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/artifacts/${id}`, { method: 'DELETE', headers: authHeaders(apiKey, modelName) });
     setArtifacts(prev => prev.filter(a => a.id !== id));
   };
 
@@ -281,7 +281,7 @@ export function AgentPage() {
     try {
       const resp = await fetch(`${API_BASE}/sessions/${threadId}/load-model`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(apiKey, modelName) },
         body: JSON.stringify({ name: runName }),
       });
       const body = await resp.json().catch(() => ({}));

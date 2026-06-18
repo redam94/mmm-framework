@@ -43,7 +43,9 @@
             items: [
                 { href: 'platform-overview.html', label: 'Platform Overview' },
                 { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
-                { href: 'security.html', label: 'Security & AI Governance' }
+                { href: 'trust.html', label: 'Trust & Security' },
+                { href: 'security.html', label: 'Security & AI Governance' },
+                { href: 'responsible-disclosure.html', label: 'Responsible Disclosure' }
             ]
         },
         {

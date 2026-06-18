@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE_URL, expertHeaders } from '../../api/client';
+import { API_BASE_URL, expertHeaders, bearerHeader } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 
 export interface GuideMessage {
@@ -59,6 +59,7 @@ export function useGuideChat(projectId: string | null) {
     if (baseUrl) h['X-Base-Url'] = baseUrl;
     if (provider) h['X-Provider'] = provider;
     Object.assign(h, expertHeaders());
+    Object.assign(h, bearerHeader());
     return h;
   }, [apiKey, modelName, baseUrl, provider, expertModel, expertProvider, expertBaseUrl]);
 

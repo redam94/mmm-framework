@@ -38,7 +38,16 @@ from schemas import (
     ReportStatusResponse,
     ReportListResponse,
 )
-from storage import StorageError, StorageService, get_storage
+from storage import (
+    StorageError,
+    StorageService,
+    assert_org_owns as _assert_org_owns,
+    get_storage,
+    org_scope as _org_scope,
+)
+
+from mmm_framework.auth.deps import get_current_principal
+from mmm_framework.auth.models import AuthContext
 
 router = APIRouter(prefix="/models", tags=["Models"])
 
@@ -168,8 +177,29 @@ def _metadata_to_model_info(metadata: dict) -> ModelInfo:
     )
 
 
-def _check_model_completed(storage: StorageService, model_id: str):
-    """Check if model exists and is completed. Raises HTTPException if not."""
+def _org_owns_model(storage: StorageService, model_id: str, org_id: str | None) -> bool:
+    """Non-raising tenancy predicate for batch endpoints.
+
+    Returns True when scoping is disabled (``org_id is None``) or the model's
+    stored org matches. A missing org defaults to ``DEFAULT_ORG_ID``.
+    """
+    if org_id is None:
+        return True
+    from storage import DEFAULT_ORG_ID
+
+    stored = storage.get_model_metadata(model_id).get("org_id")
+    return (stored or DEFAULT_ORG_ID) == org_id
+
+
+def _check_model_completed(
+    storage: StorageService, model_id: str, org_id: str | None = None
+):
+    """Check if model exists and is completed. Raises HTTPException if not.
+
+    When ``org_id`` is set (auth enabled), a model owned by a different org
+    404s — so the ~dozen result endpoints that call this inherit tenant
+    isolation. ``org_id=None`` (dev/single-tenant) preserves prior behavior.
+    """
     if not storage.model_exists(model_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -177,6 +207,7 @@ def _check_model_completed(storage: StorageService, model_id: str):
         )
 
     metadata = storage.get_model_metadata(model_id)
+    _assert_org_owns(metadata.get("org_id"), org_id)
 
     if metadata.get("status") != JobStatus.COMPLETED.value:
         raise HTTPException(
@@ -202,6 +233,7 @@ async def generate_report(
     storage: StorageService = Depends(get_storage),
     arq_pool: ArqRedis = Depends(get_arq_pool),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Generate an HTML report for a fitted model.
@@ -209,7 +241,7 @@ async def generate_report(
     This is an async operation. Use the returned report_id to track progress
     and download the report when complete.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     # Generate report ID
     report_id = storage.generate_id()[:12]
@@ -258,8 +290,15 @@ async def get_report_status(
     model_id: str,
     report_id: str,
     redis: RedisService = Depends(get_redis),
+    storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get report generation status."""
+    if storage.model_exists(model_id):
+        _assert_org_owns(
+            storage.get_model_metadata(model_id).get("org_id"),
+            _org_scope(principal),
+        )
     r = await redis.connect()
     report_key = f"mmm:report:{report_id}"
 
@@ -293,8 +332,14 @@ async def download_report(
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
     settings: Settings = Depends(get_settings),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Download a generated report."""
+    if storage.model_exists(model_id):
+        _assert_org_owns(
+            storage.get_model_metadata(model_id).get("org_id"),
+            _org_scope(principal),
+        )
     r = await redis.connect()
     report_key = f"mmm:report:{report_id}"
 
@@ -339,6 +384,7 @@ async def list_model_reports(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     settings: Settings = Depends(get_settings),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List all reports for a model."""
     if not storage.model_exists(model_id):
@@ -346,6 +392,10 @@ async def list_model_reports(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Model not found: {model_id}",
         )
+
+    _assert_org_owns(
+        storage.get_model_metadata(model_id).get("org_id"), _org_scope(principal)
+    )
 
     reports_dir = Path(settings.storage_path) / "reports"
 
@@ -383,6 +433,7 @@ async def start_model_fitting(
     storage: StorageService = Depends(get_storage),
     arq_pool: ArqRedis = Depends(get_arq_pool),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Start fitting a Bayesian MMM model.
@@ -390,6 +441,8 @@ async def start_model_fitting(
     This is an async operation. The model fitting runs in the background.
     Use the returned model_id to track progress and retrieve results.
     """
+    org = _org_scope(principal)
+
     # Validate data exists
     if not storage.data_exists(request.data_id):
         raise HTTPException(
@@ -403,6 +456,10 @@ async def start_model_fitting(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Configuration not found: {request.config_id}",
         )
+
+    # Both the dataset and config must belong to the principal's org.
+    _assert_org_owns(storage.get_data_info(request.data_id).get("org_id"), org)
+    _assert_org_owns(storage.load_config(request.config_id).get("org_id"), org)
 
     # Generate model ID
     model_id = storage.generate_id()
@@ -419,7 +476,7 @@ async def start_model_fitting(
         "created_at": datetime.utcnow().isoformat(),
     }
 
-    storage.save_model_metadata(model_id, metadata)
+    storage.save_model_metadata(model_id, metadata, org_id=org)
 
     # Initialize job status in Redis
     await redis.set_job_status(
@@ -463,9 +520,12 @@ async def list_models(
     status_filter: JobStatus | None = None,
     project_id: str | None = Query(None, description="Filter by project"),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List all models with optional status filter."""
-    all_models = storage.list_models(project_id=project_id)
+    all_models = storage.list_models(
+        project_id=project_id, org_id=_org_scope(principal)
+    )
 
     # Apply status filter
     if status_filter:
@@ -490,6 +550,7 @@ async def list_models(
 async def get_model(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get model information and status."""
     if not storage.model_exists(model_id):
@@ -499,6 +560,7 @@ async def get_model(
         )
 
     metadata = storage.get_model_metadata(model_id)
+    _assert_org_owns(metadata.get("org_id"), _org_scope(principal))
     return _metadata_to_model_info(metadata)
 
 
@@ -510,6 +572,7 @@ async def get_model_status(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get real-time model fitting status from Redis."""
     if not storage.model_exists(model_id):
@@ -517,6 +580,10 @@ async def get_model_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Model not found: {model_id}",
         )
+
+    _assert_org_owns(
+        storage.get_model_metadata(model_id).get("org_id"), _org_scope(principal)
+    )
 
     # Get status from Redis (real-time) or fall back to storage
     redis_status = await redis.get_job_status(model_id)
@@ -545,6 +612,7 @@ async def get_model_status(
 async def get_model_results(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get model results summary (diagnostics, parameter summary).
@@ -555,7 +623,7 @@ async def get_model_results(
     - /models/{model_id}/response-curves - Response curves
     - /models/{model_id}/decomposition - Component decomposition
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         results = storage.load_results(model_id, "summary")
@@ -591,6 +659,7 @@ async def get_model_results(
 async def get_model_fit(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get model fit data (observed vs predicted values).
@@ -598,7 +667,7 @@ async def get_model_fit(
     Returns periods, observed values, predicted mean/std, and fit metrics (R², RMSE, MAPE).
     Data is returned both aggregated and by geography (if available).
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         # Try to load cached fit data
@@ -776,13 +845,14 @@ async def get_posteriors(
         500, ge=100, le=2000, description="Number of samples to return"
     ),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get posterior distribution samples for model parameters.
 
     Returns samples for each parameter to enable histogram/KDE visualization.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         # Try to load cached posteriors
@@ -884,13 +954,14 @@ async def get_prior_vs_posterior(
         500, ge=100, le=2000, description="Number of samples to return"
     ),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get prior vs posterior comparison for model parameters.
 
     Returns prior and posterior samples with shrinkage metrics for each parameter.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         # Try to load cached prior-posterior data
@@ -1063,13 +1134,14 @@ async def get_response_curves(
         200, ge=50, le=500, description="Number of posterior samples for uncertainty"
     ),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get response curves for each channel.
 
     Returns spend values, response values with uncertainty bands, and current spend markers.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         # Try to load cached response curves
@@ -1181,6 +1253,7 @@ async def get_decomposition(
         False, description="Force recomputation of decomposition"
     ),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get component decomposition (trend, seasonality, media contributions, etc.).
@@ -1188,7 +1261,7 @@ async def get_decomposition(
     Returns time series of each component's contribution to the outcome,
     both aggregated and by geography.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         # Try to load cached decomposition
@@ -1874,13 +1947,14 @@ async def get_decomposition(
 async def get_marginal_roas(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get marginal ROAS for each channel.
 
     Returns mean ROAS with uncertainty (HDI) for each channel.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         # Try to load cached ROAS
@@ -1968,6 +2042,7 @@ async def cancel_model_job(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Cancel a running or queued model fitting job.
@@ -1981,6 +2056,7 @@ async def cancel_model_job(
         )
 
     metadata = storage.get_model_metadata(model_id)
+    _assert_org_owns(metadata.get("org_id"), _org_scope(principal))
     current_status = metadata.get("status", "unknown")
 
     # Check if job can be cancelled
@@ -2028,6 +2104,7 @@ async def delete_model(
     model_id: str,
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Delete a model and all its artifacts."""
     if not storage.model_exists(model_id):
@@ -2035,6 +2112,10 @@ async def delete_model(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Model not found: {model_id}",
         )
+
+    _assert_org_owns(
+        storage.get_model_metadata(model_id).get("org_id"), _org_scope(principal)
+    )
 
     # Delete from storage
     storage.delete_model(model_id)
@@ -2061,6 +2142,7 @@ async def download_model(
         "mmm", description="Artifact to download: mmm, results, panel"
     ),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Download a model artifact.
@@ -2070,7 +2152,7 @@ async def download_model(
     - **results**: The MMMResults object (pickle)
     - **panel**: The PanelDataset object (pickle)
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         artifact_path = storage.get_model_artifact_path(model_id, artifact)
@@ -2101,6 +2183,7 @@ async def compute_contributions(
     request: ContributionRequest,
     storage: StorageService = Depends(get_storage),
     arq_pool: ArqRedis = Depends(get_arq_pool),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Compute counterfactual channel contributions.
@@ -2109,7 +2192,7 @@ async def compute_contributions(
     the baseline prediction to counterfactual predictions with each channel
     zeroed out.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         mmm = storage.load_model_artifact(model_id, "mmm")
@@ -2168,13 +2251,14 @@ async def run_scenario(
     model_id: str,
     request: ScenarioRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Run what-if scenario analysis.
 
     Modify channel spend by percentage and see predicted outcome changes.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         mmm = storage.load_model_artifact(model_id, "mmm")
@@ -2214,13 +2298,14 @@ async def generate_predictions(
     model_id: str,
     request: PredictionRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Generate predictions for the model.
 
     Can optionally provide modified media spend for counterfactual predictions.
     """
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         mmm = storage.load_model_artifact(model_id, "mmm")
@@ -2269,9 +2354,10 @@ async def generate_predictions(
 async def get_model_summary(
     model_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get a summary of the model including metadata and key results."""
-    _check_model_completed(storage, model_id)
+    _check_model_completed(storage, model_id, _org_scope(principal))
 
     try:
         metadata = storage.get_model_metadata(model_id)
@@ -2318,6 +2404,7 @@ async def batch_model_status(
     model_ids: list[str],
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Get status for multiple models at once.
@@ -2336,9 +2423,10 @@ async def batch_model_status(
             detail="Cannot query more than 50 models at once",
         )
 
+    org = _org_scope(principal)
     results = {}
     for model_id in model_ids:
-        if storage.model_exists(model_id):
+        if storage.model_exists(model_id) and _org_owns_model(storage, model_id, org):
             # Try Redis first for real-time status
             redis_status = await redis.get_job_status(model_id)
             if redis_status:
@@ -2370,6 +2458,7 @@ async def batch_delete_models(
     model_ids: list[str],
     storage: StorageService = Depends(get_storage),
     redis: RedisService = Depends(get_redis),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Delete multiple models at once.
@@ -2388,11 +2477,12 @@ async def batch_delete_models(
             detail="Cannot delete more than 20 models at once",
         )
 
+    org = _org_scope(principal)
     deleted = []
     not_found = []
 
     for model_id in model_ids:
-        if storage.model_exists(model_id):
+        if storage.model_exists(model_id) and _org_owns_model(storage, model_id, org):
             storage.delete_model(model_id)
             await redis.delete_job_status(model_id)
             deleted.append(model_id)
@@ -2421,6 +2511,7 @@ async def compare_models(
         description="Metrics to compare",
     ),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Compare multiple models side by side.
@@ -2439,10 +2530,13 @@ async def compare_models(
             detail="Cannot compare more than 10 models at once",
         )
 
+    org = _org_scope(principal)
     comparisons = []
 
     for model_id in model_ids:
-        if not storage.model_exists(model_id):
+        if not storage.model_exists(model_id) or not _org_owns_model(
+            storage, model_id, org
+        ):
             comparisons.append(
                 {
                     "model_id": model_id,

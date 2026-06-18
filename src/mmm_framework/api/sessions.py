@@ -1373,15 +1373,25 @@ def ensure_default_project() -> str:
     return _DEFAULT_PROJECT_ID
 
 
-def create_project(name: str, description: str | None = None) -> dict[str, Any]:
+def create_project(
+    name: str, description: str | None = None, org_id: str | None = None
+) -> dict[str, Any]:
     project_id = uuid.uuid4().hex
     now = _now()
     with _conn() as c:
-        c.execute(
-            "INSERT INTO projects (project_id, name, description, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (project_id, name or "Untitled Project", description, now, now),
-        )
+        try:
+            c.execute(
+                "INSERT INTO projects (project_id, name, description, org_id,"
+                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (project_id, name or "Untitled Project", description, org_id, now, now),
+            )
+        except sqlite3.OperationalError:
+            # org_id column absent (auth schema not yet initialized) — fall back.
+            c.execute(
+                "INSERT INTO projects (project_id, name, description, created_at,"
+                " updated_at) VALUES (?, ?, ?, ?, ?)",
+                (project_id, name or "Untitled Project", description, now, now),
+            )
     return get_project(project_id)  # type: ignore[return-value]
 
 
@@ -1395,14 +1405,30 @@ def _project_counts(c: sqlite3.Connection, project_id: str) -> dict[str, int]:
     return {"session_count": session_count, "doc_count": doc_count}
 
 
-def list_projects() -> list[dict[str, Any]]:
-    ensure_default_project()
+def list_projects(org_id: str | None = None) -> list[dict[str, Any]]:
+    """List projects. When ``org_id`` is given, scope to that tenant's projects.
+
+    ``org_id=None`` preserves the original behavior (all projects + the built-in
+    Default Project) used by single-tenant/dev mode.
+    """
     with _conn() as c:
-        rows = c.execute(
-            "SELECT project_id, name, description, meta_json, created_at,"
-            " updated_at FROM projects"
-            " ORDER BY (project_id = 'default') DESC, updated_at DESC"
-        ).fetchall()
+        if org_id is None:
+            ensure_default_project()
+            rows = c.execute(
+                "SELECT project_id, name, description, meta_json, created_at,"
+                " updated_at FROM projects"
+                " ORDER BY (project_id = 'default') DESC, updated_at DESC"
+            ).fetchall()
+        else:
+            try:
+                rows = c.execute(
+                    "SELECT project_id, name, description, meta_json, created_at,"
+                    " updated_at FROM projects WHERE org_id = ?"
+                    " ORDER BY updated_at DESC",
+                    (org_id,),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = []
         out = []
         for r in rows:
             d = dict(r)

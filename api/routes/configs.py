@@ -17,7 +17,16 @@ from schemas import (
     ErrorResponse,
     SuccessResponse,
 )
-from storage import StorageError, StorageService, get_storage
+from storage import (
+    StorageError,
+    StorageService,
+    assert_org_owns as _assert_org_owns,
+    get_storage,
+    org_scope as _org_scope,
+)
+
+from mmm_framework.auth.deps import get_current_principal
+from mmm_framework.auth.models import AuthContext
 
 router = APIRouter(prefix="/configs", tags=["Configurations"])
 
@@ -44,6 +53,7 @@ def _config_to_response(config: dict) -> ConfigResponse:
 async def create_config(
     request: ConfigCreateRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """
     Create a new model configuration.
@@ -59,7 +69,7 @@ async def create_config(
         "model_settings": request.model_settings.model_dump(),
     }
 
-    saved = storage.save_config(config_data)
+    saved = storage.save_config(config_data, org_id=_org_scope(principal))
     return _config_to_response(saved)
 
 
@@ -72,9 +82,10 @@ async def list_configs(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     project_id: str | None = Query(None, description="Filter by project"),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """List all configurations."""
-    configs = storage.list_configs(project_id=project_id)
+    configs = storage.list_configs(project_id=project_id, org_id=_org_scope(principal))
     total = len(configs)
     configs = configs[skip : skip + limit]
 
@@ -92,10 +103,12 @@ async def list_configs(
 async def get_config(
     config_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Get a specific configuration."""
     try:
         config = storage.load_config(config_id)
+        _assert_org_owns(config.get("org_id"), _org_scope(principal))
         return _config_to_response(config)
     except StorageError:
         raise HTTPException(
@@ -113,6 +126,7 @@ async def update_config(
     config_id: str,
     request: ConfigUpdateRequest,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Update an existing configuration."""
     if not storage.config_exists(config_id):
@@ -120,6 +134,12 @@ async def update_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Configuration not found: {config_id}",
         )
+
+    # IDOR: 404 unless the principal's org owns it. ``org_id`` is already inside
+    # the stored config dict, so ``update_config`` re-save preserves it.
+    _assert_org_owns(
+        storage.load_config(config_id).get("org_id"), _org_scope(principal)
+    )
 
     updates = {}
     if request.name is not None:
@@ -143,6 +163,7 @@ async def update_config(
 async def delete_config(
     config_id: str,
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Delete a configuration."""
     if not storage.config_exists(config_id):
@@ -150,6 +171,10 @@ async def delete_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Configuration not found: {config_id}",
         )
+
+    _assert_org_owns(
+        storage.load_config(config_id).get("org_id"), _org_scope(principal)
+    )
 
     storage.delete_config(config_id)
 
@@ -169,10 +194,12 @@ async def duplicate_config(
     config_id: str,
     new_name: str = Query(..., min_length=1, max_length=100),
     storage: StorageService = Depends(get_storage),
+    principal: AuthContext = Depends(get_current_principal),
 ):
     """Create a copy of an existing configuration."""
     try:
         original = storage.load_config(config_id)
+        _assert_org_owns(original.get("org_id"), _org_scope(principal))
 
         # Create new config with new name
         new_config = {
@@ -182,7 +209,7 @@ async def duplicate_config(
             "model_settings": original["model_settings"],
         }
 
-        saved = storage.save_config(new_config)
+        saved = storage.save_config(new_config, org_id=_org_scope(principal))
         return _config_to_response(saved)
 
     except StorageError:

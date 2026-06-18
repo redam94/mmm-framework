@@ -1,4 +1,4 @@
-import { API_BASE_URL, expertHeaders } from '../../api/client';
+import { API_BASE_URL, expertHeaders, bearerHeader } from '../../api/client';
 import type { TableRef } from './types';
 
 // Mapping: tool name → tab it produced an artifact in. Only tools that mutate
@@ -54,6 +54,8 @@ export function authHeaders(apiKey: string | null, modelName: string | null): He
   if (provider) h['X-Provider'] = provider;
   // Expert (strong) tier selection for delegate_to_expert.
   Object.assign(h, expertHeaders());
+  // JWT bearer (optional, additive); {} when no token is stored.
+  Object.assign(h, bearerHeader());
   return h;
 }
 

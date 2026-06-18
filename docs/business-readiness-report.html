@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMM Framework — Business Readiness Report</title>
+<meta name="description" content="Business readiness assessment and commercialization roadmap (P0–P2) for the MMM Framework — a causal, agent-operated Bayesian marketing measurement platform.">
+<style>
+  :root{
+    --ink:#16161d; --paper:#faf9f6; --card:#ffffff; --muted:#5b5b66;
+    --line:#e7e3da; --line-strong:#d8d3c7;
+    --primary:#1f6f5c; --primary-soft:#e7f1ee;
+    --accent:#bd5b2c; --accent-soft:#f6e9e0;
+    --shipped:#2f7d4f; --shipped-bg:#e7f3eb;
+    --progress:#a9741b; --progress-bg:#f7eed9;
+    --planned:#6b7280; --planned-bg:#eceef1;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.62; font-size:17px;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 28px}
+  h1,h2,h3,h4{font-family:Georgia,"Iowan Old Style","Times New Roman",serif; line-height:1.2; color:var(--ink); font-weight:600}
+  h2{font-size:1.72rem; margin:0 0 .2em; letter-spacing:-.01em}
+  h3{font-size:1.18rem; margin:1.5em 0 .4em}
+  h4{font-size:1.02rem; margin:1.1em 0 .3em; font-family:inherit; font-weight:700}
+  p{margin:.55em 0}
+  a{color:var(--primary); text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.84em; background:#f0ede6; padding:.08em .35em; border-radius:4px; color:#33333a}
+  .muted{color:var(--muted)}
+  .small{font-size:.86rem}
+
+  /* Cover */
+  .cover{background:linear-gradient(150deg,#16161d 0%,#1c2b29 60%,#1f3a31 100%); color:#f3f1ea; padding:64px 0 52px}
+  .cover .wrap{max-width:var(--maxw)}
+  .eyebrow{font-size:.78rem; letter-spacing:.22em; text-transform:uppercase; color:#9bc6b6; font-weight:700; margin-bottom:18px}
+  .cover h1{color:#fff; font-size:2.9rem; letter-spacing:-.015em; margin:0 0 .35em; max-width:18ch}
+  .cover .tagline{font-size:1.22rem; color:#cfe6dd; max-width:54ch; margin:0 0 30px; font-family:inherit}
+  .cover-meta{display:flex; flex-wrap:wrap; gap:26px; border-top:1px solid rgba(255,255,255,.16); padding-top:20px; font-size:.84rem; color:#b9d3ca}
+  .cover-meta b{display:block; color:#fff; font-size:.95rem; font-weight:600; letter-spacing:.01em}
+
+  /* TOC */
+  .toc{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 26px; margin:-34px auto 8px; box-shadow:0 8px 30px rgba(20,20,30,.06); position:relative; z-index:2}
+  .toc ol{margin:.2em 0 0; padding-left:1.3em; columns:2; column-gap:40px}
+  .toc li{margin:.25em 0; break-inside:avoid}
+
+  section{padding:34px 0; border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:none}
+  .lede{font-size:1.12rem; color:#33333c}
+
+  /* Chips */
+  .chip{display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:.18em .6em; border-radius:999px; vertical-align:middle}
+  .chip.shipped{background:var(--shipped-bg); color:var(--shipped)}
+  .chip.progress{background:var(--progress-bg); color:var(--progress)}
+  .chip.planned{background:var(--planned-bg); color:var(--planned)}
+  .chip.partial{background:#eef1f6; color:#3c4a63}
+
+  /* Cards / grid */
+  .grid{display:grid; gap:18px; margin:18px 0}
+  .grid.c2{grid-template-columns:1fr 1fr}
+  .grid.c3{grid-template-columns:1fr 1fr 1fr}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 22px}
+  .card h4{margin-top:0}
+  .pillar{border-top:3px solid var(--primary)}
+  .pillar.b{border-top-color:var(--accent)}
+  .pillar.c{border-top-color:#3c6e8f}
+
+  /* Callouts */
+  .box{border-radius:12px; padding:18px 22px; margin:18px 0; border:1px solid var(--line)}
+  .box.tldr{background:var(--primary-soft); border-color:#cfe3dc}
+  .box.warn{background:#fbf4ea; border-color:#ecdcc0}
+  .box.ask{background:#fff; border:2px solid var(--accent)}
+  .box h4{margin-top:0}
+
+  /* Tables */
+  table{width:100%; border-collapse:collapse; margin:16px 0; font-size:.93rem}
+  th,td{text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-size:.74rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line-strong)}
+  tbody tr:hover{background:#fcfbf8}
+  td .chip{margin-top:2px}
+
+  /* Scorecard */
+  .score{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:20px 0}
+  .score .s{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; text-align:center}
+  .score .s .n{font-family:Georgia,serif; font-size:2.4rem; font-weight:600; line-height:1}
+  .score .s .l{font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-top:6px}
+  .score .s.green .n{color:var(--shipped)}
+  .score .s.amber .n{color:var(--progress)}
+  .score .s.gray .n{color:var(--planned)}
+
+  ul.tight{margin:.4em 0; padding-left:1.25em}
+  ul.tight li{margin:.25em 0}
+  .kvs li{list-style:none}
+  .kvs{padding-left:0}
+  .kvs b{color:var(--ink)}
+
+  .footer{padding:30px 0 50px; color:var(--muted); font-size:.84rem}
+  hr.soft{border:none; border-top:1px solid var(--line); margin:24px 0}
+
+  @media(max-width:760px){
+    .grid.c2,.grid.c3,.score{grid-template-columns:1fr}
+    .toc ol{columns:1}
+    .cover h1{font-size:2.1rem}
+  }
+  @media print{
+    body{font-size:12px; background:#fff}
+    .cover{background:#16161d !important; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+    .chip,.box,.score .s,.card{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+    .toc{box-shadow:none}
+    section{padding:18px 0}
+    a{color:inherit}
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="wrap">
+    <div class="eyebrow">Business Readiness Report · Confidential</div>
+    <h1>Marketing measurement you can defend in front of finance.</h1>
+    <p class="tagline">A causal, agent-operated Bayesian Marketing Mix Modeling platform — and an honest assessment of what it will take to ship it as a multi-tenant product. P0 through P2, with live status.</p>
+    <div class="cover-meta">
+      <div><b>MMM Framework</b>v0.1.0 · Beta</div>
+      <div><b>Prepared</b>17 June 2026</div>
+      <div><b>Author</b>Matthew Reda</div>
+      <div><b>Audience</b>Investor / board / design partner</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc small">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#summary">Executive summary</a></li>
+      <li><a href="#opportunity">The opportunity</a></li>
+      <li><a href="#product">The product</a></li>
+      <li><a href="#moat">Differentiation &amp; moat</a></li>
+      <li><a href="#evidence">Evidence &amp; validation</a></li>
+      <li><a href="#readiness">Readiness scorecard</a></li>
+      <li><a href="#p0">P0 — commercial table stakes</a></li>
+      <li><a href="#p1">P1 — make it stick</a></li>
+      <li><a href="#p2">P2 — accelerate growth</a></li>
+      <li><a href="#model">Business model &amp; GTM</a></li>
+      <li><a href="#risks">Risks &amp; honest limitations</a></li>
+      <li><a href="#ask">The ask — next 90 days</a></li>
+    </ol>
+  </nav>
+</div>
+
+<main class="wrap">
+
+<section id="summary">
+  <h2>Executive summary</h2>
+  <p class="lede">Marketing mix modeling is having a renaissance — privacy changes (ATT, cookie deprecation) gutted user-level attribution, and budgets are flowing back to aggregate measurement. But the category is flooded with black-box vendors selling correlational regressions dressed up as causal truth. CMOs have been burned: the model says "spend more on TV," they do, sales don't move, and nobody can explain why.</p>
+  <p>The MMM Framework is built around the one thing those tools quietly skip: <strong>causal rigor you can audit</strong>. Pre-registered analyses, experiments folded directly into the model's posterior, a fit-based refutation suite, and a structural-identification tool that proves an experiment will actually sharpen the answer before you spend a dollar on it. Wrapped around that engine is an <strong>adaptive measurement loop</strong> (fit → prioritize → experiment → recalibrate → reallocate → re-test) and a <strong>conversational analyst agent</strong> that operates the whole workflow — collapsing the "you need a Bayesian statistician on staff" barrier that keeps rigorous MMM out of the mid-market.</p>
+  <div class="box tldr">
+    <h4>Readiness in one line</h4>
+    <p style="margin-bottom:0">The hardest, riskiest part of becoming a multi-tenant SaaS — <strong>real authentication, tenant isolation, and a buyer-facing security posture</strong> — is <span class="chip shipped">Shipped</span>. What remains is commercial packaging (pricing, metering), a small security-hardening tail, and the go-to-market proof a first design partner provides. In other words: the science and the security are de-risked; the work ahead is business, not research.</p>
+  </div>
+</section>
+
+<section id="opportunity">
+  <h2>The opportunity</h2>
+  <h3>Why the category is moving</h3>
+  <p>Aggregate marketing measurement is structurally back in demand: the privacy stack that powered a decade of click-attribution is gone, regulators keep tightening, and finance wants a defensible number for the largest discretionary line on the P&amp;L. MMM is the surviving primitive.</p>
+  <h3>Why incumbents leave a gap</h3>
+  <ul class="tight">
+    <li><strong>Legacy panels &amp; agencies</strong> (e.g. Nielsen-style) are black boxes — slow, expensive, and impossible for a client to interrogate.</li>
+    <li><strong>Open-source toolkits</strong> (e.g. Robyn, Meridian) are capable libraries with no product layer, no workflow, and no causal-defensibility scaffolding — they assume a data-science team.</li>
+    <li><strong>The honest middle is empty:</strong> an auditable, causal measurement <em>system</em> — not a chart, not a library — that a mid-market or agency analyst can actually operate.</li>
+  </ul>
+  <p>That empty middle is the wedge: <strong>rigor + workflow + an agent that makes it usable.</strong></p>
+</section>
+
+<section id="product">
+  <h2>The product</h2>
+  <p class="lede">One platform runs the entire marketing-measurement loop — and an agent does the work as you chat.</p>
+  <div class="grid c3">
+    <div class="card pillar">
+      <h4>1 · Causal Bayesian engine</h4>
+      <p class="small">A production Bayesian MMM extending PyMC-Marketing: per-channel adstock (geometric, delayed, Weibull) and saturation (logistic, Hill, Michaelis-Menten, tanh), hierarchical geo &amp; geo×product panels, and extended models for funnel mediation, multi-outcome, and combined effects. Fast NUTS via NumPyro/NutPie.</p>
+    </div>
+    <div class="card pillar b">
+      <h4>2 · The measurement loop (T₀–T₅)</h4>
+      <p class="small">Fit → rank experiments by expected information gain <em>in dollars</em> (EIG/EVOI) → run pre-registered, lifecycle-tracked experiments → fold readouts back into a calibrated refit → reallocate budget → re-test as evidence decays. Measurement becomes a flywheel, not an annual report.</p>
+    </div>
+    <div class="card pillar c">
+      <h4>3 · The analyst agent</h4>
+      <p class="small">A LangGraph agent with ~40 tools validates data, runs EDA, configures and fits models, reads out ROI/decomposition/saturation, runs the budget optimizer, and plans/calibrates experiments — executing Python in a sandboxed kernel and producing branded client reports.</p>
+    </div>
+  </div>
+
+  <h3>Capability surface</h3>
+  <div class="grid c2">
+    <div class="card">
+      <h4>Experiment economics &amp; design</h4>
+      <ul class="tight small">
+        <li>Model-anchored incremental ROAS with a <em>powered / underpowered</em> verdict</li>
+        <li>Opportunity cost &amp; spend-at-risk of a holdout (a holdout can be net-positive)</li>
+        <li>A/A·A/B simulation that corrects for autocorrelation-inflated false positives</li>
+        <li>A Pareto-front optimizer trading MDE × power × cost × duration, with cool-down windows</li>
+        <li>Geo-lift, matched-market DiD, and budget-neutral national flighting designs</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Platform &amp; delivery</h4>
+      <ul class="tight small">
+        <li>Modern React UI (Program / Experiments / Performance / Agent / Knowledge / Team)</li>
+        <li>FastAPI + Redis + ARQ backend that queues long model fits asynchronously</li>
+        <li>Per-project RAG knowledge base — answers quote the actual client brief</li>
+        <li>One-click branded HTML client reports in the client's colors</li>
+        <li>Bring-your-own LLM (Anthropic, OpenAI, Gemini, Vertex, or local LM Studio); open-source Python library underneath</li>
+      </ul>
+    </div>
+  </div>
+  <p class="small muted">Platform status is <strong>Beta</strong> (web UI, agent workspace, and planning engine on the Beta tier). The React UI is the supported surface; a legacy Streamlit UI exists as a secondary surface.</p>
+</section>
+
+<section id="moat">
+  <h2>Differentiation &amp; moat</h2>
+  <p>Anyone can fit a regression. Defensibility comes from the combination of three things competitors don't have together:</p>
+  <table>
+    <thead><tr><th>Capability</th><th>What it does</th><th>Why it's a moat</th></tr></thead>
+    <tbody>
+      <tr><td><b>Auditable causal calibration</b></td><td>Experiments enter the model as an in-graph likelihood that jointly updates the coefficient, the saturation curve, <em>and</em> the adstock kernel — plus a 4-test refutation suite (placebo, negative-control, random-common-cause, subset).</td><td>The number can be <em>defended</em> to a CFO. Reduces researcher degrees of freedom — the failure mode that burns MMM buyers.</td></tr>
+      <tr><td><b>The economics loop</b></td><td>Ranks and prices experiments by the dollar value of the decision they'd change, then folds results back in.</td><td>Creates a reason to come back every quarter — the retention mechanism, not a one-off report.</td></tr>
+      <tr><td><b>The operating agent</b></td><td>Runs the full workflow conversationally over a sandboxed kernel.</td><td>Removes the "needs a Bayesian on staff" barrier — expands the serviceable market downward into mid-market and agencies.</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Lead the pitch with the loop: it is simultaneously the differentiation and the retention mechanism.</p>
+</section>
+
+<section id="evidence">
+  <h2>Evidence &amp; validation</h2>
+  <p class="lede">Credibility is the product. Here is what is measured — labeled honestly, because overclaiming is how MMM vendors lose technical buyers.</p>
+  <table>
+    <thead><tr><th>Proof point</th><th>Result</th><th>Basis</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Out-of-time forecast accuracy</b></td>
+        <td>3.0% MAPE (MASE 0.24) — ~¼ the error of a "copy last year" baseline (13.8%). 80%/95% interval coverage at 90.4% / 94.2%.</td>
+        <td><span class="chip partial">Synthetic benchmark</span> Genuine out-of-time test (expanding-window refit + posterior forward-replay) on our 156-week, 7-channel benchmark world.</td>
+      </tr>
+      <tr>
+        <td><b>Real external data (Lydia Pinkham, 54 yrs)</b></td>
+        <td>Carryover sided with the short-duration literature; total-effect ROAS <b>1.48 [1.12, 1.85]</b> landed inside the bracket six decades of published advertising econometrics produced.</td>
+        <td><span class="chip shipped">Real data</span> A causal-anchor win on a genuinely external, decades-old dataset.</td>
+      </tr>
+      <tr>
+        <td><b>Honesty under stress</b></td>
+        <td>On that same real series it reported <em>no</em> forecast skill over naïve persistence (MASE 1.36) while keeping intervals calibrated (94% coverage). A regime-shift world degrades the benchmark to 11.4% MAPE on the identical protocol.</td>
+        <td><span class="chip shipped">Real + designed-to-fail</span> "A backtest that cannot fail cannot validate." The system tells you when it doesn't know.</td>
+      </tr>
+      <tr>
+        <td><b>Speed</b></td>
+        <td>NumPyro NUTS measured <b>6.0× faster</b> than stock PyMC at equal draws; a national fit completes in ~17 s.</td>
+        <td><span class="chip shipped">Measured</span> Comparable convergence (R-hat 1.010 vs 1.008).</td>
+      </tr>
+      <tr>
+        <td><b>Methodological rigor</b></td>
+        <td>Refutation suite, in-graph experiment-calibration likelihoods, and a Fisher/Laplace structural-identification design that proves an experiment will move the saturation/adstock/coefficient parameters off their priors.</td>
+        <td><span class="chip shipped">Shipped capability</span> Addresses the equifinality ridge that makes these parameters weakly identified from smooth spend.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="box warn small">
+    <h4>Reading these numbers honestly (so the pitch survives diligence)</h4>
+    <ul class="tight" style="margin-bottom:0">
+      <li>The headline <b>3.0% MAPE</b> is from our <b>synthetic benchmark world</b>, not a client engagement — present it as such.</li>
+      <li>The only genuinely-external dataset validated is <b>Lydia Pinkham</b>. It is a strong <em>causal</em> win and an honest <em>forecasting non-win</em> — do not claim we beat naïve forecasting on real data; we explicitly did not.</li>
+      <li>Forecast accuracy validates the <em>predictive</em> model, not attribution correctness. A model can forecast well and attribute wrongly — which is exactly why the causal scaffolding matters.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="readiness">
+  <h2>Commercial readiness scorecard</h2>
+  <p>Three priority tiers, from "can't sell to one company without it" (P0) to "accelerates growth once selling" (P2). Status reflects work shipped through this assessment.</p>
+  <div class="score">
+    <div class="s green"><div class="n">P0</div><div class="l">Table stakes · mostly shipped</div></div>
+    <div class="s amber"><div class="n">P1</div><div class="l">Makes it stick · seeded</div></div>
+    <div class="s gray"><div class="n">P2</div><div class="l">Accelerates growth · planned</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Priority</th><th>Workstream</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="4"><b>P0</b><br><span class="small muted">table stakes</span></td>
+        <td>Auth, multi-tenancy &amp; RBAC</td><td><span class="chip shipped">Shipped</span></td></tr>
+      <tr><td>Security &amp; trust collateral</td><td><span class="chip shipped">Shipped</span></td></tr>
+      <tr><td>Security-hardening tail (rate limits, token kill, ship sandbox image)</td><td><span class="chip progress">In progress</span></td></tr>
+      <tr><td>Pricing &amp; packaging</td><td><span class="chip planned">Planned</span></td></tr>
+      <tr><td rowspan="3"><b>P1</b><br><span class="small muted">make it stick</span></td>
+        <td>Self-serve onboarding &amp; data validation</td><td><span class="chip partial">Partial</span></td></tr>
+      <tr><td>Reliability &amp; observability (SLAs, retries, surfaced audit)</td><td><span class="chip partial">Partial</span></td></tr>
+      <tr><td>Reference customer + ROI case study</td><td><span class="chip planned">Planned</span></td></tr>
+      <tr><td rowspan="3"><b>P2</b><br><span class="small muted">accelerate growth</span></td>
+        <td>Data &amp; ad-platform integrations</td><td><span class="chip planned">Planned</span></td></tr>
+      <tr><td>Portfolio benchmarking &amp; governance</td><td><span class="chip partial">Partial</span></td></tr>
+      <tr><td>"Model-defense" explainability collateral</td><td><span class="chip partial">Partial</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="p0">
+  <h2>P0 — Commercial table stakes</h2>
+  <p class="lede">The minimum to responsibly sell to a single company. Two of four are done; the security mechanisms below were built and adversarially verified, not asserted.</p>
+
+  <h3>P0.1 · Authentication, multi-tenancy &amp; RBAC <span class="chip shipped">Shipped</span></h3>
+  <ul class="tight">
+    <li><b>Org-scoped identity:</b> an Organization tenant layer above projects; scrypt password hashing (constant-time verify); stateless HS256 JWT access/refresh tokens; a pluggable verifier so an external <b>OIDC/SSO IdP plugs in later without rewriting call sites</b>.</li>
+    <li><b>Tenant isolation enforced on both backends:</b> <code>require_project_access</code> on all 22 project routes plus a session-guard factory that closed <b>~35 additional thread-keyed holes an internal audit surfaced</b>; cross-tenant access returns <b>404 (not 403)</b> so existence can't be probed. IDOR-resistant by-id routes; org-scoped list endpoints; a dedicated cross-tenant test matrix.</li>
+    <li><b>Full account lifecycle:</b> admin invites, self-service password reset (no email enumeration), admin deactivation, and <b>refresh-token single-use rotation + revocation</b> — all emitting structured audit events tagged with user + org.</li>
+    <li><b>Frontend wired:</b> JWT store, login, bearer interceptor, single-flight refresh-or-logout; typecheck and build clean.</li>
+  </ul>
+
+  <h3>P0.2 · Security &amp; trust collateral <span class="chip shipped">Shipped</span></h3>
+  <p>Procurement is de-risked before the first call: a buyer-facing <a href="trust.html">Trust &amp; Security page</a>, a SOC 2 <em>readiness</em> map, a SIG-lite security questionnaire, a data-processing &amp; sub-processors summary, and an RFC 9116 <code>security.txt</code> + responsible-disclosure page. <strong>Every control cites source, and an adversarial verification pass caught and corrected a real overclaim</strong> — the credibility posture a security reviewer rewards.</p>
+
+  <h3>P0.3 · Security-hardening tail <span class="chip progress">In progress</span></h3>
+  <ul class="tight">
+    <li>Per-org rate limits &amp; quotas (the agent backend has no limiter yet).</li>
+    <li>Instant access-token kill on deactivate (refresh is revoked immediately today; access tokens expire by their ≤1 h TTL — a <code>token_version</code> claim closes the gap).</li>
+    <li>Build &amp; ship the kernel sandbox image so hosted multi-tenant code execution is live (a deploy step; the fail-closed posture is already coded).</li>
+  </ul>
+
+  <h3>P0.4 · Pricing &amp; packaging <span class="chip planned">Planned</span></h3>
+  <ul class="tight">
+    <li>Tier definition (e.g. Team / Business / Enterprise) + a feature-gating map.</li>
+    <li>A <b>per-fit cost model</b> — Bayesian compute is the COGS driver — with margin guardrails.</li>
+    <li>Per-org metering of fits / models / seats for billing.</li>
+    <li>A pricing page and a one-page packaging doc.</li>
+  </ul>
+</section>
+
+<section id="p1">
+  <h2>P1 — Make it stick</h2>
+  <p class="lede">Once you can sell it, these convert a sale into retention and references.</p>
+  <div class="grid c3">
+    <div class="card">
+      <h4>Self-serve onboarding <span class="chip partial">Partial</span></h4>
+      <p class="small">A data-quality/EDA module and a project-onboarding brief already exist as the seed. Needed: a guided "first model in 30 minutes" path with validation feedback so a new customer succeeds without hand-holding.</p>
+    </div>
+    <div class="card">
+      <h4>Reliability &amp; observability <span class="chip partial">Partial</span></h4>
+      <p class="small">Async job queue (ARQ) and a tamper-evident audit logger exist. Needed: customer-facing SLAs on fits, retries/backoff, status surfacing, and an off-host audit shipper.</p>
+    </div>
+    <div class="card">
+      <h4>Reference customer + ROI case <span class="chip planned">Planned</span></h4>
+      <p class="small">The single highest-leverage asset for both sales and fundraising. The Pinkham causal validation and the backtest harness are the credibility seeds; a design partner turns them into a named ROI story.</p>
+    </div>
+  </div>
+</section>
+
+<section id="p2">
+  <h2>P2 — Accelerate growth</h2>
+  <p class="lede">Compounding levers once the motion exists.</p>
+  <div class="grid c3">
+    <div class="card">
+      <h4>Integrations <span class="chip planned">Planned</span></h4>
+      <p class="small">Ad-platform connectors and a warehouse sync so data lands automatically — removing the biggest onboarding friction and increasing stickiness.</p>
+    </div>
+    <div class="card">
+      <h4>Portfolio benchmarking &amp; governance <span class="chip partial">Partial</span></h4>
+      <p class="small">Per-run history metrics already persist. Extend to cross-brand benchmarking and governance for agencies/holding-cos running many models — a natural land-and-expand surface.</p>
+    </div>
+    <div class="card">
+      <h4>"Model-defense" collateral <span class="chip partial">Partial</span></h4>
+      <p class="small">The refutation suite exists; package it as a one-click report a buyer hands to their CFO — turning rigor into a sales artifact.</p>
+    </div>
+  </div>
+</section>
+
+<section id="model">
+  <h2>Business model &amp; go-to-market</h2>
+  <div class="grid c2">
+    <div class="card">
+      <h4>How it monetizes</h4>
+      <ul class="tight small">
+        <li><b>Seats</b> for analysts + <b>per-project / per-fit compute</b> (compute is the real COGS — meter it).</li>
+        <li>A <b>services / onboarding tier</b>: the synthetic-world tooling and branded-report generator make white-glove cheap to deliver.</li>
+        <li><b>Land-and-expand</b>: start with one brand, expand across a portfolio — the geo × product panel support is built for exactly this.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Who buys, and why now</h4>
+      <ul class="tight small">
+        <li>Mid-market brands and agencies priced out of legacy panels and underserved by open-source toolkits.</li>
+        <li>The wedge is the agent: it lets a generalist analyst operate rigorous MMM — expanding the market below the enterprise data-science tier.</li>
+        <li>Privacy-driven demand for defensible aggregate measurement is structural, not a fad.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="risks">
+  <h2>Risks &amp; honest limitations</h2>
+  <p>Stated plainly — because a readiness report that hides these isn't credible, and because every item is tracked.</p>
+  <ul class="tight">
+    <li><b>Default posture is single-tenant.</b> Authentication is <em>off by default</em>; the out-of-box install runs a dev principal that bypasses scoping. Multi-tenant isolation activates with <code>MMM_AUTH_ENABLED=1</code> — by design, but it means the secure posture is opt-in.</li>
+    <li><b>The code sandbox is deployment-dependent.</b> The hardened container kernel is inert until its image and a runtime are deployed; the in-process and subprocess kernels are not sandboxes. (A half-applied sandbox was deliberately made to fail closed.)</li>
+    <li><b>Some platform plumbing is unfinished:</b> the S3 storage backend is a settings placeholder (local filesystem is implemented); retention purges only job records, not on-disk data; encryption in-transit/at-rest is deployer-supplied (TLS proxy + encrypted volumes), not a platform feature.</li>
+    <li><b>No SOC 2 certification</b> — the collateral is explicitly <em>readiness, not certified</em>; no audit has occurred.</li>
+    <li><b>Validation is mostly synthetic.</b> The headline accuracy numbers are benchmark-world; the one real external dataset is a causal win but a forecasting non-win. A design partner is the path to a real-client ROI claim.</li>
+    <li><b>Tenant isolation is application-code-enforced</b> over SQLite + JSON sidecars, not datastore row-level ACLs — appropriate at this stage, worth migrating as scale grows.</li>
+  </ul>
+</section>
+
+<section id="ask">
+  <h2>The ask — next 90 days</h2>
+  <div class="box ask">
+    <h4>What closes the gap to "sellable"</h4>
+    <ol class="tight" style="margin-bottom:8px">
+      <li><b>Finish the P0 tail:</b> per-org quotas, instant token-kill, and ship the sandbox image (≈2–3 weeks).</li>
+      <li><b>Package &amp; price:</b> tiers, per-fit cost model, and metering — the only P0 item still untouched (≈3–4 weeks).</li>
+      <li><b>Land one design partner:</b> a single named brand/agency to convert the synthetic + Pinkham credibility into a real ROI case study — the highest-leverage asset for the next raise and the first ten sales.</li>
+    </ol>
+    <p class="small muted" style="margin-bottom:0">The science is validated and the security is built. The remaining work is commercial packaging and a first reference — both bounded, both underway or scoped.</p>
+  </div>
+</section>
+
+<div class="footer">
+  <hr class="soft">
+  <p><strong>Sources &amp; provenance.</strong> Readiness status reflects the P0 tracker (<code>technical-docs/business-readiness-p0.md</code>) and shipped code in <code>src/mmm_framework/auth/</code>. Security claims are detailed and source-cited in <a href="trust.html">trust.html</a>, <code>technical-docs/soc2-readiness.md</code>, <code>security-questionnaire.md</code>, and <code>data-processing.md</code>. Validation figures are drawn from the backtest/validation suite and the <code>nbs/</code> notebooks; synthetic-benchmark vs real-data results are labeled throughout this report.</p>
+  <p class="small">MMM Framework · Business Readiness Report · Confidential — for discussion under NDA. Figures are point-in-time and subject to change.</p>
+</div>
+
+</main>
+</body>
+</html>

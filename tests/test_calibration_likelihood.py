@@ -12,6 +12,7 @@ flow is marked ``slow``.
 """
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -773,3 +774,275 @@ class TestEndToEnd:
             rv.name.startswith("experiment_TV_mroas")
             for rv in loaded.model.observed_RVs
         )
+
+
+# =============================================================================
+# Off-panel calibration (experiment ran in a window the model was not fit on)
+# =============================================================================
+
+# A window far outside the 2021 panel: in-panel calibration would skip it, but
+# off-panel calibration evaluates the response curve at the supplied spend level.
+OFFPANEL_PERIOD = ("2099-01-01", "2099-03-31")
+
+
+class TestOffPanelMeasurement:
+    """Validation + serialization of the off-panel fields."""
+
+    def test_eval_spend_requires_eval_periods(self):
+        with pytest.raises(ValueError, match="eval_periods"):
+            ExperimentMeasurement("TV", OFFPANEL_PERIOD, 1e5, 1e4, eval_spend=120.0)
+
+    @pytest.mark.parametrize("bad", [0.0, -5.0, float("nan")])
+    def test_rejects_bad_eval_spend(self, bad):
+        with pytest.raises(ValueError, match="eval_spend"):
+            ExperimentMeasurement(
+                "TV", OFFPANEL_PERIOD, 1e5, 1e4, eval_spend=bad, eval_periods=8
+            )
+
+    def test_rejects_bad_adstock_state(self):
+        with pytest.raises(ValueError, match="adstock_state"):
+            ExperimentMeasurement(
+                "TV", OFFPANEL_PERIOD, 1e5, 1e4, adstock_state="exponential"
+            )
+
+    def test_offpanel_rejects_mroas(self):
+        with pytest.raises(ValueError, match="MROAS"):
+            ExperimentMeasurement(
+                "TV",
+                OFFPANEL_PERIOD,
+                2.0,
+                0.5,
+                estimand=ExperimentEstimand.MROAS,
+                spend_lift_pct=10.0,
+                eval_spend=120.0,
+                eval_periods=8,
+            )
+
+    def test_offpanel_rejects_holdout_regions(self):
+        with pytest.raises(ValueError, match="holdout_regions"):
+            ExperimentMeasurement(
+                "TV",
+                OFFPANEL_PERIOD,
+                1e5,
+                1e4,
+                eval_spend=120.0,
+                eval_periods=8,
+                holdout_regions=["A"],
+            )
+
+    def test_offpanel_rejects_spend_override(self):
+        with pytest.raises(ValueError, match="spend override"):
+            ExperimentMeasurement(
+                "TV",
+                OFFPANEL_PERIOD,
+                2.0,
+                0.5,
+                estimand=ExperimentEstimand.ROAS,
+                eval_spend=120.0,
+                eval_periods=8,
+                spend=999.0,
+            )
+
+    def test_coerces_int_valued_floats(self):
+        m = ExperimentMeasurement(
+            "TV", OFFPANEL_PERIOD, 1e5, 1e4, eval_spend=120.0, eval_periods=8.0
+        )
+        assert m.eval_periods == 8 and isinstance(m.eval_periods, int)
+        assert m.eval_units == 1
+
+    @pytest.mark.parametrize("bad", [8.9, 0, -3])
+    def test_rejects_non_integral_eval_periods(self, bad):
+        # The window length scales the estimand linearly — truncating 8.9->8 would
+        # silently bias calibration, so fractional values are rejected.
+        with pytest.raises(ValueError, match="eval_periods"):
+            ExperimentMeasurement(
+                "TV", OFFPANEL_PERIOD, 1e5, 1e4, eval_spend=120.0, eval_periods=bad
+            )
+
+    @pytest.mark.parametrize("bad", [2.7, 0, -1])
+    def test_validates_eval_units_even_without_eval_spend(self, bad):
+        # eval_units is coerced/validated regardless of off-panel mode so its
+        # declared int type stays honest.
+        with pytest.raises(ValueError, match="eval_units"):
+            ExperimentMeasurement("TV", OFFPANEL_PERIOD, 1e5, 1e4, eval_units=bad)
+
+    def test_non_numeric_eval_periods_gives_domain_message(self):
+        with pytest.raises(ValueError, match="eval_periods must be a positive integer"):
+            ExperimentMeasurement(
+                "TV", OFFPANEL_PERIOD, 1e5, 1e4, eval_spend=120.0, eval_periods="lots"
+            )
+
+    def test_roundtrip_with_eval_fields(self):
+        m = ExperimentMeasurement(
+            "TV",
+            OFFPANEL_PERIOD,
+            1e5,
+            1e4,
+            estimand=ExperimentEstimand.CONTRIBUTION,
+            eval_spend=120.0,
+            eval_periods=8,
+            eval_units=3,
+            adstock_state="cold_start",
+        )
+        assert ExperimentMeasurement.from_dict(m.to_dict()) == m
+
+
+def _offpanel_model(periods, exps, *, parametric=True):
+    if parametric:
+        return BayesianMMM(
+            _make_panel(periods, tv_adstock=AdstockConfig.geometric()),
+            _parametric_config(),
+            TrendConfig(type=TrendType.LINEAR),
+            experiments=exps,
+        )
+    cfg = ModelConfig(
+        inference_method=InferenceMethod.BAYESIAN_PYMC,
+        n_chains=1,
+        n_draws=40,
+        n_tune=40,
+        use_parametric_adstock=False,
+    )
+    return BayesianMMM(
+        _make_panel(periods), cfg, TrendConfig(type=TrendType.LINEAR), experiments=exps
+    )
+
+
+class TestOffPanelWiring:
+    def test_out_of_window_offpanel_adds_node(self, periods):
+        # The whole point: a window OUTSIDE the panel still calibrates, because
+        # the estimand comes from the response curve, not from training rows.
+        exps = [
+            ExperimentMeasurement(
+                "TV", OFFPANEL_PERIOD, 5e4, 8e3, eval_spend=120.0, eval_periods=8
+            )
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # must NOT warn+skip
+            model = _offpanel_model(periods, exps).model
+        assert any(
+            rv.name.startswith("experiment_TV_contribution")
+            for rv in model.observed_RVs
+        )
+
+    def test_legacy_adstock_path_skipped_with_warning(self, periods):
+        exps = [
+            ExperimentMeasurement(
+                "TV", OFFPANEL_PERIOD, 5e4, 8e3, eval_spend=120.0, eval_periods=8
+            )
+        ]
+        m = _offpanel_model(periods, exps, parametric=False)
+        with pytest.warns(UserWarning, match="legacy"):
+            model = m.model
+        assert not any(rv.name.startswith("experiment_") for rv in model.observed_RVs)
+
+
+class TestOffPanelEstimandOracle:
+    """The off-panel estimand equals the analytic response-curve value, verified
+    with prior draws against an independent NumPy recomputation (parametric
+    geometric adstock + logistic saturation)."""
+
+    def _draw(self, m, node, draws, seed):
+        model = m.model
+        cfg = m._get_adstock_config("TV")
+        s_norm = float(m._media_raw_max["TV"] + 1e-8)
+        with model:
+            b, s, alpha, est = pm.draw(
+                [
+                    model["beta_TV"],
+                    model["sat_lam_TV"],
+                    model["adstock_alpha_TV"],
+                    model[node],
+                ],
+                draws=draws,
+                random_seed=seed,
+            )
+        return b, s, alpha, est, cfg, s_norm
+
+    @staticmethod
+    def _logistic(beta, lam, x):
+        return beta * (1 - np.exp(np.clip(-lam * x, -20, 0)))
+
+    def test_steady_state_contribution(self, periods):
+        eval_spend, W, units = 120.0, 8, 2
+        exps = [
+            ExperimentMeasurement(
+                "TV",
+                OFFPANEL_PERIOD,
+                5e4,
+                8e3,
+                estimand=ExperimentEstimand.CONTRIBUTION,
+                eval_spend=eval_spend,
+                eval_periods=W,
+                eval_units=units,
+                adstock_state="steady_state",
+            )
+        ]
+        m = _offpanel_model(periods, exps)
+        node = _estimand_node(m.model, "TV", "contribution")
+        b, s, alpha, est, cfg, denom = self._draw(m, node, 6, 11)
+        s_norm = eval_spend / denom
+        for i in range(len(est)):
+            w = adstock_weights(
+                "geometric", cfg.l_max, alpha=alpha[i], normalize=cfg.normalize
+            )
+            per = self._logistic(b[i], s[i], s_norm * w.sum())
+            expect = units * per * W * m.y_std
+            assert est[i] == pytest.approx(expect, rel=1e-5, abs=1e-3)
+
+    def test_cold_start_contribution(self, periods):
+        eval_spend, W = 120.0, 6
+        exps = [
+            ExperimentMeasurement(
+                "TV",
+                OFFPANEL_PERIOD,
+                5e4,
+                8e3,
+                estimand=ExperimentEstimand.CONTRIBUTION,
+                eval_spend=eval_spend,
+                eval_periods=W,
+                adstock_state="cold_start",
+            )
+        ]
+        m = _offpanel_model(periods, exps)
+        node = _estimand_node(m.model, "TV", "contribution")
+        b, s, alpha, est, cfg, denom = self._draw(m, node, 6, 12)
+        s_norm = eval_spend / denom
+        for i in range(len(est)):
+            w = adstock_weights(
+                "geometric", cfg.l_max, alpha=alpha[i], normalize=cfg.normalize
+            )
+            cumw = np.cumsum(w)
+            idx = np.minimum(np.arange(W), len(w) - 1)
+            adstocked = s_norm * cumw[idx]
+            sat = self._logistic(b[i], s[i], adstocked)
+            expect = sat.sum() * m.y_std
+            assert est[i] == pytest.approx(expect, rel=1e-5, abs=1e-3)
+
+    def test_roas_divides_by_total_window_spend(self, periods):
+        eval_spend, W, units = 150.0, 5, 3
+        exps = [
+            ExperimentMeasurement(
+                "TV",
+                OFFPANEL_PERIOD,
+                2.5,
+                0.4,
+                estimand=ExperimentEstimand.ROAS,
+                eval_spend=eval_spend,
+                eval_periods=W,
+                eval_units=units,
+            )
+        ]
+        m = _offpanel_model(periods, exps)
+        node = _estimand_node(m.model, "TV", "roas")
+        b, s, alpha, est, cfg, denom = self._draw(m, node, 6, 13)
+        s_norm = eval_spend / denom
+        total_spend = units * W * eval_spend
+        for i in range(len(est)):
+            w = adstock_weights(
+                "geometric", cfg.l_max, alpha=alpha[i], normalize=cfg.normalize
+            )
+            per = self._logistic(b[i], s[i], s_norm * w.sum())
+            contribution = units * per * W * m.y_std
+            assert est[i] == pytest.approx(
+                contribution / total_spend, rel=1e-5, abs=1e-6
+            )

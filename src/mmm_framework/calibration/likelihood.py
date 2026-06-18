@@ -57,6 +57,28 @@ Assumed semantics (read before use)
   is the standard lift-calibration treatment (PyMC-Marketing, Meridian) -- it is
   not double counting in the pathological sense, but the experiment's ``se`` is
   what governs how hard it pulls the fit.
+
+Off-panel calibration (experiment ran in a different period)
+------------------------------------------------------------
+When an experiment was run in a window the model was **not** fit on, set
+``eval_spend`` (+ ``eval_periods`` / ``eval_units`` / ``adstock_state``) on the
+measurement. The estimand is then built by evaluating the channel's *global*
+response curve ``beta_c * sat_c(adstock_c(.))`` at the experiment's own spend
+level -- a deterministic function of the same in-graph structural parameters --
+**without** indexing any training row. This rests on one assumption made
+explicit here:
+
+* **Structural stationarity.** The channel's response-curve parameters
+  (``beta_c``, the saturation shape, the adstock kernel) are assumed *stable*
+  between the experiment period and the training period. The experiment is
+  evidence about these global, time-invariant parameters, so a measurement from
+  a non-overlapping window still constrains them -- *provided* the curve has not
+  shifted. This is the standard (usually implicit) assumption behind seeding a
+  future-period MMM with a past lift test; off-panel mode only makes it
+  load-bearing and visible. If you have reason to believe the curve moved
+  (a major creative/format change, a structural break), prefer an in-window
+  test. Steady-state vs cold-start carryover at ``eval_spend`` is chosen per
+  experiment via ``adstock_state``.
 """
 
 from __future__ import annotations
@@ -73,6 +95,24 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 # Floor for an estimand denominator / clip for log-scale stability.
 _EPS = 1e-12
+
+
+def _positive_int(value: Any, name: str) -> int:
+    """Coerce ``value`` to a positive ``int``, rejecting non-integral numbers.
+
+    Integer-valued floats (``8.0``) are accepted; genuinely fractional values
+    (``8.9``) are rejected rather than silently truncated, because the off-panel
+    estimand scales linearly in these counts (window length / treated units), so
+    a silent ``8.9 -> 8`` would bias the calibration. Non-numeric input raises
+    the same domain message instead of a bare ``int()`` error.
+    """
+    try:
+        as_int = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be a positive integer, got {value!r}") from None
+    if as_int < 1 or (isinstance(value, float) and not value.is_integer()):
+        raise ValueError(f"{name} must be a positive integer, got {value!r}")
+    return as_int
 
 
 class ExperimentEstimand(str, Enum):
@@ -130,6 +170,35 @@ class ExperimentMeasurement:
         For multi-outcome models (e.g. :class:`MultivariateMMM`,
         :class:`CombinedMMM`): which outcome the experiment measured. ``None`` for
         single-outcome models (the core model, :class:`NestedMMM`).
+    eval_spend:
+        Off-panel calibration. The channel's spend **per period, per treated
+        unit**, on the raw dollar scale, *during the experiment* -- supply this
+        when the experiment ran in a window the model was **not** fit on. When
+        set, the estimand is built by evaluating the channel's *global* response
+        curve (the same in-graph ``beta``, saturation and adstock parameters) at
+        this spend level instead of summing training-matrix rows, so the
+        experiment window no longer has to overlap the training period. This is
+        valid under **structural stationarity** -- the response-curve parameters
+        are assumed stable between the experiment period and the training period
+        (see "Assumed semantics"). Leave ``None`` for the standard in-panel route
+        (sum the contribution over the training rows inside the window).
+    eval_periods:
+        Off-panel calibration: the number of periods the experiment ran (the
+        window length ``W``). Required when ``eval_spend`` is set.
+    eval_units:
+        Off-panel calibration: the number of treated units (e.g. geos) that ran
+        at ``eval_spend`` per period. Defaults to ``1`` (a single national-level
+        stream). For a multi-geo holdout, set this to the number of treated geos
+        -- the estimand assumes those units ran at the *same* per-unit spend
+        (homogeneous treatment). Ignored unless ``eval_spend`` is set.
+    adstock_state:
+        Off-panel calibration: carryover convention at ``eval_spend``.
+        ``"steady_state"`` (default) assumes the channel had been running at
+        ~that spend long enough for adstock to converge (right for always-on /
+        sustained-holdout / scale tests); ``"cold_start"`` assumes spend turned
+        on from zero at the window start and carryover builds over ``W`` (right
+        for a burst/pulse launched from dark). Always validated, but only affects
+        the estimand when ``eval_spend`` is set.
     """
 
     channel: str
@@ -143,6 +212,10 @@ class ExperimentMeasurement:
     distribution: str = "normal"
     name: str | None = None
     outcome: str | None = None
+    eval_spend: float | None = None
+    eval_periods: int | None = None
+    eval_units: int = 1
+    adstock_state: str = "steady_state"
 
     def __post_init__(self) -> None:
         estimand = ExperimentEstimand(self.estimand)
@@ -178,6 +251,60 @@ class ExperimentMeasurement:
         if self.spend is not None and self.spend <= 0:
             raise ValueError(f"spend override must be positive, got {self.spend!r}")
 
+        if self.adstock_state not in ("steady_state", "cold_start"):
+            raise ValueError(
+                "adstock_state must be 'steady_state' or 'cold_start', got "
+                f"{self.adstock_state!r}"
+            )
+
+        # ``eval_units`` is always coerced/validated: it has a concrete int
+        # default and is read on the off-panel path, so keep its type honest
+        # regardless of whether this particular measurement is off-panel.
+        object.__setattr__(
+            self, "eval_units", _positive_int(self.eval_units, "eval_units")
+        )
+
+        # Off-panel calibration is triggered by supplying ``eval_spend``: the
+        # estimand is then evaluated on the channel's global response curve at
+        # that spend rather than on training rows, so the window need not overlap
+        # the training period (valid under structural stationarity).
+        if self.eval_spend is not None:
+            if (
+                not isinstance(self.eval_spend, (int, float))
+                or not math.isfinite(self.eval_spend)
+                or self.eval_spend <= 0
+            ):
+                raise ValueError(
+                    f"eval_spend must be a positive finite number, got "
+                    f"{self.eval_spend!r}"
+                )
+            if self.eval_periods is None:
+                raise ValueError(
+                    "eval_spend requires a positive integer eval_periods (the "
+                    "experiment's window length in periods)."
+                )
+            object.__setattr__(
+                self, "eval_periods", _positive_int(self.eval_periods, "eval_periods")
+            )
+            if estimand is ExperimentEstimand.MROAS:
+                raise ValueError(
+                    "off-panel calibration (eval_spend) does not yet support the "
+                    "MROAS estimand; use CONTRIBUTION or ROAS, or run the "
+                    "experiment within the model's fitted window for mROAS."
+                )
+            if self.holdout_regions:
+                raise ValueError(
+                    "off-panel calibration cannot also set holdout_regions (there "
+                    "are no training rows to restrict). Use eval_units to set the "
+                    "number of treated units (assumed homogeneous per-unit spend)."
+                )
+            if self.spend is not None:
+                raise ValueError(
+                    "off-panel calibration derives the ROAS denominator from "
+                    "eval_spend x eval_periods x eval_units; do not also set the "
+                    "spend override."
+                )
+
     # -- serialization ----------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
@@ -195,6 +322,10 @@ class ExperimentMeasurement:
             "distribution": self.distribution,
             "name": self.name,
             "outcome": self.outcome,
+            "eval_spend": self.eval_spend,
+            "eval_periods": self.eval_periods,
+            "eval_units": self.eval_units,
+            "adstock_state": self.adstock_state,
         }
 
     @classmethod
@@ -212,6 +343,10 @@ class ExperimentMeasurement:
             distribution=data.get("distribution", "normal"),
             name=data.get("name"),
             outcome=data.get("outcome"),
+            eval_spend=data.get("eval_spend"),
+            eval_periods=data.get("eval_periods"),
+            eval_units=data.get("eval_units", 1),
+            adstock_state=data.get("adstock_state", "steady_state"),
         )
 
     @classmethod

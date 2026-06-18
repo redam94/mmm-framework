@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getStoredApiKey, getStoredModelName, setStoredAuth, clearStoredAuth, validateApiKey, getStoredKeyForProvider, setStoredKeyForProvider, getStoredBaseUrl, setStoredBaseUrl, getStoredProvider, setStoredProvider, getStoredExpertModel, getStoredExpertProvider, getStoredExpertBaseUrl, setStoredExpert } from '../api/client';
+import { getStoredApiKey, getStoredModelName, setStoredAuth, clearStoredAuth, validateApiKey, getStoredKeyForProvider, setStoredKeyForProvider, getStoredBaseUrl, setStoredBaseUrl, getStoredProvider, setStoredProvider, getStoredExpertModel, getStoredExpertProvider, getStoredExpertBaseUrl, setStoredExpert, getAccessToken, getRefreshToken, setStoredTokens, clearStoredTokens, loginWithPassword } from '../api/client';
 import { getProviderForModel } from '../constants/models';
 
 interface AuthState {
@@ -13,12 +13,17 @@ interface AuthState {
   expertModel: string | null;
   expertProvider: string | null;
   expertBaseUrl: string | null;
+  // JWT bearer auth (optional, additive). null when JWT auth is unused.
+  accessToken: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isValidating: boolean;
   validationError: string | null;
 
   // Actions
   setApiKey: (apiKey: string, modelName: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
   switchModel: (modelName: string) => boolean;
   setBaseUrl: (baseUrl: string | null) => void;
   setProvider: (provider: string | null) => void;
@@ -37,7 +42,9 @@ export const useAuthStore = create<AuthState>()(
       expertModel: getStoredExpertModel(),
       expertProvider: getStoredExpertProvider(),
       expertBaseUrl: getStoredExpertBaseUrl(),
-      isAuthenticated: !!getStoredApiKey(),
+      accessToken: getAccessToken(),
+      refreshToken: getRefreshToken(),
+      isAuthenticated: !!getStoredApiKey() || !!getAccessToken(),
       isValidating: false,
       validationError: null,
 
@@ -71,6 +78,43 @@ export const useAuthStore = create<AuthState>()(
           });
           return false;
         }
+      },
+
+      login: async (email: string, password: string) => {
+        set({ isValidating: true, validationError: null });
+        try {
+          const { access_token, refresh_token } = await loginWithPassword(email, password);
+          setStoredTokens(access_token, refresh_token);
+          set({
+            accessToken: access_token,
+            refreshToken: refresh_token,
+            isAuthenticated: true,
+            isValidating: false,
+            validationError: null,
+          });
+          return true;
+        } catch {
+          set({
+            isValidating: false,
+            validationError: 'Invalid email or password.',
+          });
+          return false;
+        }
+      },
+
+      logout: () => {
+        clearStoredTokens();
+        clearStoredAuth();
+        set({
+          apiKey: null,
+          modelName: null,
+          baseUrl: null,
+          provider: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          validationError: null,
+        });
       },
 
       switchModel: (modelName: string) => {
@@ -119,11 +163,14 @@ export const useAuthStore = create<AuthState>()(
 
       clearApiKey: () => {
         clearStoredAuth();
+        clearStoredTokens();
         set({
           apiKey: null,
           modelName: null,
           baseUrl: null,
           provider: null,
+          accessToken: null,
+          refreshToken: null,
           isAuthenticated: false,
           validationError: null,
         });
@@ -153,7 +200,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'mmm-auth',
-      partialize: (state) => ({ apiKey: state.apiKey, modelName: state.modelName, baseUrl: state.baseUrl, provider: state.provider, expertModel: state.expertModel, expertProvider: state.expertProvider, expertBaseUrl: state.expertBaseUrl }),
+      partialize: (state) => ({ apiKey: state.apiKey, modelName: state.modelName, baseUrl: state.baseUrl, provider: state.provider, expertModel: state.expertModel, expertProvider: state.expertProvider, expertBaseUrl: state.expertBaseUrl, accessToken: state.accessToken, refreshToken: state.refreshToken }),
     }
   )
 );

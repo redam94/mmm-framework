@@ -27,7 +27,29 @@ function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, setApiKey, setBaseUrl, isValidating, validationError } = useAuthStore();
+  const { isAuthenticated, setApiKey, setBaseUrl, login, isValidating, validationError } = useAuthStore();
+  // Optional JWT email+password sign-in (coexists with the LLM-key form).
+  const authEnabled = import.meta.env.VITE_AUTH_ENABLED === 'true';
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  const onPasswordSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoggingIn(true);
+    try {
+      const ok = await login(email.trim(), password);
+      if (ok) {
+        navigate(from, { replace: true });
+      } else {
+        setLoginError('Invalid email or password.');
+      }
+    } finally {
+      setLoggingIn(false);
+    }
+  };
   const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
   const [vertexModels, setVertexModels] = useState<VertexModel[]>([]);
@@ -179,6 +201,46 @@ export function LoginPage() {
             Causality-centered marketing mix modeling — measure, experiment, calibrate.
           </p>
         </div>
+
+        {/* Optional JWT email+password sign-in (additive; enabled via VITE_AUTH_ENABLED) */}
+        {authEnabled && (
+          <div className="rounded-xl border border-line-200 bg-white p-6 shadow-sm">
+            <form onSubmit={onPasswordSignIn} className="space-y-4">
+              <div>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  placeholder="you@example.com"
+                  className={inputClass}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  className={`${inputClass} num`}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              {loginError && <p className="text-sm text-rust-600">{loginError}</p>}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={apiStatus === 'offline' || loggingIn || !email || !password}
+              >
+                {loggingIn ? 'Signing in...' : 'Sign in'}
+              </Button>
+            </form>
+          </div>
+        )}
 
         {/* Login card */}
         <div className="rounded-xl border border-line-200 bg-white p-6 shadow-sm">

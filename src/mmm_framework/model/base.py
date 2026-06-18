@@ -55,6 +55,7 @@ from ..transforms import (
     create_piecewise_trend_matrix,
 )
 from ..transforms.adstock_pt import (
+    adstock_weights_pt,
     parametric_adstock_panel_pt,
     parametric_adstock_pt,
 )
@@ -994,14 +995,18 @@ class BayesianMMM:
 
     def _channel_adstock_apply(
         self, channel_name: str
-    ) -> "Callable[[pt.TensorVariable], pt.TensorVariable]":
-        """Return a closure applying this channel's in-graph adstock kernel.
+    ) -> "tuple[Callable[[pt.TensorVariable], pt.TensorVariable], pt.TensorVariable | None]":
+        """Return ``(apply_closure, kernel_weights)`` for a channel's adstock.
 
         The kernel's random variables (decay/delay/shape/scale) are created once
         here; the returned closure re-applies that *same* kernel to any input
-        series. This lets the model adstock both the observed spend and a
-        perturbed (e.g. experiment-scaled) spend with shared parameters, which is
-        what the marginal-ROAS experiment likelihood needs.
+        series, and ``kernel_weights`` is the FIR lag-weight tensor built from
+        those same RVs (``None`` for the ``"none"`` kernel, i.e. identity). The
+        closure lets the model adstock both the observed spend and a perturbed
+        (experiment-scaled) spend with shared parameters (marginal-ROAS
+        likelihood); the weights let an *off-panel* experiment evaluate the
+        channel's carryover at a synthetic sustained spend without the training
+        panel's time/cell index structure (:meth:`_offpanel_contribution_std`).
         """
         cfg = self._get_adstock_config(channel_name)
         kind = _ADSTOCK_KIND.get(cfg.type, "geometric")
@@ -1009,7 +1014,7 @@ class BayesianMMM:
         normalize = cfg.normalize
 
         if kind == "none":
-            return lambda x: x
+            return (lambda x: x), None
 
         if kind == "geometric":
             alpha = _sample_from_prior_config(
@@ -1017,8 +1022,14 @@ class BayesianMMM:
                 cfg.alpha_prior,
                 lambda: pm.Beta(f"adstock_alpha_{channel_name}", alpha=2, beta=2),
             )
-            return lambda x: self._apply_adstock_kernel_pt(
-                x, "geometric", l_max, normalize, alpha=alpha
+            weights = adstock_weights_pt(
+                "geometric", l_max, alpha=alpha, normalize=normalize
+            )
+            return (
+                lambda x: self._apply_adstock_kernel_pt(
+                    x, "geometric", l_max, normalize, alpha=alpha
+                ),
+                weights,
             )
 
         if kind == "delayed":
@@ -1032,8 +1043,14 @@ class BayesianMMM:
                 cfg.theta_prior,
                 lambda: pm.HalfNormal(f"adstock_theta_{channel_name}", sigma=2.0),
             )
-            return lambda x: self._apply_adstock_kernel_pt(
-                x, "delayed", l_max, normalize, alpha=alpha, theta=theta
+            weights = adstock_weights_pt(
+                "delayed", l_max, alpha=alpha, theta=theta, normalize=normalize
+            )
+            return (
+                lambda x: self._apply_adstock_kernel_pt(
+                    x, "delayed", l_max, normalize, alpha=alpha, theta=theta
+                ),
+                weights,
             )
 
         # weibull
@@ -1053,8 +1070,14 @@ class BayesianMMM:
                 f"adstock_scale_{channel_name}", alpha=2.0, beta=2.0 / scale_mean
             ),
         )
-        return lambda x: self._apply_adstock_kernel_pt(
-            x, "weibull", l_max, normalize, shape=shape, scale=scale
+        weights = adstock_weights_pt(
+            "weibull", l_max, shape=shape, scale=scale, normalize=normalize
+        )
+        return (
+            lambda x: self._apply_adstock_kernel_pt(
+                x, "weibull", l_max, normalize, shape=shape, scale=scale
+            ),
+            weights,
         )
 
     def _build_channel_adstock(
@@ -1066,7 +1089,8 @@ class BayesianMMM:
         priors) and estimates a continuous adstock kernel, supporting geometric,
         delayed, and Weibull carryover shapes.
         """
-        return self._channel_adstock_apply(channel_name)(x_raw)
+        apply_fn, _weights = self._channel_adstock_apply(channel_name)
+        return apply_fn(x_raw)
 
     def compute_adstock_curves(
         self, l_max_default: int = 8
@@ -1240,13 +1264,18 @@ class BayesianMMM:
                     # Estimate a continuous adstock kernel in-graph (geometric,
                     # delayed, or Weibull) per the channel's AdstockConfig. Keep
                     # the apply-closure so a perturbed spend can be re-adstocked
-                    # with the *same* kernel RVs (marginal-ROAS likelihood).
-                    adstock_apply = self._channel_adstock_apply(channel_name)
+                    # with the *same* kernel RVs (marginal-ROAS likelihood), and
+                    # the FIR weight tensor so an off-panel experiment can
+                    # evaluate carryover at a synthetic sustained spend.
+                    adstock_apply, adstock_kernel_weights = self._channel_adstock_apply(
+                        channel_name
+                    )
                     x_input = X_media_raw_data[:, c]
                     x_adstocked = adstock_apply(x_input)
                 else:
                     # Legacy: blend two fixed-alpha geometric adstocks.
                     adstock_apply = None
+                    adstock_kernel_weights = None
                     x_input = None
                     x_low = X_media_low_data[:, c]
                     x_high = X_media_high_data[:, c]
@@ -1285,6 +1314,9 @@ class BayesianMMM:
                     "sat_lam": sat_params.get("sat_lam"),
                     "channel_contrib": channel_contrib,  # standardized, per-obs
                     "adstock_apply": adstock_apply,  # parametric path only
+                    # FIR lag weights (parametric path; None for "none" kernel),
+                    # reused by the off-panel experiment estimand.
+                    "adstock_weights": adstock_kernel_weights,
                     "x_input": x_input,  # normalized raw series (parametric)
                     "x_low": x_low if not self.use_parametric_adstock else None,
                     "x_high": x_high if not self.use_parametric_adstock else None,
@@ -1508,6 +1540,66 @@ class BayesianMMM:
         contrib_pert = beta * sat_pert
         return contrib_pert[mask_idx].sum()
 
+    def _offpanel_contribution_std(
+        self, handle: dict[str, Any], exp: "ExperimentMeasurement"
+    ) -> "pt.TensorVariable":
+        """Standardized total contribution for an *off-panel* experiment.
+
+        Evaluates the channel's GLOBAL response curve -- the same in-graph
+        ``beta``, saturation and adstock-kernel RVs the time-series likelihood
+        estimates -- at the experiment's own sustained spend level
+        (``exp.eval_spend`` per period, per unit), summed over ``exp.eval_periods``
+        and scaled by ``exp.eval_units``. Unlike the in-panel estimand it indexes
+        **no** training row, so it represents an experiment run in a window the
+        model was not fit on. Valid under structural stationarity (the response
+        curve is stable across the two periods); see
+        :mod:`mmm_framework.calibration.likelihood`. Returns the *standardized*
+        contribution (multiply by ``y_std`` for KPI units), mirroring the
+        ``channel_contrib[mask].sum()`` the in-panel path produces.
+
+        ``adstock_state`` selects the carryover convention at ``eval_spend``:
+        ``"steady_state"`` (the channel has run at that spend long enough for
+        carryover to converge -- the adstocked level is ``s_norm * sum(weights)``,
+        i.e. ``s_norm`` for a normalized kernel) or ``"cold_start"`` (spend turns
+        on from zero at the window start and the adstocked level ramps as
+        ``s_norm * cumsum(weights)``). Spend is normalized by the same per-channel
+        training max the model feeds its parametric adstock path, so the s-curve
+        is evaluated on the same normalized scale it was estimated on (a spend
+        above the training max is honest extrapolation of the fitted curve).
+        """
+        ch_idx = handle["index"]
+        beta = handle["beta"]
+        sat_kind = handle["sat_kind"]
+        sat_params = handle["sat_params"]
+        weights = handle.get("adstock_weights")
+
+        max_val = self._media_raw_max[self.channel_names[ch_idx]] + 1e-8
+        s_norm = float(exp.eval_spend) / max_val
+        n_periods = int(exp.eval_periods)
+        units = int(exp.eval_units or 1)
+
+        if weights is None:
+            # No carryover ("none" kernel): every period sees the full spend.
+            per_period = _apply_saturation_pt(
+                pt.as_tensor_variable(s_norm), sat_kind, sat_params
+            )
+            total_std = beta * per_period * n_periods
+        elif exp.adstock_state == "cold_start":
+            # Spend turns on from zero at the window start; the adstocked level
+            # ramps as carryover accumulates: a_t = s_norm * sum_{k<=t} w_k.
+            cumw = pt.cumsum(weights)
+            t = pt.arange(n_periods)
+            last = weights.shape[0] - 1
+            adstocked = s_norm * cumw[pt.minimum(t, last)]
+            sat = _apply_saturation_pt(adstocked, sat_kind, sat_params)
+            total_std = beta * sat.sum()
+        else:  # steady_state: channel ran at s_norm long enough to converge.
+            adstocked = s_norm * weights.sum()
+            per_period = _apply_saturation_pt(adstocked, sat_kind, sat_params)
+            total_std = beta * per_period * n_periods
+
+        return units * total_std
+
     def _add_experiment_likelihoods(self, channel_handles: dict[str, dict]) -> None:
         """Fold registered experiments into the graph as likelihood terms.
 
@@ -1517,6 +1609,14 @@ class BayesianMMM:
         measured value via :func:`mmm_framework.calibration.likelihood.attach_experiment_likelihood`.
         Experiments that cannot be located or scaled are skipped with a warning
         rather than aborting the build.
+
+        Two estimand sources: an **in-panel** experiment (the default) sums the
+        channel's contribution over the training rows inside its window, so the
+        window must overlap the fitted data; an **off-panel** experiment (one
+        carrying ``eval_spend`` -- it ran in a window the model was not fit on)
+        instead evaluates the channel's global response curve at the experiment's
+        own spend level via :meth:`_offpanel_contribution_std`, requiring no
+        training rows (valid under structural stationarity).
         """
         from ..calibration.likelihood import (
             ExperimentEstimand,
@@ -1532,47 +1632,83 @@ class BayesianMMM:
                 )
                 continue
 
-            mask = self._experiment_obs_mask(exp)
-            if mask is None:
-                continue
-            mask_idx = np.where(mask)[0]
             handle = channel_handles[exp.channel]
             ch_idx = handle["index"]
 
-            contrib_std = handle["channel_contrib"][mask_idx].sum()
-            contribution = contrib_std * self.y_std
-
-            if exp.spend is not None:
-                spend_window = float(exp.spend)
+            if exp.eval_spend is not None:
+                # OFF-PANEL: the experiment ran in a window the model was not fit
+                # on. Build the estimand from the channel's global response curve
+                # at the experiment's own spend -- no training rows required.
+                if not self.use_parametric_adstock:
+                    warnings.warn(
+                        f"Off-panel experiment on {exp.channel!r} skipped: it "
+                        "requires the parametric (in-graph) adstock path; this "
+                        "model uses the legacy fixed-alpha adstock blend.",
+                        stacklevel=2,
+                    )
+                    continue
+                if exp.estimand is ExperimentEstimand.MROAS:
+                    # Also blocked in ExperimentMeasurement.__post_init__; guard
+                    # defensively in case a measurement was built around it.
+                    warnings.warn(
+                        f"Off-panel mROAS experiment on {exp.channel!r} skipped: "
+                        "off-panel calibration supports CONTRIBUTION and ROAS only.",
+                        stacklevel=2,
+                    )
+                    continue
+                contrib_std = self._offpanel_contribution_std(handle, exp)
+                contribution = contrib_std * self.y_std
+                if exp.estimand is ExperimentEstimand.CONTRIBUTION:
+                    estimand = contribution
+                else:  # ROAS: denominator is the experiment's total window spend.
+                    total_spend = (
+                        float(exp.eval_units or 1)
+                        * int(exp.eval_periods)
+                        * float(exp.eval_spend)
+                    )
+                    estimand = contribution / total_spend
             else:
-                spend_window = float(self.X_media_raw[mask_idx, ch_idx].sum())
+                # IN-PANEL: sum the channel's contribution over the training rows
+                # inside the experiment window (requires the window to overlap).
+                mask = self._experiment_obs_mask(exp)
+                if mask is None:
+                    continue
+                mask_idx = np.where(mask)[0]
 
-            if exp.estimand is ExperimentEstimand.CONTRIBUTION:
-                estimand = contribution
-            elif exp.estimand is ExperimentEstimand.ROAS:
-                if spend_window <= 0:
-                    warnings.warn(
-                        f"ROAS experiment on {exp.channel!r} skipped: window "
-                        "spend is zero (cannot form ROAS denominator).",
-                        stacklevel=2,
+                contrib_std = handle["channel_contrib"][mask_idx].sum()
+                contribution = contrib_std * self.y_std
+
+                if exp.spend is not None:
+                    spend_window = float(exp.spend)
+                else:
+                    spend_window = float(self.X_media_raw[mask_idx, ch_idx].sum())
+
+                if exp.estimand is ExperimentEstimand.CONTRIBUTION:
+                    estimand = contribution
+                elif exp.estimand is ExperimentEstimand.ROAS:
+                    if spend_window <= 0:
+                        warnings.warn(
+                            f"ROAS experiment on {exp.channel!r} skipped: window "
+                            "spend is zero (cannot form ROAS denominator).",
+                            stacklevel=2,
+                        )
+                        continue
+                    estimand = contribution / spend_window
+                else:  # MROAS
+                    if spend_window <= 0:
+                        warnings.warn(
+                            f"mROAS experiment on {exp.channel!r} skipped: window "
+                            "spend is zero (cannot form marginal-spend denominator).",
+                            stacklevel=2,
+                        )
+                        continue
+                    lift = exp.spend_lift_pct / 100.0
+                    contrib_pert_std = self._perturbed_contribution_sum(
+                        handle, mask, mask_idx, lift
                     )
-                    continue
-                estimand = contribution / spend_window
-            else:  # MROAS
-                if spend_window <= 0:
-                    warnings.warn(
-                        f"mROAS experiment on {exp.channel!r} skipped: window "
-                        "spend is zero (cannot form marginal-spend denominator).",
-                        stacklevel=2,
-                    )
-                    continue
-                lift = exp.spend_lift_pct / 100.0
-                contrib_pert_std = self._perturbed_contribution_sum(
-                    handle, mask, mask_idx, lift
-                )
-                delta_contribution = (contrib_pert_std - contrib_std) * self.y_std
-                spend_delta = lift * spend_window
-                estimand = delta_contribution / spend_delta
+                    delta_contribution = (contrib_pert_std - contrib_std) * self.y_std
+                    spend_delta = lift * spend_window
+                    estimand = delta_contribution / spend_delta
 
             # Reserve both the likelihood node name and the companion
             # ``{name}_model_estimand`` Deterministic so two experiments with

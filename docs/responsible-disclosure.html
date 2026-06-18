@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsible Disclosure | MMM Framework</title>
+    <meta name="description" content="How to report a security vulnerability in the MMM Framework: contact channels, scope, what to expect, safe-harbor guidance, and the machine-readable security.txt. This is self-hosted, open-source software — there is no vendor-operated SaaS.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/responsible-disclosure.html">
+    <meta property="og:title" content="Responsible Disclosure | MMM Framework">
+    <meta property="og:description" content="How to report a security vulnerability in the MMM Framework: contact channels, scope, what to expect, safe-harbor guidance, and the machine-readable security.txt.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/responsible-disclosure.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Page-specific overrides for narrower content width */
+        .container { max-width: 960px; }
+        section { padding: 3rem 0; }
+        .hero { min-height: auto; padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        .hero::before { display: none; }
+        table code { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>Responsible Disclosure</h1>
+            <p class="lead">
+                If you have found a security vulnerability in the MMM Framework, this page tells you how to report it, what is in scope, and what to expect in response. The framework is <strong>self-hosted, open-source software</strong> — there is no vendor-operated SaaS to attack, so every finding lands in code you (and we) can read.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>How to Report</h2>
+            <p>
+                Use whichever channel you prefer. Private channels first, please — give us a chance to ship a fix before the details are public.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Channel</th><th>Use it for</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><a href="https://github.com/redam94/mmm-framework/security/advisories/new" target="_blank">GitHub Security Advisory</a></td><td>Preferred. Private, threaded, and lets us collaborate on a fix and coordinate a CVE if warranted.</td></tr>
+                    <tr><td><a href="mailto:m.reda94@gmail.com">m.reda94@gmail.com</a></td><td>Email, if you cannot use GitHub. Encrypt or share a minimal reproduction; we will move to a private advisory.</td></tr>
+                    <tr><td><a href="https://github.com/redam94/mmm-framework/issues" target="_blank">Public GitHub issue</a></td><td>Only for low-severity, already-public, or configuration/hardening questions — never for an exploitable, unfixed vulnerability.</td></tr>
+                </tbody>
+            </table>
+            <p>
+                The machine-readable policy is published at <code><a href="/mmm-framework/.well-known/security.txt">/.well-known/security.txt</a></code> per <a href="https://www.rfc-editor.org/rfc/rfc9116" target="_blank">RFC&nbsp;9116</a>.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>What Helps Us Triage Fast</h2>
+            <ul>
+                <li>The affected file and line, or the endpoint/route — every control in this project traces to a specific source location, so a file reference is the fastest path to a fix.</li>
+                <li>A minimal reproduction or proof-of-concept.</li>
+                <li>The deployment posture you tested under — <strong>single-user development</strong> (the default, no flags) or <strong>hosted multi-user</strong> (<code>MMM_AGENT_HOSTED=1</code>). The two postures have materially different threat models, so this changes severity.</li>
+                <li>Impact: what an attacker gains, and any pre-conditions (auth enabled? which kernel mode?).</li>
+            </ul>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Scope</h2>
+            <p>
+                In scope is the source in this repository: the modeling library, the FastAPI backend, the agent (LLM-calling, code-executing) subsystem, the kernel sandbox, authentication and tenant-isolation code, and the documentation site. Findings are most actionable when framed against the posture they affect.
+            </p>
+            <div class="info-box">
+                <h4>Read the posture first</h4>
+                <p>
+                    Before reporting, please read the <a href="security.html">Security &amp; Deployment Posture</a> page. Several behaviors are <em>documented, intentional properties of the default single-user posture</em> rather than vulnerabilities — for example, the default install has <strong>no login</strong> (<code>MMM_AUTH_ENABLED</code> defaults to off) and the default <code>inprocess</code> kernel runs agent code <strong>in the API process with no sandbox</strong>. These are stated plainly there. The hardened controls (multi-tenant isolation, the container kernel sandbox, denied egress) only engage when the corresponding flags are set, and the hosted profile refuses to start if its sandbox image/runtime is absent. A report that the default posture lacks a control that is documented as off-by-default is a hardening discussion, not a vulnerability.
+                </p>
+            </div>
+            <h3>Especially interesting</h3>
+            <ul>
+                <li><strong>Tenant isolation bypass</strong> when <code>MMM_AUTH_ENABLED=1</code> — cross-org read/write, IDOR, or a route missing its access dependency.</li>
+                <li><strong>Sandbox escape</strong> from the container kernel when <code>MMM_AGENT_KERNEL=container</code> (or under the hosted profile): host secret/credential exfiltration, sibling-session workspace access, or egress where egress should be denied.</li>
+                <li><strong>SSRF</strong> in the website brand-extraction fetch, including bypasses of the public-address check.</li>
+                <li><strong>Authentication weaknesses</strong> in the JWT or password paths.</li>
+                <li><strong>Path traversal / TOCTOU</strong> in file download serving, or capability leakage of content-addressed plot/table IDs.</li>
+            </ul>
+            <h3>Out of scope</h3>
+            <ul>
+                <li>Findings that require the operator to have explicitly disabled a documented safeguard (e.g. <code>MMM_KERNEL_SCRUB_ENV=0</code>, <code>MMM_KERNEL_EGRESS=open</code>).</li>
+                <li>The default single-user posture's documented lack of auth/sandbox (see the posture note above).</li>
+                <li>Vulnerabilities in third-party dependencies — please report those upstream; tell us so we can pin/patch.</li>
+                <li>Volumetric DoS against a self-hosted instance you control.</li>
+            </ul>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>What to Expect</h2>
+            <ul>
+                <li><strong>Acknowledgement</strong> as soon as we see the report (this is a small open-source project, so please allow a few days).</li>
+                <li><strong>Triage</strong> against the relevant posture and confirmation of whether we can reproduce.</li>
+                <li><strong>A fix or mitigation</strong> in the source, with the change referenced back to the report.</li>
+                <li><strong>Coordinated disclosure</strong> — we will agree a timeline with you and credit you in the advisory and changelog if you wish.</li>
+            </ul>
+            <div class="success-box">
+                <h4>Good-faith safe harbor</h4>
+                <p>
+                    We will not pursue action against researchers who act in good faith: test only against your own instance, avoid privacy violations and data destruction, do not exfiltrate more data than needed to prove a finding, and give us a reasonable window before public disclosure. There is no paid bug-bounty program — this is volunteer-maintained open-source software — but credit is given gladly.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Report Responsibly</h2>
+            <p>Every control on the security page traces to a file you can read. Found a gap? Tell us privately first.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/redam94/mmm-framework/security/advisories/new" class="btn btn-white" target="_blank">Open a Security Advisory</a>
+                <a href="security.html" class="btn btn-outline-white">Security &amp; Deployment Posture</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+</body>
+</html>
