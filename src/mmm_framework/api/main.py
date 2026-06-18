@@ -1331,6 +1331,44 @@ async def onboarding_status_endpoint(project_id: str):
     return JSONResponse(content=status)
 
 
+@app.get("/projects/{project_id}/data-quality", dependencies=[_proj_read])
+async def data_quality_endpoint(project_id: str):
+    """Latest pre-fit data-quality summary for a project (from the agent's EDA),
+    surfaced inline at the onboarding 'add data' step. Reads the most-recently
+    updated session that has an EDA envelope; returns {found: false} otherwise."""
+    from mmm_framework.api.onboarding import summarize_eda_issues
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    sessions = sorted(
+        sessions_store.list_sessions(project_id=project_id),
+        key=lambda s: s.get("updated_at", 0),
+        reverse=True,
+    )
+    g = _admin_graph()
+    for s in sessions:
+        try:
+            snap = await g.aget_state({"configurable": {"thread_id": s["thread_id"]}})
+            dd = (
+                (snap.values.get("dashboard_data") or {})
+                if snap and snap.values
+                else {}
+            )
+            eda = dd.get("eda") or {}
+            if eda:
+                return JSONResponse(
+                    content={
+                        "found": True,
+                        "thread_id": s["thread_id"],
+                        "updated_at": eda.get("updated_at"),
+                        **summarize_eda_issues(eda.get("issues") or []),
+                    }
+                )
+        except Exception:
+            continue
+    return JSONResponse(content={"found": False})
+
+
 @app.patch("/projects/{project_id}", dependencies=[_proj_write])
 async def update_project_endpoint(project_id: str, body: ProjectUpdateRequest):
     if not sessions_store.update_project(project_id, body.name, body.description):

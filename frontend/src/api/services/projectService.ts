@@ -87,6 +87,25 @@ export interface OnboardingStatus {
   counts: { data_files: number; model_runs: number; experiments: number };
 }
 
+export interface DataQualityIssue {
+  severity: string;
+  check: string;
+  variable: string | null;
+  message: string;
+}
+
+/** Pre-fit data-quality summary from the agent's EDA (inline at "add data"). */
+export interface DataQuality {
+  found: boolean;
+  thread_id?: string;
+  updated_at?: number;
+  n_errors?: number;
+  n_warnings?: number;
+  n_info?: number;
+  fit_ready?: boolean;
+  top_issues?: DataQualityIssue[];
+}
+
 export const projectService = {
   async listProjects(): Promise<ProjectListResponse> {
     const { data } = await apiClient.get<ProjectListResponse>('/projects');
@@ -126,6 +145,13 @@ export const projectService = {
   async getOnboardingStatus(projectId: string): Promise<OnboardingStatus> {
     const { data } = await apiClient.get<OnboardingStatus>(
       `/projects/${projectId}/onboarding-status`,
+    );
+    return data;
+  },
+
+  async getDataQuality(projectId: string): Promise<DataQuality> {
+    const { data } = await apiClient.get<DataQuality>(
+      `/projects/${projectId}/data-quality`,
     );
     return data;
   },

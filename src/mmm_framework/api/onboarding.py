@@ -17,6 +17,31 @@ def _step(key: str, title: str, done: bool, hint: str) -> dict[str, Any]:
     return {"key": key, "title": title, "done": bool(done), "hint": hint}
 
 
+def summarize_eda_issues(issues: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compact data-quality summary from the agent's ``dashboard_data['eda']``
+    issues (each ``{severity, check, variable, message}``). ``fit_ready`` is true
+    when there are no blocking errors. Surfaced inline at the onboarding "add
+    data" step so a new user fixes problems before fitting."""
+    errs = [i for i in issues if i.get("severity") == "error"]
+    warns = [i for i in issues if i.get("severity") == "warning"]
+    infos = [i for i in issues if i.get("severity") == "info"]
+    return {
+        "n_errors": len(errs),
+        "n_warnings": len(warns),
+        "n_info": len(infos),
+        "fit_ready": len(errs) == 0,
+        "top_issues": [
+            {
+                "severity": i.get("severity"),
+                "check": i.get("check"),
+                "variable": i.get("variable") or None,
+                "message": i.get("message"),
+            }
+            for i in (errs + warns)[:5]
+        ],
+    }
+
+
 def project_onboarding_status(project_id: str) -> dict[str, Any] | None:
     """The onboarding checklist + next action for ``project_id`` (None if absent)."""
     proj = store.get_project(project_id)

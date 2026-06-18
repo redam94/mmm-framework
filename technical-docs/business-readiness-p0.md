@@ -226,7 +226,7 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       template, not fabricated numbers). Workflow-verified `sound` (no overclaims,
       capabilities real, evidence honestly labeled, 6.0× not 7.9×).
 - [ ] A signed design partner (sales motion) → a named ROI story.
-### Self-serve onboarding  `[~]`
+### Self-serve onboarding  `[x]`
 - [x] **Onboarding-readiness API** — `api/onboarding.py` `project_onboarding_status`
       + `GET /projects/{id}/onboarding-status` (gated `_proj_read`): a 6-step
       path-to-first-model checklist computed from real state (create → brief
@@ -238,8 +238,12 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       the steps (check/circle), a progress bar, the next step's hint, and a
       "Continue in the workspace" CTA; auto-hides once `complete`. `tsc` + `vite
       build` clean.
-- [ ] Inline EDA validation feedback in the flow (data-quality warnings surfaced
-      at the "add data" step).
+- [x] **Inline EDA validation** — `GET /projects/{id}/data-quality` reads the
+      project's latest session EDA envelope (`dashboard_data['eda']`) →
+      `summarize_eda_issues` (n_errors/warnings, `fit_ready`, top issues); the
+      `OnboardingChecklist` renders a green/amber/red verdict banner once data is
+      added ("ready to fit" / "N warnings" / "N issues block fitting"). Tests:
+      `summarize_eda_issues`; `tsc` + `vite build` clean.
 
 ---
 

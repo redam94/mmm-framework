@@ -73,3 +73,36 @@ def test_report_path_on_model_run_counts_as_reviewed(db):
 
 def test_unknown_project_is_none(db):
     assert project_onboarding_status("ghost") is None
+
+
+def test_summarize_eda_issues():
+    from mmm_framework.api.onboarding import summarize_eda_issues
+
+    assert summarize_eda_issues([]) == {
+        "n_errors": 0,
+        "n_warnings": 0,
+        "n_info": 0,
+        "fit_ready": True,
+        "top_issues": [],
+    }
+    issues = [
+        {
+            "severity": "warning",
+            "check": "date_gaps",
+            "variable": "Sales",
+            "message": "gaps",
+        },
+        {
+            "severity": "error",
+            "check": "negative_spend",
+            "variable": "TV",
+            "message": "neg",
+        },
+        {"severity": "info", "check": "x", "variable": "", "message": "fyi"},
+    ]
+    s = summarize_eda_issues(issues)
+    assert s["n_errors"] == 1 and s["n_warnings"] == 1 and s["n_info"] == 1
+    assert s["fit_ready"] is False  # an error blocks
+    # errors sort ahead of warnings in top_issues
+    assert s["top_issues"][0]["severity"] == "error"
+    assert s["top_issues"][1]["variable"] == "Sales"

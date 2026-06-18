@@ -39,6 +39,15 @@ export function useOnboardingStatus(projectId: string | undefined) {
   });
 }
 
+export function useDataQuality(projectId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...projectKeys.detail(projectId ?? ''), 'data-quality'],
+    queryFn: () => projectService.getDataQuality(projectId!),
+    enabled: !!projectId && enabled,
+    staleTime: 15000,
+  });
+}
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
