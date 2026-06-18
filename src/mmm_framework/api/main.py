@@ -1320,6 +1320,17 @@ async def get_project_endpoint(project_id: str):
     return JSONResponse(content=proj)
 
 
+@app.get("/projects/{project_id}/onboarding-status", dependencies=[_proj_read])
+async def onboarding_status_endpoint(project_id: str):
+    """Self-serve onboarding checklist + next action for a project."""
+    from mmm_framework.api.onboarding import project_onboarding_status
+
+    status = project_onboarding_status(project_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(content=status)
+
+
 @app.patch("/projects/{project_id}", dependencies=[_proj_write])
 async def update_project_endpoint(project_id: str, body: ProjectUpdateRequest):
     if not sessions_store.update_project(project_id, body.name, body.description):

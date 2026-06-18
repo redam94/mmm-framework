@@ -226,9 +226,15 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       template, not fabricated numbers). Workflow-verified `sound` (no overclaims,
       capabilities real, evidence honestly labeled, 6.0× not 7.9×).
 - [ ] A signed design partner (sales motion) → a named ROI story.
-### Self-serve onboarding  `[ ]`
-- [ ] Guided "first model in 30 min" + validation feedback (EDA + project
-      onboarding seeds exist). Not started.
+### Self-serve onboarding  `[~]`
+- [x] **Onboarding-readiness API** — `api/onboarding.py` `project_onboarding_status`
+      + `GET /projects/{id}/onboarding-status` (gated `_proj_read`): a 6-step
+      path-to-first-model checklist computed from real state (create → brief
+      (`meta.onboarded`) → data (`data_files`) → fit (`model_run` artifact) →
+      review (`report` artifact / `report_path`) → experiment (registry)), with
+      `next_step`, `percent`, and per-step hints. Tests: `tests/test_onboarding_status.py` (3).
+- [ ] Front-end guided flow that renders the checklist + inline EDA validation
+      feedback ("first model in 30 min").
 
 ---
 
