@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from . import service, store
 from .config import AuthSettings, get_auth_settings
-from .deps import get_current_principal, require_org_role
+from .deps import get_current_principal, require_org_role, require_plan_feature
 from .ratelimit import require_ip_rate_limit
 from .models import (
     AcceptInviteRequest,
@@ -112,6 +112,22 @@ def create_auth_router() -> APIRouter:
         from .plans import org_usage
 
         return org_usage(principal.org_id)
+
+    @router.get(
+        "/audit-export",
+        dependencies=[Depends(require_plan_feature("audit_export"))],
+    )
+    async def audit_export(
+        principal: AuthContext = Depends(get_current_principal),
+        since: float | None = None,
+        limit: int = 1000,
+    ) -> dict:
+        # Org-scoped audit log (Business+ feature). Records carry a verifiable
+        # hash chain; this returns the caller's org's events newest-last.
+        from .audit import read_audit_events
+
+        events = read_audit_events(principal.org_id, since=since, limit=limit)
+        return {"org_id": principal.org_id, "count": len(events), "events": events}
 
     @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
     async def logout(

@@ -207,6 +207,31 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
 
 ---
 
+## P1 — Make it stick  `[~]` (started 2026-06-18)
+### Reliability & observability  `[~]`
+- [x] **Structured, queryable audit emission** — `auth/audit.py` now emits via
+      `extra={audit_event, audit_fields}` so the hash-chain sink (`agents/audit_sink.py`,
+      new `current_log_path()`) stores `org_id`/`user_id` as a top-level `fields`
+      object (was buried in the message string).
+- [x] **Per-org audit export** — `GET /auth/audit-export`, gated by
+      `require_plan_feature("audit_export")` (Business+ → 200, Free → 402);
+      `read_audit_events(org_id, since, limit)` filters the hash-chained JSONL;
+      chain stays `verify()`-able. Closes the SOC 2 "no audit export" gap AND
+      monetizes the Business tier. Tests: `tests/test_auth_audit.py` (4).
+- [ ] Off-host audit shipper; customer-facing fit SLAs/retries surfacing.
+### Reference customer + ROI case  `[~]`
+- [x] `technical-docs/design-partner-program.md` — founder-sendable program offer
+      (ideal-partner profile, 8–12wk T₀–T₅ timeline, honest risk framing) +
+      `technical-docs/roi-case-study-template.md` (123 `[PLACEHOLDER]`s — a real
+      template, not fabricated numbers). Workflow-verified `sound` (no overclaims,
+      capabilities real, evidence honestly labeled, 6.0× not 7.9×).
+- [ ] A signed design partner (sales motion) → a named ROI story.
+### Self-serve onboarding  `[ ]`
+- [ ] Guided "first model in 30 min" + validation feedback (EDA + project
+      onboarding seeds exist). Not started.
+
+---
+
 ## How to enable (once 1.2/1.3 land)
 
 ```bash

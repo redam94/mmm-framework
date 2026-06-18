@@ -106,6 +106,14 @@ class HashChainAuditHandler(logging.Handler):
             self.handleError(record)
 
 
+def current_log_path() -> str | None:
+    """Path of the installed hash-chain audit handler, if any (else None)."""
+    for h in logging.getLogger("mmm_audit").handlers:
+        if isinstance(h, HashChainAuditHandler):
+            return h._path
+    return None
+
+
 def install_audit_sink(path: str | None = None) -> HashChainAuditHandler | None:
     """Attach the hash-chain handler to the ``mmm_audit`` logger. ``path`` defaults
     to ``$MMM_AUDIT_LOG`` or ``<workspace>/audit/audit.jsonl``. Idempotent."""
