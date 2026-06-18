@@ -259,7 +259,7 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
 ---
 
 ## P2 — Accelerate growth  `[~]` (started 2026-06-18)
-### "Model-defense" report  `[~]`
+### "Model-defense" report  `[x]`
 - [x] **Generator** — `reporting/model_defense.py`: `build_model_defense`
       (pure: refutation + sampler convergence + calibration count → a verdict
       ladder Robust/Qualified/Needs-scrutiny [non-convergence dominates], per-test
@@ -267,8 +267,14 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       (self-contained, brandable via `apply_branding_html`) + `model_defense_report`
       one-call convenience. Exported from `mmm_framework.reporting`. Tests:
       `tests/test_model_defense.py` (9, incl. HTML well-formedness).
-- [ ] One-click agent tool / endpoint: run the refutation suite on a fitted model
-      → emit the defense report (needs the heavy model-op + ModelValidator wiring).
+- [x] **One-click agent tool** — `generate_model_defense_report` (agents/tools.py,
+      registered in TOOLS): runs the refutation suite (`ModelValidator.validate`
+      with `run_causal_refutation=True`), reads convergence, counts calibrated
+      experiments from the spec, applies confirmed branding, writes
+      `agent_model_defense.html`, and returns the verdict + sets
+      `dashboard_data['model_defense']`. Served at `GET /model-defense`
+      (`_rep_read`-gated). Tests: `tests/test_model_defense_tool.py` (registered +
+      no-model guard). **Model-defense is now end-to-end.**
 ### Portfolio benchmarking & governance  `[ ]`
 - [ ] Cross-brand benchmarking + governance over `run_metrics` (land-and-expand
       surface for agencies/holding-cos).

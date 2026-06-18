@@ -3754,6 +3754,16 @@ async def view_client_report(thread_id: str | None = None):
     )
 
 
+@app.get("/model-defense", dependencies=[_rep_read])
+async def view_model_defense(thread_id: str | None = None):
+    """Serve the model-defense (causal-rigor) report."""
+    return _serve_report(
+        "agent_model_defense.html",
+        thread_id=thread_id,
+        missing="No model-defense report yet. Ask the agent to generate_model_defense_report.",
+    )
+
+
 @app.get("/client-report/download", dependencies=[_rep_read])
 async def download_client_report(thread_id: str | None = None):
     return _serve_report(

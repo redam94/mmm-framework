@@ -2436,6 +2436,99 @@ def generate_client_report(
 
 
 @tool
+def generate_model_defense_report(
+    state: Annotated[dict, InjectedState],
+    report_title: Optional[str] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Generate a one-click "model defense" report — the causal-rigor evidence
+    behind the fitted model, as a CFO-readable "why you can trust this number"
+    HTML artifact.
+
+    Runs the causal refutation suite (placebo / negative-control / random-common-
+    cause / data-subset), reads sampler convergence, counts any calibrated
+    experiments, and renders a verdict (Robust / Qualified / Needs scrutiny) with
+    plain-English per-test explanations and honest caveats. Uses confirmed client
+    branding automatically. Call after `fit_mmm_model`.
+
+    EXPENSIVE: the refutation suite REFITS the model once per test.
+    """
+    from dataclasses import replace
+
+    _activate_thread(config)
+    mmm = _MODEL_CACHE.get("fitted_model")
+    results = _MODEL_CACHE.get("fit_results")
+    if mmm is None:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No fitted model found. Please fit a model first.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    try:
+        from mmm_framework.agents.branding import is_active as _brand_active
+        from mmm_framework.agents.branding import resolve_branding
+        from mmm_framework.reporting import build_model_defense, model_defense_report
+        from mmm_framework.validation.config import ValidationConfig
+        from mmm_framework.validation.validator import ModelValidator
+
+        cfg = replace(ValidationConfig.standard(), run_causal_refutation=True)
+        summary = ModelValidator(mmm, results).validate(cfg)
+        refutation = summary.causal_refutation  # may be None if it couldn't run
+        convergence = summary.convergence
+        n_cal = len(
+            (_normalized_spec(state.get("model_spec")) or {}).get("experiments", [])
+            or []
+        )
+        branding = resolve_branding(get_current_thread())
+        payload = build_model_defense(
+            refutation, convergence=convergence, n_calibrated_experiments=n_cal
+        )
+        html = model_defense_report(
+            refutation,
+            convergence=convergence,
+            n_calibrated_experiments=n_cal,
+            title=report_title or "Model Defense",
+            brand=branding if _brand_active(branding) else None,
+        )
+        report_path = str(_ws.report_path("agent_model_defense.html"))
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Failed to generate model-defense report: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    msg = (
+        f"Model-defense report generated at `{report_path}`. "
+        f"Verdict: {payload['verdict']} "
+        f"({payload['n_passed']}/{payload['n_tests']} refutation tests passed)."
+    )
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["model_defense_path"] = report_path
+    dashboard_data["model_defense"] = payload
+    return Command(
+        update={
+            "messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
 def generate_client_slides(
     state: Annotated[dict, InjectedState],
     client_name: str,
@@ -4780,6 +4873,7 @@ TOOLS = [
     # Reporting
     generate_project_report,
     generate_client_report,
+    generate_model_defense_report,
     generate_client_slides,
 ]
 
