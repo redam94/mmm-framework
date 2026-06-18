@@ -23,7 +23,9 @@ def app_ctx(tmp_path, monkeypatch):
     monkeypatch.setattr(
         ratelimit,
         "get_ratelimit_settings",
-        lambda: RateLimitSettings(enabled=True, chat_per_window=3, window_seconds=60),
+        lambda: RateLimitSettings(
+            enabled=True, chat_per_window=3, auth_per_window=5, window_seconds=60
+        ),
     )
 
     app = FastAPI()
@@ -82,3 +84,25 @@ def test_dev_principal_not_limited(app_ctx, monkeypatch):
     )
     for _ in range(10):
         assert app_ctx.get("/chatish").status_code == 200
+
+
+def test_login_brute_force_ip_throttle(app_ctx):
+    """The UNAUTHENTICATED /auth/login is IP-throttled (brute-force guard).
+
+    All TestClient requests share one client IP, so they share one auth:ip
+    bucket (auth_per_window=5). The IP limiter is a route dependency, so it fires
+    BEFORE credentials are even checked — wrong-password attempts count too.
+    """
+    codes = [
+        app_ctx.post(
+            "/auth/login", json={"email": "ghost@x.com", "password": "nope"}
+        ).status_code
+        for _ in range(8)
+    ]
+    assert codes[:5] == [401, 401, 401, 401, 401]  # first 5 reach the handler
+    assert 429 in codes[5:]  # then the IP throttle trips
+    last = app_ctx.post(
+        "/auth/login", json={"email": "ghost@x.com", "password": "nope"}
+    )
+    assert last.status_code == 429
+    assert "Retry-After" in last.headers

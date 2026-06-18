@@ -161,7 +161,7 @@
   <p>The MMM Framework is built around the one thing those tools quietly skip: <strong>causal rigor you can audit</strong>. Pre-registered analyses, experiments folded directly into the model's posterior, a fit-based refutation suite, and a structural-identification tool that proves an experiment will actually sharpen the answer before you spend a dollar on it. Wrapped around that engine is an <strong>adaptive measurement loop</strong> (fit → prioritize → experiment → recalibrate → reallocate → re-test) and a <strong>conversational analyst agent</strong> that operates the whole workflow — collapsing the "you need a Bayesian statistician on staff" barrier that keeps rigorous MMM out of the mid-market.</p>
   <div class="box tldr">
     <h4>Readiness in one line</h4>
-    <p style="margin-bottom:0">The hardest, riskiest part of becoming a multi-tenant SaaS — <strong>real authentication, tenant isolation, and a buyer-facing security posture</strong> — is <span class="chip shipped">Shipped</span>. What remains is commercial packaging (pricing, metering), a small security-hardening tail, and the go-to-market proof a first design partner provides. In other words: the science and the security are de-risked; the work ahead is business, not research.</p>
+    <p style="margin-bottom:0">The hardest, riskiest part of becoming a multi-tenant SaaS — <strong>real authentication, tenant isolation, and a buyer-facing security posture</strong> — is <span class="chip shipped">Shipped</span>. What remains is commercial packaging (pricing, metering) and the go-to-market proof a first design partner provides. In other words: the science and the security are de-risked; the work ahead is business, not research.</p>
   </div>
 </section>
 
@@ -293,7 +293,7 @@
       <tr><td rowspan="4"><b>P0</b><br><span class="small muted">table stakes</span></td>
         <td>Auth, multi-tenancy &amp; RBAC</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>Security &amp; trust collateral</td><td><span class="chip shipped">Shipped</span></td></tr>
-      <tr><td>Security-hardening tail (rate limits, token kill, ship sandbox image)</td><td><span class="chip progress">In progress</span></td></tr>
+      <tr><td>Security-hardening tail (rate limits, token kill, ship sandbox image)</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>Pricing &amp; packaging</td><td><span class="chip planned">Planned</span></td></tr>
       <tr><td rowspan="3"><b>P1</b><br><span class="small muted">make it stick</span></td>
         <td>Self-serve onboarding &amp; data validation</td><td><span class="chip partial">Partial</span></td></tr>
@@ -322,11 +322,12 @@
   <h3>P0.2 · Security &amp; trust collateral <span class="chip shipped">Shipped</span></h3>
   <p>Procurement is de-risked before the first call: a buyer-facing <a href="trust.html">Trust &amp; Security page</a>, a SOC 2 <em>readiness</em> map, a SIG-lite security questionnaire, a data-processing &amp; sub-processors summary, and an RFC 9116 <code>security.txt</code> + responsible-disclosure page. <strong>Every control cites source, and an adversarial verification pass caught and corrected a real overclaim</strong> — the credibility posture a security reviewer rewards.</p>
 
-  <h3>P0.3 · Security-hardening tail <span class="chip progress">In progress</span></h3>
+  <h3>P0.3 · Security-hardening tail <span class="chip shipped">Shipped</span></h3>
   <ul class="tight">
-    <li>Per-org rate limits &amp; quotas (the agent backend has no limiter yet).</li>
-    <li>Instant access-token kill on deactivate (refresh is revoked immediately today; access tokens expire by their ≤1 h TTL — a <code>token_version</code> claim closes the gap).</li>
-    <li>Build &amp; ship the kernel sandbox image so hosted multi-tenant code execution is live (a deploy step; the fail-closed posture is already coded).</li>
+    <li><b>Instant access-token kill:</b> a <code>token_version</code> claim checked per request — deactivation, password reset, and "sign out everywhere" reject every <em>live</em> access and refresh token immediately, not just on next refresh.</li>
+    <li><b>Rate limiting:</b> a per-org limiter on the expensive routes (chat, model fits, KB ingest) <em>and</em> an IP-based brute-force throttle on the unauthenticated login/signup/refresh endpoints. Off by default; verified by tests.</li>
+    <li><b>Sandbox image shippable:</b> one-command build/verify/push (<code>make kernel-image</code>) + a runbook tying it to <code>MMM_AGENT_HOSTED=1</code>; the Containerfile and k8s manifests (gVisor, egress-deny) already existed. Build/push is a deploy-env step.</li>
+    <li class="muted">Hardened against an adversarial review that found (and we fixed) the brute-force gap and missed expensive routes.</li>
   </ul>
 
   <h3>P0.4 · Pricing &amp; packaging <span class="chip planned">Planned</span></h3>

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from . import service, store
 from .config import AuthSettings, get_auth_settings
 from .deps import get_current_principal, require_org_role
+from .ratelimit import require_ip_rate_limit
 from .models import (
     AcceptInviteRequest,
     AuthContext,
@@ -33,7 +34,11 @@ from .models import (
 def create_auth_router() -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["Auth"])
 
-    @router.post("/signup", response_model=TokenResponse)
+    # IP-based throttle for the UNAUTHENTICATED routes (brute-force /
+    # credential-stuffing / token-grinding guard the per-org limiter can't cover).
+    _ip_auth = Depends(require_ip_rate_limit("auth"))
+
+    @router.post("/signup", response_model=TokenResponse, dependencies=[_ip_auth])
     async def signup(
         body: SignupRequest,
         settings: AuthSettings = Depends(get_auth_settings),
@@ -53,7 +58,7 @@ def create_auth_router() -> APIRouter:
             )
         return tokens
 
-    @router.post("/login", response_model=TokenResponse)
+    @router.post("/login", response_model=TokenResponse, dependencies=[_ip_auth])
     async def login(
         body: LoginRequest,
         settings: AuthSettings = Depends(get_auth_settings),
@@ -76,7 +81,7 @@ def create_auth_router() -> APIRouter:
             settings=settings,
         )
 
-    @router.post("/refresh", response_model=TokenResponse)
+    @router.post("/refresh", response_model=TokenResponse, dependencies=[_ip_auth])
     async def refresh(
         body: RefreshRequest,
         settings: AuthSettings = Depends(get_auth_settings),
@@ -153,7 +158,11 @@ def create_auth_router() -> APIRouter:
             )
         return tokens
 
-    @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+    @router.post(
+        "/password-reset/request",
+        status_code=status.HTTP_202_ACCEPTED,
+        dependencies=[_ip_auth],
+    )
     async def password_reset_request(
         body: PasswordResetRequest,
         settings: AuthSettings = Depends(get_auth_settings),

@@ -130,13 +130,22 @@ are still unscoped — that sweep is 1.3.
       token for that user is rejected on next use, immediately. Legacy tokens
       (no `tv`) read as 0 and keep working until a bump. Tests:
       `test_auth_lifecycle.py::test_token_version_instant_kill` + `_deactivate_instant_access_kill`.
-- [x] **Per-org rate limits** — `auth/ratelimit.py` in-memory fixed-window
-      limiter keyed by `org_id` (off until `MMM_RATELIMIT_ENABLED=1`; dev
-      principal never limited; `Retry-After` on 429). Mounted: `_rl_chat` on
-      `/chat`, `_rl_heavy` on the 3 experiment-design job routes. Tests:
-      `tests/test_auth_ratelimit.py` (per-org isolation, 429, disabled/dev bypass).
-      *Single-process scope — Redis-back for multi-worker (documented).* Billing
-      quotas (fits/month) deferred to Track 3 metering.
+- [x] **Rate limits** — `auth/ratelimit.py` in-memory fixed-window (off until
+      `MMM_RATELIMIT_ENABLED=1`; `Retry-After` via `math.ceil`; periodic bucket
+      sweep so it can't grow unbounded). Two layers: **per-org** (`_rl_chat` on
+      `/chat`; `_rl_heavy` on the 3 design jobs + `/kb` ingest + `/load-model` +
+      `/upload` + `branding/extract`; dev principal never limited) **and
+      per-IP** (`require_ip_rate_limit` on the unauthenticated `/auth/signup`
+      `/login` `/refresh` `/password-reset/request` — the brute-force surface the
+      per-org limiter structurally can't cover). Tests: `tests/test_auth_ratelimit.py`
+      (per-org isolation, 429, dev/disabled bypass, IP brute-force throttle).
+      *Single-process scope — Redis-back for multi-worker (documented); `X-Forwarded-For`
+      honored only via `MMM_RATELIMIT_TRUST_FORWARDED`.* Billing quotas → Track 3.
+- [x] **Adversarial review pass** (3-lens workflow) — token-version logic verdict
+      *sound*; it caught + we fixed the **HIGH** gaps (unauthenticated auth routes
+      had no throttle; `/kb`+`/load-model` missed the heavy limit) plus the
+      `Retry-After: 0` boundary bug, the unbounded bucket dict, and the blocking
+      per-request DB read (now `asyncio.to_thread`-offloaded in `deps.py`).
 - [x] **Ship the kernel sandbox image** — `make kernel-lock|image|verify|push`
       targets + `deploy/kernel/README.md` runbook (build → verify under real
       sandbox flags → push → `MMM_AGENT_HOSTED=1` + `MMM_KERNEL_IMAGE`). The

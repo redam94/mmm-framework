@@ -1613,7 +1613,10 @@ class BrandingExtractRequest(BaseModel):
     save: bool = True
 
 
-@app.post("/projects/{project_id}/branding/extract", dependencies=[_proj_write])
+@app.post(
+    "/projects/{project_id}/branding/extract",
+    dependencies=[_proj_write, _rl_heavy],
+)
 async def extract_branding_endpoint(project_id: str, body: BrandingExtractRequest):
     """Extract a branding proposal from a client website (SSRF-guarded,
     server-side). Saved with confirmed=false — the UI/user must confirm
@@ -1799,7 +1802,7 @@ class LoadModelRequest(BaseModel):
     name: str
 
 
-@app.post("/sessions/{thread_id}/load-model", dependencies=[_sess_write])
+@app.post("/sessions/{thread_id}/load-model", dependencies=[_sess_write, _rl_heavy])
 async def load_model_endpoint(thread_id: str, body: LoadModelRequest):
     """Load a saved fitted model into the session directly. UI buttons call
     this instead of asking the agent to run the load_fitted_model tool."""
@@ -2911,7 +2914,7 @@ async def download_artifact_endpoint(
 # ── Knowledge base (req 2/3 — project-level RAG) ─────────────────────────────
 
 
-@app.post("/projects/{project_id}/kb", dependencies=[_proj_write])
+@app.post("/projects/{project_id}/kb", dependencies=[_proj_write, _rl_heavy])
 async def kb_upload_endpoint(
     project_id: str,
     file: UploadFile = File(...),
@@ -3378,7 +3381,7 @@ async def dataset_preview(
 # ── Misc ──────────────────────────────────────────────────────────────────────
 
 
-@app.post("/upload", dependencies=[_sess_write])
+@app.post("/upload", dependencies=[_sess_write, _rl_heavy])
 async def upload_file(file: UploadFile = File(...), thread_id: str | None = None):
     """Upload a file scoped to a session. Files land in the session WORKSPACE
     directory (so execute_python and the Files tab share one location), are

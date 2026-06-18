@@ -19,6 +19,7 @@ single-tenant dev principal so existing flows keep working without a token.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Callable
 
 from fastapi import Depends, Header, HTTPException, status
@@ -87,8 +88,15 @@ async def get_current_principal(
         )
     # Instant revocation: reject any token minted before the user's current
     # token version (bumped on deactivate / password reset / sign-out-everywhere).
+    # The version read is a blocking sqlite call on the request hot path, so it's
+    # offloaded to a worker thread to avoid stalling the event loop.
     sub = claims.get("sub")
-    if sub is None or int(claims.get("tv", 0)) != store.get_token_version(sub):
+    current_tv = (
+        await asyncio.to_thread(store.get_token_version, sub)
+        if sub is not None
+        else None
+    )
+    if sub is None or int(claims.get("tv", 0)) != current_tv:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token superseded",
