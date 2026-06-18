@@ -149,6 +149,21 @@ def _fold_dashboard_update(combined: dict, dd: dict, live_spec: dict) -> dict:
 DB_PATH = Path(__file__).parent / "sessions.db"
 memory: AsyncSqliteSaver | None = None
 _aiosqlite_conn: aiosqlite.Connection | None = None
+_ship_task: "asyncio.Task | None" = None
+
+
+async def _audit_ship_loop(interval: float) -> None:
+    """Periodically forward new audit records off-host (when configured)."""
+    from mmm_framework.agents import audit_shipper
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await asyncio.to_thread(audit_shipper.flush_audit_to_remote)
+        except asyncio.CancelledError:
+            break
+        except Exception:  # pragma: no cover - never let the loop die
+            logger.exception("audit off-host ship failed")
 
 
 @asynccontextmanager
@@ -190,7 +205,22 @@ async def lifespan(app: FastAPI):
         initialize_auth()
     except Exception:
         logger.exception("auth initialization failed (continuing unauthenticated)")
+    # Off-host audit shipper: a background tick that forwards new hash-chained
+    # audit records to MMM_AUDIT_SHIP_URL so the local log isn't the only copy.
+    # Inert unless that env var is set.
+    global _ship_task
+    try:
+        from mmm_framework.agents import audit_shipper
+
+        if audit_shipper.ship_url():
+            interval = float(os.environ.get("MMM_AUDIT_SHIP_INTERVAL", "60"))
+            _ship_task = asyncio.create_task(_audit_ship_loop(interval))
+            logger.info("audit off-host shipper enabled (every %ss)", interval)
+    except Exception:
+        logger.exception("audit shipper start failed")
     yield
+    if _ship_task is not None:
+        _ship_task.cancel()
     try:  # reap any per-session subprocess kernels on graceful shutdown
         from mmm_framework.agents.tools import _KERNELS
 
@@ -3495,6 +3525,15 @@ async def upload_file(file: UploadFile = File(...), thread_id: str | None = None
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/observability")
+async def observability_endpoint():
+    """Reliability signals for operators: audit-chain integrity, off-host ship
+    backlog, and recent fit activity. No tenant data."""
+    from mmm_framework.api.observability import system_health
+
+    return JSONResponse(content=system_health())
 
 
 @app.get("/metrics")

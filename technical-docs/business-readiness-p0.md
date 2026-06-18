@@ -208,7 +208,7 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
 ---
 
 ## P1 — Make it stick  `[~]` (started 2026-06-18)
-### Reliability & observability  `[~]`
+### Reliability & observability  `[x]`
 - [x] **Structured, queryable audit emission** — `auth/audit.py` now emits via
       `extra={audit_event, audit_fields}` so the hash-chain sink (`agents/audit_sink.py`,
       new `current_log_path()`) stores `org_id`/`user_id` as a top-level `fields`
@@ -218,7 +218,18 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       `read_audit_events(org_id, since, limit)` filters the hash-chained JSONL;
       chain stays `verify()`-able. Closes the SOC 2 "no audit export" gap AND
       monetizes the Business tier. Tests: `tests/test_auth_audit.py` (4).
-- [ ] Off-host audit shipper; customer-facing fit SLAs/retries surfacing.
+- [x] **Off-host audit shipper** — `agents/audit_shipper.py`: `ship_pending`
+      (cursor-based, exactly-once / at-least-once on retry), `http_sink` (stdlib
+      POST), `flush_audit_to_remote()`; a background tick in the agent-app
+      lifespan flushes new records to `MMM_AUDIT_SHIP_URL` (off by default) so the
+      tamper-evident log isn't the only copy. Tests: `tests/test_audit_shipper.py`.
+- [x] **Observability endpoint** — `GET /observability` (`api/observability.py`
+      `system_health`): audit-chain integrity (`verify`), event counts, off-host
+      ship backlog, and recent fit activity (`run_metrics_activity`: total / last
+      24 h / last-fit time). Operator health, no tenant data.
+- [ ] Follow-on (UI, not P0/P1-blocking): a customer-facing fit-SLA dashboard
+      (the experiment-design jobs are already pollable; in-kernel fits run in
+      `/chat`, not as ARQ jobs).
 ### Reference customer + ROI case  `[~]`
 - [x] `technical-docs/design-partner-program.md` — founder-sendable program offer
       (ideal-partner profile, 8–12wk T₀–T₅ timeline, honest risk framing) +

@@ -1345,6 +1345,24 @@ def get_run_metrics(run_id: str) -> dict[str, Any] | None:
     return _run_metrics_row_to_dict(row) if row else None
 
 
+def run_metrics_activity(since_ts: float) -> dict[str, Any]:
+    """Deployment-wide fit activity: total fits, fits since ``since_ts``, and the
+    most recent fit time — a lightweight reliability/SLA signal."""
+    with _conn() as c:
+        try:
+            total = c.execute("SELECT COUNT(*) AS n FROM run_metrics").fetchone()["n"]
+            recent = c.execute(
+                "SELECT COUNT(*) AS n FROM run_metrics WHERE created_at >= ?",
+                (since_ts,),
+            ).fetchone()["n"]
+            last = c.execute("SELECT MAX(created_at) AS m FROM run_metrics").fetchone()[
+                "m"
+            ]
+        except sqlite3.OperationalError:
+            return {"total": 0, "recent": 0, "last_at": None}
+    return {"total": int(total or 0), "recent": int(recent or 0), "last_at": last}
+
+
 # ── Projects ────────────────────────────────────────────────────────────────
 
 _DEFAULT_PROJECT_ID = "default"
