@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop 03: Your First MMM | MMM Framework</title>
+    <meta name="description" content="Fit your first Bayesian marketing mix model end to end: the MMM vocabulary, the panel data, ModelConfig choice by choice, the diagnostics gate, and a first fit graded against a known answer key — ~7% median error with truth inside every 90% HDI.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/workshop-03-first-mmm.html">
+    <meta property="og:title" content="Workshop 03: Your First MMM | MMM Framework">
+    <meta property="og:description" content="A first BayesianMMM fit on a world whose causal truth is known: pass the diagnostics gate, open the answer key, and find every channel recovered at ~7% median error with honest intervals.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/workshop-03-first-mmm.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            width: 170px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .slider-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-text);
+            min-width: 3.2em;
+            display: inline-block;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        /* Page-specific: paired half-width charts and the wide/long tables */
+        .chart-pair {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .chart-pair .chart-container { margin: 0; }
+
+        .table-pair {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+            align-items: start;
+        }
+        .table-pair h4 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+        .table-pair table { font-size: 0.82rem; margin: 0; display: block; overflow-x: auto; }
+        .table-pair td, .table-pair th { padding: 0.3rem 0.55rem; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#vocabulary">1 · The vocabulary</a></li>
+                <li><a href="#world">2 · Meet the panel data</a></li>
+                <li><a href="#transforms">3 · Adstock &amp; saturation, hands on</a></li>
+                <li><a href="#config">4 · ModelConfig, choice by choice</a></li>
+                <li><a href="#gate">5 · The diagnostics gate</a></li>
+                <li><a href="#fit">6 · Does it reproduce the data?</a></li>
+                <li><a href="#truth">7 · The moment of truth</a></li>
+                <li><a href="#bayes">8 · In Bayes terms</a></li>
+                <li><a href="#glossary">9 · Glossary &amp; takeaways</a></li>
+            </ul>
+
+            <h3>The Workshop Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="workshop-00-thinking-in-distributions.html">00 · Thinking in Distributions</a></li>
+                <li><a href="workshop-01-priors.html">01 · Priors</a></li>
+                <li><a href="workshop-02-sampling.html">02 · Sampling</a></li>
+                <li><a href="workshop-03-first-mmm.html" class="active">03 · Your First MMM</a></li>
+                <li><a href="workshop-04-reading-the-posterior.html">04 · Reading the Posterior</a></li>
+                <li><a href="workshop-05-from-draws-to-decisions.html">05 · Draws to Decisions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Workshop 03 — Your First MMM</h1>
+            <p class="lead">
+                You know what a posterior is (<a href="workshop-00-thinking-in-distributions.html">workshop 00</a>),
+                where priors come from (<a href="workshop-01-priors.html">workshop 01</a>), and how a sampler
+                finds the posterior — and how to check that it did (<a href="workshop-02-sampling.html">workshop 02</a>).
+                Time to point all that machinery at the question your stakeholders actually care about:
+                <strong>which marketing channels drive sales, and by how much?</strong> That question has a
+                name — <strong>Marketing Mix Modeling (MMM)</strong> — and on this page you fit your first one,
+                end to end, on a synthetic world whose true answer is known to the decimal. At the end, we open
+                the answer key and grade ourselves.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">7%</div>
+                    <div class="stat-label">median |error| vs the known causal truth, across 4 channels</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">4 / 4</div>
+                    <div class="stat-label">channels whose truth lands inside the 90% HDI</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.90</div>
+                    <div class="stat-label">in-sample R²; the 90% band covers 92% of weeks</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.009</div>
+                    <div class="stat-label">max r-hat, 0 divergences, min bulk ESS 355 — gate passed</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 The series' honesty device, stated up front</h4>
+                <p>
+                    The data below was <em>generated</em> by code in this repo (<code>src/mmm_framework/synth/dgp.py</code>),
+                    so we hold the answer key: the true contribution of every channel. Real marketing data never
+                    comes with one — which is exactly why we train on data that does. It is the only way to
+                    <em>grade ourselves</em> instead of merely admiring a converged model.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>–<a href="workshop-02-sampling.html">02</a>.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~60–75 min
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>That an MMM is the Bayesian workflow wearing a marketing costume: generative story → priors → likelihood → NUTS → posterior, with parameters given business names like adstock and saturation.</li>
+                    <li>How to pass the diagnostics gate before reading anything — and why it certifies the computation, never the attribution.</li>
+                    <li>Why channel contributions are derived quantities, not parameters — and how grading a fit against a sealed answer key shows what a trustworthy posterior looks like.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/workshop_03_first_mmm.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/workshop_03_first_mmm.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="vocabulary">1 · The vocabulary in one sitting</h2>
+            <p>
+                Every MMM tells the same generative story about a week of sales, and the field's vocabulary is
+                just names for the boxes in that story. You spend money on a <strong>channel</strong> (one
+                marketing lever with its own budget line — TV, Search, Social, Display). Part of the effect lands
+                this week and part <em>carries over</em> into the next few weeks — that memory is
+                <strong>adstock</strong>. Doubling spend does not double the effect — the response bends and
+                flattens, and that bending is <strong>saturation</strong> (diminishing returns). The bent,
+                carried-over signal gets multiplied by an <strong>effect size</strong> \( \beta \) — how strongly
+                the channel moves the <strong>KPI</strong> (the business outcome being modeled; here, weekly
+                sales). Sum across channels, add the <strong>baseline</strong> — everything that would have
+                happened with zero marketing: intercept, trend, seasonality, controls like price — and you have
+                the week's expected KPI. Every box hides parameters the model does not know, and <em>every one
+                of them gets a prior and a posterior</em>.
+            </p>
+
+            <div class="chart-pair">
+                <div class="chart-container short" id="miniAdstockChart"></div>
+                <div class="chart-container short" id="miniSaturationChart"></div>
+            </div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Left: one pulse of spend in week 3 echoes forward under geometric adstock with weights
+                \( \propto \alpha^k \) over 8 weeks, normalized to sum to 1 — adstock <em>redistributes</em>
+                spend in time without inventing any. Right: the saturation curve \( 1 - e^{-\lambda x} \) on
+                max-normalized spend — bigger \( \lambda \) flattens sooner, so heavy weeks waste money; the
+                dashed line is what returns would look like if they never bent.
+            </p>
+
+            <p>
+                Two more terms complete the kit. A channel's <strong>contribution</strong> is the KPI it
+                <em>caused</em> — how much lower sales would have been had that channel spent zero. That is a
+                <em>counterfactual</em> claim, a causal question rather than a correlation. And
+                <strong>ROAS</strong> (return on ad spend) is contribution divided by spend — "KPI units bought
+                per unit of money." The baseline is what makes the causal question hard: the model must split
+                observed sales between "marketing did it" and "it would have happened anyway," and nothing in
+                the data labels which is which.
+            </p>
+
+            <h2 id="world">2 · Meet the panel data</h2>
+            <p>
+                <code>dgp.build("clean")</code> manufactures three years of weekly brand history: <strong>156
+                weeks</strong> (2021-01-04 → 2023-12-25), four media channels, a price control, and a sales KPI
+                with mean 438 and standard deviation 53. It is the <em>positive control</em> of this repo's
+                <a href="pressure-testing.html">stress-testing suite</a> — a world generated from exactly the
+                assumptions the model makes, so the model has a fair shot at full marks. The
+                <a href="stress-00-rosy-picture.html">stress series</a> is about worlds that <em>break</em>
+                those assumptions; the clean world is the same one it grades against. The scenario object carries
+                an answer key, <code>sc.true_contribution</code> — each channel's true causal contribution,
+                computed by re-running the world's own generating equations with that channel's spend set to
+                zero. We keep it sealed until <a href="#truth">section 7</a>.
+            </p>
+
+            <h3>The MFF format: how data enters the framework</h3>
+            <p>
+                Real engagements deliver data as an <strong>MFF (Master Flat File)</strong> — a <em>long</em>
+                (tidy) table with one row per <strong>variable × period</strong> observation, rather than one
+                column per variable. Long format looks wasteful for a tiny world, but it scales gracefully when
+                variables arrive at different granularities (national TV, city-level Search, store-level sales):
+                each row simply states <em>which</em> variable, <em>when</em>, <em>where</em>, and <em>what
+                value</em>. The first week of our world, in both shapes:
+            </p>
+
+            <div class="table-pair">
+                <div>
+                    <h4>Wide (one column per variable)</h4>
+                    <table>
+                        <thead><tr><th>week</th><th>TV</th><th>Search</th><th>Social</th><th>Display</th><th>Sales</th><th>Price</th></tr></thead>
+                        <tbody>
+                            <tr><td>2021-01-04</td><td>7.98</td><td>88.25</td><td>47.99</td><td>2.09</td><td>352.74</td><td>12.50</td></tr>
+                            <tr><td>2021-01-11</td><td>42.85</td><td>67.30</td><td>8.63</td><td>3.22</td><td>370.82</td><td>12.50</td></tr>
+                            <tr><td>2021-01-18</td><td>157.66</td><td>3.64</td><td>2.14</td><td>2.06</td><td>442.96</td><td>11.69</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h4>MFF long (one row per variable × period)</h4>
+                    <table>
+                        <thead><tr><th>Period</th><th>VariableName</th><th>VariableValue</th></tr></thead>
+                        <tbody>
+                            <tr><td>2021-01-04</td><td>TV</td><td>7.98</td></tr>
+                            <tr><td>2021-01-04</td><td>Search</td><td>88.25</td></tr>
+                            <tr><td>2021-01-04</td><td>Social</td><td>47.99</td></tr>
+                            <tr><td>2021-01-04</td><td>Display</td><td>2.09</td></tr>
+                            <tr><td>2021-01-04</td><td>Sales</td><td>352.74</td></tr>
+                            <tr><td>2021-01-04</td><td>Price</td><td>12.50</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <p>
+                Same numbers, two shapes — the notebook's assert checks the reshape is exact:
+                6 variables × 156 weeks = 936 MFF rows, no row lost or invented. <code>sc.panel()</code> wraps
+                the data into the <code>PanelDataset</code> structure <code>BayesianMMM</code> consumes — the
+                same thing <code>MFFLoader</code> produces from a real MFF file.
+            </p>
+
+            <h3>Look before you model</h3>
+            <p>
+                Never fit before you look. Things a working analyst eyeballs in the chart below:
+                <strong>seasonality</strong> (the KPI breathes on an annual rhythm — repeating humps about
+                52 weeks apart), <strong>trend</strong> (a gentle upward drift across the three years),
+                <strong>flighting</strong> (media bought in on-off bursts rather than a flat drip — each channel
+                pulses on its own cycle), and <strong>dark weeks</strong> (spend repeatedly drops to near zero;
+                those weeks anchor the baseline by showing what sales look like with almost no help). The pulse
+                misalignment is a gift: it is what lets a model tell the channels apart. When channels flight
+                <em>together</em>, attribution degenerates —
+                <a href="stress-03-confounding-selection.html">stress 03</a> is about exactly that.
+            </p>
+
+            <div class="chart-container tall" id="panelChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — the same generative equations as
+                <code>dgp.build("clean")</code> (pulsed flighting cycles of 9/7/11/13 weeks, trend + annual
+                seasonality + price baseline, geometric adstock, \(1-e^{-\lambda x}\) saturation, Gaussian noise),
+                re-drawn in your browser with a different random seed. Hover to read values; note the misaligned
+                pulses and the near-dark weeks in every channel.
+            </p>
+
+            <div class="chart-pair">
+                <div class="chart-container short" id="budgetChart"></div>
+                <div class="chart-container short" id="corrChart"></div>
+            </div>
+            <p class="chart-note">
+                <strong>Measured</strong> — from the baked notebook run. Left: total spend by channel
+                (TV 9,193 · Search 5,773 · Social 4,703 · Display 3,669 — budget shares 39% / 25% / 20% / 16%).
+                Right: the same-week spend–KPI correlation per channel (TV 0.33, Search 0.38, Social 0.42,
+                Display 0.15) — weak everywhere, even though every channel genuinely works. The maximum
+                cross-channel spend correlation is just 0.10: distinct flighting cycles keep the channels
+                tellable-apart.
+            </p>
+
+            <p>
+                Sit with that right-hand panel, because it carries the motivating lesson of the whole series.
+                Every channel in this world <strong>genuinely drives sales</strong> — we built it that way — yet
+                same-week correlation is nearly a shrug. Three things hide the signal: a TV pulse's effect
+                arrives <em>spread over several weeks</em> (adstock), big-spend weeks are <em>flattened</em> by
+                saturation, and the baseline (season, trend, price) moves sales around regardless of media. A
+                naive "correlate spend with sales" analysis would find little. The MMM's job is to unbend,
+                un-lag, and un-confound — and to report its remaining uncertainty honestly.
+            </p>
+
+            <h2 id="transforms">3 · Adstock and saturation, hands on</h2>
+            <p>
+                Two parameters make media modeling special, and the model will learn both <em>per channel</em>:
+            </p>
+            <ul>
+                <li>
+                    <strong>Adstock retention</strong> \( \alpha \) (0 → 1): the fraction of this week's effect
+                    that survives into next week. \( \alpha = 0 \) means no memory; \( \alpha = 0.8 \) means a
+                    long echo. Geometric adstock spreads each week's spend over the next 8 weeks with weights
+                    \( \propto \alpha^0, \alpha^1, \alpha^2, \dots \), normalized to sum to 1.
+                </li>
+                <li>
+                    <strong>Saturation strength</strong> \( \lambda \): how quickly returns diminish, via
+                    \( 1 - e^{-\lambda x} \) on max-normalized spend. Small \( \lambda \) ≈ a straight line (no
+                    saturation in the observed range); large \( \lambda \) = the curve flattens early, so heavy
+                    weeks waste money.
+                </li>
+            </ul>
+            <p>
+                The explorer below is the page's hands-on centerpiece — the same ipywidgets exhibit the notebook
+                runs live. Drag the sliders and watch two things at once: <strong>left</strong>, the transformed
+                series the model would actually multiply by \( \beta \); <strong>right</strong>, the response
+                curve with the real spend-weeks scattered along it, so you can see <em>where on the curve this
+                channel actually lives</em>. Try \( \alpha \to 0.9 \) on Search (a fast-twitch channel suddenly
+                behaves like brand TV), \( \lambda \to 4 \) on TV (most weeks pile onto the flat part — extra
+                spend buys nothing), or \( \lambda \to 0.3 \) (saturation effectively off).
+            </p>
+
+            <div class="controls-row">
+                <label>Channel:</label>
+                <button class="toggle-btn ch-btn active" data-ch="TV">TV</button>
+                <button class="toggle-btn ch-btn" data-ch="Search">Search</button>
+                <button class="toggle-btn ch-btn" data-ch="Social">Social</button>
+                <button class="toggle-btn ch-btn" data-ch="Display">Display</button>
+            </div>
+            <div class="controls-row">
+                <label for="alphaSlider">adstock α:</label>
+                <input type="range" id="alphaSlider" min="0" max="0.95" step="0.05" value="0.6">
+                <span class="slider-val" id="alphaVal">0.60</span>
+                <label for="lamSlider">saturation λ:</label>
+                <input type="range" id="lamSlider" min="0.3" max="5" step="0.1" value="1.6">
+                <span class="slider-val" id="lamVal">1.6</span>
+                <button class="toggle-btn" id="snapTruth">Snap to this channel's true values</button>
+            </div>
+            <div class="chart-pair">
+                <div class="chart-container" id="pipelineSeriesChart"></div>
+                <div class="chart-container" id="pipelineCurveChart"></div>
+            </div>
+            <p class="chart-note" id="pipelineNote">
+                <strong>Computed live in your browser — the same transform math as the notebook</strong>
+                (geometric adstock, then \( 1-e^{-\lambda x} \)), applied to the seeded illustrative spend
+                series above over a 60-week window. The model does not know \( \alpha \) and \( \lambda \): it
+                puts priors on both, per channel, and learns them from the data — these sliders are your hands
+                on knobs that NUTS (<a href="workshop-02-sampling.html">workshop 02</a>) will soon turn by
+                posterior inference. <em class="true-vals">The world generated TV with α = 0.60, λ = 1.6.</em>
+            </p>
+
+            <h2 id="config">4 · Writing the model down: <code>ModelConfig</code>, choice by choice</h2>
+            <p>
+                A model <strong>configuration</strong> is not bureaucracy — it is section 1's generative story
+                written as code, plus the priors from workshop 01. The notebook's entire setup:
+            </p>
+
+            <pre><code>from mmm_framework.config import InferenceMethod, ModelConfig
+from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+
+cfg = ModelConfig(
+    inference_method=InferenceMethod.BAYESIAN_NUMPYRO,
+    n_draws=500, n_tune=500, n_chains=2,
+    use_parametric_adstock=True, optim_seed=0,
+)
+mmm = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))</code></pre>
+
+            <table>
+                <thead>
+                    <tr><th>choice</th><th>what it means</th><th>why this value here</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>inference_method = BAYESIAN_NUMPYRO</code></td>
+                        <td>run NUTS (workshop 02) on the <strong>numpyro</strong> backend — a fast, JAX-based implementation of the same sampler</td>
+                        <td>quick and reliable on laptops (and sidesteps a macOS multiprocessing quirk in the default backend)</td>
+                    </tr>
+                    <tr>
+                        <td><code>n_draws=500, n_tune=500</code></td>
+                        <td>500 warm-up steps the sampler discards while adapting, then 500 kept draws</td>
+                        <td>workshop speed; production runs use 2000+ of each</td>
+                    </tr>
+                    <tr>
+                        <td><code>n_chains=2</code></td>
+                        <td>two independent chains so r-hat can compare them</td>
+                        <td>workshop speed; production uses 4</td>
+                    </tr>
+                    <tr>
+                        <td><code>use_parametric_adstock=True</code></td>
+                        <td>estimate adstock \( \alpha \) inside the model — a prior + posterior per channel — instead of fixing it by hand</td>
+                        <td>we want the model to <em>learn</em> the carryover you just explored</td>
+                    </tr>
+                    <tr>
+                        <td><code>optim_seed=0</code> / <code>random_seed=0</code></td>
+                        <td>fix randomness</td>
+                        <td>so your numbers match the notebook's</td>
+                    </tr>
+                    <tr>
+                        <td><code>TrendConfig(type=LINEAR)</code></td>
+                        <td>the baseline includes a straight-line drift</td>
+                        <td>matches the gentle drift visible in section 2</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                What about all the priors — \( \beta \), \( \alpha \), \( \lambda \), seasonality, noise? The
+                framework ships <strong>weakly-informative defaults</strong> for every one: wide enough not to
+                bully the data, tight enough to keep the sampler in sane territory. Effect sizes are constrained
+                positive — "ads don't destroy sales" is itself a prior! Workshop 01's job was to make you able
+                to <em>read</em> such defaults, not to re-derive them every time; you can override any of them
+                per channel, but today we take the defaults. The free parameters that get priors and posteriors:
+                \( \beta \) per channel, adstock \( \alpha \) per channel, saturation \( \lambda \) per channel,
+                intercept, trend slope, seasonality coefficients, a price coefficient, and noise \( \sigma \).
+            </p>
+
+            <h2 id="gate">5 · Fit, then face the diagnostics gate</h2>
+            <p>
+                One call runs the whole workshop-02 machine — NUTS explores the joint posterior over <em>all</em>
+                the parameters at once:
+            </p>
+            <pre><code>fit = mmm.fit(random_seed=0)   # sampled in 9s on the recorded run</code></pre>
+            <p>
+                Then — before reading <strong>any</strong> result — the <strong>diagnostics gate</strong> from
+                workshop 02: (1) <strong>r-hat</strong> ≈ 1.00, meaning the independent chains agree with each
+                other; (2) <strong>divergences</strong> = 0, meaning the sampler never broke; (3) <strong>bulk
+                ESS</strong> comfortably in the hundreds, meaning enough effective draws to trust summaries.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">1.009</div>
+                    <div class="stat-label">max r-hat (gate: &lt; 1.05)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">divergences (gate: exactly 0)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">355</div>
+                    <div class="stat-label">min bulk ESS (gate: &gt; 100)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">9 s</div>
+                    <div class="stat-label">sampling time, 2 chains × (500 tune + 500 draws)</div>
+                </div>
+            </div>
+
+            <div class="chart-container short" id="traceChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — what the notebook's <code>beta_TV</code>
+                trace plot looks like when the gate passes: two chains wandering the same territory with no
+                trends and no flat stuck stretches — workshop 02's "fuzzy caterpillar." The measured run's
+                actual trace has exactly this character (r-hat 1.009 across 2 chains × 500 kept draws).
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the gate certifies — and what it doesn't</h4>
+                <p>
+                    Passing the gate certifies the <strong>computation</strong>: the sampler faithfully explored
+                    the posterior of <em>the model we wrote down</em>. It does <strong>not</strong> certify that
+                    the model is <em>right</em>. Keep that distinction warm — it returns in section 6, and the
+                    entire <a href="pressure-testing.html">stress series</a> lives in the gap.
+                </p>
+            </div>
+
+            <h2 id="fit">6 · Does the model reproduce the data?</h2>
+            <p>
+                First sanity check after any fit: push the posterior back through the model and compare against
+                the observed KPI. Because the posterior is a <em>distribution</em>, the prediction is too — the
+                framework draws many plausible KPI paths and reports the band containing 90% of them, not a
+                single line pretending to certainty. On the recorded run: <strong>R² = 0.90</strong>, and the
+                90% predictive band covers <strong>92% of weeks</strong>. That second number matters as much as
+                the first — a 90% band that caught <em>every</em> week would be telling a different lie. The
+                uncertainty here is calibrated, not decorative.
+            </p>
+            <p>
+                A strong fit — and a deliberately incomplete victory. <strong>A good fit does not prove correct
+                attribution.</strong> The model could track sales beautifully while crediting the wrong channels:
+                a model that mistakes seasonality for TV, or a demand-chasing budget for media effectiveness,
+                can fit <em>better</em> than the truth. On real data this failure is invisible — which is
+                precisely why this series practices on synthetic worlds, and why
+                <a href="stress-00-rosy-picture.html">stress 00</a> exists: it manufactures worlds where every
+                diagnostic is green and the attribution is silently wrong. Here, in the clean world, we can do
+                what no real analyst can: <strong>open the answer key.</strong>
+            </p>
+
+            <h2 id="truth">7 · The moment of truth: grading against the answer key</h2>
+            <p>
+                The model's headline output is each channel's <strong>contribution</strong>, computed by the
+                counterfactual the term promises: predict sales with history as it happened, re-predict with one
+                channel's spend forced to zero everywhere, and take the difference. The framework's
+                <code>compute_counterfactual_contributions</code> does this <em>per posterior draw</em>, so each
+                contribution arrives with a 90% <strong>HDI</strong> (highest density interval — the narrowest
+                range holding 90% of the posterior, from workshop 00) instead of a bare number. The DGP computed
+                the <em>true</em> contributions the same way — same question, same units — so the comparison is
+                apples to apples. Unsealing the key:
+            </p>
+
+            <pre><code>contrib = mmm.compute_counterfactual_contributions(
+    compute_uncertainty=True, hdi_prob=0.9, random_seed=0)</code></pre>
+
+            <table>
+                <thead>
+                    <tr><th>channel</th><th>true</th><th>estimate</th><th>hdi 5%</th><th>hdi 95%</th><th>rel. error</th><th>truth in 90% HDI</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>TV</strong></td><td>5,668</td><td>5,229</td><td>4,281</td><td>6,372</td><td>−8%</td><td>✓</td></tr>
+                    <tr><td><strong>Search</strong></td><td>4,531</td><td>4,215</td><td>3,423</td><td>5,066</td><td>−7%</td><td>✓</td></tr>
+                    <tr><td><strong>Social</strong></td><td>4,017</td><td>4,142</td><td>3,536</td><td>4,786</td><td>+3%</td><td>✓</td></tr>
+                    <tr><td><strong>Display</strong></td><td>2,958</td><td>2,753</td><td>2,064</td><td>3,491</td><td>−7%</td><td>✓</td></tr>
+                </tbody>
+            </table>
+
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn contrib-btn active" data-view="totals">Total contribution</button>
+                <button class="toggle-btn contrib-btn" data-view="relerr">Relative error</button>
+            </div>
+            <div class="chart-container tall" id="contribChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the baked notebook's recorded fit (seeded NumPyro run,
+                <code>random_seed=0</code>). Dark bars are the sealed answer key; colored bars are the model's
+                estimates with 90% HDI whiskers. Median |relative error| = <strong>7%</strong>; truth inside the
+                90% HDI for <strong>100% of channels</strong>. Toggle to "Relative error" to see each channel's
+                miss with its HDI expressed in the same relative units.
+            </p>
+
+            <p>Read the table and the chart together, the way you would brief a stakeholder:</p>
+            <ul>
+                <li>Every <strong>estimate</strong> lands close to its truth bar, and the relative-error column
+                    quantifies "close" per channel — no eyeballing required.</li>
+                <li>Every <strong>whisker</strong> (the 90% HDI) brackets the truth. This is the part a
+                    point-estimate model cannot give you: the interval <em>claims</em> a range, and in a world
+                    where we can check, the claim holds.</li>
+                <li>The <strong>ranking</strong> comes out right — TV &gt; Search &gt; Social &gt; Display, with
+                    the top channel correctly identified — and ranking is what budget decisions actually
+                    consume.</li>
+            </ul>
+            <p>
+                This is what <em>earned trust</em> looks like: not "the model converged," but "on a world where
+                the answer is checkable, the model finds it, and its stated uncertainty is honest." The
+                <a href="pressure-testing.html">stress series</a> then asks the harder question — what happens
+                when the world stops cooperating?
+            </p>
+
+            <h2 id="bayes">8 · What just happened, in Bayes terms</h2>
+            <p>
+                Strip away the marketing words and you have run exactly the workflow of workshops 00–02, at
+                scale: (1) a <strong>generative story</strong> with a few dozen unknown parameters; (2)
+                <strong>priors</strong> on all of them (the framework's weakly-informative defaults); (3) the
+                <strong>likelihood</strong> of 156 observed weeks under any candidate parameter setting; (4)
+                <strong>NUTS</strong> exploring the joint posterior — every kept draw is a <em>complete parameter
+                set</em>, a full candidate explanation of three years of business history.
+            </p>
+            <p>
+                The contributions you just graded were never parameters at all. They are <strong>derived
+                quantities</strong>: for <em>each posterior draw</em>, the model runs its zero-out counterfactual
+                and gets one complete attribution story; section 7's table summarizes 1,000 such stories
+                (2 chains × 500 draws). The chart below makes that concrete — each thin line is one draw's
+                week-by-week claim about what TV contributed. The posterior is not a number with error bars
+                bolted on; it is a <em>population of full explanations</em>, and every summary we report is a
+                statistic of that population. That idea powers everything in
+                <a href="workshop-05-from-draws-to-decisions.html">workshop 05</a>.
+            </p>
+
+            <div class="chart-container" id="drawsChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — 40 thin lines, each one posterior draw's
+                weekly TV-contribution path (drawn here by jittering \( \alpha, \lambda, \beta \) around the
+                world's true values on the seeded illustrative spend), with the posterior mean and the true
+                weekly path overlaid. In the notebook, the per-draw totals of these paths average to section
+                7's TV estimate exactly — contributions <em>are</em> statistics of draws.
+            </p>
+            <p>
+                One more thing the notebook's posterior explorer shows when you flip channels: some parameters
+                are pinned down sharply while others stay wide <em>in the same healthy fit</em> — often because
+                \( \beta \) and \( \lambda \) can partly trade off (a taller curve bent sooner can mimic a
+                shorter curve bent later). The <em>contribution</em> stays well-determined even when the
+                individual knobs share credit. Reading those shapes — widths, trade-offs, what the data did and
+                didn't pin down — is exactly
+                <a href="workshop-04-reading-the-posterior.html">workshop 04</a>'s job.
+            </p>
+
+            <h2 id="glossary">9 · Glossary &amp; takeaways</h2>
+            <p><strong>The glossary, now with scars</strong> — you have touched every one of these:</p>
+            <table>
+                <thead>
+                    <tr><th>term</th><th>plain English</th><th>where you met it</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>MMM</strong></td><td>a model that splits historical KPI movement into the parts caused by each channel and the part that would have happened anyway</td><td>section 1</td></tr>
+                    <tr><td><strong>KPI</strong></td><td>the business outcome being modeled — here, weekly sales</td><td>section 1; section 2's panel</td></tr>
+                    <tr><td><strong>channel</strong></td><td>one marketing lever with its own budget line — TV, Search, Social, Display</td><td>sections 1–2</td></tr>
+                    <tr><td><strong>adstock</strong></td><td>carryover — this week's ad keeps working for a few weeks, with fading strength (retention \( \alpha \))</td><td>section 3's sliders</td></tr>
+                    <tr><td><strong>saturation</strong></td><td>diminishing returns — the response curve flattens as spend grows (strength \( \lambda \))</td><td>section 3's sliders</td></tr>
+                    <tr><td><strong>baseline</strong></td><td>the non-marketing part of the KPI: intercept + trend + seasonality + controls (e.g. price)</td><td>sections 1 &amp; 4</td></tr>
+                    <tr><td><strong>contribution</strong></td><td>the KPI a channel <em>caused</em> — the zero-out counterfactual</td><td>section 7, graded against the answer key</td></tr>
+                    <tr><td><strong>ROAS</strong></td><td>return on ad spend — contribution ÷ spend; it becomes a <em>distribution</em> in workshop 05</td><td>section 1's table</td></tr>
+                    <tr><td><strong>MFF</strong></td><td>Master Flat File — the long input format: one row per variable × period observation</td><td>section 2</td></tr>
+                    <tr><td><strong>HDI</strong></td><td>highest density interval — the narrowest range holding (say) 90% of the posterior</td><td>section 7's whiskers, whose claim we checked</td></tr>
+                    <tr><td><strong>diagnostics gate</strong></td><td>r-hat ≈ 1, zero divergences, healthy ESS — pass it before reading anything</td><td>section 5</td></tr>
+                    <tr><td><strong>derived quantity</strong></td><td>a number computed from each posterior draw, then summarized — never a parameter itself</td><td>section 8</td></tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>An MMM is the Bayesian workflow wearing a marketing costume.</strong> Generative
+                        story → priors → likelihood → NUTS → posterior. Nothing new was needed beyond workshops
+                        00–02; the diagram just gave the parameters business names.</li>
+                    <li><strong>Pass the diagnostics gate before reading anything</strong> — and remember it
+                        certifies the <em>computation</em>, never the <em>attribution</em>.</li>
+                    <li><strong>Contributions are derived quantities, not parameters.</strong> Each posterior
+                        draw implies a complete attribution story; reported numbers and HDIs are statistics over
+                        that population of stories.</li>
+                    <li><strong>The first real fit earned its trust:</strong> ~7% median error against the sealed
+                        answer key, truth inside the 90% HDI for all four channels, and the ranking right.</li>
+                    <li><strong>Train where the truth is checkable.</strong> Real data never has an answer key —
+                        which is why the <a href="stress-00-rosy-picture.html">stress series</a> shows the dark
+                        twin of this happy ending: green gates, wrong answers.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/workshop_03_first_mmm.ipynb</code>, authored by
+                    <code>nbs/build_workshop_03_first_mmm.py</code> — see <code>nbs/README_workshop.md</code>
+                    for the series map and re-bake instructions. The notebook runs one real fast fit
+                    (NumPyro, 2 × 500 draws, ~10 s) and adds two live ipywidgets explorers; every computational
+                    cell ends in a seeded assert encoding the claim it demonstrates, so a clean bake means the
+                    numbers on this page were re-verified. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the notebook-guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gaussianPair(rng) {
+            const u = Math.max(rng(), 1e-12), v = rng();
+            const m = Math.sqrt(-2 * Math.log(u));
+            return [m * Math.cos(2 * Math.PI * v), m * Math.sin(2 * Math.PI * v)];
+        }
+        function gaussians(rng, n) {
+            const out = [];
+            while (out.length < n) {
+                const p = gaussianPair(rng);
+                out.push(p[0]); if (out.length < n) out.push(p[1]);
+            }
+            return out;
+        }
+
+        // ------------------------------------------------------------------
+        // The transform math — identical to src/mmm_framework/synth/dgp.py
+        // ------------------------------------------------------------------
+        function geomAdstock(x, alpha, lmax) {
+            lmax = lmax || 8;
+            if (alpha <= 0) return x.slice();
+            const w = []; let s = 0;
+            for (let k = 0; k < lmax; k++) { const v = Math.pow(alpha, k); w.push(v); s += v; }
+            for (let k = 0; k < lmax; k++) w[k] /= s;
+            const out = new Array(x.length).fill(0);
+            for (let t = 0; t < x.length; t++) {
+                let acc = 0;
+                for (let k = 0; k < lmax; k++) if (t - k >= 0) acc += w[k] * x[t - k];
+                out[t] = acc;
+            }
+            return out;
+        }
+        function logisticSat(x, lam) {
+            return x.map(function(v) { return 1 - Math.exp(-lam * v); });
+        }
+
+        // ------------------------------------------------------------------
+        // The clean world's true constants (src/mmm_framework/synth/dgp.py) — for the
+        // illustrative recreation and the "snap to truth" button.
+        // ------------------------------------------------------------------
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLOR = { TV: PT.colors.tv, Search: PT.colors.search, Social: PT.colors.social, Display: PT.colors.display };
+        const TRUE_ALPHA = { TV: 0.6, Search: 0.2, Social: 0.4, Display: 0.5 };
+        const TRUE_LAM = { TV: 1.6, Search: 1.8, Social: 1.7, Display: 1.5 };
+        const TRUE_AMP = { TV: 150, Search: 100, Social: 90, Display: 65 };
+        const BASE_SPEND = { TV: 100, Search: 60, Social: 50, Display: 40 };
+        const FLIGHT_PERIOD = { TV: 9, Search: 7, Social: 11, Display: 13 };
+        const N_WEEKS = 156;
+
+        // Illustrative recreation of dgp.build("clean") — same equations,
+        // browser-seeded draws.
+        function buildWorld() {
+            const rng = mulberry32(20260610);
+            const weeks = [];
+            const start = new Date(2021, 0, 4);
+            for (let t = 0; t < N_WEEKS; t++) {
+                const d = new Date(start.getTime());
+                d.setDate(d.getDate() + 7 * t);
+                weeks.push(d);
+            }
+            // price: 12 + 0.5 cos(2πt/52) − 0.8 · 1[promo]
+            const price = [];
+            for (let t = 0; t < N_WEEKS; t++) {
+                price.push(12 + 0.5 * Math.cos(2 * Math.PI * t / 52) - 0.8 * (rng() < 0.15 ? 1 : 0));
+            }
+            const priceMean = price.reduce(function(a, b) { return a + b; }, 0) / N_WEEKS;
+            // pulsed spend levels per channel
+            const spend = {};
+            CHANNELS.forEach(function(c) {
+                const phase = rng() * 2 * Math.PI;
+                const noise = gaussians(rng, N_WEEKS);
+                const s = [];
+                for (let t = 0; t < N_WEEKS; t++) {
+                    const burst = Math.max(0, Math.sin(2 * Math.PI * t / FLIGHT_PERIOD[c] + phase));
+                    const idio = Math.exp(0.25 * noise[t]);   // lognormal(0, 0.25)
+                    s.push(Math.max(0.5, BASE_SPEND[c] * (0.08 + 1.6 * burst) * idio));
+                }
+                spend[c] = s;
+            });
+            // baseline: 300 + trend + Fourier season + price effect
+            const mu = [];
+            for (let t = 0; t < N_WEEKS; t++) {
+                mu.push(300 + 60 * (t / N_WEEKS)
+                    + 35 * Math.sin(2 * Math.PI * t / 52) + 22 * Math.cos(2 * Math.PI * t / 52)
+                    - 28 * (price[t] - priceMean));
+            }
+            // media response: amp · sat(adstock(spend / max), λ)
+            CHANNELS.forEach(function(c) {
+                const mx = Math.max.apply(null, spend[c]);
+                const xn = spend[c].map(function(v) { return v / mx; });
+                const tr = logisticSat(geomAdstock(xn, TRUE_ALPHA[c]), TRUE_LAM[c]);
+                for (let t = 0; t < N_WEEKS; t++) mu[t] += TRUE_AMP[c] * tr[t];
+            });
+            const eps = gaussians(rng, N_WEEKS);
+            const y = mu.map(function(m, t) { return m + 22 * eps[t]; });
+            return { weeks: weeks, spend: spend, y: y };
+        }
+        const WORLD = buildWorld();
+
+        // ------------------------------------------------------------------
+        // §1 mini charts: adstock pulse echo + saturation curves (live math)
+        // ------------------------------------------------------------------
+        function drawMiniAdstock() {
+            const pulse = new Array(16).fill(0); pulse[3] = 1;
+            const wk = []; for (let t = 0; t < 16; t++) wk.push(t);
+            const traces = [{
+                type: 'bar', x: wk, y: pulse, name: 'spend: one pulse',
+                marker: { color: 'rgba(45,58,45,0.25)' },
+                hovertemplate: 'week %{x}: spend %{y:.2f}<extra></extra>'
+            }];
+            [[0.3, PT.colors.search], [0.6, PT.colors.tv], [0.85, PT.colors.display]].forEach(function(pair) {
+                const ad = geomAdstock(pulse, pair[0]);
+                traces.push({
+                    type: 'scatter', mode: 'lines+markers', x: wk, y: ad,
+                    name: 'adstocked, α = ' + pair[0],
+                    line: { color: pair[1], width: 2 }, marker: { size: 5 },
+                    hovertemplate: 'week %{x}: effect %{y:.3f}<extra>α = ' + pair[0] + '</extra>'
+                });
+            });
+            Plotly.newPlot('miniAdstockChart', traces, PT.layout({
+                title: { text: 'Adstock: spend echoes forward', font: { size: 14 } },
+                margin: { l: 50, r: 15, t: 40, b: 45 },
+                xaxis: { title: 'weeks' }, yaxis: { title: 'effect weight' },
+                legend: { orientation: 'h', y: -0.25 }, showlegend: true
+            }), PT.config);
+        }
+
+        function drawMiniSaturation() {
+            const xg = []; for (let i = 0; i <= 100; i++) xg.push(i / 100);
+            const traces = [];
+            [[0.5, PT.colors.search], [1.6, PT.colors.tv], [4.0, PT.colors.display]].forEach(function(pair) {
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: xg, y: logisticSat(xg, pair[0]),
+                    name: 'λ = ' + pair[0], line: { color: pair[1], width: 2.2 },
+                    hovertemplate: 'spend %{x:.2f} → response %{y:.2f}<extra>λ = ' + pair[0] + '</extra>'
+                });
+            });
+            // "if returns never bent" reference through the λ=1.6 curve at x=0.4
+            const ref = 1 - Math.exp(-1.6 * 0.4);
+            traces.push({
+                type: 'scatter', mode: 'lines', x: xg,
+                y: xg.map(function(v) { return v * ref / 0.4; }),
+                name: 'if returns never bent',
+                line: { color: PT.colors.truth, width: 1.4, dash: 'dash' },
+                hoverinfo: 'skip'
+            });
+            Plotly.newPlot('miniSaturationChart', traces, PT.layout({
+                title: { text: 'Saturation: each extra unit buys less', font: { size: 14 } },
+                margin: { l: 50, r: 15, t: 40, b: 45 },
+                xaxis: { title: 'adstocked spend (normalized)' },
+                yaxis: { title: 'response', range: [0, 1.05] },
+                legend: { orientation: 'h', y: -0.25 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // §2 panel chart: KPI over spend (illustrative recreation, seeded)
+        // ------------------------------------------------------------------
+        function drawPanel() {
+            const traces = [{
+                type: 'scatter', mode: 'lines', x: WORLD.weeks, y: WORLD.y,
+                name: 'Sales (KPI)', line: { color: PT.colors.truth, width: 1.6 },
+                hovertemplate: '%{x|%d %b %Y}<br>Sales %{y:.0f}<extra></extra>'
+            }];
+            CHANNELS.forEach(function(c) {
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: WORLD.weeks, y: WORLD.spend[c],
+                    name: c, yaxis: 'y2', line: { color: CH_COLOR[c], width: 1.2 },
+                    hovertemplate: '%{x|%d %b %Y}<br>' + c + ' spend %{y:.1f}<extra></extra>'
+                });
+            });
+            const layout = PT.layout({
+                margin: { l: 60, r: 20, t: 20, b: 50 },
+                hovermode: 'x unified',
+                legend: { orientation: 'h', y: 1.1 },
+                yaxis: { title: 'weekly Sales', domain: [0.58, 1] },
+                yaxis2: { title: 'weekly spend', domain: [0, 0.5], gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' }
+            });
+            Plotly.newPlot('panelChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // §2 measured pair: budget shares + same-week correlations
+        // ------------------------------------------------------------------
+        const TOTAL_SPEND = { TV: 9193, Search: 5773, Social: 4703, Display: 3669 };
+        const BUDGET_SHARE = { TV: 39, Search: 25, Social: 20, Display: 16 };
+        const SAME_WEEK_CORR = { TV: 0.33, Search: 0.38, Social: 0.42, Display: 0.15 };
+
+        function drawBudget() {
+            Plotly.newPlot('budgetChart', [{
+                type: 'bar', x: CHANNELS,
+                y: CHANNELS.map(function(c) { return TOTAL_SPEND[c]; }),
+                marker: { color: CHANNELS.map(function(c) { return CH_COLOR[c]; }),
+                          line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                customdata: CHANNELS.map(function(c) { return BUDGET_SHARE[c]; }),
+                hovertemplate: '<b>%{x}</b><br>total spend %{y:,}<br>budget share %{customdata}%<extra></extra>'
+            }], PT.layout({
+                title: { text: 'Total spend by channel (measured)', font: { size: 14 } },
+                margin: { l: 60, r: 15, t: 40, b: 40 },
+                yaxis: { title: 'total spend' }
+            }), PT.config);
+        }
+
+        function drawCorr() {
+            Plotly.newPlot('corrChart', [{
+                type: 'bar', x: CHANNELS,
+                y: CHANNELS.map(function(c) { return SAME_WEEK_CORR[c]; }),
+                marker: { color: CHANNELS.map(function(c) { return PT.band(CH_COLOR[c], 0.55); }),
+                          line: { color: 'rgba(45,58,45,0.35)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>same-week corr(spend, Sales) = %{y:.2f}<extra></extra>'
+            }], PT.layout({
+                title: { text: 'Same-week spend–KPI correlation (measured)', font: { size: 14 } },
+                margin: { l: 60, r: 15, t: 40, b: 40 },
+                yaxis: { title: 'correlation', range: [0, 1] },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 0.5, y1: 0.5,
+                    line: { color: PT.colors.truth, width: 1.2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 3.4, y: 0.5, xanchor: 'right', yanchor: 'bottom',
+                    text: 'every channel works — yet nothing correlates strongly',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // §3 interactive transform-pipeline explorer
+        // ------------------------------------------------------------------
+        const explorerState = { channel: 'TV', alpha: 0.6, lam: 1.6 };
+        const WIN_LO = 40, WIN_HI = 100;   // the notebook's 60-week window
+
+        function drawPipeline(firstTime) {
+            const c = explorerState.channel;
+            const sp = WORLD.spend[c];
+            const mx = Math.max.apply(null, sp);
+            const xn = sp.map(function(v) { return v / mx; });
+            const ad = geomAdstock(xn, explorerState.alpha);
+            const tr = logisticSat(ad, explorerState.lam);
+            const wk = WORLD.weeks.slice(WIN_LO, WIN_HI);
+
+            const seriesTraces = [{
+                type: 'scatter', mode: 'lines', x: wk, y: xn.slice(WIN_LO, WIN_HI),
+                name: 'raw spend (norm.)', line: { color: 'rgba(45,58,45,0.35)', width: 1.2 },
+                hovertemplate: '%{x|%d %b %Y}<br>raw %{y:.2f}<extra></extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: wk, y: ad.slice(WIN_LO, WIN_HI),
+                name: 'after adstock', line: { color: CH_COLOR[c], width: 1.5, dash: 'dot' },
+                hovertemplate: '%{x|%d %b %Y}<br>adstocked %{y:.2f}<extra></extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: wk, y: tr.slice(WIN_LO, WIN_HI),
+                name: 'after saturation (× β next)', line: { color: CH_COLOR[c], width: 2.4 },
+                hovertemplate: '%{x|%d %b %Y}<br>transformed %{y:.2f}<extra></extra>'
+            }];
+            const seriesLayout = PT.layout({
+                title: { text: c + ': the series the model multiplies by β', font: { size: 14 } },
+                margin: { l: 50, r: 15, t: 40, b: 45 },
+                xaxis: { title: 'week' },
+                yaxis: { title: 'normalized scale', range: [-0.02, 1.05] },
+                legend: { orientation: 'h', y: -0.28 }
+            });
+
+            const grid = []; for (let i = 0; i <= 120; i++) grid.push(i / 120);
+            const curveTraces = [{
+                type: 'scatter', mode: 'lines', x: grid, y: logisticSat(grid, explorerState.lam),
+                name: 'response curve', line: { color: PT.colors.truth, width: 1.8 },
+                hovertemplate: 'adstocked %{x:.2f} → response %{y:.2f}<extra></extra>'
+            }, {
+                type: 'scatter', mode: 'markers', x: ad, y: tr,
+                name: 'actual weeks', marker: { color: PT.band(CH_COLOR[c], 0.55), size: 6,
+                    line: { color: CH_COLOR[c], width: 1 } },
+                hovertemplate: 'adstocked %{x:.2f}<br>response %{y:.2f}<extra>one week</extra>'
+            }];
+            const curveLayout = PT.layout({
+                title: { text: 'Where the real weeks sit on the curve', font: { size: 14 } },
+                margin: { l: 50, r: 15, t: 40, b: 45 },
+                xaxis: { title: 'adstocked spend (normalized)', range: [0, 1.02] },
+                yaxis: { title: 'response', range: [-0.02, 1.05] },
+                legend: { orientation: 'h', y: -0.28 }
+            });
+
+            if (firstTime) {
+                Plotly.newPlot('pipelineSeriesChart', seriesTraces, seriesLayout, PT.config);
+                Plotly.newPlot('pipelineCurveChart', curveTraces, curveLayout, PT.config);
+            } else {
+                Plotly.react('pipelineSeriesChart', seriesTraces, seriesLayout, PT.config);
+                Plotly.react('pipelineCurveChart', curveTraces, curveLayout, PT.config);
+            }
+            const note = document.getElementById('pipelineNote');
+            const tail = note.querySelector('em.true-vals');
+            const msg = 'The world generated ' + c + ' with α = ' + TRUE_ALPHA[c].toFixed(2) +
+                        ', λ = ' + TRUE_LAM[c].toFixed(1) + '.';
+            if (tail) { tail.textContent = msg; }
+        }
+
+        function wireExplorer() {
+            const alphaSlider = document.getElementById('alphaSlider');
+            const lamSlider = document.getElementById('lamSlider');
+            const alphaVal = document.getElementById('alphaVal');
+            const lamVal = document.getElementById('lamVal');
+
+            function sync() {
+                explorerState.alpha = parseFloat(alphaSlider.value);
+                explorerState.lam = parseFloat(lamSlider.value);
+                alphaVal.textContent = explorerState.alpha.toFixed(2);
+                lamVal.textContent = explorerState.lam.toFixed(1);
+                drawPipeline(false);
+            }
+            alphaSlider.addEventListener('input', sync);
+            lamSlider.addEventListener('input', sync);
+
+            document.querySelectorAll('.ch-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.ch-btn').forEach(function(b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    explorerState.channel = btn.dataset.ch;
+                    drawPipeline(false);
+                });
+            });
+
+            document.getElementById('snapTruth').addEventListener('click', function() {
+                alphaSlider.value = TRUE_ALPHA[explorerState.channel];
+                lamSlider.value = TRUE_LAM[explorerState.channel];
+                sync();
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // §5 illustrative fuzzy-caterpillar trace (seeded)
+        // ------------------------------------------------------------------
+        function drawTrace() {
+            const rng = mulberry32(42);
+            const n = 500;
+            const chains = [[], []];
+            for (let ch = 0; ch < 2; ch++) {
+                let x = 0;
+                const eps = gaussians(rng, n);
+                for (let t = 0; t < n; t++) {
+                    x = 0.6 * x + eps[t];           // AR(1): mixes well, no trend
+                    chains[ch].push(1.1 + 0.12 * x); // around a common posterior mean
+                }
+            }
+            const idx = []; for (let t = 0; t < n; t++) idx.push(t);
+            const traces = chains.map(function(c, i) {
+                return {
+                    type: 'scatter', mode: 'lines', x: idx, y: c,
+                    name: 'chain ' + (i + 1),
+                    line: { color: i === 0 ? PT.colors.tv : PT.colors.search, width: 0.9 },
+                    hovertemplate: 'draw %{x}: %{y:.2f}<extra>chain ' + (i + 1) + '</extra>'
+                };
+            });
+            Plotly.newPlot('traceChart', traces, PT.layout({
+                title: { text: 'beta_TV — two chains, the healthy "fuzzy caterpillar"', font: { size: 14 } },
+                margin: { l: 55, r: 15, t: 40, b: 45 },
+                xaxis: { title: 'kept draw' },
+                yaxis: { title: 'beta_TV (model scale)' },
+                legend: { orientation: 'h', y: 1.18 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // §7 centerpiece: truth vs estimate with 90% HDI whiskers (MEASURED)
+        // Source: baked workshop_03_first_mmm.ipynb, seeded run (random_seed=0)
+        // ------------------------------------------------------------------
+        const GRADE = [
+            { ch: 'TV',      truth: 5668, est: 5229, lo: 4281, hi: 6372 },
+            { ch: 'Search',  truth: 4531, est: 4215, lo: 3423, hi: 5066 },
+            { ch: 'Social',  truth: 4017, est: 4142, lo: 3536, hi: 4786 },
+            { ch: 'Display', truth: 2958, est: 2753, lo: 2064, hi: 3491 }
+        ];
+
+        function drawContrib(view) {
+            let traces, layout;
+            if (view === 'totals') {
+                traces = [{
+                    type: 'bar', name: 'causal truth (answer key)',
+                    x: GRADE.map(function(g) { return g.ch; }),
+                    y: GRADE.map(function(g) { return g.truth; }),
+                    marker: { color: PT.colors.truth, opacity: 0.85 },
+                    hovertemplate: '<b>%{x}</b> truth: %{y:,}<extra></extra>'
+                }, {
+                    type: 'bar', name: 'model estimate (90% HDI)',
+                    x: GRADE.map(function(g) { return g.ch; }),
+                    y: GRADE.map(function(g) { return g.est; }),
+                    marker: { color: GRADE.map(function(g) { return CH_COLOR[g.ch]; }) },
+                    error_y: {
+                        type: 'data', symmetric: false,
+                        array: GRADE.map(function(g) { return g.hi - g.est; }),
+                        arrayminus: GRADE.map(function(g) { return g.est - g.lo; }),
+                        color: PT.colors.truth, thickness: 1.5
+                    },
+                    customdata: GRADE.map(function(g) {
+                        return [g.lo, g.hi, (100 * (g.est - g.truth) / g.truth).toFixed(0)];
+                    }),
+                    hovertemplate: '<b>%{x}</b> estimate: %{y:,}<br>90% HDI [%{customdata[0]:,}, %{customdata[1]:,}]<br>rel. error %{customdata[2]}%<extra></extra>'
+                }];
+                layout = PT.layout({
+                    barmode: 'group',
+                    margin: { l: 70, r: 30, t: 20, b: 50 },
+                    yaxis: { title: 'total contribution (KPI units)' },
+                    legend: { orientation: 'h', y: 1.08 }
+                });
+            } else {
+                traces = [{
+                    type: 'bar', name: 'relative error (90% HDI)',
+                    x: GRADE.map(function(g) { return g.ch; }),
+                    y: GRADE.map(function(g) { return 100 * (g.est - g.truth) / g.truth; }),
+                    marker: { color: GRADE.map(function(g) { return CH_COLOR[g.ch]; }) },
+                    error_y: {
+                        type: 'data', symmetric: false,
+                        array: GRADE.map(function(g) { return 100 * (g.hi - g.est) / g.truth; }),
+                        arrayminus: GRADE.map(function(g) { return 100 * (g.est - g.lo) / g.truth; }),
+                        color: PT.colors.truth, thickness: 1.5
+                    },
+                    hovertemplate: '<b>%{x}</b><br>relative error %{y:.0f}%<extra></extra>'
+                }];
+                layout = PT.layout({
+                    margin: { l: 70, r: 30, t: 20, b: 50 },
+                    yaxis: { title: 'relative error vs truth (%)', zeroline: true },
+                    shapes: [{
+                        type: 'line', x0: -0.5, x1: 3.5, y0: 0, y1: 0,
+                        line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                    }],
+                    annotations: [{
+                        x: 3.4, y: 0, xanchor: 'right', yanchor: 'bottom',
+                        text: 'perfect recovery', showarrow: false,
+                        font: { size: 11, color: '#5a6b5a' }
+                    }],
+                    showlegend: false
+                });
+            }
+            Plotly.react('contribChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('.contrib-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.contrib-btn').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                drawContrib(btn.dataset.view);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // §8 population of explanations: TV weekly contribution draws
+        // (illustrative, seeded — jitter α, λ, β around the true values)
+        // ------------------------------------------------------------------
+        function drawDraws() {
+            const rng = mulberry32(7);
+            const sp = WORLD.spend.TV;
+            const mx = Math.max.apply(null, sp);
+            const xn = sp.map(function(v) { return v / mx; });
+            const truePath = logisticSat(geomAdstock(xn, TRUE_ALPHA.TV), TRUE_LAM.TV)
+                .map(function(v) { return TRUE_AMP.TV * v; });
+
+            const nDraws = 40;
+            const traces = [];
+            const sumPath = new Array(N_WEEKS).fill(0);
+            for (let k = 0; k < nDraws; k++) {
+                const g = gaussians(rng, 3);
+                const a = Math.min(0.95, Math.max(0, TRUE_ALPHA.TV + 0.05 * g[0]));
+                const l = Math.max(0.3, TRUE_LAM.TV + 0.18 * g[1]);
+                const amp = TRUE_AMP.TV * (1 + 0.07 * g[2]);
+                const path = logisticSat(geomAdstock(xn, a), l)
+                    .map(function(v) { return amp * v; });
+                for (let t = 0; t < N_WEEKS; t++) sumPath[t] += path[t] / nDraws;
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: WORLD.weeks, y: path,
+                    line: { color: PT.band(PT.colors.tv, 0.28), width: 0.8 },
+                    showlegend: k === 0, name: '40 posterior draws (each a full story)',
+                    hoverinfo: 'skip'
+                });
+            }
+            traces.push({
+                type: 'scatter', mode: 'lines', x: WORLD.weeks, y: sumPath,
+                name: 'posterior mean', line: { color: PT.colors.truth, width: 2 },
+                hovertemplate: '%{x|%d %b %Y}<br>mean contribution %{y:.0f}<extra></extra>'
+            });
+            traces.push({
+                type: 'scatter', mode: 'lines', x: WORLD.weeks, y: truePath,
+                name: 'TRUE weekly path', line: { color: PT.colors.ok, width: 1.8, dash: 'dash' },
+                hovertemplate: '%{x|%d %b %Y}<br>true contribution %{y:.0f}<extra></extra>'
+            });
+            Plotly.newPlot('drawsChart', traces, PT.layout({
+                title: { text: "TV's weekly contribution: a population of explanations", font: { size: 14 } },
+                margin: { l: 60, r: 20, t: 40, b: 50 },
+                yaxis: { title: 'weekly contribution (KPI units)' },
+                legend: { orientation: 'h', y: -0.2 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        function init() {
+            drawMiniAdstock();
+            drawMiniSaturation();
+            drawPanel();
+            drawBudget();
+            drawCorr();
+            wireExplorer();
+            drawPipeline(true);
+            drawTrace();
+            drawContrib('totals');
+            drawDraws();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

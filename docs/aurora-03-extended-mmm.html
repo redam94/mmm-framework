@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora 03: Extended Models | MMM Framework</title>
+    <meta name="description" content="What is TV really doing? NestedMMM finds TV and Display are ~100% mediated through brand awareness (true ROAS ~2.1); MultivariateMMM puts the Cold Brew cannibalization claim through an honesty test — and the prior-vs-data verdict flips it.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html">
+    <meta property="og:title" content="Aurora 03: Extended Models | MMM Framework">
+    <meta property="og:description" content="The base model called TV weak (ROAS 0.35 vs a true 2.14). The NestedMMM shows why: its effect flows ~100% through awareness. Then a cannibalization posterior sits entirely below zero — and the honest diagnostic flips the verdict.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            flex: 1 1 180px;
+            max-width: 320px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .slider-readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            min-width: 4.5rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#blind-spot">The base model's blind spot</a></li>
+                <li><a href="#mediation">Part A: NestedMMM mediation</a></li>
+                <li><a href="#toy">Interactive: how mediation hides a channel</a></li>
+                <li><a href="#cannibalization">Part B: the cannibalization claim</a></li>
+                <li><a href="#prior-or-data">Prior or data?</a></li>
+                <li><a href="#residuals">The shared demand wave</a></li>
+                <li><a href="#caveats">The caveat: extension traps</a></li>
+                <li><a href="#takeaways">What to take away</a></li>
+            </ul>
+
+            <h3>Aurora Showcase</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="aurora-00-overview.html">00 · The Trap</a></li>
+                <li><a href="aurora-01-causality.html">01 · Causality</a></li>
+                <li><a href="aurora-02-base-mmm.html">02 · The Base MMM</a></li>
+                <li><a href="aurora-03-extended-mmm.html" class="active">03 · Extended Models</a></li>
+                <li><a href="aurora-04-reporting.html">04 · Reporting</a></li>
+                <li><a href="aurora-05-unified-workflow.html">05 · Unified Workflow</a></li>
+                <li><a href="causal-features-showcase.html">Causal Features Showcase</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="blind-spot">Aurora 03 · Extended Models — What is TV <em>really</em> doing?</h1>
+            <p class="lead">
+                Chapter 3 of the Aurora Coffee Co. story. <a href="aurora-02-base-mmm.html">The base MMM</a>
+                handed us two unsolved mysteries: TV and Display look nearly worthless, and the two products
+                — Original and Cold Brew — seem to move together in ways spend can't explain. This chapter
+                answers both with the framework's extended models: a <strong>NestedMMM</strong> that models
+                the TV&nbsp;→&nbsp;awareness&nbsp;→&nbsp;sales pathway explicitly, and a
+                <strong>MultivariateMMM</strong> that models both products at once with a cross-effect
+                between them. Because Aurora's world is synthetic with known ground truth, every claim on
+                this page is graded against the real answer — including one claim that <em>looks</em>
+                confirmed and turns out to be the prior talking.
+            </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00–05</a> (Bayesian fluency assumed) — or equivalent.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~35–45 min reading + fit time if running
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why the base model structurally undervalues Aurora's brand channels (TV read 0.35 vs a true 2.14) — and how NestedMMM recovers the TV → awareness → sales pathway from 26 monthly survey points.</li>
+                    <li>How MultivariateMMM models Original and Cold Brew together with a cross-effect, and why the honest cannibalization test is contraction and overlap, not the sign of a one-sided prior.</li>
+                    <li>How a claim that looks confirmed against the answer key can turn out to be the prior talking — and where the extension traps live.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/03_extended_mmm.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/03_extended_mmm.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2>The blind spot, quantified</h2>
+            <p>
+                In Aurora's true data-generating process, TV and Display barely touch sales directly. They
+                build a slow <strong>brand-awareness stock</strong>, and the awareness stock sells coffee.
+                The base model has no awareness variable, so it can only credit the (tiny) direct slice —
+                and calls the brand channels weak. The gap is not subtle:
+            </p>
+
+            <div class="chart-container" id="blindspotChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — base-model ROAS from the chapter-2 fit
+                (<code>nbs/02_base_mmm.ipynb</code>) vs the known true ROAS from the Aurora generator
+                (<code>nbs/aurora.py</code>). TV: 0.35 vs 2.14. Display: 0.67 vs 2.11. Meanwhile Search
+                — the demand-chasing mirage from <a href="aurora-00-overview.html">chapter 0</a> — reads
+                1.05 against a truth of 0.66. The base model undervalues the brand engines three- to
+                six-fold and overvalues the demand-chaser by ~60%.
+            </p>
+
+            <div class="note">
+                <h4>💡 Why a "better fit" can't fix this</h4>
+                <p>
+                    This is a <em>structural</em> blind spot, not a sampling problem. A model with no
+                    mediator variable cannot route credit through one — no amount of draws, chains, or
+                    prior tuning changes that. The fix is a different model structure, which is exactly
+                    what this chapter adds. (For how structural misses stay invisible to green diagnostics,
+                    see <a href="pressure-testing.html">the pressure-testing scorecard</a>.)
+                </p>
+            </div>
+
+            <h2 id="mediation">Part A — Mediation: TV → Awareness → Sales</h2>
+            <p>
+                Aurora measures awareness in a <strong>monthly brand-tracker survey</strong> — 26 noisy
+                observations across 104 weeks. The <code>NestedMMM</code> treats awareness as a
+                <em>partially observed</em> mediator: TV and Display feed it, it feeds sales, and the model
+                decomposes each brand channel's effect into <strong>direct</strong> vs
+                <strong>indirect (via awareness)</strong>.
+            </p>
+
+            <pre><code>from mmm_framework.mmm_extensions.models import NestedMMM
+from mmm_framework.mmm_extensions.builders import MediatorConfigBuilder, NestedModelConfigBuilder
+
+nested_cfg = (NestedModelConfigBuilder()
+    .add_mediator(MediatorConfigBuilder("awareness")
+                  .partially_observed(observation_noise=0.1)   # the monthly survey
+                  .with_positive_media_effect(sigma=1.0)
+                  .with_direct_effect(sigma=0.5).build())
+    .map_channels_to_mediator("awareness", ["TV", "Display"])  # brand channels build awareness
+    .build())
+
+nested = NestedMMM(X, aurora.sales_total, list(CHANNELS), nested_cfg,
+                   mediator_data={"awareness": aurora.awareness_survey}, index=aurora.weeks)
+nested.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)
+med = nested.get_mediation_effects()</code></pre>
+
+            <p>
+                The decomposition is the reveal. Virtually <em>none</em> of TV's or Display's effect reaches
+                sales directly — it all flows through the awareness pathway the base model couldn't see:
+            </p>
+
+            <div class="chart-container" id="mediationStackChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>get_mediation_effects()</code> from the baked notebook:
+                TV direct 0.05 vs indirect 151.48 (total 151.53); Display direct 0.11 vs indirect 186.28
+                (total 186.39). The direct slices are so small they are invisible at this scale — that
+                <em>is</em> the finding. <code>proportion_mediated</code> = 1.00 for both channels.
+                Search and Social were not mapped to the mediator (they are pure direct-response channels
+                in Aurora's world), so the decomposition applies only to the brand channels.
+            </p>
+
+            <p>
+                Is that reveal real, or an artifact of bolting on a mediator? Because this world is
+                synthetic, we know the <strong>true</strong> mediated share — and the model lands on it:
+            </p>
+
+            <div class="chart-container" id="mediationTruthChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the model's <code>proportion_mediated</code> vs the generator's
+                <code>true_mediated_share</code>: TV 1.00 vs a truth of 0.99; Display 1.00 vs 0.97. Search
+                and Social are truly unmediated (0.00) and were not routed through awareness in the model.
+            </p>
+
+            <p>
+                The mediator itself is recovered too. From just 26 monthly survey points, the model's
+                latent awareness path tracks both the survey and the normally-hidden true awareness curve:
+            </p>
+
+            <div class="chart-container" id="awarenessChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — the baked notebook's chart shows the
+                model's latent-awareness posterior (mean + 90% band, z-scored) tracking the sparse monthly
+                survey dots and the true awareness curve across all 104 weeks. This recreation reproduces
+                that qualitative result with the same structure: a slow awareness stock, monthly noisy
+                observations of it, and a smoothed estimate with a band. The measured claim it stands in
+                for: the NestedMMM's latent path follows the truth even between survey points.
+            </p>
+
+            <div class="definition">
+                <h4>The number that flips Aurora's budget logic</h4>
+                <p>
+                    TV and Display aren't weak — they're <strong>brand engines</strong> whose value lives
+                    entirely in the awareness pathway (true ROAS ≈ 2.1 for both). The base model saw only
+                    the direct slice and read them at 0.35 and 0.67. This is the single finding that turns
+                    chapter 5's <a href="aurora-05-unified-workflow.html">budget reallocation</a> from
+                    "cut the brand channels" to "feed them."
+                </p>
+            </div>
+
+            <h2 id="toy">Interactive: how mediation hides a channel from a base model</h2>
+            <p>
+                Why does routing an effect through awareness make it invisible to a spend-on-sales
+                regression? Timing. A direct effect arrives within a few weeks of the spend that caused it
+                — adstock can see that. A mediated effect first accumulates into a slow awareness
+                <em>stock</em>, so the sales lift decouples from the spend pulses that built it. Drag the
+                slider to move a fixed-size TV effect between the two paths and watch the spend↔effect
+                correlation — the statistical handle a base model grips — fall away.
+            </p>
+
+            <div class="controls-row">
+                <label for="medShareSlider">Share of TV's effect via awareness:</label>
+                <input type="range" id="medShareSlider" min="0" max="100" step="5" value="50">
+                <span class="slider-readout" id="medShareValue">50%</span>
+                <button class="toggle-btn" id="btnAurora" type="button">Set to Aurora (≈100%)</button>
+            </div>
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value" id="corrStat">—</div>
+                    <div class="stat-label">corr(weekly TV spend, weekly TV effect) — what a spend-indexed model can "see"</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value" id="lagStat">—</div>
+                    <div class="stat-label">lag (weeks) at which spend↔effect correlation peaks</div>
+                </div>
+            </div>
+            <div class="chart-container" id="toyChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative</strong> — a toy simulation computed live in your browser, not
+                Aurora's fitted model. Flighted TV spend (grey) drives a direct adstocked path and a slow
+                awareness stock (decay 0.92/week); the slider splits a fixed total effect between them.
+                At 0% mediation the effect hugs the spend flights; at ≈100% (Aurora's measured case) the
+                effect is a smooth wave with almost no same-week relationship to spend — which is why the
+                base model handed TV's credit to the trend and the demand-chasing channels instead.
+            </p>
+
+            <h2 id="cannibalization">Part B — Cannibalization: do the two products fight?</h2>
+            <p>
+                Aurora sells two products, and the <strong>Cold Brew</strong> launch looked like it ate
+                <strong>Original</strong>'s summer sales. A <code>MultivariateMMM</code> models both
+                outcomes at once: shared media, a <strong>cross-effect</strong>
+                ψ (Cold Brew → Original) built with the <code>cannibalization_effect</code> helper, and an
+                LKJ-correlated residual structure so a shared demand shock can hit both products.
+            </p>
+
+            <pre><code>from mmm_framework.mmm_extensions.models import MultivariateMMM
+from mmm_framework.mmm_extensions.builders import (
+    MultivariateModelConfigBuilder, OutcomeConfigBuilder, cannibalization_effect)
+
+mv_cfg = (MultivariateModelConfigBuilder()
+    .add_outcome(OutcomeConfigBuilder("sales_original", column="sales_original")
+                 .with_positive_media_effects(sigma=0.5).build())
+    .add_outcome(OutcomeConfigBuilder("sales_coldbrew", column="sales_coldbrew")
+                 .with_positive_media_effects(sigma=0.5).build())
+    .add_cross_effect(cannibalization_effect(source="sales_coldbrew", target="sales_original"))
+    .build())
+
+mv = MultivariateMMM(X, outcomes, list(CHANNELS), mv_cfg, index=aurora.weeks)
+mv.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)
+ce = mv.get_cross_effects_summary()</code></pre>
+
+            <p>
+                The cross-effect summary comes back looking decisive: posterior mean −0.0003, 94% HDI
+                [−0.0008, −0.0000] — the interval sits <strong>entirely below zero</strong>. The naive read
+                writes itself: <em>"confirmed: Cold Brew cannibalizes Original."</em> Hold that thought.
+            </p>
+
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn active" data-view="prior" type="button">Prior scale</button>
+                <button class="toggle-btn" data-view="post" type="button">Zoom to posterior</button>
+            </div>
+            <div class="chart-container" id="psiChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded) of measured values</strong> — the curves are
+                seeded recreations shaped to the baked notebook's measured summaries: the prior is the
+                model's actual \( \psi = -\,\mathrm{HalfNormal}(0.3) \) density (prior mean magnitude
+                0.236, sd 0.176); the posterior matches the measured mean −0.0003 and 94% HDI
+                [−0.0008, −0.0000]. On the prior's scale the posterior is a needle at zero — toggle the
+                view to see both facts at once: the mass <em>is</em> entirely below zero, <em>and</em> it
+                is pinned a thousandfold tighter than the prior, essentially at no effect.
+            </p>
+
+            <h2 id="prior-or-data">Is this real, or did the prior decide it for us?</h2>
+            <p>
+                The cannibalization prior is <strong>one-sided by construction</strong>:
+                \( \psi = -\,\mathrm{HalfNormal}(\sigma) \), so \( \psi \le 0 \) with probability one
+                <em>before any data arrive</em>. That makes "the interval is below zero" /
+                \( P(\psi &lt; 0) \approx 1 \) nearly vacuous — it can simply restate the prior. The honest
+                replacement is the framework's parameter-learning diagnostic: <strong>contraction</strong>
+                \( c = 1 - \mathrm{Var}_{\text{post}} / \mathrm{Var}_{\text{prior}} \) (→ 1 means the data
+                pinned the parameter) and the prior↔posterior <strong>overlap</strong> coefficient (→ 0
+                means strong learning).
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">1.000</div>
+                    <div class="stat-label">contraction on ψ — the data, not the prior, pinned it</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.052</div>
+                    <div class="stat-label">prior↔posterior overlap — the densities barely touch</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.013%</div>
+                    <div class="stat-label">of Original's weekly sales — the size of the "confirmed" cross-effect</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+0.41</div>
+                    <div class="stat-label">residual correlation between the products — the real linkage</div>
+                </div>
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ The honest verdict — and it flips the naive one</h4>
+                <p>
+                    The diagnostic clears the first hurdle: contraction = 1.000 and overlap = 0.052
+                    (measured), so the posterior is <em>not</em> a prior artifact — the data genuinely
+                    spoke. But "the data spoke" is not "the effect is real" — read <em>what</em> it said.
+                    The data pinned ψ to <strong>essentially zero</strong>: a posterior mean of −0.00030,
+                    worth 0.013% of Original's weekly sales. Within this model there is <strong>little
+                    direct cannibalization</strong>. \( P(\psi &lt; 0) \approx 1 \) was the near-vacuous
+                    part — under a one-sided prior, the sign is automatic. Contraction told us the data
+                    was informative; the posterior <em>mean</em> told us it found a negligible effect.
+                </p>
+            </div>
+
+            <h2 id="residuals">Where the co-movement actually lives: the shared demand wave</h2>
+            <p>
+                The two products genuinely do move together — but through the model's <em>other</em>
+                channel for linkage. After media is accounted for, the outcome residuals remain positively
+                correlated at <strong>+0.41</strong> (measured): Aurora's shared demand wave lifts Original
+                and Cold Brew at the same time. The substitution baked into Aurora's generator is not
+                recovered as a direct cross-effect by this weakly-identified two-outcome model; it
+                surfaces as shared-demand co-movement instead.
+            </p>
+
+            <div class="chart-container" id="residualChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded), at the measured correlation</strong> — two
+                residual series constructed to share a common demand wave at exactly the baked notebook's
+                measured residual correlation, r = +0.41 (the notebook draws this as the
+                <code>get_correlation_matrix()</code> heatmap). The practical consequence is real either
+                way: the products must be <em>planned together</em>, because a demand swing moves both at
+                once — just not because Cold Brew is directly eating Original.
+            </p>
+
+            <h2 id="caveats">The caveat: extensions add structure the data cannot always identify</h2>
+            <div class="warning">
+                <h4>⚠️ Read this before reaching for an extended model</h4>
+                <p>
+                    Extended models are cure <em>and</em> disease. Every mediator and cross-effect you add
+                    is a causal claim the data may be unable to check — and the prior will happily fill the
+                    gap with an authoritative-looking posterior. The stress-test series probes exactly
+                    these failure modes on worlds with known truth:
+                    <a href="stress-04-extension-traps.html"><strong>Stress 04 · Extension Traps</strong></a>
+                    shows a NestedMMM <strong>over-crediting a sibling channel 2.6×</strong> when two
+                    channels share one mediator (the data cannot split the credit; the prior does), a
+                    cross-effect whose <strong>sign flips with the prior</strong> (the prior-determined ψ
+                    split you just watched this chapter defuse with the contraction diagnostic), and a
+                    <em>wrong</em> mediator that fits the data perfectly. If this chapter is the showcase,
+                    stress-04 is the safety briefing — read it before deploying either model on real data.
+                </p>
+            </div>
+            <p>
+                The discipline this chapter modeled: never accept a sign statement from a one-sided prior;
+                demand contraction and overlap before believing any extension-specific parameter; and
+                validate the mediation share against external evidence (a survey, a lift test —
+                see <a href="aurora-01-causality.html">chapter 1</a> for experiment calibration) rather
+                than the model's own fit.
+            </p>
+
+            <h2 id="takeaways">Wrap-up</h2>
+            <p>
+                Extended models also serialize like the base model
+                (<code>nested.save("artifacts/aurora_nested")</code> /
+                <code>NestedMMM.load(...)</code> — trace restored, measured in the notebook). Aurora now
+                has everything: a causal map, experiment anchoring, brand-pathway value, and product
+                interactions. Next: turning it into a board deck in
+                <a href="aurora-04-reporting.html">chapter 4 · Reporting</a>, and into money in
+                <a href="aurora-05-unified-workflow.html">chapter 5 · the Unified Workflow</a>.
+            </p>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>The base model structurally undervalues mediated channels.</strong> TV read
+                        0.35 and Display 0.67 against true ROAS of 2.14 and 2.11 — a three- to six-fold miss
+                        no amount of
+                        sampling can fix, because the model had no awareness pathway to route credit through.</li>
+                    <li><strong>NestedMMM recovers the pathway and grades out.</strong> Measured
+                        <code>proportion_mediated</code> = 1.00 for TV and Display vs true mediated shares of
+                        0.99 and 0.97; the latent awareness path is reconstructed from 26 monthly survey points.</li>
+                    <li><strong>A one-sided prior makes sign statements near-vacuous.</strong> The
+                        Cold Brew → Original ψ posterior sat entirely below zero (94% HDI [−0.0008, −0.0000])
+                        — but ψ ≤ 0 was true before any data. The honest test is contraction and overlap.</li>
+                    <li><strong>The honest verdict flipped the naive one.</strong> Contraction = 1.000,
+                        overlap = 0.052: the data pinned ψ — to essentially zero (0.013% of weekly sales).
+                        Little direct cannibalization; the products co-move via a shared demand wave
+                        (residual correlation +0.41) and should be planned together for that reason.</li>
+                    <li><strong>Extensions are cure and disease.</strong> Shared-mediator over-crediting and
+                        prior-determined cross-effect splits are demonstrated failure modes — see
+                        <a href="stress-04-extension-traps.html">Stress 04 · Extension Traps</a>.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/03_extended_mmm.ipynb</code> (committed with baked
+                    outputs), regenerated from <code>nbs/build_aurora_notebooks.py</code>. The shared
+                    Aurora world — ground truth included — lives in <code>nbs/aurora.py</code>; the series
+                    guide is <code>nbs/README_aurora.md</code>. Fits use small draw counts (500/500, 2
+                    chains) to stay fast; use ≥4 chains and ≥1000 draws for real analyses. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the notebook-guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                original: '#8fa86a', coldbrew: '#6a8fa8',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gauss(rand) {
+            let u = 0, v = 0;
+            while (u === 0) u = rand();
+            while (v === 0) v = rand();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+        function mean(a) { return a.reduce(function(s, x) { return s + x; }, 0) / a.length; }
+        function corr(a, b) {
+            const ma = mean(a), mb = mean(b);
+            let num = 0, da = 0, db = 0;
+            for (let i = 0; i < a.length; i++) {
+                num += (a[i] - ma) * (b[i] - mb);
+                da += (a[i] - ma) * (a[i] - ma);
+                db += (b[i] - mb) * (b[i] - mb);
+            }
+            return num / Math.sqrt(da * db);
+        }
+
+        // ------------------------------------------------------------------
+        // MEASURED numbers (baked notebook outputs / aurora.py ground truth)
+        // ------------------------------------------------------------------
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLORS = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+        const BASE_ROAS = [0.35, 1.05, 0.64, 0.67];      // nbs/02_base_mmm.ipynb cell "ROAS vs truth"
+        const TRUE_ROAS = [2.14, 0.66, 0.49, 2.11];      // aurora.py true_roas
+        const MED_DIRECT   = { TV: 0.05,   Display: 0.11   };  // 03 nb: get_mediation_effects()
+        const MED_INDIRECT = { TV: 151.48, Display: 186.28 };
+        const PROP_TRUE  = [0.99, 0.00, 0.00, 0.97];     // aurora.py true_mediated_share
+        const PROP_MODEL = [1.00, 0.00, 0.00, 1.00];     // model proportion_mediated (Search/Social: not mapped)
+        const PSI_MEAN = -0.0003, PSI_HDI = [-0.0008, -0.0000];   // 03 nb cross-effect summary
+        const PSI_PRIOR_SIGMA = 0.3;                     // cannibalization_effect prior_sigma
+        const RESID_CORR = 0.407;                        // 03 nb residual correlation (Original, Cold Brew)
+
+        // ------------------------------------------------------------------
+        // Chart 1 — the blind spot: base-model ROAS vs true ROAS (measured)
+        // ------------------------------------------------------------------
+        function drawBlindspot() {
+            const base = {
+                type: 'bar', name: 'base-model ROAS (ch. 2)',
+                x: CHANNELS, y: BASE_ROAS,
+                marker: { color: CH_COLORS, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                text: BASE_ROAS.map(function(v) { return v.toFixed(2); }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>base-model ROAS %{y:.2f}<extra></extra>'
+            };
+            const truth = {
+                type: 'bar', name: 'true ROAS (generator)',
+                x: CHANNELS, y: TRUE_ROAS,
+                marker: { color: PT.band(PT.colors.truth, 0.15), line: { color: PT.colors.truth, width: 2 } },
+                text: TRUE_ROAS.map(function(v) { return v.toFixed(2); }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>true ROAS %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'ROAS', rangemode: 'tozero', range: [0, 3.3] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 60, r: 30, t: 40, b: 50 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: '#9aa79a', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 3.45, y: 1, xanchor: 'right', yanchor: 'bottom',
+                    text: 'breakeven', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('blindspotChart', [base, truth], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2 — direct vs indirect stacked bars (measured)
+        // ------------------------------------------------------------------
+        function drawMediationStack() {
+            const brand = ['TV', 'Display'];
+            const direct = {
+                type: 'bar', name: 'direct effect',
+                x: brand, y: brand.map(function(c) { return MED_DIRECT[c]; }),
+                marker: { color: PT.colors.social, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                hovertemplate: '<b>%{x}</b><br>direct effect %{y:.2f}<extra></extra>'
+            };
+            const indirect = {
+                type: 'bar', name: 'indirect (via awareness)',
+                x: brand, y: brand.map(function(c) { return MED_INDIRECT[c]; }),
+                marker: {
+                    color: [PT.colors.tv, PT.colors.display],
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                hovertemplate: '<b>%{x}</b><br>indirect (via awareness) %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'stack',
+                yaxis: { title: 'total effect on sales (model units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 50 },
+                annotations: [
+                    { x: 'TV', y: 151.53, yanchor: 'bottom', showarrow: false,
+                      text: 'direct 0.05 · indirect 151.48<br>proportion mediated 1.00',
+                      font: { size: 11, color: '#5a6b5a' } },
+                    { x: 'Display', y: 186.39, yanchor: 'bottom', showarrow: false,
+                      text: 'direct 0.11 · indirect 186.28<br>proportion mediated 1.00',
+                      font: { size: 11, color: '#5a6b5a' } }
+                ]
+            });
+            Plotly.newPlot('mediationStackChart', [direct, indirect], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3 — proportion mediated: model vs truth (measured)
+        // ------------------------------------------------------------------
+        function drawMediationTruth() {
+            const truth = {
+                type: 'bar', name: 'true mediated share',
+                x: CHANNELS, y: PROP_TRUE,
+                marker: { color: PT.band(PT.colors.truth, 0.7) },
+                text: PROP_TRUE.map(function(v) { return v.toFixed(2); }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>true mediated share %{y:.2f}<extra></extra>'
+            };
+            const model = {
+                type: 'bar', name: 'model proportion_mediated',
+                x: CHANNELS, y: PROP_MODEL,
+                marker: { color: CH_COLORS, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                text: PROP_MODEL.map(function(v, i) { return i === 1 || i === 2 ? 'n/a' : v.toFixed(2); }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>model %{y:.2f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'share of effect via awareness', range: [0, 1.25] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 50 }
+            });
+            Plotly.newPlot('mediationTruthChart', [truth, model], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 4 — latent awareness recovered (illustrative recreation)
+        // ------------------------------------------------------------------
+        function drawAwareness() {
+            const n = 104, rand = mulberry32(42);
+            const weeks = [], truthA = [];
+            // A slow awareness wave: seasonal swell + media-built drift, like Aurora's.
+            let drift = 0;
+            for (let t = 0; t < n; t++) {
+                weeks.push(t + 1);
+                drift = 0.97 * drift + 0.6 * rand();
+                truthA.push(Math.sin(2 * Math.PI * (t - 14) / 52) * 0.9 + drift * 0.08 + 0.25 * Math.sin(2 * Math.PI * t / 26));
+            }
+            // z-score the truth
+            const mu = mean(truthA);
+            const sd = Math.sqrt(mean(truthA.map(function(x) { return (x - mu) * (x - mu); })));
+            const z = truthA.map(function(x) { return (x - mu) / sd; });
+            // monthly noisy survey (every 4th week)
+            const sx = [], sy = [];
+            for (let t = 0; t < n; t += 4) { sx.push(t + 1); sy.push(z[t] + 0.28 * gauss(rand)); }
+            // "latent" estimate: smoothed truth + small wobble, with a band
+            const lat = [], lo = [], hi = [];
+            for (let t = 0; t < n; t++) {
+                let s = 0, w = 0;
+                for (let k = -3; k <= 3; k++) {
+                    const j = Math.min(n - 1, Math.max(0, t + k));
+                    const wk = 1 / (1 + Math.abs(k));
+                    s += z[j] * wk; w += wk;
+                }
+                const m = s / w + 0.06 * gauss(rand);
+                lat.push(m); lo.push(m - 0.32); hi.push(m + 0.32);
+            }
+            const traces = [
+                { x: weeks.concat(weeks.slice().reverse()), y: hi.concat(lo.slice().reverse()),
+                  fill: 'toself', fillcolor: PT.band(PT.colors.coldbrew, 0.18),
+                  line: { width: 0 }, hoverinfo: 'skip', name: 'model latent 90% band', showlegend: true, type: 'scatter' },
+                { x: weeks, y: lat, type: 'scatter', mode: 'lines', name: 'model latent awareness',
+                  line: { color: PT.colors.coldbrew, width: 2 } },
+                { x: weeks, y: z, type: 'scatter', mode: 'lines', name: 'true awareness (hidden)',
+                  line: { color: PT.colors.truth, width: 1.6, dash: 'dash' } },
+                { x: sx, y: sy, type: 'scatter', mode: 'markers', name: 'monthly survey (26 obs)',
+                  marker: { color: PT.colors.social, size: 8, line: { color: '#fff', width: 1 } } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'awareness (z-score)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 60, r: 30, t: 40, b: 55 }
+            });
+            Plotly.newPlot('awarenessChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 5 — interactive toy: mediation share slider (illustrative)
+        // ------------------------------------------------------------------
+        const TOY = (function buildToyWorld() {
+            const n = 104, rand = mulberry32(7);
+            const spend = [];
+            for (let t = 0; t < n; t++) {
+                const on = (Math.floor(t / 5) % 2) === 0;      // 5-on / 5-off flighting
+                spend.push(on ? 70 + 30 * rand() : 4 * rand());
+            }
+            // direct path: geometric adstock, decay .55, L=8 (normalized weights)
+            const L = 8, decay = 0.55;
+            let wsum = 0; const w = [];
+            for (let k = 0; k < L; k++) { w.push(Math.pow(decay, k)); wsum += w[k]; }
+            const ad = [];
+            for (let t = 0; t < n; t++) {
+                let s = 0;
+                for (let k = 0; k < L && t - k >= 0; k++) s += w[k] * spend[t - k];
+                ad.push(s / wsum);
+            }
+            // awareness stock: slow accumulation of (saturated) spend
+            const A = [];
+            let a = 0;
+            for (let t = 0; t < n; t++) {
+                const sat = ad[t] / (ad[t] + 40);
+                a = 0.92 * a + 0.08 * sat;
+                A.push(a);
+            }
+            // normalize each path to mean 1, so the slider splits a fixed total
+            const mAd = mean(ad), mA = mean(A);
+            const dPath = ad.map(function(x) { return x / mAd; });
+            const aPath = A.map(function(x) { return x / mA; });
+            return { n: n, spend: spend, dPath: dPath, aPath: aPath };
+        })();
+
+        function drawToy(mPct) {
+            const m = mPct / 100, E = 120;       // fixed avg weekly TV effect
+            const weeks = [], direct = [], indirect = [], total = [];
+            for (let t = 0; t < TOY.n; t++) {
+                weeks.push(t + 1);
+                const d = (1 - m) * E * TOY.dPath[t];
+                const a = m * E * TOY.aPath[t];
+                direct.push(d); indirect.push(a); total.push(d + a);
+            }
+            // readouts: same-week corr + lag of peak cross-correlation (0..12)
+            const r0 = corr(TOY.spend, total);
+            let bestLag = 0, bestR = -2;
+            for (let lag = 0; lag <= 12; lag++) {
+                const x = TOY.spend.slice(0, TOY.n - lag);
+                const y = total.slice(lag);
+                const r = corr(x, y);
+                if (r > bestR) { bestR = r; bestLag = lag; }
+            }
+            document.getElementById('corrStat').textContent = r0.toFixed(2);
+            document.getElementById('lagStat').textContent = String(bestLag);
+
+            const spendScale = Math.max.apply(null, TOY.spend);
+            const totScale = Math.max.apply(null, total);
+            const spendTrace = {
+                x: weeks, y: TOY.spend.map(function(s) { return s / spendScale * totScale * 0.9; }),
+                type: 'scatter', mode: 'lines', name: 'TV spend (scaled)',
+                line: { color: '#9aa79a', width: 1.2 },
+                hoverinfo: 'skip'
+            };
+            const dTrace = {
+                x: weeks, y: direct, stackgroup: 'eff', name: 'direct effect',
+                type: 'scatter', mode: 'lines',
+                line: { color: PT.colors.social, width: 0.5 },
+                fillcolor: PT.band(PT.colors.social, 0.55),
+                hovertemplate: 'week %{x}<br>direct %{y:.0f}<extra></extra>'
+            };
+            const aTrace = {
+                x: weeks, y: indirect, stackgroup: 'eff', name: 'via awareness',
+                type: 'scatter', mode: 'lines',
+                line: { color: PT.colors.tv, width: 0.5 },
+                fillcolor: PT.band(PT.colors.tv, 0.55),
+                hovertemplate: 'week %{x}<br>via awareness %{y:.0f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'weekly TV effect on sales (toy units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 40, b: 55 }
+            });
+            Plotly.react('toyChart', [dTrace, aTrace, spendTrace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 6 — psi prior vs posterior with zoom toggle
+        // (illustrative recreation shaped to MEASURED summaries)
+        // ------------------------------------------------------------------
+        function psiTraces() {
+            // Prior: signed -HalfNormal(0.3) density (analytic, the model's actual prior)
+            const px = [], py = [];
+            for (let i = 0; i <= 240; i++) {
+                const x = -1.0 + i * (1.02 / 240);
+                px.push(x);
+                py.push(x <= 0
+                    ? Math.exp(-x * x / (2 * PSI_PRIOR_SIGMA * PSI_PRIOR_SIGMA))
+                    : 0);
+            }
+            // Posterior: signed -HalfNormal(s) with s chosen so E|psi| = 0.0003 (measured |mean|)
+            const s = 0.0003 / Math.sqrt(2 / Math.PI);
+            const qx = [], qy = [];
+            for (let i = 0; i <= 240; i++) {
+                const x = -0.0014 + i * (0.0016 / 240);
+                qx.push(x);
+                qy.push(x <= 0 ? Math.exp(-x * x / (2 * s * s)) : 0);
+            }
+            return [
+                { x: px, y: py, type: 'scatter', mode: 'lines', name: 'prior: ψ = −HalfNormal(0.3)',
+                  line: { color: '#9aa79a', width: 2, dash: 'dot' },
+                  fill: 'tozeroy', fillcolor: PT.band('#9aa79a', 0.12) },
+                { x: qx, y: qy, type: 'scatter', mode: 'lines', name: 'posterior (measured mean −0.0003)',
+                  line: { color: PT.colors.display, width: 2 },
+                  fill: 'tozeroy', fillcolor: PT.band(PT.colors.display, 0.3) }
+            ];
+        }
+
+        function drawPsi(view) {
+            const zoomed = view === 'post';
+            const xr = zoomed ? [-0.0014, 0.0003] : [-1.0, 0.05];
+            const layout = PT.layout({
+                xaxis: { title: 'signed cannibalization effect ψ (Cold Brew → Original)', range: xr },
+                yaxis: { title: 'density (each curve scaled to its own max)', showticklabels: false },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 60, r: 30, t: 40, b: 60 },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper',
+                      line: { color: PT.colors.truth, width: 1.5, dash: 'dash' } }
+                ].concat(zoomed ? [{
+                    type: 'rect', x0: PSI_HDI[0], x1: PSI_HDI[1], y0: 0, y1: 1, yref: 'paper',
+                    fillcolor: PT.band(PT.colors.display, 0.12), line: { width: 0 }, layer: 'below'
+                }] : []),
+                annotations: zoomed ? [{
+                    x: PSI_HDI[0], y: 0.96, yref: 'paper', xanchor: 'left',
+                    text: 'measured 94% HDI [−0.0008, −0.0000]',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 0, y: 0.6, yref: 'paper', xanchor: 'left',
+                    text: ' no effect', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }] : [{
+                    x: -0.45, y: 0.55, yref: 'paper',
+                    text: 'prior mass: anywhere down here', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: -0.06, y: 0.97, yref: 'paper', xanchor: 'left',
+                    text: 'posterior: a needle at zero →', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.react('psiChart', psiTraces(), layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 7 — correlated residuals (illustrative, exact measured r)
+        // ------------------------------------------------------------------
+        function drawResiduals() {
+            const n = 104, rand = mulberry32(11);
+            const weeks = [];
+            for (let t = 0; t < n; t++) weeks.push(t + 1);
+            // shared demand wave + noise, then Gram-Schmidt so corr is EXACTLY 0.407
+            const common = [], e1 = [], e2 = [];
+            for (let t = 0; t < n; t++) {
+                common.push(Math.sin(2 * Math.PI * (t - 10) / 52) + 0.45 * gauss(rand));
+                e1.push(gauss(rand));
+                e2.push(gauss(rand));
+            }
+            function standardize(v) {
+                const m = mean(v);
+                const sd = Math.sqrt(mean(v.map(function(x) { return (x - m) * (x - m); })));
+                return v.map(function(x) { return (x - m) / sd; });
+            }
+            function orth(v, u) {  // remove u-component from v (u standardized)
+                const d = mean(v.map(function(x, i) { return x * u[i]; }));
+                return v.map(function(x, i) { return x - d * u[i]; });
+            }
+            const u0 = standardize(common);
+            const f1 = standardize(orth(standardize(e1), u0));
+            let f2 = orth(standardize(e2), u0);
+            f2 = standardize(orth(f2, f1));
+            const rho = RESID_CORR, a = Math.sqrt(rho), b = Math.sqrt(1 - rho);
+            const r1 = u0.map(function(x, i) { return a * x + b * f1[i]; });
+            const r2 = u0.map(function(x, i) { return a * x + b * f2[i]; });
+            const traces = [
+                { x: weeks, y: r1, type: 'scatter', mode: 'lines', name: 'Original residual',
+                  line: { color: PT.colors.original, width: 1.8 } },
+                { x: weeks, y: r2, type: 'scatter', mode: 'lines', name: 'Cold Brew residual',
+                  line: { color: PT.colors.coldbrew, width: 1.8 } },
+                { x: weeks, y: u0.map(function(x) { return a * x; }), type: 'scatter', mode: 'lines',
+                  name: 'shared demand wave', line: { color: PT.colors.truth, width: 1.4, dash: 'dash' } }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'residual (standardized)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 60, r: 30, t: 42, b: 55 },
+                annotations: [{
+                    x: 0.99, y: 0.97, xref: 'paper', yref: 'paper', xanchor: 'right',
+                    text: 'residual correlation r = +' + corr(r1, r2).toFixed(2) + ' (measured: +0.41)',
+                    showarrow: false, font: { size: 12, color: '#5a6b5a' },
+                    bgcolor: 'rgba(255,255,255,0.7)'
+                }]
+            });
+            Plotly.newPlot('residualChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Wiring
+        // ------------------------------------------------------------------
+        function init() {
+            drawBlindspot();
+            drawMediationStack();
+            drawMediationTruth();
+            drawAwareness();
+            drawToy(50);
+            drawPsi('prior');
+            drawResiduals();
+
+            const slider = document.getElementById('medShareSlider');
+            const readout = document.getElementById('medShareValue');
+            slider.addEventListener('input', function() {
+                readout.textContent = slider.value + '%';
+                drawToy(Number(slider.value));
+            });
+            document.getElementById('btnAurora').addEventListener('click', function() {
+                slider.value = 100;
+                readout.textContent = '100%';
+                drawToy(100);
+            });
+
+            document.querySelectorAll('[data-view]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('[data-view]').forEach(function(b) {
+                        b.classList.remove('active');
+                    });
+                    btn.classList.add('active');
+                    drawPsi(btn.dataset.view);
+                });
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

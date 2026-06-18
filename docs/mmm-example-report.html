@@ -453,6 +453,19 @@
             <div class="date">Analysis Period: Jan 2023 – Dec 2025 | Generated: January 2026</div>
         </header>
 
+        <!-- Provenance badge -->
+        <div class="callout warning" style="margin-bottom: 2rem;">
+            <p style="margin: 0;">
+                <strong>Synthetic demonstration data — not a real client.</strong> This page is a
+                hand-built illustration styled after <code>MMMReportGenerator</code> output — it mirrors
+                the real generator's template and sections, but every number on it is decorative, not
+                framework output. Illustrative engagement &ldquo;B&rdquo;: numbers are <em>not comparable
+                across demo pages</em> (the <a href="scientific-workflow-demo.html" style="color: var(--color-primary-dark);">scientific-workflow
+                demo</a> is a different fictional dataset, engagement &ldquo;A&rdquo; — e.g. Radio reads
+                0.82 here and 1.6 there).
+            </p>
+        </div>
+
         <!-- Executive Summary -->
         <section class="section">
             <h2>Executive Summary</h2>
@@ -501,8 +514,10 @@
         <section class="section">
             <h2>Model Fit</h2>
             <p>
-                The model captures 94% of weekly revenue variance. The chart below shows actual vs. predicted revenue 
-                with the 80% prediction interval. The model performs well across seasons and promotional periods.
+                The model captures 94% of weekly revenue variance — fit quality, which validates the
+                computation, not the causal attribution (see the Causal Assumptions section below). The chart
+                below shows actual vs. predicted revenue with the 80% prediction interval. The model performs
+                well across seasons and promotional periods.
             </p>
             
             <div class="chart-container chart-container-lg" id="modelFitChart"></div>
@@ -782,14 +797,14 @@
 
             <div class="metrics-grid" style="margin-top: 1.5rem;">
                 <div class="metric-card">
-                    <div class="value" id="simRevenue">$127M</div>
+                    <div class="value" id="simRevenue">$116M</div>
                     <div class="label">Expected Marketing Revenue</div>
-                    <div class="ci" id="simRevenueCi">80% CI: [$98M – $156M]</div>
+                    <div class="ci" id="simRevenueCi">80% CI: [$90M – $143M]</div>
                 </div>
                 <div class="metric-card">
-                    <div class="value" id="simRoi">1.38</div>
+                    <div class="value" id="simRoi">1.26</div>
                     <div class="label">Expected Blended ROI</div>
-                    <div class="ci" id="simRoiCi">80% CI: [1.05 – 1.72]</div>
+                    <div class="ci" id="simRoiCi">80% CI: [0.96 – 1.58]</div>
                 </div>
                 <div class="metric-card" id="deltaCard">
                     <div class="value" id="simDelta">+$0M</div>
@@ -812,7 +827,7 @@
                 <h4>✓ Robust Findings</h4>
                 <p>
                     <strong>Paid Search ROI > 1.5</strong> holds across all reasonable specifications. 
-                    <strong>Print underperformance</strong> (ROI < 1.0) is consistent across sensitivity checks.
+                    <strong>Print underperformance</strong> (ROI &lt; 1.0) is consistent across sensitivity checks.
                 </p>
             </div>
 
@@ -859,6 +874,34 @@
             </div>
         </section>
 
+        <!-- Causal Assumptions -->
+        <section class="section">
+            <h2>Causal Assumptions Behind These Numbers</h2>
+            <p>
+                Every attribution above is a causal claim, and causal claims rest on assumptions the data
+                cannot fully check. The ones this report makes:
+            </p>
+            <ul style="margin: 1rem 0 1rem 1.5rem;">
+                <li><strong>Declared confounders controlled:</strong> trend, seasonality, holidays, weather,
+                    and promotional indicators enter the model as controls.</li>
+                <li><strong>No unobserved confounding assumed:</strong> given those controls, spend is treated
+                    as good-as-random. If budgets chase demand the model cannot see, channel ROIs are biased
+                    upward — adjustment alone cannot fix this.</li>
+                <li><strong>Functional form assumed:</strong> Hill saturation × geometric adstock. The
+                    sensitivity analysis varies these, but it cannot rule out misspecification outside the
+                    family it explores.</li>
+                <li><strong>Mediators excluded:</strong> no awareness or brand pathway is modeled, so channels
+                    that work indirectly (TV especially) may be under-credited.</li>
+                <li><strong>Experiment calibration:</strong> no channel in this report is yet anchored to
+                    randomized evidence — the TV geo-holdout and Display incrementality tests are proposed
+                    (Q1/Q2 2026), so current ROIs rest on observational identification only.</li>
+            </ul>
+            <p>
+                Stating these assumptions does not validate them — it converts an implicit leap of faith
+                into an explicit, reviewable claim.
+            </p>
+        </section>
+
         <!-- Methodology -->
         <section class="section">
             <h2>Methodology</h2>
@@ -877,7 +920,7 @@
                 </ul>
                 <p>
                     Inference via MCMC (4 chains, 2000 samples each, 1000 warmup). 
-                    All R-hat < 1.01, bulk ESS > 400 for all parameters.
+                    All R-hat &lt; 1.01, bulk ESS &gt; 400 for all parameters.
                 </p>
             </div>
 
@@ -899,7 +942,7 @@
         <!-- Footer -->
         <footer class="report-footer">
             <p>Generated by MMM Framework | <a href="https://github.com/redam94/mmm-framework" style="color: var(--color-primary);">Documentation</a></p>
-            <p style="margin-top: 0.5rem;">Model version 2.1.0 | Report template 1.0</p>
+            <p style="margin-top: 0.5rem;">mmm-framework 0.1.0 (Beta) | Report template 1.0</p>
         </footer>
     </div>
 

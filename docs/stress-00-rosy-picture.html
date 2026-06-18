@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stress Test 00: The Rosy Picture | MMM Framework</title>
+    <meta name="description" content="The doctrine-setting opener of the stress series: a clean positive control recovers at 7% median error — and an equally green demand-confounded fit badly over-credits Search. What each diagnostic can and cannot see.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-00-rosy-picture.html">
+    <meta property="og:title" content="Stress Test 00: The Rosy Picture | MMM Framework">
+    <meta property="og:description" content="Same green dashboard, opposite verdicts: the positive control recovers at 7% error while a confounded fit is wrong by multiples — with identical convergence diagnostics.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-00-rosy-picture.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           (Copied from pressure-testing.html so the series stays coherent.)
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            accent-color: var(--color-primary-dark);
+            width: 220px;
+        }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-text);
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-full);
+            padding: 0.25rem 0.75rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        /* Toolkit comparison table */
+        .toolkit-table { font-size: 0.9rem; display: block; overflow-x: auto; }
+        .toolkit-table th { white-space: nowrap; }
+        .toolkit-table td:first-child { font-weight: 600; white-space: nowrap; }
+        .toolkit-table .same {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+        .toolkit-table .blind { color: var(--color-danger); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#estimand">The estimand discipline</a></li>
+                <li><a href="#two-worlds">Two worlds, one dashboard</a></li>
+                <li><a href="#gate">The silent-failure gate</a></li>
+                <li><a href="#toolkit">The diagnostic toolkit</a></li>
+                <li><a href="#lenses">Three uncertainty lenses</a></li>
+                <li><a href="#sandbox">Build your own confounder</a></li>
+                <li><a href="#open">Still open: default adstock</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html" class="active">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Stress Test 00: The Rosy Picture</h1>
+            <p class="lead">
+                Your MMM converged. R-hat is 1.00 across the board, zero divergences, the posterior-mean
+                fit traces the KPI beautifully. <em>Should you believe the ROAS table?</em> Not on that
+                evidence. This opener fits the same model to two synthetic worlds — one clean, one where
+                spend secretly chases demand — and shows that <strong>every check an analyst acts on is
+                green on both</strong>, while one of them over-credits the demand-chasing channels by
+                large multiples. It sets the doctrine the whole
+                <a href="pressure-testing.html">stress series</a> runs on: green diagnostics validate the
+                <em>computation</em>, never the <em>causal claim</em>.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">7%</div>
+                    <div class="stat-label">median error on the clean positive control (100% coverage)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+111%</div>
+                    <div class="stat-label">Search over-credit on the confounded world under the defaults that started this series (+44% after the trend-prior fix it forced)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">&le; 1.02</div>
+                    <div class="stat-label">r-hat on both fits — 0 divergences, healthy ESS, PPC passes</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">diagnostics that told the two worlds apart</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why green sampler diagnostics — r-hat 1.00, zero divergences, a passing PPC — can coexist with attribution that is wrong by multiples: they validate the computation, never the causal claim.</li>
+                    <li>How a counterfactual zero-out estimand and a clean positive control (7% median error, 100% coverage) make model error measurable instead of rhetorical.</li>
+                    <li>What each check in the diagnostic toolkit can and cannot see — sampler checks test sampling, PPC tests fit, and none of them tests attribution.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_00_the_rosy_picture.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_00_the_rosy_picture.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="estimand">1 · The estimand discipline: what number would be wrong?</h2>
+            <p>
+                A stress test is only as honest as its definition of "truth", and an MMM is only as
+                honest as its definition of "contribution". Before reading any posterior — before
+                <em>fitting</em> — you must be able to answer: <strong>if this model is wrong, which
+                number is wrong, and against what?</strong> The series' answer, used in every world in
+                <code>src/mmm_framework/synth/dgp.py</code>: contribution is the <strong>counterfactual
+                zero-out</strong>, evaluated on the noiseless structural mean,
+            </p>
+            <p>
+                \[
+                C_c \;=\; \sum_{t=1}^{T}\Big(\, m_t(\mathbf{x}) \;-\; m_t\big(\mathbf{x}^{(c\to 0)}\big) \,\Big)
+                \]
+            </p>
+            <p>
+                where \( m_t(\cdot) \) is the world's true mean response and
+                \( \mathbf{x}^{(c\to 0)} \) is the observed spend history with channel \(c\) set to zero
+                everywhere (carryover handles itself — zero spend adstocks to zero). The model's estimate,
+                via <code>compute_counterfactual_contributions</code>, is computed <em>the same way</em>:
+                zero the channel's column, difference the posterior predictions. Truth and estimate are
+                the <strong>same estimand on the same KPI scale</strong>, so the gap between them
+                <em>is</em> the attribution error — not an artifact of mismatched definitions.
+            </p>
+            <ul>
+                <li><strong>For confounded worlds, the truth is causal.</strong> Zeroing spend does not
+                    change the demand-driven baseline — so when the model's estimate departs from it,
+                    that gap is exactly the causal bias the diagnostics ought to catch (and, below,
+                    don't).</li>
+                <li><strong>Nothing here is unfair to the model.</strong> The estimand is the model's
+                    own; it is graded on the question it claims to answer.</li>
+                <li><strong>Representable vs not.</strong> A world is <em>representable</em> when the
+                    truth lies inside the model's hypothesis space (e.g. positive effects under the
+                    positive-only prior). Failures on representable worlds are the model's problem;
+                    failures on unrepresentable ones are expected by construction and labeled as such.</li>
+            </ul>
+            <p>
+                If you cannot state what number would be wrong, no diagnostic can save you — there is
+                nothing for it to be wrong <em>about</em>. That discipline is rung one of the
+                <a href="pressure-testing.html#fix-ladder">fix ladder</a>.
+            </p>
+
+            <h2 id="two-worlds">2 · Two worlds, one dashboard</h2>
+            <p>
+                <strong>The positive control.</strong> <code>dgp.build("clean")</code> draws data from
+                the model's <em>exact</em> generative family — geometric adstock,
+                \( 1-e^{-\lambda x} \) saturation, additive channels, linear trend, Fourier-representable
+                seasonality, Gaussian noise, and <strong>exogenous</strong> spend. If the model can't
+                recover this world, nothing downstream means anything. It can: every channel lands within
+                8% of truth, every 90% interval covers it — <strong>7% median error, 100%
+                coverage</strong>.
+            </p>
+            <p>
+                <strong>The punchline world.</strong> In <code>dgp.build("unobserved_confounding")</code>
+                a latent demand signal (seasonal + growth + AR(1), hidden from the model) drives
+                <em>both</em> the baseline <em>and</em> the media budgets: Search and Social chase demand
+                the way real bidding and pacing systems do. Everything else is the clean world. The only
+                change is that spend is no longer exogenous — there is an open back-door from demand to
+                sales that the model cannot block, because the confounder is not in the data. The model
+                fits it <em>happily</em>: demand-driven spend is an excellent predictor of demand-driven
+                sales, and the likelihood loves it.
+            </p>
+
+            <div class="controls-row" id="twoWorldsControls">
+                <label>World:</label>
+                <button class="toggle-btn active" data-world="clean">Clean (exogenous spend)</button>
+                <button class="toggle-btn" data-world="conf">Confounded (spend chases hidden demand)</button>
+            </div>
+            <div class="chart-container" id="twoWorldsChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run, current defaults)</strong> — true causal
+                contribution (dark bars) vs the model's estimate with 90% HDI whiskers, from
+                <code>nbs/stress_00_the_rosy_picture.ipynb</code>. Clean: median |error| 7%, coverage
+                100%. Confounded: Search <strong>+44%</strong> and Social <strong>+38%</strong> with the
+                truth <em>outside</em> the interval — not just wrong, confidently wrong — median |error|
+                32%, coverage 50%. The recorded harness run of the same world
+                (<code>tests/synth/results/stress_matrix.md</code>, higher fidelity) logs Search at
+                <strong>+69%</strong>, truth outside the CI, with the same green diagnostics.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said</h4>
+                <p>
+                    Clean fit: r-hat max <strong>1.009</strong>, <strong>0</strong> divergences, min bulk
+                    ESS 355. Confounded fit: r-hat max <strong>1.012</strong>, <strong>0</strong>
+                    divergences, min bulk ESS 402. PPC: <strong>pass on both</strong>. In-sample
+                    R&sup2;: 0.90 vs 0.88. The dashboard every analyst checks <em>cannot tell these worlds
+                    apart</em>. The mechanism is mundane: Search spend rises exactly when hidden demand
+                    lifts the baseline, so the likelihood's cheapest explanation hands demand's effect to
+                    Search — and the sampler then converges <em>correctly</em> on that wrong posterior.
+                    R-hat measures whether the chains agree; they agree on the biased answer.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>💡 Framework fix that reshaped this page's numbers</h4>
+                <p>
+                    When this notebook was first built, the confounded world read Search at
+                    <strong>~+111%</strong> at notebook fidelity. The stress work traced part of that to a
+                    framework defect: the linear-trend growth prior was too tight
+                    (sigma 0.1 — the fitted trend reached only ~43% of a true trend's amplitude), so the
+                    starved trend pushed even more of the demand signal into media. The prior was loosened
+                    to 0.5 on 2026-06-10 (fitted trend now reaches ~95% of true amplitude), which
+                    <strong>halved the confounded bias to ~+44%</strong> — better, still far outside any
+                    acceptable error, and Search/Social are still mis-ranked. The same starved prior also
+                    made PPC false-alarm on the <em>clean</em> control in older recordings; it now passes.
+                    Both eras teach the same lesson from opposite directions: these verdicts track the
+                    fit configuration, not the causal claim.
+                </p>
+            </div>
+
+            <h2 id="gate">3 · The silent-failure gate</h2>
+            <p>
+                The two fits above are one row each of a systematic sweep: the harness in
+                <code>tests/synth/harness.py</code> fits the same model on 16 worlds and grades every
+                estimate against the zero-out truth. The series' central definition:
+            </p>
+
+            <div class="definition">
+                <h4>Definition: Silent failure</h4>
+                <p>
+                    A <em>representable</em> scenario where recovery is wrong — median per-channel
+                    |error| &gt; 25%, worst channel &gt; 50%, or 90%-interval coverage &lt; 75% — yet the
+                    checks an analyst acts on are green: MCMC convergence (r-hat &lt; 1.05, zero
+                    divergences) and the unobserved-confounding robustness value. PPC and the causal
+                    refutation suite are reported but <strong>excluded from the gate</strong>: their
+                    verdicts have proven config-sensitive across recordings (both false-alarmed on the
+                    clean control under the old trend prior; both pass on clean <em>and</em> on several
+                    wrong-attribution worlds under current defaults). A check whose verdict tracks the
+                    sampler configuration rather than the causal claim cannot serve as an all-clear.
+                </p>
+            </div>
+
+            <p>
+                The recorded matrix (re-recorded 2026-06-10): <strong>16 worlds, 8 silent
+                failures</strong> — unobserved confounding, the noisy-proxy "we controlled for it" trap,
+                multicollinearity, saturation misspecification, spend outliers, trend breaks, evolving
+                seasonality, dense controls — every one of them with r-hat &le; 1.02 and zero
+                divergences. The full scorecard chart lives on the
+                <a href="pressure-testing.html#scorecard">series hub</a>; the per-failure stories live in
+                <a href="stress-01-carryover-shape.html">guide 01</a>,
+                <a href="stress-02-time-structure.html">02</a> and
+                <a href="stress-03-confounding-selection.html">03</a>.
+            </p>
+
+            <h2 id="toolkit">4 · The diagnostic toolkit: what each check can and cannot see</h2>
+            <p>
+                If the routine checks can't catch silent failures, what is each one <em>for</em>? The
+                notebook runs the framework's full validation suite on <strong>both</strong> fits — the
+                one we know is right and the one we know is wrong — and records which checks
+                discriminate. None do. The measured columns below are that experiment.
+            </p>
+
+            <table class="toolkit-table">
+                <thead>
+                    <tr>
+                        <th>Check</th>
+                        <th>Actually tests</th>
+                        <th>Can see</th>
+                        <th>Cannot see</th>
+                        <th>Clean fit (right)</th>
+                        <th>Confounded fit (wrong)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>R-hat / ESS / divergences</td>
+                        <td>The sampler explored the posterior of the model as written</td>
+                        <td>Broken sampling; non-identification <em>sometimes</em> (via divergences)</td>
+                        <td class="blind">Any causal error — converges happily on biased posteriors</td>
+                        <td class="same">1.009 · 0 div</td>
+                        <td class="same">1.012 · 0 div</td>
+                    </tr>
+                    <tr>
+                        <td>In-sample fit / R&sup2;</td>
+                        <td>Predictive adequacy</td>
+                        <td>Gross misspecification</td>
+                        <td class="blind">Confounding — a confounder <em>improves</em> fit</td>
+                        <td class="same">R&sup2; 0.90</td>
+                        <td class="same">R&sup2; 0.88</td>
+                    </tr>
+                    <tr>
+                        <td>Posterior predictive checks</td>
+                        <td>Replicated data resembles observed data</td>
+                        <td>Wrong noise model; missing dynamics</td>
+                        <td class="blind">Mis-attribution at the same fit quality (and it has false-alarmed on good models)</td>
+                        <td class="same">pass</td>
+                        <td class="same">pass</td>
+                    </tr>
+                    <tr>
+                        <td>Confounding robustness value (RV)</td>
+                        <td>How strong a hidden confounder must be to nullify each channel</td>
+                        <td>Nothing by itself — it is a bound, computed from the possibly-biased posterior</td>
+                        <td class="blind">Whether such a confounder exists</td>
+                        <td class="same">0.17–0.29 · none fragile</td>
+                        <td class="same">0.12–0.22 · none fragile</td>
+                    </tr>
+                    <tr>
+                        <td>Causal refutation suite</td>
+                        <td>Effect behaves sanely under placebo / perturbation refits</td>
+                        <td>Implementation bugs; fragile effects</td>
+                        <td class="blind">Calm, stable bias; poor specificity (false alarms on fine worlds)</td>
+                        <td class="same">pass</td>
+                        <td class="same">pass</td>
+                    </tr>
+                    <tr>
+                        <td>Parameter learning (prior→posterior)</td>
+                        <td>Whether the posterior differs from the prior, per parameter</td>
+                        <td>Prior-dominated reporting; prior–data conflict</td>
+                        <td class="blind">Bias in well-identified parameters — a confounded β <em>learns strongly</em>, toward the wrong value</td>
+                        <td class="same" colspan="2">verdicts vary even on the correct fit (see below)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — validation suite
+                (<code>ModelValidator</code>, PPC + confounding RV + 4-test refutation at the harness's
+                fidelity) on both fits. Per-channel RVs: clean TV 0.25 / Search 0.29 / Social 0.23 /
+                Display 0.17; confounded TV 0.19 / Search 0.22 / Social 0.19 / Display 0.12 — <strong>the
+                confounding RV reads essentially the same on the clean and the truly confounded
+                fit</strong>, and flags nothing on either. At the recorded harness fidelity the
+                refutation suite <em>does</em> fail <code>placebo_treatment</code> on the confounded world
+                — but it fails the same test on worlds whose attribution is fine
+                (<code>reverse_causality</code>, heavy-tailed noise), and has historically false-alarmed
+                on the clean control. A detector with that specificity is a red-flag generator for
+                development, never a green light.
+            </p>
+
+            <p>
+                <strong>The honest non-catcher, demonstrated on the clean fit.</strong>
+                <code>compute_parameter_learning</code> compares each parameter's prior to its posterior —
+                contraction \( 1 - \sigma^2_{\text{post}} / \sigma^2_{\text{prior}} \), overlap, shift —
+                and is the most misread tool in the kit. On the clean fit (recovery is <em>good</em>,
+                every truth inside its interval) the per-channel β verdicts still span the range:
+                Social 0.08 (weak), TV 0.46 (moderate), Display 0.59 (strong), Search 0.90 (strong).
+                TV carries the <em>largest</em> true contribution (5,668) but not the most-learned β —
+                its β trades off against the saturation and adstock parameters while the
+                <em>contribution</em> stays tightly identified. <strong>Contraction measures
+                informativeness, not importance.</strong> Use it as an audit of which reported numbers
+                are data versus priors restated — never as a channel ranking.
+                <a href="stress-04-extension-traps.html">Guide 04</a> leans on this doctrine hard.
+            </p>
+            <p>
+                What's missing from every row of the table: <strong>information the model doesn't
+                have</strong> — a real confounder measured well, or randomized evidence (a lift test).
+                That is why the series' recovery arc runs through <em>design</em> and
+                <em>calibration</em> (<a href="stress-03-confounding-selection.html">guide 03</a>,
+                <a href="stress-05-gauntlet.html">guide 05</a>), not through more diagnostics.
+            </p>
+
+            <h2 id="lenses">5 · Three uncertainty-first lenses</h2>
+            <p>
+                Scalar diagnostics compress the posterior to a verdict; <strong>fit plots keep the
+                uncertainty visible</strong>. The notebook's §3.1 builds three views from the posterior
+                you already have, each answering a different question. Because the data is synthetic, the
+                true weekly contribution path can be overlaid — the view a real analyst never gets, and
+                exactly where the two worlds finally separate.
+            </p>
+
+            <h3>Lens 1 — the posterior-predictive band: a fit check, with a fit check's blind spot</h3>
+            <div class="chart-container" id="ppcChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> (seeded), styled after the
+                notebook's figure. The measured punchline: <strong>both</strong> fits reproduce the KPI
+                superbly — R&sup2; 0.90 (clean) vs 0.88 (confounded), with the 90% predictive band
+                hugging the observed weeks in both worlds. If your defense of an MMM is "look how well it
+                tracks the data," you have defended the confounded model too.
+            </p>
+
+            <h3>Lens 2 — contribution-over-time bands vs the true weekly path</h3>
+            <div class="controls-row" id="contribControls">
+                <label>Search channel in:</label>
+                <button class="toggle-btn active" data-world="clean">Clean fit</button>
+                <button class="toggle-btn" data-world="conf">Confounded fit</button>
+            </div>
+            <div class="chart-container" id="contribChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong>, styled after the notebook's
+                figure; the dashed line is the true weekly Search contribution. The measured punchline
+                (seeded notebook run): on the clean fit the truth lives inside the 90% band
+                <strong>88%</strong> of weeks for Search (100% for TV); on the confounded fit the Search
+                band <strong>excludes the truth ~90% of weeks — the truth sits <em>below</em> the band
+                week after week</strong> (inside only 10%), while TV in the same wrong fit stays honest
+                at 100%. The bias is a level shift, not noise: the inherited demand credit. The catch:
+                the dashed line is unobservable in real life. What this view gives a real analyst is the
+                model's full week-by-week claim with honest widths — the artifact to put in front of
+                domain experts and test against lift windows, instead of one ROAS number stripped of its
+                uncertainty.
+            </p>
+
+            <h3>Lens 3 — posterior correlation of channel totals: the separability report</h3>
+            <div class="chart-container" id="corrChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> (correlations of simulated
+                posterior draws), matching the measured result: max |pairwise correlation| of channel
+                totals is <strong>0.08 on the clean fit and 0.07 on the confounded fit</strong> — both
+                posteriors separate the channels cleanly, <em>including the wrong one</em>. The confounded
+                posterior is not confused about the split; it is confidently wrong about the
+                <em>level</em>. This lens diagnoses identification <em>between channels</em>, not
+                causality — and it gets loud exactly where it should: on the shared-calendar collinear
+                world of <a href="stress-03-confounding-selection.html">guide 03</a>, every pairwise
+                correlation goes negative (min ≈ −0.5) — the joint posterior's own statement that the
+                split is a seesaw.
+            </p>
+
+            <div class="note">
+                <h4>💡 Reading the three lenses together</h4>
+                <p>
+                    Predictive bands validate <em>fit</em>; contribution bands expose the model's actual
+                    week-by-week <em>claim</em>; the totals' correlation matrix reports which numbers are
+                    jointly pinned down versus traded off. None of them detects confounding — that lesson
+                    stands — but they turn "trust the table" into reviewable, testable claims. Plot the
+                    uncertainty, not just the verdicts.
+                </p>
+            </div>
+
+            <h2 id="sandbox">6 · Build your own confounder</h2>
+            <p>
+                The mechanism is simple enough to run in your browser. Below, a 156-week world is
+                simulated client-side: sales depend on Search, TV, trend, seasonality, and a latent
+                demand signal (AR(1)) the regression never sees. The slider sets how strongly the Search
+                budget <em>chases</em> that hidden demand. A naive least-squares "MMM" (intercept + trend
+                + annual seasonality + Search + TV) is refit on every move. Watch two numbers: the Search
+                attribution error inflates with confounding strength — while in-sample R&sup2; stays high
+                and even <em>improves</em>, because the chasing channel is soaking up the demand signal
+                the model otherwise couldn't explain.
+            </p>
+
+            <div class="controls-row">
+                <label for="confSlider">Confounding strength:</label>
+                <input type="range" id="confSlider" min="0" max="100" value="0">
+                <span class="readout" id="confStrengthVal">0.00</span>
+                <span class="readout" id="confErrVal">Search error: —</span>
+                <span class="readout" id="confR2Val">R&sup2;: —</span>
+            </div>
+            <div class="chart-container" id="confChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — a seeded toy world with
+                closed-form least squares, not the framework. At strength 0 the toy recovers its own
+                positive control (Search estimate ≈ truth, interval covers it). As strength rises the
+                point estimate runs away and the 90% interval leaves the truth behind — the same
+                level-shift signature as the measured confounded fit above — while the non-chasing TV
+                channel stays covered throughout. No goodness-of-fit number on this chart ever gets
+                worse.
+            </p>
+
+            <h2 id="open">7 · Resolved: the legacy adstock default</h2>
+            <div class="warning">
+                <h4>✅ Finding closed (June 2026) — and it changed the framework</h4>
+                <p>
+                    Every fit on this page uses <code>use_parametric_adstock=True</code>, so the model
+                    estimates the same kernel family the world was generated with. With the legacy
+                    two-point blend adstock — <code>use_parametric_adstock=False</code>, the
+                    <em>default before June 2026</em> — the <strong>clean positive control recovers at
+                    ~28% median error vs 7% parametric</strong>: the old default underperformed on the
+                    model's own generative family. This finding drove a change:
+                    <strong>parametric adstock is now the shipped default</strong>; the blend remains an
+                    explicit opt-out for reproducing older fits.
+                    <a href="stress-01-carryover-shape.html">Guide 01</a> covers kernel choice in depth.
+                </p>
+            </div>
+
+            <h2 id="takeaway">8 · What to take away</h2>
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Green diagnostics validate the computation, not the causal claim.</strong>
+                        Both fits here converged identically (r-hat &le; 1.012, 0 divergences, PPC pass);
+                        one was wrong by multiples on the channels that matter.</li>
+                    <li><strong>Insist on a comparable estimand before fitting.</strong> Truth here is the
+                        counterfactual zero-out on the structural mean — the same question the model
+                        answers — so error is measurable, not rhetorical. Ask "what number would be
+                        wrong?" first.</li>
+                    <li><strong>Run a positive control.</strong> The clean world's 7% / 100% is what earns
+                        every later accusation: same model, same settings, correct answer.</li>
+                    <li><strong>Know each check's scope.</strong> Sampler checks test sampling; PPC and
+                        R&sup2; test fit; the RV bounds sensitivity; parameter learning audits
+                        informativeness (contraction ≠ importance). None tests attribution.</li>
+                    <li><strong>The fixes are upstream of the fit</strong>: causal structure, data
+                        hygiene, and experiments. The rest of the series —
+                        <a href="stress-01-carryover-shape.html">01</a> through
+                        <a href="stress-06-geo-hierarchy.html">06</a> — is about exactly that.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/stress_00_the_rosy_picture.ipynb</code> (authored by
+                    <code>nbs/build_stress_00_rosy_picture.py</code>), backed by the scenario DGPs in
+                    <code>mmm_framework.synth</code>, the scoring harness in <code>tests/synth/</code>, and the recorded scorecard in
+                    <code>tests/synth/results/stress_matrix.md</code>. Every computational cell ends in a
+                    seeded assert encoding the claim it demonstrates — if the notebook executes clean, the
+                    story on this page is still true. Next:
+                    <a href="stress-01-carryover-shape.html">Stress 01 — Carryover &amp; Shape</a>.
+                    Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gaussMaker(rng) {
+            // Box-Muller on a seeded uniform stream.
+            return function() {
+                let u = 0, v = 0;
+                while (u === 0) u = rng();
+                while (v === 0) v = rng();
+                return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+            };
+        }
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLORS = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+
+        // ==================================================================
+        // 1. Two worlds, one dashboard — MEASURED notebook numbers
+        //    (seeded run of nbs/stress_00_the_rosy_picture.ipynb,
+        //     current defaults, numpyro 500x2, parametric adstock).
+        // ==================================================================
+        const WORLDS = {
+            clean: {
+                title: 'Clean — exogenous spend',
+                truth: [5668, 4531, 4017, 2958],
+                est:   [5229, 4215, 4142, 2753],
+                lo:    [4281, 3423, 3536, 2064],
+                hi:    [6372, 5066, 4786, 3491],
+                inHdi: [true, true, true, true],
+                relErr: ['-8%', '-7%', '+3%', '-7%'],
+                stamp: 'r-hat 1.009 · 0 divergences · ESS 355 · med |err| 7% · coverage 100%'
+            },
+            conf: {
+                title: 'Confounded — spend chases hidden demand',
+                truth: [6309, 3654, 2345, 2577],
+                est:   [5141, 5249, 3226, 1877],
+                lo:    [3617, 4147, 2527, 1016],
+                hi:    [6722, 6604, 3993, 2982],
+                inHdi: [true, false, false, true],
+                relErr: ['-19%', '+44%', '+38%', '-27%'],
+                stamp: 'r-hat 1.012 · 0 divergences · ESS 402 · med |err| 32% · coverage 50%'
+            }
+        };
+
+        function drawTwoWorlds(key) {
+            const w = WORLDS[key];
+            const truthTrace = {
+                type: 'bar',
+                name: 'causal truth',
+                x: CHANNELS,
+                y: w.truth,
+                marker: { color: PT.colors.truth, opacity: 0.82 },
+                hovertemplate: '<b>%{x}</b> true contribution: %{y:,}<extra></extra>'
+            };
+            const estTrace = {
+                type: 'bar',
+                name: 'estimate (90% HDI)',
+                x: CHANNELS,
+                y: w.est,
+                marker: {
+                    color: CH_COLORS,
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                error_y: {
+                    type: 'data', symmetric: false,
+                    array: w.hi.map(function(h, i) { return h - w.est[i]; }),
+                    arrayminus: w.est.map(function(e, i) { return e - w.lo[i]; }),
+                    color: '#2d3a2d', thickness: 1.4, width: 5
+                },
+                customdata: CHANNELS.map(function(c, i) {
+                    return [w.relErr[i], w.inHdi[i] ? 'yes' : 'NO'];
+                }),
+                hovertemplate: '<b>%{x}</b> estimate: %{y:,}<br>' +
+                               'relative error: %{customdata[0]}<br>' +
+                               'truth inside 90% HDI: %{customdata[1]}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'total contribution (KPI units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 50 },
+                annotations: [{
+                    x: 0.01, y: 0.98, xref: 'paper', yref: 'paper',
+                    xanchor: 'left', yanchor: 'top', align: 'left',
+                    text: '<b>' + w.title + '</b><br>' + w.stamp,
+                    showarrow: false,
+                    font: { size: 11.5, color: '#5a6b5a' },
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                    bordercolor: '#d4ddd4', borderwidth: 1, borderpad: 5
+                }]
+            });
+            Plotly.react('twoWorldsChart', [truthTrace, estTrace], layout, PT.config);
+        }
+
+        document.querySelectorAll('#twoWorldsControls .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#twoWorldsControls .toggle-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawTwoWorlds(btn.dataset.world);
+            });
+        });
+
+        // ==================================================================
+        // Shared toy-world ingredients for the illustrative lenses.
+        // ==================================================================
+        const N_WEEKS = 120;
+
+        function geomAdstock(x, alpha) {
+            const out = new Array(x.length);
+            let carry = 0;
+            for (let t = 0; t < x.length; t++) {
+                carry = x[t] + alpha * carry;
+                out[t] = carry;
+            }
+            return out;
+        }
+        function logisticSat(x, lam) {
+            return x.map(function(v) { return 1 - Math.exp(-lam * v); });
+        }
+        function flighting(rng, n, period, duty, lo, hi) {
+            // Blocky on/off spend calendar with noise — looks like real flighting.
+            const out = new Array(n);
+            for (let t = 0; t < n; t++) {
+                const on = ((t % period) / period) < duty;
+                out[t] = Math.max(0, (on ? hi : lo) + 0.08 * (rng() - 0.5));
+            }
+            return out;
+        }
+
+        // ==================================================================
+        // 2. Lens 1 — posterior-predictive bands, clean | confounded panels.
+        //    ILLUSTRATIVE seeded simulation; both panels hug the data.
+        // ==================================================================
+        function drawPpc() {
+            const traces = [];
+            const panels = [
+                { seed: 11, axis: '',  title: 'clean world' },
+                { seed: 47, axis: '2', title: 'confounded world' }
+            ];
+            panels.forEach(function(p, pi) {
+                const rng = mulberry32(p.seed);
+                const g = gaussMaker(mulberry32(p.seed + 1000));
+                const weeks = [], mu = [], obs = [], lo = [], hi = [];
+                const spend = flighting(rng, N_WEEKS, 10, 0.55, 0.12, 0.85);
+                const media = logisticSat(geomAdstock(spend, 0.5), 1.6);
+                let ar = 0;
+                for (let t = 0; t < N_WEEKS; t++) {
+                    ar = 0.7 * ar + 0.35 * g();
+                    const m = 42 + 0.045 * t
+                            + 5.5 * Math.sin(2 * Math.PI * t / 52 + 0.4)
+                            + 2.0 * Math.sin(4 * Math.PI * t / 52 + 1.1)
+                            + 9.0 * media[t]
+                            + (pi === 1 ? 2.2 * ar : 0);  // hidden demand, absorbed by the fit
+                    weeks.push(t);
+                    mu.push(m + 0.5 * g());      // "posterior mean": near-perfect either way
+                    obs.push(m + 2.1 * g());     // observed KPI
+                    lo.push(m - 3.4);
+                    hi.push(m + 3.4);
+                }
+                const xa = 'x' + p.axis, ya = 'y' + p.axis;
+                traces.push({
+                    type: 'scatter', x: weeks.concat(weeks.slice().reverse()),
+                    y: hi.concat(lo.slice().reverse()),
+                    fill: 'toself', fillcolor: PT.band(PT.colors.search, 0.25),
+                    line: { width: 0 }, hoverinfo: 'skip',
+                    xaxis: xa, yaxis: ya, showlegend: pi === 0, name: '90% predictive band'
+                });
+                traces.push({
+                    type: 'scatter', x: weeks, y: mu, mode: 'lines',
+                    line: { color: PT.colors.search, width: 1.4 },
+                    xaxis: xa, yaxis: ya, showlegend: pi === 0, name: 'posterior mean',
+                    hovertemplate: 'week %{x}: %{y:.1f}<extra>posterior mean</extra>'
+                });
+                traces.push({
+                    type: 'scatter', x: weeks, y: obs, mode: 'markers',
+                    marker: { color: PT.colors.truth, size: 3.5, opacity: 0.65 },
+                    xaxis: xa, yaxis: ya, showlegend: pi === 0, name: 'observed KPI',
+                    hovertemplate: 'week %{x}: %{y:.1f}<extra>observed</extra>'
+                });
+            });
+            const layout = PT.layout({
+                legend: { orientation: 'h', y: 1.16 },
+                margin: { l: 55, r: 20, t: 45, b: 50 },
+                xaxis:  { domain: [0, 0.47],  title: 'week', gridcolor: '#e3e9e3' },
+                xaxis2: { domain: [0.53, 1],  title: 'week', gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                yaxis:  { title: 'KPI' },
+                yaxis2: { anchor: 'x2', gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                annotations: [
+                    { x: 0.20, y: 1.06, xref: 'paper', yref: 'paper', showarrow: false,
+                      text: '<b>clean world</b> · measured R² 0.90', font: { size: 12, color: '#5a6b5a' } },
+                    { x: 0.80, y: 1.06, xref: 'paper', yref: 'paper', showarrow: false,
+                      text: '<b>confounded world</b> · measured R² 0.88', font: { size: 12, color: '#5a6b5a' } }
+                ]
+            });
+            Plotly.newPlot('ppcChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 3. Lens 2 — Search contribution band vs the true weekly path,
+        //    toggled clean | confounded. ILLUSTRATIVE; styled like the
+        //    notebook figure, punchline numbers are the measured ones.
+        // ==================================================================
+        function contribWorld(key) {
+            const rng = mulberry32(23);
+            const g = gaussMaker(mulberry32(77));
+            const spend = flighting(rng, N_WEEKS, 9, 0.5, 0.08, 0.9);
+            const truePath = logisticSat(geomAdstock(spend, 0.45), 1.8)
+                .map(function(v) { return 30 * v; });
+            const weeks = [], lo = [], hi = [], mean = [];
+            let inside = 0, below = 0;
+            for (let t = 0; t < N_WEEKS; t++) {
+                weeks.push(t);
+                let m, half;
+                if (key === 'clean') {
+                    m = truePath[t] * 1.03 + 0.3 + 2.0 * g();
+                    half = 3.0 + 0.05 * truePath[t];
+                } else {
+                    // The inherited demand credit: a persistent level shift up.
+                    m = truePath[t] * 1.24 + 1.8 + 0.8 * g();
+                    half = 3.8 + 0.05 * truePath[t];
+                }
+                mean.push(m);
+                lo.push(m - half);
+                hi.push(m + half);
+                if (truePath[t] >= m - half && truePath[t] <= m + half) inside++;
+                if (truePath[t] < m - half) below++;
+            }
+            return {
+                weeks: weeks, truePath: truePath, lo: lo, hi: hi, mean: mean,
+                inside: Math.round(100 * inside / N_WEEKS),
+                below: Math.round(100 * below / N_WEEKS)
+            };
+        }
+
+        function drawContrib(key) {
+            const w = contribWorld(key);
+            const label = key === 'clean' ? 'clean fit' : 'confounded fit';
+            const traces = [
+                {
+                    type: 'scatter',
+                    x: w.weeks.concat(w.weeks.slice().reverse()),
+                    y: w.hi.concat(w.lo.slice().reverse()),
+                    fill: 'toself', fillcolor: PT.band(PT.colors.search, 0.25),
+                    line: { width: 0 }, hoverinfo: 'skip', name: '90% band (posterior)'
+                },
+                {
+                    type: 'scatter', x: w.weeks, y: w.mean, mode: 'lines',
+                    line: { color: PT.colors.search, width: 1.6 },
+                    name: 'posterior mean',
+                    hovertemplate: 'week %{x}: %{y:.1f}<extra>posterior mean</extra>'
+                },
+                {
+                    type: 'scatter', x: w.weeks, y: w.truePath, mode: 'lines',
+                    line: { color: PT.colors.truth, width: 1.8, dash: 'dash' },
+                    name: 'TRUE weekly path',
+                    hovertemplate: 'week %{x}: %{y:.1f}<extra>truth</extra>'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'weekly Search contribution (KPI)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 30, t: 40, b: 55 },
+                annotations: [{
+                    x: 0.01, y: 0.98, xref: 'paper', yref: 'paper',
+                    xanchor: 'left', yanchor: 'top', align: 'left',
+                    text: '<b>Search · ' + label + '</b> (illustration)<br>' +
+                          'truth inside band: ' + w.inside + '% of weeks · truth below band: ' + w.below + '%',
+                    showarrow: false, font: { size: 11.5, color: '#5a6b5a' },
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                    bordercolor: '#d4ddd4', borderwidth: 1, borderpad: 5
+                }]
+            });
+            Plotly.react('contribChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('#contribControls .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#contribControls .toggle-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawContrib(btn.dataset.world);
+            });
+        });
+
+        // ==================================================================
+        // 4. Lens 3 — posterior correlation of channel totals, two heatmaps.
+        //    ILLUSTRATIVE: independent simulated draws -> near-zero corr,
+        //    matching the measured max |corr| of 0.08 / 0.07.
+        // ==================================================================
+        function corrFromDraws(seed) {
+            const g = gaussMaker(mulberry32(seed));
+            const nDraws = 500, k = 4;
+            const draws = [];
+            for (let d = 0; d < nDraws; d++) {
+                const row = [];
+                for (let c = 0; c < k; c++) row.push(g());
+                draws.push(row);
+            }
+            const mean = new Array(k).fill(0);
+            draws.forEach(function(r) { r.forEach(function(v, c) { mean[c] += v / nDraws; }); });
+            const cov = [];
+            for (let a = 0; a < k; a++) {
+                cov.push(new Array(k).fill(0));
+                for (let b = 0; b < k; b++) {
+                    let s = 0;
+                    for (let d = 0; d < nDraws; d++) {
+                        s += (draws[d][a] - mean[a]) * (draws[d][b] - mean[b]);
+                    }
+                    cov[a][b] = s / (nDraws - 1);
+                }
+            }
+            const corr = [];
+            for (let a = 0; a < k; a++) {
+                corr.push(new Array(k));
+                for (let b = 0; b < k; b++) {
+                    corr[a][b] = cov[a][b] / Math.sqrt(cov[a][a] * cov[b][b]);
+                }
+            }
+            return corr;
+        }
+
+        function drawCorr() {
+            const cClean = corrFromDraws(5);
+            const cConf = corrFromDraws(91);
+            const traces = [
+                {
+                    type: 'heatmap', z: cClean, x: CHANNELS, y: CHANNELS,
+                    zmin: -1, zmax: 1, colorscale: 'RdBu', reversescale: true,
+                    showscale: false, xaxis: 'x', yaxis: 'y',
+                    hovertemplate: '%{y} × %{x}: %{z:.2f}<extra>clean</extra>'
+                },
+                {
+                    type: 'heatmap', z: cConf, x: CHANNELS, y: CHANNELS,
+                    zmin: -1, zmax: 1, colorscale: 'RdBu', reversescale: true,
+                    colorbar: { title: 'corr', thickness: 12, len: 0.8 },
+                    xaxis: 'x2', yaxis: 'y2',
+                    hovertemplate: '%{y} × %{x}: %{z:.2f}<extra>confounded</extra>'
+                }
+            ];
+            const annotations = [
+                { x: 0.18, y: 1.08, xref: 'paper', yref: 'paper', showarrow: false,
+                  text: '<b>clean fit</b> · measured max |corr| 0.08', font: { size: 12, color: '#5a6b5a' } },
+                { x: 0.78, y: 1.08, xref: 'paper', yref: 'paper', showarrow: false,
+                  text: '<b>confounded fit</b> · measured max |corr| 0.07', font: { size: 12, color: '#5a6b5a' } }
+            ];
+            [cClean, cConf].forEach(function(corr, pi) {
+                for (let a = 0; a < 4; a++) {
+                    for (let b = 0; b < 4; b++) {
+                        annotations.push({
+                            x: CHANNELS[b], y: CHANNELS[a],
+                            xref: pi === 0 ? 'x' : 'x2',
+                            yref: pi === 0 ? 'y' : 'y2',
+                            text: (corr[a][b] >= 0 ? '+' : '') + corr[a][b].toFixed(2),
+                            showarrow: false,
+                            font: { size: 10.5, color: Math.abs(corr[a][b]) > 0.6 ? '#fff' : '#2d3a2d' }
+                        });
+                    }
+                }
+            });
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 50, b: 50 },
+                xaxis:  { domain: [0, 0.42], showgrid: false },
+                xaxis2: { domain: [0.52, 0.94], showgrid: false, gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                yaxis:  { autorange: 'reversed', showgrid: false },
+                yaxis2: { anchor: 'x2', autorange: 'reversed', showgrid: false,
+                          gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                annotations: annotations
+            });
+            Plotly.newPlot('corrChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 5. Interactive sandbox — demand-chasing world + naive OLS "MMM".
+        //    Everything computed live in plain JS, clearly illustrative.
+        // ==================================================================
+        const SANDBOX = (function() {
+            const n = 156;
+            const g = gaussMaker(mulberry32(99));
+            const gNoise = [], demandAR = [], season = [], trendT = [];
+            const searchBase = flighting(mulberry32(9), n, 8, 0.5, 0.15, 0.8);
+            const tv = flighting(mulberry32(10), n, 13, 0.45, 0.1, 0.75);
+            let ar = 0;
+            for (let t = 0; t < n; t++) {
+                ar = 0.7 * ar + 0.10 * g();
+                demandAR.push(ar);
+                season.push(Math.sin(2 * Math.PI * t / 52 + 0.5));
+                trendT.push(t / n);
+                gNoise.push(g());
+            }
+            // Latent demand = growth + seasonality + AR(1). The naive model has
+            // trend + season controls, so the AR(1) part is the truly hidden bit.
+            const demand = demandAR.map(function(a, t) {
+                return 0.45 * trendT[t] + 0.30 * season[t] + a;
+            });
+            return {
+                n: n, searchBase: searchBase, tv: tv, demand: demand,
+                demandAR: demandAR, season: season, trendT: trendT, noise: gNoise,
+                betaSearch: 1.2, betaTv: 1.0, gamma: 6.0, chase: 2.6, sigma: 0.3
+            };
+        })();
+
+        function solveLinear(A, b) {
+            // Gaussian elimination with partial pivoting; A is k x k (small).
+            const k = b.length;
+            const M = A.map(function(row, i) { return row.slice().concat([b[i]]); });
+            for (let col = 0; col < k; col++) {
+                let piv = col;
+                for (let r = col + 1; r < k; r++) {
+                    if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+                }
+                const tmp = M[col]; M[col] = M[piv]; M[piv] = tmp;
+                for (let r = 0; r < k; r++) {
+                    if (r === col || M[r][col] === 0) continue;
+                    const f = M[r][col] / M[col][col];
+                    for (let c = col; c <= k; c++) M[r][c] -= f * M[col][c];
+                }
+            }
+            return M.map(function(row, i) { return row[k] / M[i][i]; });
+        }
+
+        function fitSandbox(strength) {
+            const S = SANDBOX, n = S.n;
+            // Search chases hidden demand with the chosen strength.
+            const search = new Array(n), y = new Array(n);
+            const dMean = S.demand.reduce(function(a, b) { return a + b; }, 0) / n;
+            for (let t = 0; t < n; t++) {
+                search[t] = Math.max(0.02, S.searchBase[t] + strength * S.chase * (S.demand[t] - dMean));
+                y[t] = 10 + S.betaSearch * search[t] + S.betaTv * S.tv[t]
+                     + S.gamma * S.demand[t] + S.sigma * S.noise[t];
+            }
+            // Naive MMM design: intercept, trend, sin, cos, Search, TV (no demand).
+            const cosS = S.trendT.map(function(_, t) { return Math.cos(2 * Math.PI * t / 52 + 0.5); });
+            const cols = [
+                new Array(n).fill(1), S.trendT, S.season, cosS, search, S.tv
+            ];
+            const k = cols.length;
+            const XtX = [], Xty = new Array(k).fill(0);
+            for (let a = 0; a < k; a++) {
+                XtX.push(new Array(k).fill(0));
+                for (let b = 0; b < k; b++) {
+                    let s = 0;
+                    for (let t = 0; t < n; t++) s += cols[a][t] * cols[b][t];
+                    XtX[a][b] = s;
+                }
+                for (let t = 0; t < n; t++) Xty[a] += cols[a][t] * y[t];
+            }
+            const beta = solveLinear(XtX, Xty);
+            // Residuals, R², and the standard error of the Search coefficient.
+            let ssr = 0, sst = 0;
+            const yMean = y.reduce(function(a, b) { return a + b; }, 0) / n;
+            for (let t = 0; t < n; t++) {
+                let pred = 0;
+                for (let c = 0; c < k; c++) pred += beta[c] * cols[c][t];
+                ssr += (y[t] - pred) * (y[t] - pred);
+                sst += (y[t] - yMean) * (y[t] - yMean);
+            }
+            const r2 = 1 - ssr / sst;
+            const sigma2 = ssr / (n - k);
+            const eS = new Array(k).fill(0); eS[4] = 1;
+            const zS = solveLinear(XtX, eS);   // (X'X)^-1 column for Search
+            const seS = Math.sqrt(sigma2 * zS[4]);
+            const eT = new Array(k).fill(0); eT[5] = 1;
+            const zT = solveLinear(XtX, eT);
+            const seT = Math.sqrt(sigma2 * zT[5]);
+
+            const sumSearch = search.reduce(function(a, b) { return a + b; }, 0);
+            const sumTv = S.tv.reduce(function(a, b) { return a + b; }, 0);
+            return {
+                trueSearch: S.betaSearch * sumSearch,
+                estSearch: beta[4] * sumSearch,
+                ciSearch: 1.645 * seS * sumSearch,
+                trueTv: S.betaTv * sumTv,
+                estTv: beta[5] * sumTv,
+                ciTv: 1.645 * seT * sumTv,
+                r2: r2
+            };
+        }
+
+        function drawSandbox(strength) {
+            const f = fitSandbox(strength);
+            const errPct = 100 * (f.estSearch - f.trueSearch) / f.trueSearch;
+            document.getElementById('confStrengthVal').textContent = strength.toFixed(2);
+            document.getElementById('confErrVal').textContent =
+                'Search error: ' + (errPct >= 0 ? '+' : '') + errPct.toFixed(0) + '%';
+            document.getElementById('confR2Val').textContent =
+                'R²: ' + f.r2.toFixed(2);
+
+            const x = ['Search', 'TV'];
+            const truthTrace = {
+                type: 'bar', name: 'true contribution',
+                x: x, y: [f.trueSearch, f.trueTv],
+                marker: { color: PT.colors.truth, opacity: 0.82 },
+                hovertemplate: '<b>%{x}</b> truth: %{y:.0f}<extra></extra>'
+            };
+            const estTrace = {
+                type: 'bar', name: 'naive estimate (90% CI)',
+                x: x, y: [f.estSearch, f.estTv],
+                marker: {
+                    color: [PT.colors.search, PT.colors.tv],
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                error_y: {
+                    type: 'data', array: [f.ciSearch, f.ciTv],
+                    color: '#2d3a2d', thickness: 1.4, width: 5
+                },
+                hovertemplate: '<b>%{x}</b> estimate: %{y:.0f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'total contribution (toy KPI units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 50 },
+                annotations: [{
+                    x: 0.99, y: 0.98, xref: 'paper', yref: 'paper',
+                    xanchor: 'right', yanchor: 'top', align: 'right',
+                    text: 'confounding strength ' + strength.toFixed(2) +
+                          '<br>Search error ' + (errPct >= 0 ? '+' : '') + errPct.toFixed(0) +
+                          '% · in-sample R² ' + f.r2.toFixed(2),
+                    showarrow: false, font: { size: 11.5, color: '#5a6b5a' },
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                    bordercolor: '#d4ddd4', borderwidth: 1, borderpad: 5
+                }]
+            });
+            Plotly.react('confChart', [truthTrace, estTrace], layout, PT.config);
+        }
+
+        const slider = document.getElementById('confSlider');
+        slider.addEventListener('input', function() {
+            drawSandbox(slider.value / 100);
+        });
+
+        // ==================================================================
+        function init() {
+            drawTwoWorlds('clean');
+            drawPpc();
+            drawContrib('clean');
+            drawCorr();
+            drawSandbox(0);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

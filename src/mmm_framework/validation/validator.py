@@ -675,243 +675,43 @@ class ModelValidator:
         test_indices: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
-        Generate predictions at test indices using trained model.
+        Generate predictions at test indices using the trained clone.
 
-        Reconstructs predictions from posterior samples. The key insight is that
-        the trained model learned its parameters on a SUBSET of the data with its
-        own time scale (0-1 over training period). For out-of-sample prediction:
+        Delegates to :class:`mmm_framework.validation.backtest.PosteriorForecaster`,
+        which replays the model's structural forward pass from the posterior
+        draws for BOTH adstock parameterizations (the parametric in-graph
+        kernels -- the default -- and the legacy fixed-alpha blend) and all
+        configured saturation types. Adstock is convolved over the full spend
+        history so carryover crosses the train/test boundary correctly, the
+        linear trend is extrapolated on the clone's training time scale
+        (``train_offset`` handles rolling windows that do not start at period
+        zero), and Fourier seasonality is evaluated at the absolute test
+        positions, keeping the phase aligned.
 
-        1. TREND: The trained model's trend_slope was learned relative to its own
-           t_scaled (0-1 over training period). To extrapolate, we need to compute
-           t_scaled values for test periods on the SAME scale as training.
-
-        2. SEASONALITY: Fourier features are periodic, so we can use the trained
-           model's seasonality coefficients with test period indices. We just need
-           to compute features at the correct period positions.
-
-        Parameters
-        ----------
-        trained_model : BayesianMMM
-            Model fitted on training data.
-        train_indices : np.ndarray
-            Indices of training observations (for computing time scale).
-        test_indices : np.ndarray
-            Indices of test observations.
+        Raises
+        ------
+        NotImplementedError
+            For panel (multi-cell) models or non-linear trend types. The
+            previous hand-rolled implementation silently produced wrong
+            predictions in those cases (and for parametric-adstock models);
+            failing loudly is the correct behavior.
 
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
-            (y_pred_mean, y_pred_samples) in original scale.
+            ``(y_pred_mean, y_pred_samples)`` in original scale.
         """
-        from mmm_framework.transforms.adstock import geometric_adstock_2d
-        from mmm_framework.transforms.seasonality import create_fourier_features
+        from .backtest import PosteriorForecaster
 
-        # Get test data from original model (raw scale)
-        X_media_test = self.model.X_media_raw[test_indices]
-        X_controls_test = (
-            self.model.X_controls_raw[test_indices]
-            if self.model.X_controls_raw is not None
-            else None
+        forecaster = PosteriorForecaster(trained_model)
+        y_pred_samples = forecaster.forecast(
+            self.model.X_media_raw,
+            self.model.X_controls_raw,
+            positions=np.asarray(test_indices, dtype=int),
+            include_noise=True,
+            random_seed=42,
+            train_offset=int(np.asarray(train_indices).min()),
         )
-
-        # Get time indices from ORIGINAL model's coordinate space
-        time_idx_train = self.model.time_idx[train_indices]
-        time_idx_test = self.model.time_idx[test_indices]
-
-        # Compute the UNIQUE periods in training set (for time scale computation)
-        train_periods_unique = np.unique(time_idx_train)
-        n_train_periods = len(train_periods_unique)
-
-        # Map test period indices to the trained model's time scale
-        # The trained model had t_scaled = linspace(0, 1, n_train_periods)
-        # For test periods, we need to extrapolate this scale
-        # If test period index is p, it's at position (p - min_train_period) / (n_train_periods - 1)
-        min_train_period = train_periods_unique.min()
-        if n_train_periods > 1:
-            t_scaled_test = (time_idx_test - min_train_period) / (n_train_periods - 1)
-        else:
-            t_scaled_test = np.zeros(len(test_indices))
-
-        # For seasonality, we need Fourier features at the test period positions
-        # Seasonality is periodic so we can compute features at any time point
-        seasonality_config = self.model.seasonality_config
-        test_seasonality_features = {}
-        if seasonality_config.yearly and seasonality_config.yearly > 0:
-            # Fourier features at test periods (using period indices directly)
-            period = 52  # Weekly data
-            order = seasonality_config.yearly
-            # Use the original period indices for computing Fourier features
-            # since seasonality is periodic
-            test_seasonality_features["yearly"] = create_fourier_features(
-                time_idx_test, period, order
-            )
-
-        geo_idx_test = (
-            self.model.geo_idx[test_indices]
-            if hasattr(self.model, "geo_idx") and self.model.geo_idx is not None
-            else None
-        )
-        product_idx_test = (
-            self.model.product_idx[test_indices]
-            if hasattr(self.model, "product_idx") and self.model.product_idx is not None
-            else None
-        )
-
-        # Get posterior samples from trained model
-        trace = trained_model._trace
-        if trace is None:
-            raise ValueError("Trained model has no trace")
-
-        posterior = trace.posterior
-
-        # Flatten chains
-        n_chains = posterior.dims["chain"]
-        n_draws = posterior.dims["draw"]
-        n_samples = n_chains * n_draws
-        n_test = len(test_indices)
-
-        # Extract parameter samples and flatten
-        def get_samples(var_name):
-            if var_name in posterior:
-                arr = posterior[var_name].values
-                return arr.reshape(n_samples, *arr.shape[2:])
-            return None
-
-        intercept_samples = get_samples("intercept")
-        sigma_samples = get_samples("sigma")
-
-        # Media parameters
-        beta_samples = {}
-        sat_lam_samples = {}
-        adstock_mix_samples = {}
-        for ch in trained_model.channel_names:
-            beta_samples[ch] = get_samples(f"beta_{ch}")
-            sat_lam_samples[ch] = get_samples(f"sat_lam_{ch}")
-            adstock_mix_samples[ch] = get_samples(f"adstock_{ch}")
-
-        beta_controls_samples = get_samples("beta_controls")
-
-        # Trend parameters
-        trend_slope_samples = get_samples("trend_slope")
-
-        # Seasonality parameters (from trained model)
-        seasonality_samples = {}
-        for name in trained_model.seasonality_features.keys():
-            season_coef = get_samples(f"season_{name}")
-            if season_coef is not None:
-                seasonality_samples[name] = season_coef
-
-        # Geo/product effects
-        geo_sigma_samples = get_samples("geo_sigma")
-        geo_offset_samples = get_samples("geo_offset")
-        product_sigma_samples = get_samples("product_sigma")
-        product_offset_samples = get_samples("product_offset")
-
-        # Prepare normalized media data using trained model's scaling
-        alpha_low = trained_model.adstock_alphas[0]
-        alpha_high = trained_model.adstock_alphas[-1]
-
-        # Compute adstock on FULL media series to capture carryover effects
-        # The adstock at time t depends on spending at t, t-1, t-2, ...
-        # so we need the full history including training period
-        X_media_full = self.model.X_media_raw
-        X_adstock_full_low = geometric_adstock_2d(X_media_full, alpha_low)
-        X_adstock_full_high = geometric_adstock_2d(X_media_full, alpha_high)
-
-        # Slice to test indices (now includes proper carryover from training)
-        X_adstock_low = X_adstock_full_low[test_indices]
-        X_adstock_high = X_adstock_full_high[test_indices]
-
-        for c, ch_name in enumerate(trained_model.channel_names):
-            # Use TRAINED model's _media_max since beta was learned against this normalization
-            # Values may exceed 1.0 for test data (extrapolation), which is fine
-            max_val = trained_model._media_max[ch_name] + 1e-8
-            X_adstock_low[:, c] /= max_val
-            X_adstock_high[:, c] /= max_val
-
-        # Standardize controls using trained model's parameters
-        if X_controls_test is not None and trained_model.n_controls > 0:
-            X_controls_std = (
-                X_controls_test - trained_model.control_mean
-            ) / trained_model.control_std
-        else:
-            X_controls_std = None
-
-        # Compute predictions for each sample
-        y_pred_samples = np.zeros((n_samples, n_test))
-        rng = np.random.default_rng(42)
-
-        for s in range(n_samples):
-            y_pred = intercept_samples[s] if intercept_samples is not None else 0.0
-
-            # TREND: Apply trend slope to extrapolated t_scaled values
-            # The slope was learned on t_scaled in [0,1] for training period
-            # For test, t_scaled may be > 1 (extrapolation)
-            if trend_slope_samples is not None:
-                y_pred = y_pred + trend_slope_samples[s] * t_scaled_test
-
-            # SEASONALITY: Apply learned coefficients to test period features
-            for name, features in test_seasonality_features.items():
-                if name in seasonality_samples:
-                    season_coef = seasonality_samples[name][s]
-                    y_pred = y_pred + features @ season_coef
-
-            # GEO EFFECTS
-            if (
-                geo_idx_test is not None
-                and geo_sigma_samples is not None
-                and geo_offset_samples is not None
-            ):
-                geo_effect = geo_sigma_samples[s] * geo_offset_samples[s]
-                y_pred = y_pred + geo_effect[geo_idx_test]
-
-            # PRODUCT EFFECTS
-            if (
-                product_idx_test is not None
-                and product_sigma_samples is not None
-                and product_offset_samples is not None
-            ):
-                product_effect = product_sigma_samples[s] * product_offset_samples[s]
-                y_pred = y_pred + product_effect[product_idx_test]
-
-            # MEDIA CONTRIBUTIONS
-            for ch_idx, ch in enumerate(trained_model.channel_names):
-                # Use learned adstock mixing from posterior samples
-                mix = (
-                    adstock_mix_samples[ch][s]
-                    if adstock_mix_samples[ch] is not None
-                    else 0.5
-                )
-                x_adstocked = (1 - mix) * X_adstock_low[
-                    :, ch_idx
-                ] + mix * X_adstock_high[:, ch_idx]
-
-                # Apply saturation
-                lam = sat_lam_samples[ch][s] if sat_lam_samples[ch] is not None else 1.0
-                x_saturated = 1 - np.exp(-lam * x_adstocked)
-
-                # Apply beta
-                beta = beta_samples[ch][s] if beta_samples[ch] is not None else 0.0
-                y_pred = y_pred + beta * x_saturated
-
-            # CONTROL CONTRIBUTIONS
-            if X_controls_std is not None and beta_controls_samples is not None:
-                for ctrl_idx in range(X_controls_std.shape[1]):
-                    y_pred = (
-                        y_pred
-                        + beta_controls_samples[s, ctrl_idx]
-                        * X_controls_std[:, ctrl_idx]
-                    )
-
-            # OBSERVATION NOISE
-            if sigma_samples is not None:
-                noise = rng.normal(0, sigma_samples[s], size=n_test)
-                y_pred = y_pred + noise
-
-            y_pred_samples[s] = y_pred
-
-        # Convert to original scale
-        y_pred_samples = y_pred_samples * trained_model.y_std + trained_model.y_mean
         y_pred_mean = y_pred_samples.mean(axis=0)
 
         y_test_actual = self.model.y_raw[test_indices]

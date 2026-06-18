@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stress Test 05: The Gauntlet | MMM Framework</title>
+    <meta name="description" content="Everything broken at once: the Aurora kitchen-sink world inverts the channel ranking and overstates Search 8x. The full recovery workflow — EDA, triage, structural pivots, experiment calibration — each step measured against known truth.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-05-gauntlet.html">
+    <meta property="og:title" content="Stress Test 05: The Gauntlet | MMM Framework">
+    <meta property="og:description" content="Search ROAS 5.59 → 0.65 against a truth of 0.66. The capstone stress test: confounding + mediation + saturation misspec at once, and the measured workflow that digs out.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-05-gauntlet.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Copied from pressure-testing.html so the series stays coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] { accent-color: var(--color-primary); }
+        .controls-row .live-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        .ladder {
+            counter-reset: rung;
+            margin: 1.5rem 0;
+            padding: 0;
+            list-style: none;
+        }
+        .ladder li {
+            position: relative;
+            padding: 1rem 1.25rem 1rem 3.5rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            margin-bottom: 0.75rem;
+        }
+        .ladder li::before {
+            counter-increment: rung;
+            content: counter(rung);
+            position: absolute;
+            left: 1rem;
+            top: 1rem;
+            width: 1.8rem;
+            height: 1.8rem;
+            border-radius: 50%;
+            background: var(--color-primary);
+            color: #fff;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+        }
+        .ladder li strong { color: var(--color-primary-dark); }
+
+        /* Page-specific: the grader's box (synthetic-world omniscience) */
+        .grader-box {
+            background: rgba(45, 58, 45, 0.04);
+            border: 1px dashed var(--color-text-muted);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+        .grader-box .grader-tag {
+            font-weight: 700;
+            font-size: 0.8rem;
+            letter-spacing: 0.06em;
+            color: var(--color-text-muted);
+        }
+
+        /* Page-specific: the filterable decision table */
+        .decision-table-wrap { overflow-x: auto; margin: 1rem 0 0.5rem; }
+        .decision-table-wrap table { min-width: 760px; font-size: 0.88rem; }
+        .decision-table-wrap td:first-child,
+        .decision-table-wrap th:first-child { white-space: nowrap; }
+        .decision-table-wrap tr.dt-hidden { display: none; }
+        .cat-chip {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.05rem 0.5rem;
+            border-radius: var(--radius-full);
+            background: var(--color-bg-alt);
+            color: var(--color-text-muted);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#world">The world: all four at once</a></li>
+                <li><a href="#naive">The naive fit: inverted</a></li>
+                <li><a href="#eda">Step 1 · EDA pre-flight</a></li>
+                <li><a href="#triage">Step 2 · Triage</a></li>
+                <li><a href="#pivots">Step 3 · Structural pivots</a></li>
+                <li><a href="#experiment">Step 4 · The experiment</a></li>
+                <li><a href="#roas-ladder">The ROAS ladder</a></li>
+                <li><a href="#fit-trap">The fit-quality trap</a></li>
+                <li><a href="#decision-table">The decision table</a></li>
+                <li><a href="#doctrine">The fix ladder</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html" class="active">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="world">Stress Test 05: The Gauntlet</h1>
+            <p class="lead">
+                The capstone. Guides <a href="stress-00-rosy-picture.html">00</a>–<a href="stress-04-extension-traps.html">04</a>
+                broke the model's assumptions <em>one at a time</em>; this one breaks them all at once and
+                walks the entire analyst workflow — first data pull → EDA → naive fit → triage →
+                structural pivots → an experiment → a budget answer you could defend. The naive fit's
+                channel ranking comes out <strong>fully inverted</strong>, with Search roughly
+                <strong>8× overstated</strong>. The recorded recovery arc ends at
+                <strong>Search ROAS 5.59 → 0.65, against a truth of 0.66</strong> — and the untested
+                channels stay wrong, because calibration is surgical, not contagious.
+            </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How to run the full analyst workflow — EDA pre-flight, naive fit, symptom-driven triage, structural pivots, experiment — on a world with four simultaneous violations and a fully inverted naive ranking.</li>
+                    <li>Why fit quality is not attribution: four specs with R² within 0.011 of each other span truth-gaps from 95% to 31%, and interval width is the one analyst-visible signal that tracks the gap.</li>
+                    <li>Why experiments end arguments exactly where they're aimed — Search 5.59 → 0.65 against a truth of 0.66 — while the untested channels stay wrong, so the honest deliverable is a costed test plan.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_05_the_gauntlet.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_05_the_gauntlet.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2>The world: everything broken at once</h2>
+            <p>
+                <code>aurora_kitchen_sink</code> (from <code>src/mmm_framework/synth/dgp.py</code>) is Aurora Coffee Co.:
+                two years of weekly data, four channels — and four simultaneous violations, fit
+                <strong>demand-blind</strong> (the demand proxy is the column nobody exported):
+            </p>
+            <ol>
+                <li><strong>Latent-demand confounding</strong> — Search and Social budgets <em>chase</em> demand,
+                    which also drives sales (<a href="stress-03-confounding-selection.html">stress 03</a>'s killer);</li>
+                <li><strong>Mediation</strong> — TV and Display work almost entirely <em>indirectly</em>, by building
+                    awareness (~97–99% of their true effect routes through it; <a href="stress-04-extension-traps.html">stress 04</a>);</li>
+                <li><strong>Cannibalization</strong> — Cold Brew steals from Original each summer (invisible in a single-KPI view);</li>
+                <li><strong>Hill saturation</strong> — the true response curve is not the default logistic
+                    (<a href="stress-01-carryover-shape.html">stress 01</a>'s form trap).</li>
+            </ol>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">92%</div>
+                    <div class="stat-label">median |contribution error|, naive fit (recorded matrix row)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+223%</div>
+                    <div class="stat-label">worst channel (Search); TV −92%</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">25%</div>
+                    <div class="stat-label">90%-interval coverage of the truth</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">11</div>
+                    <div class="stat-label">divergences — the <em>only</em> world in the matrix with any</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 Two voices: the analyst and the grader</h4>
+                <p>
+                    Because the world is synthetic, <em>we</em> know the truth; a real analyst never does. The
+                    notebook (and this page) speak in two voices: ordinary prose is the <strong>analyst</strong>,
+                    restricted to observables — data, diagnostics, intervals, spec sensitivity, experiment
+                    readouts. Boxes marked <strong>🔭 grader</strong> are synthetic-world omniscience, scoring
+                    each stage against the known truth. Every pivot below is justified by analyst-visible
+                    evidence <em>before</em> the grader speaks — because in the field, the grader's box does
+                    not exist.
+                </p>
+            </div>
+
+            <div class="grader-box">
+                <span class="grader-tag">🔭 GRADER — ground truth (the analyst never sees this)</span>
+                <p style="margin:0.5rem 0 0;">
+                    True ROAS: <strong>TV 2.14</strong>, <strong>Display ≈ 2.1</strong> (the "cheap-looking"
+                    brand channels are the strongest, ~97–99% mediated through awareness) —
+                    <strong>Search 0.66</strong>, <strong>Social 0.49</strong> (the "direct-response stars"
+                    are the weakest). Everything below is the story of how close an analyst armed only with
+                    observables can get to this table.
+                </p>
+            </div>
+
+            <h2 id="naive">The naive fit: a ranking turned upside down</h2>
+            <p>
+                First, what the deadline ships: the default model on the data as pulled — KPI, four spend
+                columns, a price control. No demand proxy, default adstock, default logistic saturation.
+                It converges. It fits beautifully (R² ≈ 0.92 — hold that thought for
+                <a href="#fit-trap">the fit-quality trap</a>). And its attribution is the truth, almost
+                exactly reversed:
+            </p>
+
+            <div class="chart-container" id="heroChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — recorded matrix row for <code>aurora_kitchen_sink</code>
+                (<code>tests/synth/results/stress_matrix.md</code>, PyMC 500×500×2, seed 0, re-recorded
+                2026-06-10). The naive fit hands TV's contribution to Search: TV 13,053 → 1,057 (−92%),
+                Search 2,193 → 7,091 (+223%), Display 6,037 → 1,718 (−72%), Social 1,508 → 2,899 (+92%).
+                Coverage: 1 channel in 4. The estimated ROAS ranking equals the naive
+                corr(spend, sales) ranking — [Search, Social, Display, TV] — the dashboard mirage with
+                credible intervals on it.
+            </p>
+
+            <h3>Reading the alarms — what "loud" actually looks like</h3>
+            <p>
+                This is the one world in the matrix with <em>any</em> divergences — and even here the alarm
+                volume is unreliable. An earlier recording of this same row (code state 2026-06-08) was
+                genuinely loud: <strong>r-hat 1.11, 108 divergences</strong>. Re-recorded on later code, same
+                config and seed: <strong>r-hat 1.02, 11 divergences</strong>. The notebook's fast NumPyro fit
+                is quieter still. Same model, same data, same ~90% wrongness every time; the siren did not
+                survive a code revision. Two lessons the capstone insists on:
+            </p>
+            <ul>
+                <li><strong>When alarms fire, they are a gift — don't bribe them.</strong> Bumping
+                    <code>target_accept</code> to 0.99 until the divergences stop is treating the smoke detector,
+                    not the fire. Diagnose before re-tuning.</li>
+                <li><strong>When alarms don't fire, you've learned almost nothing.</strong> Naive variants of this
+                    same fit were measured at <em>zero</em> divergences — still ~4–8× wrong on Search. Every
+                    silent failure in the 16-world matrix sampled with r-hat ≤ 1.02 and zero divergences.
+                    Convergence checks the <em>sampler</em>, never the <em>attribution</em>.</li>
+            </ul>
+            <p>
+                <strong>Decision point:</strong> whichever volume you got — a converged-looking fit that mirrors
+                a correlation table you already know is confounded, or a noisy fit with warnings — you do not
+                ship. You work the recovery ladder. Each step below is measured.
+            </p>
+
+            <h2 id="eda">Step 1 · The EDA pre-flight — half the failures are visible before sampling</h2>
+            <p>
+                The pre-flight takes minutes and no MCMC. On this world it flags, <em>before any model
+                exists</em>:
+            </p>
+            <ul>
+                <li><strong>Outlier screen — clean.</strong> Every channel's spend max/median is well under the
+                    ~8× danger line, so <a href="stress-01-carryover-shape.html">stress 01</a>'s
+                    normalization-crushing spike failure is ruled out for free.</li>
+                <li><strong>Identifiability (CoV) — two red flags.</strong> TV and Display are nearly always-on
+                    (spend CoV ≈ 0.11): almost no variation to learn from. Expect prior-dominated, wide
+                    posteriors <em>no matter what you do observationally</em>. Flag them for experiments now,
+                    before any fit.</li>
+                <li><strong>The demand-chasing screen — the killer.</strong> Search's spend correlates
+                    <strong>≈ 0.85 with sales</strong> (a dashboard would crown it) <em>and</em>
+                    <strong>≈ 0.93 with the category-demand index</strong>, which itself correlates
+                    <strong>0.86 with sales</strong>. The second number poisons the first: when spend chases
+                    demand, corr(spend, sales) measures the bidding rule, not the ad. TV pairs the
+                    <em>lowest</em> naive correlation (≈ 0.29) with — the grader knows — the <em>highest</em>
+                    true ROAS.</li>
+                <li><strong>Causal roles.</strong> The demand proxy is a <em>confounder</em> (must include, don't
+                    shrink); price is a precision control; the awareness tracker is a <em>mediator</em> —
+                    exclude it as a control or you destroy TV/Display's effect
+                    (<a href="stress-04-extension-traps.html">stress 04</a>). The mediator call comes from
+                    institutional knowledge — awareness is what TV is <em>bought to do</em> — not from a
+                    correlation screen; TV's spend is too flat for the screen to see it.</li>
+            </ul>
+
+            <p>
+                Play with the mechanism that generates the mirage — the true ROAS below never changes;
+                only how aggressively the budget chases demand does:
+            </p>
+            <div class="controls-row">
+                <label for="chaseSlider">Demand-chasing strength:</label>
+                <input type="range" id="chaseSlider" min="0" max="100" value="80" style="width:220px;">
+                <span class="live-val" id="chaseVal">chase = 0.80</span>
+            </div>
+            <div class="chart-container" id="chaseChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> (seeded PRNG) — not notebook output.
+                A channel with a fixed true ROAS of 0.66 whose budget chases demand: as chasing strength
+                rises, corr(spend, sales) climbs toward 0.9 while the ad's true effect stays unchanged. A
+                naive correlation far above any plausible ROAS is a confounding tell, not a performance
+                read. The measured world's numbers: corr(Search spend, sales) ≈ 0.85, corr(Search spend,
+                proxy) ≈ 0.93.
+            </p>
+
+            <h2 id="triage">Step 2 · Triage — which symptoms point where</h2>
+            <p>
+                Don't re-tune; diagnose, with the toolkit from
+                <a href="stress-00-rosy-picture.html">stress 00</a>. On the naive fit, each instrument
+                reads (all analyst-visible, measured in the seeded notebook run):
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Symptom measured</th><th>What it means</th><th>The suspect here</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>beta_Search</code>: <strong>negative contraction</strong> (posterior <em>wider</em> than the prior) + large upward shift</td>
+                        <td>Prior-data <strong>conflict</strong>: the data demands an effect the prior thinks absurd</td>
+                        <td>Demand confounding inflating Search — the EDA's corr(spend, proxy) ≈ 0.93</td>
+                    </tr>
+                    <tr>
+                        <td>Adstock / shape parameters <strong>prior-dominated</strong></td>
+                        <td>Response shape unidentified — equifinality</td>
+                        <td>Flat TV/Display spend, plus form misspec stacked on confounding</td>
+                    </tr>
+                    <tr>
+                        <td>Confounding robustness value (RV) flags nothing; Search's RV is the <em>highest</em></td>
+                        <td>RV measures how strong a confounder <em>would have to be</em> — it cannot know one exists</td>
+                        <td>A confounder of exactly the required strength <em>does</em> exist (proxy–sales corr 0.86). RV is no green light</td>
+                    </tr>
+                    <tr>
+                        <td><strong>PPC passes</strong></td>
+                        <td>PPC certifies fit to the outcome, and demand is doing the predicting</td>
+                        <td>The model predicts sales beautifully — <em>through the confounder</em></td>
+                    </tr>
+                    <tr>
+                        <td>Residuals correlate <strong>+0.246</strong> with the unused demand proxy</td>
+                        <td>A column the model never saw predicts the model's errors</td>
+                        <td>Omitted-variable structure routed into the media betas — the proxy belongs in the model</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                Triage verdict: two independent observable fingers — the prior-data conflict on the
+                demand-chasing channel, and demand structure in the residuals — point at the same omitted
+                variable. The first pivot is structural, and the EDA already named it: close the back-door.
+            </p>
+
+            <h2 id="pivots">Step 3 · Structural pivots, each one graded</h2>
+
+            <h3>Pivot (a): add the demand control — it helps, and it isn't enough</h3>
+            <p>
+                Refit with the category-demand index as a control. Measured (seeded NumPyro run,
+                400×400×2): Search's ROAS collapses <strong>2.6 → 1.0</strong> (−62% from one defensible
+                spec change), and the stage's median contribution error falls
+                <strong>~95% → ~65%</strong>. But read what came <em>with</em> the new midpoint:
+            </p>
+            <ul>
+                <li><strong>The interval is the result.</strong> Search's 90% interval is now roughly
+                    <strong>[0.1, 2.4]</strong> — it contains "kill the channel" and "double it". Not a number
+                    you take to a budget meeting.</li>
+                <li><strong>Controlled ≠ identified.</strong> Search's spend correlates ≈ 0.93 with the control
+                    just added: after conditioning, almost no independent Search variation remains. The model
+                    splits a shared signal between the beta and the control, and priors plus noise decide the
+                    split. This is <a href="stress-03-confounding-selection.html">stress 03</a>'s
+                    noisy-proxy lesson at full scale.</li>
+                <li><strong>The mediated channels barely move</strong> (TV ≈ 0.21 → ≈ 0.4 on a tiny base), still
+                    with intervals several times their estimates — the EDA's flat-spend flag stands.</li>
+            </ul>
+            <div class="grader-box">
+                <span class="grader-tag">🔭 GRADER</span>
+                <p style="margin:0.5rem 0 0;">
+                    The pivot went the right way and stopped well short: Search keeps a ~+50% contribution
+                    overstatement (truth inside the huge interval, far from the midpoint); TV and Display
+                    stay ~65–85% under-credited — the mediated channels did not move toward the truth at all.
+                </p>
+            </div>
+
+            <h3>Pivot (b): the functional-form pivot — it reshuffles, it doesn't rescue</h3>
+            <p>
+                The stress-01 discipline: refit under a deliberately different, defensible response family —
+                in-graph parametric adstock plus per-channel Hill saturation,
+                \( \beta\,\dfrac{x^{s}}{x^{s}+K^{s}} \) in place of the default
+                \( \beta\,(1-e^{-\lambda x}) \) — and read it as a <em>spec-sensitivity experiment</em>.
+                Measured: the form change moves every channel's estimate by <strong>≤ 10%</strong>, while the
+                demand control had moved Search by <strong>62%</strong>. Nothing observable (fit, intervals,
+                diagnostics) prefers either form. Conclusion the analyst can defend without truth access:
+                <em>the response form is not the binding constraint — identification is choosing these
+                numbers.</em>
+            </p>
+            <div class="grader-box">
+                <span class="grader-tag">🔭 GRADER</span>
+                <p style="margin:0.5rem 0 0;">
+                    The punchline the analyst never gets to enjoy: pivot (b) handed the model the
+                    generative truth's <em>exact</em> response family on both axes — and the truth-gap got
+                    slightly <strong>worse</strong> (median error ~65% → ~71%). Under unresolved confounding,
+                    form pivots <strong>reshuffle the bias</strong> among equifinal parameterizations
+                    (carryover ↔ saturation ↔ β trade off) rather than remove it. Forms matter when form is
+                    the problem — on <a href="stress-01-carryover-shape.html">stress 01</a>'s Hill-truth
+                    world the same pivot cut total-media bias from ≈+40% to ≈+15%. Here it buys knobs the
+                    data cannot turn.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>🔧 Framework fix surfaced by this series (2026-06-10)</h4>
+                <p>
+                    The Hill pivot used here only exists because <a href="stress-01-carryover-shape.html">stress 01</a>
+                    discovered that per-channel <code>SaturationConfig</code> was <strong>silently ignored</strong> by the
+                    core model. Before: every channel got the logistic curve regardless of configuration.
+                    After: <code>BayesianMMM</code> honors hill / logistic / michaelis-menten / tanh / none in-graph
+                    (default unchanged, so existing models are bit-identical). The gauntlet then demonstrates
+                    the sharper lesson: even the <em>true</em> form can't fix a confounded world.
+                </p>
+            </div>
+
+            <h3>Pivot (c): acknowledge the mediation — and its limits</h3>
+            <p>
+                TV and Display still print sub-1 ROAS midpoints inside intervals several times that size.
+                The structural case needs no truth: the DAG routes their effect through awareness — a
+                pathway this single-equation model can only smear into the baseline — and their spend is
+                nearly flat (CoV ≈ 0.11). The right structural model is a nested/mediation MMM with the
+                awareness tracker as mediator outcome — that is
+                <a href="stress-04-extension-traps.html">stress 04</a>'s subject, including the trap that an
+                extension adds unidentifiable knobs when mediator data is weak. And even a perfect mediation
+                model cannot conjure identification out of a CoV-0.11 spend series.
+            </p>
+            <p>
+                <strong>Decision point:</strong> the observational program has hit its
+                <strong>identification ceiling</strong> — the demand-chasers are controlled-but-collinear, the
+                brand channels are mediated-and-flat. More observational modeling from here is knob-turning.
+                The next dollar of effort buys more as a randomized experiment than as a fifth structural
+                variant.
+            </p>
+
+            <h2 id="experiment">Step 4 · The experiment — surgical, not contagious</h2>
+            <p>
+                Aurora runs geo-holdout lift tests on the two cheapest-to-test channels — Search and Social
+                (always-on auction media; a clean two-month holdout reads out fast). Each readout
+                (Search ROAS 0.66 ± 0.07, Social 0.49 ± 0.07 over the test window) is folded in as an
+                <strong>in-graph likelihood term</strong> on the model-implied ROAS estimand
+                (<code>experiments=</code> / <code>add_experiment_calibration</code>) and the model refit. Measured:
+            </p>
+            <ul>
+                <li><strong>The calibrated channels land.</strong> Search ≈ 0.62, Social ≈ 0.48 in the seeded
+                    notebook run — truth (0.66 / 0.49) inside tight intervals. In the recorded full-fidelity
+                    arc, the same move is <strong>Search ROAS 5.59 → 0.65 against a truth of 0.66</strong>.</li>
+                <li><strong>The stage's median error falls to ~31%</strong> (from ~95% naive).</li>
+                <li><strong>The untested channels stay wrong.</strong> TV remains ~−75% under-credited; its
+                    interval never tightens. Calibrating Search and Social did nothing for TV and Display —
+                    anchoring one channel is not evidence about another.</li>
+            </ul>
+
+            <div class="chart-container" id="widthChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — relative interval width
+                (90% HDI width ÷ estimate) after calibration: Search 0.40, Social 0.68 — versus TV 2.10
+                and Display 2.32, which never drop below ~2.1 at <em>any</em> stage. Search's width was 1.64
+                one stage earlier: the experiment, not the spec work, is what tightened it. Above the
+                dashed line, the interval spans "kill the channel" to "double it". <strong>Interval width
+                is the one analyst-visible feature that tracks the truth-gap — believe the width, not the
+                midpoint.</strong>
+            </p>
+
+            <h2 id="roas-ladder">The ROAS ladder — the whole drama in one chart</h2>
+            <p>
+                Per-channel ROAS estimates at each workflow stage, with the grader's truth as a dashed
+                line. Step through the stages, or see the whole trajectory at once:
+            </p>
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn ladder-btn" data-view="1">S1 · naive</button>
+                <button class="toggle-btn ladder-btn" data-view="2">+ demand control</button>
+                <button class="toggle-btn ladder-btn" data-view="3">+ form pivot</button>
+                <button class="toggle-btn ladder-btn active" data-view="4">+ experiments</button>
+                <button class="toggle-btn ladder-btn" data-view="slope">Slopegraph (all stages)</button>
+            </div>
+            <div class="chart-container tall" id="ladderChart"></div>
+            <p class="chart-note">
+                <strong>Measured anchors from the seeded notebook run</strong> (NumPyro 400×400×2, seed 0;
+                build-script probe 2026-06-10): Search 2.6 → 1.0 → ~1.0 → 0.62 (true 0.66);
+                TV 0.21 → ~0.4 → ~0.4 → 0.55 (true 2.14); Social ends at 0.48 (true 0.49); stage median
+                errors 95% → 65% → 71% → 31%. Cells without a recorded point value (Social and Display at
+                intermediate stages, the form-pivot column) are placed inside the probe's recorded
+                constraints — the form change moves every channel ≤ 10%, the mediated channels barely move
+                at any stage — and should be read qualitatively. The story to read: <strong>Search</strong> is
+                the skyscraper two structural pivots only half-demolish and one experiment levels;
+                <strong>TV and Display never reach their dashed lines</strong>, because no observational pivot —
+                and no calibration of <em>other</em> channels — identifies a flat-spend, ~98%-mediated channel.
+            </p>
+
+            <div class="grader-box">
+                <span class="grader-tag">🔭 GRADER — the stage scorecard</span>
+                <p style="margin:0.5rem 0 0;">
+                    Median |contribution error| by stage: <strong>~95%</strong> (naive) →
+                    <strong>~65%</strong> (+demand control) → <strong>~71%</strong> (+true form — worse) →
+                    <strong>~31%</strong> (+experiments). The control helped; the form pivot reshuffled; the
+                    experiment was surgical. TV after everything: still ~−75% — and the analyst's
+                    "not identified, do not quote a point" verdict is the correct call. TV's true ROAS is
+                    ~2.1: the Stage-1 sentence "TV doesn't work — cut it" would have severed the company's
+                    best channel on the word of an unidentified posterior.
+                </p>
+            </div>
+
+            <h2 id="fit-trap">The fit-quality trap — four excellent fits, four different stories</h2>
+            <p>
+                If interval width is the analyst-visible signal that works, here is the popular one that
+                doesn't: how well the model traces the sales curve. All four stages — from the demand-blind
+                disaster to the calibrated finale — produce fits a slide deck would celebrate:
+            </p>
+
+            <div class="chart-container" id="fitTrapChart"></div>
+            <p class="chart-note">
+                <strong>Measured in the notebook (seeded run)</strong> — R² by stage: 0.918, 0.930, 0.929,
+                0.927 (total spread 0.011); 90% predictive-band coverage 0.91–0.92 at every stage — while
+                the truth-gap runs 95% → 65% → 71% → 31%. The line you watch in a readout meeting is flat;
+                the number that matters falls by two-thirds. Fit quality and attribution identifiability
+                are different axes: a predictive check cannot choose between attribution stories that all
+                predict the same curve.
+            </p>
+
+            <p>
+                Where did the credit actually move? The decomposition (additive by construction) tells it:
+                the naive model's media wedge is <strong>16% of sales</strong> with Search alone at 9.8%; the
+                final model's is <strong>11%</strong> with Search at 2.4% — the weekly demand swings the naive
+                model credited to Search's beta now flow through the demand control (std of the controls
+                component 14.6 → 23.2; std of Search's media component 18.7 → 10.5). And the residual-vs-proxy
+                correlation falls +0.246 → +0.007. The grader adds the sting: the <em>true</em> media share is
+                <strong>26%</strong> — even the calibrated final model under-credits total media, because
+                TV/Display's mediated effect is parked in the baseline, invisible to this equation.
+            </p>
+
+            <h2 id="decision-table">The decision table — the series in one artifact</h2>
+            <p>
+                Symptom → likely cause → cheapest check → pivot → where it's demonstrated. This is the
+                table to copy out of the whole series. Filter by symptom category:
+            </p>
+            <div class="note">
+                <p style="margin-bottom: 0;">
+                    📋 This table ships as a printable one-pager — the
+                    <a href="artifacts/diagnostic-checklist.html">MMM Diagnostic Checklist</a>,
+                    with the EDA pre-flight and the fix ladder on the same sheet.
+                </p>
+            </div>
+            <div class="controls-row" id="dtFilters">
+                <button class="toggle-btn dt-btn active" data-cat="all">All (15)</button>
+                <button class="toggle-btn dt-btn" data-cat="sampler">Sampler alarms</button>
+                <button class="toggle-btn dt-btn" data-cat="ident">Intervals &amp; identification</button>
+                <button class="toggle-btn dt-btn" data-cat="fit">Fit &amp; PPC</button>
+                <button class="toggle-btn dt-btn" data-cat="conf">Confounding</button>
+                <button class="toggle-btn dt-btn" data-cat="time">Time &amp; data</button>
+                <button class="toggle-btn dt-btn" data-cat="med">Mediation &amp; sign</button>
+            </div>
+            <div class="decision-table-wrap">
+                <table id="decisionTable">
+                    <thead>
+                        <tr><th>#</th><th>Symptom</th><th>Likely cause(s)</th><th>Cheap check</th><th>Pivot</th><th>Guide</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr data-cat="sampler">
+                            <td>1 <span class="cat-chip">sampler</span></td>
+                            <td>Divergences / r-hat &gt; 1.01</td>
+                            <td>Model fighting the data (misspec, conflict-laden priors) — not merely a tuning problem</td>
+                            <td>Where do divergent draws sit? Does the conflict survive <code>target_accept</code> 0.95?</td>
+                            <td>Triage parameters (learning, pair plots) <strong>before</strong> re-tuning; fix the structure the conflict points at</td>
+                            <td><a href="stress-00-rosy-picture.html">00</a> · <strong>05</strong></td>
+                        </tr>
+                        <tr data-cat="ident">
+                            <td>2 <span class="cat-chip">ident</span></td>
+                            <td>One channel's HDI ≫ its estimate</td>
+                            <td>Weak/flat spend (low CoV) — intercept-confounded</td>
+                            <td>CoV &lt; ~0.3?</td>
+                            <td>Report the interval, or buy an experiment; no model rescues a flat series</td>
+                            <td><a href="stress-00-rosy-picture.html">00</a></td>
+                        </tr>
+                        <tr data-cat="ident">
+                            <td>3 <span class="cat-chip">ident</span></td>
+                            <td>Two channels' HDIs huge <em>and</em> their spends correlated</td>
+                            <td>Collinearity — the combined effect is identified, the split isn't</td>
+                            <td>Spend corr &gt; ~0.9 / VIF &gt; 10</td>
+                            <td>Group them, or lift-test one channel to anchor the split</td>
+                            <td><a href="stress-03-confounding-selection.html">03</a></td>
+                        </tr>
+                        <tr data-cat="fit">
+                            <td>4 <span class="cat-chip">fit</span></td>
+                            <td>PPC fails (shape / autocorrelation)</td>
+                            <td>Missing time structure: trend break, seasonality, carryover misspec</td>
+                            <td>Plot residuals over time and by season</td>
+                            <td>Richer trend / seasonality / adstock — then re-check</td>
+                            <td><a href="stress-02-time-structure.html">02</a> · <a href="stress-01-carryover-shape.html">01</a></td>
+                        </tr>
+                        <tr data-cat="fit">
+                            <td>5 <span class="cat-chip">fit</span></td>
+                            <td>PPC <strong>passes</strong></td>
+                            <td>— it certifies fit, not attribution</td>
+                            <td>(none — that's the point)</td>
+                            <td>Never read a green PPC as causal validation</td>
+                            <td><a href="stress-00-rosy-picture.html">00</a></td>
+                        </tr>
+                        <tr data-cat="conf">
+                            <td>6 <span class="cat-chip">conf</span></td>
+                            <td>Confounding robustness value (RV) low on a channel</td>
+                            <td>Estimate would be nullified by a mild confounder</td>
+                            <td>Does a candidate confounder that strong exist?</td>
+                            <td>Find/keep the proxy control; calibrate</td>
+                            <td><a href="stress-03-confounding-selection.html">03</a></td>
+                        </tr>
+                        <tr data-cat="conf">
+                            <td>7 <span class="cat-chip">conf</span></td>
+                            <td>RV high but a plausible confounder is <em>known</em></td>
+                            <td>RV measures required strength, not existence</td>
+                            <td>corr(spend, proxy), corr(proxy, KPI)</td>
+                            <td>Control the proxy regardless; RV is no green light</td>
+                            <td><strong>05</strong> (Search)</td>
+                        </tr>
+                        <tr data-cat="ident">
+                            <td>8 <span class="cat-chip">ident</span></td>
+                            <td>Parameter prior-dominated (contraction ≈ 0, overlap ≈ 1)</td>
+                            <td>The data carries no information (flat, collinear, short window)</td>
+                            <td>CoV, spend correlations, window length</td>
+                            <td>Experiment, or own the prior in the writeup</td>
+                            <td><a href="stress-00-rosy-picture.html">00</a></td>
+                        </tr>
+                        <tr data-cat="conf">
+                            <td>9 <span class="cat-chip">conf</span></td>
+                            <td><strong>Negative contraction</strong> + big shift_z</td>
+                            <td>Prior-data conflict — often confounding demanding an absurd effect</td>
+                            <td>corr(spend, demand proxy)</td>
+                            <td>Close the back-door; if it persists, calibrate</td>
+                            <td><a href="stress-03-confounding-selection.html">03</a> · <strong>05</strong></td>
+                        </tr>
+                        <tr data-cat="med">
+                            <td>10 <span class="cat-chip">med</span></td>
+                            <td>Estimate piled on the sign constraint (β ≈ 0 under a positive prior)</td>
+                            <td>True effect negative (cannibalization) or mediated-away</td>
+                            <td>Cross-product / holdout correlations; mediator inventory</td>
+                            <td>Allow the sign / model the cross-effect or mediation explicitly</td>
+                            <td><a href="stress-04-extension-traps.html">04</a></td>
+                        </tr>
+                        <tr data-cat="time">
+                            <td>11 <span class="cat-chip">data</span></td>
+                            <td>Spend max/median ≫ ~8</td>
+                            <td>Data-entry spike or one-off burst → normalization trap</td>
+                            <td>The 30-second max/median screen</td>
+                            <td>Verify, winsorize/cap, percentile-normalize</td>
+                            <td><a href="stress-01-carryover-shape.html">01</a></td>
+                        </tr>
+                        <tr data-cat="time">
+                            <td>12 <span class="cat-chip">time</span></td>
+                            <td>KPI level break</td>
+                            <td>Regime change a constant-coefficient MMM can't absorb</td>
+                            <td>Plot the KPI; ask the business what happened</td>
+                            <td>Dummy / piecewise trend; never let media absorb a break</td>
+                            <td><a href="stress-02-time-structure.html">02</a></td>
+                        </tr>
+                        <tr data-cat="time">
+                            <td>13 <span class="cat-chip">time</span></td>
+                            <td>Holiday-shaped residuals</td>
+                            <td>Seasonality misspecification</td>
+                            <td>Residuals by week-of-year</td>
+                            <td>Holiday terms / higher Fourier order</td>
+                            <td><a href="stress-02-time-structure.html">02</a></td>
+                        </tr>
+                        <tr data-cat="conf">
+                            <td>14 <span class="cat-chip">conf</span></td>
+                            <td>A ROAS that would make the channel the best investment the company owns</td>
+                            <td>Demand confounding — a mirage by construction</td>
+                            <td>corr(spend, demand proxy); benchmark sanity</td>
+                            <td>Treat as confounded until an experiment says otherwise</td>
+                            <td><a href="stress-03-confounding-selection.html">03</a> · <strong>05</strong></td>
+                        </tr>
+                        <tr data-cat="conf">
+                            <td>15 <span class="cat-chip">conf</span></td>
+                            <td>Naive corr(spend, KPI) ≫ any plausible ROAS</td>
+                            <td>Spend chases demand — the dashboard mirage</td>
+                            <td>The Step-1 mirage table</td>
+                            <td>The proxy control is mandatory; calibrate the channel</td>
+                            <td><strong>05</strong> (Step 1)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="chart-note">
+                Compiled from the notebook's closing artifact. Bold <strong>05</strong> entries are
+                demonstrated live on this page's world; linked guides carry the full treatment of each row.
+            </p>
+
+            <h2 id="doctrine">The fix ladder — doctrine recap</h2>
+            <p>
+                Identification problems are solved by <strong>design, not by sampling longer</strong>. Every
+                recovery in this series, ordered by where the leverage actually was:
+            </p>
+            <ol class="ladder">
+                <li><strong>Estimand first.</strong> Pin down what "contribution" means (counterfactual zero-out)
+                    before reading any posterior. If you can't say what number would be wrong, no diagnostic
+                    can save you.</li>
+                <li><strong>EDA pre-flight.</strong> The mirage table, the CoV screen, the max/median outlier
+                    screen, the causal-role DAG — minutes of work that flagged <em>every</em> failure this world
+                    contains before the first sample was drawn.</li>
+                <li><strong>Structural pivots — chosen from symptoms, never from disliked answers.</strong> The
+                    demand control moved the headline channel 62% (it helps; it doesn't identify). The
+                    functional-form pivot moved everything ≤ 10% and made the truth-gap slightly worse —
+                    forms matter only when form is the problem.</li>
+                <li><strong>Experiments calibrate what structure can't.</strong> Search 5.59 → 0.65 against a
+                    truth of 0.66 — surgical. And not contagious: the untested channels stayed wrong, which
+                    is precisely why the deliverable ends with a costed test plan, not a full table of
+                    midpoints.</li>
+            </ol>
+            <p>
+                The pre-specification discipline that survives this notebook: lock the spec (causal roles,
+                forms, priors, which channels get calibrated) <em>before</em> looking at ROAS; pivot only on
+                measured diagnostics; and always escalate to an experiment for flat-spend channels
+                (CoV ≲ 0.3), demand-tracking channels, collinear pairs that matter, and any channel about
+                to receive a large budget move.
+            </p>
+
+            <div class="definition" id="takeaway">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>EDA caught it first.</strong> The mirage table (corr 0.85 with sales, 0.93 with
+                        demand), the CoV screen, and the DAG flagged every failure this world contains —
+                        before sampling. The cheapest diagnostics run before the model exists.</li>
+                    <li><strong>Alarm volume is not failure size.</strong> The same world recorded 108 divergences
+                        on one code state and 11 on the next, ~90% wrong both times. Loud alarms mean
+                        <em>stop</em>; quiet ones certify nothing.</li>
+                    <li><strong>Fit quality is not attribution.</strong> Four specs, R² within 0.011 of each other,
+                        truth-gaps spanning 95% → 31%. Believe the interval width — the one analyst-visible
+                        signal that tracked the truth-gap — never the midpoint or the R².</li>
+                    <li><strong>Controlled ≠ identified, and the true form can't fix a confounded world.</strong>
+                        The demand control left a +50% overstatement inside a [0.1, 2.4] interval; handing the
+                        model the exact generative response family made the truth-gap slightly worse.</li>
+                    <li><strong>Experiments end arguments exactly where they're aimed.</strong> Search
+                        5.59 → 0.65 (truth 0.66); TV and Display didn't tighten at all. The honest deliverable
+                        is experiment-backed numbers, wide intervals owned as wide — "not identified" said out
+                        loud — and a costed test plan for the rest.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This guide mirrors <code>nbs/stress_05_the_gauntlet.ipynb</code> (authored by
+                    <code>nbs/build_stress_05_gauntlet.py</code>), built on the scenario harness in
+                    <code>tests/synth/</code> — the <code>aurora_kitchen_sink</code> world with known per-channel
+                    truth. Every computational cell ends in a seeded assert encoding the claim it
+                    demonstrates: if the notebook executes clean, the story on this page is still true.
+                    Companions: <a href="stress-00-rosy-picture.html">stress 00</a> (the diagnostic toolkit),
+                    <a href="stress-03-confounding-selection.html">stress 03</a> (confounding in isolation),
+                    <a href="stress-04-extension-traps.html">stress 04</a> (the mediation ladder), and the
+                    <a href="pressure-testing.html">series scorecard</a>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers (copied from pressure-testing.html).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLOR = {
+            TV: PT.colors.tv, Search: PT.colors.search,
+            Social: PT.colors.social, Display: PT.colors.display
+        };
+
+        // ------------------------------------------------------------------
+        // MEASURED — stress_matrix.md, aurora_kitchen_sink per-channel detail
+        // (PyMC 500x500x2, seed 0, re-recorded 2026-06-10).
+        // ------------------------------------------------------------------
+        const MATRIX = {
+            trueContrib: { TV: 13053, Search: 2193, Social: 1508, Display: 6037 },
+            naiveEst:    { TV: 1057,  Search: 7091, Social: 2899, Display: 1718 },
+            relErr:      { TV: '-92%', Search: '+223%', Social: '+92%', Display: '-72%' },
+            inCI:        { TV: '✗', Search: '✗', Social: '✓', Display: '✗' }
+        };
+
+        // ------------------------------------------------------------------
+        // Stage data for the ROAS ladder.
+        // MEASURED ANCHORS (build_stress_05_gauntlet.py header probe,
+        // NumPyro 400x400x2, seed 0, 2026-06-10):
+        //   Search: S1 ~2.6, S3a ~1.0 (interval ~[0.1,2.4]), S4 ~0.62
+        //   TV:     S1 ~0.21, S3a ~0.4 (prose), S4 ~0.55 (deliverable)
+        //   Social: S4 ~0.48 ; med|err| by stage 95/65/71/31%
+        //   S4 width/est: Search 0.40, Social 0.68, TV 2.10, Display 2.32
+        // Unanchored cells (anchored:false) are placed inside the probe's
+        // recorded constraints (form pivot moves <=10% per channel; mediated
+        // channels barely move; Display ~65-85% under-credited throughout).
+        // ------------------------------------------------------------------
+        const STAGE_LABELS = ['S1 · naive', 'S3a · +demand control', 'S3b · +form pivot', 'S4 · +experiments'];
+        const STAGE_SHORT = ['S1<br>naive', 'S3a<br>+control', 'S3b<br>+form', 'S4<br>+expts'];
+        const LADDER = {
+            TV:      { est: [0.21, 0.40, 0.42, 0.55], truth: 2.14, anchored: [true, true, false, true] },
+            Search:  { est: [2.60, 1.00, 0.95, 0.62], truth: 0.66, anchored: [true, true, false, true] },
+            Social:  { est: [0.95, 0.70, 0.55, 0.48], truth: 0.49, anchored: [false, false, false, true] },
+            Display: { est: [0.59, 0.55, 0.57, 0.55], truth: 2.10, anchored: [false, false, false, true] }
+        };
+        const MED_ERR = [95, 65, 71, 31];   // measured, % per stage
+        const R2 = [0.918, 0.930, 0.929, 0.927];  // measured per stage
+        const STAGE_COLORS = ['#c97067', '#d4a86a', '#6a8fa8', '#6abf8a'];
+
+        // ==================================================================
+        // Hero chart — true vs naive contribution (measured, matrix row)
+        // ==================================================================
+        function drawHero() {
+            const trueTrace = {
+                type: 'bar', name: 'TRUE contribution (grader)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return MATRIX.trueContrib[c]; }),
+                marker: { color: CHANNELS.map(function(c) { return PT.band(CH_COLOR[c], 0.35); }),
+                          line: { color: PT.colors.truth, width: 1.5, dash: 'dash' } },
+                hovertemplate: '<b>%{x}</b><br>true contribution %{y:,.0f}<extra></extra>'
+            };
+            const estTrace = {
+                type: 'bar', name: 'Naive estimate (demand-blind)',
+                x: CHANNELS, y: CHANNELS.map(function(c) { return MATRIX.naiveEst[c]; }),
+                marker: { color: CHANNELS.map(function(c) { return CH_COLOR[c]; }),
+                          line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                customdata: CHANNELS.map(function(c) { return [MATRIX.relErr[c], MATRIX.inCI[c]]; }),
+                hovertemplate: '<b>%{x}</b><br>naive estimate %{y:,.0f}<br>' +
+                    'relative error %{customdata[0]} · truth in 90% CI: %{customdata[1]}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'total contribution (units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 80, r: 30, t: 40, b: 50 },
+                annotations: [{
+                    x: 'Search', y: MATRIX.naiveEst.Search, yanchor: 'bottom',
+                    text: '+223%', showarrow: false,
+                    font: { size: 12, color: '#a44c43', family: "'JetBrains Mono', monospace" }
+                }, {
+                    x: 'TV', y: MATRIX.trueContrib.TV, yanchor: 'bottom',
+                    text: 'a real brand engine, erased (−92%)', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('heroChart', [trueTrace, estTrace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // Demand-chasing simulator (ILLUSTRATIVE, seeded)
+        // ==================================================================
+        function simulateChase(k) {
+            const rng = mulberry32(7);
+            const T = 104;
+            const demand = [], spend = [], sales = [];
+            let ar = 0;
+            for (let t = 0; t < T; t++) {
+                ar = 0.7 * ar + 0.3 * (rng() - 0.5);
+                const d = 1 + 0.35 * Math.sin(2 * Math.PI * t / 52) + ar;
+                demand.push(d);
+                const sp = 30 * (1 + k * 1.1 * (d - 1)) + 6 * (rng() - 0.5);
+                spend.push(Math.max(sp, 2));
+                // fixed true ROAS = 0.66, demand drives the baseline
+                sales.push(80 * d + 0.66 * spend[t] + 7 * (rng() - 0.5));
+            }
+            return { demand: demand, spend: spend, sales: sales };
+        }
+
+        function corr(a, b) {
+            const n = a.length;
+            let ma = 0, mb = 0;
+            for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+            ma /= n; mb /= n;
+            let sab = 0, sa = 0, sb = 0;
+            for (let i = 0; i < n; i++) {
+                sab += (a[i] - ma) * (b[i] - mb);
+                sa += (a[i] - ma) * (a[i] - ma);
+                sb += (b[i] - mb) * (b[i] - mb);
+            }
+            return sab / Math.sqrt(sa * sb);
+        }
+
+        function drawChase(k) {
+            const sim = simulateChase(k);
+            const cSS = corr(sim.spend, sim.sales);
+            const cSD = corr(sim.spend, sim.demand);
+            const scatter = {
+                type: 'scatter', mode: 'markers',
+                x: sim.spend, y: sim.sales,
+                marker: { color: PT.colors.search, size: 7, opacity: 0.6,
+                          line: { color: 'rgba(45,58,45,0.3)', width: 0.5 } },
+                hovertemplate: 'spend %{x:.1f} · sales %{y:.1f}<extra></extra>',
+                name: 'weeks'
+            };
+            const layout = PT.layout({
+                xaxis: { title: 'weekly spend (chasing channel)' },
+                yaxis: { title: 'weekly sales' },
+                showlegend: false,
+                margin: { l: 70, r: 30, t: 36, b: 55 },
+                annotations: [{
+                    xref: 'paper', yref: 'paper', x: 0.02, y: 0.98,
+                    xanchor: 'left', yanchor: 'top', showarrow: false, align: 'left',
+                    text: 'corr(spend, sales) = <b>' + cSS.toFixed(2) + '</b><br>' +
+                          'corr(spend, demand) = <b>' + cSD.toFixed(2) + '</b><br>' +
+                          'true ROAS (unchanged): <b>0.66</b>',
+                    font: { size: 13, color: '#2d3a2d' },
+                    bgcolor: 'rgba(255,255,255,0.85)', bordercolor: '#d4ddd4', borderwidth: 1
+                }]
+            });
+            Plotly.react('chaseChart', [scatter], layout, PT.config);
+        }
+
+        const chaseSlider = document.getElementById('chaseSlider');
+        const chaseVal = document.getElementById('chaseVal');
+        chaseSlider.addEventListener('input', function() {
+            const k = chaseSlider.value / 100;
+            chaseVal.textContent = 'chase = ' + k.toFixed(2);
+            drawChase(k);
+        });
+
+        // ==================================================================
+        // Interval-width chart (MEASURED, S4)
+        // ==================================================================
+        function drawWidth() {
+            const widths = { Search: 0.40, Social: 0.68, TV: 2.10, Display: 2.32 };
+            const ord = ['Search', 'Social', 'TV', 'Display'];
+            const tag = {
+                Search: 'anchored to a randomized readout',
+                Social: 'anchored to a randomized readout',
+                TV: 'STILL unidentified — never below ~2.1 at any stage',
+                Display: 'STILL unidentified — never below ~2.1 at any stage'
+            };
+            const trace = {
+                type: 'bar',
+                x: ord, y: ord.map(function(c) { return widths[c]; }),
+                marker: { color: ord.map(function(c) { return CH_COLOR[c]; }),
+                          line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                customdata: ord.map(function(c) { return tag[c]; }),
+                hovertemplate: '<b>%{x}</b><br>90% HDI width ÷ estimate = %{y:.2f}<br>%{customdata}<extra></extra>'
+            };
+            const layout = PT.layout({
+                yaxis: { title: '90% HDI width ÷ estimate (Stage 4)', rangemode: 'tozero' },
+                margin: { l: 70, r: 30, t: 30, b: 50 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1.0, y1: 1.0,
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 3.45, y: 1.0, xanchor: 'right', yanchor: 'bottom',
+                    text: "width = estimate: the interval spans 'kill it' to 'double it'",
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 'Search', y: widths.Search, yanchor: 'bottom',
+                    text: '1.64 → 0.40<br>(the experiment did this)', showarrow: false,
+                    font: { size: 10.5, color: '#3f7a58' }
+                }]
+            });
+            Plotly.newPlot('widthChart', [trace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // The ROAS ladder — centerpiece with stage selector / slopegraph
+        // ==================================================================
+        function drawLadderBars(nStages) {
+            const traces = [];
+            for (let i = 0; i < nStages; i++) {
+                traces.push({
+                    type: 'bar', name: STAGE_LABELS[i],
+                    x: CHANNELS,
+                    y: CHANNELS.map(function(c) { return LADDER[c].est[i]; }),
+                    marker: { color: STAGE_COLORS[i],
+                              line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                    customdata: CHANNELS.map(function(c) {
+                        return LADDER[c].anchored[i] ? 'measured anchor' : 'placed within probe constraints';
+                    }),
+                    hovertemplate: '<b>%{x}</b> · ' + STAGE_LABELS[i] +
+                        '<br>est ROAS %{y:.2f} (%{customdata})<extra></extra>'
+                });
+            }
+            // truth dashes per channel (category axis: numeric = category index)
+            const shapes = CHANNELS.map(function(c, idx) {
+                return {
+                    type: 'line', x0: idx - 0.42, x1: idx + 0.42,
+                    y0: LADDER[c].truth, y1: LADDER[c].truth,
+                    line: { color: PT.colors.truth, width: 2.2, dash: 'dash' }
+                };
+            });
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'ROAS', range: [0, 3.0] },
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 70, r: 30, t: 44, b: 50 },
+                shapes: shapes,
+                annotations: [{
+                    x: 0, y: LADDER.TV.truth, yanchor: 'bottom', xanchor: 'center',
+                    text: 'TRUE ROAS (grader, dashed)', showarrow: false,
+                    font: { size: 11, color: PT.colors.truth }
+                }, {
+                    xref: 'paper', yref: 'paper', x: 0.99, y: 0.98,
+                    xanchor: 'right', yanchor: 'top', showarrow: false,
+                    text: 'median |contrib err| at this stage: <b>' + MED_ERR[nStages - 1] + '%</b>',
+                    font: { size: 12.5, color: '#a44c43' },
+                    bgcolor: 'rgba(255,255,255,0.85)', bordercolor: '#d4ddd4', borderwidth: 1
+                }]
+            });
+            Plotly.react('ladderChart', traces, layout, PT.config);
+        }
+
+        function drawLadderSlope() {
+            const traces = [];
+            CHANNELS.forEach(function(c) {
+                traces.push({
+                    type: 'scatter', mode: 'lines+markers', name: c,
+                    x: STAGE_SHORT, y: LADDER[c].est,
+                    line: { color: CH_COLOR[c], width: 2.5 },
+                    marker: {
+                        size: LADDER[c].anchored.map(function(a) { return a ? 10 : 6; }),
+                        symbol: LADDER[c].anchored.map(function(a) { return a ? 'circle' : 'circle-open'; }),
+                        color: CH_COLOR[c]
+                    },
+                    customdata: LADDER[c].anchored.map(function(a) {
+                        return a ? 'measured anchor' : 'placed within probe constraints';
+                    }),
+                    hovertemplate: '<b>' + c + '</b> · %{x}<br>est ROAS %{y:.2f} (%{customdata})' +
+                        '<br>true ROAS ' + LADDER[c].truth.toFixed(2) + '<extra></extra>'
+                });
+                // truth line per channel
+                traces.push({
+                    type: 'scatter', mode: 'lines', showlegend: false,
+                    x: STAGE_SHORT, y: STAGE_SHORT.map(function() { return LADDER[c].truth; }),
+                    line: { color: CH_COLOR[c], width: 1.4, dash: 'dash' },
+                    hoverinfo: 'skip', opacity: 0.7
+                });
+            });
+            const layout = PT.layout({
+                yaxis: { title: 'ROAS', range: [0, 3.0] },
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 70, r: 30, t: 44, b: 60 },
+                annotations: [{
+                    xref: 'paper', yref: 'y', x: 0.995, y: 2.14, xanchor: 'right', yanchor: 'bottom',
+                    text: 'dashed = TRUE ROAS — TV &amp; Display never get there',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.react('ladderChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('.ladder-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.ladder-btn').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                if (btn.dataset.view === 'slope') {
+                    drawLadderSlope();
+                } else {
+                    drawLadderBars(parseInt(btn.dataset.view, 10));
+                }
+            });
+        });
+
+        // ==================================================================
+        // Fit-quality trap — R-squared flat, truth-gap collapsing (MEASURED)
+        // ==================================================================
+        function drawFitTrap() {
+            const bars = {
+                type: 'bar', name: 'median |contribution error| (grader)',
+                x: STAGE_SHORT, y: MED_ERR,
+                marker: { color: STAGE_COLORS.map(function(c) { return PT.band(c, 0.75); }),
+                          line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                text: MED_ERR.map(function(v) { return v + '%'; }),
+                textposition: 'outside',
+                hovertemplate: '%{x}: med |err| %{y}%<extra></extra>'
+            };
+            const line = {
+                type: 'scatter', mode: 'lines+markers+text', name: 'R² (what the analyst sees)',
+                x: STAGE_SHORT, y: R2, yaxis: 'y2',
+                line: { color: PT.colors.truth, width: 2.5 },
+                marker: { size: 9, color: PT.colors.truth },
+                text: R2.map(function(v) { return v.toFixed(3); }),
+                textposition: 'top center', textfont: { size: 11 },
+                hovertemplate: '%{x}: R² = %{y:.3f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                yaxis: { title: 'median |contribution error| (%)', range: [0, 110] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 70, t: 46, b: 60 },
+                annotations: [{
+                    xref: 'paper', yref: 'y2', x: 0.5, y: 0.945, xanchor: 'center',
+                    text: 'R² spread across all four specs: 0.011 — indistinguishable',
+                    showarrow: false, font: { size: 11.5, color: '#5a6b5a' }
+                }]
+            });
+            layout.yaxis2 = {
+                title: 'R² (in-sample)', overlaying: 'y', side: 'right',
+                range: [0.85, 0.96], gridcolor: 'rgba(0,0,0,0)', zerolinecolor: 'rgba(0,0,0,0)'
+            };
+            Plotly.newPlot('fitTrapChart', [bars, line], layout, PT.config);
+        }
+
+        // ==================================================================
+        // Decision-table filters
+        // ==================================================================
+        document.querySelectorAll('.dt-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.dt-btn').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                const cat = btn.dataset.cat;
+                document.querySelectorAll('#decisionTable tbody tr').forEach(function(tr) {
+                    tr.classList.toggle('dt-hidden', cat !== 'all' && tr.dataset.cat !== cat);
+                });
+            });
+        });
+
+        // ==================================================================
+        function init() {
+            drawHero();
+            drawChase(0.8);
+            drawWidth();
+            drawLadderBars(4);
+            drawFitTrap();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

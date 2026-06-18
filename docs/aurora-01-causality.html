@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora 01: Causality | MMM Framework</title>
+    <meta name="description" content="Chapter 1 of the Aurora Coffee Co. showcase: the causal DAG behind the data, back-door identification, automatic bad-control detection, and why a geo-lift experiment — not more controls — is what finally pulls Search ROAS from 2.51 down to its true 0.66.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-01-causality.html">
+    <meta property="og:title" content="Aurora 01: Causality | MMM Framework">
+    <meta property="og:description" content="Can we trust the number? The Aurora causal map, identification analysis, bad-control detection, and the measured ROAS ladder: demand-blind 2.51 → demand-controlled 1.04 → experiment-calibrated 0.66 (truth 0.66).">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-01-causality.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        /* ------------------- DAG exhibit (page-specific) ------------------- */
+        .dag-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1rem 0.5rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .dag-box svg { width: 100%; height: auto; display: block; }
+
+        .dag-edge {
+            stroke: #b8afa4;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowGrey);
+            transition: opacity 0.25s, stroke 0.25s;
+        }
+        .dag-edge.open-backdoor {
+            stroke: #c97067;
+            stroke-width: 3;
+            stroke-dasharray: 7 5;
+            marker-end: url(#arrowRed);
+        }
+        .dag-edge.blocked { opacity: 0.18; }
+        .dag-edge.causal-live {
+            stroke: #8fa86a;
+            stroke-width: 3;
+            marker-end: url(#arrowGreen);
+        }
+
+        .dag-node circle, .dag-node ellipse {
+            stroke-width: 0;
+            transition: stroke-width 0.25s;
+        }
+        .dag-node.conditioned circle, .dag-node.conditioned ellipse {
+            stroke: #2d3a2d;
+            stroke-width: 4;
+            stroke-dasharray: 4 3;
+        }
+        .dag-node text {
+            fill: #fff;
+            font-family: 'Source Sans 3', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .dag-label {
+            fill: var(--color-text-muted);
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 11.5px;
+        }
+
+        .dag-readout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0 0.5rem;
+        }
+        .dag-readout .stat-callout { padding: 1rem; }
+        .dag-readout .stat-callout .stat-value { font-size: 1.9rem; }
+        #dagStatus {
+            margin: 0.75rem 0 0;
+            padding: 0.85rem 1.1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            font-size: 0.95rem;
+        }
+        #dagStatus strong { color: var(--color-primary-dark); }
+        #dagStatus.bad strong { color: var(--color-danger); }
+
+        .role-ok   { color: #3f7a58; font-weight: 700; }
+        .role-bad  { color: #a44c43; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#question">Can we trust the number?</a></li>
+                <li><a href="#dag">The causal map</a></li>
+                <li><a href="#identification">Identification &amp; roles</a></li>
+                <li><a href="#bad-controls">Bad-control detection</a></li>
+                <li><a href="#adjustment">Why adjustment isn't enough</a></li>
+                <li><a href="#experiment">Anchor to an experiment</a></li>
+                <li><a href="#ladder">The ROAS ladder</a></li>
+                <li><a href="#takeaways">Takeaways</a></li>
+            </ul>
+
+            <h3>Aurora Showcase</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="aurora-00-overview.html">00 · The Trap</a></li>
+                <li><a href="aurora-01-causality.html" class="active">01 · Causality</a></li>
+                <li><a href="aurora-02-base-mmm.html">02 · The Base MMM</a></li>
+                <li><a href="aurora-03-extended-mmm.html">03 · Extended Models</a></li>
+                <li><a href="aurora-04-reporting.html">04 · Reporting</a></li>
+                <li><a href="aurora-05-unified-workflow.html">05 · Unified Workflow</a></li>
+                <li><a href="causal-features-showcase.html">Causal Features Showcase</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="question">Aurora 01 · Causality — can we trust the number?</h1>
+            <p class="lead">
+                The dashboard says fund Search. Before Aurora Coffee Co. moves a dollar, the
+                data-science team asks the causal question: <em>what would have to be true for
+                "Search ROAS" to mean what we think it means?</em> This chapter draws the causal map,
+                computes what to adjust for, shows why adjustment <strong>alone isn't enough</strong> —
+                and anchors the model to a randomized geo-lift experiment that finally lands on the
+                truth. Because the Aurora world is synthetic with a known ground truth, every number
+                below is graded against the real answer. This page mirrors
+                <code>nbs/01_causality.ipynb</code>; all ROAS figures are measured from its baked outputs.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">2.51</div>
+                    <div class="stat-label">Search ROAS from a demand-blind MMM fit (measured)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">1.04</div>
+                    <div class="stat-label">Search ROAS even after controlling for demand (measured)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.66</div>
+                    <div class="stat-label">Search ROAS once a geo-lift experiment enters the likelihood</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.66</div>
+                    <div class="stat-label">the true Search ROAS (known by construction)</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00–05</a> (Bayesian fluency assumed) — or equivalent.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~35–45 min reading + fit time if running
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How to state Aurora's causal assumptions as a DAG and turn them into an adjustment set — condition on Demand, never on Awareness (a mediator the config builder refuses to admit).</li>
+                    <li>Why adjustment alone isn't enough: demand-blind Search ROAS reads 2.51, demand-controlled still 1.04, against a sealed truth of 0.66.</li>
+                    <li>How folding a randomized geo-lift experiment into the likelihood pulls Search and Social onto the answer key when observational adjustment can't.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/01_causality.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/01_causality.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="dag">Step 1 — Draw the causal map (a DAG)</h2>
+            <p>
+                Causal claims need assumptions, and assumptions should be <em>explicit</em>. The
+                framework lets you state them as a directed acyclic graph
+                (<code>DAGSpec</code> in <code>mmm_framework.dag_model_builder</code>). Here is
+                Aurora's world, exactly as the notebook declares it: a latent <strong>Demand</strong>
+                drives both paid-search bidding <em>and</em> sales (a confounder);
+                <strong>Awareness</strong> sits on the path from TV to Sales (a mediator);
+                <strong>Price</strong> is a clean predictor of sales. Sales itself is the sum of two
+                coupled product lines — Original and Cold Brew cannibalize each other, which is
+                chapter <a href="aurora-03-extended-mmm.html">03</a>'s problem.
+                <em>(For legibility the map shows two representative channels — TV the brand-builder
+                and Search the demand-chaser; the fitted models below use all four.)</em>
+            </p>
+
+            <div class="dag-box">
+                <svg viewBox="0 0 780 400" role="img" aria-label="Aurora causal DAG: Demand confounds Search and Sales; TV works through Awareness; Price predicts Sales; Sales splits into two coupled products">
+                    <defs>
+                        <marker id="arrowGrey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#b8afa4"></path>
+                        </marker>
+                        <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#c97067"></path>
+                        </marker>
+                        <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8fa86a"></path>
+                        </marker>
+                        <marker id="arrowInk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6b5a"></path>
+                        </marker>
+                    </defs>
+
+                    <!-- Edges (drawn under nodes). ids match the JS control-set logic. -->
+                    <path id="e-demand-search" class="dag-edge" d="M 116 158 C 150 200, 185 222, 218 238"></path>
+                    <path id="e-demand-sales"  class="dag-edge" d="M 130 130 C 320 100, 480 130, 568 168"></path>
+                    <path id="e-tv-aware"      class="dag-edge" d="M 300 62 L 408 62"></path>
+                    <path id="e-aware-sales"   class="dag-edge" d="M 488 80 C 540 110, 575 140, 596 158"></path>
+                    <path id="e-tv-sales"      class="dag-edge" d="M 290 86 C 380 150, 500 175, 566 184"></path>
+                    <path id="e-search-sales"  class="dag-edge" d="M 300 250 C 410 240, 510 215, 570 196"></path>
+                    <path id="e-price-sales"   class="dag-edge" d="M 296 332 C 420 320, 530 250, 588 210"></path>
+
+                    <!-- Nodes -->
+                    <g id="n-demand" class="dag-node">
+                        <circle cx="92" cy="132" r="34" fill="#5a8a6a"></circle>
+                        <text x="92" y="132">Demand</text>
+                    </g>
+                    <text class="dag-label" x="48" y="84">latent — the confounder</text>
+
+                    <g id="n-tv" class="dag-node">
+                        <circle cx="262" cy="62" r="32" fill="#8fa86a"></circle>
+                        <text x="262" y="62">TV</text>
+                    </g>
+                    <g id="n-search" class="dag-node">
+                        <circle cx="262" cy="252" r="32" fill="#6a8fa8"></circle>
+                        <text x="262" y="252">Search</text>
+                    </g>
+                    <g id="n-price" class="dag-node">
+                        <circle cx="262" cy="334" r="30" fill="#7d97ad"></circle>
+                        <text x="262" y="334">Price</text>
+                    </g>
+                    <g id="n-aware" class="dag-node">
+                        <circle cx="448" cy="62" r="36" fill="#a86a8f"></circle>
+                        <text x="448" y="62">Awareness</text>
+                    </g>
+                    <text class="dag-label" x="404" y="116">the mediator</text>
+
+                    <g id="n-sales" class="dag-node">
+                        <circle cx="618" cy="188" r="38" fill="#2d3a2d"></circle>
+                        <text x="618" y="188">Sales</text>
+                    </g>
+
+                    <!-- Coupled products inset -->
+                    <g>
+                        <rect x="520" y="262" width="216" height="108" rx="10" fill="none"
+                              stroke="#b8afa4" stroke-dasharray="6 5" stroke-width="1.5"></rect>
+                        <line x1="618" y1="226" x2="618" y2="262" stroke="#b8afa4" stroke-width="1.5" stroke-dasharray="3 3"></line>
+                        <circle cx="576" cy="312" r="26" fill="#8fa86a"></circle>
+                        <text x="576" y="312" fill="#fff" font-family="'Source Sans 3', sans-serif" font-weight="700"
+                              font-size="10.5" text-anchor="middle" dominant-baseline="middle">Original</text>
+                        <circle cx="678" cy="312" r="26" fill="#6a8fa8"></circle>
+                        <text x="678" y="312" fill="#fff" font-family="'Source Sans 3', sans-serif" font-weight="700"
+                              font-size="10" text-anchor="middle" dominant-baseline="middle">Cold Brew</text>
+                        <path d="M 606 306 L 648 306" stroke="#5a6b5a" stroke-width="1.6" marker-end="url(#arrowInk)"></path>
+                        <path d="M 648 320 L 606 320" stroke="#5a6b5a" stroke-width="1.6" marker-end="url(#arrowInk)"></path>
+                        <text class="dag-label" x="538" y="356">coupled products (ch. 03)</text>
+                    </g>
+                </svg>
+            </div>
+            <p class="chart-note">
+                <strong>Aurora's causal map</strong> — the same graph the notebook builds with
+                <code>DAGSpec</code>. The red dashed path (when a control set leaves it open) is the
+                back-door <em>Search ← Demand → Sales</em>; everything Search "earns" along it belongs
+                to demand. Diagram of the notebook's declared structure; use the buttons below to
+                condition on different control sets.
+            </p>
+
+            <h3>Choose what to condition on</h3>
+            <p>
+                This is the chapter in one interactive exhibit. Pick an adjustment set; the map shows
+                which paths stay open, and the readout shows the <strong>measured</strong> Search ROAS
+                the notebook actually got under that specification (truth: 0.66).
+            </p>
+            <div class="controls-row" id="dagControls" role="group" aria-label="Adjustment set">
+                <label>Adjustment set:</label>
+                <button class="toggle-btn active" data-set="none">∅ — nothing (demand-blind)</button>
+                <button class="toggle-btn" data-set="demand">{ Demand }</button>
+                <button class="toggle-btn" data-set="demand_aware">{ Demand, Awareness } ⛔</button>
+                <button class="toggle-btn" data-set="demand_exp">{ Demand } + geo-lift experiment</button>
+            </div>
+            <div class="dag-readout">
+                <div class="stat-callout" id="dagRoasCallout">
+                    <div class="stat-value" id="dagRoas">2.51</div>
+                    <div class="stat-label" id="dagRoasLabel">Search ROAS under this specification (measured; truth 0.66)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value" id="dagPaths">1 open</div>
+                    <div class="stat-label">non-causal back-door paths into Sales</div>
+                </div>
+            </div>
+            <div id="dagStatus"></div>
+            <p class="chart-note">
+                ROAS readouts are <strong>measured</strong> — hardcoded from the baked outputs of
+                <code>nbs/01_causality.ipynb</code> (demand-blind 2.51, demand-controlled 1.04,
+                experiment-calibrated 0.66). The {Demand, Awareness} option has no number because the
+                framework <em>refuses to fit it</em> — see Step 3.
+            </p>
+
+            <h2 id="identification">Step 2 — Identify the effect: what must we adjust for?</h2>
+            <p>
+                Given the graph, <code>identification_report</code> applies the back-door criterion:
+                find a set \(Z\) that blocks every non-causal path from treatment to outcome without
+                touching the causal ones, so that
+            </p>
+            <p>
+                \[ P(\text{sales} \mid do(\text{search})) \;=\; \sum_{z} P(\text{sales} \mid \text{search}, z)\, P(z). \]
+            </p>
+            <p>The notebook's run, verbatim:</p>
+            <pre><code>rep = identification_report(dag, treatment_id="search", outcome_id="sales")
+
+Adjustment set (condition on these): ['demand']
+Descendants of Search (must NOT adjust): ['sales']
+Effect identifiable? True
+
+Back-door paths found:
+   search ← demand → sales  — blocked by: ['demand']</code></pre>
+            <p>
+                So the model must <strong>condition on Demand</strong> to close the
+                <em>Search ← Demand → Sales</em> back-door — and must <strong>never condition on
+                Awareness</strong> when the goal is TV's <em>total</em> effect, because Awareness sits
+                on the causal path itself. Adjusting for it would throw away exactly the effect we want
+                to measure: the classic <em>bad control</em>.
+            </p>
+
+            <div class="definition">
+                <h4>Causal role typing</h4>
+                <p>
+                    <code>classify_dag_roles</code> labels every candidate control relative to the
+                    treatments and outcome. The notebook's measured classification:
+                </p>
+                <table>
+                    <thead>
+                        <tr><th>Variable</th><th>Role</th><th>Use it?</th><th>Why</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Demand</td><td><code>confounder</code></td>
+                            <td><span class="role-ok">keep</span></td>
+                            <td>a common cause of media and the KPI (back-door)</td>
+                        </tr>
+                        <tr>
+                            <td>Price</td><td><code>precision_control</code></td>
+                            <td><span class="role-ok">keep</span></td>
+                            <td>predicts the KPI but is not a common cause — tightens the posterior, adds no bias</td>
+                        </tr>
+                        <tr>
+                            <td>Awareness</td><td><code>mediator</code></td>
+                            <td><span class="role-bad">REMOVE</span></td>
+                            <td>a consequence of media (TV) — post-treatment; conditioning blocks the effect</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h2 id="bad-controls">Step 3 — Bad-control detection: the framework enforces it</h2>
+            <p>
+                Role typing isn't documentation — it's enforcement.
+                <code>dag_to_mff_config</code> translates the graph into a model configuration and tags
+                every control with its causal role:
+            </p>
+            <pre><code>cfg = dag_to_mff_config(dag)
+
+  Demand     -&gt; CausalControlRole.CONFOUNDER
+  Price      -&gt; CausalControlRole.PRECISION_CONTROL
+  Awareness  -&gt; CausalControlRole.MEDIATOR</code></pre>
+            <p>
+                When you then try to build a model that conditions on a mediator (or a collider), the
+                builder <strong>raises</strong> — the bad control never makes it into the likelihood.
+                A non-expert who drags "Awareness" into the control list gets a hard error explaining
+                why, not a silently biased TV coefficient. That is why the
+                <em>{Demand, Awareness}</em> button above has no ROAS to report: that fit does not exist.
+            </p>
+
+            <div class="warning">
+                <h4>Why conditioning on Awareness is a trap</h4>
+                <p>
+                    TV's effect in the Aurora world flows almost entirely along
+                    <em>TV → Awareness → Sales</em>. Hold Awareness fixed and you compare weeks with
+                    the same awareness regardless of TV — by construction, TV then looks useless.
+                    You'd "control away" the brand engine. The right tool for separating direct from
+                    mediated effect is a mediation model, not a control — that's the
+                    <code>NestedMMM</code> in <a href="aurora-03-extended-mmm.html">chapter 03</a>.
+                    The same family of selection mistakes (and what dense control sets do to an MMM) is
+                    pressure-tested in <a href="stress-03-confounding-selection.html">Stress 03 ·
+                    Confounding &amp; Selection</a>.
+                </p>
+            </div>
+
+            <h2 id="adjustment">Step 4 — Why adjustment <em>alone</em> isn't enough</h2>
+            <p>
+                Here's the uncomfortable truth most MMM decks skip. The notebook fits Aurora's model
+                two ways — <strong>blind to demand</strong> vs. <strong>controlling for demand</strong>
+                — and grades the recovered ROAS against the known truth (all four channels, 400 draws
+                × 2 chains, seeded):
+            </p>
+
+            <div class="chart-container" id="recoveredChart"></div>
+            <div class="controls-row" id="viewControls" role="group" aria-label="Chart view">
+                <label>View:</label>
+                <button class="toggle-btn active" data-view="roas">ROAS levels</button>
+                <button class="toggle-btn" data-view="bias">Bias (recovered − true)</button>
+            </div>
+            <p class="chart-note">
+                <strong>Measured</strong> — hardcoded from the baked outputs of
+                <code>nbs/01_causality.ipynb</code> (Step 5 table). Controlling for demand shrinks every
+                bar of bias, but Search's stays stubbornly positive: 2.51 → 1.04 against a truth of
+                0.66 (+0.38 of leftover bias). TV and Display are <em>understated</em> either way —
+                their value hides one step upstream, behind Awareness.
+            </p>
+
+            <p>
+                Why doesn't the demand control finish the job? Because Aurora bids Search
+                <em>in proportion to</em> demand, the demand proxy and demand-chasing spend are highly
+                collinear — the regression cannot fully separate them, and Search keeps absorbing
+                demand's credit. <em>This is the central limitation of any observational MMM, and the
+                framework says so out loud.</em> The fix isn't more controls. It's
+                <strong>randomized evidence</strong>. (The same residual-confounding failure, measured
+                across 16 synthetic worlds, is the headline of
+                <a href="pressure-testing.html">Pressure Testing</a> and the capstone of
+                <a href="stress-05-gauntlet.html">Stress 05 · The Gauntlet</a>.)
+            </p>
+
+            <h2 id="experiment">Step 5 — Anchor to an experiment</h2>
+            <p>
+                Last quarter Aurora ran a <strong>geo-lift test</strong> on Search and Social and
+                measured their incremental ROAS. The framework folds that straight into the likelihood
+                via <code>add_experiment_calibration</code> /
+                <code>ExperimentMeasurement</code>: the experiment becomes a data point the model must
+                agree with, updating the coefficient, the saturation curve, <em>and</em> the adstock
+                jointly:
+            </p>
+            <pre><code>from mmm_framework.calibration import ExperimentMeasurement, ExperimentEstimand
+
+experiments = [
+    ExperimentMeasurement("Search", window, value=0.66, se=0.07,
+                          estimand=ExperimentEstimand.ROAS),
+    ExperimentMeasurement("Social", window, value=0.49, se=0.07,
+                          estimand=ExperimentEstimand.ROAS),
+]
+m_cal = BayesianMMM(panel, base_config(), TrendConfig(type=TrendType.LINEAR),
+                    experiments=experiments)</code></pre>
+            <p>
+                In likelihood terms: alongside \(y_t \sim \mathcal{N}(\mu_t, \sigma)\), the model also
+                has to explain
+                \(\widehat{\text{ROAS}}_{\text{exp}} \sim \mathcal{N}(\text{ROAS}_{\text{model}},
+                \text{se}^2)\). The notebook's measured result:
+            </p>
+            <pre><code>Search: observational 1.04  →  calibrated 0.66   (true 0.66)
+Social: observational 0.70  →  calibrated 0.48   (true 0.49)</code></pre>
+
+            <div class="chart-container short" id="punchlineChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the notebook's <code>nb01_punchline</code> chart, rebuilt
+                from its printed values. Each calibrated channel's ROAS slides off its inflated
+                observational value onto the truth (dashed line) once the experiment enters the
+                likelihood. The demand mirage is gone. Calibration mechanics — lift tests, estimands,
+                standard errors — are covered in
+                <a href="measurement-calibration.html">Measurement &amp; Calibration</a>.
+            </p>
+
+            <h2 id="ladder">The whole chapter in one chart: the ROAS ladder</h2>
+            <p>
+                Three specifications, one truth. Naively, Search was the dashboard's hero (spend–sales
+                correlation ≈ 0.85 in <a href="aurora-00-overview.html">chapter 00</a>).
+                A demand-blind MMM gives the mirage a number: ROAS 2.51, nearly four times the truth.
+                Each rung of the ladder removes one layer of self-deception:
+            </p>
+
+            <div class="chart-container tall" id="ladderChart"></div>
+            <div class="controls-row" id="ladderControls" role="group" aria-label="Channels shown">
+                <label>Channels:</label>
+                <button class="toggle-btn active" data-channels="exp">Search + Social (experiment-anchored)</button>
+                <button class="toggle-btn" data-channels="all">All four</button>
+            </div>
+            <p class="chart-note">
+                <strong>Measured</strong> — every point is from the baked Step-5/Step-6 tables of
+                <code>nbs/01_causality.ipynb</code>; dashed lines are the known true ROAS. Search:
+                2.51 → 1.04 → 0.66 (truth 0.66). Social: 1.14 → 0.70 → 0.48 (truth 0.49). Switch to
+                "All four" and note that TV (truth 2.14) and Display (truth 2.11) stay
+                <em>understated</em> at every rung — calibrating Search/Social frees up a little credit
+                (TV 0.33 → 0.42, Display 0.67 → 0.78) but can't reveal effects that flow through an
+                unmodeled mediator. That's chapter <a href="aurora-03-extended-mmm.html">03</a>.
+            </p>
+
+            <div class="note">
+                <h4>The doctrine line</h4>
+                <p>
+                    <strong>Observational adjustment helps but is not sufficient when spend chases
+                    demand. Anchor the observational model to randomized evidence.</strong> This is the
+                    single most important move in causal MMM, and it's the framework's thesis — the
+                    full identification toolkit (DAGs, roles, refutation checks, calibration) is laid
+                    out in <a href="causal-inference.html">Causal Inference</a>.
+                </p>
+            </div>
+
+            <h2 id="takeaways">Takeaways</h2>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li>A DAG makes assumptions explicit, and <code>identification_report</code> turns
+                        them into an adjustment set: condition on Demand, never on Awareness.</li>
+                    <li><strong>Bad controls are auto-detected and enforced</strong> —
+                        <code>classify_dag_roles</code> labels Awareness a mediator, and the config
+                        builder raises rather than letting it into the likelihood.</li>
+                    <li>Adjustment alone is not enough: demand-blind Search ROAS 2.51; demand-controlled
+                        still 1.04 against a truth of 0.66 (collinearity between the proxy and
+                        demand-chasing spend).</li>
+                    <li>A geo-lift experiment folded into the likelihood pulls Search → 0.66 and
+                        Social → 0.48, matching truth (0.66 / 0.49). Randomized evidence fixes what
+                        observational adjustment can't.</li>
+                    <li>TV and Display remain understated at every rung — mediation is the next
+                        problem, and the next notebook but one.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>Run it yourself</h4>
+                <p>
+                    The notebook is <code>nbs/01_causality.ipynb</code> (committed with baked outputs);
+                    regenerate it from source with <code>nbs/build_aurora_notebooks.py</code> and see
+                    <code>nbs/README_aurora.md</code> for the run order and the shared Aurora world
+                    (<code>nbs/aurora.py</code>). Repository:
+                    <a href="https://github.com/redam94/mmm-framework">github.com/redam94/mmm-framework</a>.
+                    Next in the story: <a href="aurora-02-base-mmm.html">02 · The Base MMM</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // Series-wide Plotly helper (copied verbatim from pressure-testing.html)
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG — series-wide reference implementation (unused on this page).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        void mulberry32;
+
+        // ------------------------------------------------------------------
+        // MEASURED data — baked outputs of nbs/01_causality.ipynb.
+        // Step 5 table: true / demand-blind / demand-controlled ROAS.
+        // Step 6 table: experiment-calibrated ROAS.
+        // ------------------------------------------------------------------
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CHANNEL_COLORS = {
+            TV: PT.colors.tv, Search: PT.colors.search,
+            Social: PT.colors.social, Display: PT.colors.display
+        };
+        const ROAS = {
+            TV:      { truth: 2.14, blind: 0.19, ctrl: 0.33, cal: 0.42 },
+            Search:  { truth: 0.66, blind: 2.51, ctrl: 1.04, cal: 0.66 },
+            Social:  { truth: 0.49, blind: 1.14, ctrl: 0.70, cal: 0.48 },
+            Display: { truth: 2.11, blind: 0.48, ctrl: 0.67, cal: 0.78 }
+        };
+        const SPECS = ['demand-blind', 'demand-controlled', 'experiment-calibrated'];
+
+        // ------------------------------------------------------------------
+        // Interactive DAG: adjustment-set toggle
+        // ------------------------------------------------------------------
+        const BACKDOOR = 'e-demand-search e-demand-sales'.split(' ');
+        const MEDIATED = 'e-tv-aware e-aware-sales'.split(' ');
+
+        const CONTROL_SETS = {
+            none: {
+                conditioned: [],
+                backdoorOpen: true,
+                mediatorBlocked: false,
+                roas: '2.51',
+                roasLabel: 'Search ROAS under this specification (measured; truth 0.66)',
+                paths: '1 open',
+                bad: true,
+                status: '<strong>Back-door OPEN.</strong> Nothing blocks <em>Search ← Demand → Sales</em>; ' +
+                        'Search inherits demand’s credit and the fit reports 2.51 against a true 0.66. ' +
+                        'This is the demand-blind fit from Step 4.'
+            },
+            demand: {
+                conditioned: ['n-demand'],
+                backdoorOpen: false,
+                mediatorBlocked: false,
+                roas: '1.04',
+                roasLabel: 'Search ROAS under this specification (measured; truth 0.66)',
+                paths: '0 open (on paper)',
+                bad: true,
+                status: '<strong>Back-door closed on paper — but the bias survives.</strong> The demand ' +
+                        'proxy is collinear with demand-chasing Search spend, so the regression cannot fully ' +
+                        'separate them: measured ROAS 1.04, still ~60% above the truth. Adjustment alone is not enough.'
+            },
+            demand_aware: {
+                conditioned: ['n-demand', 'n-aware'],
+                backdoorOpen: false,
+                mediatorBlocked: true,
+                roas: '⛔',
+                roasLabel: 'the framework raises — this model is never fit',
+                paths: '0 open — but a causal path is blocked',
+                bad: true,
+                status: '<strong>Bad control.</strong> Awareness is a <em>mediator</em> on ' +
+                        '<em>TV → Awareness → Sales</em>; conditioning on it throws away exactly the effect ' +
+                        'we want. <code>classify_dag_roles</code> labels it <code>mediator</code> and the ' +
+                        'config builder refuses to put it in the likelihood — so there is no biased number ' +
+                        'to report. (Want the mediated effect itself? That’s the NestedMMM in chapter 03.)'
+            },
+            demand_exp: {
+                conditioned: ['n-demand'],
+                backdoorOpen: false,
+                mediatorBlocked: false,
+                roas: '0.66',
+                roasLabel: 'Search ROAS under this specification (measured; truth 0.66)',
+                paths: '0 open + likelihood anchored',
+                bad: false,
+                status: '<strong>Anchored to randomized evidence.</strong> The geo-lift experiment enters ' +
+                        'the likelihood as a measurement the model must agree with. Search snaps to 0.66 ' +
+                        '(truth 0.66) and Social to 0.48 (truth 0.49). This is the chapter’s answer: ' +
+                        'adjust where you can, calibrate where you can’t.'
+            }
+        };
+
+        function applyControlSet(key) {
+            const cfg = CONTROL_SETS[key];
+
+            document.querySelectorAll('.dag-node').forEach(function(n) {
+                n.classList.toggle('conditioned', cfg.conditioned.indexOf(n.id) !== -1);
+            });
+
+            BACKDOOR.forEach(function(id) {
+                const el = document.getElementById(id);
+                el.classList.toggle('open-backdoor', cfg.backdoorOpen);
+                el.classList.toggle('blocked', !cfg.backdoorOpen);
+            });
+
+            MEDIATED.forEach(function(id) {
+                const el = document.getElementById(id);
+                el.classList.toggle('blocked', cfg.mediatorBlocked);
+                el.classList.toggle('causal-live', !cfg.mediatorBlocked && key === 'demand_exp');
+            });
+
+            const searchEdge = document.getElementById('e-search-sales');
+            searchEdge.classList.toggle('causal-live', key === 'demand_exp');
+
+            document.getElementById('dagRoas').textContent = cfg.roas;
+            document.getElementById('dagRoasLabel').textContent = cfg.roasLabel;
+            document.getElementById('dagPaths').textContent = cfg.paths;
+
+            const status = document.getElementById('dagStatus');
+            status.innerHTML = cfg.status;
+            status.classList.toggle('bad', cfg.bad);
+
+            const callout = document.getElementById('dagRoasCallout');
+            callout.classList.toggle('danger', cfg.bad && key !== 'demand_aware');
+        }
+
+        function wireButtons(containerId, attr, handler) {
+            const box = document.getElementById(containerId);
+            box.addEventListener('click', function(ev) {
+                const btn = ev.target.closest('.toggle-btn');
+                if (!btn) return;
+                box.querySelectorAll('.toggle-btn').forEach(function(b) {
+                    b.classList.toggle('active', b === btn);
+                });
+                handler(btn.getAttribute(attr));
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 1: recovered ROAS vs truth (grouped bars), with bias toggle
+        // ------------------------------------------------------------------
+        function drawRecovered(view) {
+            let traces, yTitle, title, shapes = [];
+            if (view === 'roas') {
+                traces = [
+                    { x: CHANNELS, y: CHANNELS.map(function(c) { return ROAS[c].truth; }),
+                      name: 'true ROAS', type: 'bar', marker: { color: PT.colors.truth } },
+                    { x: CHANNELS, y: CHANNELS.map(function(c) { return ROAS[c].blind; }),
+                      name: 'demand-blind', type: 'bar', marker: { color: '#a86a8f' } },
+                    { x: CHANNELS, y: CHANNELS.map(function(c) { return ROAS[c].ctrl; }),
+                      name: 'demand-controlled', type: 'bar', marker: { color: '#7d97ad' } }
+                ];
+                yTitle = 'ROAS (revenue per $1 spend)';
+                title = 'Controlling for demand helps — but Search is still overstated';
+                shapes = [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 1, y1: 1,
+                    line: { color: '#9aa79a', width: 1, dash: 'dash' }
+                }];
+            } else {
+                traces = [
+                    { x: CHANNELS, y: CHANNELS.map(function(c) { return +(ROAS[c].blind - ROAS[c].truth).toFixed(2); }),
+                      name: 'demand-blind', type: 'bar', marker: { color: '#a86a8f' },
+                      text: CHANNELS.map(function(c) { const v = ROAS[c].blind - ROAS[c].truth; return (v >= 0 ? '+' : '') + v.toFixed(2); }),
+                      textposition: 'outside' },
+                    { x: CHANNELS, y: CHANNELS.map(function(c) { return +(ROAS[c].ctrl - ROAS[c].truth).toFixed(2); }),
+                      name: 'demand-controlled', type: 'bar', marker: { color: '#7d97ad' },
+                      text: CHANNELS.map(function(c) { const v = ROAS[c].ctrl - ROAS[c].truth; return (v >= 0 ? '+' : '') + v.toFixed(2); }),
+                      textposition: 'outside' }
+                ];
+                yTitle = 'ROAS bias (recovered − true)';
+                title = 'Bias shrinks under the demand control — but Search’s stays positive';
+                shapes = [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 0, y1: 0,
+                    line: { color: PT.colors.truth, width: 1.5 }
+                }];
+            }
+            const layout = PT.layout({
+                barmode: 'group',
+                title: { text: title, font: { size: 15 }, x: 0.02 },
+                yaxis: { title: { text: yTitle } },
+                legend: { orientation: 'h', y: -0.18 },
+                margin: { l: 70, r: 30, t: 50, b: 70 },
+                shapes: shapes
+            });
+            Plotly.newPlot('recoveredChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2: calibration punchline (dumbbell, Search & Social)
+        // ------------------------------------------------------------------
+        function drawPunchline() {
+            const calib = ['Search', 'Social'];
+            const traces = [];
+            calib.forEach(function(ch, i) {
+                const col = CHANNEL_COLORS[ch];
+                traces.push({
+                    x: [ROAS[ch].ctrl, ROAS[ch].cal], y: [i, i],
+                    mode: 'lines', line: { color: col, width: 4 },
+                    opacity: 0.45, showlegend: false, hoverinfo: 'skip'
+                });
+                traces.push({
+                    x: [ROAS[ch].ctrl], y: [i],
+                    mode: 'markers+text', name: ch + ' — observational',
+                    marker: { size: 14, color: '#ffffff', line: { color: col, width: 2.5 } },
+                    text: ['observational ' + ROAS[ch].ctrl.toFixed(2)],
+                    textposition: 'top center', textfont: { size: 11, color: '#5a6b5a' },
+                    showlegend: false
+                });
+                traces.push({
+                    x: [ROAS[ch].cal], y: [i],
+                    mode: 'markers+text', name: ch + ' — calibrated',
+                    marker: { size: 15, color: col },
+                    text: ['calibrated ' + ROAS[ch].cal.toFixed(2)],
+                    textposition: 'bottom center', textfont: { size: 11.5, color: col },
+                    showlegend: false
+                });
+                traces.push({
+                    x: [ROAS[ch].truth], y: [i],
+                    mode: 'markers', name: (i === 0 ? 'true ROAS' : ''),
+                    marker: { symbol: 'line-ns-open', size: 22,
+                              color: PT.colors.truth, line: { width: 3 } },
+                    showlegend: i === 0,
+                    hovertemplate: ch + ' true ROAS: ' + ROAS[ch].truth.toFixed(2) + '<extra></extra>'
+                });
+            });
+            const layout = PT.layout({
+                title: { text: 'Experiment calibration pulls observational ROAS onto the truth', font: { size: 15 }, x: 0.02 },
+                xaxis: { title: { text: 'ROAS (revenue per $1 spend)' }, range: [0, 1.45] },
+                yaxis: { tickvals: [0, 1], ticktext: ['Search', 'Social'], range: [-0.6, 1.6] },
+                legend: { orientation: 'h', y: -0.28 },
+                margin: { l: 70, r: 30, t: 50, b: 60 },
+                shapes: [{
+                    type: 'line', x0: 1, x1: 1, y0: -0.6, y1: 1.6,
+                    line: { color: '#9aa79a', width: 1, dash: 'dash' }
+                }]
+            });
+            Plotly.newPlot('punchlineChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3 (centerpiece): the ROAS ladder across specifications
+        // ------------------------------------------------------------------
+        function drawLadder(which) {
+            const chans = which === 'all' ? CHANNELS : ['Search', 'Social'];
+            const traces = [];
+            chans.forEach(function(ch) {
+                const col = CHANNEL_COLORS[ch];
+                traces.push({
+                    x: SPECS, y: [ROAS[ch].blind, ROAS[ch].ctrl, ROAS[ch].cal],
+                    mode: 'lines+markers+text', name: ch,
+                    line: { color: col, width: 3 },
+                    marker: { size: 11, color: col },
+                    text: [ROAS[ch].blind.toFixed(2), ROAS[ch].ctrl.toFixed(2), ROAS[ch].cal.toFixed(2)],
+                    textposition: 'top center', textfont: { size: 11, color: col }
+                });
+                traces.push({
+                    x: SPECS, y: [ROAS[ch].truth, ROAS[ch].truth, ROAS[ch].truth],
+                    mode: 'lines', name: ch + ' truth (' + ROAS[ch].truth.toFixed(2) + ')',
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' },
+                    opacity: 0.75,
+                    hovertemplate: ch + ' true ROAS: ' + ROAS[ch].truth.toFixed(2) + '<extra></extra>'
+                });
+            });
+            const layout = PT.layout({
+                title: { text: 'The ROAS ladder: each specification removes one layer of self-deception', font: { size: 15 }, x: 0.02 },
+                xaxis: { title: { text: 'model specification' } },
+                yaxis: { title: { text: 'Search / channel ROAS' }, rangemode: 'tozero' },
+                legend: { orientation: 'h', y: -0.18 },
+                margin: { l: 70, r: 30, t: 55, b: 70 }
+            });
+            Plotly.newPlot('ladderChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Init
+        // ------------------------------------------------------------------
+        function init() {
+            applyControlSet('none');
+            drawRecovered('roas');
+            drawPunchline();
+            drawLadder('exp');
+
+            wireButtons('dagControls', 'data-set', applyControlSet);
+            wireButtons('viewControls', 'data-view', drawRecovered);
+            wireButtons('ladderControls', 'data-channels', drawLadder);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

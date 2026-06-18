@@ -1,0 +1,25 @@
+# 4a — the API ServiceAccount is the ONLY identity with cloud creds + the right
+# to mint kernel pods. The kernel SA has no permissions and no mounted token, so
+# in-cluster code has no identity (mirrors the Phase-3 "no cloud identity").
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: mmm-api, namespace: mmm-system }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: mmm-kernel, namespace: mmm-tenant-TENANT }
+automountServiceAccountToken: false      # kernels get NO in-cluster identity
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: kernel-spawner, namespace: mmm-tenant-TENANT }
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services"]
+    verbs: ["create", "get", "list", "delete", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: api-spawns-kernels, namespace: mmm-tenant-TENANT }
+subjects: [{ kind: ServiceAccount, name: mmm-api, namespace: mmm-system }]
+roleRef: { kind: Role, name: kernel-spawner, apiGroup: rbac.authorization.k8s.io }

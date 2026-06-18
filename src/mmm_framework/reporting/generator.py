@@ -231,7 +231,8 @@ class MMMReportGenerator:
         """Assemble complete HTML document."""
         generated_date = self.config.generated_date or datetime.now().strftime("%B %Y")
 
-        # Build header
+        # Build header: gradient hero — serif title, client/subtitle line,
+        # analysis-period and generation dates, confidentiality badge.
         subtitle = ""
         if self.config.client:
             subtitle = f'<div class="subtitle">{html.escape(self.config.client)}'
@@ -239,29 +240,38 @@ class MMMReportGenerator:
                 subtitle += f" — {html.escape(self.config.subtitle)}"
             subtitle += "</div>"
 
-        period = ""
+        date_line = f"Generated: {generated_date}"
         if self.config.analysis_period:
-            period = f'<div class="date">Analysis Period: {html.escape(self.config.analysis_period)} | Generated: {generated_date}</div>'
+            date_line = (
+                f"Analysis Period: {html.escape(self.config.analysis_period)}"
+                f'<span class="meta-sep">|</span>{date_line}'
+            )
+
+        conf_tag = ""
+        if self.config.confidential:
+            conf_tag = '<span class="masthead-tag">Confidential</span>'
 
         header = f"""
         <header class="report-header">
             <h1>{html.escape(self.config.title)}</h1>
             {subtitle}
-            {period}
+            <div class="date">{date_line}{conf_tag}</div>
         </header>
         """
 
-        # Build footer
+        # Build footer (colophon)
         conf_line = ""
         if self.config.confidential:
             client_label = (
                 f" — {html.escape(self.config.client)}" if self.config.client else ""
             )
-            conf_line = f'<p class="confidential-notice">⚠ CONFIDENTIAL{client_label} — Not for distribution</p>'
+            conf_line = f'<p class="confidential-notice">CONFIDENTIAL{client_label} — not for distribution</p>'
         footer = f"""
         <footer class="report-footer">
             {conf_line}
-            <p>Generated: {generated_date}</p>
+            <p>Generated {generated_date} · Built with the MMM Framework
+               (Bayesian marketing mix modeling — estimates carry the uncertainty
+               intervals shown; point values alone are not decisions)</p>
         </footer>
         """
 
@@ -311,7 +321,7 @@ class MMMReportGenerator:
     <title>{html.escape(self.config.title)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     {plotly_script}
     <style>
 {css}
@@ -320,6 +330,25 @@ class MMMReportGenerator:
 <body>
     {content_wrap}
     {scrollspy}
+    <script>
+    function showTab(tabId) {{
+        var pane = document.getElementById(tabId);
+        if (!pane) return;
+        var container = pane.closest('.tab-container') || document;
+        container.querySelectorAll('.tab-btn').forEach(function(b) {{ b.classList.remove('active'); }});
+        container.querySelectorAll('.tab-content').forEach(function(c) {{ c.classList.remove('active'); }});
+        var btn = (typeof event !== 'undefined' && event) ? event.target : null;
+        if (btn) btn.classList.add('active');
+        pane.classList.add('active');
+        if (window.Plotly) {{
+            setTimeout(function() {{
+                pane.querySelectorAll('.js-plotly-plot').forEach(function(p) {{
+                    Plotly.Plots.resize(p);
+                }});
+            }}, 10);
+        }}
+    }}
+    </script>
 </body>
 </html>"""
 
@@ -368,7 +397,7 @@ class MMMReportGenerator:
             padding: 2rem;
         }}
 
-        /* Header */
+        /* Header — gradient hero */
         .report-header {{
             text-align: center;
             padding: 3rem 2rem;
@@ -381,6 +410,8 @@ class MMMReportGenerator:
         .report-header h1 {{
             font-family: {self.config.font_family_serif};
             font-size: 2.5rem;
+            font-weight: 400;
+            line-height: 1.2;
             margin-bottom: 0.5rem;
         }}
 
@@ -395,7 +426,24 @@ class MMMReportGenerator:
             opacity: 0.8;
         }}
 
-        /* Section styling */
+        .report-header .meta-sep {{
+            margin: 0 0.6em;
+            opacity: 0.6;
+        }}
+
+        .masthead-tag {{
+            display: inline-block;
+            margin-left: 0.9em;
+            padding: 0.15em 0.7em;
+            border: 1px solid rgba(255, 255, 255, 0.65);
+            border-radius: 4px;
+            color: white;
+            font-size: 0.85em;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }}
+
+        /* Section styling — modern cards */
         .section {{
             background: var(--color-surface);
             border-radius: 16px;
@@ -405,9 +453,10 @@ class MMMReportGenerator:
             border: 1px solid var(--color-border);
         }}
 
-        .section h2 {{
+        .section > h2 {{
             font-family: {self.config.font_family_serif};
             font-size: 1.6rem;
+            font-weight: 400;
             color: var(--color-text);
             margin-bottom: 1rem;
             padding-bottom: 0.75rem;
@@ -451,8 +500,10 @@ class MMMReportGenerator:
         .metric-card .value {{
             font-size: 2rem;
             font-weight: 700;
+            line-height: 1.15;
             color: var(--color-primary-dark);
             font-family: {self.config.font_family_mono};
+            font-variant-numeric: tabular-nums;
         }}
 
         .metric-card .label {{
@@ -466,6 +517,7 @@ class MMMReportGenerator:
             color: var(--color-text-muted);
             margin-top: 0.5rem;
             font-family: {self.config.font_family_mono};
+            font-variant-numeric: tabular-nums;
         }}
 
         .metric-card.highlight {{
@@ -487,18 +539,119 @@ class MMMReportGenerator:
             margin: 1.5rem 0;
         }}
 
+        .chart-container-sm {{
+            min-height: 250px;
+        }}
+
+        .chart-container-lg {{
+            min-height: 450px;
+        }}
+
         .chart-grid {{
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
+            gap: 2rem;
             margin: 1.5rem 0;
         }}
 
         .chart-box {{
             background: var(--color-bg-alt);
             border-radius: 12px;
-            padding: 1rem;
+            padding: 1.5rem;
             border: 1px solid var(--color-border);
+        }}
+
+        .chart-box h4 {{
+            font-size: 1rem;
+            color: var(--color-text);
+            margin-bottom: 1rem;
+            text-align: center;
+        }}
+
+        /* Interactive controls */
+        .control-panel {{
+            background: var(--color-bg-alt);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border: 1px solid var(--color-border);
+        }}
+
+        .control-panel h4 {{
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }}
+
+        .control-row {{
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }}
+
+        .control-row label {{
+            font-weight: 500;
+            min-width: 150px;
+            font-size: 0.95rem;
+        }}
+
+        .control-row select {{
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+            min-width: 200px;
+            background: var(--color-surface);
+            color: var(--color-text);
+        }}
+
+        /* Tabs */
+        .tab-container {{
+            margin: 1.5rem 0;
+        }}
+
+        .tab-buttons {{
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--color-border);
+            padding-bottom: 0.5rem;
+        }}
+
+        .tab-btn {{
+            padding: 0.5rem 1.25rem;
+            border: none;
+            background: transparent;
+            color: var(--color-text-muted);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-radius: 6px 6px 0 0;
+            transition: all 0.2s;
+        }}
+
+        .tab-btn:hover {{
+            color: var(--color-primary);
+            background: var(--color-bg-alt);
+        }}
+
+        .tab-btn.active {{
+            color: var(--color-primary-dark);
+            background: var(--color-bg-alt);
+            border-bottom: 2px solid var(--color-primary);
+            margin-bottom: -2px;
+        }}
+
+        .tab-content {{
+            display: none;
+        }}
+
+        .tab-content.active {{
+            display: block;
         }}
 
         /* Callout boxes */
@@ -582,6 +735,7 @@ class MMMReportGenerator:
             border-collapse: collapse;
             margin: 1.5rem 0;
             font-size: 0.95rem;
+            font-variant-numeric: tabular-nums;
         }}
 
         .data-table th, .data-table td {{
@@ -599,7 +753,7 @@ class MMMReportGenerator:
             letter-spacing: 0.03em;
         }}
 
-        .data-table tr:hover {{
+        .data-table tbody tr:hover {{
             background: var(--color-bg-alt);
         }}
 
@@ -607,6 +761,7 @@ class MMMReportGenerator:
             font-family: {self.config.font_family_mono};
         }}
 
+        .data-table .muted {{ color: var(--color-text-muted); }}
         .data-table .positive {{ color: var(--color-success); }}
         .data-table .negative {{ color: var(--color-danger); }}
         .data-table .uncertain {{ color: var(--color-warning); }}
@@ -633,9 +788,11 @@ class MMMReportGenerator:
         /* Footer */
         .report-footer {{
             text-align: center;
+            margin-top: 2.5rem;
             padding: 2rem;
             color: var(--color-text-muted);
             font-size: 0.85rem;
+            line-height: 1.6;
         }}
 
         .report-footer a {{
@@ -655,21 +812,42 @@ class MMMReportGenerator:
             .report-header h1 {{ font-size: 1.8rem; }}
         }}
 
-        /* Print styles */
+        /* Print styles — consultants print these */
+        @page {{
+            margin: 18mm 16mm;
+        }}
+
         @media print {{
-            body {{ background: white; }}
+            body {{ background: white; font-size: 11pt; }}
             .report-nav {{ display: none !important; }}
             .report-body {{ display: block !important; }}
+            .report-body.has-nav .report-container {{ padding-left: 0; }}
             .report-container {{ max-width: none; padding: 0; margin: 0; }}
+            .report-header {{
+                border-radius: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
             .section {{
                 break-inside: avoid;
                 box-shadow: none;
-                border: 1px solid #ddd;
+                border: none;
+                border-top: 1px solid #ddd;
+                border-radius: 0;
+                padding: 1.5rem 0;
             }}
+            .metric-card,
+            .callout {{
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
+            .metric-card {{ break-inside: avoid; }}
             .chart-container {{
                 break-inside: avoid;
                 page-break-inside: avoid;
             }}
+            .data-table tbody tr:hover {{ background: transparent; }}
+            .report-footer {{ page-break-inside: avoid; }}
         }}
 
         /* ── Layout shell ─────────────────────────────────────────────── */
@@ -836,6 +1014,11 @@ class ReportBuilder:
     def with_color_scheme(self, scheme: ColorScheme) -> ReportBuilder:
         """Set color scheme."""
         self._config_kwargs["color_scheme"] = scheme
+        return self
+
+    def with_channel_colors(self, channel_colors) -> ReportBuilder:
+        """Set per-channel chart colors (a ChannelColors instance)."""
+        self._config_kwargs["channel_colors"] = channel_colors
         return self
 
     def with_credible_interval(self, prob: float) -> ReportBuilder:

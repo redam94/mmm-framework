@@ -79,6 +79,27 @@
 
     <section>
         <div class="container">
+            <h2>How We Get to Causal Answers</h2>
+            <p>
+                A marketing mix model answers a causal question—"what would sales have been if we hadn't run this media?"—not just "what moved together?" Plenty of things move together without one causing the other: holiday demand lifts both ad spend and sales in the same weeks. Getting from correlation to contribution requires three disciplines, and the framework enforces all of them.
+            </p>
+            <p>
+                <strong>First, every variable has a declared role.</strong> Confounders—forces like underlying demand that drive both spend and sales—must be in the model, no exceptions, or media gets credit for sales it never caused. Precision controls—variables that explain noise without distorting media effects—are optional sharpeners. The framework keeps these roles explicit so the distinction can never be quietly blurred to make results look better.
+            </p>
+            <p>
+                <strong>Second, the model design is locked in before results are seen.</strong> Pre-specification removes the temptation to adjust the recipe after tasting the outcome, so findings reflect the data rather than the analyst's preferences.
+            </p>
+            <p>
+                <strong>Third, the model's answers are checked against real-world experiments.</strong> Think of it as a taste test for the recipe: the model proposes an effect, and a regional holdout test disposes. Lift-test results feed directly back into the model—calibration that observational data alone can never provide.
+            </p>
+            <p>
+                The product of these three disciplines is an estimate of <em>incremental</em> impact: what your media actually caused, stated with honest uncertainty.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
             <h2>Core Principles</h2>
             <div class="principle-grid">
                 <div class="principle-card">
@@ -138,13 +159,25 @@
         <div class="container">
             <h2>Technical Foundation</h2>
             <p>
-                The framework is built on <strong>PyMC-Marketing</strong> for Bayesian modeling, with a complete technical stack including FastAPI backends, Streamlit frontends, and comprehensive testing infrastructure. It supports sophisticated modeling scenarios including nested models with mediated causal pathways, multivariate outcomes with cross-correlations, and principled variable selection that maintains causal validity.
+                The framework is built on <strong>PyMC-Marketing</strong> for Bayesian modeling, with a complete technical stack: a Python library at the core, a FastAPI backend, and a modern React web application—Program, Experiments, and Performance views plus an AI agent workspace that acts as a chat-based analyst assistant (a legacy Streamlit interface remains as a secondary surface). See the <a href="platform-overview.html">platform overview</a> for a tour. It supports sophisticated modeling scenarios including nested models with mediated causal pathways, multivariate outcomes with cross-correlations, and principled variable selection that maintains causal validity.
             </p>
             <p>
                 Key technical innovations include proper handling of geo-level random effects (which can't identify national media effects), Bayesian variable selection that distinguishes confounders from precision controls, and extensive diagnostics following the Bayesian workflow framework from Gelman et al. (2020).
             </p>
             <p>
-                The framework is open source and designed for both individual use and organizational adoption. Comprehensive documentation, mathematical foundations, and educational content help teams understand not just <em>how</em> to use these methods but <em>why</em> they matter.
+                The framework is open source under the Apache-2.0 license and designed for both individual use and organizational adoption. Comprehensive documentation, mathematical foundations, and educational content help teams understand not just <em>how</em> to use these methods but <em>why</em> they matter.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Who's Behind This</h2>
+            <p>
+                The framework is built and maintained by <strong>Matthew Reda</strong>—and honestly, just him. A solo-maintained project carries real bus-factor risk, and the same honesty this site asks of measurement applies to itself: the mitigations are the Apache-2.0 license (the codebase is fully fork-able), a test suite of 2,000+ passing tests, seeded notebooks behind every measured claim (so the evidence can be re-derived by anyone), a pressure-testing harness with a recorded public scorecard, and methodology stated in documentation rather than hidden in code. For the full procurement view—license, versioning, support model, and known limitations on one page—see the <a href="evaluator.html">Evaluator's Guide</a>.
+            </p>
+            <p>
+                <strong>Citing the framework:</strong> please cite it as <em>MMM Framework</em>, version 0.1.0, Matthew Reda, <a href="https://github.com/redam94/mmm-framework" target="_blank">https://github.com/redam94/mmm-framework</a>.
             </p>
         </div>
     </section>

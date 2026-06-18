@@ -69,6 +69,19 @@ class MultivariateMMM(BaseExtendedMMM):
         self.outcome_names = [o.name for o in config.outcomes]
         self.n_outcomes = len(config.outcomes)
 
+        # Per-outcome standardization (the fixed priors assume z-scale
+        # outcomes). Data attributes stay on the caller's raw scale; the
+        # likelihood fits standardized outcomes and report-consumed
+        # deterministics are registered back in original units.
+        self.outcome_means = {
+            name: float(np.asarray(outcome_data[name], dtype=float).mean())
+            for name in self.outcome_names
+        }
+        self.outcome_stds = {
+            name: float(np.asarray(outcome_data[name], dtype=float).std()) + 1e-8
+            for name in self.outcome_names
+        }
+
         # Build cross-effect structure
         self._cross_effect_specs = self._build_cross_effect_specs()
 
@@ -120,12 +133,18 @@ class MultivariateMMM(BaseExtendedMMM):
         coords = self._build_coords()
 
         with pm.Model(coords=coords) as model:
-            # Data
+            # Data. ``Y`` stays raw: cross-effects are defined on the raw
+            # source outcome (``psi[s, t] * Y_raw[:, s]``), preserving psi's
+            # original-unit interpretation. The likelihood fits standardized
+            # outcomes so the fixed priors are well-calibrated.
             X_media = pm.Data("X_media", self.X_media, dims=("obs", "channel"))
 
             Y_matrix = np.column_stack(
                 [self.outcome_data[name] for name in self.outcome_names]
             )
+            means = np.array([self.outcome_means[n] for n in self.outcome_names])
+            stds = np.array([self.outcome_stds[n] for n in self.outcome_names])
+            Y_standardized = (Y_matrix - means) / stds
             Y = pm.Data("Y", Y_matrix, dims=("obs", "outcome"))
 
             # Media transformations: normalize -> geometric adstock -> logistic
@@ -167,7 +186,9 @@ class MultivariateMMM(BaseExtendedMMM):
             else:
                 psi_matrix = None
 
-            # Build expected values
+            # Build expected values on the standardized scale. Cross-effects
+            # act on the raw source outcome and are divided by the target's
+            # std, so ``psi`` keeps its raw source->target interpretation.
             mu_list = []
             for k, outcome_config in enumerate(self.config.outcomes):
                 mu_k = alpha[k]
@@ -192,26 +213,32 @@ class MultivariateMMM(BaseExtendedMMM):
                     cross_contrib = compute_cross_effect_contribution(
                         Y, psi_matrix, k, self.n_outcomes, modulation
                     )
-                    mu_k = mu_k + cross_contrib
+                    mu_k = mu_k + cross_contrib / stds[k]
 
                 mu_list.append(mu_k)
 
-            mu = pt.stack(mu_list, axis=1)
-            pm.Deterministic("mu", mu, dims=("obs", "outcome"))
+            mu_standardized = pt.stack(mu_list, axis=1)
+            # Original-unit predictions (reports and oracles consume this)
+            pm.Deterministic(
+                "mu",
+                mu_standardized * stds[None, :] + means[None, :],
+                dims=("obs", "outcome"),
+            )
 
-            # Multivariate likelihood
+            # Multivariate likelihood (standardized scale)
             build_multivariate_likelihood(
                 "Y_obs",
-                mu,
-                Y_matrix,
+                mu_standardized,
+                Y_standardized,
                 self.n_outcomes,
                 self.config.lkj_eta,
                 dims=("obs", "outcome"),
             )
 
             # Experiment calibration: per (channel, outcome) the model-implied
-            # contribution is beta_media[outcome, channel] * saturated spend.
-            # Outcomes are modelled on their raw scale, so scale = 1.0.
+            # contribution is beta_media[outcome, channel] * saturated spend on
+            # the standardized scale; the outcome's std converts the estimand
+            # back to original units.
             if self.experiments:
                 handles = {}
                 for k, outcome in enumerate(self.outcome_names):
@@ -223,8 +250,9 @@ class MultivariateMMM(BaseExtendedMMM):
                             "apply": apply,
                             "x_input": x_input,
                             "spend_obs": self.X_media[:, c],
+                            "scale": self.outcome_stds[outcome],
                         }
-                self._add_experiment_likelihoods(handles, scale=1.0)
+                self._add_experiment_likelihoods(handles)
 
         return model
 

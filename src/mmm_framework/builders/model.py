@@ -127,7 +127,8 @@ class SeasonalityConfigBuilder:
     --------
     >>> seasonality = (SeasonalityConfigBuilder()
     ...     .with_yearly(order=2)
-    ...     .with_weekly(order=3)
+    ...     .with_weekly(order=3, prior_sigma=0.2)
+    ...     .with_prior_sigma(0.5)  # shared amplitude prior
     ...     .build())
     """
 
@@ -135,20 +136,38 @@ class SeasonalityConfigBuilder:
         self._yearly: int | None = 2
         self._monthly: int | None = None
         self._weekly: int | None = None
+        self._prior_sigma: float = 0.3
+        self._yearly_prior_sigma: float | None = None
+        self._monthly_prior_sigma: float | None = None
+        self._weekly_prior_sigma: float | None = None
 
-    def with_yearly(self, order: int = 2) -> Self:
-        """Add yearly seasonality with given Fourier order."""
+    def with_yearly(self, order: int = 2, prior_sigma: float | None = None) -> Self:
+        """Add yearly seasonality with given Fourier order (and optionally a
+        component-specific amplitude prior sigma)."""
         self._yearly = order
+        if prior_sigma is not None:
+            self._yearly_prior_sigma = prior_sigma
         return self
 
-    def with_monthly(self, order: int = 2) -> Self:
+    def with_monthly(self, order: int = 2, prior_sigma: float | None = None) -> Self:
         """Add monthly seasonality."""
         self._monthly = order
+        if prior_sigma is not None:
+            self._monthly_prior_sigma = prior_sigma
         return self
 
-    def with_weekly(self, order: int = 3) -> Self:
+    def with_weekly(self, order: int = 3, prior_sigma: float | None = None) -> Self:
         """Add weekly seasonality."""
         self._weekly = order
+        if prior_sigma is not None:
+            self._weekly_prior_sigma = prior_sigma
+        return self
+
+    def with_prior_sigma(self, sigma: float) -> Self:
+        """Set the shared seasonal amplitude prior: Fourier coefficients get
+        ``Normal(0, sigma)`` on standardized y. Per-component sigmas (passed to
+        ``with_yearly(..., prior_sigma=)`` etc.) override this."""
+        self._prior_sigma = sigma
         return self
 
     def no_yearly(self) -> Self:
@@ -169,6 +188,10 @@ class SeasonalityConfigBuilder:
             yearly=self._yearly,
             monthly=self._monthly,
             weekly=self._weekly,
+            prior_sigma=self._prior_sigma,
+            yearly_prior_sigma=self._yearly_prior_sigma,
+            monthly_prior_sigma=self._monthly_prior_sigma,
+            weekly_prior_sigma=self._weekly_prior_sigma,
         )
 
 
@@ -251,6 +274,8 @@ class ModelConfigBuilder:
         self._n_draws: int = 1000
         self._n_tune: int = 1000
         self._target_accept: float = 0.9
+        self._intercept_prior_mu: float = 0.0
+        self._intercept_prior_sigma: float = 0.5
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -258,6 +283,7 @@ class ModelConfigBuilder:
         self._bootstrap_samples: int = 1000
         self._optim_maxiter: int = 500
         self._optim_seed: int | None = 42
+        self._use_parametric_adstock: bool = True
 
     # Model specification
     def additive(self) -> Self:
@@ -271,6 +297,21 @@ class ModelConfigBuilder:
         return self
 
     # Inference method
+    def with_parametric_adstock(self, enabled: bool = True) -> Self:
+        """Estimate a continuous in-graph adstock kernel per channel (default).
+
+        Honors each ``MediaChannelConfig.adstock`` (geometric, delayed, or
+        Weibull). Pass ``enabled=False`` for the legacy fixed-alpha blend —
+        the pre-2026-06 default, kept for reproducing older fits.
+        """
+        self._use_parametric_adstock = enabled
+        return self
+
+    def with_legacy_blend_adstock(self) -> Self:
+        """Use the legacy fixed-alpha-bank blend adstock (pre-change default)."""
+        self._use_parametric_adstock = False
+        return self
+
     def bayesian_pymc(self) -> Self:
         """Use PyMC for Bayesian inference (CPU)."""
         self._inference_method = InferenceMethod.BAYESIAN_PYMC
@@ -312,6 +353,18 @@ class ModelConfigBuilder:
         if not 0 < rate < 1:
             raise ValueError(f"Target accept must be between 0 and 1, got {rate}")
         self._target_accept = rate
+        return self
+
+    def with_intercept_prior(self, mu: float = 0.0, sigma: float = 0.5) -> Self:
+        """Set the intercept prior: Normal(mu, sigma) on standardized y.
+
+        ``mu`` is measured in KPI standard deviations from the mean, so values
+        beyond roughly ±2 place the baseline outside the observed KPI range.
+        """
+        if sigma <= 0:
+            raise ValueError(f"Intercept prior sigma must be positive, got {sigma}")
+        self._intercept_prior_mu = mu
+        self._intercept_prior_sigma = sigma
         return self
 
     # Component configs
@@ -378,6 +431,8 @@ class ModelConfigBuilder:
             n_draws=self._n_draws,
             n_tune=self._n_tune,
             target_accept=self._target_accept,
+            intercept_prior_mu=self._intercept_prior_mu,
+            intercept_prior_sigma=self._intercept_prior_sigma,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection
@@ -386,6 +441,7 @@ class ModelConfigBuilder:
             bootstrap_samples=self._bootstrap_samples,
             optim_maxiter=self._optim_maxiter,
             optim_seed=self._optim_seed,
+            use_parametric_adstock=self._use_parametric_adstock,
         )
 
 
@@ -441,7 +497,7 @@ class TrendConfigBuilder:
         # Piecewise parameters
         self._n_changepoints: int = 10
         self._changepoint_range: float = 0.8
-        self._changepoint_prior_scale: float = 0.05
+        self._changepoint_prior_scale: float = 0.5
 
         # Spline parameters
         self._n_knots: int = 10
@@ -457,7 +513,7 @@ class TrendConfigBuilder:
 
         # Linear parameters
         self._growth_prior_mu: float = 0.0
-        self._growth_prior_sigma: float = 0.1
+        self._growth_prior_sigma: float = 0.5
 
     # =========================================================================
     # Trend Type Selection
@@ -582,7 +638,7 @@ class TrendConfigBuilder:
     # Linear Trend Parameters
     # =========================================================================
 
-    def with_growth_prior(self, mu: float = 0.0, sigma: float = 0.1) -> Self:
+    def with_growth_prior(self, mu: float = 0.0, sigma: float = 0.5) -> Self:
         """Set prior for linear growth rate."""
         self._growth_prior_mu = mu
         self._growth_prior_sigma = sigma
@@ -613,7 +669,7 @@ class TrendConfigBuilder:
         self._type = self._TrendType.PIECEWISE
         self._n_changepoints = 15
         self._changepoint_range = 0.9
-        self._changepoint_prior_scale = 0.1
+        self._changepoint_prior_scale = 0.5
         return self
 
     # =========================================================================

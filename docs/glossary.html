@@ -148,33 +148,26 @@
                 own page, the entry links to it. Symbols used in equations are listed at the bottom.
             </p>
 
-            <div class="alpha-jump" aria-label="Jump to letter">
+            <div class="alpha-jump" aria-label="Jump to the first term starting with this letter (entries are grouped by theme, not alphabetically)">
                 <a href="#term-adstock">A</a>
-                <a href="#term-bayes-rule">B</a>
-                <a href="#term-calibration">C</a>
+                <a href="#term-baseline">B</a>
+                <a href="#term-counterfactual">C</a>
                 <a href="#term-dag">D</a>
                 <a href="#term-eig">E</a>
                 <a href="#term-frequentist">F</a>
                 <a href="#term-geo-lift">G</a>
-                <a href="#term-hdi">H</a>
+                <a href="#term-halo">H</a>
                 <a href="#term-itt">I</a>
-                <a class="disabled">J</a>
-                <a class="disabled">K</a>
                 <a href="#term-likelihood">L</a>
                 <a href="#term-mmm">M</a>
                 <a href="#term-numpyro">N</a>
                 <a href="#term-ols">O</a>
                 <a href="#term-posterior">P</a>
-                <a class="disabled">Q</a>
                 <a href="#term-roi">R</a>
                 <a href="#term-saturation">S</a>
                 <a href="#term-twfe">T</a>
                 <a href="#term-uncertainty">U</a>
                 <a href="#term-variable-selection">V</a>
-                <a class="disabled">W</a>
-                <a class="disabled">X</a>
-                <a class="disabled">Y</a>
-                <a class="disabled">Z</a>
             </div>
 
             <!-- ============================================== -->
@@ -208,9 +201,12 @@
 
                     <dt id="term-mff">MFF (Master Flat File)</dt>
                     <dd>
-                        The framework's input data format &mdash; a single long-form table with columns for date,
-                        outcome, media spend per channel, controls, and (optionally) geo. Loaded via
-                        <code>MFFLoader</code>; configuration is validated against a schema before fitting.
+                        The framework's input data format &mdash; a single <strong>long-format</strong> table with
+                        one row per period (and optionally geography, product, campaign, outlet, creative) per
+                        variable: a <code>VariableName</code> column says which series the row belongs to (the KPI,
+                        a media channel, a control) and a <code>VariableValue</code> column holds its value. Loaded
+                        via <code>MFFLoader</code>; column mappings and variable configuration are validated against
+                        a schema (<code>MFFConfig</code>) before fitting.
                     </dd>
 
                     <dt id="term-hierarchical">Hierarchical model</dt>
@@ -227,6 +223,23 @@
                         $1.40 of revenue per $1 of media spend). <strong>Marginal ROI (mROI)</strong> is the return
                         on the <em>next</em> dollar at the current spend level &mdash; the relevant quantity for
                         budget allocation under saturation.
+                    </dd>
+
+                    <dt id="term-roas">ROAS (Return on Ad Spend)</dt>
+                    <dd>
+                        Revenue attributed to a channel divided by its spend &mdash; a ROAS of 2.1 means $2.10 of
+                        revenue per $1 spent. Distinct from profit-based ROI, which nets out margin and costs;
+                        the docs quote revenue ROAS unless stated otherwise. As with ROI, the decision-relevant
+                        quantity under saturation is the <em>marginal</em> ROAS of the next dollar, not the average.
+                    </dd>
+
+                    <dt id="term-baseline">Baseline / contribution</dt>
+                    <dd>
+                        The two halves of a decomposition. The <strong>baseline</strong> is the outcome the model
+                        says would have occurred with no media &mdash; trend, seasonality, price, distribution, and
+                        other non-media drivers. A channel's <strong>contribution</strong> is the incremental outcome
+                        attributed to it; baseline plus contributions sum to the model's predicted outcome.
+                        Contributions are posterior distributions, not single numbers &mdash; report intervals.
                     </dd>
 
                     <dt id="term-counterfactual">Counterfactual</dt>
@@ -249,6 +262,14 @@
                         When a marketing action on one product or channel affects outcomes for another (cannibalisation,
                         halo effects, multi-pack pull-through). Ignoring cross-effects inflates per-channel ROI.
                         Modeled via the multivariate extension; see <a href="technical-guide.html#cross-effects">Technical Guide</a>.
+                    </dd>
+
+                    <dt id="term-halo">Halo effect</dt>
+                    <dd>
+                        A positive cross-effect: marketing for one product or channel lifts outcomes for another
+                        (e.g., advertising a new variant raising sales of the original). The mirror image of
+                        cannibalisation. Modeled as a cross-effect in the multivariate extension; ignoring halo
+                        understates portfolio-level value just as ignoring cannibalisation overstates it.
                     </dd>
                 </dl>
             </section>
@@ -344,6 +365,18 @@
             <section class="glossary-section" id="measurement">
                 <h2>Measurement &amp; Experiments</h2>
                 <dl class="glossary-list">
+                    <dt id="term-measurement-loop">Measurement loop</dt>
+                    <dd>
+                        The framework's operating rhythm: measurement as a cycle, not a one-time report.
+                        Fit the model (T&#8320;) &rarr; find where uncertainty is most expensive (T&#8321;:
+                        EIG and EVOI) &rarr; run the experiment that buys the most learning (T&#8322;:
+                        pre-registered tests) &rarr; feed the result back into the model (T&#8323;: calibrated
+                        refit) &rarr; reallocate budget with the sharper answer (T&#8324;) &rarr; re-evaluate
+                        as information decays (T&#8325;, then the cycle repeats). The Program page of the
+                        web app tracks where you are in the cycle.
+                        <span class="also">See: <a href="measurement-calibration.html">Calibration Loop</a>, <a href="platform-overview.html">Platform Overview</a></span>
+                    </dd>
+
                     <dt id="term-eig">EIG (Expected Information Gain)</dt>
                     <dd>
                         The expected reduction in posterior entropy from running an experiment. Measures how much
@@ -356,7 +389,15 @@
                     <dd>
                         The expected dollar improvement in budget decision quality from running an experiment.
                         Measures how much an answer would <em>change</em> what we do. EIG and EVOI together drive
-                        the 2x2 priority map. EVPI (Expected Value of Perfect Information) is the upper bound.
+                        the 2x2 priority map. <a href="#term-evpi">EVPI</a> is the upper bound.
+                    </dd>
+
+                    <dt id="term-evpi">EVPI (Expected Value of Perfect Information)</dt>
+                    <dd>
+                        The expected dollar gain from resolving <em>all</em> uncertainty about a parameter before
+                        deciding &mdash; the ceiling on what any experiment about it can be worth. The EVOI of a
+                        real (noisy, finite) experiment is always below its EVPI. Useful as a screen: if a
+                        channel's EVPI is small, no test of that channel is worth running.
                     </dd>
 
                     <dt id="term-calibration">Calibration</dt>
@@ -466,6 +507,16 @@
                         observational data.
                     </dd>
 
+                    <dt id="term-incrementality">Incrementality</dt>
+                    <dd>
+                        The portion of an outcome that media actually <em>caused</em> &mdash; sales that
+                        happened because the campaign ran and would not have happened otherwise (the gap
+                        between the observed outcome and its counterfactual). Incrementality is the quantity
+                        both the MMM and lift experiments estimate, which is what makes them comparable and
+                        calibratable against each other.
+                        <span class="also">See: <a href="causal-inference.html">Causal Inference</a>, <a href="measurement-calibration.html">Calibration Loop</a></span>
+                    </dd>
+
                     <dt id="term-spec-shopping">Specification shopping</dt>
                     <dd>
                         Re-running models with different choices (variables, transforms, lags) until one produces
@@ -490,8 +541,10 @@
                     <dt id="term-numpyro">NumPyro</dt>
                     <dd>
                         A JAX-backed probabilistic programming library used by the framework as a fast alternative
-                        sampler to native PyMC. Pass <code>nuts_sampler="numpyro"</code> to <code>BayesianMMM.fit()</code>
-                        for a 5-10x speedup on most models.
+                        sampler to native PyMC. Pass <code>nuts_sampler="numpyro"</code> to <code>BayesianMMM.fit()</code>.
+                        Measured speedup: 6.0x wall-clock vs sequential PyMC chains at equal draws on a
+                        7-channel national model (~2x vs parallel PyMC chains); see
+                        <code>nbs/runtime_benchmark.ipynb</code>.
                     </dd>
 
                     <dt id="term-nutpie">NutPie</dt>
@@ -511,6 +564,17 @@
                     <dd>
                         Async job queue used by the API service for long-running model fits. Workers run via
                         <code>arq worker.WorkerSettings</code> against a Redis backend.
+                    </dd>
+
+                    <dt id="term-agent-workspace">Agent workspace</dt>
+                    <dd>
+                        The AI analyst-assistant built into the React web app (the <code>/workspace</code> page).
+                        A chat session whose assistant has tools to validate and explore data, configure and fit
+                        models, analyze ROI and decompositions, plan and pre-register experiments, run Python in
+                        a sandboxed kernel, search an uploaded knowledge base, and generate branded client
+                        reports. Works with Anthropic, OpenAI, Google (Gemini), Vertex AI, and local LM Studio
+                        language-model providers.
+                        <span class="also">See: <a href="platform-overview.html">Platform Overview</a></span>
                     </dd>
 
                     <dt id="term-pre-period">Pre-period</dt>

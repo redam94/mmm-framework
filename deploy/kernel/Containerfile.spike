@@ -1,0 +1,9 @@
+# PR-F.0 connectivity spike image — minimal: just enough to run an ipykernel and
+# prove the host jupyter_client can drive a kernel inside `podman run`. The real
+# (framework-bearing) image is Containerfile (PR-F.1).
+FROM docker.io/library/python:3.12-slim
+RUN pip install --no-cache-dir "ipykernel==7.1.0" "jupyter-client==8.7.0"
+# non-root (proves the protocol works without root, like the real image)
+RUN useradd --create-home --uid 10001 kernel
+USER kernel
+WORKDIR /home/kernel

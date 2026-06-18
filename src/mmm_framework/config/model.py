@@ -37,13 +37,34 @@ class HierarchicalConfig(BaseModel):
 
 
 class SeasonalityConfig(BaseModel):
-    """Configuration for seasonality components."""
+    """Configuration for seasonality components.
+
+    Amplitude scale note: the Fourier coefficients get ``Normal(0, prior_sigma)``
+    priors on **standardized** ``y``, so ``prior_sigma`` bounds how much of a
+    standard deviation each harmonic may swing the KPI — it is the seasonal
+    amplitude prior. The historic default (0.3) suits mild seasonality; raise it
+    (e.g. 0.5–1.0) for strongly seasonal categories, or the seasonal signal gets
+    squeezed into trend/media. Per-component overrides win over ``prior_sigma``.
+    """
 
     yearly: int | None = 2  # Fourier order for yearly seasonality
     monthly: int | None = None
     weekly: int | None = None
 
+    # Amplitude prior (sigma of the Normal prior on Fourier coefficients)
+    prior_sigma: float = 0.3
+    yearly_prior_sigma: float | None = None
+    monthly_prior_sigma: float | None = None
+    weekly_prior_sigma: float | None = None
+
     model_config = {"extra": "forbid"}
+
+    def prior_sigma_for(self, component: str) -> float:
+        """Amplitude prior sigma for ``component`` ('yearly'/'monthly'/'weekly'),
+        falling back to the shared ``prior_sigma``. getattr defaults keep
+        configs pickled before these fields existed loadable."""
+        override = getattr(self, f"{component}_prior_sigma", None)
+        return getattr(self, "prior_sigma", 0.3) if override is None else override
 
 
 class ControlSelectionConfig(BaseModel):
@@ -66,6 +87,11 @@ class ModelConfig(BaseModel):
     # Functional form
     specification: ModelSpecification = ModelSpecification.ADDITIVE
 
+    # Intercept prior: Normal(mu, sigma) on standardized y, so mu is measured in
+    # KPI standard deviations from the mean (values beyond ±2 are extreme).
+    intercept_prior_mu: float = 0.0
+    intercept_prior_sigma: float = Field(default=0.5, gt=0)
+
     # Inference settings
     inference_method: InferenceMethod = InferenceMethod.BAYESIAN_NUMPYRO
 
@@ -87,12 +113,16 @@ class ModelConfig(BaseModel):
     )
 
     # Adstock estimation strategy.
-    # False (default): fast two-point interpolation between fixed low/high
-    #   geometric adstock (legacy behavior).
-    # True: estimate a continuous adstock kernel in-graph per channel, honoring
-    #   each MediaChannelConfig.adstock (type/l_max/normalize and priors), which
-    #   enables geometric, delayed, and Weibull carryover shapes.
-    use_parametric_adstock: bool = False
+    # True (default since the 0.1.0 development line, 2026-06): estimate a
+    #   continuous adstock kernel in-graph per channel, honoring each
+    #   MediaChannelConfig.adstock (type/l_max/normalize and priors), which
+    #   enables geometric, delayed, and Weibull carryover shapes. Made the
+    #   default after the pressure-testing series measured the legacy blend at
+    #   ~28% attribution error vs ~7% parametric on carryover-sensitive worlds.
+    # False (legacy): fast two-point interpolation between fixed low/high
+    #   geometric adstock. Set explicitly to reproduce pre-change fits;
+    #   models pickled before this change keep their original behavior.
+    use_parametric_adstock: bool = True
 
     # Frequentist settings
     ridge_alpha: float = 1.0

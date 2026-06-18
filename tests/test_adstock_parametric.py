@@ -179,9 +179,17 @@ def _free_rv_names(model):
 
 
 class TestCoreParametricAdstock:
-    def test_legacy_default_uses_two_point_mix(self, panel_with_adstock):
+    def test_default_is_parametric(self, panel_with_adstock):
         panel = panel_with_adstock(AdstockConfig.geometric(), AdstockConfig.geometric())
         model = BayesianMMM(panel, ModelConfig()).model
+        names = _free_rv_names(model)
+        # Since 2026-06 the default estimates the continuous kernel in-graph.
+        assert "adstock_alpha_TV" in names
+        assert "adstock_TV" not in names
+
+    def test_legacy_optout_uses_two_point_mix(self, panel_with_adstock):
+        panel = panel_with_adstock(AdstockConfig.geometric(), AdstockConfig.geometric())
+        model = BayesianMMM(panel, ModelConfig(use_parametric_adstock=False)).model
         names = _free_rv_names(model)
         # Legacy path samples the Beta mix and no continuous alpha.
         assert "adstock_TV" in names

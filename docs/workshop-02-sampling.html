@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop 02: Sampling | MMM Framework</title>
+    <meta name="description" content="How MCMC actually works, for analysts: why grids die, Monte Carlo, a 20-line Metropolis sampler you can drive (and break) in your browser, R-hat and ESS computed live on your own chains, NUTS and divergences in plain English, and a trace-plot reading clinic.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/workshop-02-sampling.html">
+    <meta property="og:title" content="Workshop 02: Sampling | MMM Framework">
+    <meta property="og:description" content="Drive a Metropolis sampler in your browser, break it with the step-size slider, and watch R-hat and ESS catch every failure you just caused.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/workshop-02-sampling.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.taller { height: 560px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] { width: 220px; accent-color: var(--color-primary); }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            color: var(--color-text);
+            min-width: 4.5rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        /* Live diagnostics panel (updates as the walker runs) */
+        .diag-row .stat-value { font-size: 1.9rem; }
+        .diag-verdict {
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 0.6rem 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            margin: 0.75rem 0 0;
+        }
+        .diag-verdict.good { border-left: 4px solid var(--color-success); }
+        .diag-verdict.bad  { border-left: 4px solid var(--color-danger); }
+        .diag-verdict.wait { border-left: 4px solid var(--color-border); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#grid">Why grids die</a></li>
+                <li><a href="#montecarlo">Monte Carlo</a></li>
+                <li><a href="#target">The catch: posteriors</a></li>
+                <li><a href="#metropolis">Drive the walker</a></li>
+                <li><a href="#diagnostics">R-hat &amp; ESS, live</a></li>
+                <li><a href="#bimodal">Make R-hat scream</a></li>
+                <li><a href="#nuts">NUTS &amp; divergences</a></li>
+                <li><a href="#clinic">Trace-plot clinic</a></li>
+                <li><a href="#caveat">The crucial caveat</a></li>
+                <li><a href="#glossary">Glossary</a></li>
+            </ul>
+
+            <h3>The Workshop Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="workshop-00-thinking-in-distributions.html">00 · Thinking in Distributions</a></li>
+                <li><a href="workshop-01-priors.html">01 · Priors</a></li>
+                <li><a href="workshop-02-sampling.html" class="active">02 · Sampling</a></li>
+                <li><a href="workshop-03-first-mmm.html">03 · Your First MMM</a></li>
+                <li><a href="workshop-04-reading-the-posterior.html">04 · Reading the Posterior</a></li>
+                <li><a href="workshop-05-from-draws-to-decisions.html">05 · Draws to Decisions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Workshop 02 — Sampling: How the Machine Works</h1>
+            <p class="lead">
+                In <a href="workshop-00-thinking-in-distributions.html">workshop 00</a> you computed a
+                posterior the honest way: a fine grid, prior &times; likelihood at every point, normalize.
+                For one unknown that works beautifully. An MMM has <em>dozens</em> of unknowns — and the
+                grid trick dies instantly. This page opens the hood on what PyMC does instead: it never
+                maps the posterior, it <strong>draws samples</strong> from it. You'll build the sampler,
+                drive it, break it with the step-size slider, and then watch
+                <strong>R-hat</strong> and <strong>ESS</strong> — computed live on the very chains you
+                generated — catch every failure you just caused.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">10<sup>80</sup></div>
+                    <div class="stat-label">grid cells for a 40-parameter MMM at 100 points/axis — about the number of atoms in the observable universe</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1/&radic;n</div>
+                    <div class="stat-label">Monte Carlo error rate — slow, but it never gets slower in higher dimensions</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">~20</div>
+                    <div class="stat-label">lines of code for a working MCMC sampler (Metropolis, 1953)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">&lt; 1.01</div>
+                    <div class="stat-label">the R-hat you want before trusting any parameter's draws</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>–<a href="workshop-01-priors.html">01</a>.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~90–120 min — the heaviest page in the series.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why grids die exponentially in high dimensions while Monte Carlo error stays 1/&radic;n — and why MCMC needs only the unnormalized posterior.</li>
+                    <li>How to read R-hat, ESS, and trace plots as the audit of your chains — and why a high acceptance rate is a warning sign, not a compliment.</li>
+                    <li>Why green sampler diagnostics validate the <em>computation</em>, never the model or the causal claim.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/workshop_02_sampling.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/workshop_02_sampling.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="grid">1 — Why grids die: count the cells</h2>
+            <p>
+                A small MMM has a coefficient, a carryover rate, and a saturation parameter
+                <em>per channel</em>, plus trend, seasonality, and noise terms — call it 40 parameters.
+                Lay a grid with 100 points per axis over that and you need
+                \(100^{40} = 10^{80}\) evaluations of prior &times; likelihood. This explosion is the
+                <strong>curse of dimensionality</strong> — <em>every grid-style method becomes impossible
+                as the number of parameters grows, because the number of grid cells multiplies with every
+                new parameter</em>. Suppose one evaluation takes a nanosecond — a generous
+                <strong>one billion evaluations per second</strong>. Count it yourself:
+            </p>
+
+            <div class="controls-row">
+                <label>Grid points per axis:</label>
+                <button class="toggle-btn" data-pts="50">50</button>
+                <button class="toggle-btn active" data-pts="100">100</button>
+                <button class="toggle-btn" data-pts="200">200</button>
+            </div>
+            <div class="chart-container" id="gridChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Each bar is the wall-clock time for a full grid at 1&nbsp;billion evaluations/second,
+                on a log scale spanning 70+ orders of magnitude. The notebook's table pins the
+                punchlines at 100 points/axis: 5 parameters &asymp; 10 s, 10 parameters &asymp; 3,170 years,
+                40 parameters &asymp; <strong>2.3&nbsp;&times;&nbsp;10<sup>53</sup> times the age of the
+                universe</strong>. The grid that took microseconds in workshop 00 is physically impossible
+                at MMM scale.
+            </p>
+
+            <h2 id="montecarlo">2 — Monte Carlo: answer questions by sampling</h2>
+            <p>
+                The escape hatch: instead of <em>mapping</em> a quantity everywhere, <em>estimate</em> it
+                from random samples. This is the <strong>Monte Carlo method</strong> — <em>replace an
+                exact calculation with the average of many random draws</em> — and its magical property is
+                that <strong>its cost doesn't depend on the number of dimensions</strong>, only on how
+                many samples you take.
+            </p>
+            <p>
+                The classic demo: estimate &pi; by throwing darts uniformly at a 1&times;1 square. The
+                quarter-circle inside has area \(\pi/4\), so
+                \(\hat{\pi} = 4 \times \frac{\text{darts inside}}{\text{darts thrown}}\).
+                No geometry, no calculus — just counting. Drag the slider and watch the estimate sharpen:
+            </p>
+
+            <div class="controls-row">
+                <label for="dartN">Darts n:</label>
+                <input type="range" id="dartN" min="100" max="20000" step="100" value="2000">
+                <span class="readout" id="dartNVal">2000</span>
+                <button class="toggle-btn" id="dartReseed">&#127922; New darts (re-seed)</button>
+            </div>
+            <div class="chart-container tall" id="dartChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong> (seeded
+                mulberry32 instead of numpy's PCG64, so the exact digits differ run to run; the notebook's
+                seeded 5,000-dart run landed at &pi;&#770; = 3.1728 vs truth 3.1416). Left: green darts in,
+                red darts out. Right: the running estimate converging on &pi; as darts accumulate.
+            </p>
+
+            <p>
+                How fast does the answer improve? Repeat the experiment many times per dart-count and
+                measure the <em>typical</em> error. On a log–log plot it falls on a straight line of
+                slope &asymp; &minus;&frac12;: Monte Carlo error shrinks like \(1/\sqrt{n}\). That's the
+                <strong>root-n rate</strong> — <em>to cut the error in half, you need four times the
+                samples</em>. Slow — but it never gets slower in higher dimensions, which is the whole trade.
+            </p>
+
+            <div class="chart-container" id="rateChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser</strong> — 100 repeat experiments per dart count,
+                seeded. The notebook's heavier version (200 repeats) measured a log–log slope of
+                <strong>&minus;0.49 &asymp; &minus;0.5</strong>, with typical error shrinking
+                <strong>16&times;</strong> from n = 100 to n = 30,000. Your live slope is printed on the
+                chart — it should land near &minus;0.5 too.
+            </p>
+
+            <h2 id="target">3 — One catch: you can't throw darts <em>at a posterior</em></h2>
+            <p>
+                The dart trick worked because we know how to draw uniform points in a square. But the
+                thing we want to sample is the <strong>posterior</strong> — and for any real model,
+                <em>nobody knows how to draw from it directly</em>. From workshop 00, Bayes' rule says
+            </p>
+            <p>
+                \[ p(\theta \mid \text{data}) = \frac{p(\text{data} \mid \theta)\, p(\theta)}{p(\text{data})}. \]
+            </p>
+            <p>
+                The numerator — likelihood &times; prior — is easy: pick any candidate \(\theta\), plug
+                in, get a number. The denominator \(p(\text{data})\) is the killer: it's the sum of the
+                numerator over <strong>all possible</strong> \(\theta\) — exactly the universe-sized grid
+                we just gave up on. So:
+            </p>
+            <ul>
+                <li>✅ we <strong>can</strong> compute a function <em>proportional to</em> the posterior at any point we choose,</li>
+                <li>❌ we <strong>cannot</strong> compute the normalizing constant, and we cannot draw samples directly.</li>
+            </ul>
+            <p>
+                The solution is <strong>MCMC — Markov chain Monte Carlo</strong>: <em>send a walker
+                wandering through parameter space, with movement rules rigged so that, in the long run,
+                the walker spends time in each region in exact proportion to its posterior
+                probability</em>. The walker's visit log <strong>is</strong> a sample from the posterior —
+                and the rules only ever need the computable numerator. The unknowable denominator cancels.
+            </p>
+            <p>
+                The notebook makes this concrete with a target it knows the answer to: an email campaign
+                got <strong>12 signups from 100 visitors</strong>, prior Beta(2,&nbsp;8), so the exact
+                posterior is Beta(14,&nbsp;96) with mean <strong>0.1273</strong> and sd
+                <strong>0.0316</strong> — an answer key to grade the sampler against.
+            </p>
+
+            <div class="chart-container" id="shapeChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                Left: what MCMC can evaluate — prior &times; likelihood, unnormalized (its peak height
+                here is ~10<sup>&minus;18</sup>; the scale is meaningless). Right: the normalized
+                posterior we actually want. <strong>Same shape, unknown scale — and sampling only needs
+                the shape.</strong>
+            </p>
+
+            <h2 id="metropolis">4 — Build a sampler in ~20 lines, then drive it</h2>
+            <p>
+                The oldest MCMC recipe (Metropolis et&nbsp;al., 1953 — it predates the moon landing) is
+                short enough to memorize. The walker stands at position \(x\) and repeats:
+            </p>
+            <ol>
+                <li><strong>Propose</strong> a move: a candidate \(x' = x + \text{noise}\), e.g. a Gaussian
+                    step. The candidate-generating rule is the <strong>proposal</strong> — <em>how the
+                    walker suggests its next location</em>.</li>
+                <li><strong>Compare heights</strong>: \(r = \tilde p(x') / \tilde p(x)\), the ratio of
+                    <em>unnormalized</em> posterior heights. The unknown constant divides out — this is the trick.</li>
+                <li><strong>Accept or reject</strong>: uphill (\(r \ge 1\)) always moves; downhill moves
+                    with probability \(r\) — flip a biased coin. If rejected, <em>stay put and record the
+                    current position again</em>. The fraction of proposals taken is the
+                    <strong>acceptance rate</strong>.</li>
+            </ol>
+            <p>
+                Rule&nbsp;3 is the genius part: always rising would find the peak and stop (that's
+                optimization); accepting downhill moves in proportion to relative height makes time spent
+                proportional to posterior height. The recorded list of positions is a
+                <strong>chain</strong> — <em>the walker's visit log, which becomes your bag of posterior
+                samples</em>. Here is the notebook's entire sampler:
+            </p>
+
+<pre><code>def metropolis(log_target, start, step, n, seed):
+    rng = np.random.default_rng(seed)
+    chain = np.empty(n)
+    x, lx, n_acc = float(start), log_target(start), 0
+    for i in range(n):
+        prop = x + rng.normal(0.0, step)        # 1. propose
+        lp = log_target(prop)                   # 2. compare heights (in logs)
+        if np.log(rng.uniform()) &lt; lp - lx:     # 3. accept downhill with prob r
+            x, lx, n_acc = prop, lp, n_acc + 1
+        chain[i] = x                            # rejected -&gt; record x again
+    return chain, n_acc / n</code></pre>
+
+            <p>
+                On the Beta(14,&nbsp;96) target, the notebook's seeded run of 20,000 steps took
+                <strong>0.04&nbsp;s</strong>, accepted <strong>44%</strong> of proposals, and recovered
+                sample mean <strong>0.1270</strong> vs the exact <strong>0.1273</strong> and sample sd
+                <strong>0.0313</strong> vs exact <strong>0.0316</strong> — and its 90% interval
+                [0.080,&nbsp;0.182] matched the exact [0.079,&nbsp;0.183]. Twenty lines of numpy, knowing
+                only an unnormalized log-height, reproduced the exact posterior.
+            </p>
+
+            <h3>🎛️ Drive the walker yourself</h3>
+            <p>
+                Below is the <em>same algorithm</em>, implemented in JavaScript and running in your
+                browser, on a 2-D posterior — a correlated ridge (the long diagonal valley that real MMM
+                posteriors are full of). <strong>Four walkers</strong> start in the four corners of the
+                wasteland. Press <strong>▶ Animate</strong> to watch them step:
+                <span style="color:#3f7a58; font-weight:600;">green diamonds</span> are accepted
+                proposals, <span style="color:#a44c43; font-weight:600;">red diamonds</span> rejected
+                ones (the walker stays put). Then grab the <strong>step-size</strong> slider and break it:
+            </p>
+            <ul>
+                <li><strong>Tiny steps</strong> — almost everything is accepted (nearby points have nearly
+                    the same height), but the walker inches along like a snail. Thousands of steps explore
+                    a sliver of the posterior.</li>
+                <li><strong>Huge steps</strong> — proposals leap into the wasteland and get rejected, so the
+                    walker mostly <em>stands still</em>, recording the same value over and over.</li>
+                <li><strong>Goldilocks</strong> — moderate rejection is the <em>price of real movement</em>.
+                    <strong>A high acceptance rate is not a good sign by itself.</strong></li>
+            </ul>
+
+            <div class="controls-row">
+                <label for="stepSlider">Step size:</label>
+                <input type="range" id="stepSlider" min="0" max="100" step="1" value="59">
+                <span class="readout" id="stepVal">0.60</span>
+                <button class="toggle-btn" data-preset="0.02">too small (0.02)</button>
+                <button class="toggle-btn active" data-preset="0.6">goldilocks (0.6)</button>
+                <button class="toggle-btn" data-preset="8">too large (8)</button>
+            </div>
+            <div class="controls-row">
+                <button class="toggle-btn" id="btnAnim">▶ Animate</button>
+                <button class="toggle-btn" id="btnStep">+1 step</button>
+                <button class="toggle-btn" id="btnRun">+500 steps</button>
+                <button class="toggle-btn" id="btnReset">↺ Reset chains</button>
+                <span class="readout" id="wSteps">0 steps</span>
+                <span class="readout" id="wAcc">acc —</span>
+            </div>
+            <div class="chart-container tall" id="walkerChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same Metropolis math as the notebook</strong>
+                (seeded mulberry32; the notebook's centerpiece walker runs in 1-D on the Beta posterior,
+                this page moves it onto a 2-D ridge so you can <em>see</em> exploration). Contours are the
+                target; each colored path is one chain's visit log; the big dots are the walkers now.
+                Changing the step size resets the chains so the diagnostics below stay honest.
+            </p>
+
+            <div class="chart-container" id="walkerTrace"></div>
+            <p class="chart-note">
+                <strong>Computed live</strong> — the trace plot of the same four chains (parameter&nbsp;1
+                vs step). At goldilocks the four lines collapse into one overlapping fuzzy band. At 0.02
+                they become four slow, separate rivers that take ages to meet; at 8 they become flat
+                staircases. Remember these shapes — the <a href="#clinic">clinic</a> below names them.
+            </p>
+
+            <div class="note">
+                <h4>💡 The acceptance-rate trap</h4>
+                <p>
+                    The notebook pins the same lesson in 1-D with step sizes 0.002 / 0.075 / 1.5:
+                    acceptance <strong>95%</strong> / <strong>44%</strong> / <strong>2%</strong> — and the
+                    99%-acceptance chain explored the <em>least</em>. For 1-D targets the sweet spot is
+                    roughly 30–50% acceptance; high-dimensional theory says ~23%. Moderate rejection means
+                    the walker is actually proposing real moves.
+                </p>
+            </div>
+
+            <h2 id="diagnostics">5 — Trust, but verify: R-hat and ESS on <em>your</em> chains</h2>
+            <p>
+                Everything above worked because we could overlay the exact answer. In real life there is
+                no answer key — the posterior is unknown (that's why we're sampling it!). The standard
+                trick: <strong>run several chains from deliberately different starting points</strong>.
+                If they all wander to the <em>same</em> distribution and forget where they began, that's
+                strong evidence they found the real posterior; this is <strong>mixing</strong> — <em>the
+                chain moving freely through the full posterior rather than lingering in one region</em>.
+                If different starts give different answers, the chains are lying to you.
+            </p>
+            <p>
+                <strong>R-hat</strong> (\(\hat R\), the Gelman–Rubin statistic) automates the eyeball
+                test: <em>it compares the spread <strong>between</strong> chains to the spread
+                <strong>within</strong> chains</em>:
+            </p>
+            <p>
+                \[ \hat R = \sqrt{\frac{\widehat{\text{var}}^{+}}{W}}, \qquad
+                   \widehat{\text{var}}^{+} = \frac{n-1}{n} W + \frac{B}{n}, \]
+            </p>
+            <p>
+                where \(W\) is the average within-chain variance and \(B\) the between-chain variance.
+                Mixed chains &rArr; between &asymp; within &rArr; \(\hat R \approx 1\). The rule of thumb
+                you'll use forever: <strong>R-hat below ~1.01 is healthy; above that, do not trust the
+                draws for that parameter.</strong>
+            </p>
+            <p>
+                <strong>ESS — effective sample size</strong> — is the second auditor. A chain's draws are
+                not independent darts: each position is one small step from the last, so consecutive draws
+                are <strong>autocorrelated</strong> — <em>correlated with their own recent past</em>.
+                Correlated draws repeat information; ESS is the honest exchange rate: <em>the number of
+                independent draws that would estimate the posterior mean equally well</em>. It's
+                &radic;ESS, not &radic;n, in your error denominator.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ This panel is watching the walker above</h4>
+                <p>
+                    The numbers below are computed <strong>live on the chains you just generated</strong>
+                    (first 25% discarded as burn-in). Run goldilocks for ~1,500 steps and watch R-hat sink
+                    under 1.01 while ESS climbs. Then reset at step = 0.02 and run the same 1,500 steps:
+                    R-hat stays alarmed and ESS stays tiny — the diagnostics catch the failure you caused.
+                    Then try 8 and watch ESS flatline. <em>That is the whole payoff of this page.</em>
+                </p>
+            </div>
+
+            <div class="stat-row diag-row">
+                <div class="stat-callout">
+                    <div class="stat-value" id="diagRhat">—</div>
+                    <div class="stat-label">R-hat (split, param 1) — want &lt; 1.01</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value" id="diagEss">—</div>
+                    <div class="stat-label">ESS (param 1) — want hundreds+</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value" id="diagAcc">—</div>
+                    <div class="stat-label">acceptance rate — sweet spot ~25–50%</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value" id="diagDraws">—</div>
+                    <div class="stat-label">post-burn-in draws (4 chains pooled)</div>
+                </div>
+            </div>
+            <div class="diag-verdict wait" id="diagVerdict">Run the walker above (▶ Animate or +500 steps) to generate chains worth auditing.</div>
+
+            <div class="chart-container short" id="acfChart"></div>
+            <p class="chart-note">
+                <strong>Computed live</strong> — the autocorrelation of your chain&nbsp;1, lag by lag:
+                how much does draw t resemble draw t&minus;k? Fast decay = independent-ish draws = high
+                ESS. At step 0.02 the bars barely decay — each draw is nearly a copy of the last. The
+                notebook's pinned 1-D comparison: the tiny-step chain kept an ESS of
+                <strong>19 out of 20,000 draws (0.1%)</strong>; goldilocks kept
+                <strong>4,205 (21%)</strong>.
+            </p>
+
+            <p>
+                With healthy mixing, the notebook's four dispersed chains (starts 0.05 / 0.35 / 0.65 /
+                0.95) landed on post-burn-in means of 0.1281 / 0.1262 / 0.1266 / 0.1272 — four corners,
+                one answer — and earned R-hat <strong>1.0009</strong> by hand, <strong>1.0010</strong> by
+                arviz (which uses a stricter rank-normalized split version of the same idea). This is why
+                every PyMC fit runs <strong>2–4 chains by default</strong>, and why a single chain is
+                never trustworthy no matter how nice it looks: <strong>a stuck chain has no idea it is
+                stuck.</strong> Only disagreement <em>between</em> chains exposes the problem.
+            </p>
+
+            <h2 id="bimodal">Make R-hat scream: the two-island trap</h2>
+            <p>
+                R-hat earns its keep when things go wrong. The classic killer is a <strong>bimodal</strong>
+                posterior — <em>two separate islands of probability</em> (in MMMs this happens when two
+                explanations of the data are both locally plausible). A random-walk sampler can't cross
+                the ocean of near-zero probability between islands: chains that start on different islands
+                stay there, each one <em>locally</em> looking perfectly healthy. Drag the island
+                separation and find the cliff edge:
+            </p>
+
+            <div class="controls-row">
+                <label for="bimodalD">Island separation d:</label>
+                <input type="range" id="bimodalD" min="0.5" max="6" step="0.5" value="3">
+                <span class="readout" id="bimodalDVal">3.0</span>
+                <span class="readout" id="bimodalRhat"></span>
+            </div>
+            <div class="chart-container" id="bimodalChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser</strong> — four seeded chains (two started on each
+                island), 3,000 steps each, classic split R-hat. Small d: one blob, free crossing, R-hat
+                happy. Large d: stranded chains, R-hat explodes. The notebook's measured values: at d = 3
+                the by-hand split R-hat hit <strong>6.56</strong> (arviz's rank-normalized version:
+                <strong>1.73</strong>); at d = 1 arviz gave <strong>1.01</strong>; both far past the 1.05
+                alarm at any real separation.
+            </p>
+
+            <h2 id="nuts">6 — NUTS: the engine PyMC actually uses (optional deep dive)</h2>
+            <p>
+                Random-walk Metropolis is a blindfolded walker: every proposal is a guess. In 40
+                dimensions almost every direction is "downhill into the wasteland," so the walker must
+                take minute steps to keep any acceptance at all — autocorrelation explodes and ESS
+                collapses. The curse of dimensionality, back for revenge.
+            </p>
+            <p>
+                Modern samplers remove the blindfold. The posterior's log-height has a
+                <strong>gradient</strong> — <em>the local slope, telling you uphill from downhill</em> —
+                and computers get it nearly free (the same automatic differentiation that trains neural
+                networks). <strong>Hamiltonian Monte Carlo (HMC)</strong> uses it with a physics trick:
+                turn the posterior into a landscape (high probability = low valley), place a puck at the
+                current position, flick it in a random direction, and let it <strong>glide</strong> —
+                momentum carrying it through long, sweeping, curve-hugging paths instead of dithering.
+                The end of the glide is the proposal: typically <em>far</em> from the start yet still in
+                a high-probability region, so it's usually accepted. Distant, nearly-uncorrelated draws —
+                huge ESS per draw. <strong>NUTS (the No-U-Turn Sampler)</strong> is HMC with the last knob
+                automated: it lets the puck glide until the path starts to <strong>U-turn</strong> back
+                toward where it began, then stops. NUTS is the default in PyMC and in
+                <code>mmm_framework</code> (which typically runs it on the fast NumPyro backend —
+                <code>fit(nuts_sampler="numpyro")</code>).
+            </p>
+
+            <div class="chart-container tall" id="nutsChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same leapfrog math as the notebook.</strong>
+                Same compute budget on the same ridge: 60 random-walk proposals (red, dithering near the
+                start) vs one 60-gradient-step glide (green, sweeping along the valley to a distant,
+                still-probable proposal ★). The notebook's seeded run measured farthest reach
+                <strong>5.2 for the puck vs 1.4 for the walker</strong>, with energy drift along the glide
+                |&Delta;H| = <strong>0.011</strong> — small drift means the distant proposal is almost
+                always accepted.
+            </p>
+
+            <p>
+                The notebook then hands the same conversion-rate model to PyMC — same prior, same data,
+                same posterior our 20-line walker sampled — and lets NUTS at it:
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>exact posterior mean = 0.1273</th><th>our Metropolis (goldilocks)</th><th>PyMC NUTS</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>draws kept</td><td>20,000</td><td>1,600</td></tr>
+                    <tr><td>ESS (bulk)</td><td>4,205</td><td>492</td></tr>
+                    <tr><td><strong>ESS per draw kept</strong></td><td><strong>0.21</strong></td><td><strong>0.31</strong></td></tr>
+                    <tr><td>posterior mean</td><td>0.1274</td><td>0.1270</td></tr>
+                    <tr><td>R-hat</td><td>1.001</td><td>1.008</td></tr>
+                    <tr><td>divergences</td><td>n/a (not gradient-based)</td><td>0</td></tr>
+                    <tr><td>wall time</td><td>0.04 s (pure-python loop)</td><td>1.6 s (incl. model compile)</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> — the notebook's seeded comparison table. Read it honestly: a
+                1-D target is random walk's <em>best case</em>, and NUTS still wins on information per
+                draw — the column that matters. The gap becomes a chasm as dimensions grow: random-walk
+                efficiency collapses with dimension while gradient-guided gliding barely notices. Your
+                40-parameter MMM in <a href="workshop-03-first-mmm.html">workshop 03</a> is only feasible
+                because of this.
+            </p>
+
+            <h3>Divergences: the engine warning light</h3>
+            <p>
+                The table has a column Metropolis can't have: <strong>divergences</strong> —
+                <em>moments when the gliding puck's simulated physics broke down: the trajectory shot off
+                the landscape and the step had to be abandoned</em>. They happen in regions of extreme
+                curvature, where the glide step is too coarse to follow the surface — a canyon whose walls
+                bend sharper than the puck's stride. Three things for an analyst to burn in:
+            </p>
+            <ol>
+                <li><strong>A divergence is a location, not a nuisance.</strong> It marks a specific region
+                    the sampler tried and failed to enter — your draws may be blind to exactly that region,
+                    so the posterior you see can be <strong>biased</strong>, not just noisy.</li>
+                <li><strong>Don't ignore them; don't just silence them.</strong> A handful in tens of
+                    thousands of draws may be tolerable; dozens are a model problem. The real fixes change
+                    the <em>geometry</em>: gentler/tighter priors that don't carve cliffs, or
+                    <strong>reparameterization</strong> — <em>rewriting the model in equivalent variables
+                    whose landscape is smoother</em> (the famous "non-centered" trick for hierarchical
+                    models).</li>
+                <li><strong>You mostly inherit the fixes.</strong> <code>mmm_framework</code>'s default
+                    priors (see <a href="workshop-01-priors.html">workshop 01</a>) and its hierarchical
+                    structures already encode these reparameterizations — one of several reasons
+                    workshop 03 starts from the framework's defaults instead of hand-rolled PyMC.</li>
+            </ol>
+
+            <h2 id="clinic">7 — The trace-plot reading clinic</h2>
+            <p>
+                A <strong>trace plot</strong> — <em>parameter value vs step number, one line per
+                chain</em> — is the sampler's EKG, and reading one is a 10-second skill that catches most
+                problems before any statistic does. Four patterns cover ~90% of what you'll ever see.
+                All four panels below are real chains, generated in your browser with the notebook's exact
+                recipes (same targets, same step sizes):
+            </p>
+
+            <div class="chart-container taller" id="clinicChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser (seeded) — the notebook's exact recipes.</strong>
+                The notebook's measured diagnostics for its versions of these four panels: healthy
+                R-hat <strong>1.00</strong>; trending <strong>3.93</strong>; stuck <strong>1.74</strong>;
+                and the sticky panel <em>passes</em> R-hat but pays in ESS — <strong>74 vs the healthy
+                panel's 1,099</strong>. The eyeball and the statistics agree.
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th>pattern</th><th>what you see</th><th>diagnosis</th><th>remedy</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Healthy</strong> — "fuzzy caterpillar"</td>
+                        <td>chains overlap in one stationary band</td>
+                        <td>converged &amp; mixing</td>
+                        <td>none — ship it</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Trending</strong></td>
+                        <td>each chain still travelling from its start</td>
+                        <td>not converged</td>
+                        <td>longer warm-up / better inits / bigger steps</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Stuck</strong> — parallel flat bands</td>
+                        <td>chains level but <em>disagree</em> on the level</td>
+                        <td>multimodal or pathological posterior</td>
+                        <td>reparameterize or rethink the model</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sticky</strong> — slow random waves</td>
+                        <td>one band, but long lazy swings (high autocorrelation)</td>
+                        <td>converged, tiny ESS</td>
+                        <td>more draws / better sampler (NUTS)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="caveat">8 — The crucial caveat: green lights validate the <em>computation</em>, not the <em>model</em></h2>
+            <div class="warning">
+                <h4>⚠️ Necessary, never sufficient</h4>
+                <p>
+                    Everything on this page — R-hat, ESS, divergences, trace plots — answers exactly one
+                    question: <strong>did the sampler faithfully explore the posterior of the model you
+                    wrote down?</strong> None of it asks whether the model you wrote down is
+                    <em>right</em>. A model that confuses correlation with causation — say, an MMM where a
+                    hidden demand surge drives both ad spend and sales — will converge
+                    <strong>beautifully</strong>: R-hat 1.00, zero divergences, gorgeous fuzzy
+                    caterpillars… to a confidently <em>wrong</em> answer. The chains agree with each
+                    other; they're just agreeing on a biased posterior.
+                </p>
+            </div>
+            <p>
+                Treat today's diagnostics as the pre-flight checklist, not the navigation. The full
+                treatment of this trap — 16 synthetic worlds, 8 silent attribution failures,
+                <em>every one</em> with r-hat &le; 1.02 and zero divergences — is the
+                <a href="pressure-testing.html">pressure-testing scorecard</a>, and its opening guide
+                <a href="stress-00-rosy-picture.html">The Rosy Picture</a> shows two worlds with identical
+                green dashboards and opposite verdicts. And it's why
+                <a href="workshop-03-first-mmm.html">workshop 03</a> fits your first MMM on a synthetic
+                world whose true answer is <em>known</em>: the only way to learn what a posterior
+                <em>should</em> look like is to practice where truth is checkable.
+            </p>
+
+            <h2 id="glossary">9 — Glossary</h2>
+            <table>
+                <thead><tr><th>term</th><th>plain English</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>Monte Carlo</strong></td><td>estimating a quantity from random samples instead of exact calculation; error shrinks like 1/&radic;n</td></tr>
+                    <tr><td><strong>curse of dimensionality</strong></td><td>grid-style methods explode exponentially with the number of parameters — why sampling exists</td></tr>
+                    <tr><td><strong>MCMC</strong></td><td>Markov chain Monte Carlo: a walker whose movement rules make time-spent proportional to posterior probability</td></tr>
+                    <tr><td><strong>proposal</strong></td><td>the rule for suggesting the walker's next position (e.g. a Gaussian step)</td></tr>
+                    <tr><td><strong>acceptance rate</strong></td><td>fraction of proposals taken; near-100% usually means steps are too timid, not that things are great</td></tr>
+                    <tr><td><strong>chain</strong></td><td>one walker's recorded visit log = one stream of posterior draws</td></tr>
+                    <tr><td><strong>burn-in / warm-up</strong></td><td>early draws discarded because the walker hadn't yet forgotten its arbitrary start (PyMC: <code>tune</code>)</td></tr>
+                    <tr><td><strong>mixing</strong></td><td>the chain roaming freely across the whole posterior rather than lingering</td></tr>
+                    <tr><td><strong>R-hat</strong></td><td>"do independently-started chains agree?" — between-chain vs within-chain spread; want &lt; 1.01</td></tr>
+                    <tr><td><strong>autocorrelation</strong></td><td>a draw's correlation with its recent predecessors; slow decay = repeated information</td></tr>
+                    <tr><td><strong>ESS</strong></td><td>effective sample size: how many <em>independent</em> draws your correlated draws are worth; want hundreds+</td></tr>
+                    <tr><td><strong>gradient</strong></td><td>the local slope of log-probability — the information that lets modern samplers glide instead of guess</td></tr>
+                    <tr><td><strong>NUTS</strong></td><td>No-U-Turn Sampler: gradient-guided HMC that auto-stops each glide when it starts curling back; PyMC's default</td></tr>
+                    <tr><td><strong>divergence</strong></td><td>the engine light: a spot where NUTS's simulated glide broke down — possible bias near that region; fix geometry, don't mute</td></tr>
+                    <tr><td><strong>trace plot</strong></td><td>parameter vs step per chain — the sampler's EKG (want fuzzy caterpillars)</td></tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Grids die exponentially; sampling doesn't.</strong> A 40-parameter grid needs 10<sup>80</sup> evaluations; Monte Carlo error is 1/&radic;n in <em>any</em> dimension.</li>
+                    <li><strong>MCMC needs only the unnormalized posterior.</strong> The accept/reject ratio cancels the unknowable normalizing constant — that's the whole trick, and it fits in 20 lines.</li>
+                    <li><strong>Step size makes or breaks a random walk</strong> — and a high acceptance rate is a warning sign, not a compliment.</li>
+                    <li><strong>R-hat and ESS are the audit, run multiple chains always.</strong> R-hat &lt; 1.01 says dispersed chains agree; ESS says how many independent draws you really have. A stuck chain has no idea it is stuck.</li>
+                    <li><strong>NUTS buys independence with gradients; divergences are its honesty light.</strong> And every green light here validates the <em>computation</em> — never the causal claim. That doctrine lives at <a href="pressure-testing.html">pressure-testing</a>.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/workshop_02_sampling.ipynb</code> (authored by
+                    <code>nbs/build_workshop_02_sampling.py</code>; series guide:
+                    <code>nbs/README_workshop.md</code>). The notebook adds three ipywidgets
+                    live-exploration cells (dart thrower, step-size driver, island separation), the
+                    animated walker, and a real PyMC NUTS run — every code cell ends in seeded asserts
+                    encoding the claims quoted here. Next in the series:
+                    <a href="workshop-03-first-mmm.html">workshop 03 — your first MMM</a>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the notebook-guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG — series-wide reference implementation.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gauss(rng) {  // Box-Muller
+            let u = 0;
+            do { u = rng(); } while (u === 0);
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+        }
+
+        // ------------------------------------------------------------------
+        // Small numeric helpers
+        // ------------------------------------------------------------------
+        function mean(xs) {
+            let s = 0;
+            for (let i = 0; i < xs.length; i++) s += xs[i];
+            return s / xs.length;
+        }
+        function variance(xs) {  // ddof = 1
+            const m = mean(xs);
+            let s = 0;
+            for (let i = 0; i < xs.length; i++) { const d = xs[i] - m; s += d * d; }
+            return s / (xs.length - 1);
+        }
+        function linspace(a, b, n) {
+            const out = new Array(n);
+            for (let i = 0; i < n; i++) out[i] = a + (b - a) * i / (n - 1);
+            return out;
+        }
+
+        // Classic split R-hat on an array of equal-length chains.
+        function splitRhat(chains) {
+            const half = Math.floor(chains[0].length / 2);
+            if (half < 10) return NaN;
+            const seqs = [];
+            chains.forEach(function(c) {
+                seqs.push(c.slice(0, half));
+                seqs.push(c.slice(half, 2 * half));
+            });
+            const n = half;
+            const W = mean(seqs.map(variance));
+            const B = n * variance(seqs.map(mean));
+            if (W <= 0) return NaN;
+            const varPlus = (n - 1) / n * W + B / n;
+            return Math.sqrt(varPlus / W);
+        }
+
+        // ESS via the BDA3 multi-chain variogram estimator (Geyer pairing, capped lags).
+        function essOf(chains) {
+            const m = chains.length, n = chains[0].length;
+            if (n < 20) return NaN;
+            const W = mean(chains.map(variance));
+            const B = n * variance(chains.map(mean));
+            const varPlus = (n - 1) / n * W + B / n;
+            if (varPlus <= 0) return NaN;
+            function variogram(t) {
+                let s = 0, cnt = 0;
+                for (let k = 0; k < m; k++) {
+                    const c = chains[k];
+                    for (let i = t; i < n; i++) { const d = c[i] - c[i - t]; s += d * d; cnt++; }
+                }
+                return s / cnt;
+            }
+            let rhoSum = 0;
+            const maxLag = Math.min(n - 3, 600);
+            for (let t = 1; t + 1 <= maxLag; t += 2) {
+                const rho1 = 1 - variogram(t) / (2 * varPlus);
+                const rho2 = 1 - variogram(t + 1) / (2 * varPlus);
+                if (rho1 + rho2 < 0) break;
+                rhoSum += rho1 + rho2;
+            }
+            return m * n / (1 + 2 * rhoSum);
+        }
+
+        function acf(xs, maxLag) {
+            const x = xs.slice();
+            const m = mean(x);
+            for (let i = 0; i < x.length; i++) x[i] -= m;
+            let c0 = 0;
+            for (let i = 0; i < x.length; i++) c0 += x[i] * x[i];
+            c0 /= x.length;
+            const out = [1];
+            for (let k = 1; k < maxLag; k++) {
+                let s = 0;
+                for (let i = k; i < x.length; i++) s += x[i] * x[i - k];
+                out.push((s / (x.length - k)) / c0);
+            }
+            return out;
+        }
+
+        // Generic 1-D random-walk Metropolis (the notebook's algorithm, in JS).
+        function metropolis1d(logp, start, step, n, rng) {
+            const chain = new Array(n);
+            let x = start, lx = logp(start), nAcc = 0;
+            for (let i = 0; i < n; i++) {
+                const prop = x + step * gauss(rng);
+                const lp = logp(prop);
+                if (Math.log(rng()) < lp - lx) { x = prop; lx = lp; nAcc++; }
+                chain[i] = x;
+            }
+            return { chain: chain, acc: nAcc / n };
+        }
+
+        // The notebook's conversion-rate target: Beta(14, 96) up to a constant.
+        function logBetaPost(t) {
+            if (t <= 0 || t >= 1) return -Infinity;
+            return 13 * Math.log(t) + 95 * Math.log(1 - t);
+        }
+
+        const CHAIN_COLS = [PT.colors.search, PT.colors.display, PT.colors.tv, PT.colors.social];
+
+        // ==================================================================
+        // 1. Grid blow-up (live)
+        // ==================================================================
+        const SECONDS_PER_YEAR = 3.154e7;
+        const AGE_OF_UNIVERSE_S = 4.35e17;
+
+        function fmtDuration(seconds) {
+            if (seconds < 1e-3) return (seconds * 1e6).toPrecision(3) + ' µs';
+            if (seconds < 1) return (seconds * 1000).toPrecision(3) + ' ms';
+            if (seconds < 3600) return seconds.toPrecision(3) + ' s';
+            const years = seconds / SECONDS_PER_YEAR;
+            if (years < 1e4) return Math.round(years).toLocaleString() + ' years';
+            if (seconds < AGE_OF_UNIVERSE_S) return years.toExponential(2) + ' years';
+            return (seconds / AGE_OF_UNIVERSE_S).toExponential(2) + ' × age of the universe';
+        }
+
+        function drawGridChart(pts) {
+            const dims = [1, 2, 3, 5, 10, 20, 40];
+            const logSec = dims.map(function(d) { return d * Math.log10(pts) - 9; });
+            const labels = dims.map(function(d) {
+                return fmtDuration(Math.pow(10, d * Math.log10(pts) - 9));
+            });
+            const trace = {
+                type: 'bar',
+                x: dims.map(String),
+                y: logSec,
+                text: labels,
+                textposition: 'outside',
+                textfont: { size: 11 },
+                marker: {
+                    color: logSec.map(function(v) {
+                        return v > Math.log10(AGE_OF_UNIVERSE_S) ? PT.colors.silent : PT.colors.tv;
+                    }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                hovertemplate: '<b>%{x} parameters</b><br>%{text}<extra></extra>'
+            };
+            const refs = [
+                { v: 0, label: '1 second' },
+                { v: Math.log10(SECONDS_PER_YEAR), label: '1 year' },
+                { v: Math.log10(AGE_OF_UNIVERSE_S), label: 'age of the universe' }
+            ];
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 30, b: 55 },
+                xaxis: { title: 'number of parameters (grid at ' + pts + ' points per axis)', type: 'category' },
+                yaxis: { title: 'log₁₀ seconds at 10⁹ evals/sec', range: [-12, 78] },
+                shapes: refs.map(function(r) {
+                    return { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: r.v, y1: r.v,
+                             line: { color: '#9aa79a', width: 1, dash: 'dot' } };
+                }),
+                annotations: refs.map(function(r) {
+                    return { xref: 'paper', x: 0.01, y: r.v, yanchor: 'bottom', xanchor: 'left',
+                             text: r.label, showarrow: false, font: { size: 10, color: '#5a6b5a' } };
+                })
+            });
+            Plotly.react('gridChart', [trace], layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn[data-pts]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn[data-pts]').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawGridChart(parseInt(btn.dataset.pts, 10));
+            });
+        });
+
+        // ==================================================================
+        // 2. Darts (live, seeded)
+        // ==================================================================
+        let dartSeed = 0;
+        const arcT = linspace(0, Math.PI / 2, 120);
+
+        function drawDarts() {
+            const n = parseInt(document.getElementById('dartN').value, 10);
+            document.getElementById('dartNVal').textContent = String(n);
+            const rng = mulberry32(1234 + dartSeed);
+            const xi = [], yi = [], xo = [], yo = [];
+            const runN = [], runEst = [];
+            let inside = 0;
+            for (let i = 0; i < n; i++) {
+                const x = rng(), y = rng();
+                if (x * x + y * y <= 1) { inside++; if (xi.length < 4000) { xi.push(x); yi.push(y); } }
+                else if (xo.length < 4000) { xo.push(x); yo.push(y); }
+                if ((i + 1) % Math.max(1, Math.floor(n / 300)) === 0 || i === n - 1) {
+                    runN.push(i + 1);
+                    runEst.push(4 * inside / (i + 1));
+                }
+            }
+            const est = 4 * inside / n;
+            const traces = [
+                { type: 'scatter', mode: 'markers', x: xi, y: yi, xaxis: 'x', yaxis: 'y',
+                  marker: { color: PT.colors.ok, size: 3, opacity: 0.55 }, hoverinfo: 'skip', name: 'inside' },
+                { type: 'scatter', mode: 'markers', x: xo, y: yo, xaxis: 'x', yaxis: 'y',
+                  marker: { color: PT.colors.silent, size: 3, opacity: 0.55 }, hoverinfo: 'skip', name: 'outside' },
+                { type: 'scatter', mode: 'lines', xaxis: 'x', yaxis: 'y',
+                  x: arcT.map(Math.cos), y: arcT.map(Math.sin),
+                  line: { color: PT.colors.truth, width: 2 }, hoverinfo: 'skip', name: 'quarter circle' },
+                { type: 'scatter', mode: 'lines', x: runN, y: runEst, xaxis: 'x2', yaxis: 'y2',
+                  line: { color: PT.colors.search, width: 2 }, name: 'running π̂',
+                  hovertemplate: 'n=%{x}<br>π̂=%{y:.4f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: [runN[0], n], y: [Math.PI, Math.PI], xaxis: 'x2', yaxis: 'y2',
+                  line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }, name: 'π', hoverinfo: 'skip' }
+            ];
+            const layout = PT.layout({
+                margin: { l: 50, r: 30, t: 45, b: 55 },
+                showlegend: false,
+                title: { text: 'n = ' + n.toLocaleString() + ' darts   →   π̂ = ' + est.toFixed(4) +
+                              '   (truth 3.1416, error ' + Math.abs(est - Math.PI).toFixed(4) + ')',
+                        font: { size: 14 } },
+                xaxis: { domain: [0, 0.40], range: [0, 1], title: 'dart board' },
+                yaxis: { range: [0, 1], scaleanchor: 'x' },
+                xaxis2: { domain: [0.52, 1], title: 'darts thrown', gridcolor: '#e3e9e3', type: 'log' },
+                yaxis2: { anchor: 'x2', title: 'running estimate of π', gridcolor: '#e3e9e3', range: [2.7, 3.6] }
+            });
+            Plotly.react('dartChart', traces, layout, PT.config);
+        }
+
+        document.getElementById('dartN').addEventListener('input', drawDarts);
+        document.getElementById('dartReseed').addEventListener('click', function() {
+            dartSeed = (dartSeed + 1) % 1000;
+            drawDarts();
+        });
+
+        // ==================================================================
+        // 2b. Root-n rate (live, seeded)
+        // ==================================================================
+        function drawRateChart() {
+            const ns = [100, 300, 1000, 3000, 10000, 30000];
+            const B = 100;
+            const rng = mulberry32(42);
+            const rmse = ns.map(function(n) {
+                let se = 0;
+                for (let b = 0; b < B; b++) {
+                    let inside = 0;
+                    for (let i = 0; i < n; i++) {
+                        const x = rng(), y = rng();
+                        if (x * x + y * y <= 1) inside++;
+                    }
+                    const err = 4 * inside / n - Math.PI;
+                    se += err * err;
+                }
+                return Math.sqrt(se / B);
+            });
+            // least-squares slope on logs
+            const lx = ns.map(Math.log), ly = rmse.map(Math.log);
+            const mx = mean(lx), my = mean(ly);
+            let num = 0, den = 0;
+            for (let i = 0; i < lx.length; i++) { num += (lx[i] - mx) * (ly[i] - my); den += (lx[i] - mx) * (lx[i] - mx); }
+            const slope = num / den;
+            const ref = ns.map(function(n) { return rmse[0] * Math.sqrt(ns[0] / n); });
+            const traces = [
+                { type: 'scatter', mode: 'lines+markers', x: ns, y: rmse, name: 'measured typical error',
+                  line: { color: PT.colors.search, width: 2 }, marker: { size: 8 },
+                  hovertemplate: 'n=%{x}<br>RMS error %{y:.4f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: ns, y: ref, name: '1/√n reference',
+                  line: { color: PT.colors.social, width: 2, dash: 'dash' }, hoverinfo: 'skip' }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'darts n', type: 'log' },
+                yaxis: { title: 'RMS error of π̂', type: 'log' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: [{
+                    xref: 'paper', yref: 'paper', x: 0.97, y: 0.92, xanchor: 'right',
+                    text: 'measured log–log slope: ' + slope.toFixed(2) + '  (theory: −0.5)',
+                    showarrow: false, font: { size: 12, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('rateChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 3. Unnormalized vs normalized posterior (live math)
+        // ==================================================================
+        function drawShapeChart() {
+            const grid = linspace(1e-4, 1 - 1e-4, 500);
+            const unnorm = grid.map(function(t) { return Math.exp(logBetaPost(t)); });
+            // normalize numerically (trapezoid)
+            let area = 0;
+            for (let i = 1; i < grid.length; i++) {
+                area += 0.5 * (unnorm[i] + unnorm[i - 1]) * (grid[i] - grid[i - 1]);
+            }
+            const pdf = unnorm.map(function(v) { return v / area; });
+            const traces = [
+                { type: 'scatter', mode: 'lines', x: grid, y: unnorm, xaxis: 'x', yaxis: 'y',
+                  line: { color: PT.colors.social, width: 2.5 }, name: 'unnormalized',
+                  hovertemplate: 'θ=%{x:.3f}<br>height %{y:.2e}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: grid, y: pdf, xaxis: 'x2', yaxis: 'y2',
+                  line: { color: PT.colors.search, width: 2.5 }, name: 'posterior',
+                  hovertemplate: 'θ=%{x:.3f}<br>density %{y:.2f}<extra></extra>' }
+            ];
+            const layout = PT.layout({
+                margin: { l: 70, r: 30, t: 45, b: 55 },
+                showlegend: false,
+                title: { text: 'Same shape, unknown scale — sampling only needs the shape', font: { size: 14 } },
+                xaxis: { domain: [0, 0.45], range: [0, 0.4], title: 'what we CAN compute: prior × likelihood' },
+                yaxis: { title: 'unnormalized height', exponentformat: 'power' },
+                xaxis2: { domain: [0.55, 1], range: [0, 0.4], title: 'what we WANT: normalized posterior', gridcolor: '#e3e9e3' },
+                yaxis2: { anchor: 'x2', title: 'posterior density', gridcolor: '#e3e9e3' }
+            });
+            Plotly.newPlot('shapeChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 4. THE WALKER — 2-D Metropolis playground
+        // ==================================================================
+        // Target: correlated 2-D Gaussian ridge, rho = 0.9 (Sigma inverse hard-coded).
+        const SA = 5.263157894736842, SB = -4.7368421052631575;  // [[a,b],[b,a]]
+        function U2(x, y) { return 0.5 * (SA * x * x + 2 * SB * x * y + SA * y * y); }
+        function logp2(x, y) { return -U2(x, y); }
+        function gradU2(x, y) { return [SA * x + SB * y, SB * x + SA * y]; }
+
+        const W = {
+            starts: [[-2.5, -2.5], [-2.5, 2.5], [2.5, -2.5], [2.5, 2.5]],
+            step: 0.6,
+            MAXN: 6000,
+            chains: null, rngs: null, lps: null, props: null, nAcc: 0, nProp: 0,
+            timer: null
+        };
+
+        function walkerReset() {
+            W.chains = W.starts.map(function(s) { return { x: [s[0]], y: [s[1]] }; });
+            W.rngs = W.starts.map(function(_, k) { return mulberry32(7000 + 13 * k); });
+            W.lps = W.starts.map(function(s) { return logp2(s[0], s[1]); });
+            W.props = null;
+            W.nAcc = 0; W.nProp = 0;
+            walkerStopAnim();
+            walkerRedraw();
+        }
+
+        function walkerSteps(nSteps) {
+            const lastProps = [];
+            for (let s = 0; s < nSteps; s++) {
+                for (let k = 0; k < 4; k++) {
+                    const c = W.chains[k], rng = W.rngs[k];
+                    if (c.x.length > W.MAXN) continue;
+                    const cx = c.x[c.x.length - 1], cy = c.y[c.y.length - 1];
+                    const px = cx + W.step * gauss(rng), py = cy + W.step * gauss(rng);
+                    const lp = logp2(px, py);
+                    const ok = Math.log(rng()) < lp - W.lps[k];
+                    if (ok) { c.x.push(px); c.y.push(py); W.lps[k] = lp; W.nAcc++; }
+                    else { c.x.push(cx); c.y.push(cy); }
+                    W.nProp++;
+                    if (s === nSteps - 1) lastProps.push({ x: px, y: py, ok: ok });
+                }
+            }
+            W.props = lastProps;
+        }
+
+        // Contour of the target (computed once).
+        const ctrGX = linspace(-3.2, 3.2, 70);
+        const ctrZ = ctrGX.map(function(yy) {
+            return ctrGX.map(function(xx) { return Math.exp(-U2(xx, yy)); });
+        });
+        const contourTrace = {
+            type: 'contour', x: ctrGX, y: ctrGX, z: ctrZ,
+            showscale: false, ncontours: 9, hoverinfo: 'skip',
+            contours: { coloring: 'lines' },
+            line: { width: 1 },
+            colorscale: [[0, '#dde5dd'], [1, '#9aa79a']]
+        };
+
+        function stride(len, target) { return Math.max(1, Math.ceil(len / target)); }
+
+        function walkerRedraw() {
+            const traces = [contourTrace];
+            // paths
+            W.chains.forEach(function(c, k) {
+                const st = stride(c.x.length, 1200);
+                const xs = [], ys = [];
+                for (let i = 0; i < c.x.length; i += st) { xs.push(c.x[i]); ys.push(c.y[i]); }
+                xs.push(c.x[c.x.length - 1]); ys.push(c.y[c.y.length - 1]);
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: xs, y: ys, hoverinfo: 'skip',
+                    line: { color: PT.band(CHAIN_COLS[k], 0.55), width: 1 }, name: 'chain ' + (k + 1)
+                });
+            });
+            // current positions
+            traces.push({
+                type: 'scatter', mode: 'markers',
+                x: W.chains.map(function(c) { return c.x[c.x.length - 1]; }),
+                y: W.chains.map(function(c) { return c.y[c.y.length - 1]; }),
+                marker: { color: CHAIN_COLS, size: 12, line: { color: '#2d3a2d', width: 1.5 } },
+                name: 'walkers now',
+                hovertemplate: 'walker at (%{x:.2f}, %{y:.2f})<extra></extra>'
+            });
+            // last proposals
+            if (W.props) {
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: W.props.map(function(p) { return p.x; }),
+                    y: W.props.map(function(p) { return p.y; }),
+                    marker: {
+                        symbol: 'diamond', size: 9,
+                        color: W.props.map(function(p) { return p.ok ? PT.colors.ok : PT.colors.silent; }),
+                        line: { color: 'rgba(45,58,45,0.4)', width: 1 }
+                    },
+                    name: 'last proposals',
+                    hovertemplate: 'proposal (%{x:.2f}, %{y:.2f})<extra></extra>'
+                });
+            }
+            const nSteps = W.chains[0].x.length - 1;
+            const layout2d = PT.layout({
+                margin: { l: 55, r: 20, t: 10, b: 50 },
+                showlegend: false,
+                xaxis: { title: 'parameter 1', range: [-3.2, 3.2] },
+                yaxis: { title: 'parameter 2', range: [-3.2, 3.2], scaleanchor: 'x' }
+            });
+            Plotly.react('walkerChart', traces, layout2d, PT.config);
+
+            // trace plot (param 1)
+            const trTraces = W.chains.map(function(c, k) {
+                const st = stride(c.x.length, 1500);
+                const ys = [], xs = [];
+                for (let i = 0; i < c.x.length; i += st) { xs.push(i); ys.push(c.x[i]); }
+                return { type: 'scatter', mode: 'lines', x: xs, y: ys, name: 'chain ' + (k + 1),
+                         line: { color: CHAIN_COLS[k], width: 0.9 }, hoverinfo: 'skip' };
+            });
+            const trLayout = PT.layout({
+                margin: { l: 55, r: 20, t: 10, b: 50 },
+                xaxis: { title: 'step' },
+                yaxis: { title: 'parameter 1' },
+                legend: { orientation: 'h', y: 1.12 }
+            });
+            Plotly.react('walkerTrace', trTraces, trLayout, PT.config);
+
+            document.getElementById('wSteps').textContent = nSteps.toLocaleString() + ' steps';
+            document.getElementById('wAcc').textContent =
+                W.nProp > 0 ? 'acc ' + Math.round(100 * W.nAcc / W.nProp) + '%' : 'acc —';
+            updateDiagnostics();
+            if (nSteps >= W.MAXN) walkerStopAnim();
+        }
+
+        function updateDiagnostics() {
+            const n = W.chains[0].x.length - 1;
+            const rhatEl = document.getElementById('diagRhat');
+            const essEl = document.getElementById('diagEss');
+            const accEl = document.getElementById('diagAcc');
+            const drawsEl = document.getElementById('diagDraws');
+            const verdictEl = document.getElementById('diagVerdict');
+            accEl.textContent = W.nProp > 0 ? Math.round(100 * W.nAcc / W.nProp) + '%' : '—';
+            if (n < 80) {
+                rhatEl.textContent = '—';
+                essEl.textContent = '—';
+                drawsEl.textContent = n > 0 ? String(4 * n) : '—';
+                verdictEl.className = 'diag-verdict wait';
+                verdictEl.textContent = n === 0
+                    ? 'Run the walker above (▶ Animate or +500 steps) to generate chains worth auditing.'
+                    : 'Keep going — at least ~80 steps per chain before the audit means anything.';
+                return;
+            }
+            const burn = Math.floor(n / 4);
+            const post = W.chains.map(function(c) { return c.x.slice(burn + 1); });
+            const rhat = splitRhat(post);
+            const ess = essOf(post);
+            const kept = post[0].length * 4;
+            rhatEl.textContent = isFinite(rhat) ? rhat.toFixed(rhat < 2 ? 3 : 2) : '—';
+            essEl.textContent = isFinite(ess) ? String(Math.max(1, Math.round(ess))) : '—';
+            drawsEl.textContent = kept.toLocaleString();
+            const acc = W.nAcc / W.nProp;
+            const rhatBad = !(rhat < 1.05);
+            const essBad = !(ess > 100);
+            if (!rhatBad && !essBad) {
+                verdictEl.className = 'diag-verdict good';
+                verdictEl.textContent = '✅ Audit passed: R-hat ' + rhat.toFixed(3) +
+                    ' < 1.05 and ESS ' + Math.round(ess) +
+                    ' — dispersed chains agree and the draws carry real information. (Remember: this certifies the computation, not the model.)';
+            } else {
+                verdictEl.className = 'diag-verdict bad';
+                let msg = '⚠️ Audit failed: ';
+                const parts = [];
+                if (rhatBad) parts.push('R-hat ' + (isFinite(rhat) ? rhat.toFixed(2) : '?') + ' ≥ 1.05 — the four chains have not agreed on one distribution');
+                if (essBad) parts.push('ESS ≈ ' + (isFinite(ess) ? Math.round(ess) : '?') + ' — heavily autocorrelated draws carrying little information');
+                msg += parts.join('; ') + '. ';
+                if (acc > 0.8) msg += 'Acceptance ' + Math.round(acc * 100) + '% — steps too timid: the snail regime.';
+                else if (acc < 0.1) msg += 'Acceptance ' + Math.round(acc * 100) + '% — steps too wild: the statue regime.';
+                else msg += 'The chains may simply need more steps — keep running.';
+                verdictEl.textContent = msg;
+            }
+            drawAcf(post);
+        }
+
+        function drawAcf(post) {
+            const L = 60;
+            const series = post[0].length > L * 2 ? post[0] : null;
+            const bars = series ? acf(series, L) : [];
+            const traces = [{
+                type: 'bar', x: bars.map(function(_, i) { return i; }), y: bars,
+                marker: { color: PT.colors.search, opacity: 0.85 },
+                hovertemplate: 'lag %{x}: %{y:.2f}<extra></extra>'
+            }];
+            const layoutA = PT.layout({
+                margin: { l: 55, r: 20, t: 10, b: 45 },
+                xaxis: { title: 'lag (steps apart) — chain 1, post-burn-in' },
+                yaxis: { title: 'autocorrelation', range: [-0.15, 1.05] }
+            });
+            Plotly.react('acfChart', traces, layoutA, PT.config);
+        }
+
+        function walkerStopAnim() {
+            if (W.timer) { clearInterval(W.timer); W.timer = null; }
+            const b = document.getElementById('btnAnim');
+            b.textContent = '▶ Animate';
+            b.classList.remove('active');
+        }
+
+        document.getElementById('btnAnim').addEventListener('click', function() {
+            if (W.timer) { walkerStopAnim(); return; }
+            const b = document.getElementById('btnAnim');
+            b.textContent = '⏸ Pause';
+            b.classList.add('active');
+            W.timer = setInterval(function() {
+                walkerSteps(2);
+                walkerRedraw();
+            }, 110);
+        });
+        document.getElementById('btnStep').addEventListener('click', function() {
+            walkerSteps(1); walkerRedraw();
+        });
+        document.getElementById('btnRun').addEventListener('click', function() {
+            walkerSteps(500); walkerRedraw();
+        });
+        document.getElementById('btnReset').addEventListener('click', walkerReset);
+
+        function sliderToStep(v) { return Math.pow(10, -2 + 3 * v / 100); }  // 0.01 .. 10
+        function stepToSlider(s) { return Math.round((Math.log10(s) + 2) / 3 * 100); }
+
+        document.getElementById('stepSlider').addEventListener('input', function() {
+            W.step = sliderToStep(parseInt(this.value, 10));
+            document.getElementById('stepVal').textContent = W.step.toPrecision(2);
+            document.querySelectorAll('.toggle-btn[data-preset]').forEach(function(b) { b.classList.remove('active'); });
+            walkerReset();
+        });
+        document.querySelectorAll('.toggle-btn[data-preset]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.toggle-btn[data-preset]').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                W.step = parseFloat(btn.dataset.preset);
+                document.getElementById('stepSlider').value = String(stepToSlider(W.step));
+                document.getElementById('stepVal').textContent = W.step.toPrecision(2);
+                walkerReset();
+            });
+        });
+
+        // ==================================================================
+        // 5. Bimodal: make R-hat scream (live)
+        // ==================================================================
+        function logBimodal(d, x) {
+            const a = -0.5 * Math.pow((x - d) / 0.5, 2);
+            const b = -0.5 * Math.pow((x + d) / 0.5, 2);
+            const m = Math.max(a, b);
+            return m + Math.log(Math.exp(a - m) + Math.exp(b - m));
+        }
+
+        function drawBimodal() {
+            const d = parseFloat(document.getElementById('bimodalD').value);
+            document.getElementById('bimodalDVal').textContent = d.toFixed(1);
+            const starts = [-d - 0.3, -d + 0.3, d - 0.3, d + 0.3];
+            const chains = starts.map(function(s, k) {
+                const rng = mulberry32(300 + 10 * k);
+                return metropolis1d(function(x) { return logBimodal(d, x); }, s, 0.5, 3000, rng)
+                    .chain.slice(300);
+            });
+            const rhat = splitRhat(chains);
+            const verdict = rhat < 1.05 ? 'OK (mixed)' : 'BROKEN (stuck)';
+            document.getElementById('bimodalRhat').textContent =
+                'R-hat = ' + rhat.toFixed(2) + ' → ' + verdict;
+
+            const traces = chains.map(function(c, k) {
+                const st = stride(c.length, 1000);
+                const xs = [], ys = [];
+                for (let i = 0; i < c.length; i += st) { xs.push(i); ys.push(c[i]); }
+                return { type: 'scatter', mode: 'lines', x: xs, y: ys, name: 'chain ' + (k + 1),
+                         line: { color: CHAIN_COLS[k], width: 0.9 }, hoverinfo: 'skip', xaxis: 'x', yaxis: 'y' };
+            });
+            // target shape on the right
+            const xg = linspace(-d - 2, d + 2, 240);
+            traces.push({
+                type: 'scatter', mode: 'lines', xaxis: 'x2', yaxis: 'y2',
+                x: xg, y: xg.map(function(x) { return Math.exp(logBimodal(d, x)); }),
+                line: { color: PT.colors.truth, width: 2 }, hoverinfo: 'skip', name: 'target'
+            });
+            const layoutB = PT.layout({
+                margin: { l: 55, r: 20, t: 45, b: 50 },
+                showlegend: false,
+                title: { text: 'd = ' + d.toFixed(1) + '  →  split R-hat = ' + rhat.toFixed(2) + '  →  ' + verdict, font: { size: 14 } },
+                xaxis: { domain: [0, 0.6], title: 'step' },
+                yaxis: { title: 'x' },
+                xaxis2: { domain: [0.7, 1], title: 'the target they should sample', gridcolor: '#e3e9e3' },
+                yaxis2: { anchor: 'x2', gridcolor: '#e3e9e3', showticklabels: false }
+            });
+            Plotly.react('bimodalChart', traces, layoutB, PT.config);
+        }
+        document.getElementById('bimodalD').addEventListener('input', drawBimodal);
+
+        // ==================================================================
+        // 6. NUTS: blindfold vs puck (live leapfrog)
+        // ==================================================================
+        function drawNuts() {
+            // gliding puck: leapfrog, eps=0.1, L=60, seeded momentum
+            const rngP = mulberry32(3);
+            let qx = -1.7, qy = -1.9;
+            let px = gauss(rngP), py = gauss(rngP);
+            const H0 = U2(qx, qy) + 0.5 * (px * px + py * py);
+            const eps = 0.1, L = 60;
+            const tx = [qx], ty = [qy];
+            for (let i = 0; i < L; i++) {
+                let g = gradU2(qx, qy);
+                px -= 0.5 * eps * g[0]; py -= 0.5 * eps * g[1];
+                qx += eps * px; qy += eps * py;
+                g = gradU2(qx, qy);
+                px -= 0.5 * eps * g[0]; py -= 0.5 * eps * g[1];
+                tx.push(qx); ty.push(qy);
+            }
+            const H1 = U2(qx, qy) + 0.5 * (px * px + py * py);
+            // blindfolded walker: 60 RW proposals from the same start
+            const rngW = mulberry32(4);
+            let wx = -1.7, wy = -1.9, wl = logp2(wx, wy);
+            const rx = [wx], ry = [wy];
+            for (let i = 0; i < L; i++) {
+                const cx = wx + 0.25 * gauss(rngW), cy = wy + 0.25 * gauss(rngW);
+                const lp = logp2(cx, cy);
+                if (Math.log(rngW()) < lp - wl) { wx = cx; wy = cy; wl = lp; }
+                rx.push(wx); ry.push(wy);
+            }
+            let reachP = 0, reachW = 0;
+            for (let i = 0; i < tx.length; i++) {
+                reachP = Math.max(reachP, Math.hypot(tx[i] - tx[0], ty[i] - ty[0]));
+                reachW = Math.max(reachW, Math.hypot(rx[i] - rx[0], ry[i] - ry[0]));
+            }
+            const traces = [
+                contourTrace,
+                { type: 'scatter', mode: 'lines+markers', x: rx, y: ry,
+                  name: 'blindfolded walker (60 proposals)',
+                  line: { color: PT.colors.silent, width: 1 }, marker: { size: 4 },
+                  hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: tx, y: ty,
+                  name: 'gliding puck (60 gradient steps)',
+                  line: { color: PT.colors.tv, width: 2.5 }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'markers', x: [tx[0]], y: [ty[0]], name: 'shared start',
+                  marker: { symbol: 'square', size: 11, color: PT.colors.truth }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'markers', x: [tx[tx.length - 1]], y: [ty[ty.length - 1]],
+                  name: "puck's proposal",
+                  marker: { symbol: 'star', size: 17, color: PT.colors.tv,
+                            line: { color: '#2d3a2d', width: 1 } }, hoverinfo: 'skip' }
+            ];
+            const layoutN = PT.layout({
+                margin: { l: 55, r: 20, t: 45, b: 50 },
+                title: { text: 'Same budget, no contest — live run: puck reach ' + reachP.toFixed(1) +
+                              ' vs walker ' + reachW.toFixed(1) + ', |ΔH| = ' + Math.abs(H1 - H0).toFixed(3),
+                        font: { size: 14 } },
+                xaxis: { title: 'parameter 1', range: [-3.2, 3.2] },
+                yaxis: { title: 'parameter 2', range: [-3.2, 3.2], scaleanchor: 'x' },
+                legend: { orientation: 'h', y: -0.18 }
+            });
+            Plotly.newPlot('nutsChart', traces, layoutN, PT.config);
+        }
+
+        // ==================================================================
+        // 7. Trace-plot clinic (live, seeded — the notebook's recipes)
+        // ==================================================================
+        function drawClinic() {
+            const WIN = 1500;
+            const starts4 = [0.05, 0.35, 0.65, 0.95];
+            // healthy: goldilocks step from dispersed starts, drop 1000 burn-in
+            const healthy = starts4.map(function(s, k) {
+                return metropolis1d(logBetaPost, s, 0.075, 2500, mulberry32(200 + 10 * k)).chain.slice(1000);
+            });
+            // trending: tiny step from dispersed starts, no burn-in dropped
+            const trending = starts4.map(function(s, k) {
+                return metropolis1d(logBetaPost, s, 0.0015, WIN, mulberry32(400 + 10 * k)).chain;
+            });
+            // stuck: bimodal islands at d = 3
+            const D = 3;
+            const stuck = [-D - 0.3, -D + 0.3, D - 0.3, D + 0.3].map(function(s, k) {
+                return metropolis1d(function(x) { return logBimodal(D, x); }, s, 0.5, WIN + 300,
+                                    mulberry32(300 + 10 * k)).chain.slice(300);
+            });
+            // sticky: small step, started at the mode (converged but slow)
+            const sticky = starts4.map(function(_, k) {
+                return metropolis1d(logBetaPost, 0.1273, 0.008, WIN, mulberry32(500 + 10 * k)).chain;
+            });
+            const panels = [
+                { data: healthy,  ax: '',  title: "HEALTHY: 'fuzzy caterpillar'" },
+                { data: trending, ax: '2', title: 'TRENDING: still drifting' },
+                { data: stuck,    ax: '3', title: 'STUCK: parallel flat bands' },
+                { data: sticky,   ax: '4', title: 'STICKY: slow random waves' }
+            ];
+            const traces = [];
+            panels.forEach(function(p) {
+                p.data.forEach(function(c, k) {
+                    const st = stride(c.length, 700);
+                    const xs = [], ys = [];
+                    for (let i = 0; i < c.length; i += st) { xs.push(i); ys.push(c[i]); }
+                    traces.push({
+                        type: 'scatter', mode: 'lines', x: xs, y: ys,
+                        xaxis: 'x' + p.ax, yaxis: 'y' + p.ax,
+                        line: { color: CHAIN_COLS[k], width: 0.7 }, hoverinfo: 'skip'
+                    });
+                });
+            });
+            const layoutC = PT.layout({
+                margin: { l: 55, r: 20, t: 40, b: 50 },
+                showlegend: false,
+                grid: { rows: 2, columns: 2, pattern: 'independent', ygap: 0.22, xgap: 0.1 },
+                annotations: panels.map(function(p, i) {
+                    return {
+                        xref: 'x' + p.ax + ' domain', yref: 'y' + p.ax + ' domain',
+                        x: 0.5, y: 1.14, xanchor: 'center', showarrow: false,
+                        text: '<b>' + p.title + '</b>', font: { size: 12 }
+                    };
+                })
+            });
+            Plotly.newPlot('clinicChart', traces, layoutC, PT.config);
+        }
+
+        // ==================================================================
+        // init
+        // ==================================================================
+        function init() {
+            drawGridChart(100);
+            drawDarts();
+            drawRateChart();
+            drawShapeChart();
+            walkerReset();
+            drawBimodal();
+            drawNuts();
+            drawClinic();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

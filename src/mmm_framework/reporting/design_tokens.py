@@ -40,9 +40,9 @@ class DesignTokens:
     shadow_md: str = "0 8px 24px rgba(45, 58, 45, 0.08)"
     shadow_lg: str = "0 16px 48px rgba(45, 58, 45, 0.12)"
 
-    # Fonts (Source Sans 3 to match documentation)
+    # Fonts (Inter to match the example-report aesthetic)
     font_serif: str = "'DM Serif Display', serif"
-    font_sans: str = "'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif"
+    font_sans: str = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
     font_mono: str = "'JetBrains Mono', monospace"
 
     # Transitions

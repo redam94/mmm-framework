@@ -121,6 +121,15 @@
                 </p>
             </div>
 
+            <div class="note">
+                <h4>📜 The identification contract</h4>
+                <p style="margin-bottom: 0;">
+                    Everything this guide teaches comes due as assumptions. The framework states all seven in one
+                    place — formally, labeled testable or untestable, priced against the pressure-testing scorecard:
+                    <a href="identification-assumptions.html">the identification contract</a>.
+                </p>
+            </div>
+
             <!-- ================================================================== -->
             <h2 id="introduction">Why Causal Inference?</h2>
             
@@ -217,8 +226,10 @@
             <h2 id="dags">Directed Acyclic Graphs (DAGs)</h2>
 
             <p>
-                Every SCM implies a <strong>Directed Acyclic Graph (DAG)</strong> where nodes are variables and 
+                Every SCM implies a <strong>Directed Acyclic Graph (DAG)</strong> where nodes are variables and
                 edges point from causes to effects. DAGs provide a visual language for causal reasoning.
+                In an MMM, a TV spend node sends an edge into sales—but an underlying demand node (holiday season,
+                category growth) sends edges into <em>both</em> spend and sales, which is exactly what makes it a confounder.
             </p>
 
             <div class="dag-box">
@@ -244,6 +255,8 @@
             <p>
                 <strong>d-separation</strong> is a graphical criterion for reading conditional independence from a DAG.
                 Two variables are d-separated (conditionally independent) given a set Z if every path between them is "blocked."
+                In plain terms: the graph tells you which variables can still pass information to each other once you have
+                controlled for a given set—so it tells you what to control for, and what to leave alone.
             </p>
 
             <div class="definition">
@@ -310,7 +323,8 @@
                     <div>
                         <strong>Counterfactuals (Imagining)</strong><br>
                         <em>"What would Y have been if X had been different, given what I observed?"</em><br>
-                        Query: \(P(Y_x | X', Y')\) — Requires full SCM with specific \(U\) values
+                        Query: \(P(Y_x | X', Y')\) — Requires full SCM with specific \(U\) values<br>
+                        <em>Marketing:</em> "What would last quarter have looked like without the promo?"
                     </div>
                 </div>
                 <div class="ladder-rung rung-2">
@@ -318,7 +332,8 @@
                     <div>
                         <strong>Intervention (Doing)</strong><br>
                         <em>"What would happen to Y if I set X to a specific value?"</em><br>
-                        Query: \(P(Y | do(X=x))\) — Requires causal graph structure
+                        Query: \(P(Y | do(X=x))\) — Requires causal graph structure<br>
+                        <em>Marketing:</em> "What happens to sales if we double TV spend?"
                     </div>
                 </div>
                 <div class="ladder-rung rung-1">
@@ -326,7 +341,8 @@
                     <div>
                         <strong>Association (Seeing)</strong><br>
                         <em>"What does observing X tell me about Y?"</em><br>
-                        Query: \(P(Y | X=x)\) — Requires only observational data
+                        Query: \(P(Y | X=x)\) — Requires only observational data<br>
+                        <em>Marketing:</em> "Search spend and sales move together."
                     </div>
                 </div>
             </div>
@@ -407,9 +423,11 @@
             <div class="note">
                 <h4>MMM Counterfactuals</h4>
                 <p style="margin-bottom: 0;">
-                    "Given that we spent 100K USD on TV and observed 1M USD in sales, how much would we have sold 
-                    if we had spent 0 USD on TV?" This is a counterfactual question—it's about a specific week 
-                    that already happened.
+                    "Given that we spent 100K USD on TV and observed 1M USD in sales, how much would we have sold
+                    if we had spent 0 USD on TV?" This is a counterfactual question—it's about a specific week
+                    that already happened. A regional holdout test is the closest physical approximation: by keeping
+                    media dark in matched regions, you let part of the market live out the counterfactual world
+                    the model can otherwise only compute.
                 </p>
             </div>
 
@@ -427,8 +445,10 @@
             </ol>
 
             <p>
-                This "graph surgery" reflects what happens in an experiment: we override the natural causes of X 
-                and force it to take a specific value.
+                This "graph surgery" reflects what happens in an experiment: we override the natural causes of X
+                and force it to take a specific value. In marketing terms, \(do(\cdot)\) is the difference between
+                <em>observing</em> the weeks when spend happened to be high—often the very weeks demand was high
+                anyway—and <em>forcing</em> spend high regardless of conditions, the way a geo lift test does.
             </p>
 
             <div class="two-col">
@@ -553,6 +573,12 @@
                 $$P(Y | do(X)) = \sum_z P(Y | X, Z=z) \cdot P(Z=z)$$
                 <span class="equation-label">(backdoor adjustment)</span>
             </div>
+
+            <p>
+                This is the formal version of what an MMM does when it controls for demand: measure proxies for the
+                confounder—seasonality, trend, pricing, macro indicators—and adjust for them, so that the remaining
+                spend-to-sales relationship reflects contribution rather than coincidence.
+            </p>
 
             <div class="interactive-box">
                 <h4>Interactive: Backdoor Adjustment</h4>
@@ -885,20 +911,33 @@
             </p>
 
             <pre><code class="python"># Counterfactual contribution in the framework
-contributions = model.compute_contributions(
-    method="counterfactual",  # vs "marginal" decomposition
-    baseline="zero"           # counterfactual: set channel to zero
+# (BayesianMMM.compute_counterfactual_contributions)
+contributions = model.compute_counterfactual_contributions(
+    compute_uncertainty=True,  # propagate the full posterior into HDIs
+    hdi_prob=0.9,
+    random_seed=42,
 )
 
-# For each posterior draw, compute Y - Y_{do(X_c=0)}
-# Returns full posterior distribution of contributions</code></pre>
+# For each channel: Y_pred(actual spend) - Y_pred(channel zeroed out),
+# computed per posterior draw, so uncertainty carries through
+print(contributions.total_contributions)    # total contribution per channel
+print(contributions.contribution_hdi_low)   # 90% HDI bounds
+print(contributions.contribution_hdi_high)
+print(contributions.summary())              # tidy DataFrame of the above</code></pre>
 
             <div class="note">
-                <h4>Contributions Sum to More Than Total</h4>
+                <h4>A Convention, Not a Bug: Contributions Need Not Sum to the Total</h4>
                 <p style="margin-bottom: 0;">
-                    With nonlinear (saturating) effects, the sum of individual counterfactual contributions 
-                    typically exceeds total sales minus baseline. This is because removing all channels simultaneously 
-                    is different from removing each one at a time (interaction effects). This is expected and correct.
+                    Be explicit about the convention in play. The counterfactual (zero-out) contribution of a channel
+                    answers its own question&mdash;<em>what changes if this one channel goes dark?</em>&mdash;and with
+                    nonlinear (saturating) effects, the sum of these one-at-a-time answers need not equal total sales
+                    minus baseline. Removing all channels simultaneously is a different counterfactual from removing
+                    each one at a time, so overlap or shortfall between the two is expected and correct, not an error
+                    to be reconciled away. The normalized decomposition used elsewhere&mdash;for instance the
+                    percentage shares in <code>contribution_pct</code> and the stacked decompositions in
+                    reports&mdash;is a <em>different convention</em> that rescales effects to sum exactly, trading
+                    counterfactual interpretability for additivity. Use each for what it is; never mix the two in one
+                    table.
                 </p>
             </div>
 
@@ -972,6 +1011,22 @@ contributions = model.compute_contributions(
                     </p>
                 </div>
             </div>
+
+            <h3>From Theory to Practice in This Framework</h3>
+
+            <p>
+                Everything on this page has a concrete counterpart in how the framework works. The DAG discipline
+                becomes explicit <strong>variable roles</strong>—each control is declared a confounder, a precision
+                control, or a mediator, so the model adjusts for forks without blocking chains
+                (see <a href="variable-selection.html">Variable Selection</a>). The preregistration mindset becomes
+                <strong>pre-specification</strong>: the model design is locked before results are seen, closing the
+                door on specification shopping. And because observational data alone cannot always climb the ladder,
+                <strong>experiment calibration</strong> folds real interventions—geo lift tests, matched-market
+                designs—back into the model as priors or in-graph likelihoods
+                (see <a href="measurement-calibration.html">Measurement &amp; Calibration</a>). For a hands-on tour of
+                these features working together, see the
+                <a href="causal-features-showcase.html">Causal Features Showcase</a>.
+            </p>
 
             <!-- ================================================================== -->
             <h2>References</h2>

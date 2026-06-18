@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pressure Testing | MMM Framework</title>
+    <meta name="description" content="How the MMM Framework is pressure-tested: 16 synthetic worlds with known causal ground truth, the measured silent-failure scorecard, and the framework's known strengths and weaknesses.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/pressure-testing.html">
+    <meta property="og:title" content="Pressure Testing | MMM Framework">
+    <meta property="og:description" content="16 synthetic worlds, 8 silent failures — every one with clean convergence diagnostics. How the MMM Framework is stress-tested, and what analysts should watch for.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/pressure-testing.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        .guide-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .guide-card {
+            display: flex;
+            flex-direction: column;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition-smooth);
+        }
+        .guide-card:hover {
+            border-color: var(--color-primary);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
+        }
+        .guide-card .guide-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.4rem;
+        }
+        .guide-card h3 { margin: 0 0 0.5rem; font-size: 1.15rem; }
+        .guide-card p { font-size: 0.92rem; color: var(--color-text-muted); margin: 0; flex: 1; }
+        .guide-card .guide-punchline {
+            margin-top: 0.9rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--color-danger);
+        }
+
+        .sw-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .sw-col {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+        }
+        .sw-col h3 { margin-top: 0; }
+        .sw-col ul { margin: 0; padding-left: 1.2rem; }
+        .sw-col li { margin-bottom: 0.7rem; font-size: 0.95rem; }
+        .sw-col li strong { display: inline; }
+        .sw-col.strengths { border-top: 4px solid var(--color-success); }
+        .sw-col.weaknesses { border-top: 4px solid var(--color-danger); }
+
+        .ladder {
+            counter-reset: rung;
+            margin: 1.5rem 0;
+            padding: 0;
+            list-style: none;
+        }
+        .ladder li {
+            position: relative;
+            padding: 1rem 1.25rem 1rem 3.5rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            margin-bottom: 0.75rem;
+        }
+        .ladder li::before {
+            counter-increment: rung;
+            content: counter(rung);
+            position: absolute;
+            left: 1rem;
+            top: 1rem;
+            width: 1.8rem;
+            height: 1.8rem;
+            border-radius: 50%;
+            background: var(--color-primary);
+            color: #fff;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+        }
+        .ladder li strong { color: var(--color-primary-dark); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Why pressure-test an MMM?</a></li>
+                <li><a href="#method">How the tests work</a></li>
+                <li><a href="#scorecard">The scorecard: 16 worlds</a></li>
+                <li><a href="#green">The checks were green</a></li>
+                <li><a href="#strengths-weaknesses">Strengths &amp; weaknesses</a></li>
+                <li><a href="#fix-ladder">The fix ladder</a></li>
+                <li><a href="#guides">The interactive guides</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html" class="active">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Pressure Testing the MMM</h1>
+            <p class="lead">
+                A marketing mix model that converges cleanly and fits the data beautifully can still be
+                badly wrong about <em>attribution</em>. We fit the framework to synthetic worlds engineered
+                around real-world difficulties — where the true causal contribution of every channel is
+                known — and grade every estimate against that truth. This page is the scorecard; the
+                <a href="#guides">seven interactive guides</a> walk through each failure mode and the
+                recovery moves, with the same story and charts as the
+                <code>nbs/stress_0X</code> notebooks.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">16</div>
+                    <div class="stat-label">synthetic worlds, each breaking one named assumption</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">8</div>
+                    <div class="stat-label">silent failures — wrong attribution, green diagnostics</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">&le; 1.02</div>
+                    <div class="stat-label">r-hat on every silent failure (0 divergences)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">7%</div>
+                    <div class="stat-label">median error when no assumption is broken (positive control)</div>
+                </div>
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ The motivating worry</h4>
+                <p>
+                    The checks analysts trust — R-hat, divergences, posterior-predictive checks, in-sample
+                    fit — validate the <strong>computation</strong>, not the <strong>causal claim</strong>.
+                    In the recorded matrix below, <em>not one attribution failure was caught by convergence
+                    diagnostics</em>. Every silent failure sampled cleanly.
+                </p>
+            </div>
+
+            <h2 id="method">How the tests work</h2>
+            <p>
+                Every world comes from the scenario harness in <code>tests/synth/</code>. Each one starts
+                from a clean core world drawn from the model's <em>exact</em> structural family, then
+                injects one real-world violation (the capstone injects many at once). Because ground truth
+                is the model's own counterfactual zero-out estimand, the "true contribution" and the
+                model's <code>compute_counterfactual_contributions</code> are directly comparable —
+                there is no apples-to-oranges gap in the grading.
+            </p>
+
+            <div class="definition">
+                <h4>Definition: Silent failure</h4>
+                <p>
+                    A <em>representable</em> scenario where recovery is wrong — median per-channel error
+                    &gt; 25%, worst channel &gt; 50%, or 90%-interval coverage &lt; 75% — yet the checks an
+                    analyst acts on are green: MCMC convergence (r-hat &lt; 1.05, no divergences) and the
+                    unobserved-confounding robustness value. The model looks healthy. The numbers are wrong.
+                </p>
+            </div>
+
+            <p>
+                Estimates are graded on per-channel <em>total contribution</em>: median and worst-case
+                relative error, sign and size of the total-media error, and the fraction of channels whose
+                true contribution lands inside the 90% credible interval ("coverage"). The full recorded
+                scorecard lives at <code>tests/synth/results/stress_matrix.md</code> and is re-recorded
+                whenever framework defaults change.
+            </p>
+
+            <h2 id="scorecard">The scorecard: 16 worlds</h2>
+            <p>
+                Each bar is one synthetic world. <span class="verdict-pill ok">recovers</span> means the
+                model got attribution right (or a non-convergence check flagged the problem);
+                <span class="verdict-pill silent">silent failure</span> means attribution is wrong while
+                every check an analyst acts on stayed green;
+                <span class="verdict-pill expected">expected</span> marks worlds the model structurally
+                cannot represent (negative effects under a positivity prior; the kitchen-sink capstone fit
+                demand-blind). Hover any bar for the broken assumption and the per-world numbers.
+            </p>
+
+            <div class="controls-row">
+                <label>Metric:</label>
+                <button class="toggle-btn active" data-metric="med">Median |error|</button>
+                <button class="toggle-btn" data-metric="max">Worst channel |error|</button>
+                <button class="toggle-btn" data-metric="cover">90% CI coverage</button>
+            </div>
+            <div class="chart-container tall" id="scorecardChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — recorded scorecard from <code>tests/synth/results/stress_matrix.md</code>
+                (re-recorded 2026-06-10 on current defaults; seeded NumPyro runs). The dashed line marks the
+                25% median-error gate. Note where the red bars sit: confounding, collinearity, saturation
+                form, spend outliers, trend breaks, evolving seasonality, dense controls — none of them
+                exotic, all of them quiet.
+            </p>
+
+            <p>
+                The same scorecard as a plain table — one row per world, in the order the matrix records
+                them. "Silent failure" means attribution is wrong while every check an analyst acts on
+                stayed green.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>World</th>
+                        <th>What it violates</th>
+                        <th>Median |error|</th>
+                        <th>Max |error|</th>
+                        <th>90% CI coverage</th>
+                        <th>Silent failure?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>clean</code></td><td>— (positive control)</td><td>7%</td><td>7%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>unobserved_confounding</code></td><td>no unobserved confounding (exogeneity of spend)</td><td>23%</td><td>69%</td><td>75%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>reverse_causality</code></td><td>no unobserved confounding (exogeneity of spend)</td><td>13%</td><td>19%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>multicollinearity</code></td><td>identifiability (independent spend variation)</td><td>39%</td><td>60%</td><td>100%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>adstock_misspec</code></td><td>adstock functional form / carryover window</td><td>80%</td><td>96%</td><td>50%</td><td><span class="verdict-pill ok">no — flagged (fragile robustness value)</span></td></tr>
+                    <tr><td><code>saturation_misspec</code></td><td>saturation functional form (concavity / no threshold)</td><td>43%</td><td>65%</td><td>25%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>time_varying_beta</code></td><td>time-invariant coefficients (stationarity)</td><td>13%</td><td>20%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>heavy_tailed_noise</code></td><td>Gaussian, homoscedastic likelihood</td><td>4%</td><td>37%</td><td>75%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>synergy</code></td><td>additive separability of channels</td><td>4%</td><td>6%</td><td>100%</td><td><span class="verdict-pill ok">no — recovers</span></td></tr>
+                    <tr><td><code>spend_outliers</code></td><td>robustness of per-channel max-normalization</td><td>39%</td><td>70%</td><td>0%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>negative_effect</code></td><td>positivity of media effects (Gamma prior, &beta; &ge; 0)</td><td>19%</td><td>101%</td><td>50%</td><td><span class="verdict-pill expected">expected (unrepresentable)</span></td></tr>
+                    <tr><td><code>trend_break</code></td><td>smooth global trend (no structural breaks)</td><td>27%</td><td>41%</td><td>100%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>seasonality_misspec</code></td><td>static low-order Fourier seasonality</td><td>37%</td><td>104%</td><td>75%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>dense_controls</code></td><td>a parsimonious, correctly-chosen control set</td><td>16%</td><td>52%</td><td>75%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>confounding_controlled</code></td><td>no unobserved confounding (noisy-proxy control)</td><td>10%</td><td>50%</td><td>100%</td><td><span class="verdict-pill silent">yes — silent failure</span></td></tr>
+                    <tr><td><code>aurora_kitchen_sink</code></td><td>multiple at once (confounding + mediation + non-1-exp saturation)</td><td>92%</td><td>223%</td><td>25%</td><td><span class="verdict-pill expected">expected (unrepresentable)</span></td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Scorecard provenance:</strong> <code>tests/synth/results/stress_matrix.md</code>,
+                repo snapshot 2026-06-12 (matrix re-recorded 2026-06-10 on current defaults; seeded NumPyro
+                runs). One honest caveat: the clean world's ~7% median error is an <em>upper bound</em> on
+                real-world performance — the control DGP is drawn from the model's own structural family,
+                and real data never is.
+            </p>
+
+            <h2 id="green">The checks were green everywhere</h2>
+            <p>
+                If convergence diagnostics could see attribution error, the points below would slope upward:
+                worse attribution, worse r-hat. They don't. Every world — including the one where the worst
+                channel is off by 104% — sampled with r-hat &le; 1.02 and zero divergences. (The only
+                divergences in the whole matrix belong to the deliberately unrepresentable kitchen-sink
+                world.) Convergence tells you the sampler explored the posterior; it cannot tell you the
+                posterior is centered on the wrong answer.
+            </p>
+
+            <div class="chart-container" id="greenChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — each point is one world: worst-channel attribution error (x)
+                against r-hat (y). The shaded band is the conventional r-hat &lt; 1.05 "all clear" zone.
+                Red silent failures live happily inside it.
+            </p>
+
+            <div class="note">
+                <h4>💡 What this means in practice</h4>
+                <p>
+                    Run convergence checks — they are necessary. But treat them as a statement about the
+                    <em>sampler</em>, never as evidence the <em>attribution</em> is right. The checks that
+                    actually move the needle are structural: spend-vs-demand correlation before fitting,
+                    split-window refits, posterior contribution correlations, lift-test calibration.
+                    Each guide below demonstrates the relevant ones.
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>📜 The identification contract</h4>
+                <p style="margin-bottom: 0;">
+                    Each world in this matrix breaks one named assumption. The full list — all seven, stated
+                    formally, labeled testable or untestable, with these scorecard numbers as the price of breach —
+                    lives in one place: <a href="identification-assumptions.html">the identification contract</a>.
+                </p>
+            </div>
+
+            <h2 id="strengths-weaknesses">Known strengths &amp; weaknesses</h2>
+            <p>
+                The honest summary an analyst should carry around. Everything here is measured in the
+                notebooks, not asserted from theory.
+            </p>
+
+            <div class="sw-grid">
+                <div class="sw-col strengths">
+                    <h3>✅ Where the framework holds up</h3>
+                    <ul>
+                        <li><strong>Clean recovery:</strong> on the positive control the parametric pipeline recovers every channel at ~7% median error with 100% coverage.</li>
+                        <li><strong>Reverse causality</strong> (last week's sales driving this week's spend): 13% median error, full coverage — the adstocked design absorbs it.</li>
+                        <li><strong>Channel synergy</strong> left out of the model: ~4% error — additive misspecification is forgiving here.</li>
+                        <li><strong>Heavy-tailed noise:</strong> 4% median error; attribution is robust even where the Gaussian likelihood is wrong.</li>
+                        <li><strong>Slow effectiveness drift:</strong> time-varying betas average out to ~13% error on totals, and split-window refits expose the drift when you look.</li>
+                        <li><strong>Decoy controls don't steal credit:</strong> media-tracking decoys cost precision, not attribution — the adstock/saturation pipeline separates them.</li>
+                        <li><strong>Honest collinear intervals:</strong> under near-perfect collinearity the posterior widens and the contribution "seesaw" is visible in posterior correlations — the uncertainty is real, and reported.</li>
+                        <li><strong>Calibration is surgical:</strong> one ROAS lift test pulls the confounded channel's bias from +110% to +14% without disturbing the others (a measured before/after pair from the stress-03 notebook bake; the recorded scorecard's worst-channel bias for this world is +69%).</li>
+                    </ul>
+                </div>
+                <div class="sw-col weaknesses">
+                    <h3>❌ Where it fails silently</h3>
+                    <ul>
+                        <li><strong>Demand confounding:</strong> spend that chases demand inflates the chasing channel +69% (worst channel; 23% median) in the recorded scorecard, with every diagnostic green — an earlier notebook bake measured +110%. Only design (roles, controls, experiments) fixes it.</li>
+                        <li><strong>"We controlled for it" isn't a fix:</strong> a noisy proxy of the confounder still leaves a +50% worst-channel bias in the recorded scorecard (an earlier bake measured ~+35% with truth outside the interval; under current defaults the wide interval covers — wrong and quiet either way).</li>
+                        <li><strong>Saturation form:</strong> Hill-type thresholds fit with a concave default read +38% on total media — green across the board.</li>
+                        <li><strong>Spend outliers:</strong> a handful of 15× spikes crush max-normalization — coverage drops to 0%. (A 30-second max/median screen catches this before fitting.)</li>
+                        <li><strong>Trend breaks &amp; evolving seasonality:</strong> structural time misfit flows into whichever channel's spend co-moves with it — direction unpredictable, totals often still right.</li>
+                        <li><strong>Mediation:</strong> the base model structurally loses mediated channels (TV ROAS 0.22 vs true 2.14); extensions recover them but add prior-determined splits the data cannot identify.</li>
+                        <li><strong>Resolved (June 2026) — legacy adstock default:</strong> the old default two-point blend recovers the <em>clean</em> world at ~28% median error vs 7% parametric. That finding drove a change: <code>use_parametric_adstock=True</code> is now the shipped default; the blend remains an explicit opt-out for reproducing older fits.</li>
+                        <li><strong>Open issue — holdout validation:</strong> the holdout path falls back to a logistic curve for non-logistic channels, so holdout predictions are wrong (no crash) for Hill-fit models.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h2 id="fix-ladder">The fix ladder</h2>
+            <p>
+                The series' central recovery doctrine: pivots are cheap to try and easy to misuse.
+                Functional-form pivots help only when form is the actual problem; identification problems
+                are solved by <em>design</em>, not by sampling longer. Work the ladder top-down.
+            </p>
+
+            <ol class="ladder">
+                <li>
+                    <strong>Estimand first.</strong> Pin down what "contribution" means (counterfactual
+                    zero-out) before reading any posterior. If you can't say what number would be wrong,
+                    no diagnostic can save you.
+                </li>
+                <li>
+                    <strong>EDA pre-flight.</strong> Spend-vs-structure correlation, the max/median outlier
+                    screen, spend-pattern collinearity — each takes seconds and catches failures sampling
+                    never will. Misfit goes to whichever channel's spend co-moves with it.
+                </li>
+                <li>
+                    <strong>Structural pivots.</strong> Causal roles for confounders, piecewise trend for
+                    breaks, event dummies for holidays (median error → 9% on the holiday world), Weibull
+                    adstock and Hill saturation where the data demand them — each measured before/after in
+                    the guides.
+                </li>
+                <li>
+                    <strong>Experiments calibrate what structure can't.</strong> On the kitchen-sink world,
+                    one lift test pulls Search ROAS from 5.59 to 0.65 against a truth of 0.66 — and
+                    untested channels stay wrong. Calibration is surgical, not contagious.
+                </li>
+            </ol>
+
+            <h2 id="guides">The interactive guides</h2>
+            <p>
+                Seven guides, one per stress notebook. Read 00 first — it sets the doctrine and the
+                diagnostic toolkit. 01–04 and 06 stand alone; 05 is the capstone that throws everything at
+                the model at once. Every measured number on these pages comes from the seeded notebook runs.
+            </p>
+
+            <p>
+                Each stress guide is the empirical counterpart to a theory page — the math says what the
+                model assumes, the stress test measures what happens when the world disagrees:
+            </p>
+            <ul>
+                <li><a href="math-01-adstock.html">Math 01 · Adstock</a> and
+                    <a href="math-02-saturation.html">Math 02 · Saturation</a> are pressure-tested in
+                    <a href="stress-01-carryover-shape.html">Stress 01 · Carryover &amp; Shape</a></li>
+                <li><a href="math-04-bayesian-model.html">Math 04 · The Bayesian Model</a> meets its
+                    full-system trial in <a href="stress-05-gauntlet.html">Stress 05 · The Gauntlet</a></li>
+                <li><a href="math-06-extensions.html">Math 06 · Extensions</a> is stress-validated in
+                    <a href="stress-04-extension-traps.html">Stress 04 · Extension Traps</a></li>
+                <li>The <a href="technical-guide.html#hierarchical">hierarchical geo structure</a> is
+                    pushed to failure in <a href="stress-06-geo-hierarchy.html">Stress 06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+
+            <div class="guide-grid">
+                <a class="guide-card" href="stress-00-rosy-picture.html">
+                    <div class="guide-num">STRESS 00</div>
+                    <h3>The Rosy Picture</h3>
+                    <p>The doctrine. A positive control recovers at 7% error — and an equally-green
+                    confounded fit is +111% wrong on Search. What each diagnostic can and cannot see.</p>
+                    <div class="guide-punchline">Same green dashboard, opposite verdicts.</div>
+                </a>
+                <a class="guide-card" href="stress-01-carryover-shape.html">
+                    <div class="guide-num">STRESS 01</div>
+                    <h3>Carryover &amp; Shape</h3>
+                    <p>Delayed carryover vs a geometric kernel (median error 88%); Hill thresholds vs a
+                    concave default (+40% total, all green); 15× spend spikes (coverage 0%) — and the
+                    pivots that fix each.</p>
+                    <div class="guide-punchline">The kernel that can't bend, bends the answer.</div>
+                </a>
+                <a class="guide-card" href="stress-02-time-structure.html">
+                    <div class="guide-num">STRESS 02</div>
+                    <h3>Time Structure</h3>
+                    <p>A trend break plus a reactive media ramp sends TV to −63%; evolving seasonality
+                    scrambles the channel split while totals stay right; drift hides inside green totals.</p>
+                    <div class="guide-punchline">Misfit flows to whoever co-moves with it.</div>
+                </a>
+                <a class="guide-card" href="stress-03-confounding-selection.html">
+                    <div class="guide-num">STRESS 03</div>
+                    <h3>Confounding &amp; Selection</h3>
+                    <p>Demand-chasing spend (+110% on Search, all green), the noisy-proxy trap, the
+                    collinear seesaw, 25 candidate controls — and the one lift test that closes the gap.</p>
+                    <div class="guide-punchline">"We controlled for it" is not a fix.</div>
+                </a>
+                <a class="guide-card" href="stress-04-extension-traps.html">
+                    <div class="guide-num">STRESS 04</div>
+                    <h3>Extension Traps</h3>
+                    <p>The base model loses a mediated channel; NestedMMM recovers it but over-credits its
+                    sibling 2.6×; a cross-effect flips sign with the prior; a <em>wrong</em> mediator fits
+                    perfectly.</p>
+                    <div class="guide-punchline">Extensions are cure and disease.</div>
+                </a>
+                <a class="guide-card" href="stress-05-gauntlet.html">
+                    <div class="guide-num">STRESS 05</div>
+                    <h3>The Gauntlet</h3>
+                    <p>Everything at once: ranking fully inverted, Search 8× overstated. The full recovery
+                    workflow — EDA, triage, structural pivots, experiment calibration — each step measured.</p>
+                    <div class="guide-punchline">Search ROAS 5.59 → 0.65; truth 0.66.</div>
+                </a>
+                <a class="guide-card" href="stress-06-geo-hierarchy.html">
+                    <div class="guide-num">STRESS 06</div>
+                    <h3>Geography &amp; Hierarchy</h3>
+                    <p>Panel worlds: a cross-geo adstock-bleed bug found and fixed by this series; national
+                    numbers green while per-geo errors hit +330% and the regional ROI ranking fully inverts.</p>
+                    <div class="guide-punchline">Right nationally, backwards regionally (ρ = −1).</div>
+                </a>
+            </div>
+
+            <p class="chart-note">
+                <strong>A note on the card numbers</strong> — guide-card figures mirror each guide's baked
+                notebook run. Where a card disagrees with the recorded scorecard (e.g. confounded Search
+                +110/+111% vs the matrix's +69% worst-channel; delayed-carryover median 88% vs 80%;
+                Hill-threshold total +40% vs +38%), the scorecard at
+                <code>tests/synth/results/stress_matrix.md</code> is canonical — the larger figures are
+                earlier bakes recorded under older defaults.
+            </p>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    Every guide mirrors a runnable notebook in <code>nbs/</code>
+                    (<code>stress_00_the_rosy_picture.ipynb</code> … <code>stress_06_geography_and_hierarchy.ipynb</code>),
+                    backed by the scenario harness in <code>tests/synth/</code>. Every computational cell
+                    ends in a seeded assert encoding the claim it demonstrates — if the notebook executes
+                    clean, the story on these pages is still true. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Cinelli, C. &amp; Hazlett, C. (2020). <em>Making sense of sensitivity: extending omitted variable bias.</em> Journal of the Royal Statistical Society B 82(1), 39&ndash;67. [the robustness value reported per channel in the silent-failure gate]</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D. &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects.</em> Google Research. [the carryover/shape parameterizations several stress worlds violate by design]</li>
+                <li>Chan, D. &amp; Perry, M. (2017). <em>Challenges and Opportunities in Media Mix Modeling.</em> Google Research. [the catalogue of MMM failure modes this series measures rather than lists]</li>
+                <li>Vaver, J. &amp; Koehler, J. (2011). <em>Measuring Ad Effectiveness Using Geo Experiments.</em> Google Research. [the experiment family the fix ladder prescribes when observational identification fails]</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series.
+        // Guide pages copy this object so charts stay visually consistent.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations (unused on this page,
+        // kept here as the series-wide reference implementation).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Measured scorecard data — tests/synth/results/stress_matrix.md
+        // (re-recorded 2026-06-10). med/max = median/worst |relative error| on
+        // per-channel total contribution (%); cover = 90% CI coverage (%).
+        // ------------------------------------------------------------------
+        const SCENARIOS = [
+            { key: 'clean',                  label: 'clean (positive control)',  assumption: 'none — control',                                   med: 7,  max: 7,   total: -4,  cover: 100, rhat: 1.01, div: 0,  verdict: 'ok' },
+            { key: 'reverse_causality',      label: 'reverse causality',         assumption: 'exogeneity of spend',                              med: 13, max: 19,  total: -6,  cover: 100, rhat: 1.01, div: 0,  verdict: 'ok' },
+            { key: 'synergy',                label: 'channel synergy',           assumption: 'additive separability of channels',                med: 4,  max: 6,   total: -3,  cover: 100, rhat: 1.01, div: 0,  verdict: 'ok' },
+            { key: 'heavy_tailed_noise',     label: 'heavy-tailed noise',        assumption: 'Gaussian, homoscedastic likelihood',               med: 4,  max: 37,  total: -12, cover: 75,  rhat: 1.01, div: 0,  verdict: 'ok' },
+            { key: 'time_varying_beta',      label: 'effectiveness drift',       assumption: 'time-invariant coefficients',                      med: 13, max: 20,  total: -10, cover: 100, rhat: 1.01, div: 0,  verdict: 'ok' },
+            { key: 'adstock_misspec',        label: 'adstock misspec (flagged)', assumption: 'adstock functional form / carryover window',       med: 80, max: 96,  total: -68, cover: 50,  rhat: 1.01, div: 0,  verdict: 'ok' },
+            { key: 'unobserved_confounding', label: 'unobserved confounding',    assumption: 'no unobserved confounding',                        med: 23, max: 69,  total: 4,   cover: 75,  rhat: 1.01, div: 0,  verdict: 'silent' },
+            { key: 'confounding_controlled', label: 'noisy-proxy control',       assumption: 'no unobserved confounding (proxy control)',        med: 10, max: 50,  total: 5,   cover: 100, rhat: 1.02, div: 0,  verdict: 'silent' },
+            { key: 'multicollinearity',      label: 'multicollinearity',         assumption: 'independent spend variation',                      med: 39, max: 60,  total: -5,  cover: 100, rhat: 1.01, div: 0,  verdict: 'silent' },
+            { key: 'saturation_misspec',     label: 'saturation misspec',        assumption: 'saturation form (concavity / no threshold)',       med: 43, max: 65,  total: 38,  cover: 25,  rhat: 1.01, div: 0,  verdict: 'silent' },
+            { key: 'spend_outliers',         label: 'spend outliers',            assumption: 'robustness of per-channel max-normalization',      med: 39, max: 70,  total: -41, cover: 0,   rhat: 1.01, div: 0,  verdict: 'silent' },
+            { key: 'trend_break',            label: 'trend break',               assumption: 'smooth global trend (no structural breaks)',       med: 27, max: 41,  total: -21, cover: 100, rhat: 1.02, div: 0,  verdict: 'silent' },
+            { key: 'seasonality_misspec',    label: 'evolving seasonality',      assumption: 'static low-order Fourier seasonality',             med: 37, max: 104, total: 11,  cover: 75,  rhat: 1.02, div: 0,  verdict: 'silent' },
+            { key: 'dense_controls',         label: 'dense controls',            assumption: 'a parsimonious, correctly-chosen control set',     med: 16, max: 52,  total: -22, cover: 75,  rhat: 1.01, div: 0,  verdict: 'silent' },
+            { key: 'negative_effect',        label: 'negative effect',           assumption: 'positivity of media effects (unrepresentable)',    med: 19, max: 101, total: 78,  cover: 50,  rhat: 1.02, div: 0,  verdict: 'expected' },
+            { key: 'aurora_kitchen_sink',    label: 'kitchen sink (capstone)',   assumption: 'many at once (confounding + mediation + form)',    med: 92, max: 223, total: -44, cover: 25,  rhat: 1.02, div: 11, verdict: 'expected' }
+        ];
+
+        const VERDICT_NAMES = { ok: 'recovers / flagged', silent: 'SILENT FAILURE', expected: 'expected (unrepresentable)' };
+
+        // ------------------------------------------------------------------
+        // Scorecard chart with metric toggle
+        // ------------------------------------------------------------------
+        const METRICS = {
+            med:   { title: 'Median |relative error| on channel contribution (%)', gate: 25,  gateLabel: '25% gate', reversed: false },
+            max:   { title: 'Worst-channel |relative error| (%)',                  gate: 50,  gateLabel: '50% gate', reversed: false },
+            cover: { title: 'Channels whose truth lands in the 90% CI (%)',        gate: 75,  gateLabel: '75% gate', reversed: true }
+        };
+
+        function drawScorecard(metric) {
+            const m = METRICS[metric];
+            const sorted = SCENARIOS.slice().sort(function(a, b) {
+                return m.reversed ? (b[metric] - a[metric]) : (a[metric] - b[metric]);
+            });
+
+            const trace = {
+                type: 'bar',
+                orientation: 'h',
+                y: sorted.map(function(s) { return s.label; }),
+                x: sorted.map(function(s) { return s[metric]; }),
+                marker: {
+                    color: sorted.map(function(s) { return PT.colors[s.verdict]; }),
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                customdata: sorted.map(function(s) {
+                    return [s.assumption, VERDICT_NAMES[s.verdict], s.med, s.max, s.cover, s.rhat, s.div];
+                }),
+                hovertemplate:
+                    '<b>%{y}</b><br>' +
+                    'assumption broken: %{customdata[0]}<br>' +
+                    'verdict: %{customdata[1]}<br>' +
+                    'median err %{customdata[2]}% · worst %{customdata[3]}% · coverage %{customdata[4]}%<br>' +
+                    'r-hat %{customdata[5]} · divergences %{customdata[6]}' +
+                    '<extra></extra>'
+            };
+
+            const layout = PT.layout({
+                margin: { l: 200, r: 30, t: 10, b: 55 },
+                xaxis: { title: m.title, rangemode: 'tozero' },
+                yaxis: { automargin: true },
+                shapes: [{
+                    type: 'line', x0: m.gate, x1: m.gate, y0: -0.5, y1: SCENARIOS.length - 0.5,
+                    line: { color: '#2d3a2d', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: m.gate, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: m.gateLabel, showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.react('scorecardChart', [trace], layout, PT.config);
+        }
+
+        document.querySelectorAll('.controls-row .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.controls-row .toggle-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                drawScorecard(btn.dataset.metric);
+            });
+        });
+
+        // ------------------------------------------------------------------
+        // "The checks were green" — worst error vs r-hat
+        // ------------------------------------------------------------------
+        function drawGreenChart() {
+            const groups = ['ok', 'silent', 'expected'];
+            const traces = groups.map(function(v) {
+                const rows = SCENARIOS.filter(function(s) { return s.verdict === v; });
+                return {
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: VERDICT_NAMES[v],
+                    x: rows.map(function(s) { return s.max; }),
+                    y: rows.map(function(s) { return s.rhat; }),
+                    text: rows.map(function(s) { return s.label; }),
+                    marker: {
+                        color: PT.colors[v],
+                        size: rows.map(function(s) { return s.div > 0 ? 16 : 11; }),
+                        symbol: rows.map(function(s) { return s.div > 0 ? 'diamond' : 'circle'; }),
+                        line: { color: 'rgba(45,58,45,0.4)', width: 1 }
+                    },
+                    hovertemplate: '<b>%{text}</b><br>worst error %{x}%<br>r-hat %{y}<extra></extra>'
+                };
+            });
+
+            const layout = PT.layout({
+                xaxis: { title: 'Worst-channel |relative error| (%)', rangemode: 'tozero' },
+                yaxis: { title: 'r-hat', range: [0.995, 1.06] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'rect', x0: 0, x1: 230, y0: 0.995, y1: 1.05,
+                    fillcolor: 'rgba(106, 191, 138, 0.08)', line: { width: 0 }, layer: 'below'
+                }, {
+                    type: 'line', x0: 0, x1: 230, y0: 1.05, y1: 1.05,
+                    line: { color: '#6abf8a', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 215, y: 1.05, yanchor: 'bottom', xanchor: 'right',
+                    text: 'conventional "all clear": r-hat < 1.05',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 223, y: 1.02, yanchor: 'top',
+                    text: 'kitchen sink: the only world<br>with divergences (11) ◆',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }, xanchor: 'right'
+                }]
+            });
+
+            Plotly.newPlot('greenChart', traces, layout, PT.config);
+        }
+
+        function init() {
+            drawScorecard('med');
+            drawGreenChart();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

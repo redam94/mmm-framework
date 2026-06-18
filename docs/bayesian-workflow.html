@@ -136,6 +136,14 @@
                 <li><strong>Overfitting is tempting:</strong> With many channels and controls, specification shopping is easy</li>
             </ul>
 
+            <p>
+                Beneath the mechanics, the seven phases share one purpose: protecting the <strong>causal
+                interpretation</strong> of the model's attribution. Prior predictive checks encode marketing knowledge
+                before the data can speak; sensitivity analysis asks whether the attribution survives perturbation.
+                A model that passes these gates has earned the right to say "this is what your media caused," not
+                merely "this is what fit best."
+            </p>
+
             <!-- ================================================================== -->
             <h2 id="workflow-diagram">The Full Workflow</h2>
             
@@ -269,7 +277,9 @@
             <h3 id="prior-elicitation">Prior Elicitation</h3>
 
             <p>
-                Priors encode domain knowledge <em>before</em> seeing the data. In MMM, we often have strong beliefs:
+                Priors encode domain knowledge <em>before</em> seeing the data. Think of them as your media plan's
+                institutional memory—what decades of marketing science says about plausible effect sizes, carryover,
+                and saturation before this particular dataset speaks. In MMM, we often have strong beliefs:
             </p>
 
             <table>
@@ -307,34 +317,44 @@
             <h3 id="domain-knowledge">Encoding Domain Knowledge</h3>
 
             <p>
-                The prior is the formal mechanism for encoding domain knowledge. Consider the saturation parameter 
-                \(\lambda\) in a logistic saturation function:
+                The prior is the formal mechanism for encoding domain knowledge. Consider the saturation parameter
+                \(\lambda\) in the framework's default saturation function:
             </p>
 
             <div class="math-block">
-                $$f(x; \lambda) = \frac{1}{1 + e^{-\lambda x}} - 0.5$$
+                $$f(x; \lambda) = 1 - e^{-\lambda x}$$
                 <span class="equation-label">(saturation)</span>
             </div>
 
             <p>
-                If we know that saturation typically occurs around 1M USD spend, we can set a prior on \(\lambda\) such that
-                \(f(1M)\) has most of its mass in a plausible range (e.g., 60-90% of maximum effect).
+                This is <em>exponential saturation</em>: \(f(0) = 0\), concave, asymptoting to 1.
+                (The config name <code>SaturationConfig.logistic()</code> is historical — the shipped
+                function is the curve above, not the logistic sigmoid; see
+                <code>transforms/saturation.py</code>. Hill, Michaelis&ndash;Menten, and tanh shapes
+                are available per channel via <code>SaturationConfig</code>.)
+                If we know that diminishing returns are well established around 1M USD spend, we can
+                set a prior on \(\lambda\) such that \(f(1M)\) has most of its mass in a plausible
+                range (e.g., 60&ndash;90% of maximum effect).
             </p>
 
             <pre><code class="python"># Prior on saturation parameter
-# If typical_spend = 1M and we want 70% saturation at typical spend:
-# solve: 0.7 = 1/(1 + exp(-lambda * 1M))
-# lambda ≈ 0.85 / 1M
+# If typical_spend = 1M and we want ~70% of max effect at typical spend:
+# solve: 0.7 = 1 - exp(-lambda * 1M)
+# lambda = -ln(0.3) / 1M ≈ 1.20 / 1M
 
 import pymc as pm
 
 with pm.Model():
     # Lognormal prior on lambda, centered on expected value
     lam = pm.Lognormal(
-        "lambda", 
-        mu=np.log(0.85 / typical_spend), 
+        "lambda",
+        mu=np.log(1.20 / typical_spend),
         sigma=0.5  # allows factor of ~3x variation
-    )</code></pre>
+    )
+
+# Note: the shipped model applies saturation to adstocked spend normalized
+# to roughly [0, 1] per channel, so its default prior sat_lam ~ Exponential(0.5)
+# lives on that normalized scale, not on raw dollars.</code></pre>
 
             <!-- ================================================================== -->
             <h2 id="prior-predictive">2. Prior Predictive Checks</h2>
@@ -738,7 +758,9 @@ az.plot_compare(comparison)</code></pre>
 
             <p>
                 How much do our conclusions depend on our modeling choices? Sensitivity analysis systematically
-                varies assumptions to assess robustness.
+                varies assumptions to assess robustness. For an MMM, this is the causal stress test: if a channel's
+                attribution survives reasonable perturbations of priors, trend, and influential weeks, you can treat
+                it as a finding rather than an artifact of one specification.
             </p>
 
             <h3 id="prior-sensitivity">Prior Sensitivity</h3>
@@ -947,73 +969,89 @@ az.plot_compare(comparison)</code></pre>
                 <thead>
                     <tr>
                         <th>Parameter</th>
-                        <th>Framework Default</th>
+                        <th>Shipped Default</th>
                         <th>Rationale</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Media β (log scale)</td>
-                        <td><code>HalfNormal(σ=0.5)</code></td>
-                        <td>Positive effects; ~5% lift per unit at median</td>
+                        <td>Media coefficient β (standardized scale)</td>
+                        <td><code>Gamma(μ=1.5, σ=1.0)</code></td>
+                        <td>Positive effects with mass spread around 1 on the standardized
+                            max-contribution scale; overridden per channel when an
+                            experiment-calibrated <code>roi_prior</code> is set</td>
                     </tr>
                     <tr>
-                        <td>Adstock α</td>
-                        <td><code>Beta(α=3, β=3)</code></td>
-                        <td>Centered at 0.5; most mass in [0.2, 0.8]</td>
+                        <td>Adstock — parametric (the default since June 2026)</td>
+                        <td><code>α ~ Beta(1, 3)</code> (geometric)</td>
+                        <td>Continuous in-graph decay, prior mean 0.25 (short memory);
+                            delayed/Weibull kernels have their own priors per
+                            <code>MediaChannelConfig.adstock</code>. Made the default after
+                            pressure testing measured the legacy blend at ~28% error vs ~7%
+                            parametric on carryover-sensitive worlds</td>
                     </tr>
                     <tr>
-                        <td>Saturation λ (logistic)</td>
-                        <td><code>Gamma(α=2, β=1/x̄)</code></td>
-                        <td>Scaled to mean spend; 50% saturation at typical level</td>
+                        <td>Adstock — legacy blend (opt-out)</td>
+                        <td><code>adstock_mix ~ Beta(2, 2)</code></td>
+                        <td>A learned blend weight between two fixed geometric decays
+                            (bank α ∈ {0.0, 0.3, 0.5, 0.7, 0.9}); the pre-change default,
+                            available via <code>use_parametric_adstock=False</code> for
+                            reproducing older fits</td>
                     </tr>
                     <tr>
-                        <td>Mediator→Outcome γ</td>
+                        <td>Saturation λ (exponential-saturation, config name "logistic")</td>
+                        <td><code>Exponential(λ=0.5)</code></td>
+                        <td>On adstocked spend normalized to ≈[0, 1]; prior mean 2 puts
+                            ~86% of max effect at the historical spend peak</td>
+                    </tr>
+                    <tr>
+                        <td>Mediator→Outcome γ (NestedMMM)</td>
                         <td><code>HalfNormal(σ=1)</code></td>
                         <td>Positive awareness→sales; scale depends on units</td>
                     </tr>
                     <tr>
-                        <td>Cross-effect (cannib.)</td>
-                        <td><code>HalfNormal(σ=0.3)</code></td>
+                        <td>Cross-effect (cannib., MultivariateMMM)</td>
+                        <td><code>−HalfNormal(σ=0.3)</code></td>
                         <td>Constrained negative; typically small relative to main effects</td>
                     </tr>
                     <tr>
-                        <td>Hierarchical σ (geo)</td>
-                        <td><code>HalfNormal(σ=0.5)</code></td>
-                        <td>Prior on geo-level variation; weakly informative</td>
+                        <td>Hierarchical σ (geo / product offsets)</td>
+                        <td><code>HalfNormal(σ=0.3)</code></td>
+                        <td>Prior on cross-sectional variation; weakly informative</td>
                     </tr>
                     <tr>
-                        <td>LKJ η (correlations)</td>
+                        <td>LKJ η (correlations, MultivariateMMM)</td>
                         <td><code>η=2.0</code></td>
                         <td>Mild shrinkage toward independence; η=1 is uniform</td>
                     </tr>
                     <tr>
-                        <td>Horseshoe τ (global)</td>
+                        <td>Horseshoe τ (global, control selection)</td>
                         <td><code>D₀/(D-D₀) · σ/√n</code></td>
                         <td>Calibrated by expected # nonzero (Piironen & Vehtari, 2017)</td>
                     </tr>
                 </tbody>
             </table>
 
-            <pre><code class="python"># Example: Configure priors in the framework
-from mmm_framework import ModelConfigBuilder, AdstockConfigBuilder, SaturationConfigBuilder
+            <p class="note" style="font-size:0.9rem;">
+                Defaults above are read from the shipped code
+                (<code>model/base.py</code>, <code>config/transforms.py</code>) as of 0.1.0 —
+                if this table and the code ever disagree, the code wins and this page is stale.
+            </p>
 
-config = (
-    ModelConfigBuilder()
-    .with_adstock(
-        AdstockConfigBuilder()
-        .with_type("geometric")
-        .with_alpha_prior("Beta", alpha=3, beta=3)  # Centered at 0.5
-        .build()
-    )
-    .with_saturation(
-        SaturationConfigBuilder()
-        .with_type("logistic")
-        .with_lam_prior("Gamma", alpha=2, beta=1/mean_spend)  # Scale to data
-        .build()
-    )
-    .with_media_prior("HalfNormal", sigma=0.5)  # Positive effects
-    .build()
+            <pre><code class="python"># Example: configure priors per channel with the shipped config objects
+from mmm_framework.config import (
+    AdstockConfig, MediaChannelConfig, PriorConfig, SaturationConfig,
+)
+
+tv = MediaChannelConfig(
+    name="TV",
+    adstock=AdstockConfig.geometric(          # parametric path (the default;
+        l_max=8,                              # ModelConfig.use_parametric_adstock=True)
+        alpha_prior=PriorConfig.beta(alpha=2, beta=2),  # longer-memory belief for TV
+    ),
+    saturation=SaturationConfig.logistic(     # exponential-saturation form 1 - e^(-λx)
+        lam_prior=PriorConfig.gamma(alpha=2.0, beta=1.0),
+    ),
 )</code></pre>
 
             <h3 id="mmm-validation">Validation Strategies</h3>
@@ -1063,22 +1101,30 @@ config = (
             </div>
 
             <h4>Framework Validation Code</h4>
-            <pre><code class="python"># Holdout validation
-train_data, test_data = panel.split(holdout_periods=8)
-model = BayesianMMM(train_data, config)
-model.fit()
+            <pre><code class="python"># Holdout validation: rolling-origin backtest (refits on expanding
+# training windows, grades genuine out-of-time forecasts)
+from mmm_framework.validation import BacktestConfig, run_backtest
 
-# Predict on holdout
-predictions = model.predict(test_data)
-coverage = model.compute_coverage(test_data, ci=0.9)
-print(f"90% CI Coverage: {coverage:.1%}")  # Should be ~90%
+result = run_backtest(
+    BayesianMMM(panel, config),
+    BacktestConfig(min_train_size=104, horizon=13, step=13),
+)
+print(result.summary())    # MAPE/MASE vs naive + seasonal-naive baselines
+print(result.coverage())   # nominal vs empirical interval coverage (~90% at 0.9)
 
-# Compare to geo experiment
-geo_test_lift = 0.12  # 12% lift from experiment
-mmm_lift = model.compute_channel_lift("tv", scenario="actual_vs_zero")
-print(f"MMM Lift: {mmm_lift.mean():.1%} [{mmm_lift.hdi(0.9)}]")
-print(f"Geo Test Lift: {geo_test_lift:.1%}")
-# Check if geo test result within MMM credible interval</code></pre>
+# Compare to a geo experiment: the model's implied lift for the channel
+contrib = model.compute_counterfactual_contributions(
+    compute_uncertainty=True, hdi_prob=0.90
+)
+mmm_lift = contrib.total_contributions["TV"] / baseline_sales
+print(f"MMM lift: {mmm_lift:.1%} "
+      f"[{contrib.contribution_hdi_low['TV'] / baseline_sales:.1%}, "
+      f"{contrib.contribution_hdi_high['TV'] / baseline_sales:.1%}]")
+print(f"Geo test lift: {0.12:.1%}")  # from the experiment readout
+# If the geo result falls outside the MMM interval, calibrate:
+# feed the experiment in as a likelihood term via add_experiment_calibration()
+# or compare systematically with ModelValidator + ValidationConfigBuilder
+# .with_calibration([LiftTestResult(...)]).</code></pre>
 
             <div class="note">
                 <h4>Documentation is Critical</h4>

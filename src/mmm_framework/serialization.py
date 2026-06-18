@@ -489,6 +489,16 @@ class MMMSerializer:
                     shutil.copyfileobj(f_in, f_out)
 
             trace = az.from_netcdf(tmp_path)
+            # Materialize the trace into memory BEFORE deleting the temp file —
+            # az.from_netcdf can be lazy (engine-dependent), and returning a lazy
+            # InferenceData that references a unlinked temp makes any later access
+            # raise "Unable to open file" (hit when reloading a model in a fresh
+            # kernel for interpretation).
+            try:
+                for _group in getattr(trace, "_groups_all", []):
+                    getattr(trace, _group).load()
+            except Exception:
+                pass
             os.unlink(tmp_path)  # Clean up temp file
             return trace
 

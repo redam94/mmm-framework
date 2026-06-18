@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stress Test 01: Carryover &amp; Shape | MMM Framework</title>
+    <meta name="description" content="Delayed-Weibull carryover vs a geometric kernel (median error 88%), Hill thresholds vs a concave default (+38% total media, all diagnostics green), and 15× spend spikes (coverage 0%) — three functional-form failures and the measured pivots that repair them.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-01-carryover-shape.html">
+    <meta property="og:title" content="Stress Test 01: Carryover &amp; Shape | MMM Framework">
+    <meta property="og:description" content="The kernel that can't bend, bends the answer: delayed carryover, S-curve thresholds, and spend outliers — three silent failures with green diagnostics, each with a measured pivot.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-01-carryover-shape.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Pressure Tests guide series.
+           Copied from pressure-testing.html so the series stays coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            width: 140px;
+            accent-color: var(--color-primary-dark);
+        }
+        .controls-row select {
+            font-family: inherit;
+            font-size: 0.9rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+        }
+        .ctrl-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(106, 191, 138, 0.18); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(201, 112, 103, 0.16); color: #a44c43; }
+        .verdict-pill.expected{ background: rgba(90, 107, 90, 0.12);  color: var(--color-text-muted); }
+
+        /* "What the diagnostics said" mini-dashboard */
+        .diag-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin: 0.75rem 0 0;
+        }
+        .diag-strip span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.65rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+        .diag-strip span.green { border-color: rgba(106,191,138,0.6); color: #3f7a58; }
+        .diag-strip span.red   { border-color: rgba(201,112,103,0.6); color: #a44c43; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Three shape failures</a></li>
+                <li><a href="#act1">Act 1 · Carryover</a></li>
+                <li><a href="#act1-pivot">&nbsp;&nbsp;The Weibull pivot</a></li>
+                <li><a href="#act2">Act 2 · Saturation</a></li>
+                <li><a href="#act2-pivot">&nbsp;&nbsp;The Hill pivot</a></li>
+                <li><a href="#act3">Act 3 · Spend outliers</a></li>
+                <li><a href="#synthesis">Three pivots, side by side</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>The Stress Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="pressure-testing.html">Overview &amp; scorecard</a></li>
+                <li><a href="stress-00-rosy-picture.html">00 · The Rosy Picture</a></li>
+                <li><a href="stress-01-carryover-shape.html" class="active">01 · Carryover &amp; Shape</a></li>
+                <li><a href="stress-02-time-structure.html">02 · Time Structure</a></li>
+                <li><a href="stress-03-confounding-selection.html">03 · Confounding &amp; Selection</a></li>
+                <li><a href="stress-04-extension-traps.html">04 · Extension Traps</a></li>
+                <li><a href="stress-05-gauntlet.html">05 · The Gauntlet</a></li>
+                <li><a href="stress-06-geo-hierarchy.html">06 · Geography &amp; Hierarchy</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Stress Test 01: Carryover &amp; Shape</h1>
+            <p class="lead">
+                Every channel in an MMM gets a <em>shape</em>: a carryover kernel that says when the
+                effect arrives, and a saturation curve that says how it bends with spend. No sampler
+                diagnostic ever inspects either. This guide mirrors
+                <code>nbs/stress_01_carryover_and_shape.ipynb</code>: three worlds from
+                <code>src/mmm_framework/synth/dgp.py</code> where exactly one shape assumption is wrong, three naive
+                fits that converge beautifully onto badly wrong attribution, and three measured pivots.
+                <a href="stress-00-rosy-picture.html">Stress&nbsp;00</a> set the doctrine — <em>green
+                diagnostics ≠ correct attribution</em> — this is where the doctrine starts costing money.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">88%</div>
+                    <div class="stat-label">median contribution error when delayed carryover meets a geometric kernel (Act 1, notebook run)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+38%</div>
+                    <div class="stat-label">total-media over-credit when Hill truth meets the concave default (Act 2, recorded matrix)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0%</div>
+                    <div class="stat-label">interval coverage after a handful of 15× spend spikes (Act 3, recorded matrix)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">&le; 1.02</div>
+                    <div class="stat-label">r-hat on all three naive fits — zero divergences, nothing flagged</div>
+                </div>
+            </div>
+
+            <p>
+                In every act the ground truth is the model's own estimand — counterfactual zero-out on the
+                noiseless structural mean — so the gap between truth and
+                <code>compute_counterfactual_contributions</code> is pure model error, never an
+                apples-to-oranges artifact. Recorded scorecard:
+                <code>tests/synth/results/stress_matrix.md</code>
+                (see the <a href="pressure-testing.html#scorecard">hub scorecard</a>).
+            </p>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-03-first-mmm.html">Workshop 03–05</a>
+                    or equivalent MMM experience; the Aurora series helpful.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–40 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why functional-form errors are silent by construction — the sampler explores the model you wrote, not the one that generated the data, so a wrong kernel or curve converges green onto badly wrong attribution.</li>
+                    <li>How to see shape failures directly: plot the fitted transform over the spend distribution, let LOO arbitrate between fitted kernel candidates, and screen spend ratios before the model corrupts its own normalization.</li>
+                    <li>Why the measured pivots are partial fixes on purpose — they buy back most of the damage and leave the residual visible in honest intervals instead of confident wrong numbers.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_01_carryover_and_shape.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress_01_carryover_and_shape.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="act1">Act 1 — Carryover: the kernel the model cannot draw</h2>
+            <p>
+                <strong>The world.</strong> <code>adstock_misspec</code> keeps everything from the clean
+                control — same flighting, same concave saturation, same Gaussian noise — and changes only
+                the carryover. The true kernel is a <strong>delayed Weibull</strong> (shape 1.8–2.6, scale
+                6–9, support out to 26 weeks): a flight's effect <em>builds for several weeks before it
+                peaks</em> (peak lags 3–7 across channels) and carries 15–42% of its mass past week 8.
+                The model's default is a <strong>geometric</strong> kernel with <code>l_max=8</code>:
+            </p>
+            <p>
+                \[ w^{\text{geo}}_k = \frac{\alpha^{k}}{\sum_{j=0}^{L-1}\alpha^{j}},
+                \qquad k = 0,\dots,L-1
+                \qquad\text{vs.}\qquad
+                w^{\text{wei}}_k \;\propto\; \frac{s}{\lambda}\left(\frac{k+1}{\lambda}\right)^{s-1}
+                e^{-\left((k+1)/\lambda\right)^{s}} \]
+            </p>
+            <p>
+                The geometric weights are monotone decreasing for every \( \alpha \in (0,1) \): the peak
+                is <em>forced</em> to lag 0 and nothing exists after week 8. The misspecification is
+                structural — no parameter value can produce a hump. Try it:
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>geometric &alpha;</label>
+                    <input type="range" id="adAlpha" min="0.05" max="0.95" step="0.05" value="0.60">
+                    <span class="ctrl-val" id="adAlphaVal">0.60</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>geometric l_max</label>
+                    <input type="range" id="adLmax" min="4" max="16" step="1" value="8">
+                    <span class="ctrl-val" id="adLmaxVal">8</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>Weibull shape s</label>
+                    <input type="range" id="adShape" min="1.0" max="3.5" step="0.1" value="2.6">
+                    <span class="ctrl-val" id="adShapeVal">2.6</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>Weibull scale &lambda;</label>
+                    <input type="range" id="adScale" min="3" max="12" step="0.5" value="9.0">
+                    <span class="ctrl-val" id="adScaleVal">9.0</span>
+                </div>
+            </div>
+            <div class="chart-container" id="adstockExplorer"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser.</strong> Defaults are TV's true kernel
+                from the DGP (shape 2.6, scale 9 — the dark dashed hump) against the model's default
+                geometric window. Drag &alpha; anywhere you like: the geometric family always peaks at
+                lag 0 and always decays monotonically. Raising &alpha; toward 1 flattens the kernel — it
+                still cannot put its mass <em>away</em> from lag 0, and everything in the shaded region
+                beyond <code>l_max</code> simply does not exist for the model.
+            </p>
+
+            <h3>The naive fit, graded</h3>
+            <p>
+                The notebook fits the stress-matrix spec honestly — parametric adstock, default
+                per-channel <code>AdstockConfig.geometric()</code> at <code>l_max=8</code>, NumPyro,
+                500 draws × 2 chains — and grades against truth.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">88%</div>
+                    <div class="stat-label">median |contribution error| (notebook seeded run; recorded matrix row: 80%)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">&minus;68%</div>
+                    <div class="stat-label">total-media error — two-thirds of media value erased (matrix)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">50%</div>
+                    <div class="stat-label">90% CI coverage (matrix) — the intervals don't admit the miss</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.01</div>
+                    <div class="stat-label">r-hat, 0 divergences — the sampler is delighted</div>
+                </div>
+            </div>
+
+            <p>
+                <strong>What happened.</strong> With the true effect arriving 3–9 weeks <em>after</em> the
+                spend, a lag-0-peaked kernel can't line media up with its response. The regression does the
+                only thing it can: it routes the orphaned media signal into the baseline — trend and
+                seasonality soak up the slow carryover hum — and shrinks the channels toward zero. The one
+                channel whose true kernel is closest to geometric (Search: shape 1.8, an early modest hump)
+                survives; the long-memory channels are nearly erased. The fitted geometric kernel piles its
+                mass on lags 0–1 while the true kernel hasn't even peaked yet.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said</h4>
+                <div class="diag-strip">
+                    <span class="green">r-hat 1.01 ✓</span>
+                    <span class="green">divergences 0 ✓</span>
+                    <span class="red">parameter learning: adstock priors not contracted ✗</span>
+                    <span class="red">LOO vs richer kernel: decisively worse ✗</span>
+                </div>
+                <p>
+                    Convergence is green. The two checks that <em>do</em> whisper are opt-in: the
+                    prior→posterior learning diagnostic (<code>compute_parameter_learning</code>) shows
+                    <strong>no adstock decay parameter strongly identified</strong> — several posteriors
+                    come out <em>wider than the prior</em>, the likelihood fighting a kernel family that
+                    cannot fit rather than measuring carryover — and leave-one-out comparison against a
+                    richer kernel (below) picks the right family decisively. Neither runs by default.
+                </p>
+            </div>
+
+            <h3 id="act1-pivot">The pivot — a kernel that can represent the truth</h3>
+            <p>
+                Per-channel <code>AdstockConfig.weibull(l_max=26)</code>, consumed in-graph by the core
+                model. Two lessons here, and the first is a trap the framework itself had to fix:
+            </p>
+            <p>
+                <strong>Attempt 1 — flexibility with an off-target prior fails.</strong> The framework's
+                <em>old</em> default Weibull scale prior was a fixed Gamma(2,&nbsp;1): mean 2 weeks, almost
+                no mass past week 5, regardless of the lag window. Asking it to find a scale-6–9 kernel
+                over a 26-lag window produces a sampler fight — the notebook reproduces it by passing the
+                old prior explicitly, and divergences spike and/or r-hat degrades past 1.05. A diagnostic
+                finally fires, but it is reporting a prior–likelihood fight, not which kernel is true.
+            </p>
+            <p>
+                <strong>Attempt 2 — the current default.</strong> <code>AdstockConfig.weibull(l_max=26)</code>
+                now gives <code>scale ~ Gamma(2, 2/m)</code> with mean \( m = \max(2, (L-9)/2) \) — mean
+                8.5 weeks at \( L=26 \), the decade the window itself implies. Same data, same likelihood,
+                same flexibility, no hand-tuned priors — and it samples cleanly (r-hat &lt; 1.05, zero
+                divergence storm).
+            </p>
+
+            <div class="note">
+                <h4>🔧 Framework fix surfaced by this notebook</h4>
+                <p>
+                    <strong>Before:</strong> <code>AdstockConfig.weibull()</code> shipped a fixed
+                    Gamma(2,&nbsp;1) scale prior (mean 2 weeks) at every <code>l_max</code> — at
+                    <code>l_max=26</code> it produced a divergence storm.
+                    <strong>After (fixed 2026-06-10):</strong> the default scale prior scales with the
+                    window — mean <code>max(2, (l_max − 9)/2)</code>, i.e. the legacy prior for short
+                    windows, half the window beyond — and the same fit samples cleanly with no tuning.
+                    The same work also guarded a <strong>0/0 → NaN underflow</strong> in the kernel
+                    normalization in <code>transforms/adstock_pt.py</code> (epsilon in the denominator),
+                    so near-zero kernels no longer poison the graph.
+                </p>
+            </div>
+
+            <h3>Uncertainty in the kernel — not just its mean</h3>
+            <p>
+                A posterior-mean kernel hides the most decision-relevant fact about carryover: how wide the
+                plausible kernel family still is after 156 weeks of data. The notebook rebuilds the full
+                <strong>posterior kernel band</strong> per channel from the raw draws and lays the truth on
+                top. The figure below recreates that exhibit for TV:
+            </p>
+
+            <div class="chart-container" id="kernelBandChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation in your browser</strong> (seeded simulation of the
+                notebook's figure geometry). <strong>The measured result it depicts:</strong> the Weibull
+                pivot's 90% posterior kernel band <strong>covers the true kernel at 92–100% of lags</strong>
+                per channel, while the naive geometric band is <em>narrow around a shape that cannot
+                bend</em> — it <strong>excludes the truth at the truth's own peak lag for every
+                channel</strong>. Wide-and-honest beats narrow-and-wrong: the flexible kernel's uncertainty
+                is the honest statement of what 156 weekly observations can know about carryover.
+            </p>
+
+            <h3>Choosing a kernel when you don't know the truth</h3>
+            <p>
+                In real life there is no <code>true_contribution</code>. Both fits store pointwise
+                log-likelihood (<code>idata_kwargs={"log_likelihood": True}</code>), so
+                <code>az.compare(..., ic="loo")</code> ranks the kernels on predictive grounds — and it
+                prefers the Weibull kernel <strong>decisively</strong> (the elpd difference exceeds twice
+                its standard error). Functional-form choice <em>can</em> be data-driven, but only if you
+                fit the candidates and compare; the default never volunteers that it is wrong.
+            </p>
+            <p>
+                <strong>Measured improvement, naive → pivot</strong> (notebook seeded run): the pivot
+                roughly <strong>halves the 88% median error and doubles coverage</strong> — with zero
+                divergences and no hand-tuned priors — but does <em>not</em> reach zero: a 26-week kernel
+                is still weakly identified from three years of weekly data, and the build's asserts gate
+                exactly that honesty (error drops by &gt;20 points yet stays above 20%). The remaining
+                error lives in wide, truthful posteriors instead of confident wrong ones. That trade is
+                the win.
+            </p>
+
+            <h2 id="act2">Act 2 — Saturation: the S-curve the model flattens into a ramp</h2>
+            <p>
+                <strong>The world.</strong> <code>saturation_misspec</code> swaps one ingredient: the true
+                response is an <strong>S-shaped Hill curve</strong> — Hill coefficient ≈ 3, half-saturation
+                at 0.40–0.45 of max spend. Below the threshold, spend does almost nothing; above it,
+                response climbs steeply, then plateaus. The model's default is the
+                <strong>strictly concave</strong> logistic curve, steepest at zero — exactly backwards in
+                the threshold region:
+            </p>
+            <p>
+                \[ f_{\text{hill}}(x) = \beta\,\frac{x^{s}}{x^{s} + K^{s}}
+                \qquad\text{vs.}\qquad
+                f_{\text{1-exp}}(x) = \beta\,\bigl(1 - e^{-\lambda x}\bigr) \]
+            </p>
+            <p>
+                And the spend sits mostly <em>below</em> the threshold: roughly three-quarters of all weeks
+                live in the region where the truth says spend did nothing and every concave curve is at its
+                steepest. Try to match the S-curve with the concave family:
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>your family</label>
+                    <select id="satFamily">
+                        <option value="logistic" selected>logistic 1 − exp (the old default)</option>
+                        <option value="hill">Hill (threshold + plateau)</option>
+                    </select>
+                </div>
+                <div class="ctrl-group" id="satLamGroup">
+                    <label>&lambda;</label>
+                    <input type="range" id="satLam" min="0.5" max="8" step="0.25" value="3">
+                    <span class="ctrl-val" id="satLamVal">3.00</span>
+                </div>
+                <div class="ctrl-group" id="satKGroup" style="display:none">
+                    <label>half-sat K</label>
+                    <input type="range" id="satK" min="0.15" max="0.75" step="0.01" value="0.45">
+                    <span class="ctrl-val" id="satKVal">0.45</span>
+                </div>
+                <div class="ctrl-group" id="satSGroup" style="display:none">
+                    <label>slope s</label>
+                    <input type="range" id="satS" min="1" max="6" step="0.1" value="3.0">
+                    <span class="ctrl-val" id="satSVal">3.0</span>
+                </div>
+            </div>
+            <div class="chart-container" id="satExplorer"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser.</strong> The dark dashed curve is TV's
+                true Hill response (K = 0.45, s = 3); the tick marks along the bottom are a seeded
+                draw of the normalized spend distribution (~3/4 of weeks below the threshold band, shaded).
+                With <em>logistic</em> selected, no &lambda; reproduces the flat toe: a concave curve is
+                steepest exactly where the truth is flattest, so low-spend weeks get credit they never
+                earned. Switch the family to <em>Hill</em> and two parameters express the threshold
+                immediately.
+            </p>
+
+            <h3>The naive fit, graded</h3>
+
+            <div class="chart-container" id="satErrChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — recorded matrix row <code>saturation_misspec</code>
+                (per-channel detail, <code>tests/synth/results/stress_matrix.md</code>). Truth vs estimate:
+                TV +65%, Search +11%, Social +53%, Display +33% — total media <strong>+38%</strong>,
+                coverage <strong>25%</strong> (truth outside the 90% interval for three of four channels).
+                Contribution error here is not noise: it is the <em>curve mismatch integrated over the
+                spend distribution</em>, concentrated where the spend rug meets the threshold.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said — the purest silent failure in the catalog</h4>
+                <div class="diag-strip">
+                    <span class="green">r-hat 1.01 ✓</span>
+                    <span class="green">divergences 0 ✓</span>
+                    <span class="green">posterior-predictive check PASSES ✓</span>
+                    <span class="green">refutation suite PASSES ✓</span>
+                </div>
+                <p>
+                    In the recorded matrix this scenario passes <em>everything</em> — convergence, PPC,
+                    and the refutation suite — while over-crediting total media by +38% with 25% coverage.
+                    The posterior is exactly where it should be, <em>given the wrong curve</em>. No scalar
+                    diagnostic sees this; the exhibit that does is the fitted curve plotted over the spend
+                    rug.
+                </p>
+            </div>
+
+            <h3 id="act2-pivot">The pivot — flip the channel's saturation config to Hill</h3>
+
+            <div class="note">
+                <h4>🔧 Framework fix surfaced by this notebook</h4>
+                <p>
+                    <strong>Before:</strong> the core <code>BayesianMMM</code> <em>silently ignored</em>
+                    per-channel <code>MediaChannelConfig.saturation</code> — the config could say
+                    <code>hill</code> while the model fit 1−exp anyway; Hill existed only as
+                    <code>mmm_extensions</code> components you had to assemble by hand.
+                    <strong>After (fixed 2026-06-10):</strong> per-channel <code>SaturationConfig</code>
+                    (hill / logistic / michaelis_menten / tanh / none) is honored in-graph —
+                    <code>SaturationConfig.hill()</code> creates real <code>sat_half_*</code> /
+                    <code>sat_slope_*</code> RVs — and the default flipped to an explicit
+                    <code>SaturationConfig.logistic()</code> so default models stay bit-identical to the
+                    old behavior. On this world the core Hill pivot cuts total-media bias
+                    <strong>≈ +40% → ≈ +15%</strong>.
+                </p>
+            </div>
+
+            <p>
+                One config line per channel, same model everywhere else, same grader. Measured (notebook
+                seeded run, gated by the build's asserts): median error drops from ~43–46%
+                to <strong>under 15%</strong>, the aggregate bias at least halves, and the half-saturation
+                points are <em>genuinely recovered</em> — median \( |\hat{K} - K| < 0.12 \). The honest
+                residual is TV: its heavy carryover smears adstocked spend across the threshold, blurring
+                the S-bend, so TV stays over-credited by &gt; 30% even after the pivot. Three channels land
+                near truth; the fourth needs spend variation it never got — or an experiment
+                (see <a href="stress-03-confounding-selection.html">stress&nbsp;03</a> for the lift-test
+                move).
+            </p>
+
+            <h3>Uncertainty in the response shape</h3>
+            <p>
+                The better question than "did the posterior mean land near the truth?" is
+                <strong>"does the model's full posterior response band contain the truth?"</strong> Pushing
+                every posterior draw (β jointly with its curve parameters) through the response function
+                gives a 90% <em>curve band</em> per channel:
+            </p>
+
+            <div class="chart-container" id="responseBandChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation in your browser</strong> (seeded simulation of the
+                notebook's band geometry for TV; the naive curve is genuinely least-squares-fit to
+                Hill-truth responses over the simulated spend, so its miss pattern is structural, not
+                drawn by hand). <strong>The measured result it depicts:</strong> mean truth-coverage of
+                the posterior response band goes <strong>~58% (1−exp) → ~86% (Hill)</strong> when the
+                family flips. The naive band is the quiet scandal: narrow and truth-excluding through the
+                threshold region — precise about a curve geometry its family cannot produce.
+            </p>
+
+            <p>
+                <strong>The identifiability bill:</strong> Hill costs one extra free parameter per channel
+                (K <em>and</em> s vs a single λ). <code>compute_parameter_learning</code> confirms the data
+                paid for them — most shape parameters contract strongly against their priors. That check
+                matters every time you add flexibility: contraction tells you the data spoke; the posterior
+                mean tells you what it said.
+            </p>
+
+            <h2 id="act3">Act 3 — Spend outliers: one bad cell in a spreadsheet beats your sampler</h2>
+            <p>
+                <strong>The world.</strong> <code>spend_outliers</code> is the most mundane scenario in the
+                series and the most vicious row in the matrix (recorded coverage: <strong>0%</strong>).
+                Ordinary sales from ordinary spend — then the <em>observed</em> spend is corrupted with a
+                single ~15× data-entry spike per channel: a mis-keyed invoice, a units error. The model
+                normalizes each channel by its <strong>training max</strong>, so one phantom week rescales
+                the entire series for every other week.
+            </p>
+
+            <div class="chart-container short" id="outlierSpendChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong> — a seeded spend series with the
+                one ~15× phantom week marked. In the DGP, truth is computed on the <em>un-spiked</em>
+                spend: the spike never happened, but the model's normalizer believes it did.
+            </p>
+
+            <div class="controls-row">
+                <label>Normalize by:</label>
+                <button class="toggle-btn active" data-olmode="spiked" id="btnSpiked">the spiked max (what the model does)</button>
+                <button class="toggle-btn" data-olmode="clean" id="btnClean">the winsorized max (after the screen)</button>
+            </div>
+            <div class="chart-container short" id="outlierHistChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative simulation in your browser</strong>, mirroring the notebook's
+                histogram. Under the spiked max, every real week collapses into the bottom sliver of the
+                saturation input — <strong>the largest real week sits below ~0.07 of max</strong>
+                (measured in the notebook: &lt; 0.1) — so the curve is only ever evaluated in its
+                near-linear toe, the channel cannot exhibit curvature, and the compressed dynamic range
+                attenuates everything. Toggle to the winsorized max and spend occupies the full curve
+                again.
+            </p>
+
+            <h3>The naive fit, graded</h3>
+
+            <div class="chart-container" id="outlierErrChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — recorded matrix row <code>spend_outliers</code> (per-channel
+                detail): TV −49%, Search −29%, Social −23%, Display −70%; median error 39%, total media
+                −41%, and <strong>not one channel's truth lands inside its 90% interval</strong> —
+                coverage 0%, with r-hat 1.01 and zero divergences.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said — confident AND wrong</h4>
+                <div class="diag-strip">
+                    <span class="green">r-hat 1.01 ✓</span>
+                    <span class="green">divergences 0 ✓</span>
+                    <span class="red">coverage 0% ✗</span>
+                    <span class="red">β learning verdicts: "strong" ✗</span>
+                </div>
+                <p>
+                    Worse than green: the parameter-learning verdicts on the media coefficients read
+                    <strong>strong</strong> — the data confidently identified coefficients for a spend
+                    scale that does not exist. Confident <em>and</em> wrong is the signature of a data bug,
+                    not a modeling problem. No amount of sampling rigor survives a corrupted normalizer.
+                </p>
+            </div>
+
+            <h3>The pivot — a 30-second pre-flight screen, then winsorize</h3>
+            <p>
+                The screen: <code>max/median</code> per channel — in this world the spiked channels read
+                <strong>&gt; 50×</strong> where clean channels run ~5–20× — then the gap between the max
+                and the <strong>second</strong>-largest week. A genuine heavy week sits in a continuum; a
+                data-entry error sits alone, an order of magnitude above its neighbor. In the notebook the
+                screen flagged <strong>exactly the four injected spikes with zero false positives</strong>
+                (every flagged week's max-vs-second-max gap &gt; 5×). The fix: cap the flagged week at the
+                second-largest observed value (or verify it against the invoice and drop it), then refit.
+            </p>
+            <p>
+                <strong>Measured improvement, naive → pivot</strong> (notebook seeded run, gated by the
+                build's asserts): median error <strong>39% → under 30%</strong>, total-media error
+                <strong>−41% → better than −30%</strong>, coverage <strong>0% → at least 50%</strong>.
+                One capped cell per channel undoes the bulk of the collapse; TV keeps a modest residual
+                under-estimate at this fit budget — winsorizing repairs the <em>scale</em>, not every last
+                percent. Run the screen <strong>before</strong> every fit: the framework normalizes by the
+                training max and will not warn you.
+            </p>
+
+            <h2 id="synthesis">Three functional-form failures, side by side</h2>
+            <p>
+                All three pivots improved both error and coverage — and none reached zero error. That is
+                the honest shape of functional-form repair: you buy back most of the damage, and the model
+                starts telling the truth about what remains.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>act</th>
+                        <th>broken assumption</th>
+                        <th>naive (measured)</th>
+                        <th>pivot (measured)</th>
+                        <th>verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1 · adstock</strong></td>
+                        <td>delayed-Weibull carryover vs geometric <code>l_max=8</code></td>
+                        <td>med err 88% · total −68% · cover 50%</td>
+                        <td>error ≈ halved, coverage ≈ doubled; kernel band covers truth at 92–100% of lags</td>
+                        <td><span class="verdict-pill ok">partial fix, honest intervals</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>2 · saturation</strong></td>
+                        <td>Hill threshold vs concave 1−exp default</td>
+                        <td>med err 43% · total +38% · cover 25% · PPC ✓ refut ✓</td>
+                        <td>med err &lt; 15% · total ≈ +15% · K recovered (|ΔK| &lt; 0.12); TV residual stays visible</td>
+                        <td><span class="verdict-pill ok">one config line</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>3 · outliers</strong></td>
+                        <td>15× spikes corrupt max-normalization</td>
+                        <td>med err 39% · total −41% · cover <strong>0%</strong></td>
+                        <td>med err &lt; 30% · total &gt; −30% · cover ≥ 50% from one winsorized cell per channel</td>
+                        <td><span class="verdict-pill ok">30-second screen</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                Naive columns: recorded matrix (<code>tests/synth/results/stress_matrix.md</code>,
+                re-recorded 2026-06-10) and notebook seeded runs. Pivot columns: notebook seeded runs —
+                stated at the bounds the build script's asserts gate, so a clean re-bake guarantees them.
+            </p>
+
+            <div class="definition" id="takeaway">
+                <h4>📌 What to take away</h4>
+                <ul>
+                    <li><strong>Functional-form errors are silent by construction.</strong> The sampler
+                    explores the posterior of the model you <em>wrote</em>, not the model that generated
+                    the data. In all three acts r-hat was green; in Act 2 even PPC and the refutation
+                    suite passed. Convergence certifies arithmetic, not shape.</li>
+                    <li><strong>Kernels and curves are weakly identified observationally.</strong> Keep
+                    priors in the decade the lag window implies (the framework's Weibull default now does
+                    this for you), check <code>compute_parameter_learning</code> for prior-dominated or
+                    wider-than-prior posteriors, and let LOO arbitrate between <em>fitted</em>
+                    candidates — it picked the right kernel decisively here.</li>
+                    <li><strong>Plot the fitted transform over the spend distribution.</strong>
+                    Contribution error is the curve mismatch integrated over where the spend actually
+                    sits. The threshold-region overlay explains every number in Act 2's table; no scalar
+                    diagnostic does.</li>
+                    <li><strong>Screen spend before the model ever sees it.</strong> <code>max/median</code>
+                    per channel plus the max-vs-second-max gap takes thirty seconds and would have
+                    prevented the worst row in the entire matrix (0% coverage). The training-max
+                    normalization is a single point of failure — guard it.</li>
+                    <li><strong>Pivots are partial, and that's the point.</strong> Each residual ends up
+                    <em>visible</em> — wide-but-honest intervals or an explainable channel story — instead
+                    of hiding behind confident wrong numbers. Two of the three pivots are one-line config
+                    changes today <em>because</em> this harness flagged the failure modes.</li>
+                </ul>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This guide mirrors <code>nbs/stress_01_carryover_and_shape.ipynb</code> (authored by
+                    <code>nbs/build_stress_01_carryover_shape.py</code>), backed by the scenario harness in
+                    <code>tests/synth/</code> — worlds <code>adstock_misspec</code>,
+                    <code>saturation_misspec</code>, <code>spend_outliers</code>. Every computational cell
+                    ends in a seeded assert encoding the claim it demonstrates; if the notebook executes
+                    clean, this page is still true. Next in the series:
+                    <a href="stress-02-time-structure.html">Stress&nbsp;02 — Time Structure</a>, where the
+                    thing the model can't draw is the <em>baseline</em>, not the media transform. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the Pressure Tests series
+        // (copied verbatim from pressure-testing.html).
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function gaussFactory(rand) {
+            // Box-Muller on the seeded PRNG.
+            let spare = null;
+            return function() {
+                if (spare !== null) { const v = spare; spare = null; return v; }
+                let u = 0, v = 0;
+                while (u === 0) u = rand();
+                while (v === 0) v = rand();
+                const m = Math.sqrt(-2.0 * Math.log(u));
+                spare = m * Math.sin(2.0 * Math.PI * v);
+                return m * Math.cos(2.0 * Math.PI * v);
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Pure transform functions (mirror src/mmm_framework/synth/dgp.py / the model)
+        // ------------------------------------------------------------------
+        function geometricKernel(alpha, lMax) {
+            const w = []; let s = 0;
+            for (let k = 0; k < lMax; k++) { const v = Math.pow(alpha, k); w.push(v); s += v; }
+            return w.map(function(v) { return v / s; });
+        }
+        function weibullKernel(shape, scale, lMax) {
+            const w = []; let s = 0;
+            for (let k = 0; k < lMax; k++) {
+                const t = (k + 1) / scale;
+                const v = (shape / scale) * Math.pow(t, shape - 1) * Math.exp(-Math.pow(t, shape));
+                w.push(v); s += v;
+            }
+            return w.map(function(v) { return v / s; });
+        }
+        function hill(x, K, S) { return Math.pow(x, S) / (Math.pow(x, S) + Math.pow(K, S)); }
+        function logisticSat(x, lam) { return 1 - Math.exp(-lam * x); }
+
+        function range(n) { return Array.from({ length: n }, function(_, i) { return i; }); }
+        function percentile(sortedCopy, q) {
+            const arr = sortedCopy.slice().sort(function(a, b) { return a - b; });
+            const idx = q * (arr.length - 1);
+            const lo = Math.floor(idx), hi = Math.ceil(idx);
+            return arr[lo] + (arr[hi] - arr[lo]) * (idx - lo);
+        }
+
+        const TRUE_L = 26;                       // true carryover support (weeks)
+        const TV_SHAPE = 2.6, TV_SCALE = 9.0;    // TV's true Weibull kernel (dgp.py)
+        const TRUE_K_TV = 0.45, TRUE_S_TV = 3.0; // TV's true Hill curve (dgp.py)
+        const AMP_TV = 150;                      // TV response amplitude (dgp._AMP)
+
+        // ==================================================================
+        // ACT 1 — interactive adstock-kernel explorer
+        // ==================================================================
+        function drawAdstockExplorer() {
+            const alpha = parseFloat(document.getElementById('adAlpha').value);
+            const lMax  = parseInt(document.getElementById('adLmax').value, 10);
+            const shape = parseFloat(document.getElementById('adShape').value);
+            const scale = parseFloat(document.getElementById('adScale').value);
+
+            document.getElementById('adAlphaVal').textContent = alpha.toFixed(2);
+            document.getElementById('adLmaxVal').textContent  = String(lMax);
+            document.getElementById('adShapeVal').textContent = shape.toFixed(1);
+            document.getElementById('adScaleVal').textContent = scale.toFixed(1);
+
+            const geo = geometricKernel(alpha, lMax);
+            const wei = weibullKernel(shape, scale, TRUE_L);
+            const weiPeak = wei.indexOf(Math.max.apply(null, wei));
+            let massBeyond = 0;
+            for (let k = lMax; k < TRUE_L; k++) massBeyond += wei[k];
+
+            const traces = [
+                {
+                    type: 'bar',
+                    name: 'geometric kernel (the model)',
+                    x: range(lMax), y: geo,
+                    marker: { color: PT.band(PT.colors.silent, 0.55), line: { color: PT.colors.silent, width: 1 } },
+                    hovertemplate: 'lag %{x}: %{y:.3f}<extra>geometric</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers',
+                    name: 'delayed Weibull (the world)',
+                    x: range(TRUE_L), y: wei,
+                    line: { color: PT.colors.truth, width: 2.5, dash: 'dash' },
+                    marker: { size: 5 },
+                    hovertemplate: 'lag %{x}: %{y:.3f}<extra>Weibull truth</extra>'
+                }
+            ];
+
+            const yMaxData = Math.max(Math.max.apply(null, geo), Math.max.apply(null, wei));
+            const layout = PT.layout({
+                xaxis: { title: 'lag (weeks)', range: [-0.7, TRUE_L - 0.3] },
+                yaxis: { title: 'normalized kernel weight', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 20, t: 40, b: 55 },
+                bargap: 0.45,
+                shapes: [{
+                    type: 'rect', x0: lMax - 0.5, x1: TRUE_L - 0.3, y0: 0, y1: yMaxData * 1.08,
+                    fillcolor: 'rgba(154,167,154,0.14)', line: { width: 0 }, layer: 'below'
+                }, {
+                    type: 'line', x0: lMax - 0.5, x1: lMax - 0.5, y0: 0, y1: yMaxData * 1.08,
+                    line: { color: '#2d3a2d', width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: (lMax - 0.5 + TRUE_L) / 2, y: yMaxData * 1.02,
+                    text: 'invisible to l_max=' + lMax + ' — ' + (massBeyond * 100).toFixed(0) + '% of the true effect',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: weiPeak, y: wei[weiPeak],
+                    text: 'truth peaks at lag ' + weiPeak,
+                    showarrow: true, arrowhead: 0, ax: 0, ay: -28,
+                    font: { size: 11, color: '#2d3a2d' }
+                }, {
+                    x: 0, y: geo[0],
+                    text: 'geometric peak: always lag 0',
+                    showarrow: true, arrowhead: 0, ax: 55, ay: -30,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.react('adstockExplorer', traces, layout, PT.config);
+        }
+
+        ['adAlpha', 'adLmax', 'adShape', 'adScale'].forEach(function(id) {
+            document.getElementById(id).addEventListener('input', drawAdstockExplorer);
+        });
+
+        // ==================================================================
+        // ACT 1 — posterior kernel band recreation (illustrative)
+        // ==================================================================
+        function drawKernelBand() {
+            const rand = mulberry32(11);
+            const gauss = gaussFactory(rand);
+            const nDraws = 400;
+            const lags = range(TRUE_L);
+
+            // Weibull pivot: posterior-ish draws centered on the truth (the
+            // measured pivot band covers the true kernel at 92-100% of lags).
+            const weiDraws = [];
+            for (let d = 0; d < nDraws; d++) {
+                const s = TV_SHAPE * Math.exp(0.16 * gauss());
+                const sc = TV_SCALE * Math.exp(0.13 * gauss());
+                weiDraws.push(weibullKernel(s, sc, TRUE_L));
+            }
+            const wLo = [], wHi = [], wMean = [];
+            for (let k = 0; k < TRUE_L; k++) {
+                const col = weiDraws.map(function(w) { return w[k]; });
+                wLo.push(percentile(col, 0.05));
+                wHi.push(percentile(col, 0.95));
+                wMean.push(col.reduce(function(a, b) { return a + b; }, 0) / nDraws);
+            }
+
+            // Naive geometric: a tight alpha posterior over an 8-lag window —
+            // narrow around a shape that cannot bend.
+            const geoDraws = [];
+            for (let d = 0; d < nDraws; d++) {
+                const a = Math.min(0.93, Math.max(0.1, 0.55 + 0.06 * gauss()));
+                geoDraws.push(geometricKernel(a, 8));
+            }
+            const gLo = [], gHi = [];
+            for (let k = 0; k < 8; k++) {
+                const col = geoDraws.map(function(w) { return w[k]; });
+                gLo.push(percentile(col, 0.05));
+                gHi.push(percentile(col, 0.95));
+            }
+
+            const truth = weibullKernel(TV_SHAPE, TV_SCALE, TRUE_L);
+            const truthPeak = truth.indexOf(Math.max.apply(null, truth));
+
+            const traces = [
+                // Weibull band
+                { type: 'scatter', mode: 'lines', x: lags, y: wHi, line: { width: 0 },
+                  hoverinfo: 'skip', showlegend: false },
+                { type: 'scatter', mode: 'lines', x: lags, y: wLo, line: { width: 0 },
+                  fill: 'tonexty', fillcolor: PT.band(PT.colors.search, 0.30),
+                  name: 'pivot Weibull 90% band', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: lags, y: wMean,
+                  line: { color: PT.colors.search, width: 1.6 },
+                  name: 'pivot posterior mean',
+                  hovertemplate: 'lag %{x}: %{y:.3f}<extra>pivot mean</extra>' },
+                // Geometric band
+                { type: 'scatter', mode: 'lines', x: range(8), y: gHi, line: { width: 0 },
+                  hoverinfo: 'skip', showlegend: false },
+                { type: 'scatter', mode: 'lines', x: range(8), y: gLo, line: { width: 0 },
+                  fill: 'tonexty', fillcolor: PT.band(PT.colors.silent, 0.40),
+                  name: 'naive geometric 90% band', hoverinfo: 'skip' },
+                // Truth
+                { type: 'scatter', mode: 'lines', x: lags, y: truth,
+                  line: { color: PT.colors.truth, width: 2.5, dash: 'dash' },
+                  name: 'truth (delayed Weibull)',
+                  hovertemplate: 'lag %{x}: %{y:.3f}<extra>truth</extra>' }
+            ];
+
+            const layout = PT.layout({
+                xaxis: { title: 'lag (weeks)' },
+                yaxis: { title: 'kernel weight', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 20, t: 42, b: 55 },
+                annotations: [{
+                    x: truthPeak, y: truth[truthPeak],
+                    text: 'at the truth\'s own peak the naive<br>band has nothing here at all',
+                    showarrow: true, arrowhead: 0, ax: 60, ay: -42,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.newPlot('kernelBandChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // ACT 2 — interactive saturation-curve explorer
+        // ==================================================================
+        const XG = Array.from({ length: 161 }, function(_, i) { return i / 160; });
+        let satSpendRug = null;
+        function makeSpendRug() {
+            // Seeded log-normal-ish spend, mostly below the threshold (as in
+            // the world: ~3/4 of weeks below half-saturation).
+            const rand = mulberry32(7);
+            const gauss = gaussFactory(rand);
+            const pts = [];
+            for (let i = 0; i < 156; i++) {
+                pts.push(Math.min(1, Math.exp(-1.1 + 0.55 * gauss())));
+            }
+            return pts;
+        }
+
+        function drawSatExplorer() {
+            const family = document.getElementById('satFamily').value;
+            const lam = parseFloat(document.getElementById('satLam').value);
+            const K = parseFloat(document.getElementById('satK').value);
+            const S = parseFloat(document.getElementById('satS').value);
+
+            document.getElementById('satLamVal').textContent = lam.toFixed(2);
+            document.getElementById('satKVal').textContent = K.toFixed(2);
+            document.getElementById('satSVal').textContent = S.toFixed(1);
+            document.getElementById('satLamGroup').style.display = family === 'logistic' ? 'flex' : 'none';
+            document.getElementById('satKGroup').style.display = family === 'hill' ? 'flex' : 'none';
+            document.getElementById('satSGroup').style.display = family === 'hill' ? 'flex' : 'none';
+
+            const truth = XG.map(function(x) { return AMP_TV * hill(x, TRUE_K_TV, TRUE_S_TV); });
+            // Scale both candidate curves to match the truth at x = 1, so the
+            // comparison is purely about SHAPE.
+            const top = AMP_TV * hill(1, TRUE_K_TV, TRUE_S_TV);
+            let yours;
+            if (family === 'logistic') {
+                const denom = logisticSat(1, lam);
+                yours = XG.map(function(x) { return top * logisticSat(x, lam) / denom; });
+            } else {
+                const denom = hill(1, K, S);
+                yours = XG.map(function(x) { return top * hill(x, K, S) / denom; });
+            }
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', x: XG, y: truth,
+                  line: { color: PT.colors.truth, width: 2.5, dash: 'dash' },
+                  name: 'truth: Hill (K=0.45, s=3)',
+                  hovertemplate: 'x %{x:.2f}: %{y:.0f}<extra>truth</extra>' },
+                { type: 'scatter', mode: 'lines', x: XG, y: yours,
+                  line: { color: family === 'logistic' ? PT.colors.silent : PT.colors.search, width: 2.5 },
+                  name: family === 'logistic' ? 'your curve: logistic 1−exp' : 'your curve: Hill',
+                  hovertemplate: 'x %{x:.2f}: %{y:.0f}<extra>your curve</extra>' },
+                { type: 'scatter', mode: 'markers', x: satSpendRug,
+                  y: satSpendRug.map(function() { return -6; }),
+                  marker: { symbol: 'line-ns-open', size: 9, color: '#9aa79a', opacity: 0.5 },
+                  name: 'spend distribution (rug)', hoverinfo: 'skip' }
+            ];
+
+            const layout = PT.layout({
+                xaxis: { title: 'normalized (adstocked) spend', range: [0, 1] },
+                yaxis: { title: 'response (KPI units)', range: [-12, 160] },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 20, t: 42, b: 55 },
+                shapes: [{
+                    type: 'rect', x0: 0.40, x1: 0.45, y0: -12, y1: 160,
+                    fillcolor: 'rgba(201,112,103,0.10)', line: { width: 0 }, layer: 'below'
+                }],
+                annotations: [{
+                    x: 0.425, y: 150, text: 'true half-saturation band',
+                    showarrow: false, font: { size: 10.5, color: '#a44c43' }
+                }, {
+                    x: 0.16, y: 6, yanchor: 'bottom',
+                    text: 'the threshold toe: truth ≈ flat,<br>every concave curve steepest',
+                    showarrow: false, font: { size: 10.5, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.react('satExplorer', traces, layout, PT.config);
+        }
+
+        document.getElementById('satFamily').addEventListener('change', drawSatExplorer);
+        ['satLam', 'satK', 'satS'].forEach(function(id) {
+            document.getElementById(id).addEventListener('input', drawSatExplorer);
+        });
+
+        // ==================================================================
+        // ACT 2 — measured per-channel damage (matrix detail)
+        // ==================================================================
+        function drawSatErr() {
+            // tests/synth/results/stress_matrix.md — saturation_misspec detail.
+            const rows = [
+                { ch: 'TV',      truth: 2658, est: 4397, err: '+65%', cov: '✗' },
+                { ch: 'Search',  truth: 3868, est: 4294, err: '+11%', cov: '✓' },
+                { ch: 'Social',  truth: 3106, est: 4767, err: '+53%', cov: '✗' },
+                { ch: 'Display', truth: 2456, est: 3271, err: '+33%', cov: '✗' }
+            ];
+            const chColors = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+            const traces = [
+                { type: 'bar', name: 'truth',
+                  x: rows.map(function(r) { return r.ch; }),
+                  y: rows.map(function(r) { return r.truth; }),
+                  marker: { color: PT.colors.truth, opacity: 0.85 },
+                  hovertemplate: '%{x} truth: %{y:,}<extra></extra>' },
+                { type: 'bar', name: 'naive 1−exp estimate',
+                  x: rows.map(function(r) { return r.ch; }),
+                  y: rows.map(function(r) { return r.est; }),
+                  marker: { color: chColors, line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                  customdata: rows.map(function(r) { return [r.err, r.cov]; }),
+                  hovertemplate: '%{x} estimate: %{y:,}<br>error %{customdata[0]} · truth in 90% CI: %{customdata[1]}<extra></extra>' }
+            ];
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: '' },
+                yaxis: { title: 'total contribution (KPI units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 45 },
+                annotations: rows.map(function(r, i) {
+                    return { x: i + 0.19, y: r.est, yanchor: 'bottom',
+                             text: r.err + (r.cov === '✗' ? ' ✗' : ''),
+                             showarrow: false, font: { size: 11, color: '#a44c43' } };
+                })
+            });
+            Plotly.newPlot('satErrChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // ACT 2 — response-band recreation (illustrative; naive curve is
+        // genuinely least-squares fit to Hill truth over the spend draw)
+        // ==================================================================
+        function drawResponseBand() {
+            const rand = mulberry32(23);
+            const gauss = gaussFactory(rand);
+            const spend = satSpendRug;
+            const truthAt = function(x) { return AMP_TV * hill(x, TRUE_K_TV, TRUE_S_TV); };
+
+            // Fit the concave family to the Hill world by grid search over
+            // lambda with closed-form beta (least squares on the spend draw).
+            let best = { sse: Infinity, lam: 1, b: 1 };
+            for (let lam = 0.4; lam <= 8.001; lam += 0.1) {
+                let num = 0, den = 0;
+                for (let i = 0; i < spend.length; i++) {
+                    const f = logisticSat(spend[i], lam);
+                    num += truthAt(spend[i]) * f; den += f * f;
+                }
+                const b = num / den;
+                let sse = 0;
+                for (let i = 0; i < spend.length; i++) {
+                    const r = truthAt(spend[i]) - b * logisticSat(spend[i], lam);
+                    sse += r * r;
+                }
+                if (sse < best.sse) best = { sse: sse, lam: lam, b: b };
+            }
+
+            const xs = XG.slice(2); // skip x ~ 0
+            const nDraws = 350;
+            // Naive band: tight posterior-ish jitter around the LS fit.
+            const nLo = [], nHi = [];
+            const naiveDraws = [];
+            for (let d = 0; d < nDraws; d++) {
+                const lam = best.lam * Math.exp(0.05 * gauss());
+                const b = best.b * Math.exp(0.035 * gauss());
+                naiveDraws.push(xs.map(function(x) { return b * logisticSat(x, lam); }));
+            }
+            // Hill band: posterior-ish draws around the truth (the measured
+            // pivot genuinely recovers K within 0.12).
+            const hillDraws = [];
+            for (let d = 0; d < nDraws; d++) {
+                const K = TRUE_K_TV + 0.045 * gauss();
+                const S = TRUE_S_TV * Math.exp(0.13 * gauss());
+                const b = AMP_TV * Math.exp(0.07 * gauss());
+                hillDraws.push(xs.map(function(x) { return b * hill(x, K, S); }));
+            }
+            const hLo = [], hHi = [];
+            for (let k = 0; k < xs.length; k++) {
+                const ncol = naiveDraws.map(function(c) { return c[k]; });
+                nLo.push(percentile(ncol, 0.05)); nHi.push(percentile(ncol, 0.95));
+                const hcol = hillDraws.map(function(c) { return c[k]; });
+                hLo.push(percentile(hcol, 0.05)); hHi.push(percentile(hcol, 0.95));
+            }
+            const truth = xs.map(truthAt);
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: hHi, line: { width: 0 },
+                  hoverinfo: 'skip', showlegend: false },
+                { type: 'scatter', mode: 'lines', x: xs, y: hLo, line: { width: 0 },
+                  fill: 'tonexty', fillcolor: PT.band(PT.colors.search, 0.30),
+                  name: 'pivot Hill 90% band', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: xs, y: nHi, line: { width: 0 },
+                  hoverinfo: 'skip', showlegend: false },
+                { type: 'scatter', mode: 'lines', x: xs, y: nLo, line: { width: 0 },
+                  fill: 'tonexty', fillcolor: PT.band(PT.colors.silent, 0.35),
+                  name: 'naive 1−exp 90% band', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: xs, y: truth,
+                  line: { color: PT.colors.truth, width: 2.5, dash: 'dash' },
+                  name: 'truth (Hill)',
+                  hovertemplate: 'x %{x:.2f}: %{y:.0f}<extra>truth</extra>' },
+                { type: 'scatter', mode: 'markers', x: spend,
+                  y: spend.map(function() { return -6; }),
+                  marker: { symbol: 'line-ns-open', size: 9, color: '#9aa79a', opacity: 0.5 },
+                  name: 'spend distribution (rug)', hoverinfo: 'skip' }
+            ];
+
+            const layout = PT.layout({
+                xaxis: { title: 'normalized (adstocked) spend', range: [0, 1] },
+                yaxis: { title: 'response (KPI units)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 20, t: 42, b: 55 },
+                annotations: [{
+                    x: 0.22, y: 38,
+                    text: 'threshold region: the naive band is<br>narrow — and the truth is not in it',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.newPlot('responseBandChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // ACT 3 — illustrative spiked-spend series
+        // ==================================================================
+        let olSpend = null, olSpikeIdx = 70;
+        function makeOutlierSpend() {
+            const rand = mulberry32(42);
+            const gauss = gaussFactory(rand);
+            const s = [];
+            for (let w = 0; w < 156; w++) {
+                const seasonal = 1 + 0.25 * Math.sin(2 * Math.PI * w / 52);
+                s.push(Math.max(2, 30 * seasonal * Math.exp(0.30 * gauss())));
+            }
+            s[olSpikeIdx] = s[olSpikeIdx] * 15; // the mis-keyed invoice
+            return s;
+        }
+
+        function drawOutlierSpend() {
+            const weeks = range(156);
+            const traces = [
+                { type: 'scatter', mode: 'lines', x: weeks, y: olSpend,
+                  line: { color: PT.colors.tv, width: 1.4 }, name: 'observed spend',
+                  hovertemplate: 'week %{x}: %{y:.0f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [olSpikeIdx], y: [olSpend[olSpikeIdx]],
+                  marker: { color: PT.colors.silent, size: 11, symbol: 'circle',
+                            line: { color: '#a44c43', width: 1.5 } },
+                  name: 'the ~15× phantom week',
+                  hovertemplate: 'week %{x}: %{y:.0f} — data-entry spike<extra></extra>' }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'spend', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.18 },
+                margin: { l: 70, r: 20, t: 35, b: 50 },
+                annotations: [{
+                    x: olSpikeIdx, y: olSpend[olSpikeIdx],
+                    text: 'this one cell becomes the<br>normalizer for every other week',
+                    showarrow: true, arrowhead: 0, ax: 70, ay: 10,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('outlierSpendChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // ACT 3 — interactive normalized-spend histogram (spiked vs clean)
+        // ==================================================================
+        function drawOutlierHist(mode) {
+            let series = olSpend.slice();
+            if (mode === 'clean') {
+                const sorted = olSpend.slice().sort(function(a, b) { return a - b; });
+                const second = sorted[sorted.length - 2];
+                series[olSpikeIdx] = second; // winsorize the phantom week
+            }
+            const mx = Math.max.apply(null, series);
+            const norm = series.map(function(v) { return v / mx; });
+            const real = norm.filter(function(_, i) { return mode === 'clean' || i !== olSpikeIdx; });
+            const realMax = Math.max.apply(null, real);
+
+            const traces = [{
+                type: 'histogram', x: norm,
+                xbins: { start: 0, end: 1.0001, size: 0.025 },
+                marker: {
+                    color: mode === 'spiked' ? PT.band(PT.colors.silent, 0.65) : PT.band(PT.colors.ok, 0.65),
+                    line: { color: mode === 'spiked' ? '#a44c43' : '#3f7a58', width: 1 }
+                },
+                name: mode === 'spiked' ? 'normalized by spiked max' : 'normalized by winsorized max',
+                hovertemplate: 'x ∈ %{x}: %{y} weeks<extra></extra>'
+            }];
+
+            const layout = PT.layout({
+                xaxis: { title: 'normalized spend = spend / training max', range: [0, 1.02] },
+                yaxis: { title: 'weeks' },
+                showlegend: false,
+                margin: { l: 70, r: 20, t: 35, b: 55 },
+                shapes: [{
+                    type: 'line', x0: realMax, x1: realMax, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: '#2d3a2d', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: realMax, y: 0.96, yref: 'paper', xanchor: mode === 'spiked' ? 'left' : 'right',
+                    text: (mode === 'spiked'
+                        ? '  largest REAL week: ' + realMax.toFixed(2) + ' of max —<br>  the saturation curve only ever sees its toe'
+                        : 'spend occupies the full curve again  '),
+                    showarrow: false, font: { size: 11.5, color: '#5a6b5a' },
+                    align: mode === 'spiked' ? 'left' : 'right'
+                }].concat(mode === 'spiked' ? [{
+                    x: 1.0, y: 0.18, yref: 'paper', xanchor: 'right',
+                    text: 'the phantom week<br>sits alone at 1.0',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }] : [])
+            });
+
+            Plotly.react('outlierHistChart', traces, layout, PT.config);
+        }
+
+        document.querySelectorAll('[data-olmode]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('[data-olmode]').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                drawOutlierHist(btn.dataset.olmode);
+            });
+        });
+
+        // ==================================================================
+        // ACT 3 — measured per-channel damage (matrix detail)
+        // ==================================================================
+        function drawOutlierErr() {
+            // tests/synth/results/stress_matrix.md — spend_outliers detail.
+            const rows = [
+                { ch: 'TV',      truth: 5668, est: 2866, err: '−49%' },
+                { ch: 'Search',  truth: 4531, est: 3228, err: '−29%' },
+                { ch: 'Social',  truth: 4017, est: 3113, err: '−23%' },
+                { ch: 'Display', truth: 2958, est: 902,  err: '−70%' }
+            ];
+            const chColors = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
+            const traces = [
+                { type: 'bar', name: 'truth (un-spiked world)',
+                  x: rows.map(function(r) { return r.ch; }),
+                  y: rows.map(function(r) { return r.truth; }),
+                  marker: { color: PT.colors.truth, opacity: 0.85 },
+                  hovertemplate: '%{x} truth: %{y:,}<extra></extra>' },
+                { type: 'bar', name: 'naive estimate (spiked normalizer)',
+                  x: rows.map(function(r) { return r.ch; }),
+                  y: rows.map(function(r) { return r.est; }),
+                  marker: { color: chColors, line: { color: 'rgba(45,58,45,0.3)', width: 1 } },
+                  customdata: rows.map(function(r) { return [r.err]; }),
+                  hovertemplate: '%{x} estimate: %{y:,}<br>error %{customdata[0]} · truth in 90% CI: ✗<extra></extra>' }
+            ];
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'total contribution (KPI units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 45 },
+                annotations: rows.map(function(r, i) {
+                    return { x: i + 0.19, y: r.est, yanchor: 'bottom',
+                             text: r.err + ' ✗', showarrow: false,
+                             font: { size: 11, color: '#a44c43' } };
+                })
+            });
+            Plotly.newPlot('outlierErrChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        function init() {
+            satSpendRug = makeSpendRug();
+            olSpend = makeOutlierSpend();
+            drawAdstockExplorer();
+            drawKernelBand();
+            drawSatExplorer();
+            drawSatErr();
+            drawResponseBand();
+            drawOutlierSpend();
+            drawOutlierHist('spiked');
+            drawOutlierErr();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
-import type { ProjectCreateRequest, ProjectUpdateRequest } from '../services/projectService';
+import type {
+  ProjectCreateRequest,
+  ProjectOnboardingRequest,
+  ProjectUpdateRequest,
+} from '../services/projectService';
 
 export const projectKeys = {
   all: ['projects'] as const,
@@ -42,6 +46,15 @@ export function useUpdateProject(projectId: string) {
       qc.invalidateQueries({ queryKey: projectKeys.lists() });
       qc.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     },
+  });
+}
+
+export function useOnboardProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, body }: { projectId: string; body: ProjectOnboardingRequest }) =>
+      projectService.onboardProject(projectId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   });
 }
 

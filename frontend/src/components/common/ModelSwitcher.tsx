@@ -1,344 +1,333 @@
-import { useState, useRef, useEffect } from 'react';
-import { CheckIcon, ChevronDownIcon, KeyIcon, CloudIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  ChevronDownIcon,
+  XMarkIcon,
+  CloudIcon,
+  ComputerDesktopIcon,
+  KeyIcon,
+} from '@heroicons/react/24/outline';
 import { useAuthStore } from '../../stores/authStore';
 import {
   getStoredKeyForProvider,
   getModelConfig,
   getVertexModels,
+  getLmStudioModels,
   SERVER_MANAGED_KEY,
   type ServerModelConfig,
   type VertexModel,
+  type LmStudioModel,
 } from '../../api/client';
-import {
-  MODELS,
-  PROVIDER_LABELS,
-  getModelsByProvider,
-  getModelLabel,
-  type Provider,
-} from '../../constants/models';
+import { MODELS, getModelLabel } from '../../constants/models';
 
 interface ModelSwitcherProps {
-  /** 'light' for white backgrounds, 'dark' for the sidebar */
+  /** 'light' for white backgrounds, 'dark' for dark headers */
   theme?: 'light' | 'dark';
 }
 
-const PROVIDER_COLORS: Record<Provider, string> = {
-  anthropic: 'bg-amber-500',
-  openai: 'bg-emerald-500',
-  google: 'bg-blue-500',
-};
+// Backend provider catalog (these strings are what the server's `provider`
+// enum + the X-Provider header expect). `needs` drives which credential field
+// the UI shows; `ui` maps to the model catalog in constants/models.ts.
+type Needs = 'key' | 'adc' | 'baseUrl';
+const PROVIDERS: { id: string; label: string; needs: Needs; ui?: 'anthropic' | 'openai' | 'google' }[] = [
+  { id: 'anthropic', label: 'Anthropic (API key)', needs: 'key', ui: 'anthropic' },
+  { id: 'openai', label: 'OpenAI (API key)', needs: 'key', ui: 'openai' },
+  { id: 'google_genai', label: 'Google Gemini (API key)', needs: 'key', ui: 'google' },
+  { id: 'vertex_anthropic', label: 'Vertex AI · Claude', needs: 'adc' },
+  { id: 'vertex_gemini', label: 'Vertex AI · Gemini', needs: 'adc' },
+  { id: 'lmstudio', label: 'LM Studio (local)', needs: 'baseUrl' },
+];
 
-const PROVIDER_TEXT_COLORS: Record<Provider, string> = {
-  anthropic: 'text-amber-600',
-  openai: 'text-emerald-600',
-  google: 'text-blue-600',
-};
+function metaFor(provider: string) {
+  return PROVIDERS.find((p) => p.id === provider);
+}
 
-// Dot colour for a Vertex model family.
-function familyColor(family: string): string {
-  return family === 'claude' ? 'bg-amber-500' : 'bg-blue-500';
+function dotFor(provider: string | undefined): string {
+  if (!provider) return 'bg-gray-300';
+  if (provider.startsWith('vertex')) return 'bg-blue-500';
+  if (provider === 'lmstudio') return 'bg-teal-500';
+  if (provider === 'openai') return 'bg-emerald-500';
+  if (provider === 'google_genai') return 'bg-blue-500';
+  return 'bg-amber-500'; // anthropic
 }
 
 export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
-  const { modelName, setApiKey, switchModel } = useAuthStore();
+  const { provider, modelName, baseUrl, setApiKey, setBaseUrl, setProvider } = useAuthStore();
   const [open, setOpen] = useState(false);
-  const [pendingModel, setPendingModel] = useState<string | null>(null);
-  const [keyInput, setKeyInput] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Server-managed (Vertex AI / ADC) state.
   const [serverConfig, setServerConfig] = useState<ServerModelConfig | null>(null);
   const [vertexModels, setVertexModels] = useState<VertexModel[]>([]);
-  const [customModel, setCustomModel] = useState('');
+  const [lmStudioModels, setLmStudioModels] = useState<LmStudioModel[]>([]);
 
-  const byProvider = getModelsByProvider();
-  const vertexMode = !!serverConfig?.uses_vertex;
-  const currentLabel = vertexMode
-    ? modelName || 'No model'
-    : modelName
-    ? getModelLabel(modelName)
+  // Modal form state
+  const [selProvider, setSelProvider] = useState('anthropic');
+  const [selModel, setSelModel] = useState('');
+  const [customModel, setCustomModel] = useState('');
+  const [keyInput, setKeyInput] = useState('');
+  const [baseUrlInput, setBaseUrlInput] = useState('http://localhost:1234/v1');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const effectiveProvider = provider || serverConfig?.provider || 'anthropic';
+  const serverVertexLocked = !!serverConfig?.uses_vertex;
+  const currentLabel = modelName
+    ? effectiveProvider.startsWith('vertex') || effectiveProvider === 'lmstudio'
+      ? modelName
+      : getModelLabel(modelName)
     : 'No model';
 
-  // Detect server-managed Vertex mode and discover selectable models.
   useEffect(() => {
-    getModelConfig().then((cfg) => {
-      setServerConfig(cfg);
-      if (cfg?.uses_vertex) {
-        getVertexModels().then((res) => {
-          if (res?.models?.length) setVertexModels(res.models);
-        });
-      }
-    });
+    getModelConfig().then(setServerConfig);
   }, []);
 
-  // Close on outside click
+  // Initialise the form whenever the modal opens.
   useEffect(() => {
     if (!open) return;
-    function handler(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setPendingModel(null);
-        setKeyInput('');
-        setSaveError(null);
-      }
-    }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const p = effectiveProvider;
+    setSelProvider(p);
+    setSelModel(modelName || serverConfig?.model || '');
+    setCustomModel('');
+    setBaseUrlInput(baseUrl || serverConfig?.base_url || 'http://localhost:1234/v1');
+    const m = metaFor(p);
+    setKeyInput(m?.ui ? getStoredKeyForProvider(m.ui) || '' : '');
+    setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  function handleSelectModel(id: string) {
-    if (id === modelName) {
-      setOpen(false);
-      return;
+  // Discover models for the selected provider (in the modal).
+  useEffect(() => {
+    if (!open) return;
+    if (selProvider.startsWith('vertex')) {
+      getVertexModels().then((res) => setVertexModels(res?.models ?? []));
     }
-    const switched = switchModel(id);
-    if (switched) {
-      setOpen(false);
-      setPendingModel(null);
-    } else {
-      setPendingModel(id);
-      setKeyInput('');
-      setSaveError(null);
-    }
-  }
+  }, [open, selProvider]);
 
-  async function handleSaveKey() {
-    if (!pendingModel || !keyInput.trim()) return;
-    setSaving(true);
-    setSaveError(null);
-    const success = await setApiKey(keyInput.trim(), pendingModel);
-    setSaving(false);
-    if (success) {
-      setOpen(false);
-      setPendingModel(null);
-      setKeyInput('');
-    } else {
-      setSaveError('Invalid API key for this provider');
-    }
-  }
+  useEffect(() => {
+    if (!open || selProvider !== 'lmstudio') return;
+    const t = setTimeout(() => {
+      getLmStudioModels(baseUrlInput || undefined).then((res) => setLmStudioModels(res?.models ?? []));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [open, selProvider, baseUrlInput]);
 
-  // Switch to a Vertex model: credentials are server-managed, so we re-store the
-  // sentinel key with the new model id (build_llm routes it to the right Vertex
-  // backend by family). No API key required.
-  async function handleSelectVertex(id: string) {
-    const target = id.trim();
-    if (!target) return;
-    if (target === modelName) {
-      setOpen(false);
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    const success = await setApiKey(SERVER_MANAGED_KEY, target);
-    setSaving(false);
-    if (success) {
-      setOpen(false);
-      setCustomModel('');
-    } else {
-      setSaveError('Failed to switch model');
-    }
-  }
+  const needs = metaFor(selProvider)?.needs ?? 'key';
 
-  // Vertex dropdown list: ensure the current model is present, then discovered.
-  const vertexList: { id: string; display_name: string; family: string; source: string }[] = (() => {
+  // Model options for the selected provider.
+  const modelOptions: { id: string; label: string }[] = (() => {
+    const out: { id: string; label: string }[] = [];
     const ids = new Set<string>();
-    const out: { id: string; display_name: string; family: string; source: string }[] = [];
-    if (modelName) {
-      ids.add(modelName);
-      const fam = modelName.toLowerCase().includes('claude') ? 'claude' : 'gemini';
-      out.push({ id: modelName, display_name: modelName, family: fam, source: 'current' });
-    }
-    for (const m of vertexModels) {
-      if (ids.has(m.id)) continue;
-      ids.add(m.id);
-      out.push({ id: m.id, display_name: m.display_name, family: m.family, source: m.source });
+    const push = (id: string, label: string) => {
+      if (!id || ids.has(id)) return;
+      ids.add(id);
+      out.push({ id, label });
+    };
+    if (modelName && selProvider === effectiveProvider) push(modelName, `${modelName} (current)`);
+    if (needs === 'key') {
+      const ui = metaFor(selProvider)?.ui;
+      MODELS.filter((m) => m.provider === ui).forEach((m) => push(m.id, m.label));
+    } else if (needs === 'adc') {
+      const fam = selProvider === 'vertex_anthropic' ? 'claude' : 'gemini';
+      vertexModels.filter((m) => m.family === fam).forEach((m) => push(m.id, m.display_name));
+    } else {
+      lmStudioModels.forEach((m) => push(m.id, m.display_name));
     }
     return out;
   })();
+
+  async function handleSave() {
+    const model = (customModel.trim() || selModel).trim();
+    if (!model) {
+      setError('Pick or enter a model id.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+
+    // Provider override is ignored by a Vertex-locked server, so don't set it there.
+    setProvider(serverVertexLocked ? null : selProvider);
+    setBaseUrl(needs === 'baseUrl' ? baseUrlInput.trim() || null : null);
+
+    let key = SERVER_MANAGED_KEY;
+    if (needs === 'key') {
+      const ui = metaFor(selProvider)?.ui;
+      key = keyInput.trim() || (ui ? getStoredKeyForProvider(ui) || '' : '');
+      if (!key) {
+        setSaving(false);
+        setError('This provider needs an API key.');
+        return;
+      }
+    }
+
+    const ok = await setApiKey(key, model);
+    setSaving(false);
+    if (ok) {
+      setOpen(false);
+    } else {
+      setError('Could not reach the server. Check it is running (and the URL/key).');
+    }
+  }
 
   const triggerClass =
     theme === 'dark'
       ? 'flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors cursor-pointer select-none'
       : 'flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors cursor-pointer select-none';
 
-  const triggerDotColor = vertexMode
-    ? familyColor(modelName?.toLowerCase().includes('claude') ? 'claude' : 'gemini')
-    : PROVIDER_COLORS[MODELS.find((m) => m.id === modelName)?.provider ?? 'anthropic'];
-
   return (
-    <div ref={containerRef} className="relative">
-      <button className={triggerClass} onClick={() => setOpen((v) => !v)}>
-        {modelName && <span className={`h-1.5 w-1.5 rounded-full ${triggerDotColor}`} />}
-        <span className="truncate max-w-32">{currentLabel}</span>
+    <>
+      <button className={triggerClass} onClick={() => setOpen(true)} title="Model settings">
+        <span className={`h-1.5 w-1.5 rounded-full ${dotFor(effectiveProvider)}`} />
+        <span className="truncate max-w-40">{currentLabel}</span>
         <ChevronDownIcon className="h-3 w-3 shrink-0" />
       </button>
 
-      {open && (
-        <div className="absolute bottom-full mb-2 left-0 z-50 w-72 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden">
-          <div className="px-3 py-2 border-b border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Switch Model
-            </p>
-            {vertexMode && (
-              <p className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-400">
-                <CloudIcon className="h-3 w-3" />
-                Vertex AI{serverConfig?.location ? ` · ${serverConfig.location}` : ''}
-              </p>
-            )}
-          </div>
+      {open && createPortal(
+        <div
+          // Portaled to <body>: an ancestor with backdrop-filter (the sticky
+          // Header) would otherwise become this fixed overlay's containing
+          // block, clipping the dialog to the header strip.
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink-900/40 p-4"
+          onClick={() => !saving && setOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-900">Model settings</h3>
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
 
-          {vertexMode ? (
-            // ── Server-managed Vertex models ─────────────────────────────
-            <div>
-              {vertexList.map((m) => {
-                const isCurrent = m.id === modelName;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => handleSelectVertex(m.id)}
-                    disabled={saving}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${
-                      isCurrent ? 'bg-gray-50' : ''
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${familyColor(m.family)}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{m.display_name}</p>
-                      <p className="text-xs text-gray-400">
-                        {m.family === 'claude' ? 'Claude' : 'Gemini'}
-                        {m.source === 'catalog' ? ' · catalog' : ''}
-                      </p>
-                    </div>
-                    {isCurrent && <CheckIcon className="h-4 w-4 text-indigo-600 shrink-0" />}
-                  </button>
-                );
-              })}
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Provider */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                <select
+                  value={selProvider}
+                  disabled={serverVertexLocked}
+                  onChange={(e) => {
+                    setSelProvider(e.target.value);
+                    setSelModel('');
+                    setCustomModel('');
+                    const m = metaFor(e.target.value);
+                    setKeyInput(m?.ui ? getStoredKeyForProvider(m.ui) || '' : '');
+                  }}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600 disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  {PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                {serverVertexLocked && (
+                  <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
+                    <CloudIcon className="h-3 w-3" />
+                    Provider is locked to Vertex AI / ADC on this server; you can still change the model.
+                  </p>
+                )}
+              </div>
 
-              <div className="px-3 pb-3 pt-2 space-y-2 border-t border-gray-100 bg-gray-50">
-                <p className="text-xs text-gray-500 pt-1">Or enter a model id (from your Vertex console):</p>
-                <div className="flex gap-2">
+              {/* LM Studio server URL */}
+              {needs === 'baseUrl' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <ComputerDesktopIcon className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+                    LM Studio server URL
+                  </label>
                   <input
                     type="text"
-                    placeholder="claude-sonnet-4-5@20250929"
-                    value={customModel}
-                    onChange={(e) => setCustomModel(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSelectVertex(customModel)}
-                    className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="http://localhost:1234/v1"
+                    value={baseUrlInput}
+                    onChange={(e) => setBaseUrlInput(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
-                  <button
-                    onClick={() => handleSelectVertex(customModel)}
-                    disabled={!customModel.trim() || saving}
-                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                  >
-                    {saving ? '…' : 'Use'}
-                  </button>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {lmStudioModels.length > 0
+                      ? `${lmStudioModels.length} model(s) loaded at this URL.`
+                      : 'Start LM Studio’s server (Developer → Start Server) and load a model.'}
+                  </p>
                 </div>
-                {saveError && <p className="text-xs text-red-500">{saveError}</p>}
-              </div>
-            </div>
-          ) : (
-            // ── Direct API providers (key-based) ─────────────────────────
-            <>
-              {(Object.entries(byProvider) as [Provider, typeof MODELS[number][]][]).map(
-                ([provider, models]) => (
-                  <div key={provider}>
-                    <p
-                      className={`px-3 pt-2 pb-1 text-xs font-medium ${PROVIDER_TEXT_COLORS[provider]}`}
-                    >
-                      {PROVIDER_LABELS[provider]}
-                    </p>
-                    {models.map((m) => {
-                      const hasKey = !!getStoredKeyForProvider(provider);
-                      const isCurrent = m.id === modelName;
-                      const isPending = m.id === pendingModel;
-
-                      return (
-                        <div key={m.id}>
-                          <button
-                            onClick={() => handleSelectModel(m.id)}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${
-                              isCurrent ? 'bg-gray-50' : ''
-                            }`}
-                          >
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                                hasKey ? PROVIDER_COLORS[provider] : 'bg-gray-300'
-                              }`}
-                              title={hasKey ? 'API key stored' : 'No API key stored'}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800">{m.label}</p>
-                              <p className="text-xs text-gray-400">{m.description}</p>
-                            </div>
-                            {isCurrent && <CheckIcon className="h-4 w-4 text-indigo-600 shrink-0" />}
-                            {!hasKey && !isCurrent && (
-                              <KeyIcon className="h-3.5 w-3.5 text-gray-300 shrink-0" />
-                            )}
-                          </button>
-
-                          {/* Inline key input when no key stored */}
-                          {isPending && (
-                            <div className="px-3 pb-3 space-y-2 bg-gray-50 border-t border-gray-100">
-                              <p className="text-xs text-gray-500 pt-2">
-                                Enter your{' '}
-                                <span className={`font-medium ${PROVIDER_TEXT_COLORS[provider]}`}>
-                                  {PROVIDER_LABELS[provider]}
-                                </span>{' '}
-                                API key to use {m.label}:
-                              </p>
-                              <input
-                                autoFocus
-                                type="password"
-                                placeholder="sk-..."
-                                value={keyInput}
-                                onChange={(e) => setKeyInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSaveKey()}
-                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              />
-                              {saveError && <p className="text-xs text-red-500">{saveError}</p>}
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={handleSaveKey}
-                                  disabled={!keyInput.trim() || saving}
-                                  className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                                >
-                                  {saving ? 'Saving…' : 'Save & Switch'}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setPendingModel(null);
-                                    setKeyInput('');
-                                    setSaveError(null);
-                                  }}
-                                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
               )}
 
-              <div className="border-t border-gray-100 px-3 py-2">
-                <p className="text-xs text-gray-400">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-gray-300 mr-1.5 align-middle" />
-                  No key stored &nbsp;·&nbsp;
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 mr-1.5 align-middle" />
-                  Key saved
-                </p>
+              {/* Model */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+                <select
+                  value={customModel ? '' : selModel}
+                  onChange={(e) => {
+                    setSelModel(e.target.value);
+                    setCustomModel('');
+                  }}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sage-600"
+                >
+                  <option value="" disabled>
+                    {modelOptions.length ? 'Select a model…' : 'No models discovered — type one below'}
+                  </option>
+                  {modelOptions.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="…or type a model id"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                  className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
+                />
               </div>
-            </>
-          )}
-        </div>
+
+              {/* API key (direct providers) */}
+              {needs === 'key' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <KeyIcon className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+                    API key
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="sk-…"
+                    value={keyInput}
+                    onChange={(e) => setKeyInput(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sage-600"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Stored locally in your browser and sent as the X-API-Key header.
+                  </p>
+                </div>
+              )}
+
+              {needs === 'adc' && (
+                <p className="text-[11px] text-gray-400">
+                  Vertex AI authenticates with the server’s Application Default Credentials — no key needed.
+                </p>
+              )}
+
+              {error && <p className="text-xs text-red-600">{error}</p>}
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setOpen(false)}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-1.5 bg-sage-700 text-white text-sm font-medium rounded-lg hover:bg-sage-800 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 

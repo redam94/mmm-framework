@@ -16,6 +16,64 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        /* Page-specific: interactive demo readouts (palette tokens only) */
+        .bs-readout {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem 2.5rem;
+            margin: 1.25rem 0 0.5rem;
+        }
+        .bs-readout-item { min-width: 160px; }
+        .bs-readout-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+            margin-bottom: 0.2rem;
+        }
+        .bs-big {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.4rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+            transition: color 0.4s ease;
+        }
+        .bs-big.inflated { color: var(--color-danger); }
+        .bs-verdict {
+            display: inline-block;
+            padding: 0.35rem 0.9rem;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: var(--transition-smooth);
+        }
+        .bs-verdict.warn {
+            background: rgba(212, 168, 106, 0.16);
+            color: #9a7437;
+            border: 1px solid rgba(212, 168, 106, 0.45);
+        }
+        .bs-verdict.ok {
+            background: rgba(106, 191, 138, 0.14);
+            color: #3e7d58;
+            border: 1px solid rgba(106, 191, 138, 0.4);
+        }
+        .bs-demo-note {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.75rem;
+            font-style: italic;
+        }
+        .bs-chart { height: 320px; }
+        .bs-chart-sm { height: 130px; }
+        @media (max-width: 768px) {
+            .bs-big { font-size: 1.9rem; }
+            .bs-chart { height: 260px; }
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation injected by components.js -->
@@ -25,7 +83,7 @@
             <span class="tag tag-warning" style="margin-bottom: 1rem; display: inline-block;">For Business Leaders</span>
             <h1>The Hidden Risk in Your Marketing Models</h1>
             <p class="lead">
-                How specification shopping undermines marketing measurement at ad agencies, model shops, and brands&mdash;and what you can do about it.
+                How specification shopping undermines marketing measurement at ad agencies, model shops, and brands&mdash;and how causal modeling, calibrated against real-world experiments, protects your budget.
             </p>
         </div>
     </section>
@@ -35,6 +93,7 @@
             <h3>Overview</h3>
             <ul class="sidebar-nav">
                 <li><a href="#what-is-specification-shopping">What Is Specification Shopping?</a></li>
+                <li><a href="#why-causal">Why Causal, in Plain Terms</a></li>
                 <li><a href="#who-is-affected">Who Is Affected</a></li>
             </ul>
 
@@ -55,6 +114,7 @@
             <h3>The Solution</h3>
             <ul class="sidebar-nav">
                 <li><a href="#better-approach">A Better Approach</a></li>
+                <li><a href="#calibration-in-action">Calibration in Action</a></li>
                 <li><a href="#questions-to-ask">Questions to Ask</a></li>
                 <li><a href="#getting-started">Getting Started</a></li>
             </ul>
@@ -100,6 +160,45 @@
                 <p>
                     When you test many specifications and select based on results, standard statistical inference is invalidated. The confidence intervals no longer mean what they claim to mean. The process systematically selects for confirming rather than disconfirming evidence.
                 </p>
+            </div>
+
+            <!-- Why Causal -->
+            <h2 id="why-causal">Why Causal, in Plain Terms</h2>
+            <p>
+                A marketing mix model is supposed to answer a causal question&mdash;"what would sales have been if we hadn't run this media?"&mdash;not just report what moved together. The distinction matters because lots of things move together without one causing the other. Ice cream sales and sunburns rise in the same weeks, but neither causes the other; summer does. In the same way, holiday demand lifts both your ad spend and your sales at the same time&mdash;so a careless model hands media the credit for sales the season would have delivered anyway.
+            </p>
+            <p>
+                The number that should drive budget decisions is <strong>incremental</strong> impact: the sales your media actually caused, above what would have happened without it. Spend that merely coincides with sales is spend you could cut without losing anything; spend that causes sales is spend worth defending and scaling. A model that cannot tell these apart will confidently send budget to the wrong channels.
+            </p>
+            <div class="highlight-box">
+                <h4>How This Framework Separates Coincidence from Contribution</h4>
+                <p>
+                    It accounts for confounders like underlying demand, locks the model design in before results are seen, and checks its answers against real-world experiments such as regional holdout tests. The result is an estimate of what your media actually caused&mdash;stated with honest uncertainty.
+                </p>
+            </div>
+
+            <div class="demo-container fade-in" style="margin-top: 2rem;">
+                <div class="demo-header">
+                    <h3>See Confounding in Action</h3>
+                    <p>A year of weekly data. Spend ramps into the demand season&mdash;exactly when sales were going to rise anyway. Switch models and watch who gets the credit.</p>
+                </div>
+                <div class="chart-tabs" role="group" aria-label="Model choice">
+                    <button class="chart-tab active" id="bsTabNaive">Naive model &mdash; ignores demand</button>
+                    <button class="chart-tab" id="bsTabCausal">Causal model &mdash; accounts for demand</button>
+                </div>
+                <div id="bsLinesChart" class="bs-chart"></div>
+                <div id="bsCreditChart" class="bs-chart-sm"></div>
+                <div class="bs-readout">
+                    <div class="bs-readout-item">
+                        <div class="bs-readout-label">Media ROI the model reports</div>
+                        <div class="bs-big inflated" id="bsRoiValue">2.4&times;</div>
+                    </div>
+                    <div class="bs-readout-item" style="flex: 1; min-width: 260px;">
+                        <div class="bs-readout-label">What it means</div>
+                        <p id="bsRoiVerdict" style="margin: 0; font-size: 0.95rem;">The naive model hands media the season&rsquo;s sales&mdash;the rooster taking credit for the sunrise. Budgets set on this number buy more roosters, not more sunrises.</p>
+                    </div>
+                </div>
+                <p class="bs-demo-note">Illustrative data. The same pattern is measured on synthetic worlds with known truth in <a href="pressure-testing.html">pressure testing</a>.</p>
             </div>
 
             <!-- Who Is Affected -->
@@ -182,7 +281,7 @@
 
             <div class="quote-block">
                 When everyone uses the same biased methods, an entire industry can be confidently wrong. The first firms to break this cycle will have a significant competitive advantage.
-                <div class="quote-attribution">&mdash; The case for rigorous measurement</div>
+                <div class="quote-attribution">&mdash; the framework&rsquo;s design principle</div>
             </div>
 
             <h3>Common Specification Shopping Practices</h3>
@@ -233,7 +332,7 @@
                 <div class="icon-circle">&#128184;</div>
                 <div>
                     <h4>The Budget Impact</h4>
-                    <p>If your model overstates TV ROI by 40% due to specification shopping, you are systematically over-investing in television at the expense of other channels. Over a year, this can mean millions of dollars in misallocated spend.</p>
+                    <p>If your model overstates TV ROI by 40% due to specification shopping, you are systematically over-investing in television at the expense of other channels. Over a year, this can mean millions of dollars in misallocated spend. The only spend that earns its budget line is <em>incremental</em> spend&mdash;media whose causal effect has been measured, and ideally calibrated against a real experiment.</p>
                 </div>
             </div>
 
@@ -247,29 +346,33 @@
 
             <!-- Financial Risk -->
             <h2 id="financial-risk">Financial Consequences</h2>
+            <p>
+                We will not quote industry-wide loss statistics here&mdash;we have no source we could defend, and inventing one is exactly what this page warns against. What we can show is what happens on synthetic markets where the true ROI is known in advance, from the framework&rsquo;s own pressure-testing program:
+            </p>
 
             <div class="metric-grid">
                 <div class="metric-card">
-                    <div class="metric-value gradient-text">30-50%</div>
-                    <div class="metric-label">ROI Overestimation</div>
-                    <div class="metric-context">Typical upward bias from zeroing out negative effects</div>
+                    <div class="metric-value gradient-text-warm">8 of 16</div>
+                    <div class="metric-label">Silent Failures</div>
+                    <div class="metric-context">Synthetic stress worlds where attribution was materially wrong while every standard check looked healthy</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value gradient-text-warm">5-15%</div>
-                    <div class="metric-label">Budget Misallocation</div>
-                    <div class="metric-context">Share of budget directed to wrong channels</div>
+                    <div class="metric-value gradient-text-warm">+69%</div>
+                    <div class="metric-label">Worst Channel Error</div>
+                    <div class="metric-context">In the hidden-confounder world, one channel&rsquo;s contribution was overstated by 69% (median error across channels: 23%)</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value gradient-text">100%</div>
-                    <div class="metric-label">Reported Accuracy</div>
-                    <div class="metric-context">From models selected to show high fit</div>
+                    <div class="metric-value gradient-text">&le;1.02</div>
+                    <div class="metric-label">R-hat on Every Silent Failure</div>
+                    <div class="metric-context">Convergence diagnostics stayed green on every one of those wrong answers</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value gradient-text-warm">&lt;50%</div>
-                    <div class="metric-label">Actual Reliability</div>
-                    <div class="metric-context">When validated against holdout experiments</div>
+                    <div class="metric-value gradient-text">0</div>
+                    <div class="metric-label">Divergences</div>
+                    <div class="metric-context">The sampler raised no alarm&mdash;a model can be confidently, quietly wrong</div>
                 </div>
             </div>
+            <p class="bs-demo-note"><strong>Measured</strong> on synthetic worlds with known ground truth &mdash; see <a href="pressure-testing.html">Pressure Testing</a> for the full scorecard.</p>
 
             <div class="warning-box">
                 <h4>The Compounding Effect</h4>
@@ -278,35 +381,28 @@
                 </p>
             </div>
 
+            <div class="highlight-box">
+                <h4>Case Study: What the Gap Is Worth</h4>
+                <p>
+                    In the Aurora Coffee Co. engagement&mdash;a synthetic brand whose true channel effects are on file&mdash;two planners split the same budget. The dashboard-style plan funded the channels that <em>looked</em> best; the experiment-anchored causal plan funded the channels that <em>were</em> best. Scored against the known ground truth, the causal plan was worth <strong>&asymp; +$11.9M of revenue per year on the same budget</strong> ($11,884k/yr; a first-order estimate whose direction is verified against ground truth).
+                </p>
+                <p class="bs-demo-note" style="margin-bottom: 0;"><strong>Measured</strong> on the Aurora synthetic engagement (known ground truth) &mdash; see <a href="aurora-05-unified-workflow.html">the Aurora finale</a> for the full reallocation.</p>
+            </div>
+
             <!-- Credibility Risk -->
             <h2 id="credibility-risk">Credibility Risk</h2>
             <p>
                 The marketing measurement industry faces a growing credibility crisis. As data science matures in other domains and clients become more sophisticated, the gap between standard practice and scientific rigor becomes harder to ignore.
             </p>
 
-            <div class="risk-meter">
-                <span style="font-weight: 600; min-width: 180px;">Client trust erosion</span>
-                <div class="risk-bar">
-                    <div class="risk-bar-fill high" style="width: 85%;"></div>
-                </div>
-                <span class="risk-label high">High</span>
-            </div>
-
-            <div class="risk-meter">
-                <span style="font-weight: 600; min-width: 180px;">Regulatory scrutiny</span>
-                <div class="risk-bar">
-                    <div class="risk-bar-fill medium" style="width: 55%;"></div>
-                </div>
-                <span class="risk-label medium">Growing</span>
-            </div>
-
-            <div class="risk-meter">
-                <span style="font-weight: 600; min-width: 180px;">Competitive displacement</span>
-                <div class="risk-bar">
-                    <div class="risk-bar-fill high" style="width: 70%;"></div>
-                </div>
-                <span class="risk-label high">High</span>
-            </div>
+            <p>
+                We won&rsquo;t put percentages on these risks&mdash;no one has measured them, and a progress bar with an invented number is the same false precision this page argues against. Qualitatively, the exposures are real:
+            </p>
+            <ul>
+                <li><strong>Client trust:</strong> every contradictory year-over-year result, and every pair of model shops delivering opposite answers from the same data, erodes the credibility of the whole category.</li>
+                <li><strong>Scrutiny:</strong> as procurement and finance teams grow more data-literate, unvalidated causal claims invite harder questions&mdash;and harder audits.</li>
+                <li><strong>Competitive displacement:</strong> firms that can point to experimental validation of their estimates have a straightforward way to take business from firms that cannot.</li>
+            </ul>
 
             <!-- How to Detect It -->
             <h2 id="how-to-detect">How to Detect Specification Shopping</h2>
@@ -374,11 +470,57 @@
                 </div>
             </div>
 
+            <p>
+                Rigor here is an ongoing practice, not a one-time deliverable: measurement runs as a loop&mdash;fit the model, find where uncertainty is most expensive, run the experiment that buys the most learning, feed the result back in, and reallocate budget with the sharper answer (see <a href="measurement-calibration.html">the calibration loop</a>). The whole cycle runs in a modern web application with an AI analyst assistant alongside the Python library&mdash;take <a href="platform-overview.html">the platform tour</a>.
+            </p>
+
             <div class="highlight-box">
                 <h4>The Business Case for Rigor</h4>
                 <p>
                     Organizations that adopt rigorous measurement practices don&rsquo;t just get better models&mdash;they get better decisions. When you know which estimates are confident and which are uncertain, you can invest in experiments where they matter most, allocate budget based on validated effects, and build a compounding knowledge advantage over competitors who rely on specification-shopped results.
                 </p>
+            </div>
+
+            <!-- Calibration in Action -->
+            <h2 id="calibration-in-action">Calibration: Proof, Not Promises</h2>
+            <p>
+                A model, however careful, is still a recipe written on paper. Calibration is the taste test: the model proposes an answer, and a real-world experiment disposes. The most common form is a <strong>geo lift test</strong>&mdash;matched pairs of cities or regions where one side runs the media and the other holds out. The held-out regions live out the &ldquo;what would have happened without it&rdquo; question that no spreadsheet can answer on its own. The gap between the pairs is your incremental effect, measured in the real world.
+            </p>
+            <p>
+                What makes this a loop rather than a one-off audit is what happens next: the experiment&rsquo;s readout is fed back into the model as evidence. Estimates that were wide tighten; estimates that were flattering get corrected. Each experiment moves through a tracked lifecycle&mdash;designed, pre-registered (so the success criteria are locked before launch, the same discipline that prevents specification shopping), run, read out, and finally folded into the next model fit. The platform manages this end to end, from choosing <em>which</em> test buys the most learning per dollar to scheduling the re-test when the answer goes stale.
+            </p>
+
+            <div class="demo-container fade-in" style="margin-top: 1.5rem;">
+                <div class="demo-header">
+                    <h3>Watch Experiments Sharpen the Answer</h3>
+                    <p>A confounded model starts out confidently wrong about TV ROI. Each calibrated experiment pulls the estimate toward the truth and narrows the range you would bet a budget on.</p>
+                </div>
+                <div class="chart-tabs" role="group" aria-label="Number of experiments">
+                    <button class="chart-tab active" data-exp="0">No experiments</button>
+                    <button class="chart-tab" data-exp="1">1 experiment</button>
+                    <button class="chart-tab" data-exp="2">2 experiments</button>
+                    <button class="chart-tab" data-exp="3">3 experiments</button>
+                </div>
+                <div id="bsCalibChart" class="bs-chart"></div>
+                <div class="bs-readout">
+                    <div class="bs-readout-item">
+                        <div class="bs-readout-label">Plausible TV ROI range</div>
+                        <div class="bs-big inflated" id="bsCalibRange">0.8&times; &ndash; 3.0&times;</div>
+                    </div>
+                    <div class="bs-readout-item">
+                        <div class="bs-readout-label">Decision readiness</div>
+                        <span class="bs-verdict warn" id="bsCalibVerdict">Too wide to bet a budget on</span>
+                    </div>
+                </div>
+                <p class="bs-demo-note">Illustrative posteriors. The framework&rsquo;s measured version of this story&mdash;a confounded estimate corrected by calibration on a world with known truth&mdash;is in the <a href="mmm-walkthrough.html">end-to-end walkthrough</a>.</p>
+            </div>
+
+            <div class="icon-box" style="margin-top: 2rem;">
+                <div class="icon-circle">&#8987;</div>
+                <div>
+                    <h4>Calibration Has a Shelf Life</h4>
+                    <p>Markets shift, creative wears out, competitors react&mdash;so a lift test from two years ago is a memory, not a measurement. The platform&rsquo;s default decay assumptions&mdash;modeling priors you can change, not measured industry facts&mdash;treat digital learnings as fading with a half-life of about six months, and slower brand and TV learnings about a year. The measurement loop treats this like creative rotation: it tracks how stale each channel&rsquo;s evidence is and schedules the re-test before decisions start leaning on expired knowledge.</p>
+                </div>
             </div>
 
             <!-- Questions to Ask -->
@@ -429,6 +571,13 @@
                 </div>
             </div>
 
+            <div class="accordion-item">
+                <button class="accordion-header">7. Which channels are calibrated against experiments&mdash;and when do those results expire?</button>
+                <div class="accordion-body">
+                    <p>A strong answer names specific channels, specific tests, and dates. Calibration is perishable&mdash;this platform&rsquo;s default working assumption (a configurable prior, not an industry statistic) is that digital learnings fade within about six months and brand or TV learnings within about a year&mdash;so &ldquo;we ran a lift test once&rdquo; is not a standing guarantee. Ask for the re-test schedule. A partner running a genuine measurement loop will have one; a partner who validated once and moved on is presenting a snapshot as a system.</p>
+                </div>
+            </div>
+
             <!-- Getting Started -->
             <h2 id="getting-started">Getting Started with Rigorous Measurement</h2>
             <p>
@@ -449,7 +598,10 @@
                 </div>
                 <div class="process-step" data-step="3">
                     <h4>Design validation experiments</h4>
-                    <p>Use model predictions to design geo lift tests or holdout experiments. This creates the feedback loop needed to distinguish working models from non-working ones.</p>
+                    <p>Use model predictions to design geo lift tests or holdout experiments. This creates the feedback loop needed to distinguish working models from non-working ones&mdash;the heart of the <a href="measurement-calibration.html">measurement loop</a>.</p>
+                    <div class="step-details">
+                        <a href="platform-overview.html" class="btn btn-outline" style="margin-top: 0.5rem;">Design Experiments in the Platform &rarr;</a>
+                    </div>
                 </div>
                 <div class="process-step" data-step="4">
                     <h4>Communicate uncertainty as a feature</h4>
@@ -467,7 +619,7 @@
             <div class="takeaway-box">
                 <h4>Key Takeaway</h4>
                 <p>
-                    The marketing measurement industry is moving toward greater rigor. Organizations that lead this transition will build differentiated capabilities and client relationships grounded in demonstrated rather than asserted credibility. The MMM Framework provides the tools&mdash;the rest is organizational commitment to honesty.
+                    Marketing measurement is getting more rigorous, and clients are learning to tell the difference. The organizations that move first won&rsquo;t just have better models&mdash;they&rsquo;ll have client relationships built on validated results instead of confident presentation. The MMM Framework provides the tools&mdash;the rest is organizational commitment to honesty.
                 </p>
             </div>
 
@@ -518,21 +670,254 @@
             animObserver.observe(el);
         });
 
-        // Animate risk bars on scroll
-        const riskObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const fill = entry.target.querySelector('.risk-bar-fill');
-                    if (fill) {
-                        const width = fill.style.width;
-                        fill.style.width = '0%';
-                        setTimeout(() => { fill.style.width = width; }, 100);
-                    }
-                }
-            });
-        }, { threshold: 0.5 });
+        // =====================================================================
+        // Shared helpers for the interactive demos
+        // =====================================================================
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const PAL = {
+            sage: '#8fa86a', sageDark: '#6d8a4a', blue: '#6a8fa8', blueDark: '#4a6d8a',
+            warm: '#d4a86a', danger: '#c97067', text: '#2d3a2d', muted: '#5a6b5a',
+            grid: '#e4eae4', bg: 'rgba(0,0,0,0)'
+        };
+        const FONT = { family: "'Source Sans 3', sans-serif", color: PAL.text, size: 13 };
+        const PLOTCFG = { displayModeBar: false, responsive: true };
 
-        document.querySelectorAll('.risk-meter').forEach(el => riskObserver.observe(el));
+        // Deterministic wiggle so the page renders identically every visit
+        function mulberry32(seed) {
+            return function() {
+                seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+                let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+
+        function animateNumber(el, from, to, suffix, duration) {
+            if (reduceMotion || duration === 0) { el.textContent = to.toFixed(1) + suffix; return; }
+            const start = performance.now();
+            function tick(now) {
+                const p = Math.min((now - start) / duration, 1);
+                const eased = 1 - Math.pow(1 - p, 3);
+                el.textContent = (from + (to - from) * eased).toFixed(1) + suffix;
+                if (p < 1) requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // =====================================================================
+        // Demo 1 — Confounding: who gets credit for the demand season?
+        // =====================================================================
+        (function () {
+            const linesEl = document.getElementById('bsLinesChart');
+            const creditEl = document.getElementById('bsCreditChart');
+            if (!linesEl || !creditEl || typeof Plotly === 'undefined') return;
+
+            const rnd = mulberry32(42);
+            const weeks = [], sales = [], spend = [];
+            for (let t = 0; t < 52; t++) {
+                weeks.push(t + 1);
+                // Demand season: strong holiday peak (wk ~49), mild summer bump (wk ~26)
+                const season = 60 * Math.exp(-0.5 * Math.pow((t - 48) / 4, 2))
+                             + 18 * Math.exp(-0.5 * Math.pow((t - 25) / 5, 2));
+                const sp = 22 + 0.42 * season + (rnd() - 0.5) * 6;      // spend ramps into the season
+                spend.push(Math.max(8, sp));
+                sales.push(100 + season + 0.9 * sp + (rnd() - 0.5) * 10); // real media effect is modest
+            }
+
+            Plotly.newPlot(linesEl, [
+                {
+                    x: weeks, y: sales, name: 'Sales', mode: 'lines',
+                    line: { color: PAL.sageDark, width: 3 }
+                },
+                {
+                    x: weeks, y: spend, name: 'Media spend', mode: 'lines', yaxis: 'y2',
+                    line: { color: PAL.blue, width: 2.5, dash: 'dot' }
+                }
+            ], {
+                font: FONT, paper_bgcolor: PAL.bg, plot_bgcolor: PAL.bg,
+                margin: { l: 50, r: 50, t: 10, b: 38 },
+                xaxis: { title: 'Week', gridcolor: PAL.grid, zeroline: false },
+                yaxis: { title: 'Sales', gridcolor: PAL.grid, zeroline: false },
+                yaxis2: { title: 'Spend', overlaying: 'y', side: 'right', showgrid: false, zeroline: false },
+                legend: { orientation: 'h', y: 1.12 },
+                shapes: [{
+                    type: 'rect', x0: 42, x1: 52, y0: 0, y1: 1, yref: 'paper',
+                    fillcolor: 'rgba(212, 168, 106, 0.12)', line: { width: 0 }
+                }],
+                annotations: [{
+                    x: 47, y: 1.04, yref: 'paper', showarrow: false,
+                    text: 'Demand season — spend and sales rise together',
+                    font: { size: 12, color: PAL.muted }
+                }]
+            }, PLOTCFG);
+
+            // Credit split (% of explained sales) under each model
+            const STATES = {
+                naive:  { base: 56, season: 0,  media: 44, roi: 2.4 },
+                causal: { base: 56, season: 27, media: 17, roi: 1.1 }
+            };
+            const VERDICTS = {
+                naive: 'The naive model hands media the season’s sales — the rooster taking credit for the sunrise. Budgets set on this number buy more roosters, not more sunrises.',
+                causal: 'With demand accounted for, media keeps real but honest credit. This is the incremental number — the sales you would actually lose by going dark.'
+            };
+
+            function creditTraces(s) {
+                return [
+                    { x: [s.base], y: [''], name: 'Baseline business', orientation: 'h', type: 'bar',
+                      marker: { color: PAL.grid }, hovertemplate: 'Baseline: %{x}%<extra></extra>' },
+                    { x: [s.season], y: [''], name: 'Seasonal demand', orientation: 'h', type: 'bar',
+                      marker: { color: PAL.warm }, hovertemplate: 'Season: %{x}%<extra></extra>' },
+                    { x: [s.media], y: [''], name: 'Media', orientation: 'h', type: 'bar',
+                      marker: { color: PAL.sage }, hovertemplate: 'Media: %{x}%<extra></extra>' }
+                ];
+            }
+            const creditLayout = {
+                font: FONT, paper_bgcolor: PAL.bg, plot_bgcolor: PAL.bg, barmode: 'stack',
+                margin: { l: 8, r: 8, t: 26, b: 8 }, height: 130,
+                xaxis: { range: [0, 100], ticksuffix: '%', showgrid: false, zeroline: false },
+                yaxis: { visible: false },
+                legend: { orientation: 'h', y: 1.55 },
+                title: { text: 'Where the credit goes', font: { size: 13, color: PAL.muted }, x: 0, y: 0.97, yanchor: 'top' }
+            };
+            Plotly.newPlot(creditEl, creditTraces(STATES.naive), creditLayout, PLOTCFG);
+
+            const tabNaive = document.getElementById('bsTabNaive');
+            const tabCausal = document.getElementById('bsTabCausal');
+            const roiEl = document.getElementById('bsRoiValue');
+            const verdictEl = document.getElementById('bsRoiVerdict');
+            let current = 'naive';
+
+            function setState(which) {
+                if (which === current) return;
+                const prev = STATES[current];
+                current = which;
+                const s = STATES[which];
+                tabNaive.classList.toggle('active', which === 'naive');
+                tabCausal.classList.toggle('active', which === 'causal');
+                Plotly.react(creditEl, creditTraces(s), creditLayout, PLOTCFG);
+                animateNumber(roiEl, prev.roi, s.roi, '×', 600);
+                roiEl.classList.toggle('inflated', which === 'naive');
+                verdictEl.textContent = VERDICTS[which];
+            }
+            tabNaive.addEventListener('click', () => setState('naive'));
+            tabCausal.addEventListener('click', () => setState('causal'));
+        })();
+
+        // =====================================================================
+        // Demo 2 — Calibration: experiments sharpen the answer
+        // =====================================================================
+        (function () {
+            const el = document.getElementById('bsCalibChart');
+            if (!el || typeof Plotly === 'undefined') return;
+
+            const TRUTH = 1.0;
+            // mean / sd of the believed TV ROI after n calibrated experiments
+            const STAGES = [
+                { mean: 1.9, sd: 0.55, label: 'Confounded and confident', ok: false,
+                  verdict: 'Too wide to bet a budget on' },
+                { mean: 1.45, sd: 0.34, label: 'First geo lift folded in', ok: false,
+                  verdict: 'Directionally useful — keep testing' },
+                { mean: 1.15, sd: 0.20, label: 'Second readout folded in', ok: true,
+                  verdict: 'Decision-grade' },
+                { mean: 1.05, sd: 0.12, label: 'Third readout folded in', ok: true,
+                  verdict: 'Decision-grade — schedule the re-test' }
+            ];
+
+            function curve(mean, sd) {
+                const x = [], y = [];
+                for (let v = 0; v <= 3.2; v += 0.02) {
+                    x.push(v);
+                    y.push(Math.exp(-0.5 * Math.pow((v - mean) / sd, 2)) / sd);
+                }
+                return { x, y };
+            }
+
+            function traces(n) {
+                const s = STAGES[n];
+                const c = curve(s.mean, s.sd);
+                const out = [];
+                if (n > 0) {           // ghost of the uncalibrated belief for contrast
+                    const g = curve(STAGES[0].mean, STAGES[0].sd);
+                    out.push({ x: g.x, y: g.y, mode: 'lines', name: 'Before any experiments',
+                        line: { color: PAL.danger, width: 1.5, dash: 'dot' }, hoverinfo: 'skip' });
+                }
+                out.push({ x: c.x, y: c.y, mode: 'lines', name: s.label, fill: 'tozeroy',
+                    line: { color: s.ok ? PAL.sageDark : PAL.warm, width: 3 },
+                    fillcolor: s.ok ? 'rgba(143, 168, 106, 0.18)' : 'rgba(212, 168, 106, 0.18)',
+                    hoverinfo: 'skip' });
+                return out;
+            }
+
+            const layout = {
+                font: FONT, paper_bgcolor: PAL.bg, plot_bgcolor: PAL.bg,
+                margin: { l: 30, r: 16, t: 14, b: 42 },
+                xaxis: { title: 'TV ROI the model believes', range: [0, 3.2], gridcolor: PAL.grid, zeroline: false },
+                yaxis: { visible: false },
+                legend: { orientation: 'h', y: 1.12 },
+                shapes: [{
+                    type: 'line', x0: TRUTH, x1: TRUTH, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PAL.blueDark, width: 2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: TRUTH, y: 1.02, yref: 'paper', showarrow: false,
+                    text: 'What lift tests reveal', font: { size: 12, color: PAL.blueDark }, xanchor: 'left'
+                }],
+                transition: reduceMotion ? undefined : { duration: 450, easing: 'cubic-in-out' }
+            };
+            Plotly.newPlot(el, traces(0), layout, PLOTCFG);
+
+            const rangeEl = document.getElementById('bsCalibRange');
+            const verdictEl = document.getElementById('bsCalibVerdict');
+            const tabs = document.querySelectorAll('[data-exp]');
+
+            function show(n) {
+                const s = STAGES[n];
+                tabs.forEach(t => t.classList.toggle('active', Number(t.dataset.exp) === n));
+                Plotly.react(el, traces(n), layout, PLOTCFG);
+                const lo = Math.max(0, s.mean - 2 * s.sd), hi = s.mean + 2 * s.sd;
+                rangeEl.innerHTML = lo.toFixed(1) + '&times; &ndash; ' + hi.toFixed(1) + '&times;';
+                rangeEl.classList.toggle('inflated', !s.ok);
+                verdictEl.textContent = s.verdict;
+                verdictEl.className = 'bs-verdict ' + (s.ok ? 'ok' : 'warn');
+            }
+            tabs.forEach(t => t.addEventListener('click', () => show(Number(t.dataset.exp))));
+        })();
+
+        // =====================================================================
+        // Count-up animation for the financial metric cards
+        // =====================================================================
+        (function () {
+            if (reduceMotion) return;
+            const metricEls = document.querySelectorAll('.metric-value');
+            if (!metricEls.length) return;
+
+            function animateText(el) {
+                const original = el.textContent;
+                const numbers = original.match(/\d+/g);
+                if (!numbers) return;
+                const targets = numbers.map(Number);
+                const start = performance.now(), duration = 1100;
+                function tick(now) {
+                    const p = Math.min((now - start) / duration, 1);
+                    const eased = 1 - Math.pow(1 - p, 3);
+                    let i = 0;
+                    el.textContent = original.replace(/\d+/g, () => Math.round(targets[i++] * eased));
+                    if (p < 1) requestAnimationFrame(tick); else el.textContent = original;
+                }
+                requestAnimationFrame(tick);
+            }
+
+            const seen = new WeakSet();
+            const obs = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !seen.has(entry.target)) {
+                        seen.add(entry.target);
+                        animateText(entry.target);
+                    }
+                });
+            }, { threshold: 0.6 });
+            metricEls.forEach(el => obs.observe(el));
+        })();
     </script>
 </body>
 </html>

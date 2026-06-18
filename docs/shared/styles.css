@@ -26,11 +26,21 @@
     --color-warning: #d4a86a;
     --color-danger: #c97067;
 
-    /* Shadows */
-    --shadow-sm: 0 2px 8px rgba(45, 58, 45, 0.06);
-    --shadow-md: 0 8px 24px rgba(45, 58, 45, 0.08);
-    --shadow-lg: 0 16px 48px rgba(45, 58, 45, 0.12);
+    /* Derived tints (rgba of existing palette colors — no new hues) */
+    --tint-primary-06: rgba(143, 168, 106, 0.06);
+    --tint-primary-10: rgba(143, 168, 106, 0.10);
+    --tint-primary-16: rgba(143, 168, 106, 0.16);
+    --tint-accent-10: rgba(106, 143, 168, 0.10);
+    --tint-accent-ring: rgba(106, 143, 168, 0.35);
+    --border-hover: rgba(143, 168, 106, 0.55);
+    --selection-tint: rgba(143, 168, 106, 0.28);
+
+    /* Shadows (soft, layered: tight contact shadow + diffuse ambient) */
+    --shadow-sm: 0 1px 2px rgba(45, 58, 45, 0.04), 0 2px 8px rgba(45, 58, 45, 0.05);
+    --shadow-md: 0 2px 4px rgba(45, 58, 45, 0.04), 0 10px 28px rgba(45, 58, 45, 0.08);
+    --shadow-lg: 0 4px 10px rgba(45, 58, 45, 0.05), 0 22px 56px rgba(45, 58, 45, 0.11);
     --shadow-glow: 0 0 40px rgba(143, 168, 106, 0.15);
+    --focus-ring: 0 0 0 3px var(--tint-accent-ring);
 
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -61,12 +71,29 @@
     box-sizing: border-box;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--color-bg);
     color: var(--color-text);
     line-height: 1.7;
     font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+::selection {
+    background: var(--selection-tint);
+    color: var(--color-text);
+}
+
+:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
 }
 
 /* --------------------------------------------------------------------------
@@ -168,10 +195,11 @@ section {
     left: 0;
     right: 0;
     z-index: 1000;
-    background: rgba(250, 251, 249, 0.95);
-    backdrop-filter: blur(20px);
+    background: rgba(250, 251, 249, 0.88);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
     border-bottom: 1px solid var(--color-border);
-    padding: 1rem 0;
+    padding: 0.75rem 0;
 }
 
 .nav-content {
@@ -181,6 +209,7 @@ section {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 2.5rem;
 }
 
 .logo {
@@ -194,24 +223,162 @@ section {
 
 .nav-links {
     display: flex;
-    gap: 1.25rem;
+    gap: 1rem;
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
 .nav-links a {
+    position: relative;
     color: var(--color-text-muted);
     text-decoration: none;
     font-weight: 500;
-    font-size: 0.92rem;
+    font-size: 0.89rem;
+    padding: 0.3rem 0;
     transition: var(--transition-smooth);
     white-space: nowrap;
 }
 
+.nav-links a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .nav-links a:hover,
 .nav-links a.active {
-    color: var(--color-primary);
+    color: var(--color-primary-dark);
+}
+
+.nav-links a:hover::after,
+.nav-links a.active::after {
+    transform: scaleX(1);
+}
+
+/* Grouped nav dropdowns (Learn / Methodology / Platform / Proof / Project) */
+.nav-group {
+    position: relative;
+}
+
+.nav-group-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 0.89rem;
+    color: var(--color-text-muted);
+    padding: 0.3rem 0;
+    white-space: nowrap;
+    transition: var(--transition-smooth);
+}
+
+.nav-group-btn .caret {
+    font-size: 0.65em;
+    transform: translateY(1px);
+    transition: transform 0.2s ease;
+}
+
+.nav-group-btn::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-group:hover .nav-group-btn,
+.nav-group.open .nav-group-btn,
+.nav-group-btn.active {
+    color: var(--color-primary-dark);
+}
+
+.nav-group:hover .nav-group-btn::after,
+.nav-group.open .nav-group-btn::after,
+.nav-group-btn.active::after {
+    transform: scaleX(1);
+}
+
+.nav-group:hover .nav-group-btn .caret,
+.nav-group.open .nav-group-btn .caret {
+    transform: translateY(1px) rotate(180deg);
+}
+
+.nav-dropdown {
+    position: absolute;
+    top: calc(100% + 0.65rem);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    min-width: 240px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    padding: 0.5rem;
+    margin: 0;
+    list-style: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+    z-index: 1001;
+}
+
+/* Invisible bridge so the pointer can travel from button to panel */
+.nav-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -0.7rem;
+    left: 0;
+    right: 0;
+    height: 0.7rem;
+}
+
+.nav-group:hover .nav-dropdown,
+.nav-group:focus-within .nav-dropdown,
+.nav-group.open .nav-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.nav-dropdown li {
+    margin: 0;
+}
+
+.nav-dropdown a {
+    display: block;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+}
+
+.nav-dropdown a::after {
+    display: none;
+}
+
+.nav-dropdown a:hover,
+.nav-dropdown a.active {
+    background: var(--tint-primary-10, rgba(90, 124, 101, 0.1));
+    color: var(--color-primary-dark);
 }
 
 /* Mobile menu button */
@@ -248,12 +415,14 @@ footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 3rem;
 }
 
 .footer-links {
     display: flex;
-    gap: 2rem;
+    gap: 0.6rem 1.75rem;
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .footer-links a {
@@ -266,20 +435,65 @@ footer {
     color: var(--color-primary);
 }
 
+.footer-meta {
+    max-width: 1200px;
+    margin: 1.5rem auto 0;
+    padding: 1.25rem 2rem 0;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+}
+
+.footer-meta a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.footer-meta a:hover {
+    color: var(--color-primary);
+}
+
 /* --------------------------------------------------------------------------
    Typography
    -------------------------------------------------------------------------- */
 h1, h2, h3, h4, h5, h6 {
     font-family: 'DM Serif Display', serif;
     color: var(--color-text);
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    text-wrap: balance;
 }
 
-h1 { font-size: 2.8rem; }
-h2 { font-size: 2rem; margin-bottom: 1.5rem; }
-h3 { font-size: 1.3rem; margin: 2rem 0 1rem; }
+h1 { font-size: 2.9rem; line-height: 1.12; letter-spacing: -0.02em; }
+h2 { font-size: 2.05rem; margin-bottom: 1.25rem; line-height: 1.18; }
+h3 { font-size: 1.35rem; margin: 2.25rem 0 0.9rem; }
 
 p { margin-bottom: 1.25rem; }
 p:last-child { margin-bottom: 0; }
+
+/* Prose links: accent-colored with a refined underline.
+   Scoped away from injected chrome — nav, sidebar, footer, page-toc links
+   are plain <li>/<a> markup and must not pick this up. */
+p a:not([class]),
+li a:not([class], .site-nav *, .sidebar *, footer *, .page-toc *),
+td a:not([class]) {
+    color: var(--color-accent-dark);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--tint-accent-ring);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.2s ease, color 0.2s ease;
+}
+
+p a:not([class]):hover,
+li a:not([class], .site-nav *, .sidebar *, footer *, .page-toc *):hover,
+td a:not([class]):hover {
+    color: var(--color-accent);
+    text-decoration-color: var(--color-accent);
+}
 
 .lead {
     font-size: 1.25rem;
@@ -302,25 +516,35 @@ li {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 1rem 2rem;
-    border-radius: 8px;
+    padding: 0.8rem 1.7rem;
+    border-radius: 10px;
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
     text-decoration: none;
     transition: var(--transition-smooth);
     border: none;
     cursor: pointer;
 }
 
+.btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
 .btn-primary {
     background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     color: white;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md), 0 8px 20px rgba(143, 168, 106, 0.28);
+}
+
+.btn-primary:focus-visible {
+    box-shadow: var(--focus-ring), var(--shadow-sm);
 }
 
 .btn-secondary {
@@ -331,7 +555,9 @@ li {
 
 .btn-secondary:hover {
     border-color: var(--color-primary);
-    color: var(--color-primary);
+    color: var(--color-primary-dark);
+    background: var(--tint-primary-06);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn-outline {
@@ -496,7 +722,7 @@ li {
 .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 1.5rem;
     transition: var(--transition-smooth);
 }
@@ -504,6 +730,7 @@ li {
 .card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
+    border-color: var(--border-hover);
 }
 
 .card h4 {
@@ -545,7 +772,7 @@ li {
 .principle-card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 1.5rem;
     transition: var(--transition-smooth);
 }
@@ -553,6 +780,7 @@ li {
 .principle-card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
+    border-color: var(--border-hover);
 }
 
 .principle-card .icon {
@@ -590,7 +818,7 @@ li {
 .model-card:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
-    border-color: var(--color-primary);
+    border-color: var(--border-hover);
 }
 
 .model-icon {
@@ -660,7 +888,7 @@ li {
 .method-card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 1.5rem;
     text-align: center;
     transition: var(--transition-smooth);
@@ -669,6 +897,7 @@ li {
 .method-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+    border-color: var(--border-hover);
 }
 
 .method-card h4 {
@@ -805,10 +1034,12 @@ li {
    -------------------------------------------------------------------------- */
 pre {
     background: var(--color-bg-alt);
+    border: 1px solid var(--color-border);
     padding: 1.5rem;
-    border-radius: 8px;
+    border-radius: 10px;
     overflow-x: auto;
     margin: 1.5rem 0;
+    line-height: 1.6;
 }
 
 code {
@@ -818,14 +1049,18 @@ code {
 
 p code, li code {
     background: var(--color-bg-alt);
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    border: 1px solid rgba(212, 221, 212, 0.7);
+    padding: 0.15rem 0.45rem;
+    border-radius: 5px;
+    font-size: 0.85em;
+    color: var(--color-primary-dark);
 }
 
 .math-block {
     background: var(--color-bg-alt);
+    border: 1px solid var(--color-border);
     padding: 1.5rem;
-    border-radius: 8px;
+    border-radius: 10px;
     margin: 1.5rem 0;
     overflow-x: auto;
     position: relative;
@@ -862,6 +1097,21 @@ th, td {
 th {
     background: var(--color-bg-alt);
     font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+
+tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+tbody tr:hover {
+    background: var(--tint-primary-06);
 }
 
 tbody tr:last-child td {
@@ -1016,8 +1266,9 @@ tbody tr:last-child td {
 
 .sidebar-nav a:hover,
 .sidebar-nav a.active {
-    color: var(--color-primary);
+    color: var(--color-primary-dark);
     border-left-color: var(--color-primary);
+    background: linear-gradient(90deg, var(--tint-primary-06), transparent 80%);
 }
 
 .sidebar-nav .sub-item a {
@@ -1028,6 +1279,14 @@ tbody tr:last-child td {
 .main-content {
     padding: 3rem 4rem;
     max-width: 900px;
+}
+
+/* Comfortable measure for long-form prose (direct children only,
+   so cards/grids/tables inside the content area are unaffected) */
+.main-content > p,
+.main-content > ul,
+.main-content > ol {
+    max-width: 100ch;
 }
 
 .main-content h1 {
@@ -1401,6 +1660,14 @@ tbody tr:last-child td {
 
 .chart-container-lg {
     height: 400px;
+}
+
+/* Plotly renders directly into many .chart-container divs. Plotly sizes its
+   SVG to clientHeight (which includes padding), so any padding pushes the
+   axis titles below the box. Drop the padding once a plot has mounted —
+   Plotly's own margins provide the breathing room. */
+.chart-container.js-plotly-plot {
+    padding: 0;
 }
 
 .chart-grid {
@@ -1799,17 +2066,17 @@ tbody tr:last-child td {
 
 /* Tighten nav between desktop and mobile-menu breakpoint so 10+ items
    don't wrap or overflow before the hamburger kicks in. */
-@media (max-width: 1320px) {
-    .nav-links { gap: 0.9rem; }
-    .nav-links a { font-size: 0.88rem; }
+@media (max-width: 1480px) {
+    .nav-links { gap: 0.8rem; }
+    .nav-links a { font-size: 0.86rem; }
 }
 
-@media (max-width: 1200px) {
-    .nav-links { gap: 0.7rem; }
+@media (max-width: 1340px) {
+    .nav-links { gap: 0.65rem; }
     .nav-links a { font-size: 0.84rem; }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
     .nav-links {
         display: none;
     }
@@ -1835,6 +2102,18 @@ tbody tr:last-child td {
 
     .nav-links.active a {
         font-size: 1rem;
+        padding: 0.4rem 0.6rem;
+        border-radius: 8px;
+    }
+
+    /* In the open mobile menu, a soft pill replaces the underline */
+    .nav-links.active a::after {
+        display: none;
+    }
+
+    .nav-links.active a:hover,
+    .nav-links.active a.active {
+        background: var(--tint-primary-10);
     }
 }
 
@@ -2223,7 +2502,7 @@ tbody tr:last-child td {
 
 .process-step:hover {
     box-shadow: var(--shadow-md);
-    border-color: var(--color-primary);
+    border-color: var(--border-hover);
 }
 
 .process-step::before {
@@ -2283,6 +2562,7 @@ tbody tr:last-child td {
 .metric-card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
+    border-color: var(--border-hover);
 }
 
 .metric-card .metric-value {
@@ -2425,7 +2705,8 @@ tbody tr:last-child td {
 }
 
 .accordion-item:hover {
-    border-color: var(--color-primary);
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-sm);
 }
 
 .accordion-header {
@@ -2636,7 +2917,7 @@ tbody tr:last-child td {
 
 .icon-box:hover {
     box-shadow: var(--shadow-sm);
-    border-color: var(--color-primary);
+    border-color: var(--border-hover);
 }
 
 .icon-box .icon-circle {
@@ -2694,4 +2975,53 @@ tbody tr:last-child td {
         height: 1.75rem;
         font-size: 0.75rem;
     }
+}
+
+/* --------------------------------------------------------------------------
+   Motion & Accessibility
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    /* Scroll-reveal elements render in place, fully visible */
+    .fade-in,
+    .fade-in-up,
+    .slide-in-left,
+    .slide-in-right,
+    .scale-in {
+        opacity: 1;
+        transform: none;
+    }
+
+    /* No hover lift */
+    .card:hover,
+    .principle-card:hover,
+    .method-card:hover,
+    .model-card:hover,
+    .metric-card:hover,
+    .role-card:hover,
+    .glass-card:hover,
+    .btn-primary:hover,
+    .btn-white:hover {
+        transform: none;
+    }
+}
+
+/* Long display equations (KaTeX/MathML) scroll within the column instead of
+   pushing the page wider. */
+.katex-display,
+.main-content math {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
 }

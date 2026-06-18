@@ -1,9 +1,27 @@
 import { apiClient } from '../client';
+import type { ProjectMember, ProjectMemberInput } from './teamService';
+
+/** Onboarding profile stored in projects.meta_json (all fields optional). */
+export interface ProjectMeta {
+  client_name?: string;
+  industry?: string;
+  website?: string;
+  markets?: string;
+  audience?: string;
+  goals?: string;
+  kpis?: string;
+  channels?: string;
+  constraints?: string;
+  notes?: string;
+  onboarded?: boolean;
+  [key: string]: unknown;
+}
 
 export interface ProjectResponse {
   project_id: string;
   name: string;
   description: string | null;
+  meta?: ProjectMeta;
   created_at: string;
   updated_at: string;
   data_count: number;
@@ -25,6 +43,27 @@ export interface ProjectCreateRequest {
 export interface ProjectUpdateRequest {
   name?: string;
   description?: string;
+}
+
+export interface ProjectOnboardingRequest {
+  client_name?: string;
+  industry?: string;
+  website?: string;
+  markets?: string;
+  audience?: string;
+  goals?: string;
+  kpis?: string;
+  channels?: string;
+  constraints?: string;
+  notes?: string;
+  members?: ProjectMemberInput[];
+}
+
+export interface ProjectOnboardingResponse {
+  project: ProjectResponse;
+  members: ProjectMember[];
+  /** 'ready' when the project brief was ingested into the knowledge base. */
+  brief_status: string;
 }
 
 export const projectService = {
@@ -50,5 +89,16 @@ export const projectService = {
 
   async deleteProject(projectId: string): Promise<void> {
     await apiClient.delete(`/projects/${projectId}`);
+  },
+
+  async onboardProject(
+    projectId: string,
+    request: ProjectOnboardingRequest,
+  ): Promise<ProjectOnboardingResponse> {
+    const { data } = await apiClient.post<ProjectOnboardingResponse>(
+      `/projects/${projectId}/onboarding`,
+      request,
+    );
+    return data;
   },
 };

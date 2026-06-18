@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Component, type ReactNode } from 'react';
@@ -6,8 +6,11 @@ import { AppShell } from './components/layout';
 import { ProtectedRoute } from './components/common';
 import {
   LoginPage,
-  DashboardPage,
-  PlanningPage,
+  ProgramPage,
+  ExperimentsPage,
+  PerformancePage,
+  TeamPage,
+  KnowledgePage,
   AgentPage,
 } from './pages';
 import './index.css';
@@ -19,15 +22,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
     if (this.state.error) {
       const e = this.state.error as Error;
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
-          <div className="max-w-lg w-full bg-white rounded-xl border border-red-200 shadow p-6">
-            <h1 className="text-lg font-semibold text-red-700 mb-2">Something went wrong</h1>
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded p-3 border border-gray-200">
+        <div className="min-h-screen flex items-center justify-center bg-cream-50 p-8">
+          <div className="max-w-lg w-full bg-white rounded-xl border border-rust-600/30 shadow p-6">
+            <h1 className="text-lg font-semibold text-rust-700 mb-2 font-display">Something went wrong</h1>
+            <pre className="text-sm text-ink-700 whitespace-pre-wrap bg-cream-100 rounded p-3 border border-line-200">
               {e.message}{'\n\n'}{e.stack}
             </pre>
             <button
               onClick={() => { this.setState({ error: null }); window.location.reload(); }}
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700"
+              className="mt-4 px-4 py-2 bg-sage-700 text-white text-sm rounded-lg hover:bg-sage-800"
             >Reload</button>
           </div>
         </div>
@@ -48,6 +51,13 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Permanent /chat → /workspace redirect that forwards query params
+ * (deep links like /chat?session=... exist in saved bookmarks + old emails). */
+function ChatRedirect() {
+  const location = useLocation();
+  return <Navigate to={`/workspace${location.search}`} replace />;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -57,15 +67,19 @@ function App() {
           {/* Public route - Login */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Chat — full-screen layout, no AppShell */}
+          {/* Workspace (chat) — inside the AppShell (shared nav, header, and
+              project switcher) with a full-bleed content area */}
           <Route
-            path="/chat"
+            path="/workspace"
             element={
               <ProtectedRoute>
-                <AgentPage />
+                <AppShell fullBleed>
+                  <AgentPage />
+                </AppShell>
               </ProtectedRoute>
             }
           />
+          <Route path="/chat" element={<ChatRedirect />} />
 
           {/* Protected routes — share AppShell */}
           <Route
@@ -74,10 +88,21 @@ function App() {
               <ProtectedRoute>
                 <AppShell>
                   <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/analysis-plan" element={<PlanningPage />} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/" element={<Navigate to="/program" replace />} />
+                    <Route path="/program" element={<ProgramPage />} />
+                    <Route path="/experiments" element={<ExperimentsPage />} />
+                    <Route path="/experiments/:experimentId" element={<ExperimentsPage />} />
+                    <Route path="/performance" element={<PerformancePage />} />
+                    <Route path="/performance/:tab" element={<PerformancePage />} />
+                    <Route path="/knowledge" element={<KnowledgePage />} />
+                    <Route path="/team" element={<TeamPage />} />
+                    {/* Legacy paths */}
+                    <Route path="/dashboard" element={<Navigate to="/program" replace />} />
+                    <Route path="/runs" element={<Navigate to="/performance/runs" replace />} />
+                    {/* The standalone Planning page was folded into the agent
+                        workspace's Causal tab (CausalPlanner). */}
+                    <Route path="/analysis-plan" element={<Navigate to="/workspace" replace />} />
+                    <Route path="*" element={<Navigate to="/program" replace />} />
                   </Routes>
                 </AppShell>
               </ProtectedRoute>

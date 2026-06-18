@@ -14,10 +14,9 @@ import pymc as pm
 import pytensor.tensor as pt
 
 from .base import BaseExtendedMMM
+from ..results import CrossEffectSummary
 
 if TYPE_CHECKING:
-    import arviz as az
-
     from ..config import CombinedModelConfig
 
 
@@ -77,11 +76,63 @@ class CombinedMMM(BaseExtendedMMM):
         self.n_mediators = len(self.mediator_names)
         self.n_outcomes = len(self.outcome_names)
 
+        # Per-outcome standardization (same convention as MultivariateMMM):
+        # raw data attributes, standardized likelihood, original-unit
+        # deterministics.
+        self.outcome_means = {
+            name: float(np.asarray(outcome_data[name], dtype=float).mean())
+            for name in self.outcome_names
+        }
+        self.outcome_stds = {
+            name: float(np.asarray(outcome_data[name], dtype=float).std()) + 1e-8
+            for name in self.outcome_names
+        }
+
+        # Build cross-effect structure (same machinery as MultivariateMMM).
+        self._cross_effect_specs = self._build_cross_effect_specs()
+
     def _build_coords(self) -> dict:
         coords = super()._build_coords()
         coords["mediator"] = self.mediator_names
         coords["outcome"] = self.outcome_names
         return coords
+
+    def _build_cross_effect_specs(self):
+        """Convert configured cross-effects to internal specs.
+
+        Mirrors :meth:`MultivariateMMM._build_cross_effect_specs`: only the
+        configured (source, target) directions get a free RV; everything else
+        in the psi matrix is a structural zero (including the diagonal).
+        """
+        from ..components.cross_effects import CrossEffectSpec
+        from ..config import CrossEffectType
+
+        specs = []
+        for ce in self.config.multivariate.cross_effects:
+            source_idx = self.outcome_names.index(ce.source_outcome)
+            target_idx = self.outcome_names.index(ce.target_outcome)
+
+            specs.append(
+                CrossEffectSpec(
+                    source_idx=source_idx,
+                    target_idx=target_idx,
+                    effect_type=ce.effect_type.value,
+                    prior_sigma=ce.prior_sigma,
+                )
+            )
+
+            # Add reverse direction for symmetric effects
+            if ce.effect_type == CrossEffectType.SYMMETRIC:
+                specs.append(
+                    CrossEffectSpec(
+                        source_idx=target_idx,
+                        target_idx=source_idx,
+                        effect_type=ce.effect_type.value,
+                        prior_sigma=ce.prior_sigma,
+                    )
+                )
+
+        return specs
 
     def _get_affecting_channels(self, mediator_name: str) -> list[str]:
         """Get channels that affect a mediator."""
@@ -99,6 +150,10 @@ class CombinedMMM(BaseExtendedMMM):
 
     def _build_model(self) -> pm.Model:
         """Build the combined model."""
+        from ..components.cross_effects import (
+            build_cross_effect_matrix,
+            compute_cross_effect_contribution,
+        )
         from ..components.priors import create_effect_prior
         from ..components.observation import (
             build_partial_observation_model,
@@ -114,6 +169,11 @@ class CombinedMMM(BaseExtendedMMM):
             Y_matrix = np.column_stack(
                 [self.outcome_data[name] for name in self.outcome_names]
             )
+            # ``Y`` stays raw (cross-effects act on the raw source outcome);
+            # the likelihood fits standardized outcomes.
+            means = np.array([self.outcome_means[n] for n in self.outcome_names])
+            stds = np.array([self.outcome_stds[n] for n in self.outcome_names])
+            Y_standardized = (Y_matrix - means) / stds
             Y = pm.Data("Y", Y_matrix, dims=("obs", "outcome"))
 
             # Media transformations: normalize -> geometric adstock -> logistic
@@ -183,8 +243,35 @@ class CombinedMMM(BaseExtendedMMM):
             # Mediator → Outcome effects
             gamma = pm.Normal("gamma", mu=0, sigma=0.5, dims=("outcome", "mediator"))
 
-            # Cross-effects
-            psi = pm.Normal("psi", mu=0, sigma=0.3, dims=("outcome", "outcome"))
+            # Cross-effects: only configured (source, target) directions get a
+            # free RV (sign-constrained where requested); all other entries —
+            # including the diagonal — are structural zeros. Same machinery as
+            # MultivariateMMM. No configured cross-effects => no psi RVs.
+            if self._cross_effect_specs:
+                psi_matrix, _psi_params = build_cross_effect_matrix(
+                    self._cross_effect_specs,
+                    self.n_outcomes,
+                    name_prefix="psi",
+                )
+                pm.Deterministic("psi_matrix", psi_matrix)
+            else:
+                psi_matrix = None
+
+            # Optional promotion modulation per source outcome (built once).
+            modulation: dict[int, pt.TensorVariable] = {}
+            if psi_matrix is not None:
+                for ce in self.config.multivariate.cross_effects:
+                    if (
+                        ce.promotion_modulated
+                        and ce.promotion_column
+                        and ce.promotion_column in self.promotion_data
+                    ):
+                        source_idx = self.outcome_names.index(ce.source_outcome)
+                        modulation[source_idx] = pm.Data(
+                            f"promo_{ce.source_outcome}",
+                            self.promotion_data[ce.promotion_column],
+                            dims="obs",
+                        )
 
             # Build expected values
             mu_list = []
@@ -201,21 +288,34 @@ class CombinedMMM(BaseExtendedMMM):
                     if outcome_name in affected:
                         mu_k = mu_k + gamma[k, m] * mediator_values[med_name]
 
-                # Cross-effects
-                for j in range(self.n_outcomes):
-                    if j != k:
-                        mu_k = mu_k + psi[j, k] * Y[:, j]
+                # Cross-effects: psi_matrix[source, target] * Y[:, source],
+                # added to target k (same orientation as MultivariateMMM). The
+                # raw-scale contribution is divided by the target's std so psi
+                # keeps its raw source->target interpretation in the
+                # standardized-mu graph.
+                if psi_matrix is not None:
+                    mu_k = mu_k + (
+                        compute_cross_effect_contribution(
+                            Y, psi_matrix, k, self.n_outcomes, modulation
+                        )
+                        / stds[k]
+                    )
 
                 mu_list.append(mu_k)
 
-            mu = pt.stack(mu_list, axis=1)
-            pm.Deterministic("mu", mu, dims=("obs", "outcome"))
+            mu_standardized = pt.stack(mu_list, axis=1)
+            # Original-unit predictions (reports and oracles consume this)
+            pm.Deterministic(
+                "mu",
+                mu_standardized * stds[None, :] + means[None, :],
+                dims=("obs", "outcome"),
+            )
 
-            # Multivariate likelihood
+            # Multivariate likelihood (standardized scale)
             build_multivariate_likelihood(
                 "Y_obs",
-                mu,
-                Y_matrix,
+                mu_standardized,
+                Y_standardized,
                 self.n_outcomes,
                 self.config.multivariate.lkj_eta,
                 dims=("obs", "outcome"),
@@ -223,9 +323,10 @@ class CombinedMMM(BaseExtendedMMM):
 
             # Derived quantities. ``indirect`` respects the mediator->outcome
             # routing (``_get_affected_outcomes``) so it matches ``mu`` exactly.
+            # Registered in original units (x outcome std), matching ``mu``.
             for i, channel in enumerate(self.channel_names):
                 for k, outcome_name in enumerate(self.outcome_names):
-                    direct = beta_direct[k, i]
+                    direct = beta_direct[k, i] * stds[k]
 
                     indirect = pt.zeros(())
                     for m, med_name in enumerate(self.mediator_names):
@@ -233,7 +334,7 @@ class CombinedMMM(BaseExtendedMMM):
                             continue
                         beta = channel_mediator_betas.get(med_name, {}).get(channel)
                         if beta is not None:
-                            indirect = indirect + beta * gamma[k, m]
+                            indirect = indirect + beta * gamma[k, m] * stds[k]
 
                     pm.Deterministic(f"direct_{channel}_{outcome_name}", direct)
                     pm.Deterministic(f"indirect_{channel}_{outcome_name}", indirect)
@@ -265,10 +366,47 @@ class CombinedMMM(BaseExtendedMMM):
                             "apply": apply,
                             "x_input": x_input,
                             "spend_obs": self.X_media[:, c],
+                            "scale": self.outcome_stds[outcome_name],
                         }
-                self._add_experiment_likelihoods(handles, scale=1.0)
+                self._add_experiment_likelihoods(handles)
 
         return model
+
+    def get_cross_effects_summary(self) -> pd.DataFrame:
+        """Extract cross-effect estimates.
+
+        Same convention as :meth:`MultivariateMMM.get_cross_effects_summary`:
+        each row reports the configured source -> target effect read from
+        ``psi_matrix[source_idx, target_idx]`` (cannibalization rows carry the
+        imposed negative sign).
+        """
+        import arviz as az
+
+        self._check_fitted()
+
+        if "psi_matrix" not in self._trace.posterior:
+            return pd.DataFrame()
+
+        results = []
+        psi = self._trace.posterior["psi_matrix"]
+
+        for spec in self._cross_effect_specs:
+            vals = psi[:, :, spec.source_idx, spec.target_idx].values.flatten()
+            hdi = az.hdi(vals, hdi_prob=0.94)
+
+            results.append(
+                CrossEffectSummary(
+                    source=self.outcome_names[spec.source_idx],
+                    target=self.outcome_names[spec.target_idx],
+                    effect_type=spec.effect_type,
+                    mean=float(np.mean(vals)),
+                    sd=float(np.std(vals)),
+                    hdi_low=float(hdi[0]),
+                    hdi_high=float(hdi[1]),
+                )
+            )
+
+        return pd.DataFrame([r.to_dict() for r in results])
 
     def get_effect_decomposition(self) -> pd.DataFrame:
         """Get full effect decomposition by channel and outcome."""

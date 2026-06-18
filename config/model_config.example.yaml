@@ -22,6 +22,7 @@
 #   anthropic         Anthropic API (direct)                     -> api_key
 #   openai            OpenAI API (direct)                        -> api_key
 #   google_genai      Gemini Developer API (direct)              -> api_key
+#   lmstudio          Local model via LM Studio (OpenAI-compat)  -> base_url, no key
 provider: vertex_anthropic
 
 # Model id.
@@ -64,6 +65,19 @@ extra_models: []
 # API key. Usually leave blank and set the provider's environment variable
 # instead (ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY).
 api_key:
+
+# --- Local LM Studio (used only by the lmstudio provider) -------------------
+# Run LM Studio, load a model, and start its local server (Developer tab →
+# "Start Server"). Then set:
+#   provider: lmstudio
+#   model:    <the model identifier shown in LM Studio, e.g. qwen2.5-7b-instruct>
+#   base_url: http://localhost:1234/v1   # default; change if you moved the port
+# No api_key is needed. The login screen auto-discovers loaded models via
+# LM Studio's /v1/models. For the knowledge base, also load an embedding model
+# in LM Studio and set MMM_EMBED_MODEL to its id (MMM_EMBED_PROVIDER defaults to
+# lmstudio when the chat provider is lmstudio). Note: tool-calling requires a
+# model that supports it (most instruct models served by LM Studio do).
+base_url:
 
 # Extra kwargs passed straight through to the underlying LangChain chat model.
 model_kwargs: {}

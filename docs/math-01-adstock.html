@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math 01: Adstock | MMM Framework</title>
+    <meta name="description" content="The mathematics of adstock (carryover): the geometric recurrence and its 1/(1−α) multiplier, normalized FIR kernels, the geometric/delayed/Weibull families in an interactive explorer, the parametric default vs the legacy Beta(2,2) blend-weight mechanism, and what l_max truncation cuts off.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-01-adstock.html">
+    <meta property="og:title" content="Math 01: Adstock | MMM Framework">
+    <meta property="og:description" content="Carryover as a convolution: derive the geometric recurrence, normalize the kernel, explore delayed and Weibull shapes live, and learn why the legacy blend parameter is a mixing weight — not a decay rate — while the default now estimates the kernel itself.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-01-adstock.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] { accent-color: var(--color-primary); }
+        .controls-row .slider-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+            min-width: 3.2em;
+            display: inline-block;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        /* live readout chips for the explorer */
+        .readout-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin: 0.6rem 0 0;
+        }
+        .readout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-full);
+            padding: 0.25rem 0.9rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+        .readout b {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--color-primary-dark);
+        }
+        .readout.hot b { color: var(--color-danger); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Four ways to write carryover</a></li>
+                <li><a href="#recurrence">(a) The geometric recurrence</a></li>
+                <li><a href="#fir">(b) Normalized FIR kernels</a></li>
+                <li><a href="#families">(c) Kernel families, live</a></li>
+                <li><a href="#blend">(d) The legacy blend path</a></li>
+                <li><a href="#truncation">IIR vs FIR: what l_max cuts</a></li>
+                <li><a href="#equifinality">Identifiability</a></li>
+                <li><a href="#recap">Recap &amp; takeaways</a></li>
+            </ul>
+
+            <h3>The Math Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="math-00-overview.html">00 · The Generative Model</a></li>
+                <li><a href="math-01-adstock.html" class="active">01 · Adstock</a></li>
+                <li><a href="math-02-saturation.html">02 · Saturation</a></li>
+                <li><a href="math-03-seasonality-trend.html">03 · Seasonality &amp; Trend</a></li>
+                <li><a href="math-04-bayesian-model.html">04 · The Bayesian Model</a></li>
+                <li><a href="math-05-calibration.html">05 · Calibration</a></li>
+                <li><a href="math-06-extensions.html">06 · Extensions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Math 01 · The Mathematics of Adstock</h1>
+            <p class="lead">
+                When you spend on advertising in week \(t\), the effect does not vanish in week \(t\).
+                A TV flight seen this week still nudges a purchase three weeks from now; a brand campaign
+                builds for a while <em>before</em> it peaks. <strong>Adstock</strong> (carryover) is the
+                function that turns a raw spend series \(x_t\) into an <em>effective</em> exposure series
+                that carries the past forward. This page derives every formula the framework uses, charts
+                every kernel live in your browser, and ends with the single most-misread fact in the
+                codebase: the legacy model's <code>adstock_&lt;channel&gt;</code> parameter is a
+                <strong>blend weight between two fixed kernels — not a decay rate</strong>
+                (the default since June 2026 estimates the kernel itself in-graph).
+                It mirrors <code>nbs/math_01_adstock.ipynb</code>, where every identity below is
+                encoded as an executable <code>assert</code> against the real framework functions.
+            </p>
+
+            <p>
+                The framework offers <strong>three related representations</strong> of adstock, plus a
+                fourth thing that is easy to misread — the legacy blend mechanism that was the default
+                before June 2026 (the current default is the parametric path, (c)):
+            </p>
+
+            <table>
+                <thead>
+                    <tr><th></th><th>Representation</th><th>Where</th><th>Estimated?</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>(a)</strong></td><td>Geometric <strong>recurrence</strong> (IIR)</td><td><code>transforms.geometric_adstock</code></td><td>fixed \(\alpha\)</td></tr>
+                    <tr><td><strong>(b)</strong></td><td>Normalized <strong>FIR kernels</strong> (geometric / delayed / Weibull)</td><td><code>transforms.adstock.adstock_weights</code> + <code>apply_adstock</code></td><td>fixed shape</td></tr>
+                    <tr><td><strong>(c)</strong></td><td><strong>In-graph PyTensor</strong> mirror of (b)</td><td><code>transforms.adstock_pt</code></td><td>differentiable, learned</td></tr>
+                    <tr><td><strong>(d)</strong></td><td>The <strong>legacy <code>BayesianMMM</code></strong> mechanism (pre-2026-06 default)</td><td><code>model.base</code></td><td>learns a <em>blend weight</em>, <strong>not</strong> a decay rate; the current default is (c)</td></tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why the geometric recurrence \(a_t = x_t + \alpha a_{t-1}\) is a convolution with kernel \(\alpha^k\), and why its total-effect multiplier \(1/(1-\alpha)\) explodes near \(\alpha = 1\).</li>
+                    <li>How normalized FIR kernels (geometric, delayed, Weibull) separate timing from size — the kernel sums to exactly 1, pushing the magnitude into \(\beta\).</li>
+                    <li>Why the legacy model's <code>adstock_&lt;channel&gt;</code> parameter is a blend weight between two fixed kernels — not a decay rate (the current default, part (c), estimates the kernel itself).</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_01_adstock.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_01_adstock.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="recurrence">(a) Carryover as a convolution: the geometric recurrence</h2>
+            <p>
+                The classic form is a one-line <strong>recurrence</strong> — an <em>infinite impulse
+                response</em> (IIR) filter, exactly what <code>geometric_adstock(x, alpha)</code> computes:
+            </p>
+            \[
+            a_t \;=\; x_t \;+\; \alpha\, a_{t-1},
+            \qquad a_0 = x_0,
+            \qquad \alpha \in [0, 1).
+            \]
+            <p>
+                The decay rate \(\alpha\) is the share of <em>last</em> week's effective exposure that
+                survives into <em>this</em> week. \(\alpha = 0\) means no carryover (the transform is the
+                identity); \(\alpha \to 1\) means the effect barely fades.
+            </p>
+
+            <h3>Unrolling it: where the lag weights come from</h3>
+            <p>Substitute the recurrence into itself, starting from \(a_0 = x_0\):</p>
+            \[
+            \begin{aligned}
+            a_1 &amp;= x_1 + \alpha x_0,\\
+            a_2 &amp;= x_2 + \alpha x_1 + \alpha^2 x_0,\\
+            &amp;\;\;\vdots\\
+            a_t &amp;= \sum_{k=0}^{t} \alpha^{k}\, x_{t-k}.
+            \end{aligned}
+            \]
+            <p>
+                So the recurrence is <em>secretly</em> a <strong>causal convolution</strong> with the
+                closed-form kernel \(w_k = \alpha^k\). A <strong>unit impulse</strong> at \(t=0\) — one
+                unit of spend, then nothing — therefore produces the sequence
+                \(1,\ \alpha,\ \alpha^2,\ \alpha^3,\dots\): the impulse response <em>is</em> the kernel,
+                literally readable off the output.
+            </p>
+
+            <div class="chart-container" id="impulseChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong> Each line
+                is <code>geometric_adstock</code> applied to a unit impulse at \(t=0\). The response at
+                lag \(k\) is exactly \(\alpha^k\) — the notebook asserts this to \(10^{-9}\) against the
+                real framework function.
+            </p>
+
+            <h3>The total carryover multiplier \(1/(1-\alpha)\)</h3>
+            <p>Summing the kernel over all lags is a geometric series:</p>
+            \[
+            \sum_{k=0}^{\infty} \alpha^{k} \;=\; \frac{1}{1-\alpha}.
+            \]
+            <p>
+                This is the framework docstring's claim that <em>"the total effect of a unit spend is
+                scaled by \(1/(1-\alpha)\)."</em> At \(\alpha = 0.5\) a single dollar of spend contributes
+                the equivalent of <strong>two</strong> dollars of effective exposure once you add up all
+                its future echoes; the notebook's measured sums are
+                \(\{\alpha{=}0.2 \to 1.25,\ \alpha{=}0.5 \to 2.0,\ \alpha{=}0.8 \to 5.0\}\).
+                Crucially this kernel is <strong>un-normalized</strong>: its weights sum to
+                \(1/(1-\alpha) &gt; 1\), not to \(1\). Hold that thought for part (b).
+            </p>
+
+            <div class="chart-container" id="multiplierChart"></div>
+            <p class="chart-note">
+                <strong>Computed live — same math as the notebook.</strong> The multiplier
+                <em>explodes</em> as \(\alpha \to 1\), which is why \(\alpha\) is constrained to
+                \([0,1)\) and why an estimated \(\alpha\) near the boundary is a red flag (infinite
+                memory). The marked points are the notebook's asserted values.
+            </p>
+
+            <div class="note">
+                <h4>💡 One recurrence, many channels</h4>
+                <p>
+                    <code>geometric_adstock_2d(X, alpha)</code> applies the same recurrence independently
+                    to each column of a \((T, n_\text{channels})\) spend matrix. It is the workhorse the
+                    legacy blend path precomputes with — see part (d).
+                </p>
+            </div>
+
+            <h2 id="fir">(b) Normalized FIR kernels: separating timing from size</h2>
+            <p>
+                The recurrence in (a) has <em>infinite</em> memory and can only ever <strong>peak at lag
+                0</strong> — the current period is always the largest weight. The framework's
+                <code>adstock_weights(kind, l_max, ...)</code> instead builds an explicit
+                <strong>finite</strong> weight vector \(w = (w_0, w_1, \dots, w_{L-1})\) of length
+                <code>l_max</code>, and <code>apply_adstock(x, w)</code> performs the causal convolution
+            </p>
+            \[
+            y_t \;=\; \sum_{k=0}^{L-1} w_k\, x_{t-k},
+            \]
+            <p>
+                with zero left-padding (weeks before the series start count as \(0\)). The wrapper
+                <code>parametric_adstock(x, kind, l_max=8, ...)</code> does both steps at once.
+            </p>
+
+            <h3><code>normalize=True</code> vs <code>normalize=False</code> — a magnitude convention, not a shape change</h3>
+            <p>
+                This is the conceptual hinge between (a) and (b). The <em>shape</em> of a geometric kernel
+                is the same either way; what differs is <strong>where the total magnitude lives</strong>:
+            </p>
+            <ul>
+                <li>
+                    <strong><code>normalize=False</code></strong> keeps the raw weights \(w_k = \alpha^k\).
+                    They sum to \(1/(1-\alpha) &gt; 1\) — exactly the IIR multiplier from part (a). The
+                    carryover <em>magnitude</em> is <strong>inside the kernel</strong>.
+                </li>
+                <li>
+                    <strong><code>normalize=True</code></strong> rescales to
+                    \(\tilde w_k = w_k \big/ \sum_j w_j\), so the weights <strong>sum to exactly
+                    \(1\)</strong>. The kernel becomes a weighted moving average that only
+                    <em>redistributes spend across time</em>; the total magnitude is folded into the
+                    channel coefficient \(\beta\) downstream — which keeps \(\beta\) interpretable as
+                    the channel's total effect size.
+                </li>
+            </ul>
+
+            <div class="definition">
+                <h4>Assert-encoded identities (notebook, verified against the real code)</h4>
+                <ul>
+                    <li>\(\texttt{normalize=True} \Rightarrow \sum_k \tilde w_k = 1\) for every \(\alpha\) tested.</li>
+                    <li>\(\texttt{normalize=False}\) geometric kernel applied to an impulse \(=\alpha^k\) exactly.</li>
+                    <li><code>parametric_adstock(x, ...)</code> \(\equiv\) <code>apply_adstock(x, adstock_weights(...))</code> (it is the wrapper).</li>
+                    <li>The raw and normalized kernels have a constant ratio — <strong>identical shape</strong>, different area.</li>
+                </ul>
+            </div>
+
+            <div class="controls-row">
+                <label for="firAlpha">decay rate \(\alpha\):</label>
+                <input type="range" id="firAlpha" min="0.05" max="0.95" step="0.05" value="0.7">
+                <span class="slider-val" id="firAlphaVal">0.70</span>
+            </div>
+            <div class="readout-row">
+                <div class="readout">raw kernel sum \(\sum w_k\): <b id="firRawSum">—</b></div>
+                <div class="readout">theoretical \(1/(1-\alpha)\): <b id="firTheory">—</b></div>
+                <div class="readout">normalized kernel sum: <b id="firNormSum">1.000</b></div>
+            </div>
+            <div class="chart-container" id="firChart"></div>
+            <p class="chart-note">
+                <strong>Computed live — same math as the notebook.</strong> Raw (\(\sum = 1/(1-\alpha)\))
+                vs normalized (\(\sum = 1\)) geometric kernels over a 20-lag window. Drag \(\alpha\): the
+                bars rescale but the silhouettes stay proportional. At \(\alpha = 0.7\) the notebook
+                measures raw sum <strong>3.331</strong> vs the infinite-series value
+                <strong>3.333</strong> — the tiny gap is the truncation tail, the subject of the
+                <a href="#truncation">l_max section</a> below.
+            </p>
+
+            <p>
+                Normalizing is the standard MMM choice because it cleanly separates <strong>timing</strong>
+                (the kernel) from <strong>size</strong> (the coefficient) — but, as the
+                <a href="#equifinality">identifiability section</a> shows, that separation is exactly what
+                creates the decay-vs-saturation tug-of-war.
+            </p>
+
+            <h2 id="families">(c) The kernel families: geometric, delayed, Weibull</h2>
+            <p>
+                Three kernel <strong>shapes</strong> are available, all returned by
+                <code>adstock_weights</code> and all mirrored symbolically in
+                <code>transforms.adstock_pt</code> (<code>adstock_weights_pt</code>,
+                <code>apply_adstock_pt</code>, <code>parametric_adstock_pt</code>) so NUTS can
+                differentiate through them and <em>learn</em> the parameters when
+                <code>use_parametric_adstock=True</code>:
+            </p>
+            <p>
+                <strong>Geometric</strong> — \(w_k = \alpha^k\). Same shape as (a) but truncated to
+                \(L\) lags. Peak always at lag \(0\); it cannot express a delayed build.
+            </p>
+            <p>
+                <strong>Delayed geometric</strong> (Jin et&nbsp;al., 2017) —
+                \(w_k = \alpha^{(k-\theta)^2}\). The squared exponent makes the weight maximal where
+                \((k-\theta)^2\) is smallest, so the <strong>peak moves to lag \(\theta\)</strong>. At
+                \(\theta = 0\) the peak returns to lag 0, but the weights are then \(\alpha^{k^2}\) —
+                decaying <em>faster</em> than geometric, so it is not literally the geometric kernel,
+                only the same peak location. This is the kernel that can model a genuinely delayed peak.
+            </p>
+            <p><strong>Weibull</strong> (PDF form, lags shifted by 1 so lag 0 is well-defined for every shape):</p>
+            \[
+            w_k \;\propto\; \frac{s}{\lambda}\!\left(\frac{k+1}{\lambda}\right)^{\,s-1}
+            \exp\!\left[-\left(\frac{k+1}{\lambda}\right)^{s}\right],
+            \]
+            <p>
+                with shape \(s\) and scale \(\lambda\). The shape governs the silhouette: \(s &lt; 1\)
+                <strong>front-loads</strong> (most mass at lag 0, then a long thin tail — heavier than any
+                geometric), \(s = 1\) is exponential, and \(s &gt; 1\) pushes the <strong>peak out to a
+                later lag</strong> as a smooth hump.
+            </p>
+
+            <div class="controls-row">
+                <label>family:</label>
+                <button class="toggle-btn active" data-family="geometric">geometric</button>
+                <button class="toggle-btn" data-family="delayed">delayed</button>
+                <button class="toggle-btn" data-family="weibull">Weibull</button>
+            </div>
+            <div class="controls-row" id="exAlphaGroup">
+                <label for="exAlpha">\(\alpha\):</label>
+                <input type="range" id="exAlpha" min="0.05" max="0.95" step="0.05" value="0.7">
+                <span class="slider-val" id="exAlphaVal">0.70</span>
+            </div>
+            <div class="controls-row" id="exThetaGroup" style="display:none;">
+                <label for="exTheta">delay \(\theta\):</label>
+                <input type="range" id="exTheta" min="0" max="10" step="1" value="3">
+                <span class="slider-val" id="exThetaVal">3</span>
+            </div>
+            <div class="controls-row" id="exShapeGroup" style="display:none;">
+                <label for="exShape">shape \(s\):</label>
+                <input type="range" id="exShape" min="0.4" max="4" step="0.1" value="2.5">
+                <span class="slider-val" id="exShapeVal">2.5</span>
+                <label for="exScale">scale \(\lambda\):</label>
+                <input type="range" id="exScale" min="1" max="12" step="0.5" value="4">
+                <span class="slider-val" id="exScaleVal">4.0</span>
+            </div>
+            <div class="controls-row">
+                <label for="exLmax">window <code>l_max</code>:</label>
+                <input type="range" id="exLmax" min="2" max="26" step="1" value="8">
+                <span class="slider-val" id="exLmaxVal">8</span>
+            </div>
+            <div class="readout-row">
+                <div class="readout">peak lag: <b id="exPeak">—</b></div>
+                <div class="readout">mean lag (centroid): <b id="exMean">—</b></div>
+                <div class="readout" id="exTailChip">mass beyond window: <b id="exTail">—</b></div>
+            </div>
+            <div class="chart-container" id="kernelExplorer"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook's
+                <code>adstock_weights</code>.</strong> Normalized weights inside the chosen window
+                (faded bars: lags the window cuts off, shown out to lag 26). Watch the delayed kernel's
+                mass <strong>walk right</strong> as \(\theta\) grows (peak lag \(= \theta\), asserted in
+                the notebook) and the Weibull flip from front-load (\(s&lt;1\)) through exponential
+                (\(s=1\)) to a delayed hump (\(s&gt;2\)). The "mass beyond window" chip turns red when
+                <code>l_max</code> amputates more than 10% of the kernel's untruncated mass.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What each family can and cannot express</h4>
+                <p>
+                    Geometric can only decay from lag 0 — no delayed peak, ever. Delayed-geometric buys
+                    the peak shift but its \( \alpha^{(k-\theta)^2}\) tails die fast on both sides.
+                    Weibull with \(s&lt;1\) is the only one with genuinely heavy tails; with \(s&gt;1\)
+                    it gives a smooth asymmetric hump. When the world's carryover is delayed-Weibull and
+                    the model only has geometric, attribution does not degrade gracefully — see
+                    <a href="stress-01-carryover-shape.html">Stress 01</a>, where exactly that mismatch
+                    produced an <strong>88% median contribution error with green diagnostics</strong>.
+                </p>
+            </div>
+
+            <h2 id="blend">(d) The legacy blend path — read this carefully</h2>
+            <p>
+                Here is the single most common point of confusion. Since June 2026 the model's
+                <strong>default is the parametric path of part (c)</strong>
+                (<code>use_parametric_adstock=True</code>): it estimates the actual kernel parameters
+                in-graph. But the framework still ships — and many older fits used — the
+                <strong>legacy blend path</strong> (<code>use_parametric_adstock=False</code>, the
+                default before the change), and on that path the model does <strong>not</strong>
+                estimate a decay rate at all. Instead it:
+            </p>
+            <ol>
+                <li>
+                    <strong>Precomputes</strong> geometric adstock at two <em>fixed</em> decay rates — a
+                    low \(\alpha_\text{low}\) and a high \(\alpha_\text{high}\), taken from
+                    <code>adstock_alphas</code> (defaults \([0.0,\ 0.3,\ 0.5,\ 0.7,\ 0.9]\), so
+                    \(\alpha_\text{low}=0\) is <em>no carryover</em> and \(\alpha_\text{high}=0.9\) is
+                    <em>strong carryover</em>) — giving two exposure series \(x^\text{low}\) and
+                    \(x^\text{high}\) per channel.
+                </li>
+                <li>
+                    <strong>Learns a blend weight</strong> per channel,
+                    \(m \sim \text{Beta}(2,2)\) — the model variable named
+                    <code>adstock_&lt;CHANNEL&gt;</code> — and mixes the two precomputed series:
+                </li>
+            </ol>
+            \[
+            x^{\text{adstock}}_t \;=\; (1-m)\,x^{\text{low}}_t \;+\; m\,x^{\text{high}}_t,
+            \qquad m \in (0,1).
+            \]
+            <p>
+                Because convolution is linear, blending the <em>series</em> is the same as convolving with
+                the blended <em>kernel</em>:
+            </p>
+            \[
+            w^{\text{blend}}_k \;=\; (1-m)\,w^{\text{low}}_k + m\,w^{\text{high}}_k
+            \;=\; (1-m)\,\delta_{k0} \;+\; m\,\tilde w^{(0.9)}_k ,
+            \]
+            <p>
+                a convex combination of a spike at lag 0 and one fixed normalized geometric tail. So
+                <strong><code>adstock_&lt;CHANNEL&gt;</code> is a mixing weight between two fixed-\(\alpha\)
+                geometric adstocks — it is <em>not</em> a decay rate.</strong> \(m \to 0\) pins the channel
+                to the short-memory series, \(m \to 1\) to the long-memory series. The notebook asserts the
+                endpoints exactly: \(m=0\) recovers \(x^\text{low}\), \(m=1\) recovers \(x^\text{high}\),
+                and any \(m \in (0,1)\) stays pointwise between the two. The \(\text{Beta}(2,2)\) prior is
+                symmetric and gently concentrated toward \(m = 0.5\). This design is cheap (no per-draw
+                recurrence) and well-behaved for the sampler.
+            </p>
+
+            <div class="controls-row">
+                <label for="blendM">blend weight \(m\):</label>
+                <input type="range" id="blendM" min="0" max="1" step="0.05" value="0.5">
+                <span class="slider-val" id="blendMVal">0.50</span>
+            </div>
+            <div class="chart-container" id="blendChart"></div>
+            <p class="chart-note">
+                <strong>Computed live — the literal model formula \((1-m)\,x^{low} + m\,x^{high}\) on a
+                seeded bursty spend plan</strong> (flights of activity separated by dark weeks, as in the
+                notebook). At \(m=0\) the exposure is the raw flights; at \(m=1\) each flight keeps
+                "glowing" for weeks after it ends. Every intermediate curve is a convex blend of these two
+                endpoints — nothing else is reachable.
+            </p>
+
+            <h3>The reachable kernel set — and what lives outside it</h3>
+            <div class="chart-container" id="reachableChart"></div>
+            <p class="chart-note">
+                <strong>Computed live.</strong> The shaded region is <em>every</em> kernel the legacy
+                blend can express as \(m\) sweeps \([0,1]\) (spike-at-0 plus a scaled \(\alpha=0.9\)
+                tail). The dashed lines are a delayed kernel (\(\theta=3\)) and a Weibull hump
+                (\(s=2.5\)): their peaks sit far above the band at lags 2–5. <strong>No value of \(m\)
+                can bend the blend into a delayed peak</strong> — the family is structurally monotone
+                from lag 0.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Honest limits of the blend (measured, not theoretical)</h4>
+                <ul>
+                    <li>
+                        <strong>It cannot bend.</strong> In
+                        <a href="stress-01-carryover-shape.html">Stress 01</a>, a world with
+                        delayed-Weibull carryover fit with the geometric family produced an
+                        <strong>88% median contribution error</strong> (recorded matrix row: 80%) with
+                        r-hat &le; 1.02 and zero divergences. The Weibull pivot roughly halved the error
+                        and doubled coverage — form was the actual problem.
+                    </li>
+                    <li>
+                        <strong>Open finding (Stress 00):</strong> even on the <em>clean</em> world — drawn
+                        from the model's own generative family — the legacy two-point blend recovers at
+                        <strong>~28% median error vs 7%</strong> for the parametric path. The default
+                        underperforms on its own home turf; until the default changes, prefer
+                        <code>use_parametric_adstock=True</code>. See
+                        <a href="stress-00-rosy-picture.html#open">Stress 00 §7</a>.
+                    </li>
+                </ul>
+            </div>
+
+            <p>
+                The <strong>parametric path</strong> is the alternative: set
+                <code>use_parametric_adstock=True</code> and the model estimates the actual kernel
+                parameters in-graph — \(\alpha\) (<code>adstock_alpha_&lt;CHANNEL&gt;</code>
+                \(\sim \text{Beta}(2,2)\)) for geometric/delayed, plus \(\theta\)
+                (<code>adstock_theta_&lt;CHANNEL&gt;</code> \(\sim\) HalfNormal) for delayed, or
+                \((s, \lambda)\) (<code>adstock_shape/scale_&lt;CHANNEL&gt;</code> \(\sim\) Gamma) for
+                Weibull. Both are legitimate; they answer different questions. The blend asks <em>"how
+                much memory, on a 2-point scale?"</em>; the parametric path asks <em>"what is the precise
+                decay shape?"</em> The framework even reuses the learned-kernel closure at predict time,
+                so perturbed spend is re-adstocked with the <em>same</em> kernel for marginal-ROAS
+                analysis. <a href="workshop-03-first-mmm.html">Workshop 03</a> fits a first model with
+                these settings end-to-end. This recommendation is stress-validated, not aesthetic:
+                <a href="stress-01-carryover-shape.html">Stress 01</a> measures exactly what happens when
+                the world's carryover is truly Weibull but the model assumes geometric.
+            </p>
+
+            <h2 id="truncation">IIR vs FIR truncation: what <code>l_max</code> cuts off</h2>
+            <p>
+                The recurrence (a) carries mass to infinity; an FIR kernel stops at lag \(L-1\). For the
+                geometric family the amputated tail has a closed form: the un-normalized mass beyond the
+                window is
+            </p>
+            \[
+            \sum_{k=L}^{\infty} \alpha^{k} \;=\; \frac{\alpha^{L}}{1-\alpha},
+            \qquad\text{i.e. a fraction } \alpha^{L} \text{ of the total } \frac{1}{1-\alpha}.
+            \]
+            <p>
+                That fraction is what the notebook's measured <strong>3.331 vs 3.333</strong>
+                (\(\alpha=0.7\), \(L=20\)) is showing: \(0.7^{20} \approx 0.08\%\) of the mass —
+                negligible. But at the framework default <code>l_max=8</code> with \(\alpha = 0.9\),
+                \(0.9^{8} \approx 43\%\) of the kernel's mass is cut off. Normalization then silently
+                redistributes the surviving 57% to sum to 1, so the <em>shape</em> inside the window is
+                distorted too, not just shortened. The explorer above reports this number live for all
+                three families.
+            </p>
+
+            <div class="chart-container" id="truncationChart"></div>
+            <p class="chart-note">
+                <strong>Computed live — exact formula \(\alpha^{L}\).</strong> Fraction of geometric
+                kernel mass beyond an <code>l_max</code> window, for four decay rates. The vertical line
+                marks the framework default <code>l_max=8</code>: harmless for fast decay, severe for
+                \(\alpha \ge 0.9\). Rule of thumb: choose \(L\) so \(\alpha^{L}\) is small — at
+                \(\alpha = 0.9\) you need \(L \approx 22\) just to get below 10%.
+            </p>
+
+            <div class="note">
+                <h4>💡 Long windows are not free</h4>
+                <p>
+                    A 26-week kernel has 26 weights to pin down from finitely many flights —
+                    <a href="stress-01-carryover-shape.html">Stress 01</a> measures that even the correct
+                    Weibull family at <code>l_max=26</code> stays weakly identified from three years of
+                    weekly data (error halves but remains above 20%, with honestly wide posteriors).
+                    Window length trades truncation bias against estimation variance.
+                </p>
+            </div>
+
+            <h2 id="equifinality">Identifiability: why decay and saturation fight each other</h2>
+            <p>
+                The framework's own <code>adstock_weights</code> docstring flags this, and it matters more
+                than any single formula. In an additive MMM each channel contributes
+            </p>
+            \[
+            \text{contribution}_t \;=\; \beta \cdot f_{\text{sat}}\!\big(\text{adstock}_\alpha(x)_t\big),
+            \]
+            <p>
+                and with a normalized kernel the carryover magnitude lives entirely in \(\beta\). That
+                leaves <strong>three knobs — decay shape, saturation strength, and \(\beta\) — competing
+                to explain the same wiggle in the data</strong>. A <em>long-carryover + weak-saturation</em>
+                fit and a <em>short-carryover + strong-saturation</em> fit can be nearly indistinguishable
+                in-sample. This is <strong>equifinality</strong>: inherent to additive MMM, not a bug.
+            </p>
+
+            <div class="chart-container" id="equifinalityChart"></div>
+            <p class="chart-note">
+                <strong>Computed live (seeded) — same construction as the notebook.</strong> Regime A:
+                longer carryover (\(\alpha=0.70\)) + weak saturation (\(\lambda=4\)); regime B: shorter
+                carryover (\(\alpha=0.50\)) + strong saturation (\(\lambda=8\)), both peak-normalized
+                (\(\beta\) would absorb the scale). The notebook's seeded run measures their shape
+                correlation at <strong>0.9509</strong> — the likelihood can barely tell them apart from
+                observational data alone.
+            </p>
+
+            <p>The framework's recommended mitigations, in increasing order of power:</p>
+            <ul>
+                <li><strong>Informative priors</strong> on \(\alpha\)/saturation — don't let them roam to the boundary.</li>
+                <li><strong>Anchoring saturation to data percentiles</strong> (e.g. <code>SaturationConfig.compute_kappa_bounds_from_data</code> for the Hill path), so the half-saturation point is tied to observed spend levels — see <a href="math-02-saturation.html">Math 02</a> for the curve this feeds.</li>
+                <li><strong>Experiment-calibrated coefficient priors</strong> (<code>mmm_framework.calibration</code>) — the most powerful fix. A geo-lift test pins \(\beta\) directly, which breaks the trade-off: once magnitude is nailed down by randomized evidence, the decay/saturation split is far better determined. <a href="math-05-calibration.html">Math 05</a> derives the machinery; <a href="stress-05-gauntlet.html">Stress 05</a> measures it under fire.</li>
+            </ul>
+
+            <h2 id="recap">Recap: the four representations, reconciled</h2>
+            <table>
+                <thead>
+                    <tr><th>Form</th><th>Equation</th><th>Weight sum</th><th>Estimated knob</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>(a) IIR recurrence</td><td>\(a_t = x_t + \alpha a_{t-1}\)</td><td>\(1/(1-\alpha)\)</td><td>fixed \(\alpha\)</td></tr>
+                    <tr><td>(b) FIR, <code>normalize=False</code></td><td>\(y_t = \sum_k \alpha^k x_{t-k}\)</td><td>\(1/(1-\alpha)\) (minus tail)</td><td>fixed shape</td></tr>
+                    <tr><td>(b) FIR, <code>normalize=True</code></td><td>\(y_t = \sum_k \tilde w_k x_{t-k}\)</td><td>\(1\) (magnitude \(\to \beta\))</td><td>fixed shape</td></tr>
+                    <tr><td>(c) PyTensor mirror</td><td>same as (b)</td><td>per <code>normalize</code></td><td><strong>learned</strong> \(\alpha, \theta, s, \lambda\)</td></tr>
+                    <tr><td>(d) default model blend</td><td>\((1-m)x^{\text{low}} + m\,x^{\text{high}}\)</td><td>—</td><td><strong>learned mix</strong> \(m\)</td></tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li>The geometric recurrence \(a_t = x_t + \alpha a_{t-1}\) <strong>is</strong> a convolution with kernel \(\alpha^k\); its total-effect multiplier is \(1/(1-\alpha)\), which explodes near \(\alpha = 1\).</li>
+                    <li>Geometric weights are <strong>un-normalized</strong> (\(\sum = 1/(1-\alpha)\)) unless you normalize; the normalized FIR kernel sums to exactly 1 and pushes the magnitude into \(\beta\) — that's what keeps \(\beta\) interpretable.</li>
+                    <li>Only the delayed and Weibull (\(s&gt;1\)) families can express a <strong>delayed peak</strong>; only Weibull (\(s&lt;1\)) has genuinely heavy tails. Geometric can never bend — and when the world bends, the answer bends instead (88% median error, <a href="stress-01-carryover-shape.html">Stress 01</a>).</li>
+                    <li>The default model's <code>adstock_&lt;CHANNEL&gt;</code> \(\sim \text{Beta}(2,2)\) is a <strong>blend weight</strong> between fixed \(\alpha=0\) and \(\alpha=0.9\) geometric adstocks — <strong>not a decay rate</strong>. The blend recovers even the clean world at ~28% vs 7% parametric; prefer <code>use_parametric_adstock=True</code>.</li>
+                    <li><code>l_max</code> truncation cuts a fraction \(\alpha^{L}\) of geometric mass: negligible at \(\alpha=0.7,\ L=20\) (0.08%), brutal at \(\alpha=0.9,\ L=8\) (43%).</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/math_01_adstock.ipynb</code>, authored by
+                    <code>nbs/build_math_01_adstock.py</code> and documented in
+                    <code>nbs/README_math.md</code>. Every identity above is an executable
+                    <code>assert</code> against the real <code>mmm_framework.transforms</code> functions —
+                    if the notebook runs clean, the math on this page is still true. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                    Next: <a href="math-02-saturation.html">Math 02 · Saturation</a>, the other
+                    nonlinearity — the curve adstock feeds into and fights for identifiability.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for deterministic "live" simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Adstock math — mirrors mmm_framework.transforms exactly.
+        // ------------------------------------------------------------------
+
+        // (a) geometric recurrence: a_t = x_t + alpha * a_{t-1}
+        function geometricAdstock(x, alpha) {
+            const y = new Array(x.length);
+            y[0] = x[0];
+            for (let t = 1; t < x.length; t++) y[t] = x[t] + alpha * y[t - 1];
+            return y;
+        }
+
+        // (b) adstock_weights(kind, L, params, normalize)
+        function adstockWeights(kind, L, p, normalize) {
+            const w = new Array(L);
+            for (let k = 0; k < L; k++) {
+                if (kind === 'geometric') {
+                    w[k] = Math.pow(p.alpha, k);
+                } else if (kind === 'delayed') {
+                    w[k] = Math.pow(p.alpha, (k - p.theta) * (k - p.theta));
+                } else { // weibull, lags shifted by 1
+                    const u = (k + 1) / p.scale;
+                    w[k] = (p.shape / p.scale) * Math.pow(u, p.shape - 1) * Math.exp(-Math.pow(u, p.shape));
+                }
+            }
+            if (normalize) {
+                const s = w.reduce(function(a, b) { return a + b; }, 0);
+                for (let k = 0; k < L; k++) w[k] /= s;
+            }
+            return w;
+        }
+
+        // (b) apply_adstock: causal convolution with zero left-padding
+        function applyAdstock(x, w) {
+            const y = new Array(x.length).fill(0);
+            for (let t = 0; t < x.length; t++) {
+                for (let k = 0; k < w.length && k <= t; k++) y[t] += w[k] * x[t - k];
+            }
+            return y;
+        }
+
+        function logisticSaturation(x, lam) {
+            return x.map(function(v) { return 1 - Math.exp(-lam * Math.max(v, 0)); });
+        }
+
+        function range(n) {
+            return Array.from({ length: n }, function(_, i) { return i; });
+        }
+        function sum(a) { return a.reduce(function(x, y) { return x + y; }, 0); }
+
+        // Bursty spend plan (deterministic, seeded — same flights as the notebook).
+        function burstySpend(T) {
+            const rng = mulberry32(7);
+            const spend = new Array(T).fill(0);
+            const flights = [[2, 3, 1.0], [16, 2, 0.7], [30, 4, 1.2], [48, 2, 0.6]];
+            flights.forEach(function(f) {
+                for (let i = f[0]; i < f[0] + f[1] && i < T; i++) {
+                    spend[i] = f[2] * (0.6 + 0.4 * rng());
+                }
+            });
+            return spend;
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 1: impulse responses (live)
+        // ------------------------------------------------------------------
+        function drawImpulse() {
+            const T = 24;
+            const impulse = new Array(T).fill(0); impulse[0] = 1;
+            const alphas = [0.2, 0.5, 0.8];
+            const cols = [PT.colors.tv, PT.colors.search, PT.colors.display];
+            const traces = alphas.map(function(a, i) {
+                return {
+                    type: 'scatter', mode: 'lines+markers',
+                    x: range(T), y: geometricAdstock(impulse, a),
+                    name: 'α = ' + a, line: { color: cols[i], width: 2 },
+                    marker: { size: 5 },
+                    hovertemplate: 'lag %{x}: %{y:.4f}<extra>α=' + a + '</extra>'
+                };
+            });
+            Plotly.newPlot('impulseChart', traces, PT.layout({
+                xaxis: { title: 'lag k (weeks after the spend)' },
+                yaxis: { title: 'effective exposure' },
+                legend: { orientation: 'h', y: 1.12 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2: total multiplier 1/(1-alpha) (live)
+        // ------------------------------------------------------------------
+        function drawMultiplier() {
+            const xs = [], ys = [];
+            for (let a = 0; a <= 0.97; a += 0.005) { xs.push(a); ys.push(1 / (1 - a)); }
+            const marks = [0.2, 0.5, 0.8];
+            const traces = [{
+                type: 'scatter', mode: 'lines', x: xs, y: ys,
+                name: '1/(1−α)', line: { color: PT.colors.search, width: 2.5 },
+                hovertemplate: 'α=%{x:.2f} → %{y:.2f}×<extra></extra>'
+            }, {
+                type: 'scatter', mode: 'markers+text',
+                x: marks, y: marks.map(function(a) { return 1 / (1 - a); }),
+                text: marks.map(function(a) { return 'α=' + a + ' → ' + (1 / (1 - a)).toFixed(2) + '×'; }),
+                textposition: 'middle right', textfont: { size: 11, color: '#5a6b5a' },
+                marker: { color: PT.colors.truth, size: 8 },
+                showlegend: false, hoverinfo: 'skip'
+            }];
+            Plotly.newPlot('multiplierChart', traces, PT.layout({
+                xaxis: { title: 'decay rate α', range: [0, 1] },
+                yaxis: { title: 'total carryover multiplier', range: [0, 20] },
+                showlegend: false
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3: raw vs normalized FIR kernel, alpha slider (live)
+        // ------------------------------------------------------------------
+        function drawFir() {
+            const L = 20;
+            const a = parseFloat(document.getElementById('firAlpha').value);
+            document.getElementById('firAlphaVal').textContent = a.toFixed(2);
+            const raw = adstockWeights('geometric', L, { alpha: a }, false);
+            const nrm = adstockWeights('geometric', L, { alpha: a }, true);
+            document.getElementById('firRawSum').textContent = sum(raw).toFixed(3);
+            document.getElementById('firTheory').textContent = (1 / (1 - a)).toFixed(3);
+            document.getElementById('firNormSum').textContent = sum(nrm).toFixed(3);
+
+            const traces = [{
+                type: 'bar', x: range(L), y: raw,
+                name: 'normalize=False (Σ = ' + sum(raw).toFixed(2) + ')',
+                marker: { color: PT.band(PT.colors.search, 0.75) },
+                hovertemplate: 'lag %{x}: %{y:.4f}<extra>raw</extra>'
+            }, {
+                type: 'bar', x: range(L), y: nrm,
+                name: 'normalize=True (Σ = 1)',
+                marker: { color: PT.band(PT.colors.display, 0.85) },
+                hovertemplate: 'lag %{x}: %{y:.4f}<extra>normalized</extra>'
+            }];
+            Plotly.react('firChart', traces, PT.layout({
+                barmode: 'group',
+                xaxis: { title: 'lag k' },
+                yaxis: { title: 'kernel weight wₖ' },
+                legend: { orientation: 'h', y: 1.12 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 4: kernel-family explorer (live, interactive)
+        // ------------------------------------------------------------------
+        let exFamily = 'geometric';
+        const FULL_L = 200;   // "untruncated" reference length for tail mass
+
+        function exParams() {
+            return {
+                alpha: parseFloat(document.getElementById('exAlpha').value),
+                theta: parseInt(document.getElementById('exTheta').value, 10),
+                shape: parseFloat(document.getElementById('exShape').value),
+                scale: parseFloat(document.getElementById('exScale').value)
+            };
+        }
+
+        function drawExplorer() {
+            const p = exParams();
+            const L = parseInt(document.getElementById('exLmax').value, 10);
+            document.getElementById('exAlphaVal').textContent = p.alpha.toFixed(2);
+            document.getElementById('exThetaVal').textContent = String(p.theta);
+            document.getElementById('exShapeVal').textContent = p.shape.toFixed(1);
+            document.getElementById('exScaleVal').textContent = p.scale.toFixed(1);
+            document.getElementById('exLmaxVal').textContent = String(L);
+
+            // Untruncated reference kernel (raw weights to FULL_L lags).
+            const full = adstockWeights(exFamily, FULL_L, p, false);
+            const fullSum = sum(full);
+            const inWin = sum(full.slice(0, L));
+            const tailFrac = fullSum > 0 ? 1 - inWin / fullSum : 0;
+
+            // Normalized kernel inside the window (what the model actually uses).
+            const w = adstockWeights(exFamily, L, p, true);
+            let peak = 0;
+            for (let k = 1; k < L; k++) if (w[k] > w[peak]) peak = k;
+            const meanLag = w.reduce(function(acc, v, k) { return acc + k * v; }, 0);
+
+            document.getElementById('exPeak').textContent = String(peak);
+            document.getElementById('exMean').textContent = meanLag.toFixed(2);
+            document.getElementById('exTail').textContent = (100 * tailFrac).toFixed(1) + '%';
+            document.getElementById('exTailChip').classList.toggle('hot', tailFrac > 0.10);
+
+            // Faded bars: kernel shape the window cuts off (rescaled by the same Z).
+            const showTo = 26;
+            const z = sum(adstockWeights(exFamily, L, p, false));
+            const cutX = [], cutY = [];
+            for (let k = L; k < showTo; k++) { cutX.push(k); cutY.push(full[k] / z); }
+
+            const traces = [{
+                type: 'bar', x: range(L), y: w,
+                name: 'normalized weights (inside l_max)',
+                marker: { color: PT.band(PT.colors.tv, 0.85) },
+                hovertemplate: 'lag %{x}: %{y:.4f}<extra>in window</extra>'
+            }, {
+                type: 'bar', x: cutX, y: cutY,
+                name: 'cut off by the window',
+                marker: { color: PT.band(PT.colors.display, 0.35) },
+                hovertemplate: 'lag %{x}: %{y:.4f}<extra>truncated</extra>'
+            }];
+            Plotly.react('kernelExplorer', traces, PT.layout({
+                barmode: 'overlay',
+                xaxis: { title: 'lag k', range: [-0.6, showTo - 0.4] },
+                yaxis: { title: 'normalized weight' },
+                legend: { orientation: 'h', y: 1.12 },
+                shapes: [{
+                    type: 'line', x0: L - 0.5, x1: L - 0.5, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: L - 0.5, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'l_max = ' + L, showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            }), PT.config);
+        }
+
+        function setFamily(f) {
+            exFamily = f;
+            document.querySelectorAll('.controls-row .toggle-btn').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.family === f);
+            });
+            document.getElementById('exAlphaGroup').style.display = (f === 'weibull') ? 'none' : 'flex';
+            document.getElementById('exThetaGroup').style.display = (f === 'delayed') ? 'flex' : 'none';
+            document.getElementById('exShapeGroup').style.display = (f === 'weibull') ? 'flex' : 'none';
+            drawExplorer();
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 5: default-model blend on bursty spend, m slider (live)
+        // ------------------------------------------------------------------
+        const BLEND_T = 60, BLEND_L = 24;
+        const blendSpend = burstySpend(BLEND_T);
+        const xLow = applyAdstock(blendSpend, adstockWeights('geometric', BLEND_L, { alpha: 0.0 }, true));
+        const xHigh = applyAdstock(blendSpend, adstockWeights('geometric', BLEND_L, { alpha: 0.9 }, true));
+
+        function drawBlend() {
+            const m = parseFloat(document.getElementById('blendM').value);
+            document.getElementById('blendMVal').textContent = m.toFixed(2);
+            const blend = xLow.map(function(lo, t) { return (1 - m) * lo + m * xHigh[t]; });
+
+            const traces = [{
+                type: 'bar', x: range(BLEND_T), y: blendSpend,
+                name: 'raw weekly spend',
+                marker: { color: PT.band('#9aa79a', 0.45) },
+                hovertemplate: 'week %{x}: %{y:.2f}<extra>spend</extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: range(BLEND_T), y: xLow,
+                name: 'xᴸᵒʷ (α = 0, m = 0)',
+                line: { color: PT.colors.tv, width: 1.5, dash: 'dot' },
+                hovertemplate: 'week %{x}: %{y:.3f}<extra>low</extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: range(BLEND_T), y: xHigh,
+                name: 'xᴴⁱᵍʰ (α = 0.9, m = 1)',
+                line: { color: PT.colors.search, width: 1.5, dash: 'dot' },
+                hovertemplate: 'week %{x}: %{y:.3f}<extra>high</extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: range(BLEND_T),
+                y: blend,
+                name: 'blend, m = ' + m.toFixed(2),
+                line: { color: PT.colors.display, width: 3 },
+                hovertemplate: 'week %{x}: %{y:.3f}<extra>blend</extra>'
+            }];
+            Plotly.react('blendChart', traces, PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'exposure (normalized kernels)' },
+                legend: { orientation: 'h', y: 1.14 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 6: reachable kernel set of the blend vs delayed/Weibull (live)
+        // ------------------------------------------------------------------
+        function drawReachable() {
+            const L = 16;
+            const wLow = adstockWeights('geometric', L, { alpha: 0.0 }, true);   // spike at lag 0
+            const wHigh = adstockWeights('geometric', L, { alpha: 0.9 }, true);
+            const lo = [], hi = [];
+            for (let k = 0; k < L; k++) {
+                lo.push(Math.min(wLow[k], wHigh[k]));
+                hi.push(Math.max(wLow[k], wHigh[k]));
+            }
+            const wDelayed = adstockWeights('delayed', L, { alpha: 0.7, theta: 3 }, true);
+            const wWeibull = adstockWeights('weibull', L, { shape: 2.5, scale: 4 }, true);
+            const mSamples = [0.25, 0.5, 0.75];
+
+            const traces = [{
+                type: 'scatter', mode: 'lines', x: range(L), y: hi,
+                name: 'reachable band (m ∈ [0,1])',
+                line: { color: PT.band(PT.colors.tv, 0.6), width: 1 },
+                hoverinfo: 'skip', showlegend: false
+            }, {
+                type: 'scatter', mode: 'lines', x: range(L), y: lo,
+                name: 'reachable band (m ∈ [0,1])',
+                fill: 'tonexty', fillcolor: PT.band(PT.colors.tv, 0.22),
+                line: { color: PT.band(PT.colors.tv, 0.6), width: 1 },
+                hoverinfo: 'skip'
+            }];
+            mSamples.forEach(function(m, i) {
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: range(L),
+                    y: wLow.map(function(v, k) { return (1 - m) * v + m * wHigh[k]; }),
+                    name: 'blend kernel, m = ' + m,
+                    line: { color: PT.colors.tv, width: 1.2 + 0.6 * i },
+                    hovertemplate: 'lag %{x}: %{y:.4f}<extra>m=' + m + '</extra>'
+                });
+            });
+            traces.push({
+                type: 'scatter', mode: 'lines', x: range(L), y: wDelayed,
+                name: 'delayed (θ = 3) — unreachable',
+                line: { color: PT.colors.display, width: 2.5, dash: 'dash' },
+                hovertemplate: 'lag %{x}: %{y:.4f}<extra>delayed</extra>'
+            });
+            traces.push({
+                type: 'scatter', mode: 'lines', x: range(L), y: wWeibull,
+                name: 'Weibull (s = 2.5, λ = 4) — unreachable',
+                line: { color: PT.colors.social, width: 2.5, dash: 'dash' },
+                hovertemplate: 'lag %{x}: %{y:.4f}<extra>Weibull</extra>'
+            });
+            Plotly.newPlot('reachableChart', traces, PT.layout({
+                xaxis: { title: 'lag k' },
+                yaxis: { title: 'normalized kernel weight' },
+                legend: { orientation: 'h', y: 1.16 }
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 7: truncated mass alpha^L vs l_max (live, exact formula)
+        // ------------------------------------------------------------------
+        function drawTruncation() {
+            const alphas = [0.3, 0.5, 0.7, 0.9];
+            const cols = [PT.colors.tv, PT.colors.social, PT.colors.search, PT.colors.display];
+            const Ls = range(27).slice(1);
+            const traces = alphas.map(function(a, i) {
+                return {
+                    type: 'scatter', mode: 'lines+markers',
+                    x: Ls, y: Ls.map(function(L) { return 100 * Math.pow(a, L); }),
+                    name: 'α = ' + a,
+                    line: { color: cols[i], width: 2 }, marker: { size: 4 },
+                    hovertemplate: 'l_max=%{x}: %{y:.2f}% of mass cut<extra>α=' + a + '</extra>'
+                };
+            });
+            Plotly.newPlot('truncationChart', traces, PT.layout({
+                xaxis: { title: 'window length l_max' },
+                yaxis: { title: '% of kernel mass beyond the window (αᴸ)' },
+                legend: { orientation: 'h', y: 1.12 },
+                shapes: [{
+                    type: 'line', x0: 8, x1: 8, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PT.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 8, y: 1, yref: 'paper', yanchor: 'bottom',
+                    text: 'framework default l_max = 8 (α=0.9 → 43% cut)',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 8: equifinality — two regimes, nearly one curve (live, seeded)
+        // ------------------------------------------------------------------
+        function drawEquifinality() {
+            const T = 60, L = 24;
+            const spend = burstySpend(T);
+            const xa = applyAdstock(spend, adstockWeights('geometric', L, { alpha: 0.70 }, true));
+            const xb = applyAdstock(spend, adstockWeights('geometric', L, { alpha: 0.50 }, true));
+            let yA = logisticSaturation(xa, 4.0);
+            let yB = logisticSaturation(xb, 8.0);
+            const mA = Math.max.apply(null, yA), mB = Math.max.apply(null, yB);
+            yA = yA.map(function(v) { return v / mA; });
+            yB = yB.map(function(v) { return v / mB; });
+
+            // live correlation (the notebook's seeded run measured 0.9509)
+            const n = T;
+            const muA = sum(yA) / n, muB = sum(yB) / n;
+            let cov = 0, vA = 0, vB = 0;
+            for (let t = 0; t < n; t++) {
+                cov += (yA[t] - muA) * (yB[t] - muB);
+                vA += (yA[t] - muA) * (yA[t] - muA);
+                vB += (yB[t] - muB) * (yB[t] - muB);
+            }
+            const corr = cov / Math.sqrt(vA * vB);
+
+            const traces = [{
+                type: 'scatter', mode: 'lines', x: range(T), y: yA,
+                name: 'A: longer carryover (α=0.70) + weak saturation (λ=4)',
+                line: { color: PT.colors.search, width: 2.5 },
+                hovertemplate: 'week %{x}: %{y:.3f}<extra>A</extra>'
+            }, {
+                type: 'scatter', mode: 'lines', x: range(T), y: yB,
+                name: 'B: shorter carryover (α=0.50) + strong saturation (λ=8)',
+                line: { color: PT.colors.display, width: 2.5, dash: 'dash' },
+                hovertemplate: 'week %{x}: %{y:.3f}<extra>B</extra>'
+            }];
+            Plotly.newPlot('equifinalityChart', traces, PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'saturated response (peak-normalized)' },
+                legend: { orientation: 'h', y: 1.16 },
+                annotations: [{
+                    x: 0.98, y: 0.06, xref: 'paper', yref: 'paper', xanchor: 'right',
+                    text: 'shape correlation here: ' + corr.toFixed(3) +
+                          ' (notebook seeded run: 0.9509)',
+                    showarrow: false, font: { size: 12, color: '#5a6b5a' }
+                }]
+            }), PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Wiring
+        // ------------------------------------------------------------------
+        function init() {
+            drawImpulse();
+            drawMultiplier();
+            drawFir();
+            drawExplorer();
+            drawBlend();
+            drawReachable();
+            drawTruncation();
+            drawEquifinality();
+
+            document.getElementById('firAlpha').addEventListener('input', drawFir);
+            document.querySelectorAll('.controls-row .toggle-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() { setFamily(btn.dataset.family); });
+            });
+            ['exAlpha', 'exTheta', 'exShape', 'exScale', 'exLmax'].forEach(function(id) {
+                document.getElementById(id).addEventListener('input', drawExplorer);
+            });
+            document.getElementById('blendM').addEventListener('input', drawBlend);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

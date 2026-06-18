@@ -430,7 +430,7 @@ provides `adstock_weights_pt`, `apply_adstock_pt`, and `parametric_adstock_pt` �
 the NumPy functions in (b), computing the *same* kernels symbolically.
 
 We won't build a sampler graph here; just note the contract: **the math in (b) is exactly the math
-that runs inside the model** when you set `ModelConfig.use_parametric_adstock=True`. The NumPy versions
+that runs inside the model** on the default parametric path (`ModelConfig.use_parametric_adstock=True`). The NumPy versions
 in this notebook are the reference implementation you can reason about on paper; the PyTensor versions
 are the same equations made estimable. The framework even reuses the closure at predict time so a
 perturbed spend can be re-adstocked with the *same* learned kernel (used for marginal-ROAS analysis).
@@ -449,10 +449,13 @@ print("-> same geometric / delayed / Weibull kernels as (b), differentiable for 
     # (d) Default BayesianMMM mechanism
     # =====================================================================
     c.append(md(r"""
-## (d) How the **default** `BayesianMMM` uses adstock — read this carefully
+## (d) The legacy blend path — read this carefully
 
-Here is the single most common point of confusion. **By default** (`use_parametric_adstock=False`) the
-model does **not** estimate a decay rate at all. Instead it:
+Here is the single most common point of confusion. Since June 2026 the model's **default is the
+parametric path of part (c)** (`use_parametric_adstock=True`): it estimates the actual kernel
+parameters in-graph. But the framework still ships — and many older fits used — the **legacy blend
+path** (`use_parametric_adstock=False`, the default before the change), and on that path the model
+does **not** estimate a decay rate at all. Instead it:
 
 1. **Precomputes** geometric adstock at two *fixed* decay rates — a **low** $\alpha_\text{low}$ and a
    **high** $\alpha_\text{high}$ (from `adstock_alphas`, whose defaults are
@@ -472,8 +475,7 @@ a decay rate.** $m \to 0$ pins the channel to the short-memory series, $m \to 1$
 series, and intermediate $m$ interpolates. This is cheap (no per-draw recurrence) and well-behaved for
 the sampler. The $\text{Beta}(2,2)$ prior is symmetric and gently concentrated toward $m=0.5$.
 
-The **parametric path** (part c) is the alternative: set `use_parametric_adstock=True` and the model
-estimates the actual kernel parameters in-graph —
+The **parametric path** (part c) — now the default — estimates the actual kernel parameters in-graph —
 $\alpha$ (`adstock_alpha_<CHANNEL>` $\sim \text{Beta}(2,2)$) for geometric/delayed,
 plus $\theta$ (`adstock_theta_<CHANNEL>` $\sim \text{HalfNormal}$) for delayed, or
 $(s,\lambda)$ (`adstock_shape/scale_<CHANNEL>` $\sim \text{Gamma}$) for Weibull. Both are legitimate;
@@ -597,9 +599,10 @@ This is the bridge to the calibration notebook (`math_05_calibration.ipynb`).
 **The two things people get wrong:**
 1. Geometric adstock weights are **un-normalized** ($\sum = 1/(1-\alpha)$) unless you normalize; the
    normalized FIR kernel pushes that magnitude into $\beta$.
-2. The default model's `adstock_<CHANNEL>` is a **Beta(2,2) blend weight** between two fixed-$\alpha$
-   geometric adstocks — **not** a decay rate. Switch to `use_parametric_adstock=True` to estimate the
-   actual kernel shape.
+2. The legacy blend model's `adstock_<CHANNEL>` is a **Beta(2,2) blend weight** between two
+   fixed-$\alpha$ geometric adstocks — **not** a decay rate. The default
+   (`use_parametric_adstock=True`, since June 2026) estimates the actual kernel shape
+   (`adstock_alpha_<CHANNEL>`) instead.
 
 **Next in the math series:**
 - **`math_02_saturation.ipynb`** — the *other* nonlinearity: diminishing returns (logistic / Hill),

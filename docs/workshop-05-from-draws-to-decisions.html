@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop 05: From Draws to Decisions | MMM Framework</title>
+    <meta name="description" content="The capstone of the Bayesian MMM workshop: compute per draw, summarize last. ROAS as a distribution, decision probabilities, marginal vs average ROAS, response curves with bands, and a budget reallocation graded against known truth.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/workshop-05-from-draws-to-decisions.html">
+    <meta property="og:title" content="Workshop 05: From Draws to Decisions | MMM Framework">
+    <meta property="og:description" content="One rule turns a posterior into budget decisions: compute per draw, summarize last. The naive reallocation is a coin flip tilted to a loss; the marginal-driven one wins with P = 0.98.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/workshop-05-from-draws-to-decisions.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            accent-color: var(--color-primary);
+            width: 240px;
+        }
+        .controls-row select {
+            font-family: inherit;
+            font-size: 0.9rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+        }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            color: var(--color-primary-dark);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .mini-table { font-size: 0.92rem; }
+        .mini-table td, .mini-table th { padding: 0.45rem 0.75rem; }
+        .mini-table .num { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; white-space: nowrap; }
+        .mini-table .good { color: #3f7a58; font-weight: 700; }
+        .mini-table .bad { color: var(--color-danger); font-weight: 700; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#doctrine">The doctrine</a></li>
+                <li><a href="#roas">ROAS is a distribution</a></li>
+                <li><a href="#probabilities">Decision probabilities</a></li>
+                <li><a href="#marginal">Marginal vs average ROAS</a></li>
+                <li><a href="#curves">Response curves &amp; what-ifs</a></li>
+                <li><a href="#reallocation">Reallocation under uncertainty</a></li>
+                <li><a href="#meetings">Real budget meetings</a></li>
+                <li><a href="#glossary">Glossary</a></li>
+            </ul>
+
+            <h3>The Workshop Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="workshop-00-thinking-in-distributions.html">00 · Thinking in Distributions</a></li>
+                <li><a href="workshop-01-priors.html">01 · Priors</a></li>
+                <li><a href="workshop-02-sampling.html">02 · Sampling</a></li>
+                <li><a href="workshop-03-first-mmm.html">03 · Your First MMM</a></li>
+                <li><a href="workshop-04-reading-the-posterior.html">04 · Reading the Posterior</a></li>
+                <li><a href="workshop-05-from-draws-to-decisions.html" class="active">05 · Draws to Decisions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Workshop 05: From Draws to Decisions</h1>
+            <p class="lead">
+                Your CMO doesn't want a posterior. She wants three sentences: <em>which channel do we
+                cut, where does the next million go, and how sure are we?</em> Workshops
+                <a href="workshop-00-thinking-in-distributions.html">00</a>–<a href="workshop-04-reading-the-posterior.html">04</a>
+                built the machinery; this capstone is the bridge from machinery to those three
+                sentences. The bridge has exactly one rule — <strong>compute per draw, summarize
+                last</strong> — and by the end of this page that one rule will have ranked the
+                channels, priced the next dollar, and told us, with a number, how confident to be
+                about a budget reallocation. Because the model is fit on a synthetic world with a
+                sealed answer key, every claim gets graded.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">4/4</div>
+                    <div class="stat-label">channels whose true ROAS landed inside the 90% HDI</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+10.3%</div>
+                    <div class="stat-label">how much the plug-in shortcut overstates TV's effect</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.98</div>
+                    <div class="stat-label">P(gain &gt; 0) for the marginal-driven reallocation</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.18</div>
+                    <div class="stat-label">P(gain &gt; 0) for the average-ROAS-driven one</div>
+                </div>
+            </div>
+
+            <p>
+                Everything below is arithmetic on <strong>one fit</strong> — the same model, settings,
+                and seed as workshop 03: NumPyro NUTS, 500 draws &times; 2 chains, parametric adstock,
+                on the <code>dgp.build("clean")</code> world from <code>mmm_framework.synth</code>. The fit took
+                10&nbsp;s with max r-hat 1.009, zero divergences, min bulk ESS 355. One units note:
+                this world's KPI is in <em>sales units</em>, so "ROAS" here means incremental KPI units
+                per dollar — a value of 0.8 says a dollar buys 0.8 units. The answer key, recorded
+                when the world was built:
+            </p>
+
+            <table class="mini-table">
+                <thead><tr><th>channel</th><th>total spend</th><th>TRUE contribution</th><th>TRUE ROAS</th></tr></thead>
+                <tbody>
+                    <tr><td>TV</td><td class="num">9,193</td><td class="num">5,668</td><td class="num">0.616</td></tr>
+                    <tr><td>Search</td><td class="num">5,773</td><td class="num">4,531</td><td class="num">0.785</td></tr>
+                    <tr><td>Social</td><td class="num">4,703</td><td class="num">4,017</td><td class="num">0.854</td></tr>
+                    <tr><td>Display</td><td class="num">3,669</td><td class="num">2,958</td><td class="num">0.806</td></tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="workshop-00-thinking-in-distributions.html">Workshop 00</a>–<a href="workshop-04-reading-the-posterior.html">04</a>.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~60–75 min
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>The one rule of the page — compute per draw, summarize last — and why the plug-in shortcut \( f(\mathbb{E}[\theta]) \) overstates effects and hides your uncertainty.</li>
+                    <li>How decision probabilities like P(ROAS &gt; t) and P(A beats B) come straight from counting draws, and why the next dollar (marginal ROAS) is not the average dollar.</li>
+                    <li>How to attach a probability to a budget reallocation — the same dollars can be a P = 0.98 win or a P = 0.18 coin flip tilted to a loss, depending on which ranking you trust.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/workshop_05_from_draws_to_decisions.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/workshop_05_from_draws_to_decisions.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="doctrine">1 — The doctrine: \( f(\mathbb{E}[\theta]) \neq \mathbb{E}[f(\theta)] \)</h2>
+            <p>
+                A <strong>derived quantity</strong> <em>(any business number computed from model
+                parameters — ROAS, an uplift, a ranking — rather than estimated directly)</em> can be
+                computed two ways. The <strong>plug-in shortcut</strong> <em>(collapse the posterior to
+                one "best" parameter value, then compute)</em> is the tempting one. The notebook
+                demonstrates why it quietly misreports, using TV's <strong>saturation curve</strong>
+                <em>(diminishing returns: each extra dollar buys a bit less than the last)</em>:
+            </p>
+            <p>
+                \[ \text{weekly effect} \;=\; \beta_{TV}\,\bigl(1 - e^{-\lambda_{TV}\, x}\bigr) \]
+            </p>
+            <p>
+                The posterior knows \( \beta_{TV} \) and \( \lambda_{TV} \) only as <strong>clouds of
+                draws</strong> — 1,000 plausible values each, <em>correlated with each other</em>
+                (<a href="workshop-04-reading-the-posterior.html">workshop 04</a>'s joint structure:
+                a flatter curve with a bigger \( \beta \) explains the same data as a steeper curve
+                with a smaller \( \beta \)). Two recipes for "TV's effect at a mid-curve spend level":
+                average the parameters first and push the averages through the curve (plug-in), or
+                push <em>each</em> (β,&nbsp;λ) pair through and average the 1,000 answers (per-draw).
+                If the curve were a straight line they'd agree. It isn't, and they don't —
+                measured from the notebook's posterior at \(x_0 = 0.5\):
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">1.5556</div>
+                    <div class="stat-label">plug-in: f(mean β, mean λ)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.4098</div>
+                    <div class="stat-label">per-draw: mean of f(β<sub>i</sub>, λ<sub>i</sub>) — the honest one</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">9.1</div>
+                    <div class="stat-label">KPI units/week — the largest gap between the two curves</div>
+                </div>
+            </div>
+
+            <div class="controls-row">
+                <label for="jensenSlider">Spend level \(x_0\):</label>
+                <input type="range" id="jensenSlider" min="0.1" max="1.1" step="0.05" value="0.5">
+                <span class="readout" id="jensenReadout"></span>
+            </div>
+            <div class="chart-container" id="jensenChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded), live in your browser</strong> — a correlated
+                (β,&nbsp;λ) cloud pushed through the same saturation formula as the notebook. The thin
+                green curves are individual posterior draws; the solid line is their per-draw average;
+                the dashed red line is the plug-in curve, which sits <em>above</em> the honest curve at
+                every positive spend level — it is a curve <strong>no posterior draw believes in</strong>.
+                Drag the slider to move the comparison point. The measured notebook numbers at
+                \(x_0=0.5\): plug-in 1.5556 vs per-draw 1.4098, a <strong>+10.3%</strong> overstatement.
+            </p>
+
+            <p>
+                <strong>Why this is THE transferable skill.</strong> Every number your CMO asks for —
+                ROAS, an uplift, "which channel is best" — is a <em>nonlinear</em> function of
+                parameters (ratios, curves, rankings, max's). For all of them the plug-in shortcut is
+                biased, and — worse — it produces a <em>single</em> number, hiding how sure you are.
+                The per-draw recipe fixes both at once: the spread of the 1,000 answers
+                <strong>is</strong> your uncertainty, for free.
+            </p>
+
+            <div class="definition">
+                <h4>The rule, on a card</h4>
+                <p><strong>Compute per draw, summarize last.</strong></p>
+                <ol>
+                    <li>Write the business formula.</li>
+                    <li>Evaluate it on <em>each</em> posterior draw → a distribution of answers.</li>
+                    <li>Summarize at the very end: median for "the number", an HDI for "give or take",
+                        a probability for "how sure".</li>
+                </ol>
+                <p>The rest of this page is this card, applied six ways.</p>
+            </div>
+
+            <h2 id="roas">2 — ROAS is a distribution (and we can grade it)</h2>
+            <p>
+                The fitted model carries a per-draw array called <code>channel_contributions</code>:
+                for every posterior draw, every week, every channel, the KPI units that channel's
+                spend generated. The ROAS recipe: <em>per draw</em>, sum a channel's weekly
+                contributions and divide by its actual total spend → that draw's ROAS;
+                <em>summarize last</em> — 1,000 draws → a distribution per channel → median plus a 90%
+                <strong>HDI</strong> <em>(highest-density interval — the narrowest range holding 90% of
+                the draws; workshop 04)</em>. Because the world is synthetic, the table gets a column
+                real analysts never see — the truth, and whether the interval caught it:
+            </p>
+
+            <table class="mini-table">
+                <thead><tr><th>channel</th><th>ROAS median</th><th>90% HDI</th><th>TRUE ROAS</th><th>truth inside?</th></tr></thead>
+                <tbody>
+                    <tr><td>TV</td><td class="num">0.561</td><td class="num">[0.447, 0.673]</td><td class="num">0.616</td><td class="good">yes</td></tr>
+                    <tr><td>Search</td><td class="num">0.727</td><td class="num">[0.578, 0.859]</td><td class="num">0.785</td><td class="good">yes</td></tr>
+                    <tr><td>Social</td><td class="num">0.876</td><td class="num">[0.745, 1.005]</td><td class="num">0.854</td><td class="good">yes</td></tr>
+                    <tr><td>Display</td><td class="num">0.746</td><td class="num">[0.541, 0.925]</td><td class="num">0.806</td><td class="good">yes</td></tr>
+                </tbody>
+            </table>
+
+            <div class="chart-container" id="roasChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — per-channel ROAS densities from
+                seeded draws matched to the <strong>measured</strong> medians and 90% HDIs above; the
+                ink diamonds mark the <strong>measured TRUE ROAS</strong> from the answer key. Every
+                channel's ROAS carries real width — remember that width when ranking. Intervals
+                caught the truth for <strong>4/4</strong> channels.
+            </p>
+
+            <div class="note">
+                <h4>💡 The framework one-liner is the same computation, packaged</h4>
+                <p>
+                    <code>MMMAnalyzer(mmm).compute_channel_roi()</code> does exactly this: per-draw
+                    <strong>counterfactual</strong> contributions <em>(the "what if this channel had been
+                    dark?" comparison)</em>, summed per draw, divided by spend, summarized last. The
+                    notebook asserts the one-liner reproduces the hand-rolled numbers to six decimal
+                    places (e.g. TV 0.568784 both ways). Reading notes: its <code>ROI</code> column is
+                    the per-draw <em>mean</em> (not median), and its HDI columns are absolute
+                    contributions at 94% by default.
+                </p>
+            </div>
+
+            <h2 id="probabilities">3 — Decision probabilities: numbers your CFO can argue with</h2>
+            <p>
+                Once ROAS is 1,000 draws instead of one number, questions that classically require a
+                statistics consult become <em>counting</em>. "Does Search clear our breakeven
+                multiple?" → count the draws above the threshold: <code>(ROAS_search &gt; t).mean()</code>.
+                That is a <strong>decision probability</strong> <em>(the posterior probability that a
+                business statement is true)</em>. "Is Social actually better than Display?" → count the
+                draws where it is — computed <strong>within each draw</strong>, so the comparison
+                automatically respects everything the two estimates share. No p-values, no
+                significance rituals: <em>"there's an 81% chance Social out-earns Display per
+                dollar"</em> is a sentence a CFO can argue with, budget against, or demand more data
+                about.
+            </p>
+            <p>
+                One honesty note: in this world the answer key says every channel's true ROAS sits
+                <em>below</em> 1. A good model should agree — and it does. Measured
+                <strong>P(ROAS&nbsp;&gt;&nbsp;1.0)</strong>: TV <strong>0.000</strong>, Search
+                <strong>0.001</strong>, Social <strong>0.070</strong>, Display <strong>0.022</strong>.
+                And from the measured pairwise "beats" matrix: P(Social beats Display) =
+                <strong>0.811</strong>, P(Social beats TV) = <strong>0.998</strong>, while
+                P(Search beats Display) = <strong>0.446</strong> — an honest coin flip.
+            </p>
+
+            <div class="controls-row">
+                <label for="breakevenSlider">Breakeven threshold t:</label>
+                <input type="range" id="breakevenSlider" min="0.4" max="1.2" step="0.05" value="0.8">
+                <span class="readout" id="breakevenReadout"></span>
+            </div>
+            <div class="chart-container" id="breakevenChart"></div>
+            <p class="chart-note">
+                <strong>Interactive, illustrative (seeded)</strong> — P(ROAS &gt; t) per channel, counted
+                from seeded draws approximating the notebook's posterior (matched to the measured
+                medians/HDIs). Drag the bar like a finance team would: fully-loaded margin,
+                contribution margin, "must beat last year's blended 0.7"… The probabilities move;
+                the draws never change. Measured anchor at t = 1.0: TV 0.000, Search 0.001,
+                Social 0.070, Display 0.022 — the model correctly refuses to claim anyone clears 1.
+            </p>
+
+            <h2 id="marginal">4 — Marginal ROAS: the next dollar is not the average dollar</h2>
+            <p>
+                The §2 ROAS — total contribution ÷ total spend — is the <strong>average ROAS</strong>:
+                what each dollar earned <em>on average, historically</em>. But your CMO's second
+                question was about the <strong>next</strong> dollar. Under saturation those differ,
+                always in the same direction: on a curve that flattens, the next dollar lands on a
+                <em>flatter</em> part than the historical average dollar did. <strong>Marginal
+                ROAS</strong> <em>(the return on a small additional dollar of spend, at today's
+                operating point)</em> is therefore <em>below</em> average ROAS for every channel — and
+                the <em>gap</em> differs by channel, which is exactly what makes rankings flip.
+                Geometrically: average ROAS is the slope of the <strong>secant</strong> <em>(the line
+                from zero to today's operating point)</em>; marginal ROAS is the slope of the
+                <strong>tangent</strong> <em>(the line that just kisses the curve there)</em>.
+            </p>
+            <p>
+                The framework's <code>compute_marginal_contributions(compute_uncertainty=True)</code>
+                simulates a +10% nudge per channel through <strong>paired</strong> posterior draws
+                (same seed for baseline and nudged prediction, so shared noise cancels draw-by-draw —
+                the per-draw doctrine again). The measured table, with the payoff in the rank columns:
+            </p>
+
+            <table class="mini-table">
+                <thead><tr><th>channel</th><th>average ROAS</th><th>marginal ROAS</th><th>marginal / average</th><th>rank (average)</th><th>rank (marginal)</th></tr></thead>
+                <tbody>
+                    <tr><td>Social</td><td class="num">0.881</td><td class="num">0.697</td><td class="num">0.792</td><td class="num">1</td><td class="num">1</td></tr>
+                    <tr><td>Display</td><td class="num">0.750</td><td class="num">0.561</td><td class="num">0.747</td><td class="num">2</td><td class="num">2</td></tr>
+                    <tr><td>Search</td><td class="num">0.730</td><td class="num bad">0.404</td><td class="num bad">0.554</td><td class="num">3</td><td class="num bad">4</td></tr>
+                    <tr><td>TV</td><td class="num">0.569</td><td class="num">0.428</td><td class="num">0.752</td><td class="num">4</td><td class="num good">3</td></tr>
+                </tbody>
+            </table>
+
+            <p>
+                <strong>The two rankings genuinely disagree on this world.</strong> By average ROAS,
+                Search out-earns TV (0.730 vs 0.569). By the <em>next-dollar</em> yardstick the order
+                flips: TV 0.428 vs Search 0.404. Search keeps only 55% of its average return at the
+                margin — it operates deepest into its curve — while TV keeps 75%. And because the flip
+                was computed per draw, it comes with its own confidence: measured
+                <strong>P(TV's next dollar beats Search's) = 0.62</strong> — a real but modest call,
+                not a certainty.
+            </p>
+
+            <div class="chart-container" id="rankingChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — average ROAS (solid) vs marginal ROAS (hatched) per channel,
+                both with measured 90% HDIs from the notebook. The solid bars rank
+                Social&nbsp;&gt;&nbsp;Display&nbsp;&gt;&nbsp;<em>Search</em>&nbsp;&gt;&nbsp;<em>TV</em>;
+                the hatched bars rank
+                Social&nbsp;&gt;&nbsp;Display&nbsp;&gt;&nbsp;<em>TV</em>&nbsp;&gt;&nbsp;<em>Search</em>.
+                Only the marginal number is about the <em>future</em>.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Honesty checkpoint</h4>
+                <p>
+                    In this world the <em>top</em> of the ranking didn't move — Social wins on both
+                    yardsticks — and the flip happened at the bottom, at a 6-in-10 confidence. When
+                    would it hit the top? Whenever your historically-best channel is also your
+                    most-saturated one — very common for brands that scaled their proven winner for
+                    years. Then average ROAS says "double down" while marginal ROAS says "you already
+                    ate that curve." And all of this presumes the saturation <em>form</em> is right —
+                    see <a href="stress-01-carryover-shape.html">stress 01</a> for what happens when
+                    it isn't (a Hill-type threshold fit with a concave default reads +38% on total
+                    media, all diagnostics green).
+                </p>
+            </div>
+
+            <h2 id="curves">5 — Response curves with bands, and what-if scenarios</h2>
+            <p>
+                Tangent-vs-secant was one channel at one point. The full deliverable is each channel's
+                <strong>response curve</strong> <em>(expected weekly contribution as a function of weekly
+                spend)</em> drawn <strong>per draw</strong>, so it comes with a credibility band, not just
+                a line. Read each curve with two questions: <em>where is the operating point</em>
+                (diamond = today's average week), and <em>is the curve still climbing there, or flat?</em>
+                Steep → headroom; flat → saturated — more budget mostly buys confirmation that the
+                curve is flat. The notebook's measured <strong>saturation-at-operating-point</strong>
+                (share of the estimated ceiling already consumed in a typical week):
+                <strong>Search 0.46</strong>, TV 0.29, Display 0.25, <strong>Social 0.20</strong>.
+                Search has eaten almost half its curve; Social has barely started. For Search, the
+                measured secant slope is <strong>0.894</strong> against a tangent slope of
+                <strong>0.629</strong> — the next dollar earns about 30% less than the picture the
+                historical average paints.
+            </p>
+
+            <div class="controls-row">
+                <label for="curveSelect">Channel:</label>
+                <select id="curveSelect">
+                    <option value="0">TV</option>
+                    <option value="1" selected>Search</option>
+                    <option value="2">Social</option>
+                    <option value="3">Display</option>
+                </select>
+                <span class="readout" id="curveReadout"></span>
+            </div>
+            <div class="chart-container" id="curvesChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation</strong> — steady-state weekly response curve per channel,
+                anchored to the <strong>measured</strong> operating points, contributions, and
+                saturation-at-op fractions from the notebook; band width scaled to each channel's
+                measured ROAS interval. The secant runs from zero to the operating diamond (its slope
+                ≈ average return); the tangent kisses the curve there (its slope ≈ the next dollar's
+                return). Switch to Social to see a curve still climbing; switch to Search to see one
+                going flat. The notebook's own caveat applies: this is a steady-state simplification —
+                trust the §4 table for the decision numbers.
+            </p>
+
+            <p>
+                <strong>What-if scenarios: uplift is a distribution too.</strong> "What if we put 20%
+                more into Social next year?" The one-liner is
+                <code>mmm.what_if_scenario({"Social": 1.2})</code> — measured point answer:
+                <strong>+644 KPI units (+0.94%) for $941 more Social spend</strong>. Useful, but it
+                summarizes to a point. The doctrine version is two <strong>paired</strong>
+                <code>mmm.predict()</code> calls (same seed, so each draw's simulated noise cancels in
+                the difference) and a per-draw subtraction. The measured +20% uplift distributions:
+            </p>
+
+            <div class="controls-row">
+                <label>View:</label>
+                <button class="toggle-btn active" data-view="abs" id="wiAbsBtn">Total uplift (KPI units)</button>
+                <button class="toggle-btn" data-view="perdollar" id="wiPdBtn">Per extra dollar</button>
+            </div>
+            <div class="chart-container" id="whatIfChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — mean uplift of +20% spend per channel with 90% HDIs, from the
+                notebook's paired predictions (P(uplift &gt; 0) = 1.0 for all four). Absolute lift rewards
+                big budgets — TV's +20% is the biggest check ($1,839) and buys the biggest lift (769).
+                Per extra dollar, the ordering reshuffles to the marginal story: Social 0.684,
+                Display 0.548, TV 0.418, Search 0.389. And cuts bite harder than raises on a concave
+                curve: the notebook's measured Social −20% scenario loses a mean
+                <strong>695</strong> units with P(loss) = 100% — the dollars you remove were earning
+                more than the dollars you'd add.
+            </p>
+
+            <h2 id="reallocation">6 — A simple reallocation, with honesty</h2>
+            <p>
+                The capstone scenario: <strong>move budget, keep the total constant</strong>. Section 4
+                nominated the donor and the recipient — Search's next dollar earns the least (most
+                saturated), Social's earns the most. So: cut Search 20% and give those dollars to
+                Social. And, as a control on ourselves, the <em>plausible-looking mistake</em>: rank by
+                <strong>average</strong> ROAS instead. On that table Search out-earns TV, so a naive
+                analyst happily moves TV money <em>into</em> Search — into the most saturated curve on
+                the books. Both scenarios get the full per-draw treatment; both get graded the same way.
+            </p>
+
+            <table class="mini-table">
+                <thead><tr><th>scenario</th><th>moved ($)</th><th>mean gain</th><th>90% HDI</th><th>P(gain &gt; 0)</th></tr></thead>
+                <tbody>
+                    <tr><td>Search → Social (marginal-driven)</td><td class="num">1,155</td><td class="num good">+252</td><td class="num">[+47, +431]</td><td class="num good">0.98</td></tr>
+                    <tr><td>TV → Search (average-driven)</td><td class="num">1,839</td><td class="num bad">−161</td><td class="num">[−417, +125]</td><td class="num bad">0.18</td></tr>
+                </tbody>
+            </table>
+
+            <div class="chart-container" id="reallocChart"></div>
+            <p class="chart-note">
+                <strong>Illustrative recreation (seeded)</strong> — the two reallocations' gain
+                distributions, from seeded draws matched to the <strong>measured</strong> means and 90%
+                HDIs in the table. Same total dollars, two rankings: the marginal-driven move clears
+                zero with <strong>P = 0.98</strong>; the average-ROAS-driven move is a coin flip tilted
+                to a loss, <strong>P(gain &gt; 0) = 0.18</strong>. This chart <em>is</em> the CMO answer:
+                what to move, what it's worth, and how sure we are.
+            </p>
+
+            <div class="definition">
+                <h4>The final teaching beat — read the chart like a grown-up</h4>
+                <ul>
+                    <li><strong>The interval is the deliverable.</strong> "Move Search money to Social"
+                        is worth recommending <em>because</em> its gain distribution clears zero with
+                        high probability — and even then, look how wide it is. Report the width. A
+                        reallocation whose gain interval straddles zero is a coin flip, and recommending
+                        a coin flip as a sure thing is how MMM teams lose credibility.</li>
+                    <li><strong>Bigger moves buy more risk, not more certainty.</strong> At a 30% cut the
+                        interval widens toward zero faster than the mean grows — the recipient's curve
+                        flattens as you pile dollars onto it.</li>
+                    <li><strong>All of this assumed the model is causally right.</strong> Every
+                        distribution here is honest about the model's <em>own</em> uncertainty. None of
+                        it defends against the model being wrong about causality: this clean world has
+                        no hidden demand driver, but real worlds do, and a confounded model produces
+                        beautifully tight intervals around the wrong answer
+                        (<a href="stress-00-rosy-picture.html">stress 00</a> for the doctrine,
+                        <a href="stress-05-gauntlet.html">stress 05</a> for everything at once). The fix
+                        is upstream of any chart here: causal structure, data hygiene, and experiments
+                        folded in as calibration.</li>
+                </ul>
+            </div>
+
+            <h2 id="meetings">7 — What this means for real budget meetings</h2>
+            <p>
+                The deliverable that survives a budget meeting is never "the ROAS is 0.73." It is the
+                §6 chart plus three sentences shaped like the CMO's questions: <em>cut the most
+                saturated channel's next dollars, not the lowest-average one's; the next million goes
+                where the marginal curve is steepest; and here is the probability we're right.</em>
+                Concretely, the habits this page bakes in:
+            </p>
+            <ul>
+                <li><strong>Never rank channels by average ROAS when deciding increments.</strong> The
+                    average grades the past; the margin prices the future. On this world they disagree,
+                    and only one of the two resulting reallocations wins (P = 0.98 vs 0.18).</li>
+                <li><strong>Attach a probability to every recommendation.</strong> "81% chance Social
+                    out-earns Display" invites a productive argument; "Social is better" invites a
+                    political one.</li>
+                <li><strong>Say "coin flip" out loud when it is one.</strong> P(Search beats Display) =
+                    0.446 — the honest answer is that the data can't separate them yet, which is itself
+                    a decision input (it prices an experiment).</li>
+                <li><strong>Keep the caveat attached:</strong> these are the model's own error bars,
+                    conditional on its causal assumptions. The
+                    <a href="pressure-testing.html">pressure-testing scorecard</a> is the required
+                    reading before trusting any of this on real data.</li>
+            </ul>
+            <p>
+                Where to go next: <a href="aurora-05-unified-workflow.html">Aurora 05 · Unified
+                Workflow</a> runs this exact doctrine at story scale — a full analyst engagement where
+                per-draw decision quantities drive a real budget recommendation; the
+                <a href="workflow-budget-optimization.html">budget-optimization workflow guide</a>
+                covers the production tooling for the constrained-allocation version of §6; and
+                <a href="workshop-04-reading-the-posterior.html">workshop 04</a> is the prequel if any
+                of "draws, HDIs, joint structure" felt shaky.
+            </p>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>Compute per draw, summarize last.</strong> For any nonlinear business
+                        quantity, \( f(\mathbb{E}[\theta]) \neq \mathbb{E}[f(\theta)] \) — the plug-in
+                        shortcut overstated TV's effect by +10.3% on this fit, and it hides your
+                        uncertainty besides.</li>
+                    <li><strong>ROAS is a distribution</strong>, and on this answer-keyed world the 90%
+                        HDIs caught the truth for 4/4 channels — the intervals are earned, not decorative.</li>
+                    <li><strong>Decision probabilities are counting:</strong> P(ROAS &gt; t) and P(A beats B)
+                        come straight from the draws, computed within-draw so shared uncertainty cancels.</li>
+                    <li><strong>The next dollar is not the average dollar.</strong> The average-ROAS and
+                        marginal-ROAS rankings genuinely disagree here (Search 3rd → 4th, TV 4th → 3rd),
+                        and only the marginal one is about the future.</li>
+                    <li><strong>The interval is the deliverable.</strong> The marginal-driven reallocation
+                        wins with P = 0.98; the average-driven one is a coin flip tilted to a loss
+                        (P = 0.18). Same dollars, opposite verdicts.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/workshop_05_from_draws_to_decisions.ipynb</code>
+                    (one ~10&nbsp;s NumPyro fit; every cell ends in an assert encoding the claim it just
+                    made), authored by <code>nbs/build_workshop_05_from_draws_to_decisions.py</code>.
+                    The series README is <code>nbs/README_workshop.md</code>; the known-truth world is
+                    <code>mmm_framework.synth.dgp.build("clean")</code>. The notebook's 🎛️ ipywidgets cells
+                    (breakeven slider, budget-move explorer) need a live kernel — this page's sliders
+                    are their browser stand-ins. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+
+            <h2 id="glossary">Glossary</h2>
+            <table class="mini-table">
+                <thead><tr><th>term</th><th>plain English</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>derived quantity</strong></td><td>any business number computed <em>from</em> model parameters (ROAS, an uplift, a ranking) rather than estimated directly</td></tr>
+                    <tr><td><strong>per-draw computation</strong></td><td>evaluating the business formula once per posterior draw, yielding a distribution of answers; summarize (median/HDI/probability) only at the end</td></tr>
+                    <tr><td><strong>plug-in shortcut</strong></td><td>the biased alternative: collapse the posterior to one "best" value first, then compute — f(average) ≠ average of f for nonlinear f</td></tr>
+                    <tr><td><strong>average ROAS</strong></td><td>total contribution ÷ total spend: what the <em>historical</em> dollar earned (the secant's slope)</td></tr>
+                    <tr><td><strong>marginal ROAS</strong></td><td>the return on the <em>next</em> dollar at today's operating point (the tangent's slope); always below average ROAS under saturation</td></tr>
+                    <tr><td><strong>response curve</strong></td><td>expected weekly contribution as a function of weekly spend; drawn per draw it comes with a credibility band</td></tr>
+                    <tr><td><strong>operating point</strong></td><td>where on its response curve a channel currently spends; steep = headroom, flat = saturated</td></tr>
+                    <tr><td><strong>what-if / counterfactual</strong></td><td>re-predicting the KPI under altered spend (paired draws so noise cancels); the difference per draw is the uplift distribution</td></tr>
+                    <tr><td><strong>decision probability</strong></td><td>the posterior probability of a business statement — P(ROAS &gt; breakeven), P(A beats B), P(reallocation gains) — computed by counting draws</td></tr>
+                    <tr><td><strong>HDI</strong></td><td>highest-density interval: the narrowest range holding a given share (e.g. 90%) of the draws — the honest "give or take"</td></tr>
+                </tbody>
+            </table>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the notebook-guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG (series-wide reference implementation).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // Seeded standard normals via Box-Muller.
+        function seededNormals(seed, n) {
+            const rng = mulberry32(seed), out = new Array(n);
+            for (let i = 0; i < n; i += 2) {
+                const u1 = Math.max(rng(), 1e-12), u2 = rng();
+                const r = Math.sqrt(-2 * Math.log(u1)), th = 2 * Math.PI * u2;
+                out[i] = r * Math.cos(th);
+                if (i + 1 < n) out[i + 1] = r * Math.sin(th);
+            }
+            return out;
+        }
+
+        // Simple Gaussian KDE on a grid.
+        function kde(xs, lo, hi, npts, bw) {
+            const grid = [], dens = [];
+            const n = xs.length;
+            for (let i = 0; i < npts; i++) {
+                const x = lo + (hi - lo) * i / (npts - 1);
+                let s = 0;
+                for (let j = 0; j < n; j++) {
+                    const z = (x - xs[j]) / bw;
+                    s += Math.exp(-0.5 * z * z);
+                }
+                grid.push(x);
+                dens.push(s / (n * bw * Math.sqrt(2 * Math.PI)));
+            }
+            return { x: grid, y: dens };
+        }
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CCOL = { TV: PT.colors.tv, Search: PT.colors.search, Social: PT.colors.social, Display: PT.colors.display };
+        const INK = PT.colors.truth;
+
+        // ------------------------------------------------------------------
+        // MEASURED numbers from the baked notebook
+        // (nbs/workshop_05_from_draws_to_decisions.ipynb, seeded run).
+        // ------------------------------------------------------------------
+        const TRUE_ROAS = { TV: 0.616, Search: 0.785, Social: 0.854, Display: 0.806 };
+        // ROAS posterior: measured median + 90% HDI -> sd = width / (2 * 1.645)
+        const ROAS_POST = {
+            TV:      { m: 0.561, lo: 0.447, hi: 0.673 },
+            Search:  { m: 0.727, lo: 0.578, hi: 0.859 },
+            Social:  { m: 0.876, lo: 0.745, hi: 1.005 },
+            Display: { m: 0.746, lo: 0.541, hi: 0.925 }
+        };
+        // Measured P(ROAS > 1.0) anchors, quoted in the readout at t = 1.0.
+        const MEASURED_P1 = { TV: 0.000, Search: 0.001, Social: 0.070, Display: 0.022 };
+
+        // Measured average vs marginal ROAS (means + 90% HDIs).
+        const AVG  = { mean: [0.569, 0.730, 0.881, 0.750], lo: [0.447, 0.578, 0.745, 0.541], hi: [0.673, 0.859, 1.005, 0.925] };
+        const MARG = { mean: [0.428, 0.404, 0.697, 0.561], lo: [0.345, 0.284, 0.590, 0.409], hi: [0.513, 0.524, 0.808, 0.707] };
+        const RANK_AVG  = [4, 3, 1, 2];
+        const RANK_MARG = [3, 4, 1, 2];
+
+        // Measured anchors for the response-curve exhibit.
+        const WEEKS = 156;
+        const TOTAL_SPEND   = [9193.3, 5773.3, 4703.3, 3668.6];   // $
+        const TOTAL_CONTRIB = [5229.0, 4215.0, 4141.9, 2753.3];   // KPI units (posterior mean)
+        const SAT_AT_OP     = [0.29, 0.46, 0.20, 0.25];           // measured share of ceiling consumed
+
+        // Measured +20% what-if uplifts (paired draws), with 90% HDIs.
+        const WI_DOLLARS = [1838.66, 1154.65, 940.65, 733.72];
+        const WI_ABS  = { mean: [769, 449, 644, 402], lo: [621, 309, 536, 292], hi: [925, 583, 742, 511] };
+        // per-dollar = measured uplift / measured extra dollars
+        const WI_PD = {
+            mean: WI_ABS.mean.map(function(v, i) { return v / WI_DOLLARS[i]; }),
+            lo:   WI_ABS.lo.map(function(v, i) { return v / WI_DOLLARS[i]; }),
+            hi:   WI_ABS.hi.map(function(v, i) { return v / WI_DOLLARS[i]; })
+        };
+
+        // Measured reallocation verdicts.
+        const REALLOC = [
+            { name: 'Search → Social (marginal-driven)', mean: 251.68, lo: 47.47,   hi: 430.55, p: 0.98, color: PT.colors.tv },
+            { name: 'TV → Search (average-driven)',      mean: -160.56, lo: -417.05, hi: 124.87, p: 0.18, color: PT.colors.display }
+        ];
+
+        // ------------------------------------------------------------------
+        // Seeded draws approximating the notebook's ROAS posterior
+        // (normal, matched to measured median/HDI) — illustrative.
+        // ------------------------------------------------------------------
+        const N_DRAWS = 1000;
+        const ROAS_DRAWS = {};
+        CHANNELS.forEach(function(c, i) {
+            const p = ROAS_POST[c];
+            const sd = (p.hi - p.lo) / 3.29;
+            ROAS_DRAWS[c] = seededNormals(7100 + i, N_DRAWS).map(function(z) { return p.m + sd * z; });
+        });
+
+        // ==================================================================
+        // 1 — Jensen exhibit: correlated (beta, lambda) cloud, live.
+        // ==================================================================
+        const J_N = 400;
+        const jz1 = seededNormals(20260610, J_N), jz2 = seededNormals(48151623, J_N);
+        const J_BETA = [], J_LAM = [];
+        for (let i = 0; i < J_N; i++) {
+            // negatively correlated, as in workshop_04's joint-structure picture
+            J_BETA.push(Math.exp(0.50 + 0.28 * jz1[i]));
+            J_LAM.push(Math.exp(0.85 + 0.50 * (-0.8 * jz1[i] + 0.6 * jz2[i])));
+        }
+        const J_MB = J_BETA.reduce(function(a, b) { return a + b; }, 0) / J_N;
+        const J_ML = J_LAM.reduce(function(a, b) { return a + b; }, 0) / J_N;
+        function satf(b, l, x) { return b * (1 - Math.exp(-l * x)); }
+
+        const J_X = [];
+        for (let i = 0; i <= 60; i++) J_X.push(1.2 * i / 60);
+        const J_MEAN_CURVE = J_X.map(function(x) {
+            let s = 0;
+            for (let i = 0; i < J_N; i++) s += satf(J_BETA[i], J_LAM[i], x);
+            return s / J_N;
+        });
+        const J_PLUG_CURVE = J_X.map(function(x) { return satf(J_MB, J_ML, x); });
+
+        function jensenTraces(x0) {
+            const traces = [];
+            for (let i = 0; i < 60; i++) {
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: J_X,
+                    y: J_X.map(function(x) { return satf(J_BETA[i], J_LAM[i], x); }),
+                    line: { color: PT.band(PT.colors.tv, 0.25), width: 1 },
+                    hoverinfo: 'skip', showlegend: false
+                });
+            }
+            traces.push({
+                type: 'scatter', mode: 'lines', x: J_X, y: J_MEAN_CURVE,
+                name: 'per-draw mean (honest)', line: { color: INK, width: 3 }
+            });
+            traces.push({
+                type: 'scatter', mode: 'lines', x: J_X, y: J_PLUG_CURVE,
+                name: 'plug-in curve (no draw believes it)',
+                line: { color: PT.colors.display, width: 2.5, dash: 'dash' }
+            });
+            let perDraw = 0;
+            for (let i = 0; i < J_N; i++) perDraw += satf(J_BETA[i], J_LAM[i], x0);
+            perDraw /= J_N;
+            const plug = satf(J_MB, J_ML, x0);
+            traces.push({
+                type: 'scatter', mode: 'markers', x: [x0, x0], y: [perDraw, plug],
+                name: 'comparison at x₀',
+                marker: {
+                    size: 11, symbol: ['circle', 'x'],
+                    color: [INK, PT.colors.display],
+                    line: { width: 1, color: 'white' }
+                },
+                hovertemplate: '%{y:.3f}<extra></extra>'
+            });
+            return { traces: traces, plug: plug, perDraw: perDraw };
+        }
+
+        function drawJensen() {
+            const x0 = parseFloat(document.getElementById('jensenSlider').value);
+            const r = jensenTraces(x0);
+            const gapPct = 100 * (r.plug - r.perDraw) / r.perDraw;
+            document.getElementById('jensenReadout').textContent =
+                'plug-in ' + r.plug.toFixed(3) + ' vs per-draw ' + r.perDraw.toFixed(3) +
+                ' (+' + gapPct.toFixed(1) + '% overstated, illustrative)';
+            const layout = PT.layout({
+                xaxis: { title: 'normalized weekly spend x (1 = biggest week on record)', range: [0, 1.22] },
+                yaxis: { title: 'weekly effect (illustrative units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'line', x0: x0, x1: x0, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: '#9aa79a', width: 1, dash: 'dot' }
+                }]
+            });
+            Plotly.react('jensenChart', r.traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 2 — ROAS densities with truth diamonds.
+        // ==================================================================
+        function drawRoas() {
+            const traces = [];
+            CHANNELS.forEach(function(c) {
+                const p = ROAS_POST[c];
+                const sd = (p.hi - p.lo) / 3.29;
+                const d = kde(ROAS_DRAWS[c], p.m - 4 * sd, p.m + 4 * sd, 120, sd * 0.45);
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: d.x, y: d.y, name: c,
+                    line: { color: CCOL[c], width: 2.5 },
+                    fill: 'tozeroy', fillcolor: PT.band(CCOL[c], 0.18),
+                    hovertemplate: c + ': ROAS %{x:.3f}<extra></extra>'
+                });
+            });
+            traces.push({
+                type: 'scatter', mode: 'markers',
+                x: CHANNELS.map(function(c) { return TRUE_ROAS[c]; }),
+                y: CHANNELS.map(function() { return 0; }),
+                name: 'TRUE ROAS (answer key)',
+                marker: { symbol: 'diamond', size: 13, color: INK, line: { width: 1.5, color: 'white' } },
+                hovertemplate: 'truth: %{x:.3f}<extra></extra>'
+            });
+            const layout = PT.layout({
+                xaxis: { title: 'ROAS (KPI units per dollar)', range: [0.25, 1.25] },
+                yaxis: { title: 'density', showticklabels: false },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 50, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'line', x0: 1, x1: 1, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: '#9aa79a', width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 1, y: 0.97, yref: 'paper', xanchor: 'left',
+                    text: ' breakeven 1.0', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('roasChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 3 — Breakeven slider: P(ROAS > t) counted from the seeded draws.
+        // ==================================================================
+        function drawBreakeven() {
+            const t = parseFloat(document.getElementById('breakevenSlider').value);
+            const probs = CHANNELS.map(function(c) {
+                let n = 0;
+                for (let i = 0; i < N_DRAWS; i++) if (ROAS_DRAWS[c][i] > t) n++;
+                return n / N_DRAWS;
+            });
+            const survivors = CHANNELS.filter(function(c, i) { return probs[i] >= 0.5; });
+            document.getElementById('breakevenReadout').textContent =
+                't = ' + t.toFixed(2) + ' — channels with P ≥ 50%: ' +
+                (survivors.length ? survivors.join(', ') : 'none');
+            const trace = {
+                type: 'bar',
+                x: CHANNELS, y: probs,
+                marker: { color: CHANNELS.map(function(c) { return CCOL[c]; }), line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                text: probs.map(function(p) { return (100 * p).toFixed(0) + '%'; }),
+                textposition: 'outside',
+                hovertemplate: '<b>%{x}</b><br>P(ROAS > ' + t.toFixed(2) + ') = %{y:.3f}<extra></extra>'
+            };
+            const layout = PT.layout({
+                xaxis: { title: '' },
+                yaxis: { title: 'P(ROAS > t)', range: [0, 1.12] },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 0.5, y1: 0.5,
+                    line: { color: '#9aa79a', width: 1.5, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 3.45, y: 0.5, xanchor: 'right', yanchor: 'bottom',
+                    text: 'coin-flip line', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.react('breakevenChart', [trace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // 4 — Average vs marginal ROAS (measured, with HDIs).
+        // ==================================================================
+        function drawRanking() {
+            const colors = CHANNELS.map(function(c) { return CCOL[c]; });
+            const avgTrace = {
+                type: 'bar', name: 'average ROAS (historical dollar)',
+                x: CHANNELS, y: AVG.mean,
+                marker: { color: colors, opacity: 0.88, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                error_y: {
+                    type: 'data', symmetric: false,
+                    array: AVG.hi.map(function(h, i) { return h - AVG.mean[i]; }),
+                    arrayminus: AVG.mean.map(function(m, i) { return m - AVG.lo[i]; }),
+                    color: INK, thickness: 1.4
+                },
+                customdata: RANK_AVG,
+                hovertemplate: '<b>%{x}</b><br>average ROAS %{y:.3f}<br>rank by average: %{customdata}<extra></extra>'
+            };
+            const margTrace = {
+                type: 'bar', name: 'marginal ROAS (next dollar)',
+                x: CHANNELS, y: MARG.mean,
+                marker: {
+                    color: colors, opacity: 0.45,
+                    pattern: { shape: '/' },
+                    line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                },
+                error_y: {
+                    type: 'data', symmetric: false,
+                    array: MARG.hi.map(function(h, i) { return h - MARG.mean[i]; }),
+                    arrayminus: MARG.mean.map(function(m, i) { return m - MARG.lo[i]; }),
+                    color: INK, thickness: 1.4
+                },
+                customdata: RANK_MARG,
+                hovertemplate: '<b>%{x}</b><br>marginal ROAS %{y:.3f}<br>rank by marginal: %{customdata}<extra></extra>'
+            };
+            const layout = PT.layout({
+                barmode: 'group',
+                xaxis: { title: '' },
+                yaxis: { title: 'ROAS (KPI units per dollar)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                annotations: [{
+                    x: 'Search', y: MARG.lo[1] - 0.04, yanchor: 'top',
+                    text: 'rank 3 → 4', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }, {
+                    x: 'TV', y: MARG.lo[0] - 0.04, yanchor: 'top',
+                    text: 'rank 4 → 3 (P = 0.62)', showarrow: false,
+                    font: { size: 11, color: '#3f7a58' }
+                }]
+            });
+            Plotly.newPlot('rankingChart', [avgTrace, margTrace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // 5a — Response curves with bands (anchored illustrative), dropdown.
+        // ==================================================================
+        function drawCurve() {
+            const i = parseInt(document.getElementById('curveSelect').value, 10);
+            const c = CHANNELS[i];
+            const sOp = TOTAL_SPEND[i] / WEEKS;            // typical weekly spend ($)
+            const cOp = TOTAL_CONTRIB[i] / WEEKS;          // typical weekly contribution
+            const sat = SAT_AT_OP[i];
+            const A = cOp / sat;                           // estimated weekly ceiling
+            const k = -Math.log(1 - sat) / sOp;
+            const rel = (ROAS_POST[c].hi - ROAS_POST[c].lo) / (2 * ROAS_POST[c].m); // band half-width
+
+            const xs = [], med = [], lo = [], hi = [];
+            const xMax = 2.4 * sOp;
+            for (let j = 0; j <= 80; j++) {
+                const s = xMax * j / 80;
+                const f = A * (1 - Math.exp(-k * s));
+                xs.push(s); med.push(f); lo.push(f * (1 - rel)); hi.push(f * (1 + rel));
+            }
+            const tangentSlope = A * k * Math.exp(-k * sOp);
+            const tx = [Math.max(sOp - 0.45 * sOp, 0), sOp + 0.6 * sOp];
+            const ty = tx.map(function(x) { return cOp + tangentSlope * (x - sOp); });
+
+            const traces = [
+                {
+                    type: 'scatter', x: xs.concat(xs.slice().reverse()),
+                    y: hi.concat(lo.slice().reverse()),
+                    fill: 'toself', fillcolor: PT.band(CCOL[c], 0.18),
+                    line: { width: 0 }, hoverinfo: 'skip', name: '90%-style band', showlegend: false
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: med,
+                    name: c + ' response curve', line: { color: CCOL[c], width: 3 },
+                    hovertemplate: '$%{x:.0f}/wk → %{y:.1f} units<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: [0, sOp], y: [0, cOp],
+                    name: 'secant (avg return)', line: { color: '#9aa79a', width: 2, dash: 'dot' },
+                    hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: tx, y: ty,
+                    name: 'tangent (next dollar)', line: { color: INK, width: 2, dash: 'dash' },
+                    hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [sOp], y: [cOp],
+                    name: 'operating point (avg week)',
+                    marker: { symbol: 'diamond', size: 13, color: INK, line: { width: 1.5, color: 'white' } },
+                    hovertemplate: 'today: $%{x:.0f}/wk, %{y:.1f} units<extra></extra>'
+                }
+            ];
+            document.getElementById('curveReadout').textContent =
+                c + ': saturation at operating point = ' + sat.toFixed(2) + ' (measured)';
+            const layout = PT.layout({
+                xaxis: { title: 'weekly spend ($)', rangemode: 'tozero' },
+                yaxis: { title: 'weekly contribution (KPI units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 }
+            });
+            Plotly.react('curvesChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // 5b — What-if uplift bars (measured), abs vs per-dollar toggle.
+        // ==================================================================
+        function drawWhatIf(view) {
+            const D = view === 'abs' ? WI_ABS : WI_PD;
+            const fmt = view === 'abs' ? '.0f' : '.3f';
+            const trace = {
+                type: 'bar',
+                x: CHANNELS, y: D.mean,
+                marker: { color: CHANNELS.map(function(c) { return CCOL[c]; }), line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                error_y: {
+                    type: 'data', symmetric: false,
+                    array: D.hi.map(function(h, i) { return h - D.mean[i]; }),
+                    arrayminus: D.mean.map(function(m, i) { return m - D.lo[i]; }),
+                    color: INK, thickness: 1.4
+                },
+                customdata: WI_DOLLARS,
+                hovertemplate: '<b>%{x}</b> +20% spend ($%{customdata:.0f} extra)<br>' +
+                    (view === 'abs' ? 'mean uplift %{y:.0f} KPI units' : 'uplift per extra dollar %{y:.3f}') +
+                    '<extra></extra>'
+            };
+            const layout = PT.layout({
+                xaxis: { title: '' },
+                yaxis: {
+                    title: view === 'abs' ? 'mean uplift of +20% spend (KPI units)' : 'uplift per extra dollar (KPI units/$)',
+                    rangemode: 'tozero', tickformat: fmt
+                }
+            });
+            Plotly.react('whatIfChart', [trace], layout, PT.config);
+        }
+
+        // ==================================================================
+        // 6 — Reallocation gain distributions (seeded, matched to measured).
+        // ==================================================================
+        function drawRealloc() {
+            const traces = [];
+            const annotations = [];
+            REALLOC.forEach(function(s, idx) {
+                const sd = (s.hi - s.lo) / 3.29;
+                const draws = seededNormals(9000 + idx, 2000).map(function(z) { return s.mean + sd * z; });
+                const d = kde(draws, s.mean - 4 * sd, s.mean + 4 * sd, 140, sd * 0.4);
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: d.x, y: d.y, name: s.name,
+                    line: { color: s.color, width: 2.5 },
+                    fill: 'tozeroy', fillcolor: PT.band(s.color, 0.22),
+                    hovertemplate: s.name + '<br>gain %{x:.0f} KPI units<extra></extra>'
+                });
+                const peak = Math.max.apply(null, d.y);
+                annotations.push({
+                    x: s.mean, y: peak * 1.07,
+                    text: 'P(gain&gt;0) = ' + (100 * s.p).toFixed(0) + '%',
+                    showarrow: false, font: { size: 12, color: s.color }
+                });
+            });
+            const layout = PT.layout({
+                xaxis: { title: 'total KPI gain vs current plan (constant total spend)' },
+                yaxis: { title: 'density', showticklabels: false },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 50, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: INK, width: 2 }
+                }],
+                annotations: annotations
+            });
+            Plotly.newPlot('reallocChart', traces, layout, PT.config);
+        }
+
+        // ==================================================================
+        // Wiring
+        // ==================================================================
+        function init() {
+            drawJensen();
+            drawRoas();
+            drawBreakeven();
+            drawRanking();
+            drawCurve();
+            drawWhatIf('abs');
+            drawRealloc();
+
+            document.getElementById('jensenSlider').addEventListener('input', drawJensen);
+            document.getElementById('breakevenSlider').addEventListener('input', drawBreakeven);
+            document.getElementById('curveSelect').addEventListener('change', drawCurve);
+
+            [document.getElementById('wiAbsBtn'), document.getElementById('wiPdBtn')].forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.getElementById('wiAbsBtn').classList.remove('active');
+                    document.getElementById('wiPdBtn').classList.remove('active');
+                    btn.classList.add('active');
+                    drawWhatIf(btn.dataset.view);
+                });
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

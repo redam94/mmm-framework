@@ -225,10 +225,73 @@
                 Explore interactive workflow demonstrations, scenario analyses, and example reports
                 that showcase the MMM Framework in action.
             </p>
+            <p style="max-width: 720px; margin-top: 0.75rem;">
+                Every demo here exercises the same causal measurement loop—pre-specify the model,
+                fit it, validate against real-world experiments, calibrate, and decide—so each page
+                is one rehearsal of the discipline the framework is built around.
+            </p>
         </div>
     </section>
 
     <div class="container" style="max-width: 1100px; margin: 0 auto;">
+
+        <!-- Recommended paths by audience and time budget -->
+        <div class="section-header">
+            <h2>Recommended Paths</h2>
+            <p>Where to spend your time, by who you are and how much of it you have</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr><th>You are…</th><th>30 minutes</th><th>Half a day</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>A skeptical evaluator</strong></td>
+                    <td><a href="pressure-testing.html">The scorecard</a> &rarr;
+                        <a href="stress-05-gauntlet.html">The Gauntlet</a> &rarr;
+                        <a href="aurora-05-unified-workflow.html">Aurora 05</a></td>
+                    <td>Add the <a href="workflow-forecasting.html#backtesting">measured backtest</a>,
+                        the <a href="evaluator.html">evaluator's guide</a>, and re-run the
+                        <a href="getting-started.html">quickstart</a> yourself</td>
+                </tr>
+                <tr>
+                    <td><strong>A business sponsor</strong></td>
+                    <td><a href="business-stakeholders.html">For Business</a> &rarr;
+                        <a href="mmm-example-report.html">the example report</a></td>
+                    <td>Add <a href="interpreting-results.html">Interpreting Results</a> and the
+                        <a href="measurement-calibration.html">calibration loop</a> overview</td>
+                </tr>
+                <tr>
+                    <td><strong>An analyst new to Bayes</strong></td>
+                    <td><a href="workshop-00-thinking-in-distributions.html">Workshop 00</a></td>
+                    <td>Workshop 00&ndash;03, then <a href="mmm-walkthrough.html">the walkthrough</a></td>
+                </tr>
+                <tr>
+                    <td><strong>A methodologist</strong></td>
+                    <td><a href="stress-00-rosy-picture.html">Stress 00</a> &rarr;
+                        <a href="identification-assumptions.html">the identification contract</a></td>
+                    <td>The stress series end-to-end, then the
+                        <a href="math-00-overview.html">math companion</a></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="section-header" style="margin-top: 1.5rem;">
+            <h2 style="font-size: 1.15rem;">Why synthetic ground truth?</h2>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.95rem; max-width: 880px;">
+            Most demos here run on synthetic worlds — deliberately. Real data cannot grade an MMM's
+            <em>attribution</em>, because the true causal effect is unobservable; only data with a
+            known answer key can measure the gap between "all diagnostics green" and "the answer is
+            right," which is precisely what the pressure-testing program does (including publishing
+            the failures). The objection "of course it works on data you generated" is answered two
+            ways: the stress worlds are built to <em>break</em> the model, not flatter it, and the
+            framework is also graded on real data — the
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb"
+               target="_blank" rel="noopener">Lydia Pinkham pressure test</a> against 50 years of
+            published econometrics.
+        </p>
 
         <!-- Workflow Demos Section -->
         <div class="section-header">
@@ -237,16 +300,16 @@
         </div>
 
         <div class="demo-hub-grid">
-            <a href="scientific-workflow-demo.html" class="demo-card">
-                <div class="demo-card-icon workflow">&#x1F52C;</div>
-                <h3>Complete 9-Step Workflow</h3>
+            <a href="scientific-modeling.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F4DC;</div>
+                <h3>Scientific Modeling</h3>
                 <p>
-                    The full Bayesian modeling workflow from question formulation through
-                    actionable insights. Interactive controls, live charts, and story-to-math connections.
+                    The philosophy: why honest, transparent iteration beats specification
+                    shopping, and the principles that keep a model trustworthy under pressure.
                 </p>
                 <div class="demo-card-meta">
-                    <span class="demo-card-tag interactive">Interactive</span>
-                    <span>9 steps &middot; ~20 min</span>
+                    <span class="demo-card-tag interactive">Philosophy</span>
+                    <span>The why &middot; ~10 min</span>
                     <span class="arrow">&rarr;</span>
                 </div>
             </a>
@@ -255,12 +318,43 @@
                 <div class="demo-card-icon workflow">&#x1F4D6;</div>
                 <h3>Scientific Modeling Overview</h3>
                 <p>
-                    A conceptual overview of why pre-specified, transparent scientific modeling
-                    produces more trustworthy results than traditional approaches.
+                    The guided read for first-time analysts: a conceptual tour of why pre-specified,
+                    transparent modeling produces more trustworthy results than traditional approaches.
                 </p>
                 <div class="demo-card-meta">
                     <span class="demo-card-tag interactive">Interactive</span>
-                    <span>Conceptual guide &middot; ~10 min</span>
+                    <span>Guided read &middot; ~10 min</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+
+            <a href="scientific-workflow-demo.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F52C;</div>
+                <h3>Complete 9-Step Workflow</h3>
+                <p>
+                    The interactive step-by-step walkthrough: the full Bayesian modeling workflow from
+                    question formulation through actionable insights, with live charts and
+                    story-to-math connections.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>9 steps &middot; ~20 min</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+
+            <a href="real-data-guide.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F9F9;</div>
+                <h3>Real-Data Onboarding</h3>
+                <p>
+                    A deliberately messy client CSV &mdash; mixed dates, a TOTAL row, missing spend,
+                    a negative refund &mdash; taken through cleaning, MFF assembly, the EDA gate,
+                    fitting, and the validation battery that substitutes for ground truth when none
+                    exists. Measured: MASE 0.25 out of time, &minus;6% vs the disclosed answer key.
+                </p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Real-data path</span>
+                    <span>Messy CSV &middot; no-truth validation</span>
                     <span class="arrow">&rarr;</span>
                 </div>
             </a>
@@ -331,6 +425,433 @@
             </a>
         </div>
 
+        <!-- Aurora Showcase Series -->
+        <div class="section-header">
+            <h2>The Aurora Showcase</h2>
+            <p>One story, end to end: Aurora Coffee Co. decides next quarter's budget — and a causal MMM
+               keeps a dashboard from getting it expensively wrong. Mirrors <code>nbs/00&ndash;05</code>.</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="aurora-00-overview.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x2615;</div>
+                <h3>00 &middot; The Trap</h3>
+                <p>The dashboard crowns Search (correlation 0.85). The sealed answer key says its true ROAS
+                   is 0.66 — a demand-chasing mirage — while the "weak" channels are the brand engines.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>The hook</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="aurora-01-causality.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F500;</div>
+                <h3>01 &middot; Causality</h3>
+                <p>The causal DAG, identification, bad-control detection — and why observational adjustment
+                   alone is insufficient until a geo-lift experiment pulls Search back to truth.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>DAG &middot; calibration</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="aurora-02-base-mmm.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F4CA;</div>
+                <h3>02 &middot; The Base MMM</h3>
+                <p>What is each channel worth? Contributions and ROAS with credible intervals, marginal
+                   ROAS, what-if scenarios — and an honest account of what the base model still gets wrong.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Fit &middot; ROAS &middot; what-if</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="aurora-03-extended-mmm.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F9E0;</div>
+                <h3>03 &middot; Extended Models</h3>
+                <p>What is TV really doing? NestedMMM shows TV is ~fully mediated through awareness;
+                   MultivariateMMM weighs the Cold Brew cannibalization claim.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Mediation &middot; cross-effects</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="aurora-04-reporting.html" class="demo-card">
+                <div class="demo-card-icon report">&#x1F4CB;</div>
+                <h3>04 &middot; Reporting</h3>
+                <p>From posterior to boardroom: the report generator's API, sections, and themes — and the
+                   doctrine of what never gets stripped out when someone asks for "just the number".</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Report</span>
+                    <span>MMMReportGenerator</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="aurora-05-unified-workflow.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F3C1;</div>
+                <h3>05 &middot; The Unified Workflow</h3>
+                <p>The payoff: the experiment-anchored causal plan beats the dashboard plan by
+                   &asymp;$11.9M/yr on the same budget — a defensible reallocation, with uncertainty.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>The decision</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="causal-features-showcase.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F9ED;</div>
+                <h3>Causal Features Showcase</h3>
+                <p>The feature catalog: role typing, identification analysis, sensitivity &amp; refutation
+                   diagnostics, pre-specification locks, and experiment calibration (prior and likelihood routes).</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>13 features</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Workshop Series -->
+        <div class="section-header">
+            <h2>The Workshop Series</h2>
+            <p>Bayesian MMM from zero: no Bayesian background assumed, every term glossed in plain English,
+               every estimate graded against a known answer key. Mirrors <code>nbs/workshop_00&ndash;05</code>.</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="workshop-00-thinking-in-distributions.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F3B2;</div>
+                <h3>00 &middot; Thinking in Distributions</h3>
+                <p>Probability as belief, Bayes' rule on a grid, credible intervals, and your first derived
+                   quantity: "is the new creative better?" answered as P(B &gt; A) and an uplift distribution.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Foundations</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="workshop-01-priors.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F331;</div>
+                <h3>01 &middot; Priors</h3>
+                <p>The MMM prior zoo — and the doctrine that a prior on a parameter is really a prior on
+                   behavior, shown as slider-driven fans of implied adstock and response curves.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Prior predictive</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="workshop-02-sampling.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F6B6;</div>
+                <h3>02 &middot; Sampling</h3>
+                <p>Drive a Metropolis sampler in your browser, break it with the step-size slider, and watch
+                   R-hat and ESS — computed live on your own chains — catch every failure you caused.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>MCMC &middot; diagnostics</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="workshop-03-first-mmm.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F680;</div>
+                <h3>03 &middot; Your First MMM</h3>
+                <p>MMM vocabulary, the config built choice by choice, the diagnostics gate — and a first fit
+                   that recovers the known answer at ~7% median error, checked by you.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>First fit</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="workshop-04-reading-the-posterior.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F4D6;</div>
+                <h3>04 &middot; Reading the Posterior</h3>
+                <p>The posterior as a table of internally-consistent worlds: HDIs, forest plots, the β–λ
+                   trade-off at r &asymp; &minus;0.8 that proves derived quantities are computed per draw.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Posterior literacy</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="workshop-05-from-draws-to-decisions.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F4B8;</div>
+                <h3>05 &middot; From Draws to Decisions</h3>
+                <p>Compute per draw, summarize last. ROAS as a distribution, marginal vs average rankings
+                   that genuinely disagree, and a reallocation that wins with P = 0.98.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Decisions</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Math Series -->
+        <div class="section-header">
+            <h2>The Math Series</h2>
+            <p>The mathematics under the hood — every transform, prior, and likelihood term derived and
+               graphed, grounded in the framework's real code. Mirrors <code>nbs/math_00&ndash;06</code>.</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="math-00-overview.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F9EC;</div>
+                <h3>00 &middot; The Generative Model</h3>
+                <p>The full additive &mu;<sub>t</sub>, the Normal likelihood, the complete default-prior
+                   table, and a live draw from the prior — the index for the set.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>The model</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="math-01-adstock.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x23F3;</div>
+                <h3>01 &middot; Adstock</h3>
+                <p>Carryover as convolution: geometric IIR vs normalized FIR kernels, the 1/(1&minus;&alpha;)
+                   multiplier, and what the legacy Beta(2,2) two-&alpha; blend (the pre-2026 default) can and cannot express.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Carryover</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="math-02-saturation.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F4C9;</div>
+                <h3>02 &middot; Saturation</h3>
+                <p>The core exponential curve (strictly concave — not S-shaped), half-saturation at
+                   ln2/&lambda;, the Hill alternative with real thresholds, and marginal returns.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Diminishing returns</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="math-03-seasonality-trend.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F30A;</div>
+                <h3>03 &middot; Seasonality &amp; Trend</h3>
+                <p>Fourier order as a bias&ndash;variance dial, the corrected Prophet-style piecewise trend
+                   (slope changes, not level jumps), and B-splines as a partition of unity.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Baseline structure</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="math-04-bayesian-model.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F52E;</div>
+                <h3>04 &middot; The Bayesian Model</h3>
+                <p>Priors &rarr; prior predictive &rarr; NUTS &rarr; convergence &rarr; posterior intervals &rarr;
+                   PPC &rarr; additive decomposition — the full inference pipeline run on Aurora.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Inference</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="math-05-calibration.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x2696;&#xFE0F;</div>
+                <h3>05 &middot; Calibration</h3>
+                <p>The equifinality trap, the prior route (design factor + Gamma moment-matching) and the
+                   likelihood route — and the demo that pulls Search's ROAS from 2.8 to its true 0.66.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Experiments</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="math-06-extensions.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F517;</div>
+                <h3>06 &middot; Extensions</h3>
+                <p>The structural equations behind NestedMMM mediation, MultivariateMMM cross-effects
+                   (&psi; in the mean vs correlation in the noise), and CombinedMMM as their synthesis.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>Extensions</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Pressure Testing Series -->
+        <div class="section-header">
+            <h2>Pressure Testing</h2>
+            <p>The framework's known strengths and weaknesses, measured: synthetic worlds engineered to
+               break the model, graded against known causal truth. Mirrors <code>nbs/stress_00&ndash;06</code>.</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="pressure-testing.html" class="demo-card">
+                <div class="demo-card-icon report">&#x1F6A8;</div>
+                <h3>Overview &amp; Scorecard</h3>
+                <p>16 worlds, 8 silent failures — every one with clean convergence diagnostics. The
+                   interactive scorecard, the strengths/weaknesses ledger, and the fix ladder.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Start here</span>
+                    <span>The scorecard</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="mmm-walkthrough.html" class="demo-card">
+                <div class="demo-card-icon workflow">&#x1F6E4;&#xFE0F;</div>
+                <h3>The MMM Walkthrough</h3>
+                <p>The full analyst workflow — EDA pre-flight, pre-specified model, diagnostics gate,
+                   calibration — on a world that is realistic but kind. The gentle companion to the Gauntlet.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag interactive">Interactive</span>
+                    <span>The workflow</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-00-rosy-picture.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F338;</div>
+                <h3>00 &middot; The Rosy Picture</h3>
+                <p>A positive control recovers at 7% error — and an equally-green confounded fit is badly
+                   wrong on Search. What each diagnostic can and cannot see.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>The doctrine</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-01-carryover-shape.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F4D0;</div>
+                <h3>01 &middot; Carryover &amp; Shape</h3>
+                <p>Delayed carryover vs a kernel that can't bend (median error 88%); Hill thresholds vs a
+                   concave default (+40%, all green); 15&times; spend spikes (coverage 0%).</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>Functional form</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-02-time-structure.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F4C5;</div>
+                <h3>02 &middot; Time Structure</h3>
+                <p>A trend break plus a reactive media ramp sends TV to &minus;63%; evolving seasonality
+                   scrambles the channel split while totals stay right.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>Trend &middot; seasonality</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-03-confounding-selection.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F3AD;</div>
+                <h3>03 &middot; Confounding &amp; Selection</h3>
+                <p>Demand-chasing spend (+110% on Search, all diagnostics green), the noisy-proxy trap, the
+                   collinear seesaw — and the one lift test that closes the gap.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>Identification</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-04-extension-traps.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1FAA4;</div>
+                <h3>04 &middot; Extension Traps</h3>
+                <p>NestedMMM recovers what the base model loses — and over-credits its shared-mediator
+                   sibling 2.6&times;; a cross-effect flips sign with the prior; a wrong mediator fits perfectly.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>Extensions</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-05-gauntlet.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x2694;&#xFE0F;</div>
+                <h3>05 &middot; The Gauntlet</h3>
+                <p>Everything at once: ranking fully inverted, Search 8&times; overstated — and the full
+                   recovery workflow, each step measured, ending at Search ROAS 5.59 &rarr; 0.65 (truth 0.66).</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>The capstone</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="stress-06-geo-hierarchy.html" class="demo-card">
+                <div class="demo-card-icon scenario">&#x1F30D;</div>
+                <h3>06 &middot; Geography &amp; Hierarchy</h3>
+                <p>National numbers green while per-geo errors hit +330% and the regional ROI ranking fully
+                   inverts (&rho; = &minus;1) — plus the cross-geo adstock bug this series found and fixed.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag scenario-tag">Stress test</span>
+                    <span>Geo panels</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Validation Evidence Section -->
+        <div class="section-header">
+            <h2>Validation Evidence</h2>
+            <p>Forecast accuracy, runtime, and a real-data pressure test — measured in baked, seeded
+               notebooks whose recorded artifacts the docs quote.</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/backtest_validation.ipynb" target="_blank" class="demo-card">
+                <div class="demo-card-icon report">&#x1F3AF;</div>
+                <h3>Forecast Accuracy Backtest</h3>
+                <p>Rolling-origin backtest: 52 out-of-time weekly forecasts, MAPE 3.0% vs 13.8%
+                   seasonal-naive (MASE 0.24), honest interval coverage — plus the trend-break
+                   negative control where the harness correctly reports failure.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Measured</span>
+                    <span>nbs/backtest_validation.ipynb</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/runtime_benchmark.ipynb" target="_blank" class="demo-card">
+                <div class="demo-card-icon report">&#x23F1;&#xFE0F;</div>
+                <h3>Runtime Benchmark</h3>
+                <p>Wall-clock by data shape, samplers, draws, geo panels, and extension models on
+                   disclosed hardware: a production-size national fit in ~17&nbsp;s, NumPyro 6.0&times;
+                   vs sequential PyMC — every docs runtime claim traced to this artifact.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Measured</span>
+                    <span>nbs/runtime_benchmark.ipynb</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb" target="_blank" class="demo-card">
+                <div class="demo-card-icon report">&#x1F4F0;</div>
+                <h3>Real Data: Lydia Pinkham, 1907&ndash;1960</h3>
+                <p>The framework on the most-studied real advertising series in econometrics, graded
+                   against 50 years of published estimates: carryover sides with Clarke/Hanssens over
+                   Palda, ROAS inside the literature bracket, and a forecast grade reported honestly.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Real data</span>
+                    <span>nbs/pinkham_real_data.ipynb</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Consultant Artifacts Section -->
+        <div class="section-header">
+            <h2>Consultant Artifacts</h2>
+            <p>Printable engagement documents, generated by the reporting module</p>
+        </div>
+
+        <div class="demo-hub-grid">
+            <a href="artifacts/index.html" class="demo-card">
+                <div class="demo-card-icon report">&#x1F4CE;</div>
+                <h3>The Engagement Playbook</h3>
+                <p>Five downloadable one-pagers: the MMM diagnostic checklist (EDA pre-flight +
+                   symptom&rarr;action table + fix ladder), an experiment pre-registration memo,
+                   a client data-onboarding checklist, an honest exec-summary template, and a
+                   10&ndash;12 week engagement timeline mapped to the measurement loop.</p>
+                <div class="demo-card-meta">
+                    <span class="demo-card-tag report-tag">Downloads</span>
+                    <span>Print-ready &middot; 1&ndash;2 pages each</span>
+                    <span class="arrow">&rarr;</span>
+                </div>
+            </a>
+        </div>
+
         <!-- Example Report Section -->
         <div class="section-header">
             <h2>Example Report</h2>
@@ -360,49 +881,49 @@
         </div>
 
         <div class="report-gallery">
-            <a href="../examples/mmm_report_basic.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_basic.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview basic">&#x1F4D1;</div>
                 <div class="report-thumb-info">
                     <h4>Basic Report</h4>
                     <p>Standard full analysis</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_executive.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_executive.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview executive">&#x1F451;</div>
                 <div class="report-thumb-info">
                     <h4>Executive Summary</h4>
                     <p>High-level insights</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_corporate.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_corporate.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview corporate">&#x1F3E2;</div>
                 <div class="report-thumb-info">
                     <h4>Corporate</h4>
                     <p>Professional styling</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_sage.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_sage.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview sage">&#x1F33F;</div>
                 <div class="report-thumb-info">
                     <h4>Sage Theme</h4>
                     <p>Sage green palette</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_warm.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_warm.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview warm">&#x2600;&#xFE0F;</div>
                 <div class="report-thumb-info">
                     <h4>Warm Theme</h4>
                     <p>Warm color palette</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_minimal.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_minimal.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview minimal">&#x25CB;</div>
                 <div class="report-thumb-info">
                     <h4>Minimal</h4>
                     <p>Lightweight, core metrics</p>
                 </div>
             </a>
-            <a href="../examples/mmm_report_builder.html" class="report-thumb" target="_blank">
+            <a href="examples/mmm_report_builder.html" class="report-thumb" target="_blank">
                 <div class="report-thumb-preview builder">&#x1F527;</div>
                 <div class="report-thumb-info">
                     <h4>Builder Pattern</h4>

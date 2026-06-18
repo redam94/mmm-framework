@@ -91,6 +91,10 @@ mmm-framework/
 │   ├── utils/                  # Utility functions
 │   │   ├── standardization.py  # Data standardization
 │   │   └── statistics.py       # Statistical helpers
+│   ├── synth/                  # Synthetic DGP worlds with causal ground truth
+│   │   ├── dgp.py              # National scenarios (realistic, clean, violations)
+│   │   ├── dgp_geo.py          # Geo / geo x product panel scenarios
+│   │   └── mff.py              # Scenario -> MFF dataset + JSON answer key
 │   ├── dag_model_builder/      # DAG-based model configuration
 │   │   ├── builder.py          # Main DAG builder
 │   │   ├── dag_spec.py         # DAG specification
@@ -169,21 +173,20 @@ mmm-framework/
 │   ├── src/
 │   │   ├── api/                # API hooks and services
 │   │   ├── components/         # React components
-│   │   │   ├── common/         # Shared components
-│   │   │   ├── layout/         # Layout components
-│   │   │   └── workflow/       # Workflow components
-│   │   ├── pages/              # Page components
-│   │   │   ├── Dashboard/
-│   │   │   ├── DataUpload/
-│   │   │   ├── Diagnostics/
-│   │   │   ├── Login/
-│   │   │   ├── ModelConfig/
-│   │   │   ├── ModelFit/
-│   │   │   ├── Planning/
-│   │   │   └── Results/
+│   │   │   ├── common/         # Shared (ProjectSwitcher, ModelSwitcher…)
+│   │   │   ├── layout/         # AppShell, Header, Sidebar
+│   │   │   └── ui/             # Token-native kit (Card, StatHero, Drawer…)
+│   │   ├── pages/              # IA mirrors the measurement loop
+│   │   │   ├── Program/        # Home: T₀–T₅ stage, KPIs, coverage map
+│   │   │   ├── Experiments/    # EIG/EVOI matrix, lifecycle board, drawer
+│   │   │   ├── Performance/    # Trajectories, agreement log, runs timeline
+│   │   │   ├── Agent/          # Chat workspace (/workspace)
+│   │   │   └── Login/
+│   │   ├── theme/              # Design tokens: tokens.css (@theme — Tailwind 4,
+│   │   │                       #   NO tailwind.config), colors.ts, plotlyTheme.ts
 │   │   └── stores/             # Zustand state stores
 │   ├── vite.config.ts
-│   └── tailwind.config.js
+│   └── tailwind.config.js      # INERT under Tailwind 4 (tokens live in CSS)
 ├── examples/                   # Working usage examples
 ├── tests/                      # Test suite
 ├── docs/                       # Sphinx documentation
@@ -205,6 +208,7 @@ mmm-framework/
 | `serialization.py` | MMMSerializer for model persistence |
 | `transforms/` | Adstock, saturation, seasonality, trend transforms |
 | `utils/` | Standardization and statistics utilities |
+| `synth/` | Synthetic worlds with known causal truth (moved from `tests/synth`, which now shims to it); `generate_mff()` powers the agent's `generate_synthetic_data` (default scenario `realistic`; writes `synthetic_truth.json` answer key) |
 | `dag_model_builder/` | DAG-based model configuration from frontend |
 | `mmm_extensions/` | NestedMMM (mediation), MultivariateMMM (multi-outcome), CombinedMMM |
 | `reporting/` | MMMReportGenerator, charts, extractors, helpers |
@@ -263,6 +267,7 @@ Test organization:
 - `tests/` - Core module tests
 - `tests/reporting/` - Reporting module tests
 - `tests/mmm_extensions/` - Extension module tests
+- `tests/test_docs_snippets.py` - Docs code-snippet gate: verifies `docs/*.html` Python blocks only reference real APIs (see `technical-docs/doc-snippet-testing.md`)
 
 ## Common Development Tasks
 
@@ -351,4 +356,13 @@ analysis = MarginalAnalysisResult.from_model(model, results)
 | Serialization errors | Ensure cloudpickle version matches across environments |
 | DAG validation fails | Check `dag_model_builder/validation.py` for requirements |
 | Agent LLM auth / wrong provider | Check `config/model_config.yaml` (or `MMM_LLM_*` env); see `docs/model-configuration.md`. On GCP, Vertex uses ADC — grant the VM service account `roles/aiplatform.user` |
+| Use a local model (LM Studio) | Set `provider: lmstudio`, `model: <id from LM Studio>`, `base_url: http://localhost:1234/v1` (or `MMM_LLM_PROVIDER=lmstudio`/`MMM_LLM_BASE_URL`). Start LM Studio's server and load a model; the login screen lists loaded models via `/lmstudio-models`. No API key needed. Tool-calling needs a tool-capable model. For the KB, load an embedding model too and set `MMM_EMBED_MODEL`. |
 | Vertex "model not found" / 404 | Use the exact Model Garden id (may have `@version`) and a `location` region that serves it (Claude: e.g. `us-east5`) |
+| Knowledge-base ingest shows "error" / "no embedding backend" | The chat LLM and the embedder are separate (Anthropic has no embeddings). With a `vertex_*` chat provider, KB uses Vertex `text-embedding-005` over the same ADC — run `gcloud auth application-default login` and ensure a GCP project is set. Override with `MMM_EMBED_PROVIDER` (`vertex`/`openai`/`google_genai`), `MMM_EMBED_MODEL`, `MMM_EMBED_LOCATION` (default `us-central1`). See `technical-docs/agent-knowledge-workspace.md` §5. |
+| Agent output files / KB location | Per-session output lands in `$MMM_AGENT_WORKSPACE/threads/<thread_id>/` (default `./agent_workspace`); project KB sources in `$MMM_AGENT_WORKSPACE/projects/<project_id>/kb/`. The agent greps/reads these via `list_workspace_files`/`grep_workspace`. |
+| Agent tables / formatted output | Tabular tool output streams as content-addressed refs in `dashboard_data.tables` (rows served once via `GET /tables/{id}`, thread-salted + size-capped via `MMM_TABLE_MAX_BYTES`, default 1 MiB; store in `agents/workspace.py`, builders in `agents/tables.py`). In `execute_python`, `show_table(df, title=...)` renders a sortable dashboard table — the prompt forbids printing full DataFrames. Model ops return a `tables` key across the kernel MIME boundary; EDA tools also fill `dashboard_data.eda` (issues + outlier actions) for the UI EDA tab, whose confirm buttons hit `POST /outliers/{thread_id}/apply` (state-only update). |
+| Measurement loop / experiments | The product story is the adaptive cycle T₀ fit → T₁ EIG/EVOI priorities (`planning/eig.py`,`evoi.py`,`priority.py`) → T₂ pre-registered experiments (lifecycle registry in `api/sessions.py`: draft→planned→running→completed→calibrated, `POST /experiments/{id}/transition`) → T₃ calibrated refit (`spec["experiments"]` → `add_experiment_calibration`; `fit_mmm_model` auto-marks calibrated) → T₄ allocate → T₅ re-evaluate (information decay triggers re-tests). Per-run history metrics persist at fit time (`planning/history.py` → `run_metrics` table; knob `inference.metrics_draws`, 0 disables; backfill: `python -m mmm_framework.api.backfill`). Endpoints: `/projects/{id}/experiment-priorities|history|calibration-coverage`. Agent tools: `compute_experiment_priorities`, `design_experiment_plan` (randomized matched-pair geo lift / matched-market DiD with DiD power+placebo math, or budget-neutral randomized flighting for national data — `planning/design.py`, pure pandas, works pre-fit; UI: "Design experiment" studio on /experiments via `POST /projects/{id}/experiment-design`), `plan_experiment`, `preregister_experiment`, `record_experiment_readout`, `apply_experiment_calibration`. Demo: `uv run python scripts/seed_demo_project.py [--synthetic-records]` (replaces the prior demo project; seeds chats + workspace state). |
+| Guide chat / onboarding / team | Floating guide bubble (AppShell pages) talks to a per-project "✦ Project guide" session (`POST /projects/{id}/guide`, idempotent) through the normal `/chat` SSE with a `page_context` field. Project onboarding (`POST /projects/{id}/onboarding`) saves `projects.meta_json` (client/goals/KPIs/channels/constraints) and renders+ingests `project_brief.md` into the project KB so guide AND session chats retrieve it. Team roster: `users` + `project_members` tables (owner/analyst/viewer — attribution, not authentication), `/users` CRUD, `/projects/{id}/members`, UI at `/team`. |
+| Client branding / preferences | Stored in the sessions-store `preferences` table: global (`GET/PUT /preferences`; PUT 403s when hosted) + per-project branding (`GET/PUT /projects/{id}/branding`, hex-validated `agents/branding.py:Branding`). Agent tools: `get_preferences`, `save_preference`, `list_templates`, `extract_brand_from_website` (+`POST /projects/{id}/branding/extract` — SSRF-guarded server-side fetch in `agents/brand_extract.py`; hosted: disabled unless `MMM_BRAND_FETCH_ALLOW=1`). **Confirmed** branding auto-recolors agent/EDA plots (`apply_brand_colors`, applied host-side at plot-store time — old plots keep their colors) and brands client reports (`generate_client_report(template=client\|minimal\|presentation\|full)`) + project reports/slides (`report_builder.apply_branding_html`). Extracted branding saves with `confirmed:false` and never styles output until confirmed. |
+| Hosted multi-user profile | Set `MMM_AGENT_HOSTED=1` to flip from the single-user dev posture to the **hosted** posture (Phase 3 PR-F.6, `agents/profile.py`): the kernel defaults to the sandboxed `container` impl + fail-closed isolation, egress is denied, `Path.cwd()` is dropped from the download allow-roots, agent reports go **per-session** under the workspace (`/report*` endpoints take `?thread_id=`), and `/chat` refuses guessable/unknown `thread_id`s (server-minted `POST /sessions` only). Requires the kernel image built (`deploy/kernel/Containerfile`) + a container runtime. Inert/unsafe unless the Tier-2 sandbox is present — don't set it without the image. |
+| `execute_python` kernel mode | `execute_python` runs behind a `KernelManager` (`agents/kernels.py`). Default `MMM_AGENT_KERNEL=inprocess` (the in-process warm namespace; `mmm`/`results` available after a fit). `MMM_AGENT_KERNEL=subprocess` runs one isolated `ipykernel` per session; `MMM_AGENT_KERNEL=container` runs each session's kernel inside `podman run` (`agents/container_kernel.py`) — sandboxed (scrubbed env, read-only rootfs, `--cap-drop ALL`, cgroup mem/pids/cpu caps, egress-deny, ephemeral overlay; build the image with `deploy/kernel/Containerfile`; knobs: `MMM_KERNEL_RUNTIME`/`_RUNTIME_BIN`, `MMM_KERNEL_IMAGE`, `MMM_KERNEL_TRANSPORT` (ipc/tcp), `MMM_KERNEL_MEM`/`_PIDS`/`_CPUS`, `MMM_KERNEL_EGRESS`, `MMM_KERNEL_REQUIRE_SANDBOX`). All three need no extra service (`jupyter_client`/`ipykernel` are deps). As of **Phase 2**, fits run **in** the kernel, so `mmm`/`results` are kernel globals under `subprocess` too (a cold/evicted kernel rehydrates the last fit from `<work_dir>/mmm_models/`). **Phase 3 PR-E.1:** the subprocess kernel is spawned with a **scrubbed env** (no `*_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `MMM_LLM_API_KEY`, etc. — it never calls the LLM/embedder); fail-closed allowlist + secret-pattern denylist. Opt out with `MMM_KERNEL_SCRUB_ENV=0` (debug only); add a rare needed var with `MMM_KERNEL_ENV_PASSTHROUGH=NAME1,NAME2` (denylist still wins). NB: env-scrub does **not** block the cloud metadata server (ADC theft) — that's egress (Phase 3 Tier 2). **Phase 3 PR-E.3/E.4:** captured plots are thread-salted + schema-validated + size-capped (`MMM_PLOT_MAX_BYTES`, default 5 MiB) before storage; kernel lifecycle/security events log to the `mmm_audit` logger (`kernel_spawn`/`_evict_lru`/`_died`/`_timeout_kill`, `plot_rejected`). Tunables (subprocess): `MMM_MAX_KERNELS` (live-kernel LRU cap, default 8), `MMM_CELL_TIMEOUT` (per-cell wall-clock seconds before interrupt→kill, default 600), `MMM_FIT_TIMEOUT`, `MMM_KERNEL_RECV_TIMEOUT`/`MMM_KERNEL_READY_TIMEOUT`. See `technical-docs/agent-session-kernels.md` + `-phase1.md`/`-phase2.md`/`-phase3.md`. |

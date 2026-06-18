@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math 03: Seasonality &amp; Trend | MMM Framework</title>
+    <meta name="description" content="The mathematics of the MMM baseline: Fourier seasonality as a bias-variance dial, and three trend families — linear, piecewise/Prophet-style slope changes, and B-spline partition of unity — with interactive derivations.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-03-seasonality-trend.html">
+    <meta property="og:title" content="Math 03: Seasonality &amp; Trend | MMM Framework">
+    <meta property="og:description" content="How the MMM separates baseline into periodic seasonality (Fourier harmonics) and drift (linear, piecewise, B-spline trends) — and why getting it wrong corrupts media attribution, not just fit.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-03-seasonality-trend.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .controls-row input[type="range"] {
+            width: 140px;
+            accent-color: var(--color-primary-dark);
+        }
+        .ctrl-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .fit-verdict {
+            font-weight: 700;
+        }
+        .fit-verdict.under { color: #6a8fa8; }
+        .fit-verdict.good  { color: #3f7a58; }
+        .fit-verdict.over  { color: var(--color-danger); }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The baseline problem</a></li>
+                <li><a href="#fourier">Fourier seasonality</a></li>
+                <li><a href="#order-dial">Order as a bias&ndash;variance dial</a></li>
+                <li><a href="#trend-families">The three trend families</a></li>
+                <li><a href="#piecewise">Piecewise (Prophet-style)</a></li>
+                <li><a href="#bspline">B-splines: partition of unity</a></li>
+                <li><a href="#head-to-head">Head-to-head on a kinked truth</a></li>
+                <li><a href="#attribution">Why this is about attribution</a></li>
+                <li><a href="#takeaway">What to take away</a></li>
+            </ul>
+
+            <h3>The Math Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="math-00-overview.html">00 · The Generative Model</a></li>
+                <li><a href="math-01-adstock.html">01 · Adstock</a></li>
+                <li><a href="math-02-saturation.html">02 · Saturation</a></li>
+                <li><a href="math-03-seasonality-trend.html" class="active">03 · Seasonality &amp; Trend</a></li>
+                <li><a href="math-04-bayesian-model.html">04 · The Bayesian Model</a></li>
+                <li><a href="math-05-calibration.html">05 · Calibration</a></li>
+                <li><a href="math-06-extensions.html">06 · Extensions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Mathematics of Seasonality &amp; Trend</h1>
+            <p class="lead">
+                A marketing-mix model decomposes a KPI into media-driven contributions <em>plus</em> a
+                baseline — the sales the business would have made anyway. That baseline is rarely flat:
+                it <strong>breathes with the calendar</strong> and <strong>drifts over the years</strong>.
+                This page derives the two basis expansions the framework uses for those motions —
+                Fourier harmonics for seasonality, and linear / piecewise / B-spline bases for trend —
+                with the same math, the same assert-encoded identities, and the same charts as
+                <code>nbs/math_03_seasonality_trend.ipynb</code>. If the model has no language for these
+                motions, they don't disappear — they <a href="#attribution">leak into the media
+                coefficients</a> and corrupt every ROI estimate.
+            </p>
+
+            <p>
+                This is notebook 03 of the math series. The full additive mean
+                \( \mu_t \) that these terms slot into is assembled in
+                <a href="math-00-overview.html">Math 00 — The Generative Model</a>; the priors named
+                below are sampled for real in <a href="math-04-bayesian-model.html">Math 04 — The
+                Bayesian Model</a>. The recurring idea on this page is one recipe used twice:
+            </p>
+
+            <div class="definition">
+                <h4>Definition: basis expansion</h4>
+                <p>
+                    Build a <strong>fixed design matrix</strong> \( \Phi \in \mathbb{R}^{T \times M} \)
+                    of basis functions, then let the Bayesian model learn a coefficient vector
+                    \( \boldsymbol\theta \) under a regularizing prior:
+                    \( \text{component}_t = \Phi(t)\,\boldsymbol\theta \).
+                    The <em>shape vocabulary</em> lives in \( \Phi \) (this page); the
+                    <em>amplitude</em> is controlled by the priors. Get the basis right and the prior
+                    does the rest.
+                </p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr><th>Motion</th><th>Basis</th><th>Framework function</th><th>Shape it draws</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Seasonal</strong> (periodic)</td><td>Fourier harmonics</td><td><code>create_fourier_features</code></td><td>smooth, repeating</td></tr>
+                    <tr><td><strong>Trend</strong> (drift)</td><td>B-spline <em>or</em> piecewise-linear</td><td><code>create_bspline_basis</code>, <code>create_piecewise_trend_matrix</code></td><td>smooth / kinked</td></tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>How one basis-expansion recipe builds both seasonality (truncated Fourier series, zero-mean interleaved sin/cos columns) and trend (linear, piecewise, B-spline families).</li>
+                    <li>Why Fourier order \( K \) is a bias–variance dial, why the piecewise trend changes slope rather than level, and why B-spline rows form a partition of unity.</li>
+                    <li>Why baseline structure is an attribution control, not a fit knob — motions the model has no language for leak into the media coefficients.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_03_seasonality_trend.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_03_seasonality_trend.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="fourier">Part I — Seasonality via Fourier features</h2>
+
+            <p>
+                A seasonal pattern with period \( P \) (say \( P = 52 \) weeks for a yearly cycle) is a
+                <em>periodic</em> function: \( g(t + P) = g(t) \). The Fourier theorem says any
+                reasonable periodic function is a sum of <strong>harmonics</strong> — sines and cosines
+                whose frequencies are integer multiples of the fundamental \( 1/P \):
+            </p>
+
+            \[
+            g(t) \;=\; \sum_{k=1}^{\infty}
+            \Big[\, a_k \sin\!\Big(\tfrac{2\pi k\, t}{P}\Big)
+                  + b_k \cos\!\Big(\tfrac{2\pi k\, t}{P}\Big) \,\Big].
+            \]
+
+            <p>
+                Truncating at a finite <strong>order</strong> \( K \) gives a smooth approximation that
+                sharpens as \( K \) grows. That truncation is exactly what
+                <code>create_fourier_features(t, period, order)</code> builds: a design matrix
+                \( \Phi \in \mathbb{R}^{T \times 2K} \) whose columns are the harmonics,
+                <strong>interleaved</strong> as
+            </p>
+
+            \[
+            \Phi(t) \;=\;
+            \big[\,
+            \underbrace{\sin\tfrac{2\pi t}{P}}_{k=1},\;
+            \underbrace{\cos\tfrac{2\pi t}{P}}_{k=1},\;
+            \underbrace{\sin\tfrac{4\pi t}{P}}_{k=2},\;
+            \underbrace{\cos\tfrac{4\pi t}{P}}_{k=2},\;
+            \dots,\;
+            \sin\tfrac{2\pi K t}{P},\;
+            \cos\tfrac{2\pi K t}{P}
+            \,\big].
+            \]
+
+            <p>
+                The column order is \( [\sin_1, \cos_1, \sin_2, \cos_2, \dots] \) — sine <em>then</em>
+                cosine within each harmonic, <strong>not</strong> all sines followed by all cosines. In
+                the model the seasonal coefficients carry a tight prior,
+                \( [a_k, b_k] \sim \mathcal{N}(0,\, 0.3^2) \), and
+                \( \text{seasonality}_t = \Phi(t)\,\boldsymbol\theta \)
+                (<code>seasonality = features @ coef</code>). That shrinking prior is the regularization
+                that tames the overfitting demonstrated below.
+            </p>
+
+            <h3>Why <em>both</em> sine and cosine?</h3>
+            <p>
+                A single sine \( \sin(2\pi k t / P) \) is pinned to a fixed <em>phase</em>
+                (zero-crossing at \( t = 0 \)). Real seasonal peaks land wherever the calendar puts
+                them. The identity
+            </p>
+
+            \[
+            A\sin(\omega t + \varphi) \;=\; \underbrace{A\cos\varphi}_{a}\,\sin(\omega t)
+                                             + \underbrace{A\sin\varphi}_{b}\,\cos(\omega t)
+            \]
+
+            <p>
+                shows that a sine/cosine <strong>pair</strong> spans every amplitude \( A \) and every
+                phase \( \varphi \) at that frequency. Two columns per harmonic buy arbitrary phase for
+                free — which is why the basis always comes in pairs and the matrix is
+                \( (T, 2K) \), never \( (T, K) \).
+            </p>
+
+            <div class="chart-container" id="harmonicsChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                The sine columns of the first three harmonics over one 52-week year: harmonic \( k \)
+                completes exactly \( k \) cycles per period. Higher harmonics oscillate faster and let
+                the basis carve out sharper features.
+            </p>
+
+            <div class="note">
+                <h4>💡 Assert-encoded identities (verified by the notebook run)</h4>
+                <p>
+                    The baked notebook verifies, column by column against
+                    <code>np.sin</code>/<code>np.cos</code>, that the order-3 matrix has shape
+                    <strong>(104, 6)</strong> with column \( 2(k{-}1) \) equal to the sine harmonic and
+                    \( 2(k{-}1){+}1 \) the cosine — and that the whole matrix is exactly periodic:
+                    \( \Phi(t{+}P) = \Phi(t) \), i.e. <code>features[0] == features[52]</code> holds to
+                    floating point (the docstring's promise, generalized to every row). Fourier columns
+                    are also <strong>zero-mean</strong>: they carry no constant, so the baseline
+                    <em>level</em> always needs a separate intercept.
+                </p>
+            </div>
+
+            <h2 id="order-dial">Order is a bias&ndash;variance dial</h2>
+
+            <p>
+                What does order \( K \) buy? Take a deliberately non-sinusoidal target — a smooth wave
+                plus a sharp recurring "holiday" spike — and reconstruct it by <strong>least
+                squares</strong> at increasing order:
+            </p>
+
+            \[
+            \hat{\boldsymbol\theta}_K
+            = \arg\min_{\boldsymbol\theta}
+            \big\| \, g - \Phi_K\,\boldsymbol\theta \, \big\|_2^2 ,
+            \qquad
+            \hat g_K = \Phi_K\,\hat{\boldsymbol\theta}_K .
+            \]
+
+            <p>
+                On the <em>noiseless</em> target the notebook measures the residual
+                \( \|g - \hat g_K\| \) falling monotonically: <strong>3.408</strong> at \( K{=}1 \),
+                <strong>1.473</strong> at \( K{=}2 \), <strong>0.858</strong> at \( K{=}3 \),
+                <strong>0.616</strong> at \( K{=}6 \) (order-6 correlation with the target
+                <strong>0.9927</strong>). More basis vectors can only help the in-sample fit. The
+                question is whether the extra wiggles are <em>signal</em> or <em>overfit</em> — and
+                noisy data answers it. Drive the dial yourself:
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label for="orderSlider">Fourier order \( K \)</label>
+                    <input type="range" id="orderSlider" min="1" max="24" step="1" value="4">
+                    <span class="ctrl-val" id="orderVal">K = 4</span>
+                </div>
+                <span id="fitVerdict" class="fit-verdict good">about right</span>
+            </div>
+            <div class="chart-container" id="fourierFitChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong>
+                (least squares on <code>create_fourier_features</code>-style harmonics + intercept,
+                fit on two years of seeded noisy data, one year shown; the JS noise realization is
+                seeded but differs from numpy's).
+                Training residual <span class="ctrl-val" id="trainResid">–</span> keeps falling as
+                \( K \) rises; distance to the <em>true</em> signal
+                <span class="ctrl-val" id="truthErr">–</span> falls, bottoms out around
+                \( K \approx 3\text{–}6 \), then climbs again as high orders chase noise between the
+                data points. <strong>Measured in the notebook (seeded run):</strong> training residual
+                \( K{=}1: 4.38 \ge K{=}4: 3.19 \ge K{=}24: 2.23 \), yet against the truth
+                \( K{=}4 \) errs <strong>1.11</strong> vs \( K{=}24 \)'s <strong>2.31</strong> —
+                the in-sample winner is the out-of-sample loser.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">3.41 → 0.62</div>
+                    <div class="stat-label">noiseless residual, order 1 → 6 (monotone, assert-checked)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.11</div>
+                    <div class="stat-label">error vs truth at K = 4 on noisy data (measured)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">2.31</div>
+                    <div class="stat-label">error vs truth at K = 24 — better in-sample, worse in fact</div>
+                </div>
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ The dial is a prior, not a search</h4>
+                <p>
+                    The framework does not pick \( K \) by minimizing training error — that procedure
+                    is the red curve above. It pairs a <strong>modest default order</strong> with the
+                    shrinking \( \mathcal{N}(0, 0.3) \) prior on every \( [a_k, b_k] \):
+                    regularization, not raw flexibility, controls variance. What this <em>cannot</em>
+                    absorb is seasonality whose shape <em>changes over the years</em> — a static
+                    low-order basis fit to evolving seasonality scrambles the channel split while totals
+                    stay green (worst channel <strong>+104%</strong>); see
+                    <a href="stress-02-time-structure.html">Stress 02 — Time Structure</a>.
+                </p>
+            </div>
+
+            <h2 id="trend-families">Part II — The three trend families</h2>
+
+            <p>
+                Seasonality is periodic; <strong>trend</strong> is the non-periodic drift of the
+                baseline — the slow climb or decline that does not repeat. The framework offers three
+                families, ordered by flexibility (a fourth, a Gaussian-process / Hilbert-space trend,
+                exists for fully nonparametric drift but is not exercised here). All trend bases are
+                defined on a <strong>rescaled time axis</strong> \( t \in [0, 1] \) — a different
+                convention from the integer weeks of Part I; feeding raw week numbers degenerates both
+                bases.
+            </p>
+
+            <ol>
+                <li>
+                    <strong>Linear</strong> — the default. One slope:
+                    \( \text{trend}(t) = k + m\,t \) with \( m \sim \mathcal{N}(0, 0.5) \)
+                    (<code>trend_slope</code>). Maximal shrinkage, zero ability to bend. Right when the
+                    baseline is roughly stable; helpless at a structural break.
+                </li>
+                <li>
+                    <strong>Piecewise-linear (Prophet-style)</strong> — a line whose <em>slope</em>
+                    changes at a handful of changepoints. Built by
+                    <code>create_piecewise_trend_matrix</code>. Derived next.
+                </li>
+                <li>
+                    <strong>B-spline</strong> — a smooth, locally-supported polynomial basis. Built by
+                    <code>create_bspline_basis</code>. Derived after that.
+                </li>
+            </ol>
+
+            <h2 id="piecewise">Trend family 2 — Piecewise linear, done correctly</h2>
+
+            <p>
+                <code>create_piecewise_trend_matrix(t, n_changepoints, changepoint_range=0.8)</code>
+                returns a pair \( (s, A) \):
+            </p>
+            <ul>
+                <li>
+                    \( s \in \mathbb{R}^{C} \) — the <strong>changepoint locations</strong>, evenly
+                    spaced inside the first <code>changepoint_range</code> of the axis (default 0.8, so
+                    no changepoints in the last 20% — a guard against overfitting the most recent, most
+                    influential observations). For \( C = 8 \) the notebook measures
+                    \( s = [0.089,\ 0.178,\ 0.267,\ 0.356,\ 0.444,\ 0.533,\ 0.622,\ 0.711] \).
+                </li>
+                <li>
+                    \( A \in \{0,1\}^{T \times C} \) — a <strong>step indicator matrix</strong>,
+                    \( A_{t,j} = \mathbf{1}[\,t \ge s_j\,] \): column \( j \) switches on at \( s_j \)
+                    and stays on.
+                </li>
+            </ul>
+
+            <div class="chart-container short" id="pwHeatChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook.</strong>
+                The design matrix \( A_{t,j} = \mathbf{1}[t \ge s_j] \) as a heatmap: each column turns
+                on (dark) at its changepoint and stays on. The staircase of activation fronts
+                <em>is</em> the piecewise basis. Assert-checked in the notebook: \( A \) is exactly
+                binary, every column equals its indicator, and \( \max_j s_j \le 0.8 \).
+            </p>
+
+            <p>
+                The Prophet trend uses \( A \) not as a level shifter but as a <em>switch on slope
+                changes</em>. Write a base growth rate \( k \) (the slope before any changepoint), an
+                offset \( m \) (the level at \( t = 0 \)), and let each \( \delta_j \) be a
+                <strong>change in slope</strong> that activates at \( s_j \). The cumulative slope at
+                time \( t \) is \( k + (A\boldsymbol\delta)_t \), and the trend is
+            </p>
+
+            \[
+            \text{trend}(t)
+            \;=\; \big(\,\underbrace{k}_{\text{base rate}} + (A\,\boldsymbol\delta)_t\,\big)\, t
+            \;+\; \big(\,\underbrace{m}_{\text{offset}} + (A\,\boldsymbol\gamma)_t\,\big),
+            \qquad
+            \gamma_j \;=\; -\,s_j\,\delta_j .
+            \]
+
+            <p>
+                <strong>Why the cumulative slope multiplies \( t \) — and what
+                \( \boldsymbol\gamma \) is for.</strong> The whole point is that \( \delta_j \) changes
+                the <em>slope</em>, not the level; that only happens if \( A\boldsymbol\delta \) enters
+                as a coefficient <em>on</em> \( t \). But multiplying by \( t \) alone would make the
+                trend <em>jump</em> at each changepoint — the new slope would suddenly apply to all the
+                elapsed time before \( s_j \) too. The offset correction
+                \( \gamma_j = -s_j \delta_j \) cancels that jump exactly. Expanding one active
+                changepoint:
+            </p>
+
+            \[
+            \delta_j\, t + \gamma_j \;=\; \delta_j\,(t - s_j),
+            \quad\text{which is zero at } t = s_j
+            \;\;\Longrightarrow\;\;
+            \text{trend}(t) \;=\; k\,t + m + \sum_{j=1}^{C} \delta_j\,(t - s_j)_{+}.
+            \]
+
+            <p>
+                The pair (slope-change column \( A_{\cdot j}\, t \), level-correction column
+                \( A_{\cdot j} \)) spans the cumulative <strong>ramp basis</strong>
+                \( (t - s_j)_{+} \) — continuous, kinking only after its changepoint. The notebook
+                asserts this identity to \( 10^{-12} \): the constructed trend equals the ramp form
+                exactly, the largest single grid step is 0.0352 against a trend range of 1.18 (no level
+                jumps), the slope after the last changepoint equals \( k + \sum_j \delta_j = 2.600 \),
+                and the instantaneous slope jumps by exactly \( \delta_j \) across each active
+                \( s_j \).
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Framework fix: slope changes, not level shifts</h4>
+                <p>
+                    Using \( A\boldsymbol\delta \) as a bare additive term <em>without</em> the
+                    \( \cdot\,t \) — i.e. \( k + m\,t + A\boldsymbol\delta \) — makes it a sum of step
+                    functions: <strong>piecewise-constant level shifts</strong>, with the slope never
+                    changing. The framework's <code>_build_piecewise_trend</code> (in
+                    <code>model/base.py</code>) was found doing exactly that, and was
+                    <strong>fixed</strong> to the slope-change form above; the math notebook was
+                    rewritten (2026-06-02) to derive the corrected formula. The tell was the lone
+                    \( \boldsymbol\gamma \) continuity term sitting in the code: it is meaningless
+                    under level shifts (there is no slope jump to cancel) and only makes sense when
+                    slope changes were intended all along. In the model, sparse Laplace priors on
+                    \( \boldsymbol\delta \) (<code>trend_delta</code>) keep most changepoints at zero,
+                    so a slope bend is "spent" only where the data demand one.
+                </p>
+            </div>
+
+            <h3>Build a piecewise trend yourself</h3>
+            <p>
+                Fix the base rate \( k \) and offset \( m = 1 \), then drive three of the eight
+                \( \delta_j \) sliders (the notebook's active set: \( s_1, s_3, s_6 \)). Watch the top
+                panel stay <strong>continuous</strong> — no level jumps, only kinks — while the bottom
+                panel shows the instantaneous slope \( k + (A\boldsymbol\delta)_t \) as a step function
+                jumping by exactly \( \delta_j \) at each changepoint.
+            </p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label for="pwK">base rate \( k \)</label>
+                    <input type="range" id="pwK" min="-2" max="3" step="0.1" value="0.6">
+                    <span class="ctrl-val" id="pwKVal">0.6</span>
+                </div>
+                <div class="ctrl-group">
+                    <label for="pwD1">\( \delta_1 \) at \( s_1{=}0.178 \)</label>
+                    <input type="range" id="pwD1" min="-10" max="10" step="0.5" value="5">
+                    <span class="ctrl-val" id="pwD1Val">+5.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label for="pwD3">\( \delta_3 \) at \( s_3{=}0.356 \)</label>
+                    <input type="range" id="pwD3" min="-10" max="10" step="0.5" value="-9">
+                    <span class="ctrl-val" id="pwD3Val">−9.0</span>
+                </div>
+                <div class="ctrl-group">
+                    <label for="pwD6">\( \delta_6 \) at \( s_6{=}0.622 \)</label>
+                    <input type="range" id="pwD6" min="-10" max="10" step="0.5" value="6">
+                    <span class="ctrl-val" id="pwD6Val">+6.0</span>
+                </div>
+            </div>
+            <div class="chart-container tall" id="pwBuildChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong>
+                (\( \text{trend} = (k + A\boldsymbol\delta)\,t + (m + A\boldsymbol\gamma) \) with
+                \( \gamma_j = -s_j\delta_j \), evaluated on the notebook's 160-point grid and its 8
+                measured changepoints). Final slope \( k + \sum\delta \) =
+                <span class="ctrl-val" id="pwFinalSlope">2.60</span>. At the notebook's defaults
+                (\( k{=}0.6, \delta = [+5, -9, +6] \)) this reproduces the baked figure, including the
+                assert-checked final slope of <strong>2.600</strong>. Set all \( \delta_j = 0 \) and the
+                trend collapses to the dashed base line \( k\,t + m \).
+            </p>
+
+            <h2 id="bspline">Trend family 3 — B-splines as a partition of unity</h2>
+
+            <p>
+                <code>create_bspline_basis(t, n_knots, degree=3)</code> returns
+                \( B \in \mathbb{R}^{T \times M} \) with
+                \( M = \texttt{n\_knots} + \texttt{degree} + 1 \) columns (the notebook's
+                \( n\_knots = 6 \), cubic, gives the measured shape <strong>(160, 10)</strong>). Each
+                column is a <strong>B-spline</strong>: a piecewise polynomial that is non-zero only over
+                a few adjacent knot intervals. That <em>local support</em> is what makes splines
+                well-behaved — moving one coefficient nudges the curve locally instead of globally. Two
+                structural properties are guaranteed by the construction and assert-encoded in the
+                notebook:
+            </p>
+
+            <div class="definition">
+                <h4>Definition: partition of unity</h4>
+                <p>
+                    At every \( t \), the basis functions sum to one:
+                    \[ \sum_{j=1}^{M} B_j(t) \;=\; 1 \qquad \text{for all } t \in [0,1]. \]
+                    The notebook asserts every row of \( B \) sums to 1 (measured max deviation
+                    <strong>2.22 × 10<sup>−16</sup></strong> — machine epsilon), with every entry
+                    non-negative. A constant coefficient vector therefore reproduces a constant
+                    function: the basis never injects or removes "mass", it only redistributes it.
+                    This is the spline analogue of the <em>normalized adstock kernel</em> from
+                    <a href="math-01-adstock.html">Math 01 — Adstock</a> (weights sum to 1).
+                </p>
+            </div>
+
+            <p>
+                <strong>Clamping.</strong> The boundary knots are repeated \( \text{degree}+1 \) times,
+                pinning the first and last basis functions to 1 at the endpoints — assert-checked as
+                \( B_{0,0} = 1 \) at \( t = 0 \) and \( B_{T-1,M-1} = 1 \) at \( t = 1 \). The fitted
+                curve honors the endpoints cleanly rather than drifting off the edge of the data. The
+                trend is \( B\boldsymbol\beta \) with \( \boldsymbol\beta \) given Normal priors whose
+                scale is itself HalfNormal — hierarchical shrinkage that lets the data decide how
+                wiggly the trend should be.
+            </p>
+
+            <div class="chart-container" id="bsplineChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same construction as the notebook</strong>
+                (clamped cubic B-splines via the Cox–de Boor recursion, 6 interior knots → 10 basis
+                functions). Ten smooth local bumps, the first and last rising to 1 at the clamped
+                boundaries — and their <strong>sum</strong>, the dark flat line pinned at 1 everywhere:
+                the partition of unity made visible.
+            </p>
+
+            <h2 id="head-to-head">Head-to-head: three families, one kinked truth</h2>
+
+            <p>
+                Now the payoff. Synthesize one trending baseline with <strong>two structural
+                breaks</strong> — a gentle climb (\( 2 + t \)), a sharp acceleration after
+                \( t = 0.35 \) (\( +6\,(t-0.35)_+ \)), then a flattening-into-decline after
+                \( t = 0.70 \) (\( -7\,(t-0.70)_+ \)) — plus noise. Fit each family by least squares:
+            </p>
+
+            <ul>
+                <li><strong>Linear</strong> \( X = [\mathbf 1,\; t] \) — two parameters; <em>must</em> underfit the kinks.</li>
+                <li>
+                    <strong>Piecewise</strong> \( X = [\mathbf 1,\; t,\; A\!\cdot\! t,\; A] \) — the
+                    global line plus, per changepoint, a slope-change column \( A_{\cdot j}\,t \)
+                    <em>and</em> its level-correction column \( A_{\cdot j} \); together they span the
+                    ramp basis \( (t - s_j)_+ = A_{\cdot j}\,t - s_j A_{\cdot j} \), so least squares
+                    recovers the continuous slope-change trend exactly.
+                </li>
+                <li><strong>B-spline</strong> \( X = B \) — partition of unity already spans the constant, so no extra intercept column.</li>
+            </ul>
+
+            <div class="chart-container" id="headToHeadChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as the notebook</strong> (seeded
+                JS noise realization; the notebook's seeded numpy run is the measured record).
+                <strong>Measured correlations with the true kinked trend:</strong> linear
+                <strong>0.9613</strong>, piecewise <strong>0.9983</strong>, B-spline
+                <strong>0.9990</strong> — assert-checked that both flexible families exceed 0.97
+                <em>and</em> beat the linear fit. The linear trend slices straight through both breaks;
+                the flexible bases bend with them. (The notebook does <em>not</em> assert the linear
+                fit is good — by design it cannot be.)
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.961</div>
+                    <div class="stat-label">linear trend × truth correlation on the kinked world (measured)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.998</div>
+                    <div class="stat-label">piecewise (Prophet-style) — catches both breaks</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.999</div>
+                    <div class="stat-label">B-spline — same place, no event knowledge needed</div>
+                </div>
+            </div>
+
+            <h2 id="attribution">Why this is about attribution, not fit</h2>
+
+            <p>
+                A 0.96 correlation sounds harmless — until you remember the trend is fit <em>jointly</em>
+                with the media coefficients. Whatever baseline structure the trend family cannot
+                represent does not vanish from the regression: the residual time-shape gets absorbed by
+                <strong>whichever channel's spend happens to co-move with it</strong>. Misfit time
+                structure is not a fit problem; it is an <em>attribution</em> problem wearing a good
+                R&sup2;.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Measured consequence: TV at −63% with green diagnostics</h4>
+                <p>
+                    <a href="stress-02-time-structure.html"><strong>Stress 02 — Time
+                    Structure</strong></a> builds exactly this trap: a structural trend break plus a
+                    reactive media ramp. Under the default linear trend, <strong>TV's contribution is
+                    misattributed by ~−63%</strong>, truth outside the 90% interval, r-hat clean.
+                    The same series also surfaced a second framework fix: the <em>old</em> piecewise
+                    changepoint prior, Laplace scale 0.05, was too stiff to pay for the break (fitted
+                    trend × truth correlation <strong>0.33</strong> — no better than the line). The
+                    default <code>changepoint_prior_scale</code> was changed
+                    <strong>0.05 → 0.5</strong> (2026-06-10), after which the trend tracks the
+                    shock-and-recovery at correlation <strong>0.86</strong> and median channel error
+                    drops below 20%. A flexible trend <em>family</em> is not enough — the <em>prior on
+                    its flexibility</em> is part of the spec.
+                </p>
+            </div>
+
+            <p>
+                The doctrine, stated once: the basis matrix decides what baseline shapes are
+                <em>representable</em>; the prior decides how much of that flexibility gets
+                <em>used</em>; and anything neither can express is silently reassigned to media. The
+                full assembly — baseline plus adstocked, saturated media response, with every prior
+                sampled and the decomposition graded — is
+                <a href="math-04-bayesian-model.html">Math 04 — The Bayesian Model</a>.
+            </p>
+
+            <h2 id="takeaway">Recap</h2>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li>
+                        <strong>Seasonality is a truncated Fourier series</strong>:
+                        \( \Phi \in \mathbb{R}^{T\times 2K} \), columns <em>interleaved</em>
+                        \( [\sin_1, \cos_1, \sin_2, \cos_2, \dots] \) and zero-mean (the level needs its
+                        own intercept); each sin/cos pair buys arbitrary amplitude <em>and</em> phase.
+                    </li>
+                    <li>
+                        <strong>Order \( K \) is a bias–variance dial</strong>: training residual falls
+                        monotonically with \( K \) (measured 4.38 → 3.19 → 2.23 for
+                        \( K = 1, 4, 24 \)), but error against the truth bottoms out near
+                        \( K \approx 4 \) (1.11) and worsens at \( K = 24 \) (2.31). The framework
+                        controls variance with the \( \mathcal{N}(0, 0.3) \) coefficient prior, not by
+                        chasing in-sample fit.
+                    </li>
+                    <li>
+                        <strong>The piecewise trend changes slope, not level</strong>:
+                        \( \text{trend}(t) = (k + A\boldsymbol\delta)\,t + (m + A\boldsymbol\gamma) \)
+                        with \( \gamma_j = -s_j\delta_j \) is identically the continuous ramp sum
+                        \( k\,t + m + \sum_j \delta_j (t - s_j)_+ \) (assert-checked to
+                        \( 10^{-12} \)). Dropping the \( \cdot\,t \) gives level shifts — a real
+                        framework bug in <code>_build_piecewise_trend</code>, now fixed.
+                    </li>
+                    <li>
+                        <strong>B-splines are a partition of unity</strong>: rows of \( B \) sum to 1
+                        (measured max deviation 2.2 × 10<sup>−16</sup>), columns are non-negative with
+                        local support, boundaries clamped — the trend-side sibling of the normalized
+                        adstock kernel.
+                    </li>
+                    <li>
+                        <strong>Baseline structure is an attribution control</strong>: on a kinked truth
+                        the flexible families hit correlation 0.998–0.999 vs linear's 0.961, and what
+                        the trend can't represent lands on whichever channel co-moves with it — TV
+                        −63% in <a href="stress-02-time-structure.html">Stress 02</a>.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/math_03_seasonality_trend.ipynb</code>, authored by
+                    <code>nbs/build_math_03_seasonality_trend.py</code> (pure numpy/scipy — it bakes in
+                    seconds, no MCMC). Every plotted claim ends in an <code>assert</code> on the real
+                    framework functions (<code>create_fourier_features</code>,
+                    <code>create_piecewise_trend_matrix</code>, <code>create_bspline_basis</code>), so
+                    "the notebook executes clean" means "the math on this page is right". Series guide:
+                    <code>nbs/README_math.md</code>. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG (series-wide reference implementation).
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        // Seeded standard normals (Box-Muller).
+        function gaussians(n, seed) {
+            const rnd = mulberry32(seed), out = [];
+            for (let i = 0; i < n; i += 2) {
+                const u1 = Math.max(rnd(), 1e-12), u2 = rnd();
+                const r = Math.sqrt(-2 * Math.log(u1));
+                out.push(r * Math.cos(2 * Math.PI * u2));
+                if (out.length < n) out.push(r * Math.sin(2 * Math.PI * u2));
+            }
+            return out;
+        }
+
+        // ------------------------------------------------------------------
+        // Tiny linear algebra: least squares via normal equations + Gaussian
+        // elimination with partial pivoting (designs here are <= ~50 cols).
+        // ------------------------------------------------------------------
+        function lstsqPredict(X, y) {
+            const n = X.length, p = X[0].length;
+            const G = [], b = new Array(p).fill(0);
+            for (let i = 0; i < p; i++) G.push(new Array(p).fill(0));
+            for (let r = 0; r < n; r++) {
+                const row = X[r];
+                for (let i = 0; i < p; i++) {
+                    b[i] += row[i] * y[r];
+                    for (let j = i; j < p; j++) G[i][j] += row[i] * row[j];
+                }
+            }
+            for (let i = 0; i < p; i++) {
+                G[i][i] += 1e-9;                       // tiny ridge for numeric stability
+                for (let j = 0; j < i; j++) G[i][j] = G[j][i];
+            }
+            // solve G theta = b
+            for (let col = 0; col < p; col++) {
+                let piv = col;
+                for (let r = col + 1; r < p; r++) {
+                    if (Math.abs(G[r][col]) > Math.abs(G[piv][col])) piv = r;
+                }
+                if (piv !== col) {
+                    const tmp = G[col]; G[col] = G[piv]; G[piv] = tmp;
+                    const tb = b[col]; b[col] = b[piv]; b[piv] = tb;
+                }
+                const d = G[col][col];
+                for (let r = col + 1; r < p; r++) {
+                    const f = G[r][col] / d;
+                    if (f === 0) continue;
+                    for (let cc = col; cc < p; cc++) G[r][cc] -= f * G[col][cc];
+                    b[r] -= f * b[col];
+                }
+            }
+            const theta = new Array(p).fill(0);
+            for (let i = p - 1; i >= 0; i--) {
+                let s = b[i];
+                for (let j = i + 1; j < p; j++) s -= G[i][j] * theta[j];
+                theta[i] = s / G[i][i];
+            }
+            return X.map(function(row) {
+                let s = 0;
+                for (let i = 0; i < p; i++) s += row[i] * theta[i];
+                return s;
+            });
+        }
+
+        function norm2(a, b) {
+            let s = 0;
+            for (let i = 0; i < a.length; i++) { const d = a[i] - b[i]; s += d * d; }
+            return Math.sqrt(s);
+        }
+        function pearson(a, b) {
+            const n = a.length;
+            let ma = 0, mb = 0;
+            for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+            ma /= n; mb /= n;
+            let sab = 0, saa = 0, sbb = 0;
+            for (let i = 0; i < n; i++) {
+                const da = a[i] - ma, db = b[i] - mb;
+                sab += da * db; saa += da * da; sbb += db * db;
+            }
+            return sab / Math.sqrt(saa * sbb);
+        }
+
+        // ------------------------------------------------------------------
+        // The notebook's math, in JS.
+        // ------------------------------------------------------------------
+        // Fourier features, interleaved [sin1, cos1, sin2, cos2, ...].
+        function fourierRow(t, P, K) {
+            const row = [];
+            for (let k = 1; k <= K; k++) {
+                row.push(Math.sin(2 * Math.PI * k * t / P));
+                row.push(Math.cos(2 * Math.PI * k * t / P));
+            }
+            return row;
+        }
+        // The notebook's "spiky holiday" seasonal target.
+        function seasonalTarget(t, P) {
+            const phase = 2 * Math.PI * t / P;
+            const wave = Math.sin(phase) + 0.4 * Math.cos(2 * phase);
+            const frac = ((t % P) + P) % P / P;
+            const spike = 1.6 * Math.exp(-((frac - 0.85) * (frac - 0.85)) / (2 * 0.012));
+            return wave + spike;
+        }
+        // Changepoint locations: evenly spaced inside [0, changepoint_range].
+        function changepoints(C, range) {
+            const s = [];
+            for (let j = 1; j <= C; j++) s.push(range * j / (C + 1));
+            return s;
+        }
+        // Clamped B-spline basis row (Cox-de Boor); n_knots interior knots.
+        function makeBsplineBasis(tArr, nKnots, degree) {
+            const knots = [];
+            for (let i = 0; i <= degree; i++) knots.push(0);
+            for (let i = 1; i <= nKnots; i++) knots.push(i / (nKnots + 1));
+            for (let i = 0; i <= degree; i++) knots.push(1);
+            const nk = knots.length;                 // = nKnots + 2*(degree+1)
+            const M = nKnots + degree + 1;
+            return tArr.map(function(t) {
+                let N = new Array(nk - 1).fill(0);
+                for (let i = 0; i < nk - 1; i++) {
+                    if (knots[i] <= t && t < knots[i + 1]) N[i] = 1;
+                }
+                if (t >= 1) {                        // clamp: last non-degenerate span
+                    for (let i = nk - 2; i >= 0; i--) {
+                        if (knots[i] < knots[i + 1]) { N[i] = 1; break; }
+                    }
+                }
+                for (let d = 1; d <= degree; d++) {
+                    const Nn = new Array(nk - 1 - d).fill(0);
+                    for (let i = 0; i < nk - 1 - d; i++) {
+                        let a = 0, bb = 0;
+                        const den1 = knots[i + d] - knots[i];
+                        if (den1 > 0) a = (t - knots[i]) / den1 * N[i];
+                        const den2 = knots[i + d + 1] - knots[i + 1];
+                        if (den2 > 0) bb = (knots[i + d + 1] - t) / den2 * N[i + 1];
+                        Nn[i] = a + bb;
+                    }
+                    N = Nn;
+                }
+                return N;                            // length M
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Shared grids and data (notebook values).
+        // ------------------------------------------------------------------
+        const P = 52;
+        const T2 = 2 * P;                            // two years, integer weeks
+        const weeks = []; for (let i = 0; i < T2; i++) weeks.push(i);
+        const gTrue = weeks.map(function(w) { return seasonalTarget(w, P); });
+        const gNoisy = (function() {
+            const z = gaussians(T2, 11);
+            return gTrue.map(function(v, i) { return v + 0.35 * z[i]; });
+        })();
+
+        const N = 160;
+        const t01 = []; for (let i = 0; i < N; i++) t01.push(i / (N - 1));
+        const C = 8;
+        const S = changepoints(C, 0.8);              // [0.089, 0.178, ..., 0.711]
+        // Step indicator A[t][j] = 1[t >= s_j]
+        const A = t01.map(function(t) {
+            return S.map(function(sj) { return t >= sj ? 1 : 0; });
+        });
+        const BS = makeBsplineBasis(t01, 6, 3);      // (160, 10)
+        const M = 10;
+
+        // ------------------------------------------------------------------
+        // Chart 1: Fourier harmonics (sine columns, one year).
+        // ------------------------------------------------------------------
+        function drawHarmonics() {
+            const cols = [PT.colors.tv, PT.colors.social, PT.colors.display];
+            const traces = [1, 2, 3].map(function(k, i) {
+                return {
+                    type: 'scatter', mode: 'lines',
+                    x: weeks.slice(0, P),
+                    y: weeks.slice(0, P).map(function(w) { return Math.sin(2 * Math.PI * k * w / P); }),
+                    name: 'sin harmonic k = ' + k + ' (' + k + ' cycle' + (k > 1 ? 's' : '') + '/year)',
+                    line: { color: cols[i], width: 2.4 }
+                };
+            });
+            const layout = PT.layout({
+                xaxis: { title: 'week of year t' },
+                yaxis: { title: 'basis value' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 60, r: 20, t: 40, b: 55 }
+            });
+            Plotly.newPlot('harmonicsChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2 (interactive): order slider fitting the noisy seasonal target.
+        // ------------------------------------------------------------------
+        function fitFourier(K) {
+            const X = weeks.map(function(w) { return [1].concat(fourierRow(w, P, K)); });
+            return lstsqPredict(X, gNoisy);
+        }
+        function drawFourierFit(K) {
+            const fit = fitFourier(K);
+            const trainResid = norm2(gNoisy, fit);
+            const truthErr = norm2(gTrue, fit);
+
+            let regime, regClass, fitColor;
+            if (K <= 2)      { regime = 'underfit — too stiff to see the spike'; regClass = 'under'; fitColor = PT.colors.search; }
+            else if (K <= 6) { regime = 'about right';                            regClass = 'good';  fitColor = PT.colors.tv; }
+            else if (K <= 11){ regime = 'starting to chase noise';                regClass = 'over';  fitColor = PT.colors.social; }
+            else             { regime = 'overfit — wiggle-chasing between points'; regClass = 'over'; fitColor = PT.colors.display; }
+
+            document.getElementById('orderVal').textContent = 'K = ' + K;
+            const v = document.getElementById('fitVerdict');
+            v.textContent = regime;
+            v.className = 'fit-verdict ' + regClass;
+            document.getElementById('trainResid').textContent = trainResid.toFixed(2);
+            document.getElementById('truthErr').textContent = truthErr.toFixed(2);
+
+            const x1 = weeks.slice(0, P);
+            const traces = [
+                {
+                    type: 'scatter', mode: 'markers', name: 'noisy data',
+                    x: x1, y: gNoisy.slice(0, P),
+                    marker: { color: PT.colors.expected, size: 5, opacity: 0.7 }
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'true signal',
+                    x: x1, y: gTrue.slice(0, P),
+                    line: { color: PT.colors.truth, width: 2.2, dash: 'dot' }
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'least-squares fit, K = ' + K,
+                    x: x1, y: fit.slice(0, P),
+                    line: { color: fitColor, width: 2.6 }
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'week of year' },
+                yaxis: { title: 'seasonal value' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 60, r: 20, t: 40, b: 55 }
+            });
+            Plotly.react('fourierFitChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3: piecewise design matrix A as a heatmap.
+        // ------------------------------------------------------------------
+        function drawPwHeat() {
+            const z = [];
+            for (let j = 0; j < C; j++) z.push(t01.map(function(t) { return t >= S[j] ? 1 : 0; }));
+            const trace = {
+                type: 'heatmap',
+                x: t01,
+                y: S.map(function(sj, j) { return 's' + j + ' = ' + sj.toFixed(2); }),
+                z: z,
+                colorscale: [[0, '#f5f1ea'], [1, '#8fa86a']],
+                showscale: false,
+                hovertemplate: 't = %{x:.2f}<br>%{y}<br>A = %{z}<extra></extra>'
+            };
+            const layout = PT.layout({
+                xaxis: { title: 'rescaled time t' },
+                yaxis: { title: '', automargin: true },
+                margin: { l: 90, r: 20, t: 10, b: 55 }
+            });
+            Plotly.newPlot('pwHeatChart', [trace], layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 4 (interactive): build a piecewise trend with delta sliders.
+        // ------------------------------------------------------------------
+        function drawPwBuild() {
+            const k = parseFloat(document.getElementById('pwK').value);
+            const d1 = parseFloat(document.getElementById('pwD1').value);
+            const d3 = parseFloat(document.getElementById('pwD3').value);
+            const d6 = parseFloat(document.getElementById('pwD6').value);
+            const m = 1.0;
+            const delta = new Array(C).fill(0);
+            delta[1] = d1; delta[3] = d3; delta[6] = d6;
+            const gamma = delta.map(function(dj, j) { return -S[j] * dj; });
+
+            function fmt(x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1); }
+            document.getElementById('pwKVal').textContent = k.toFixed(1);
+            document.getElementById('pwD1Val').textContent = fmt(d1);
+            document.getElementById('pwD3Val').textContent = fmt(d3);
+            document.getElementById('pwD6Val').textContent = fmt(d6);
+
+            const slope = t01.map(function(_, i) {
+                let s = k;
+                for (let j = 0; j < C; j++) s += A[i][j] * delta[j];
+                return s;
+            });
+            const trend = t01.map(function(t, i) {
+                let off = m;
+                for (let j = 0; j < C; j++) off += A[i][j] * gamma[j];
+                return slope[i] * t + off;
+            });
+            document.getElementById('pwFinalSlope').textContent = slope[N - 1].toFixed(2);
+
+            const shapes = [];
+            [1, 3, 6].forEach(function(j) {
+                if (delta[j] !== 0) {
+                    shapes.push({
+                        type: 'line', x0: S[j], x1: S[j], y0: 0, y1: 1,
+                        yref: 'paper', line: { color: PT.colors.display, width: 1, dash: 'dot' }
+                    });
+                }
+            });
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines',
+                    name: '(k + Aδ)·t + (m + Aγ)',
+                    x: t01, y: trend,
+                    line: { color: PT.colors.social, width: 2.8 },
+                    yaxis: 'y'
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'base line k·t + m',
+                    x: t01, y: t01.map(function(t) { return k * t + m; }),
+                    line: { color: PT.colors.expected, width: 1.6, dash: 'dash' },
+                    yaxis: 'y'
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    name: 'instantaneous slope k + (Aδ)ₜ',
+                    x: t01, y: slope,
+                    line: { color: PT.colors.tv, width: 2.4, shape: 'hv' },
+                    yaxis: 'y2'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'rescaled time t', anchor: 'y2' },
+                yaxis: { title: 'trend', domain: [0.42, 1] },
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 60, r: 20, t: 40, b: 55 },
+                shapes: shapes
+            });
+            layout.yaxis2 = {
+                title: 'slope', domain: [0, 0.3],
+                gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4'
+            };
+            Plotly.react('pwBuildChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 5: B-spline basis + partition-of-unity sum.
+        // ------------------------------------------------------------------
+        function lerpColor(c1, c2, f) {
+            const p = function(h, i) { return parseInt(h.slice(i, i + 2), 16); };
+            const mix = function(a, b) { return Math.round(a + (b - a) * f); };
+            return 'rgb(' + mix(p(c1, 1), p(c2, 1)) + ',' + mix(p(c1, 3), p(c2, 3)) + ',' + mix(p(c1, 5), p(c2, 5)) + ')';
+        }
+        function drawBspline() {
+            const traces = [];
+            for (let j = 0; j < M; j++) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    name: 'B' + j,
+                    x: t01, y: BS.map(function(row) { return row[j]; }),
+                    line: { color: lerpColor(PT.colors.search, PT.colors.display, j / (M - 1)), width: 1.8 },
+                    showlegend: false,
+                    hovertemplate: 'B' + j + '(t=%{x:.2f}) = %{y:.3f}<extra></extra>'
+                });
+            }
+            traces.push({
+                type: 'scatter', mode: 'lines',
+                name: 'Σⱼ Bⱼ(t)  (partition of unity)',
+                x: t01, y: BS.map(function(row) {
+                    return row.reduce(function(a, b) { return a + b; }, 0);
+                }),
+                line: { color: PT.colors.truth, width: 3 }
+            });
+            const layout = PT.layout({
+                xaxis: { title: 'rescaled time t' },
+                yaxis: { title: 'basis value', range: [-0.05, 1.12] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 60, r: 20, t: 40, b: 55 }
+            });
+            Plotly.newPlot('bsplineChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 6: head-to-head trend fits on the kinked truth.
+        // ------------------------------------------------------------------
+        function drawHeadToHead() {
+            const truth = t01.map(function(t) {
+                return 2.0 + 1.0 * t
+                    + 6.0 * Math.max(t - 0.35, 0)
+                    - 7.0 * Math.max(t - 0.70, 0);
+            });
+            const z = gaussians(N, 3);
+            const y = truth.map(function(v, i) { return v + 0.25 * z[i]; });
+
+            const Xlin = t01.map(function(t) { return [1, t]; });
+            const Xpw = t01.map(function(t, i) {
+                const row = [1, t];
+                for (let j = 0; j < C; j++) row.push(A[i][j] * t);   // slope-change ramps
+                for (let j = 0; j < C; j++) row.push(A[i][j]);        // level corrections
+                return row;
+            });
+            const fitLin = lstsqPredict(Xlin, y);
+            const fitPw = lstsqPredict(Xpw, y);
+            const fitBs = lstsqPredict(BS, y);
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'markers', name: 'noisy data',
+                    x: t01, y: y,
+                    marker: { color: PT.colors.expected, size: 4, opacity: 0.55 }
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'true kinked trend',
+                    x: t01, y: truth,
+                    line: { color: PT.colors.truth, width: 2.4, dash: 'dot' }
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    name: 'linear (live corr ' + pearson(truth, fitLin).toFixed(3) + ')',
+                    x: t01, y: fitLin, line: { color: PT.colors.search, width: 2.2 }
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    name: 'piecewise (live corr ' + pearson(truth, fitPw).toFixed(3) + ')',
+                    x: t01, y: fitPw, line: { color: PT.colors.social, width: 2.2 }
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    name: 'B-spline (live corr ' + pearson(truth, fitBs).toFixed(3) + ')',
+                    x: t01, y: fitBs, line: { color: PT.colors.tv, width: 2.2 }
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'rescaled time t' },
+                yaxis: { title: 'baseline' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 60, r: 20, t: 50, b: 55 },
+                shapes: [0.35, 0.70].map(function(cp) {
+                    return {
+                        type: 'line', x0: cp, x1: cp, y0: 0, y1: 1, yref: 'paper',
+                        line: { color: PT.colors.display, width: 1, dash: 'dot' }
+                    };
+                })
+            });
+            Plotly.newPlot('headToHeadChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Wiring
+        // ------------------------------------------------------------------
+        function init() {
+            drawHarmonics();
+            drawFourierFit(4);
+            drawPwHeat();
+            drawPwBuild();
+            drawBspline();
+            drawHeadToHead();
+
+            document.getElementById('orderSlider').addEventListener('input', function() {
+                drawFourierFit(parseInt(this.value, 10));
+            });
+            ['pwK', 'pwD1', 'pwD3', 'pwD6'].forEach(function(id) {
+                document.getElementById(id).addEventListener('input', drawPwBuild);
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

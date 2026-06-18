@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from loguru import logger
 
-from ..helpers import _safe_get_column, _safe_to_numpy
+from ..helpers import _safe_get_column
 from .base import DataExtractor
 from .bundle import MMMDataBundle
 from .mixins import AggregationMixin, GeoExtractionMixin, ProductExtractionMixin
 
 if TYPE_CHECKING:
-    import pandas as pd
+    pass
 
 
 class BayesianMMMExtractor(
@@ -1497,30 +1497,67 @@ class BayesianMMMExtractor(
             logger.debug(traceback.format_exc())
             return None
 
+    def _components_from_decomposition(self) -> dict[str, np.ndarray] | None:
+        """Build component time series (original KPI scale) from the model's
+        canonical decomposition, which handles inverse-scaling correctly
+        (the intercept carries the ``y_mean`` location shift)."""
+        if not hasattr(self.mmm, "compute_component_decomposition"):
+            return None
+        try:
+            decomp = self.mmm.compute_component_decomposition()
+        except Exception as e:
+            logger.debug(f"compute_component_decomposition unavailable: {e}")
+            return None
+
+        components: dict[str, np.ndarray] = {
+            "Baseline": np.asarray(decomp.intercept, dtype=float)
+        }
+        if np.any(decomp.trend):
+            components["Trend"] = np.asarray(decomp.trend, dtype=float)
+        if np.any(decomp.seasonality):
+            components["Seasonality"] = np.asarray(decomp.seasonality, dtype=float)
+        if decomp.geo_effects is not None and np.any(decomp.geo_effects):
+            components["Geo"] = np.asarray(decomp.geo_effects, dtype=float)
+        if decomp.product_effects is not None and np.any(decomp.product_effects):
+            components["Product"] = np.asarray(decomp.product_effects, dtype=float)
+        for ch in decomp.media_by_channel.columns:
+            components[str(ch)] = decomp.media_by_channel[ch].to_numpy(dtype=float)
+        if decomp.controls_by_var is not None:
+            for ctrl in decomp.controls_by_var.columns:
+                components[f"Control: {ctrl}"] = decomp.controls_by_var[ctrl].to_numpy(
+                    dtype=float
+                )
+        elif np.any(decomp.controls_total):
+            components["Controls"] = np.asarray(decomp.controls_total, dtype=float)
+        return components
+
     def _get_component_totals(self) -> dict[str, float] | None:
-        """Get total contribution by component."""
+        """Get total contribution by component (original KPI scale)."""
         try:
             logger.debug("Computing component totals")
 
-            # Try model's method first
-            if hasattr(self.mmm, "compute_contributions"):
-                contrib = self.mmm.compute_contributions()
-                if hasattr(contrib, "component_totals"):
-                    return dict(contrib.component_totals)
+            # Preferred path: the model's canonical decomposition
+            components = self._components_from_decomposition()
+            if components:
+                return {name: float(vals.sum()) for name, vals in components.items()}
 
             trace = getattr(self.mmm, "_trace", None)
             if trace is None or not hasattr(trace, "posterior"):
                 return None
 
             posterior = trace.posterior
+            y_mean = getattr(self.mmm, "y_mean", 0.0)
             y_std = getattr(self.mmm, "y_std", 1.0)
             n_obs = getattr(self.mmm, "n_obs", 52)
 
             totals = {}
 
-            # Baseline/Intercept
+            # Baseline/Intercept — carries the y_mean location shift so the
+            # decomposition sums to predictions in original units
             if "intercept" in posterior:
-                intercept = float(posterior["intercept"].values.mean()) * y_std * n_obs
+                intercept = (
+                    float(posterior["intercept"].values.mean()) * y_std + y_mean
+                ) * n_obs
                 totals["Baseline"] = intercept
 
             # Media channels
@@ -1576,23 +1613,30 @@ class BayesianMMMExtractor(
             return None
 
     def _get_component_time_series(self) -> dict[str, np.ndarray] | None:
-        """Get component time series for decomposition chart."""
+        """Get component time series for decomposition chart (original KPI scale)."""
         try:
             logger.debug("Computing component time series")
+
+            # Preferred path: the model's canonical decomposition
+            components = self._components_from_decomposition()
+            if components:
+                return components
 
             trace = getattr(self.mmm, "_trace", None)
             if trace is None or not hasattr(trace, "posterior"):
                 return None
 
             posterior = trace.posterior
+            y_mean = getattr(self.mmm, "y_mean", 0.0)
             y_std = getattr(self.mmm, "y_std", 1.0)
             n_obs = getattr(self.mmm, "n_obs", 52)
 
             components = {}
 
-            # Baseline - constant
+            # Baseline - constant; carries the y_mean location shift so the
+            # decomposition sums to predictions in original units
             if "intercept" in posterior:
-                intercept = float(posterior["intercept"].values.mean()) * y_std
+                intercept = float(posterior["intercept"].values.mean()) * y_std + y_mean
                 components["Baseline"] = np.full(n_obs, intercept)
 
             # Trend
@@ -1796,16 +1840,30 @@ class BayesianMMMExtractor(
 
                 spend_range = np.linspace(0, max_spend, 100)
 
-                # Try Hill saturation parameters
-                kappa_names = [f"kappa_{ch}", f"K_{ch}", f"sat_K_{ch}"]
-                slope_names = [f"slope_{ch}", f"S_{ch}", f"sat_S_{ch}", f"n_{ch}"]
+                # Try Hill saturation parameters (sat_half_/sat_slope_ are the
+                # core BayesianMMM's per-channel Hill RVs)
+                kappa_names = [
+                    f"sat_half_{ch}",
+                    f"kappa_{ch}",
+                    f"K_{ch}",
+                    f"sat_K_{ch}",
+                ]
+                slope_names = [
+                    f"sat_slope_{ch}",
+                    f"slope_{ch}",
+                    f"S_{ch}",
+                    f"sat_S_{ch}",
+                    f"n_{ch}",
+                ]
 
                 kappa_val = None
                 slope_val = None
+                kappa_matched = None
 
                 for k_name in kappa_names:
                     if k_name in posterior:
                         kappa_val = float(posterior[k_name].values.mean())
+                        kappa_matched = k_name
                         break
 
                 for s_name in slope_names:
@@ -1813,42 +1871,76 @@ class BayesianMMMExtractor(
                         slope_val = float(posterior[s_name].values.mean())
                         break
 
-                if kappa_val is not None and slope_val is not None:
-                    # Hill function
-                    response = spend_range**slope_val / (
-                        kappa_val**slope_val + spend_range**slope_val
-                    )
-
-                    # Scale by beta if available
+                def _beta_scaled(response: np.ndarray) -> np.ndarray:
                     for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
                         if beta_name in posterior:
                             beta_val = float(posterior[beta_name].values.mean())
-                            response = response * beta_val
-                            break
+                            return response * beta_val
+                    return response
 
-                    curves[ch] = {"spend": spend_range, "response": response}
+                if kappa_val is not None and slope_val is not None:
+                    # The core model's sat_half_ is on the normalized (~[0, 1])
+                    # spend scale, so evaluate the curve on normalized spend
+                    # (mirroring the logistic branch below). Other naming
+                    # conventions keep the raw-spend evaluation.
+                    if kappa_matched is not None and kappa_matched.startswith(
+                        "sat_half_"
+                    ):
+                        x_grid = spend_range / max(spend_range.max(), 1)
+                    else:
+                        x_grid = spend_range
+                    x_grid = np.clip(x_grid, 1e-9, None)
+                    # Hill function
+                    response = x_grid**slope_val / (
+                        kappa_val**slope_val + x_grid**slope_val
+                    )
+                    curves[ch] = {
+                        "spend": spend_range,
+                        "response": _beta_scaled(response),
+                    }
                     logger.debug(f"Generated Hill saturation curve for {ch}")
                     continue
 
-                # Try exponential saturation (sat_lam)
+                if kappa_val is not None and slope_val is None:
+                    # sat_half_ without a slope RV: the core model's
+                    # michaelis_menten or tanh saturation. The two are
+                    # indistinguishable from RV names alone, so consult the
+                    # channel's configured saturation type.
+                    sat_type = None
+                    try:
+                        sat_type = self.mmm._get_saturation_config(ch).type.value
+                    except Exception:
+                        sat_type = None
+                    x_grid = spend_range / max(spend_range.max(), 1)
+                    if sat_type == "michaelis_menten":
+                        response = x_grid / (x_grid + kappa_val)
+                    elif sat_type == "tanh":
+                        response = np.tanh(x_grid / kappa_val)
+                    else:
+                        logger.warning(
+                            f"Saturation curve for {ch}: found {kappa_matched} but "
+                            "cannot determine the saturation form; skipping."
+                        )
+                        continue
+                    curves[ch] = {
+                        "spend": spend_range,
+                        "response": _beta_scaled(response),
+                    }
+                    logger.debug(f"Generated {sat_type} saturation curve for {ch}")
+                    continue
+
+                # Logistic saturation (the core default): 1 - exp(-lam * x)
                 for lam_name in [f"sat_lam_{ch}", f"saturation_lam_{ch}", f"lam_{ch}"]:
                     if lam_name in posterior:
                         lam_val = float(posterior[lam_name].values.mean())
-
-                        # Exponential saturation: 1 - exp(-lam * x)
                         response = 1 - np.exp(
                             -lam_val * spend_range / max(spend_range.max(), 1)
                         )
-
-                        # Scale by beta if available
-                        for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
-                            if beta_name in posterior:
-                                beta_val = float(posterior[beta_name].values.mean())
-                                response = response * beta_val
-                                break
-
-                        curves[ch] = {"spend": spend_range, "response": response}
-                        logger.debug(f"Generated exponential saturation curve for {ch}")
+                        curves[ch] = {
+                            "spend": spend_range,
+                            "response": _beta_scaled(response),
+                        }
+                        logger.debug(f"Generated logistic saturation curve for {ch}")
                         break
 
             return curves if curves else None
@@ -1879,36 +1971,65 @@ class BayesianMMMExtractor(
             posterior = trace.posterior
             curves = {}
 
+            from ...transforms.adstock import adstock_weights
+
             for ch in channels:
-                # Try different alpha parameter names
-                alpha_names = [
+                # Default l_max from the channel's adstock config if resolvable
+                l_max = getattr(self.mmm, "adstock_lmax", 8)
+                if hasattr(self.mmm, "model_config"):
+                    l_max = getattr(self.mmm.model_config, "adstock_lmax", l_max)
+                try:
+                    l_max = self.mmm._get_adstock_config(ch).l_max
+                except Exception:
+                    pass
+
+                def _mean(name: str) -> float | None:
+                    if name in posterior:
+                        return float(posterior[name].values.mean())
+                    return None
+
+                # Weibull kernel (shape + scale)
+                shape_val = _mean(f"adstock_shape_{ch}")
+                scale_val = _mean(f"adstock_scale_{ch}")
+                if shape_val is not None and scale_val is not None:
+                    curves[ch] = adstock_weights(
+                        "weibull", l_max, shape=shape_val, scale=scale_val
+                    )
+                    logger.debug(
+                        f"Generated weibull adstock curve for {ch}: "
+                        f"shape={shape_val:.3f} scale={scale_val:.3f}"
+                    )
+                    continue
+
+                # Geometric / delayed kernel (alpha [+ theta])
+                alpha_val = None
+                for alpha_name in [
+                    f"adstock_alpha_{ch}",
                     f"alpha_{ch}",
                     f"adstock_{ch}",
                     f"decay_{ch}",
-                    f"adstock_alpha_{ch}",
-                ]
-
-                alpha_val = None
-                for alpha_name in alpha_names:
-                    if alpha_name in posterior:
-                        alpha_val = float(posterior[alpha_name].values.mean())
+                ]:
+                    alpha_val = _mean(alpha_name)
+                    if alpha_val is not None:
                         break
 
                 if alpha_val is not None and 0 < alpha_val < 1:
-                    # Get l_max from model config or default
-                    l_max = getattr(self.mmm, "adstock_lmax", 8)
-                    if hasattr(self.mmm, "model_config"):
-                        l_max = getattr(self.mmm.model_config, "adstock_lmax", l_max)
-
-                    # Geometric decay weights
-                    lags = np.arange(l_max)
-                    weights = alpha_val**lags
-                    weights = weights / weights.sum()  # Normalize
-
-                    curves[ch] = weights
-                    logger.debug(
-                        f"Generated adstock curve for {ch}: alpha={alpha_val:.3f}"
-                    )
+                    theta_val = _mean(f"adstock_theta_{ch}")
+                    if theta_val is not None:
+                        curves[ch] = adstock_weights(
+                            "delayed", l_max, alpha=alpha_val, theta=theta_val
+                        )
+                        logger.debug(
+                            f"Generated delayed adstock curve for {ch}: "
+                            f"alpha={alpha_val:.3f} theta={theta_val:.2f}"
+                        )
+                    else:
+                        curves[ch] = adstock_weights(
+                            "geometric", l_max, alpha=alpha_val
+                        )
+                        logger.debug(
+                            f"Generated adstock curve for {ch}: alpha={alpha_val:.3f}"
+                        )
 
             return curves if curves else None
 
@@ -2008,6 +2129,7 @@ class BayesianMMMExtractor(
                     "alpha",
                     "adstock",
                     "sat_lam",
+                    "sat_half",
                     "kappa",
                     "slope",
                 ]
@@ -2145,6 +2267,14 @@ class BayesianMMMExtractor(
                 elif param.startswith("alpha_") or param.startswith("adstock_"):
                     # Adstock decay: Beta(1, 3) - favors lower values
                     prior_samples[param] = np.random.beta(1, 3, n_samples)
+
+                elif param.startswith("sat_half_"):
+                    # Core-model half-saturation: Beta(2, 2)
+                    prior_samples[param] = np.random.beta(2, 2, n_samples)
+
+                elif param.startswith("sat_slope_"):
+                    # Core-model Hill slope: HalfNormal(sigma=1.5)
+                    prior_samples[param] = np.abs(np.random.normal(0, 1.5, n_samples))
 
                 elif param.startswith("sat_lam_") or param.startswith("saturation_"):
                     # Saturation rate: Gamma(2, 1)

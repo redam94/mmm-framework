@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Requirements &amp; Runtime | MMM Framework</title>
+    <meta name="description" content="What data the MMM Framework needs and what it costs to run: the MFF input format, minimum history and variation guidance, and measured fit times on commodity hardware.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/data-requirements.html">
+    <meta property="og:title" content="Data Requirements &amp; Runtime | MMM Framework">
+    <meta property="og:description" content="What data the MMM Framework needs and what it costs to run: the MFF input format, minimum history and variation guidance, and measured fit times on commodity hardware.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/data-requirements.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .evidence-tag {
+            display: inline-block;
+            padding: 0.1rem 0.55rem;
+            border-radius: 100px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        .evidence-tag.code { background: rgba(106, 143, 168, 0.18); color: var(--color-accent-dark); }
+        .evidence-tag.measured { background: rgba(143, 168, 106, 0.18); color: var(--color-primary-dark); }
+        .evidence-tag.guidance { background: rgba(212, 168, 106, 0.18); color: #b8860b; }
+        .evidence-tag.extrapolated { background: rgba(201, 112, 103, 0.15); color: var(--color-danger); }
+        .mff-table td, .mff-table th { font-size: 0.85rem; }
+        .mff-table code { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Reference</span>
+            <h1>Data Requirements &amp; Runtime</h1>
+            <p class="lead">
+                The first question in every RFP: what data does this framework need, and what does it cost to run?
+                This page answers both&mdash;and labels every claim as <strong>code-enforced</strong>,
+                <strong>measured</strong>, or <strong>guidance</strong>, because those are not the same thing.
+            </p>
+        </div>
+    </section>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>The Input Format</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#mff-format">The MFF in One Paragraph</a></li>
+                <li><a href="#mff-columns">Column Dictionary</a></li>
+                <li><a href="#mff-example">Worked Example</a></li>
+                <li><a href="#declaring-variables">Declaring Variables</a></li>
+            </ul>
+
+            <h3>Minimum Data</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#minimum-data">History &amp; Variation</a></li>
+                <li><a href="#spend-vs-impressions">Spend vs. Impressions</a></li>
+                <li><a href="#channel-geo-counts">Channels &amp; Geographies</a></li>
+            </ul>
+
+            <h3>Cost to Run</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#runtime">Measured Runtimes</a></li>
+                <li><a href="#fit-budgets">Fit Budgets</a></li>
+            </ul>
+
+            <h3>Data Quality</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#bad-data">What Happens to Bad Data</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+
+            <!-- ===============================================================
+                 1. THE MFF FORMAT
+                 Verified against:
+                   src/mmm_framework/config/mff.py   (MFFColumnConfig, MFFConfig)
+                   src/mmm_framework/data_loader.py  (MFFLoader, load_mff,
+                                                      validate_mff_structure,
+                                                      mff_from_wide_format,
+                                                      generate_complete_date_range)
+                 =============================================================== -->
+            <h1 id="mff-format">The Input Format: One Long Table</h1>
+            <p class="lead">
+                All data enters the framework as a single <strong>Master Flat File (MFF)</strong>&mdash;a
+                long-format table with one row per period (and optionally geography, product, campaign,
+                outlet, creative) <em>per variable</em>.
+            </p>
+            <p>
+                Instead of one column per metric, the MFF uses two columns&mdash;<code>VariableName</code>
+                says which series a row belongs to (the KPI, a media channel, a control), and
+                <code>VariableValue</code> holds its value. The same file therefore carries national and
+                geo-level series side by side, and adding a channel means adding rows, not redesigning a schema.
+                This matches the definition in the <a href="glossary.html#term-mff">glossary</a>. Data is loaded
+                with <code>MFFLoader</code> (or the one-call <code>load_mff()</code>), which validates the file
+                against a declared <code>MFFConfig</code> before anything is fit. If your data lives in the more
+                common wide format (one column per metric), <code>mff_from_wide_format()</code> converts it.
+            </p>
+
+            <h2 id="mff-columns">Column Dictionary</h2>
+            <p>
+                Eight columns. <strong>All eight must exist in the file</strong>&mdash;the loader raises
+                <code>MFFValidationError: Missing required columns</code> otherwise
+                <span class="evidence-tag code">code-enforced</span>. But the five extra dimension columns
+                may be left <em>blank</em> for data that doesn't use them: the loader treats a dimension as
+                active only when it has more than one distinct non-null value. Column names are remappable
+                via <code>MFFColumnConfig</code>; the defaults are shown.
+            </p>
+
+            <!-- Defaults from MFFColumnConfig, src/mmm_framework/config/mff.py:38-67 -->
+            <table class="mff-table">
+                <thead>
+                    <tr>
+                        <th>Column (default name)</th>
+                        <th>Required content?</th>
+                        <th>What it is</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>Period</code></td>
+                        <td>Yes &mdash; every row</td>
+                        <td>Date of the observation. Parsed with <code>MFFConfig.date_format</code>
+                            (default <code>%Y-%m-%d</code>); unparseable dates fail loading.</td>
+                    </tr>
+                    <tr>
+                        <td><code>Geography</code></td>
+                        <td>Only for geo-level series</td>
+                        <td>Region / DMA / market label. Blank for national series.</td>
+                    </tr>
+                    <tr>
+                        <td><code>Product</code></td>
+                        <td>Only for product-level series</td>
+                        <td>Product or brand line. Blank otherwise.</td>
+                    </tr>
+                    <tr>
+                        <td><code>Campaign</code></td>
+                        <td>Optional</td>
+                        <td>Campaign label, for campaign-split media.</td>
+                    </tr>
+                    <tr>
+                        <td><code>Outlet</code></td>
+                        <td>Optional</td>
+                        <td>Sub-channel split (e.g. social platform within "Social").</td>
+                    </tr>
+                    <tr>
+                        <td><code>Creative</code></td>
+                        <td>Optional</td>
+                        <td>Creative-level split.</td>
+                    </tr>
+                    <tr>
+                        <td><code>VariableName</code></td>
+                        <td>Yes &mdash; every row</td>
+                        <td>Which series this row belongs to. Must match a declared variable; undeclared
+                            names are ignored with a warning, <em>missing</em> declared names fail loading.</td>
+                    </tr>
+                    <tr>
+                        <td><code>VariableValue</code></td>
+                        <td>Yes &mdash; every row</td>
+                        <td>The numeric value (KPI units, spend, index, &hellip;).</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                <strong>Frequency.</strong> <code>MFFConfig.frequency</code> accepts exactly
+                <code>"W"</code> (weekly, aligned to weeks ending Sunday), <code>"D"</code> (daily), or
+                <code>"M"</code> (monthly, month-start) <span class="evidence-tag code">code-enforced</span>.
+                Weekly is the default and the frequency all of the framework's published benchmarks and
+                pressure tests use.
+            </p>
+            <p>
+                <strong>Gaps.</strong> Missing media values are filled with <code>0.0</code> by default
+                (no record of spend = no spend); missing control values are forward-filled by default.
+                Both behaviors are configurable (<code>fill_missing_media</code>,
+                <code>fill_missing_controls</code>) <span class="evidence-tag code">code-enforced</span>.
+            </p>
+
+            <h2 id="mff-example">Worked Example</h2>
+            <p>
+                Two weeks of a small national model&mdash;one KPI (<code>Sales</code>), two media channels,
+                one price control. Note the dimension columns sit empty for national data; a geo-level KPI
+                would simply repeat the <code>Sales</code> rows once per region with <code>Geography</code>
+                filled in.
+            </p>
+
+            <table class="mff-table">
+                <thead>
+                    <tr>
+                        <th>Period</th><th>Geography</th><th>Product</th><th>Campaign</th>
+                        <th>Outlet</th><th>Creative</th><th>VariableName</th><th>VariableValue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>2024-01-07</td><td></td><td></td><td></td><td></td><td></td><td>Sales</td><td>1,204,300</td></tr>
+                    <tr><td>2024-01-07</td><td></td><td></td><td></td><td></td><td></td><td>TV</td><td>85,000</td></tr>
+                    <tr><td>2024-01-07</td><td></td><td></td><td></td><td></td><td></td><td>Paid_Search</td><td>22,400</td></tr>
+                    <tr><td>2024-01-07</td><td></td><td></td><td></td><td></td><td></td><td>Price_Index</td><td>1.02</td></tr>
+                    <tr><td>2024-01-14</td><td></td><td></td><td></td><td></td><td></td><td>Sales</td><td>1,187,950</td></tr>
+                    <tr><td>2024-01-14</td><td></td><td></td><td></td><td></td><td></td><td>TV</td><td>0</td></tr>
+                    <tr><td>2024-01-14</td><td></td><td></td><td></td><td></td><td></td><td>Paid_Search</td><td>24,100</td></tr>
+                    <tr><td>2024-01-14</td><td></td><td></td><td></td><td></td><td></td><td>Price_Index</td><td>1.02</td></tr>
+                </tbody>
+            </table>
+
+            <p>
+                That <code>TV = 0</code> week is not a data error&mdash;it's information. Dark weeks are
+                what let the model see what sales look like <em>without</em> TV (see
+                <a href="#minimum-data">media variation</a> below).
+            </p>
+
+            <h2 id="declaring-variables">How Variables Are Declared</h2>
+            <p>
+                The file alone doesn't say which series is the KPI, which are media, and which are controls.
+                That's declared in an <code>MFFConfig</code>: one required <code>KPIConfig</code>, a list of
+                <code>MediaChannelConfig</code>s (each carrying its own adstock, saturation, and coefficient-prior
+                settings), and a list of <code>ControlVariableConfig</code>s (sign constraints, shrinkage, and
+                an optional <em>causal role</em>&mdash;declared mediators and colliders are refused as controls
+                at model-construction time). Each variable also declares its <code>DimensionType</code>s
+                (<code>PERIOD</code>, <code>GEOGRAPHY</code>, <code>PRODUCT</code>, <code>CAMPAIGN</code>,
+                <code>OUTLET</code>, <code>CREATIVE</code>), and the loader checks the data actually has the
+                dimensions you claimed <span class="evidence-tag code">code-enforced</span>. National media is
+                automatically allocated down to a geo-level KPI (population weights by default; configurable).
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">import pandas as pd
+from mmm_framework import MFFConfigBuilder, load_mff
+
+# Declare what each VariableName means
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Sales")
+    .add_national_media("TV", adstock_lmax=8)
+    .add_national_media("Paid_Search", adstock_lmax=2)
+    .add_price_control("Price_Index")   # control allowed a negative sign
+    .build()
+)
+
+# Load + validate in one call -> aligned panel, ready to fit
+panel = load_mff(pd.read_csv("weekly_mff.csv"), mff_config)
+print(panel.summary())</code></pre>
+            </div>
+
+            <!-- ===============================================================
+                 2. MINIMUM DATA REQUIREMENTS (guidance)
+                 Checklist mirrored from docs/modeling-guide.html (Data Quality
+                 Checklist, "Prepare Your Data"); positivity framing per
+                 docs/variable-selection.html + synth worlds; geo identification
+                 per src/mmm_framework/validation/geo_identification.py.
+                 =============================================================== -->
+            <h1 id="minimum-data">Minimum Data Requirements</h1>
+            <p class="lead">
+                The loader enforces structure, not statistical sufficiency. The thresholds below are
+                <strong>guidance</strong>&mdash;the same checklist the
+                <a href="modeling-guide.html#prepare-data">Modeling Guide</a> uses&mdash;not hard gates.
+                A model will fit on less; its intervals will just be honest about how little it learned.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Requirement</th>
+                        <th>Threshold</th>
+                        <th>Why</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>History length</strong></td>
+                        <td>104+ weekly observations (2 years)</td>
+                        <td>Two full seasonal cycles are needed to separate seasonality from trend and from
+                            media timing. One cycle leaves them confounded.</td>
+                        <td><span class="evidence-tag guidance">guidance</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Zero-spend share</strong></td>
+                        <td>&lt; 50% zero-spend weeks per channel</td>
+                        <td>A channel that's almost always dark carries too little signal to estimate
+                            a response curve.</td>
+                        <td><span class="evidence-tag guidance">guidance</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Media variation</strong></td>
+                        <td>Channels should sometimes go dark or near-dark, and channels should not all
+                            flight together</td>
+                        <td>ROI is a <em>do(spend = 0)</em> counterfactual. A channel that never goes dark
+                            gives the model no observations near zero&mdash;a positivity violation&mdash;so
+                            the &ldquo;what if we turned it off&rdquo; answer is extrapolated from the prior,
+                            not the data. Synchronized flighting (all channels pulsing together) makes the
+                            <em>split</em> between channels unidentifiable even when total media is fine.</td>
+                        <td><span class="evidence-tag guidance">guidance</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Controls coverage</strong></td>
+                        <td>Controls present for the entire time series</td>
+                        <td>Gaps in confounders (price, distribution, promo) become gaps in causal
+                            adjustment exactly where you need it.</td>
+                        <td><span class="evidence-tag guidance">guidance</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sanity</strong></td>
+                        <td>No negative spend, consistent frequency, parseable dates</td>
+                        <td>Structural errors&mdash;the loader and the
+                            <a href="#bad-data">EDA module</a> catch most of these.</td>
+                        <td><span class="evidence-tag code">code / eda</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+                The variation requirements are not hypothetical: the framework's own
+                <a href="pressure-testing.html">pressure-testing worlds</a> include a synchronized-flighting
+                scenario and a near-collinear channel pair built precisely to demonstrate what happens when
+                they're violated&mdash;the model's job in those worlds is to report wide intervals, not to
+                invent a split. See <a href="variable-selection.html">Variable Selection</a> for how
+                collinearity is handled and when only an experiment can break the tie.
+            </p>
+
+            <h2 id="spend-vs-impressions">Spend or Impressions?</h2>
+            <p>
+                Either works as the media input. Internally each channel is scaled by its own maximum after
+                adstock <span class="evidence-tag code">code-enforced</span>
+                <!-- per-channel max normalization: src/mmm_framework/data_preparation.py:365-377 -->,
+                so units don't affect the fit&mdash;the response curve is learned on a normalized scale either
+                way. <strong>Prefer spend</strong> when you want ROI and budget-allocation readouts directly:
+                contributions-per-dollar require dollars in the denominator. Use impressions (or GRPs) when CPMs
+                shifted materially over the window and you want the response curve in exposure units&mdash;then
+                convert to ROI with your own cost data.
+                <span class="evidence-tag guidance">guidance</span>
+            </p>
+
+            <h2 id="channel-geo-counts">How Many Channels? How Many Geographies?</h2>
+            <p>
+                <strong>Channels.</strong> The framework's synthetic evaluation worlds use 4 channels
+                (the clean and violation worlds) to 7 (the &ldquo;realistic&rdquo; world, which deliberately
+                includes a near-collinear Radio/Print pair)
+                <!-- src/mmm_framework/synth/dgp.py: CHANNELS (4), _R_CHANNELS (7) -->, and the runtime
+                benchmark sweeps 3&ndash;7. Nothing caps the channel count, but identification degrades before
+                runtime does: every added channel is another response curve competing to explain the same KPI
+                variance, and collinearity risk grows with count. Past roughly this range, consider grouping
+                minor channels under a <code>parent_channel</code> hierarchy or letting
+                <a href="variable-selection.html">shrinkage-based selection</a> do the pruning.
+                <span class="evidence-tag guidance">guidance</span>
+            </p>
+            <p>
+                <strong>Geographies.</strong> Hierarchical geo models need at least 2 geographies
+                <span class="evidence-tag code">code-enforced</span>; the synthetic geo worlds use 4
+                <!-- src/mmm_framework/synth/dgp_geo.py: GEOS = North/South/East/West -->. The binding
+                constraint is not the count but <em>per-geo spend variation</em>: the built-in diagnostic
+                (<code>validation.geo_spend_variation_diagnostic</code>) computes each channel's coefficient
+                of variation of spend across geos and flags channels below a 0.15 default threshold as too
+                uniform to carry geo-level identifying information
+                <!-- src/mmm_framework/validation/geo_identification.py: DEFAULT_CV_THRESHOLD = 0.15 -->.
+                It also ships with a caveat worth repeating verbatim in spirit: cross-geo variation identifies
+                effects only if geo-level spend is <em>exogenous</em>&mdash;not the result of targeting
+                higher-demand markets.
+            </p>
+
+            <!-- ===============================================================
+                 3. RUNTIME REFERENCE (measured)
+                 All numbers from nbs/artifacts/runtime_benchmark.json,
+                 produced by nbs/runtime_benchmark.ipynb.
+                 =============================================================== -->
+            <h1 id="runtime">Cost to Run: Measured Runtimes</h1>
+            <p class="lead">
+                These are <strong>measured</strong> numbers, not vendor estimates&mdash;every row below comes
+                from <code>nbs/runtime_benchmark.ipynb</code>, run on an Apple&nbsp;M3 laptop (8 cores,
+                16&nbsp;GB RAM; Python 3.12, PyMC 5.26, NumPyro 0.19). The honest caveat: the
+                <em>ratios</em> transfer to other hardware; the <em>absolute seconds</em> don't.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Workload</th>
+                        <th>Wall-clock</th>
+                        <th>Notes</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Production-shaped national fit</strong><br>156 weeks &times; 7 channels</td>
+                        <td>&asymp; 17 s</td>
+                        <td>NumPyro NUTS, 4 chains &times; 500 draws (500 tune); R&#770; &le; 1.01.</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Full size grid</strong><br>104&ndash;156 weeks &times; 3&ndash;7 channels</td>
+                        <td>8&ndash;17 s</td>
+                        <td>Runtime is nearly flat in problem size at this scale&mdash;sampler overhead
+                            dominates, not data volume.</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Default PyMC sampler</strong> (same model, 104w &times; 7ch)</td>
+                        <td>86 s vs. 14 s</td>
+                        <td>Sequential PyMC NUTS is 6.0&times; slower than NumPyro at equal draws. Use
+                            <code>nuts_sampler="numpyro"</code>.</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Doubling draws</strong> (500 &rarr; 1000, 156w &times; 7ch)</td>
+                        <td>16.7 s &rarr; 21.1 s</td>
+                        <td>1.26&times;, not 2&times;&mdash;compilation and warmup amortize.</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hierarchical geo panel</strong><br>4 geos &times; 130 weeks &times; 4 channels</td>
+                        <td>&asymp; 22 s</td>
+                        <td>3.1&times; its national twin (7.0 s) in raw time&mdash;but 4&times; the rows, so
+                            0.78&times; per observation. Pooling is cheap.</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Extended models</strong> (nested mediation, multivariate)</td>
+                        <td>&asymp; 0.5&ndash;0.6&times; of core</td>
+                        <td>On the same data and sampling budget, NestedMMM ran at 0.6&times; and
+                            MultivariateMMM at 0.45&times; the base model's time. Extensions are not the
+                            runtime bottleneck.</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="fit-budgets">Fit Budgets</h2>
+            <p>
+                What this means for a working day:
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Stage</th>
+                        <th>Sampling budget</th>
+                        <th>Expected wall-clock</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Exploration</strong> &mdash; iterating on specification</td>
+                        <td>4 chains &times; 500 draws</td>
+                        <td>&asymp; 10&ndash;15 s per fit</td>
+                        <td><span class="evidence-tag measured">measured</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Production</strong> &mdash; the fit you report</td>
+                        <td>4 chains &times; 2000 draws</td>
+                        <td>&asymp; 30 s (about half a minute)</td>
+                        <td><span class="evidence-tag extrapolated">extrapolated</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                The production figure is extrapolated from the measured draws-scaling line (500 &rarr; 1000
+                draws cost 1.26&times;; per-draw cost &asymp; 9&nbsp;ms on this hardware), not measured
+                directly&mdash;treat it as an order of magnitude, not a quote. The practical point survives
+                any hardware change: <strong>a full Bayesian MMM refit is a coffee break, not an overnight
+                job</strong>, which is what makes the
+                <a href="measurement-calibration.html">closed measurement loop</a> (refit after every
+                experiment) economically viable.
+            </p>
+
+            <!-- ===============================================================
+                 4. WHAT HAPPENS TO BAD DATA
+                 Verified against src/mmm_framework/eda/__init__.py and
+                 data_loader.py validation paths.
+                 =============================================================== -->
+            <h1 id="bad-data">What Happens to Bad Data</h1>
+            <p>
+                Two lines of defense, both before any model is fit:
+            </p>
+            <p>
+                <strong>The loader refuses structural errors</strong>
+                <span class="evidence-tag code">code-enforced</span>. <code>MFFLoader</code> raises
+                <code>MFFValidationError</code> for missing required columns, declared variables absent
+                from the file, dates that don't parse under the configured format, and variables whose
+                actual dimensions contradict their declared ones. It warns (rather than fails) on
+                undeclared extra variables&mdash;which are ignored&mdash;and on null values in
+                <code>VariableValue</code>. Nothing silently reshapes your data into something fittable.
+            </p>
+            <p>
+                <strong>The EDA module screens statistical problems</strong>. <code>mmm_framework.eda</code>
+                is the pre-fit sibling of the post-fit validation suite: <code>load_eda_panel</code> builds
+                the panel view, <code>validate_dataset</code> runs the automated rule checks,
+                <code>missingness_matrix</code> maps gaps, and <code>detect_outliers</code> flags anomalies
+                and pairs them with recommended treatments (<code>recommend_treatments</code> /
+                <code>apply_treatments</code>)&mdash;plus <code>collinearity_analysis</code> for the
+                channel-separation problem above. The design stance is the same throughout: flag and
+                explain, never silently fix. Outlier remediation is proposed, reviewed, and applied
+                explicitly&mdash;not baked invisibly into the fit.
+            </p>
+
+            <div class="note" style="margin-top: 2rem;">
+                <h4>Next Steps</h4>
+                <p>
+                    Have your data in shape? The <a href="getting-started.html">Getting Started</a> guide
+                    takes you from install to first fit. For the full pre-specified workflow this data feeds,
+                    see the <a href="modeling-guide.html">Modeling Guide</a>; for the priors that fill the gaps
+                    your data leaves, see the
+                    <a href="technical-guide.html#standard-priors">Technical Guide&rsquo;s prior specification</a>.
+                    Evaluating the framework for procurement? The <a href="evaluator.html">Evaluator&rsquo;s
+                    Guide</a> collects the facts in RFP order.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Data Ready?</h2>
+            <p>Install the framework and load your first MFF with the getting started guide.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            hljs.highlightAll();
+        });
+    </script>
+</body>
+</html>

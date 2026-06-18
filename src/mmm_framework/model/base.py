@@ -6,7 +6,9 @@ model building, fitting, and prediction.
 
 Identifiability note (equifinality, critique.md §3.6)
 -----------------------------------------------------
-The core model uses logistic saturation (a single ``sat_lam`` per channel) and,
+The core model uses logistic saturation (a single ``sat_lam`` per channel) by
+default, honoring each channel's configured :class:`SaturationConfig` type
+(logistic / hill / michaelis_menten / tanh / none) and,
 by default, normalized adstock (``AdstockConfig.normalize=True``). Normalization
 folds the total carryover magnitude into the channel coefficient ``beta``, so a
 channel's adstock decay, saturation strength, and ``beta`` trade off against one
@@ -40,6 +42,8 @@ from ..config import (
     ModelConfig,
     PriorConfig,
     PriorType,
+    SaturationConfig,
+    SaturationType,
 )
 from ..data_loader import PanelDataset
 from ..utils import compute_hdi_bounds
@@ -50,7 +54,10 @@ from ..transforms import (
     create_bspline_basis,
     create_piecewise_trend_matrix,
 )
-from ..transforms.adstock_pt import parametric_adstock_pt
+from ..transforms.adstock_pt import (
+    parametric_adstock_panel_pt,
+    parametric_adstock_pt,
+)
 
 from .results import (
     MMMResults,
@@ -145,17 +152,68 @@ def _sample_from_prior_config(
     return default()
 
 
+def _apply_saturation_pt(
+    x: "pt.TensorVariable",
+    kind: SaturationType,
+    params: dict[str, Any],
+) -> "pt.TensorVariable":
+    """Apply a channel's saturation transform to a pytensor input.
+
+    This is the SINGLE place the saturation formula lives: the model build
+    (:meth:`BayesianMMM._build_model`) and every re-evaluation of a perturbed
+    spend series (:meth:`BayesianMMM._perturbed_contribution_sum`) route
+    through it, so the likelihood and the marginal/counterfactual estimands
+    cannot drift apart.
+
+    Args:
+        x: Adstocked, normalized (roughly ``[0, 1]``) spend tensor.
+        kind: The channel's configured :class:`SaturationType`.
+        params: The channel's saturation RVs as created by
+            :meth:`BayesianMMM._build_channel_saturation` (``sat_lam`` for
+            logistic; ``sat_half``/``sat_slope`` for hill; ``sat_half`` for
+            michaelis_menten and tanh; empty for none).
+
+    Returns:
+        The saturated tensor.
+    """
+    if kind == SaturationType.LOGISTIC:
+        sat_lam = params["sat_lam"]
+        exponent = pt.clip(-sat_lam * x, -20, 0)
+        return 1 - pt.exp(exponent)
+    if kind == SaturationType.HILL:
+        # x^s / (x^s + k^s). Clamp x away from 0: d/dx x^s is unbounded at
+        # x = 0 for s < 1, which would hand NUTS infinite gradients on
+        # zero-spend weeks (maximum's gradient is exactly 0 below the bound).
+        sat_half = params["sat_half"]
+        sat_slope = params["sat_slope"]
+        x_safe = pt.maximum(x, 1e-9)
+        x_pow = x_safe**sat_slope
+        return x_pow / (x_pow + sat_half**sat_slope)
+    if kind == SaturationType.MICHAELIS_MENTEN:
+        sat_half = params["sat_half"]
+        return x / (x + sat_half)
+    if kind == SaturationType.TANH:
+        sat_half = params["sat_half"]
+        return pt.tanh(x / sat_half)
+    # SaturationType.NONE: identity (no saturation RVs).
+    return x
+
+
 class BayesianMMM:
     """
     Bayesian Marketing Mix Model - Robust Implementation with Prediction Support.
 
     This implementation prioritizes numerical stability:
     - All data is standardized before modeling
-    - Adstock: by default pre-computed at fixed alphas and blended via a learned
-      mix (fast). Set ``ModelConfig.use_parametric_adstock=True`` to instead
-      estimate a continuous in-graph kernel per channel, honoring each
-      ``MediaChannelConfig.adstock`` (geometric, delayed, or Weibull).
-    - Logistic saturation is used (more stable than Hill)
+    - Adstock: by default a continuous in-graph kernel estimated per channel,
+      honoring each ``MediaChannelConfig.adstock`` (geometric, delayed, or
+      Weibull). Set ``ModelConfig.use_parametric_adstock=False`` for the legacy
+      fast path (fixed-alpha bank blended via a learned mix) — the previous
+      default, kept for reproducing older fits; deserialized pre-change models
+      retain their original behavior.
+    - Saturation: logistic (``1 - exp(-lam * x)``) by default -- the most
+      stable choice -- honoring each ``MediaChannelConfig.saturation`` type per
+      channel (logistic, hill, michaelis_menten, tanh, or none)
     - Priors are carefully scaled for standardized data
     - Flexible trend modeling with GP, spline, and piecewise options
     - Support for prediction and counterfactual analysis
@@ -261,12 +319,44 @@ class BayesianMMM:
             for c, ch in enumerate(self.channel_names)
         }
 
+        # === Geo/product/time structure ===
+        # Resolved before any adstock computation: panel observations are a
+        # stacked (period x geography x product) vector, and carryover must run
+        # along each cross-section cell's own time axis — never across cells.
+        self.has_geo = self.panel.coords.has_geo
+        self.has_product = self.panel.coords.has_product
+        self.n_geos = self.panel.coords.n_geos
+        self.n_products = self.panel.coords.n_products
+
+        if self.has_geo:
+            self.geo_names = list(self.panel.coords.geographies)
+            self.geo_idx = self._get_group_indices("geography")
+        else:
+            self.geo_idx = np.zeros(self.n_obs, dtype=np.int32)
+
+        if self.has_product:
+            self.product_names = list(self.panel.coords.products)
+            self.product_idx = self._get_group_indices("product")
+        else:
+            self.product_idx = np.zeros(self.n_obs, dtype=np.int32)
+
+        self.n_periods = self.panel.coords.n_periods
+        self.time_idx = self._get_time_index()
+        self.t_scaled = np.linspace(0, 1, self.n_periods)
+
+        # Flat cross-section cell index (geo x product) for per-cell adstock.
+        self.n_cells = self.n_geos * self.n_products
+        self.cell_idx = (
+            self.geo_idx.astype(np.int64) * self.n_products
+            + self.product_idx.astype(np.int64)
+        ).astype(np.int32)
+
         # === Pre-compute adstocked media at fixed alphas ===
         self._media_max = {}
         self.X_media_adstocked = {}
 
         for alpha in self.adstock_alphas:
-            adstocked = geometric_adstock_2d(self.X_media_raw, alpha)
+            adstocked = self._geometric_adstock_per_cell(self.X_media_raw, alpha)
             for c in range(self.n_channels):
                 key = self.channel_names[c]
                 current_max = adstocked[:, c].max()
@@ -277,7 +367,7 @@ class BayesianMMM:
 
         # Normalize using consistent max values
         for alpha in self.adstock_alphas:
-            adstocked = geometric_adstock_2d(self.X_media_raw, alpha)
+            adstocked = self._geometric_adstock_per_cell(self.X_media_raw, alpha)
             normalized = np.zeros_like(adstocked)
             for c, ch_name in enumerate(self.channel_names):
                 normalized[:, c] = adstocked[:, c] / (self._media_max[ch_name] + 1e-8)
@@ -303,29 +393,6 @@ class BayesianMMM:
         # is the enforcement point for both manually-typed roles (P1-2) and roles
         # the DAG builder infers from the identified adjustment set (P1-1).
         self._control_causal_roles = self._resolve_control_causal_roles()
-
-        # === Geo/product info ===
-        self.has_geo = self.panel.coords.has_geo
-        self.has_product = self.panel.coords.has_product
-        self.n_geos = self.panel.coords.n_geos
-        self.n_products = self.panel.coords.n_products
-
-        if self.has_geo:
-            self.geo_names = list(self.panel.coords.geographies)
-            self.geo_idx = self._get_group_indices("geography")
-        else:
-            self.geo_idx = np.zeros(self.n_obs, dtype=np.int32)
-
-        if self.has_product:
-            self.product_names = list(self.panel.coords.products)
-            self.product_idx = self._get_group_indices("product")
-        else:
-            self.product_idx = np.zeros(self.n_obs, dtype=np.int32)
-
-        # === Time index ===
-        self.n_periods = self.panel.coords.n_periods
-        self.time_idx = self._get_time_index()
-        self.t_scaled = np.linspace(0, 1, self.n_periods)
 
         # === Seasonality features ===
         self._prepare_seasonality()
@@ -386,6 +453,98 @@ class BayesianMMM:
                 sigmas[i] = _CONFOUNDER_PRIOR_SIGMA
         return sigmas
 
+    def _selection_active(self) -> bool:
+        """True when a variable-selection prior should be wired on controls.
+
+        Off by default and whenever there are fewer than two *selectable* (non-
+        confounder) controls -- confounders are never shrunk, so selection needs a
+        non-trivial selectable set to do anything.
+        """
+        method = getattr(self.model_config.control_selection, "method", "none")
+        if self.n_controls == 0 or method == "none":
+            return False
+        n_select = sum(
+            1 for r in self._control_causal_roles if r != CausalControlRole.CONFOUNDER
+        )
+        return n_select >= 2
+
+    def _build_control_betas(self, sigma: "pt.TensorVariable | None"):
+        """Control coefficients, honoring causal roles and optional selection.
+
+        **Off (default):** a single ``Normal('beta_controls', sigma=role_widths)``
+        -- *bit-identical* to the historical model.
+
+        **On** (``ModelConfig.control_selection.method != 'none'``): confounders
+        keep the wide, un-shrunk prior (shrinking a confounder re-opens the
+        back-door), while the remaining precision/irrelevant controls get a
+        horseshoe / spike-slab / LASSO prior so the model *selects* among them.
+        ``beta_controls`` is preserved (name, shape, ``control`` dim) so reporting
+        and validation are unaffected.
+        """
+        if not self._selection_active():
+            return pm.Normal(
+                "beta_controls",
+                mu=0,
+                sigma=self._control_prior_sigmas(),
+                shape=self.n_controls,
+            )
+
+        conf_mask = np.array(
+            [r == CausalControlRole.CONFOUNDER for r in self._control_causal_roles],
+            dtype=bool,
+        )
+        beta = pt.zeros(self.n_controls)
+        if conf_mask.any():
+            conf_idx = np.where(conf_mask)[0]
+            beta_conf = pm.Normal(
+                "beta_controls_confounder",
+                mu=0,
+                sigma=_CONFOUNDER_PRIOR_SIGMA,
+                shape=int(conf_mask.sum()),
+            )
+            beta = pt.set_subtensor(beta[conf_idx], beta_conf)
+        sel_idx = np.where(~conf_mask)[0]
+        beta = pt.set_subtensor(
+            beta[sel_idx], self._selection_prior(int((~conf_mask).sum()), sigma)
+        )
+        return pm.Deterministic("beta_controls", beta, dims="control")
+
+    def _selection_prior(self, n_select: int, sigma: "pt.TensorVariable | None"):
+        """Coefficients for the selectable controls under the configured method.
+
+        Reuses the tested ``mmm_extensions`` priors (lazy import: only when
+        selection is actually enabled). The horseshoe global scale uses the real
+        observation ``sigma`` (Piironen & Vehtari, 2017), so it shrinks correctly
+        on the standardized scale.
+        """
+        cfg = self.model_config.control_selection
+        from ..mmm_extensions.components.variable_selection import (
+            create_bayesian_lasso_prior,
+            create_regularized_horseshoe_prior,
+            create_spike_slab_prior,
+        )
+        from ..mmm_extensions.config import (
+            HorseshoeConfig,
+            LassoConfig,
+            SpikeSlabConfig,
+        )
+
+        name = "beta_controls_select"
+        if cfg.method in ("horseshoe", "finnish_horseshoe"):
+            hc = HorseshoeConfig(
+                expected_nonzero=max(1, min(cfg.expected_nonzero, n_select - 1))
+            )
+            return create_regularized_horseshoe_prior(
+                name, n_select, self.n_obs, sigma, hc
+            ).beta
+        if cfg.method == "spike_slab":
+            return create_spike_slab_prior(name, n_select, SpikeSlabConfig()).beta
+        if cfg.method == "lasso":
+            return create_bayesian_lasso_prior(
+                name, n_select, LassoConfig(regularization=cfg.regularization)
+            ).beta
+        raise ValueError(f"Unknown control_selection.method: {cfg.method!r}")
+
     def _get_group_indices(self, level_name: str) -> np.ndarray:
         """Get group indices for a hierarchical level."""
         cols = self.mff_config.columns
@@ -413,16 +572,52 @@ class BayesianMMM:
         return np.arange(self.n_obs, dtype=np.int32)
 
     def _prepare_seasonality(self):
-        """Prepare Fourier features for seasonality."""
+        """Prepare Fourier features for seasonality.
+
+        Periods are derived from the data frequency (MFFConfig.frequency), so
+        yearly/monthly/weekly components mean the same thing on weekly and
+        daily data. Components that the sampling frequency cannot represent
+        (e.g. weekly seasonality in weekly data) are skipped with a warning —
+        previously monthly/weekly were silently ignored for ALL data.
+        """
         self.seasonality_features = {}
         t = np.arange(self.n_periods)
 
-        if self.seasonality_config.yearly and self.seasonality_config.yearly > 0:
-            period = 52  # Weekly data
-            order = self.seasonality_config.yearly
+        freq = getattr(self.mff_config, "frequency", "W") or "W"
+        periods_by_freq: dict[str, dict[str, float]] = {
+            "W": {"yearly": 52.0, "monthly": 52.0 / 12.0},
+            "D": {"yearly": 365.25, "monthly": 365.25 / 12.0, "weekly": 7.0},
+            "M": {"yearly": 12.0},
+        }
+        component_periods = periods_by_freq.get(freq, periods_by_freq["W"])
+
+        for component in ("yearly", "monthly", "weekly"):
+            order = getattr(self.seasonality_config, component, None)
+            if not order or order <= 0:
+                continue
+            period = component_periods.get(component)
+            if period is None:
+                warnings.warn(
+                    f"{component} seasonality cannot be represented at data "
+                    f"frequency '{freq}'; skipping this component.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                continue
+            # Harmonics above the Nyquist limit (period/2 observations) alias
+            max_order = max(1, int(period / 2))
+            if order > max_order:
+                warnings.warn(
+                    f"{component} seasonality order {order} exceeds the "
+                    f"max resolvable order {max_order} for period {period:.2f} "
+                    f"at frequency '{freq}'; clamping to {max_order}.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                order = max_order
             features = create_fourier_features(t, period, order)
             if features.shape[1] > 0:
-                self.seasonality_features["yearly"] = features
+                self.seasonality_features[component] = features
 
     def _prepare_trend(self):
         """Prepare trend features based on configuration."""
@@ -660,6 +855,23 @@ class BayesianMMM:
 
         return trend_unique[time_idx]
 
+    def _geometric_adstock_per_cell(self, X: np.ndarray, alpha: float) -> np.ndarray:
+        """Geometric adstock applied within each geo/product cell separately.
+
+        For national data (one cell) this is exactly
+        :func:`geometric_adstock_2d`. For panels it convolves each
+        cross-section cell's own time series, so carryover never bleeds from
+        one geography/product into the rows of another.
+        """
+        if self.n_cells <= 1:
+            return geometric_adstock_2d(X, alpha)
+        out = np.zeros_like(X, dtype=np.float64)
+        for k in range(self.n_cells):
+            rows = np.flatnonzero(self.cell_idx == k)
+            rows = rows[np.argsort(self.time_idx[rows], kind="stable")]
+            out[rows] = geometric_adstock_2d(X[rows], alpha)
+        return out
+
     def _prepare_media_data_for_model(
         self, X_media_raw: np.ndarray | None = None
     ) -> tuple[np.ndarray, np.ndarray]:
@@ -670,8 +882,8 @@ class BayesianMMM:
         alpha_low = self.adstock_alphas[0]
         alpha_high = self.adstock_alphas[-1]
 
-        adstock_low = geometric_adstock_2d(X_media_raw, alpha_low)
-        adstock_high = geometric_adstock_2d(X_media_raw, alpha_high)
+        adstock_low = self._geometric_adstock_per_cell(X_media_raw, alpha_low)
+        adstock_high = self._geometric_adstock_per_cell(X_media_raw, alpha_high)
 
         for c, ch_name in enumerate(self.channel_names):
             max_val = self._media_max[ch_name] + 1e-8
@@ -705,6 +917,81 @@ class BayesianMMM:
             return media_cfg.adstock
         return AdstockConfig.geometric()
 
+    def _get_saturation_config(self, channel_name: str) -> SaturationConfig:
+        """Resolve the SaturationConfig for a channel, defaulting to logistic."""
+        media_cfg = self.mff_config.get_media_config(channel_name)
+        if media_cfg is not None and media_cfg.saturation is not None:
+            return media_cfg.saturation
+        return SaturationConfig.logistic()
+
+    def _build_channel_saturation(
+        self, channel_name: str
+    ) -> tuple[SaturationType, dict[str, Any]]:
+        """Create the saturation RVs for one channel per its SaturationConfig.
+
+        Must be called inside the ``pm.Model`` context. Returns the channel's
+        saturation kind plus a params dict consumed by
+        :func:`_apply_saturation_pt`. The logistic default reproduces the
+        historical graph exactly (``sat_lam_<ch> ~ Exponential(lam=0.5)``), so
+        default configs stay bit-identical to models built before saturation
+        types were honored.
+        """
+        cfg = self._get_saturation_config(channel_name)
+        kind = cfg.type
+        params: dict[str, Any] = {}
+
+        if kind == SaturationType.LOGISTIC:
+            params["sat_lam"] = _sample_from_prior_config(
+                f"sat_lam_{channel_name}",
+                cfg.lam_prior,
+                lambda: pm.Exponential(f"sat_lam_{channel_name}", lam=0.5),
+            )
+        elif kind == SaturationType.HILL:
+            # Half-saturation point of the adstocked normalized (~[0, 1])
+            # spend; Beta(2, 2) centers it well inside the data's support.
+            params["sat_half"] = _sample_from_prior_config(
+                f"sat_half_{channel_name}",
+                cfg.kappa_prior,
+                lambda: pm.Beta(f"sat_half_{channel_name}", alpha=2, beta=2),
+            )
+            params["sat_slope"] = _sample_from_prior_config(
+                f"sat_slope_{channel_name}",
+                cfg.slope_prior,
+                lambda: pm.HalfNormal(f"sat_slope_{channel_name}", sigma=1.5),
+            )
+        elif kind in (SaturationType.MICHAELIS_MENTEN, SaturationType.TANH):
+            params["sat_half"] = _sample_from_prior_config(
+                f"sat_half_{channel_name}",
+                cfg.kappa_prior,
+                lambda: pm.Beta(f"sat_half_{channel_name}", alpha=2, beta=2),
+            )
+        # SaturationType.NONE: no RVs.
+        return kind, params
+
+    def _apply_adstock_kernel_pt(
+        self, x: "pt.TensorVariable", kind: str, l_max: int, normalize: bool, **params
+    ) -> "pt.TensorVariable":
+        """Apply an in-graph adstock kernel, per-cell for panel data.
+
+        National data (one geo/product cell) keeps the historical 1-D
+        convolution — graphs stay bit-identical to pre-panel-fix models. Panel
+        data routes through the panel-aware convolution so each cell carries
+        over only its own spend history.
+        """
+        if self.n_cells > 1:
+            return parametric_adstock_panel_pt(
+                x,
+                kind,
+                l_max,
+                time_idx=self.time_idx,
+                cell_idx=self.cell_idx,
+                n_periods=self.n_periods,
+                n_cells=self.n_cells,
+                normalize=normalize,
+                **params,
+            )
+        return parametric_adstock_pt(x, kind, l_max, normalize=normalize, **params)
+
     def _channel_adstock_apply(
         self, channel_name: str
     ) -> "Callable[[pt.TensorVariable], pt.TensorVariable]":
@@ -730,8 +1017,8 @@ class BayesianMMM:
                 cfg.alpha_prior,
                 lambda: pm.Beta(f"adstock_alpha_{channel_name}", alpha=2, beta=2),
             )
-            return lambda x: parametric_adstock_pt(
-                x, "geometric", l_max, alpha=alpha, normalize=normalize
+            return lambda x: self._apply_adstock_kernel_pt(
+                x, "geometric", l_max, normalize, alpha=alpha
             )
 
         if kind == "delayed":
@@ -745,8 +1032,8 @@ class BayesianMMM:
                 cfg.theta_prior,
                 lambda: pm.HalfNormal(f"adstock_theta_{channel_name}", sigma=2.0),
             )
-            return lambda x: parametric_adstock_pt(
-                x, "delayed", l_max, alpha=alpha, theta=theta, normalize=normalize
+            return lambda x: self._apply_adstock_kernel_pt(
+                x, "delayed", l_max, normalize, alpha=alpha, theta=theta
             )
 
         # weibull
@@ -755,13 +1042,19 @@ class BayesianMMM:
             cfg.shape_prior,
             lambda: pm.Gamma(f"adstock_shape_{channel_name}", alpha=2.0, beta=1.0),
         )
+        # Fallback scale prior follows AdstockConfig.weibull()'s l_max scaling
+        # rule (mean max(2, (l_max - 9) / 2)): a fixed mean-2 prior puts no mass
+        # where long-window kernels live and causes divergence storms.
+        scale_mean = max(2.0, (l_max - 9) / 2)
         scale = _sample_from_prior_config(
             f"adstock_scale_{channel_name}",
             cfg.scale_prior,
-            lambda: pm.Gamma(f"adstock_scale_{channel_name}", alpha=2.0, beta=1.0),
+            lambda: pm.Gamma(
+                f"adstock_scale_{channel_name}", alpha=2.0, beta=2.0 / scale_mean
+            ),
         )
-        return lambda x: parametric_adstock_pt(
-            x, "weibull", l_max, shape=shape, scale=scale, normalize=normalize
+        return lambda x: self._apply_adstock_kernel_pt(
+            x, "weibull", l_max, normalize, shape=shape, scale=scale
         )
 
     def _build_channel_adstock(
@@ -877,8 +1170,13 @@ class BayesianMMM:
             else:
                 n_obs_data = X_media_low_data.shape[0]
 
-            # INTERCEPT
-            intercept = pm.Normal("intercept", mu=0, sigma=0.5)
+            # INTERCEPT (getattr defaults keep configs pickled before these
+            # fields existed loadable)
+            intercept = pm.Normal(
+                "intercept",
+                mu=getattr(self.model_config, "intercept_prior_mu", 0.0),
+                sigma=getattr(self.model_config, "intercept_prior_sigma", 0.5),
+            )
             pm.Deterministic(
                 "intercept_component", intercept + pt.zeros(n_obs_data), dims="obs"
             )
@@ -896,7 +1194,7 @@ class BayesianMMM:
                 season_coef = pm.Normal(
                     f"season_{name}",
                     mu=0,
-                    sigma=0.3,
+                    sigma=self.seasonality_config.prior_sigma_for(name),
                     shape=n_features,
                     dims=f"{name}_fourier",
                 )
@@ -955,9 +1253,12 @@ class BayesianMMM:
                     adstock_mix = pm.Beta(f"adstock_{channel_name}", alpha=2, beta=2)
                     x_adstocked = (1 - adstock_mix) * x_low + adstock_mix * x_high
 
-                sat_lam = pm.Exponential(f"sat_lam_{channel_name}", lam=0.5)
-                exponent = pt.clip(-sat_lam * x_adstocked, -20, 0)
-                x_saturated = 1 - pt.exp(exponent)
+                # Saturation: per the channel's SaturationConfig (logistic by
+                # default, matching historical behavior bit-for-bit). The same
+                # helper is reused for perturbed-spend re-evaluations so the
+                # marginal/counterfactual estimands cannot drift.
+                sat_kind, sat_params = self._build_channel_saturation(channel_name)
+                x_saturated = _apply_saturation_pt(x_adstocked, sat_kind, sat_params)
 
                 # Coefficient (effect size). When an experiment-calibrated
                 # ``roi_prior`` is configured for this channel (e.g. derived from
@@ -978,7 +1279,10 @@ class BayesianMMM:
                 channel_handles[channel_name] = {
                     "index": c,
                     "beta": beta,
-                    "sat_lam": sat_lam,
+                    "sat_kind": sat_kind,
+                    "sat_params": sat_params,
+                    # Back-compat alias (None unless logistic).
+                    "sat_lam": sat_params.get("sat_lam"),
                     "channel_contrib": channel_contrib,  # standardized, per-obs
                     "adstock_apply": adstock_apply,  # parametric path only
                     "x_input": x_input,  # normalized raw series (parametric)
@@ -1005,19 +1309,19 @@ class BayesianMMM:
                 self._add_experiment_likelihoods(channel_handles)
 
             # CONTROL EFFECTS
-            # A single ``beta_controls`` vector (kept for reporting/validation
-            # which read it by name) but with a per-control prior width: a
-            # confounder gets a wide, un-shrunk prior so it is not biased toward
-            # zero, while precision controls keep the historical Normal(0, 0.5).
-            # Mediators/colliders were already refused in ``_prepare_data``.
+            # ``beta_controls`` (kept for reporting/validation which read it by
+            # name): a confounder gets a wide, un-shrunk prior so it is not biased
+            # toward zero, while precision controls keep the historical
+            # Normal(0, 0.5). When ``control_selection`` is enabled (off by
+            # default), the non-confounder controls instead get a horseshoe /
+            # spike-slab / LASSO prior so the model selects among them -- the
+            # horseshoe needs the observation ``sigma`` for its global scale, so
+            # create it here on the selection path (the off path is unchanged).
+            sigma = (
+                pm.HalfNormal("sigma", sigma=0.5) if self._selection_active() else None
+            )
             if self.n_controls > 0:
-                control_sigmas = self._control_prior_sigmas()
-                beta_controls = pm.Normal(
-                    "beta_controls",
-                    mu=0,
-                    sigma=control_sigmas,
-                    shape=self.n_controls,
-                )
+                beta_controls = self._build_control_betas(sigma)
                 control_contribution = pt.dot(X_controls_data, beta_controls)
                 # Per-control, per-obs contribution (column c = X[:, c] * beta_c).
                 pm.Deterministic(
@@ -1040,7 +1344,10 @@ class BayesianMMM:
                 + control_contribution
             )
 
-            sigma = pm.HalfNormal("sigma", sigma=0.5)
+            # Off path: create sigma here exactly as before (bit-identical). On
+            # the selection path it was already created above for the horseshoe.
+            if sigma is None:
+                sigma = pm.HalfNormal("sigma", sigma=0.5)
             y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
             pm.Deterministic(
                 "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
@@ -1161,14 +1468,13 @@ class BayesianMMM:
 
         Re-evaluates the channel's adstock+saturation at spend scaled by
         ``(1 + lift)`` *inside the window only*, reusing the channel's existing
-        ``beta``, ``sat_lam`` and adstock RVs so the marginal effect is a genuine
+        ``beta``, saturation and adstock RVs so the marginal effect is a genuine
         function of the fitted parameters. Adstock is linear, so scaling the
         normalized input is exact. The sum is taken over the same window mask the
         observed contribution uses (carryover landing after the window is not
         counted -- matching ``compute_marginal_contributions``).
         """
         ch_idx = handle["index"]
-        sat_lam = handle["sat_lam"]
         beta = handle["beta"]
 
         if self.use_parametric_adstock:
@@ -1196,7 +1502,9 @@ class BayesianMMM:
                 pt.as_tensor_variable(pert_high)
             )
 
-        sat_pert = 1 - pt.exp(pt.clip(-sat_lam * a_pert, -20, 0))
+        sat_pert = _apply_saturation_pt(
+            a_pert, handle["sat_kind"], handle["sat_params"]
+        )
         contrib_pert = beta * sat_pert
         return contrib_pert[mask_idx].sum()
 
@@ -1817,6 +2125,57 @@ class BayesianMMM:
             "baseline_prediction": baseline_pred.y_pred_mean,
             "scenario_prediction": scenario_pred.y_pred_mean,
         }
+
+    def sample_channel_contributions(
+        self,
+        X_media: np.ndarray | None = None,
+        max_draws: int | None = None,
+        random_seed: int | None = None,
+    ) -> np.ndarray:
+        """Posterior draws of per-channel contributions under a media scenario.
+
+        Evaluates the ``channel_contributions`` deterministic with ``X_media``
+        swapped in (training data when ``None``), returning ORIGINAL-scale
+        contributions of shape ``(n_draws, n_obs, n_channels)``. Because the
+        model is additive in channels, a scenario that changes every channel at
+        once still yields each channel's own response — this is what makes
+        budget-response curves cheap (one pass per spend level, not per
+        channel × level).
+
+        ``max_draws`` thins the trace evenly to at most that many draws per
+        chain-flattened posterior — response-curve grids don't need the full
+        posterior.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+
+        trace = self._trace
+        if max_draws is not None:
+            n_chains = trace.posterior.sizes["chain"]
+            per_chain = max(1, int(np.ceil(max_draws / n_chains)))
+            step = max(1, trace.posterior.sizes["draw"] // per_chain)
+            trace = trace.sel(draw=slice(None, None, step))
+
+        with self.model:
+            if self.use_parametric_adstock:
+                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
+            else:
+                X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(
+                    X_media
+                )
+                pm.set_data(
+                    {"X_media_low": X_adstock_low, "X_media_high": X_adstock_high}
+                )
+            pp = pm.sample_posterior_predictive(
+                trace,
+                var_names=["channel_contributions"],
+                random_seed=random_seed,
+                progressbar=False,
+            )
+
+        contrib = pp.posterior_predictive["channel_contributions"].values
+        contrib = contrib.reshape(-1, *contrib.shape[2:])  # (draws, obs, channel)
+        return contrib * self.y_std  # contributions scale by y_std (no mean shift)
 
     def sample_prior_predictive(
         self, samples: int = 500, random_seed: int | None = None

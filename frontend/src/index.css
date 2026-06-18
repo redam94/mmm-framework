@@ -1,9 +1,10 @@
 @import "tailwindcss";
+@import "./theme/tokens.css";
 
 /* Custom base styles */
 @layer base {
   :root {
-    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.5;
     font-weight: 400;
     font-synthesis: none;
@@ -13,7 +14,7 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-cream-50 text-ink-900;
     margin: 0;
     min-height: 100vh;
   }
@@ -27,9 +28,9 @@
 
 /* Custom component styles */
 @layer components {
-  /* Card styles for analytics dashboard */
+  /* Card styles for analytics surfaces */
   .analytics-card {
-    @apply bg-white rounded-lg shadow-md border border-gray-200 p-6;
+    @apply bg-white rounded-lg shadow-sm border border-line-200 p-6;
   }
 
   /* Status badge styles */
@@ -38,23 +39,23 @@
   }
 
   .status-badge-success {
-    @apply bg-green-100 text-green-800;
+    @apply bg-sage-100 text-sage-800;
   }
 
   .status-badge-warning {
-    @apply bg-yellow-100 text-yellow-800;
+    @apply bg-gold-100 text-gold-700;
   }
 
   .status-badge-error {
-    @apply bg-red-100 text-red-800;
+    @apply bg-rust-100 text-rust-700;
   }
 
   .status-badge-info {
-    @apply bg-blue-100 text-blue-800;
+    @apply bg-steel-100 text-steel-700;
   }
 
   .status-badge-pending {
-    @apply bg-gray-100 text-gray-800;
+    @apply bg-cream-200 text-ink-600;
   }
 
   /* Workflow stepper styles */
@@ -63,15 +64,15 @@
   }
 
   .workflow-step-active {
-    @apply bg-blue-100 text-blue-700;
+    @apply bg-sage-100 text-sage-800;
   }
 
   .workflow-step-complete {
-    @apply text-green-600;
+    @apply text-sage-700;
   }
 
   .workflow-step-pending {
-    @apply text-gray-400;
+    @apply text-ink-300;
   }
 }
 
@@ -80,7 +81,7 @@
   /* Smooth scrollbar */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #d1d5db transparent;
+    scrollbar-color: #d8d4c5 transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -93,7 +94,7 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #d1d5db;
+    background-color: #d8d4c5;
     border-radius: 3px;
   }
 
@@ -105,5 +106,12 @@
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Tabular, mono numerals — every metric, hash, and date */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 }

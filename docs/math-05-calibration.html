@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math 05: Calibration | MMM Framework</title>
+    <meta name="description" content="Identifiability and experiment calibration in the MMM Framework: the equifinality trap, the design-factor algebra that turns a lift test into a prior, the in-graph likelihood route, and the measured Aurora demo where calibration pulls Search ROAS from 1.04 toward its true 0.66.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/math-05-calibration.html">
+    <meta property="og:title" content="Math 05: Calibration | MMM Framework">
+    <meta property="og:description" content="Why observational data alone cannot pin down per-channel ROI, and the exact algebra — design factor, Gamma moment-matching, in-graph estimand likelihoods — that folds a randomized experiment in. Measured: Search ROAS 1.04 → 0.64 against a truth of 0.66.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/math-05-calibration.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the notebook-guide series.
+           Guide pages copy this block so the series stays visually coherent.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row input[type="range"] {
+            flex: 1;
+            min-width: 160px;
+            max-width: 340px;
+            accent-color: var(--color-primary);
+        }
+        .controls-row .readout {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+            white-space: nowrap;
+        }
+        .controls-row .toggle-btn {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .controls-row .toggle-btn:hover { border-color: var(--color-primary); }
+        .controls-row .toggle-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .eq-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1.25rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+
+        .route-table td, .route-table th { vertical-align: top; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#trap">The equifinality trap</a></li>
+                <li><a href="#model">The model being calibrated</a></li>
+                <li><a href="#route1">Route 1: the prior route</a></li>
+                <li><a href="#route2">Route 2: the likelihood route</a></li>
+                <li><a href="#demo">Measured: Aurora&rsquo;s Search channel</a></li>
+                <li><a href="#pull">How strong must the test be?</a></li>
+                <li><a href="#doctrine">Doctrine: surgical calibration</a></li>
+            </ul>
+
+            <h3>The Math Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="demos.html">All demos &amp; reports</a></li>
+                <li><a href="math-00-overview.html">00 · The Generative Model</a></li>
+                <li><a href="math-01-adstock.html">01 · Adstock</a></li>
+                <li><a href="math-02-saturation.html">02 · Saturation</a></li>
+                <li><a href="math-03-seasonality-trend.html">03 · Seasonality &amp; Trend</a></li>
+                <li><a href="math-04-bayesian-model.html">04 · The Bayesian Model</a></li>
+                <li><a href="math-05-calibration.html" class="active">05 · Calibration</a></li>
+                <li><a href="math-06-extensions.html">06 · Extensions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Identifiability &amp; Experiment Calibration</h1>
+            <p class="lead">
+                An observational MMM cannot pin down per-channel ROI on its own: carryover decay,
+                saturation strength, and the coefficient \(\beta_c\) all fight to explain the same
+                wiggle in the data, so very different parameter triples fit almost identically.
+                This page derives the exact algebra <code>mmm_framework</code> uses to break that tie
+                with a randomized experiment — the <strong>prior route</strong> (design factor
+                \(K_c\) + Gamma moment-matching) and the <strong>likelihood route</strong> (an
+                in-graph estimand term) — and shows the measured result: calibration pulls
+                Aurora&rsquo;s Search ROAS from an overstated <strong>1.04</strong> down to
+                <strong>0.64</strong>, against a known truth of <strong>0.66</strong>. It mirrors
+                <code>nbs/math_05_calibration.ipynb</code>, where every identity below is
+                assert-encoded against the framework&rsquo;s real calibration code.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.951</div>
+                    <div class="stat-label">shape correlation between two regimes whose decay rates differ by 0.20</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">1.04</div>
+                    <div class="stat-label">uncalibrated Search ROAS — demand-controlled, converged, and 1.6&times; the truth</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.64</div>
+                    <div class="stat-label">calibrated Search ROAS after one in-graph lift test (truth: 0.66)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.024</div>
+                    <div class="stat-label">distance to truth after calibration, down from 0.376</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> comfort with calculus &amp; probability; the
+                    <a href="workshop-00-thinking-in-distributions.html">Workshop series</a> recommended first.
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~30–45 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why an observational MMM cannot pin down per-channel ROI on its own — the equifinality trap, where different (adstock, saturation, \(\beta_c\)) triples fit near-identically but imply opposite budget advice.</li>
+                    <li>The exact algebra of both calibration routes: the prior route (per-draw design factor \(K_c\) + Gamma moment-matching) and the likelihood route (an in-graph estimand term that updates all three pieces jointly).</li>
+                    <li>The doctrine: experiments calibrate what structure cannot identify — and only what they tested; untested channels keep their bias.</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_05_calibration.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math_05_calibration.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="trap">1 · The equifinality trap</h2>
+            <p>
+                A channel&rsquo;s modeled contribution is the <em>composition</em> of three learned pieces:
+            </p>
+            <div class="eq-box">
+                \[ \text{contribution}_{c,t} \;=\; \beta_c \cdot \mathrm{sat}_c\!\big(\mathrm{adstock}_c(x_c)_t\big). \]
+            </div>
+            <p>
+                A <em>long-carryover + weak-saturation</em> setting can be made to look almost exactly
+                like a <em>short-carryover + strong-saturation</em> setting, with \(\beta_c\) absorbing
+                whatever scale difference remains. With only observational data the likelihood is nearly
+                flat along that \((\text{decay},\,\text{saturation},\,\beta)\) ridge — this is
+                <strong>equifinality</strong>, and it is the identifiability problem stated plainly:
+            </p>
+            <div class="eq-box">
+                \[ \textbf{Observational data alone only weakly identifies per-channel ROI.} \]
+            </div>
+            <p>
+                The notebook demonstrates it with the framework&rsquo;s own transforms. Regime
+                <strong>A</strong> uses geometric decay \(\alpha = 0.70\) with weak saturation
+                \(\lambda = 4\); regime <strong>B</strong> uses \(\alpha = 0.50\) with strong
+                saturation \(\lambda = 8\). Run on a bursty spend plan, the two peak-normalized
+                response shapes correlate at <strong>0.951</strong> despite a 0.20 gap in decay rate
+                — no realistic noise level separates them.
+            </p>
+
+            <div class="chart-container" id="eqFitChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser</strong> — the same transform math as the
+                notebook (normalized geometric FIR adstock, \(l_{\max}=24\), then
+                \(\mathrm{sat}(u) = 1 - e^{-\lambda u}\)), on a seeded recreation of the bursty
+                spend plan. The two lines are genuinely different (decay, saturation) regimes; the
+                live correlation is printed on the chart. The baked notebook measures
+                <strong>0.951</strong> for its seeded plan and asserts it exceeds 0.9.
+            </p>
+
+            <p>
+                Indistinguishable in-sample, the two regimes are <em>not</em> interchangeable for
+                decisions. Scale the same spend plan by a factor \(k\) and the weak-saturation regime
+                keeps growing while the strong-saturation regime plateaus — same fit, different
+                attribution of headroom, opposite budget advice. Drag the slider:
+            </p>
+
+            <div class="controls-row">
+                <label for="kSlider">Spend multiplier \(k\):</label>
+                <input type="range" id="kSlider" min="25" max="300" value="200" step="5">
+                <span class="readout" id="kReadout"></span>
+            </div>
+            <div class="chart-container short" id="eqDivergeChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser</strong> — total window response
+                \(R(k) = \sum_t \mathrm{sat}\big(k\cdot \mathrm{adstock}(x)_t\big)\) for each regime,
+                normalized so both equal 1 at the observed plan (\(k=1\)), where the fits agree.
+                Away from \(k=1\) they diverge — exactly the question (&ldquo;what happens if we
+                spend more?&rdquo;) the model exists to answer. Adstock is linear in spend, so
+                \(\mathrm{adstock}(kx) = k\,\mathrm{adstock}(x)\) and the whole curve is one
+                saturation evaluation.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Why controls are not enough</h4>
+                <p>
+                    Adjusting for confounders (Aurora&rsquo;s demand proxy) helps, but it is
+                    <strong>not sufficient</strong> — a channel whose spend chases latent demand
+                    still looks too effective, and the equifinality ridge stays flat. The framework&rsquo;s
+                    thesis, made concrete below: <strong>a randomized experiment breaks the trade-off</strong>,
+                    because it measures an effect the likelihood cannot fake. The stress series
+                    pressure-tests this claim in
+                    <a href="stress-03-confounding-selection.html">stress&nbsp;03</a> (+110% confounded
+                    Search, all diagnostics green) and <a href="stress-05-gauntlet.html">stress&nbsp;05</a>
+                    (Search ROAS 5.59 → 0.65 against a truth of 0.66).
+                </p>
+            </div>
+
+            <h2 id="model">2 · The model being calibrated</h2>
+            <p>
+                Calibration is only meaningful relative to a specific generative model
+                (derived in full in <a href="math-00-overview.html">math&nbsp;00</a> and fitted in
+                <a href="math-04-bayesian-model.html">math&nbsp;04</a>). The KPI is standardized,
+                \(\tilde y_t = (y_t - \bar y)/s_y\), and its mean is a sum of additive blocks:
+            </p>
+            <div class="eq-box">
+                \[ \mu_t = \underbrace{\text{intercept} + \text{trend}_t + \text{seas}_t + \text{controls}_t}_{\text{baseline}}
+                   \;+\; \sum_c \beta_c\, \mathrm{sat}_c\!\big(\mathrm{adstock}_c(x_{c,t})\big),
+                   \qquad \tilde y_t \sim \mathcal N(\mu_t, \sigma). \]
+            </div>
+            <p>
+                Saturation is the exponential form \(\mathrm{sat}(u) = 1 - e^{-\lambda u}\)
+                (<a href="math-02-saturation.html">math&nbsp;02</a>); default adstock (since
+                June 2026) is a parametric in-graph geometric kernel with learned decay
+                \(\alpha_c \sim \mathrm{Beta}(1,3)\) — the legacy path blends two fixed-\(\alpha\)
+                kernels with a \(\mathrm{Beta}(2,2)\) mix weight
+                (<a href="math-01-adstock.html">math&nbsp;01</a>); the coefficient prior is
+                \(\beta_c \sim \mathrm{Gamma}(\mu{=}1.5,\ \sigma{=}1.0)\) — positive by construction.
+                Because the model is additive and \(\mathrm{sat}(0) = 0\), the decomposition
+                \(y \approx \text{baseline} + \sum_c \text{contribution}_c\) is exact in the mean,
+                and a channel&rsquo;s contribution is exactly what zeroing its spend would remove.
+                That one fact powers everything below.
+            </p>
+
+            <h2 id="route1">3 · Route 1 — the prior route (<code>ExperimentCalibrator</code>)</h2>
+            <p>
+                The two-stage recipe: <strong>fit</strong> with default priors → <strong>derive</strong>
+                an experiment-anchored prior on the tested channel&rsquo;s \(\beta_c\) →
+                <strong>refit</strong>. The derivation rests on one clean piece of linear algebra.
+            </p>
+
+            <h3>The key linearity, and the design factor \(K_c\)</h3>
+            <p>
+                Over an experiment window \(P\), the channel&rsquo;s counterfactual contribution is
+            </p>
+            <div class="eq-box">
+                \[ \text{contribution}_c \;=\; \beta_c \cdot
+                   \underbrace{s_y \sum_{t \in P} \mathrm{sat}_c\!\big(\mathrm{adstock}_c(x_{c,t})\big)}_{\textstyle K_c
+                   \ \text{— contains no } \beta_c}. \]
+            </div>
+            <p>
+                The bracket has no \(\beta_c\) in it, so <strong>contribution is linear in
+                \(\beta_c\)</strong>: \(\text{contribution}_c = \beta_c K_c\). A full-holdout lift
+                test measures that contribution directly as \(\widehat L \pm \mathrm{se}_L\), and the
+                inversion is one division:
+            </p>
+            <div class="eq-box">
+                \[ \boxed{\ \beta_c^{\text{target}} = \frac{\widehat L}{K_c}, \qquad
+                   \beta_c^{\text{se}} = \frac{\mathrm{se}_L}{K_c} \ }
+                   \qquad\Longleftrightarrow\qquad
+                   \beta_c^{\text{target}} \cdot K_c \;=\; \widehat L . \]
+            </div>
+            <p>
+                The right-hand identity is <em>exact algebra, not MCMC</em> — the notebook asserts
+                \(\beta^{\text{target}}\cdot K_c = \widehat L\) to <code>atol=1e-12</code>. With the
+                measured demo numbers: a lift of \(1.95 \pm 0.30\) and \(K_c = 1.3000\) give
+                \(\beta^{\text{target}} = 1.5000\) and \(\beta^{\text{se}} = 0.2308\), and
+                \(1.5000 \times 1.3000 = 1.95\) exactly.
+            </p>
+
+            <h3>Why \(K_c\) is a per-draw average, not a ratio of means</h3>
+            <p>
+                \(K_c\) depends on the saturation/adstock <em>shape</em>, which is itself uncertain and
+                — by equifinality — <strong>negatively correlated with \(\beta_c\)</strong> across
+                posterior draws (a draw with a larger coefficient tends to carry stronger saturation,
+                hence a smaller per-unit-\(\beta\) contribution). The framework&rsquo;s
+                <code>design_factor(...)</code> therefore computes the ratio <em>per draw</em> and
+                averages:
+            </p>
+            <div class="eq-box">
+                \[ K_c \;=\; \mathbb E_{\text{posterior}}\!\left[\frac{\text{contribution}_c^{(s)}}{\beta_c^{(s)}}\right]
+                   \quad (\text{average of ratios}),
+                   \qquad\text{not}\qquad
+                   \frac{\mathbb E[\text{contribution}]}{\mathbb E[\beta]}
+                   \quad (\text{ratio of averages}). \]
+            </div>
+            <p>
+                In the notebook&rsquo;s synthetic posterior with \(\mathrm{corr}(\beta, K) = -0.916\),
+                the per-draw estimator recovers the marginal mean exactly
+                (\(K_c = 1.3000\)) while the ratio-of-means shortcut drifts to
+                <strong>0.9959</strong> — a 0.304 gap, 23% of the answer, leaked in entirely by the
+                \(\beta\)–shape covariance. That gap is the whole reason <code>design_factor</code>
+                exists.
+            </p>
+
+            <h3>Pooling several tests: inverse-variance meta-analysis</h3>
+            <p>
+                A channel tested more than once yields several
+                \((\beta^{\text{target}}_i,\ \beta^{\text{se}}_i)\) pairs.
+                <code>combine_inverse_variance</code> pools them with fixed-effect weights
+                \(w_i = 1/\mathrm{se}_i^2\):
+            </p>
+            <div class="eq-box">
+                \[ \bar\beta = \frac{\sum_i w_i \beta_i}{\sum_i w_i}, \qquad
+                   \mathrm{sd}(\bar\beta) = \sqrt{\frac{1}{\sum_i w_i}}
+                   \quad\Rightarrow\quad \text{combined precision} = \textstyle\sum_i w_i . \]
+            </div>
+            <p>
+                Measured: targets \([1.50,\ 1.62,\ 1.40]\) with ses \([0.30,\ 0.12,\ 0.50]\) pool to
+                \(\bar\beta = 1.5938,\ \mathrm{sd} = 0.1087\). The combined precision
+                \(84.56\) equals the sum of the individual precisions, the pooled sd beats the
+                tightest single test (0.1087 &lt; 0.12), and the estimate sits closest to the most
+                precise test — all assert-encoded.
+            </p>
+
+            <h3>Rendering the anchor as a Gamma prior (moment matching)</h3>
+            <p>
+                The coefficient prior must stay a positive \(\mathrm{Gamma}\), so
+                <code>mean_sd_to_gamma(m, s)</code> converts the pooled \((m, s)\) by moment
+                matching. For \(\mathrm{Gamma}(\alpha,\ \text{rate})\) the mean is
+                \(\alpha/\text{rate}\) and the variance \(\alpha/\text{rate}^2\); solving:
+            </p>
+            <div class="eq-box">
+                \[ \boxed{\ \alpha = \left(\frac{m}{s}\right)^{2}, \qquad \text{rate} = \frac{m}{s^{2}} \ } \]
+            </div>
+            <p>
+                For the pooled target this gives \(\mathrm{Gamma}(\alpha = 214.79,\ \text{rate} = 134.77)\),
+                which round-trips to \((1.5938,\ 0.1087)\) to nine decimals. The full pipeline,
+                <code>derive_channel_prior</code>, also drops non-positive lifts before pooling: fed
+                two usable tests plus one negative-lift test, it returns
+                \(\beta^{\text{target}} = 1.5848,\ \beta^{\text{sigma}} = 0.1187\)
+                (a \(\mathrm{Gamma}(178.18,\ 112.43)\) ROI prior) and notes the excluded test.
+            </p>
+
+            <div class="chart-container" id="priorChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser</strong> — exact Gamma densities at the
+                measured parameters. The default prior \(\mathrm{Gamma}(\mu{=}1.5, \sigma{=}1.0)\)
+                (i.e. \(\alpha = 2.25\), rate \(=1.5\)) lets \(\beta\) roam; one test
+                (\(m = 1.5000,\ s = 0.2308\)) relocates and tightens it; pooling three tests
+                (\(\alpha = 214.79\), rate \(= 134.77\)) pins it. The experiment doesn&rsquo;t just
+                move the prior — it adds the information the likelihood ridge couldn&rsquo;t supply.
+            </p>
+
+            <h2 id="route2">4 · Route 2 — the likelihood route (<code>ExperimentMeasurement</code>)</h2>
+            <p>
+                Route 1 inverts the experiment <em>with the saturation/adstock shape held fixed</em>
+                at the first-stage posterior — it can only encode a contribution, and its derived
+                prior is marginally tighter than a fully joint treatment would justify. Route 2
+                instead folds the experiment in as an extra likelihood term <em>inside the PyMC
+                graph</em>:
+            </p>
+            <div class="eq-box">
+                \[ \text{measured\_value} \;\sim\; \mathcal N\!\Big(\, \text{estimand}(\theta),\ \ \mathrm{se} \,\Big), \]
+            </div>
+            <p>
+                where \(\theta\) are the channel&rsquo;s live in-graph parameters
+                \((\beta_c,\ \lambda_c,\ \alpha_c)\). Because the estimand is a function of the live
+                graph, this single fit updates \(\beta_c\), <strong>the s-curve, and the adstock
+                kernel jointly</strong> — the posterior is forced to find parameter combinations that
+                explain the time series <em>and</em> reproduce the experiment, which collapses the
+                equifinality ridge instead of just re-centering one marginal. Three estimands are
+                supported, with \(\text{contribution} = s_y \sum_{t\in P} \beta\,\mathrm{sat}(\mathrm{adstock}(x_t))\):
+            </p>
+            <div class="eq-box">
+                \[ \begin{aligned}
+                   \textbf{CONTRIBUTION} &= s_y \sum_{t\in P} \beta\,\mathrm{sat}\!\big(\mathrm{adstock}(x_t)\big), \\[2pt]
+                   \textbf{ROAS} &= \frac{\text{contribution}}{\text{spend}_P}, \\[2pt]
+                   \textbf{MROAS} &= \frac{\big(\text{contribution}^{\text{pert}} - \text{contribution}\big)\, s_y}{\text{lift} \cdot \text{spend}_P},
+                   \quad \text{spend perturbed by } (1 + \text{lift}) \text{ inside } P.
+                   \end{aligned} \]
+            </div>
+            <p>
+                That multi-estimand menu is the second advantage over the prior route: a ROAS or
+                marginal-ROAS experiment has no expression as a \(\beta\) prior, but it is one line
+                as a likelihood term. Worked example from the notebook (measured): with
+                \(s_y = 12\), window contribution \(0.18\), spend \(3.0\), a \(+10\%\) perturbation
+                to \(0.192\) gives \(\text{CONTRIBUTION} = 2.16\), \(\text{ROAS} = 0.72\),
+                \(\text{MROAS} = 0.48\).
+            </p>
+            <p>
+                For strictly positive estimands like ROAS, a <strong>lognormal</strong> measurement
+                error is available; its log-scale sd is moment-matched from the natural-scale
+                coefficient of variation (<code>lognormal_sigma_from_moments</code>):
+            </p>
+            <div class="eq-box">
+                \[ \sigma_{\log} = \sqrt{\ln\!\Big(1 + \big(\tfrac{\mathrm{se}}{\text{value}}\big)^2\Big)}
+                   \qquad\text{e.g. } \sigma_{\log}(0.66,\ 0.07) = 0.10576 \ \text{(assert-encoded)}. \]
+            </div>
+
+            <table class="route-table">
+                <thead>
+                    <tr><th></th><th>Route</th><th>The math</th><th>Updates</th><th>Estimands</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1</strong></td>
+                        <td>prior (<code>ExperimentCalibrator</code>)</td>
+                        <td>\(\beta^{\text{target}} = \widehat L / K_c\); \(K_c = \mathbb E[\text{contrib}/\beta]\) per draw; Gamma via \(\alpha = (m/s)^2\), rate \(= m/s^2\)</td>
+                        <td>\(\beta\) only (shape held fixed)</td>
+                        <td>contribution</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2</strong></td>
+                        <td>likelihood (<code>ExperimentMeasurement</code>)</td>
+                        <td>\(\text{value} \sim \mathcal N(\text{estimand}(\theta),\ \mathrm{se})\)</td>
+                        <td>\(\beta\), s-curve, <strong>and</strong> adstock — jointly</td>
+                        <td>contribution / ROAS / mROAS</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="demo">5 · Measured: calibration pulls Search onto the truth</h2>
+            <p>
+                Aurora&rsquo;s <strong>Search</strong> channel is the textbook confounded channel —
+                its spend chases latent demand, so even a <em>demand-controlled</em> observational
+                model overstates its ROI. Ground truth (the data-generating process is known):
+                Search&rsquo;s true ROAS is <strong>0.664</strong>. The notebook fits an uncalibrated
+                demand-controlled model, then refits with one in-graph ROAS experiment
+                (value \(= 0.664\), \(\mathrm{se} = 0.07\), a 38-week window) and compares. Both fits
+                converge (max \(\widehat R = 1.00\)); the uncalibrated fit tracks the data at
+                correlation 0.961. The diagnostics cannot tell them apart — the attribution can:
+            </p>
+
+            <div class="chart-container" id="demoChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — baked outputs of <code>math_05_calibration.ipynb</code>
+                (seeded, 400 draws, 2 chains). Uncalibrated Search ROAS <strong>1.040</strong> with a
+                94% contribution-HDI band of [0.01,&nbsp;2.76] in ROAS units (contribution HDI
+                divided by window spend); experiment-calibrated point estimate <strong>0.639</strong>
+                (the calibrated run&rsquo;s interval is not printed in the baked outputs, so no band
+                is drawn). Dashed line: true ROAS 0.664. Distance to truth: 0.376 → 0.024. The
+                model-implied ROAS estimand node (<code>experiment_Search_roas_0_model_estimand</code>)
+                concentrates at posterior mean <strong>0.661</strong> against the measured 0.664 —
+                the likelihood term doing its job.
+            </p>
+
+            <p>
+                Under the hood, the decomposition shows <em>where</em> the correction lands. Search&rsquo;s
+                mean per-week contribution drops from <strong>33.14 to 20.49</strong>; the credit it
+                was stealing spreads modestly across TV (19.45 → 22.92), Social (21.12 → 22.38), and
+                Display (18.42 → 19.99):
+            </p>
+
+            <div class="chart-container" id="contribChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — mean per-week channel contributions from
+                <code>compute_component_decomposition()</code>, uncalibrated vs calibrated (baked
+                outputs). The experiment is an anchor on <em>Search</em>; it shrinks Search directly,
+                and the other channels move only because the freed-up variance has to go somewhere.
+                Nothing about their own confounding has been tested — see the doctrine below.
+            </p>
+
+            <div class="note">
+                <h4>💡 Reading the calibrated fit honestly</h4>
+                <p>
+                    The calibrated point estimate (0.639) lands slightly <em>below</em> the truth
+                    (0.664) on this small 400-draw run, while the in-graph estimand node sits at
+                    0.661. The assert in the notebook is deliberately directional: calibrated ROI
+                    must move <em>below</em> the uncalibrated value and <em>closer to truth</em> —
+                    never tight equality on an 800-draw fit. Both hold, with room to spare. (One
+                    honesty footnote: the calibrated run logs <strong>2 divergences after tuning</strong>
+                    in the baked sampler output — noted, not alarming at this draw count, and the
+                    uncommented warning is left visible in the notebook.)
+                </p>
+            </div>
+
+            <h2 id="pull">6 · Interactive: how strong must the test be?</h2>
+            <p>
+                The mechanics of the pull are precision-weighting. In a toy conjugate Normal–Normal
+                model — observational evidence \(\mathcal N(\mu_0, \tau^2)\), experiment
+                \(\widehat L \sim \mathcal N(\theta, \mathrm{se}^2)\) — the posterior is
+            </p>
+            <div class="eq-box">
+                \[ \theta \mid \widehat L \;\sim\; \mathcal N\!\left(
+                   \frac{\mu_0/\tau^2 + \widehat L/\mathrm{se}^2}{1/\tau^2 + 1/\mathrm{se}^2},\;
+                   \Big(\tfrac{1}{\tau^2} + \tfrac{1}{\mathrm{se}^2}\Big)^{-1} \right). \]
+            </div>
+            <p>
+                Set \(\mu_0 = 1.04\) (the overstated observational estimate) and
+                \(\widehat L = 0.664\) (what a clean lift test measures), and drag the experiment&rsquo;s
+                standard error from sloppy to sharp:
+            </p>
+
+            <div class="controls-row">
+                <label for="seSlider">Experiment se:</label>
+                <input type="range" id="seSlider" min="0" max="100" value="55" step="1">
+                <span class="readout" id="seReadout"></span>
+            </div>
+            <div class="chart-container" id="conjChart"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — illustrative toy model.</strong> The real MMM
+                is not conjugate (the estimand is a nonlinear function of \(\beta\), \(\lambda\), and
+                the adstock weight), but the precision-weighting logic is identical: the posterior
+                lands at the precision-weighted average of what the time series says and what the
+                experiment says. At \(\mathrm{se} = 0.07\) — the demo&rsquo;s value — the experiment
+                carries ~99% of the weight and the posterior sits essentially on the test.
+                A sloppy test (\(\mathrm{se} \gtrsim 1\)) barely moves the needle: an
+                under-powered experiment is not calibration, it&rsquo;s decoration.
+            </p>
+
+            <h2 id="doctrine">7 · Doctrine: experiments calibrate what structure cannot identify</h2>
+            <p>
+                Three things to carry out of this page:
+            </p>
+            <ol>
+                <li>
+                    <strong>Equifinality is structural, not a data-size problem.</strong> The
+                    \((\text{decay}, \text{saturation}, \beta)\) ridge is nearly flat in the
+                    observational likelihood; controls help but cannot flatten a channel that chases
+                    demand. Sampling longer sharpens the wrong posterior.
+                </li>
+                <li>
+                    <strong>A randomized experiment breaks the tie because contribution is linear in
+                    \(\beta_c\).</strong> \(\text{contribution}_c = \beta_c K_c\), so a measured lift
+                    inverts cleanly to a coefficient anchor — and the per-draw design factor
+                    \(K_c\) is the bridge that keeps the \(\beta\)&ndash;shape covariance from
+                    corrupting it.
+                </li>
+                <li>
+                    <strong>Calibration is surgical, not contagious.</strong> The experiment anchors
+                    the tested channel only. In the Aurora demo the untested channels just absorb the
+                    re-allocated variance; in <a href="stress-05-gauntlet.html">stress&nbsp;05</a> the
+                    same move pulls Search from 5.59 to 0.65 (truth 0.66) <em>while the untested
+                    channels stay wrong</em>. One lift test fixes one channel&rsquo;s
+                    identification — it is not absolution for the model.
+                </li>
+            </ol>
+            <p>
+                Where this lives in practice: the <a href="measurement-calibration.html">measurement
+                &amp; calibration guide</a> covers the operating loop (which channels to test, geo
+                vs holdout designs, how often to refresh);
+                <a href="stress-03-confounding-selection.html">stress&nbsp;03</a> shows the failure
+                calibration exists to fix; <a href="math-04-bayesian-model.html">math&nbsp;04</a>
+                derives the Bayesian machinery these likelihood terms plug into; and
+                <a href="math-06-extensions.html">math&nbsp;06</a> extends the same logic to mediation
+                and cross-product effects — where the identification gaps are even wider and priors
+                do even more of the work.
+            </p>
+            <p>
+                Two further companions close the loop: <a href="stress-05-gauntlet.html">stress&nbsp;05 ·
+                the gauntlet</a> measures this calibration math across the full sequence of adversarial
+                worlds, and the <a href="measurement-calibration.html">measurement &amp; calibration
+                guide</a> shows how experiment <em>selection</em> (EIG/EVOI priorities) and the experiment
+                lifecycle operate around it — deciding which test to run before this page's machinery
+                decides what the result is worth.
+            </p>
+
+            <div class="definition">
+                <h4>What to take away</h4>
+                <ul>
+                    <li><strong>The trap:</strong> different (adstock, saturation, \(\beta\)) triples fit near-identically (measured shape correlation 0.951 across a 0.20 decay gap) but imply different attributions and opposite budget advice.</li>
+                    <li><strong>Route 1 (prior):</strong> \(\beta^{\text{target}} = \widehat L / K_c\) with the per-draw design factor \(K_c = \mathbb E[\text{contrib}/\beta]\) — assert-encoded as \(\beta^{\text{target}} \cdot K_c = \widehat L\) exactly — then inverse-variance pooling and Gamma moment-matching \(\alpha = (m/s)^2\), rate \(= m/s^2\).</li>
+                    <li><strong>Route 2 (likelihood):</strong> \(\text{value} \sim \mathcal N(\text{estimand}(\theta), \mathrm{se})\) inside the graph updates \(\beta\), the s-curve, and the adstock jointly, and supports contribution / ROAS / mROAS estimands the prior route cannot express.</li>
+                    <li><strong>Measured:</strong> one in-graph ROAS experiment pulls Search from 1.040 to 0.639 against a truth of 0.664 (distance to truth 0.376 → 0.024); the model-implied estimand lands at 0.661.</li>
+                    <li><strong>Doctrine:</strong> experiments calibrate what structure cannot identify — and only what they tested. Untested channels keep their bias.</li>
+                </ul>
+            </div>
+
+            <div class="note">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors <code>nbs/math_05_calibration.ipynb</code>, authored by
+                    <code>nbs/build_math_05_calibration.py</code> (series overview:
+                    <code>nbs/README_math.md</code>). Every identity above ends in an
+                    <code>assert</code> against the framework&rsquo;s real calibration code
+                    (<code>mmm_framework.calibration</code>) — algebraic identities tightly, MCMC
+                    claims directionally with <code>random_seed=0</code> — so if the notebook
+                    executes clean, the math on this page is still true. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // PT: shared Plotly helpers for the guide series.
+        // ------------------------------------------------------------------
+        const PT = {
+            colors: {
+                tv: '#8fa86a', search: '#6a8fa8', social: '#d4a86a', display: '#c97067',
+                truth: '#2d3a2d',
+                ok: '#6abf8a', silent: '#c97067', expected: '#9aa79a',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Seeded PRNG for illustrative simulations.
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function() {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // Pure math: the same transforms as the notebook.
+        // ------------------------------------------------------------------
+
+        // Normalized geometric FIR adstock: w_k = alpha^k / sum(alpha^k), k = 0..lmax-1.
+        function geometricAdstock(x, alpha, lmax) {
+            const w = [];
+            let s = 0;
+            for (let k = 0; k < lmax; k++) { const v = Math.pow(alpha, k); w.push(v); s += v; }
+            for (let k = 0; k < lmax; k++) w[k] /= s;
+            const out = new Array(x.length).fill(0);
+            for (let t = 0; t < x.length; t++) {
+                let acc = 0;
+                for (let k = 0; k < lmax && k <= t; k++) acc += w[k] * x[t - k];
+                out[t] = acc;
+            }
+            return out;
+        }
+
+        // The framework's saturation: sat(u) = 1 - exp(-lam * u).
+        function sat(u, lam) { return 1 - Math.exp(-lam * u); }
+
+        function corr(a, b) {
+            const n = a.length;
+            let ma = 0, mb = 0;
+            for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+            ma /= n; mb /= n;
+            let sab = 0, saa = 0, sbb = 0;
+            for (let i = 0; i < n; i++) {
+                const da = a[i] - ma, db = b[i] - mb;
+                sab += da * db; saa += da * da; sbb += db * db;
+            }
+            return sab / Math.sqrt(saa * sbb);
+        }
+
+        // Lanczos log-gamma (g=7, n=9) for exact Gamma pdfs.
+        function lngamma(z) {
+            const g = 7;
+            const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+                       771.32342877765313, -176.61502916214059, 12.507343278686905,
+                       -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+            if (z < 0.5) {
+                return Math.log(Math.PI / Math.sin(Math.PI * z)) - lngamma(1 - z);
+            }
+            z -= 1;
+            let x = c[0];
+            for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+            const t = z + g + 0.5;
+            return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+        }
+
+        // Gamma(alpha, rate) pdf.
+        function gammaPdf(x, a, rate) {
+            if (x <= 0) return 0;
+            return Math.exp(a * Math.log(rate) + (a - 1) * Math.log(x) - rate * x - lngamma(a));
+        }
+
+        function normPdf(x, mu, sd) {
+            const z = (x - mu) / sd;
+            return Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
+        }
+
+        function linspace(a, b, n) {
+            const out = [];
+            for (let i = 0; i < n; i++) out.push(a + (b - a) * i / (n - 1));
+            return out;
+        }
+
+        // ------------------------------------------------------------------
+        // Shared equifinality setup: seeded bursty spend plan + two regimes.
+        // Regime A: long carryover (alpha=0.70) + weak saturation (lam=4).
+        // Regime B: short carryover (alpha=0.50) + strong saturation (lam=8).
+        // ------------------------------------------------------------------
+        const T = 60, LMAX = 24;
+        const spend = new Array(T).fill(0);
+        (function buildSpend() {
+            const rand = mulberry32(7);
+            const bursts = [[2, 3, 1.0], [16, 2, 0.7], [30, 4, 1.2], [48, 2, 0.6]];
+            bursts.forEach(function(b) {
+                for (let i = 0; i < b[1]; i++) spend[b[0] + i] = b[2] * (0.6 + 0.4 * rand());
+            });
+        })();
+
+        const xa = geometricAdstock(spend, 0.70, LMAX);
+        const xb = geometricAdstock(spend, 0.50, LMAX);
+        const yA = xa.map(function(u) { return sat(u, 4.0); });
+        const yB = xb.map(function(u) { return sat(u, 8.0); });
+        const maxA = Math.max.apply(null, yA), maxB = Math.max.apply(null, yB);
+        const yAn = yA.map(function(v) { return v / maxA; });
+        const yBn = yB.map(function(v) { return v / maxB; });
+        const liveCorr = corr(yAn, yBn);
+        const weeks = linspace(0, T - 1, T);
+
+        // ------------------------------------------------------------------
+        // Chart 1: equifinality — two regimes, near-identical fits.
+        // ------------------------------------------------------------------
+        function drawEqFit() {
+            const traces = [
+                {
+                    type: 'bar', x: weeks, y: spend, name: 'raw weekly spend',
+                    marker: { color: PT.band('#9aa79a', 0.45) },
+                    hovertemplate: 'week %{x}<br>spend %{y:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: yAn,
+                    name: 'A: long carryover (α=0.70) + weak saturation (λ=4)',
+                    line: { color: PT.colors.search, width: 2.6 },
+                    hovertemplate: 'week %{x}<br>regime A %{y:.3f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: yBn,
+                    name: 'B: short carryover (α=0.50) + strong saturation (λ=8)',
+                    line: { color: PT.colors.display, width: 2.6, dash: 'dash' },
+                    hovertemplate: 'week %{x}<br>regime B %{y:.3f}<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'saturated response (peak-normalized)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 30, t: 45, b: 55 },
+                annotations: [{
+                    x: 0.98, y: 0.96, xref: 'paper', yref: 'paper', xanchor: 'right',
+                    text: 'live correlation between regimes: ' + liveCorr.toFixed(3) +
+                          '  (notebook, measured: 0.951)',
+                    showarrow: false, font: { size: 12, color: '#5a6b5a' },
+                    bgcolor: 'rgba(255,255,255,0.75)'
+                }]
+            });
+            Plotly.newPlot('eqFitChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 2: same fits, different advice — response vs spend multiplier.
+        // adstock(k·x) = k·adstock(x), so R(k) = sum_t sat(k·u_t, lam).
+        // ------------------------------------------------------------------
+        function windowResponse(adstocked, lam, k) {
+            let s = 0;
+            for (let t = 0; t < adstocked.length; t++) s += sat(k * adstocked[t], lam);
+            return s;
+        }
+        const RA1 = windowResponse(xa, 4.0, 1);
+        const RB1 = windowResponse(xb, 8.0, 1);
+        const kGrid = linspace(0.25, 3.0, 56);
+        const RA = kGrid.map(function(k) { return windowResponse(xa, 4.0, k) / RA1; });
+        const RB = kGrid.map(function(k) { return windowResponse(xb, 8.0, k) / RB1; });
+
+        function drawEqDiverge(k) {
+            const rAk = windowResponse(xa, 4.0, k) / RA1;
+            const rBk = windowResponse(xb, 8.0, k) / RB1;
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: kGrid, y: RA,
+                    name: 'regime A (weak saturation): keeps growing',
+                    line: { color: PT.colors.search, width: 2.6 },
+                    hovertemplate: 'k=%{x:.2f}<br>A response %{y:.2f}×<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: kGrid, y: RB,
+                    name: 'regime B (strong saturation): plateaus',
+                    line: { color: PT.colors.display, width: 2.6, dash: 'dash' },
+                    hovertemplate: 'k=%{x:.2f}<br>B response %{y:.2f}×<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    x: [k, k], y: [rAk, rBk], showlegend: false,
+                    marker: {
+                        color: [PT.colors.search, PT.colors.display], size: 11,
+                        line: { color: '#2d3a2d', width: 1 }
+                    },
+                    hovertemplate: 'k=%{x:.2f}<br>response %{y:.2f}×<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'spend multiplier k (1 = the observed plan, where the fits agree)' },
+                yaxis: { title: 'window response (×, vs k=1)' },
+                legend: { orientation: 'h', y: 1.18 },
+                margin: { l: 70, r: 30, t: 40, b: 55 },
+                shapes: [
+                    { type: 'line', x0: 1, x1: 1, y0: 0, y1: 1, yref: 'paper',
+                      line: { color: '#9aa79a', width: 1, dash: 'dot' } },
+                    { type: 'line', x0: k, x1: k, y0: 0, y1: 1, yref: 'paper',
+                      line: { color: '#2d3a2d', width: 1.5, dash: 'dash' } }
+                ]
+            });
+            Plotly.react('eqDivergeChart', traces, layout, PT.config);
+
+            const gapPct = (rAk / rBk - 1) * 100;
+            document.getElementById('kReadout').textContent =
+                'k = ' + k.toFixed(2) + ' → A: ' + rAk.toFixed(2) + '×, B: ' + rBk.toFixed(2) +
+                '× (A predicts ' + (gapPct >= 0 ? '+' : '') + gapPct.toFixed(0) + '% more)';
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 3: default vs experiment-anchored Gamma priors (measured params).
+        // ------------------------------------------------------------------
+        function drawPriorChart() {
+            const grid = linspace(0.001, 4.5, 700);
+            // Default: Gamma(mu=1.5, sigma=1.0) -> alpha=(1.5)^2=2.25, rate=1.5.
+            const pdfDef = grid.map(function(x) { return gammaPdf(x, 2.25, 1.5); });
+            // Single test (measured): m=1.5000, s=0.2308 -> alpha=(m/s)^2, rate=m/s^2.
+            const m1 = 1.5000, s1 = 0.2308;
+            const a1 = Math.pow(m1 / s1, 2), r1 = m1 / (s1 * s1);
+            const pdfOne = grid.map(function(x) { return gammaPdf(x, a1, r1); });
+            // Pooled three tests (measured): alpha=214.7943, rate=134.7667 (mean 1.5938, sd 0.1087).
+            const pdfPool = grid.map(function(x) { return gammaPdf(x, 214.7943, 134.7667); });
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: grid, y: pdfDef,
+                    name: 'default prior  Gamma(μ=1.5, σ=1.0)',
+                    line: { color: '#9aa79a', width: 2.2, dash: 'dash' },
+                    hovertemplate: 'β=%{x:.2f}<br>density %{y:.2f}<extra>default</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: grid, y: pdfOne,
+                    name: 'one lift test  (β-target 1.50 ± 0.23)',
+                    line: { color: PT.colors.social, width: 2.4 },
+                    fill: 'tozeroy', fillcolor: PT.band(PT.colors.social, 0.18),
+                    hovertemplate: 'β=%{x:.2f}<br>density %{y:.2f}<extra>one test</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: grid, y: pdfPool,
+                    name: 'three tests pooled  (1.594 ± 0.109)',
+                    line: { color: PT.colors.search, width: 2.6 },
+                    fill: 'tozeroy', fillcolor: PT.band(PT.colors.search, 0.18),
+                    hovertemplate: 'β=%{x:.2f}<br>density %{y:.2f}<extra>pooled</extra>'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'channel coefficient β' },
+                yaxis: { title: 'prior density' },
+                legend: { orientation: 'h', y: 1.16 },
+                margin: { l: 70, r: 30, t: 40, b: 55 },
+                shapes: [{
+                    type: 'line', x0: 1.5938, x1: 1.5938, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: '#2d3a2d', width: 1.4, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 1.5938, y: 1.0, yref: 'paper', yanchor: 'bottom',
+                    text: 'pooled β-target = 1.594', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('priorChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 4 (centerpiece): measured before/after Search ROAS vs truth.
+        // Numbers from the baked notebook outputs:
+        //   uncalibrated ROI 1.040, contribution HDI [42.178, 9127.819],
+        //   window spend 3312.382 -> ROAS band [0.013, 2.756];
+        //   calibrated ROI 0.639; truth 0.664; estimand posterior mean 0.661.
+        // ------------------------------------------------------------------
+        function drawDemoChart() {
+            const TRUTH = 0.664;
+            const uncal = 1.040, uncalLo = 42.178 / 3312.382, uncalHi = 9127.819 / 3312.382;
+            const cal = 0.639;
+
+            const traces = [
+                {
+                    type: 'bar',
+                    x: ['uncalibrated (observational)', 'experiment-calibrated'],
+                    y: [uncal, cal],
+                    marker: {
+                        color: [PT.colors.display, PT.colors.search],
+                        line: { color: 'rgba(45,58,45,0.25)', width: 1 }
+                    },
+                    width: 0.5,
+                    error_y: {
+                        type: 'data', symmetric: false,
+                        array: [uncalHi - uncal, 0],
+                        arrayminus: [uncal - uncalLo, 0],
+                        color: '#2d3a2d', thickness: 1.4, width: 8
+                    },
+                    text: [uncal.toFixed(2), cal.toFixed(2)],
+                    textposition: 'outside',
+                    textfont: { size: 15, color: '#2d3a2d' },
+                    hovertemplate: '%{x}<br>Search ROAS %{y:.3f}<extra></extra>',
+                    showlegend: false
+                },
+                {
+                    // dummy trace so the truth line gets a legend entry
+                    type: 'scatter', mode: 'lines', x: [null], y: [null],
+                    name: 'true ROAS = 0.664',
+                    line: { color: PT.colors.truth, width: 2, dash: 'dash' }
+                }
+            ];
+            const layout = PT.layout({
+                yaxis: { title: 'Search ROAS', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 60 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 1.5, xref: 'x', y0: TRUTH, y1: TRUTH,
+                    line: { color: PT.colors.truth, width: 2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: 1, y: 0.661, xanchor: 'left', xshift: 28,
+                    text: 'model-implied ROAS estimand:<br>posterior mean 0.661',
+                    showarrow: true, arrowhead: 0, ax: 60, ay: -55,
+                    font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 0, y: 2.92, xanchor: 'center',
+                    text: 'distance to truth: 0.376', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }, {
+                    x: 1, y: 0.95, xanchor: 'center',
+                    text: 'distance to truth: 0.024', showarrow: false,
+                    font: { size: 11, color: '#3f7a58' }
+                }]
+            });
+            Plotly.newPlot('demoChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 5: measured mean per-week contributions, uncal vs cal.
+        // ------------------------------------------------------------------
+        function drawContribChart() {
+            const channels = ['TV', 'Search', 'Social', 'Display'];
+            const uncal = [19.445, 33.136, 21.117, 18.418];
+            const cal   = [22.918, 20.494, 22.380, 19.988];
+            const traces = [
+                {
+                    type: 'bar', x: channels, y: uncal, name: 'uncalibrated',
+                    marker: { color: PT.colors.display, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '%{x}<br>uncalibrated %{y:.1f}<extra></extra>'
+                },
+                {
+                    type: 'bar', x: channels, y: cal, name: 'calibrated',
+                    marker: { color: PT.colors.search, line: { color: 'rgba(45,58,45,0.25)', width: 1 } },
+                    hovertemplate: '%{x}<br>calibrated %{y:.1f}<extra></extra>'
+                }
+            ];
+            const layout = PT.layout({
+                barmode: 'group',
+                yaxis: { title: 'mean per-week contribution' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 40, b: 55 },
+                annotations: [{
+                    x: 'Search', y: 33.136, yanchor: 'bottom',
+                    text: '33.14 → 20.49', showarrow: false, yshift: 6,
+                    font: { size: 12, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('contribChart', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // Chart 6 (interactive): conjugate pull toward the experiment.
+        // Toy Normal–Normal: prior N(1.04, 0.73²), experiment N(0.664, se²).
+        // (0.73 ≈ the sd implied by the measured uncalibrated 94% ROAS band [0.01, 2.76].)
+        // ------------------------------------------------------------------
+        const MU0 = 1.04, TAU = 0.73, LHAT = 0.664, TRUTH = 0.664;
+
+        function sliderToSe(v) {
+            // log-scale map: 0 -> 2.0 (sloppy), 100 -> 0.04 (sharp)
+            const lo = Math.log10(0.04), hi = Math.log10(2.0);
+            return Math.pow(10, hi + (lo - hi) * v / 100);
+        }
+
+        function drawConj(se) {
+            const grid = linspace(-0.6, 3.2, 700);
+            const wPrior = 1 / (TAU * TAU), wExp = 1 / (se * se);
+            const postMu = (MU0 * wPrior + LHAT * wExp) / (wPrior + wExp);
+            const postSd = Math.sqrt(1 / (wPrior + wExp));
+            const expWeight = wExp / (wPrior + wExp);
+
+            const prior = grid.map(function(x) { return normPdf(x, MU0, TAU); });
+            const lik   = grid.map(function(x) { return normPdf(x, LHAT, se); });
+            const post  = grid.map(function(x) { return normPdf(x, postMu, postSd); });
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: grid, y: prior,
+                    name: 'observational evidence  N(1.04, 0.73²)',
+                    line: { color: PT.colors.display, width: 2.2, dash: 'dash' },
+                    hovertemplate: 'ROAS %{x:.2f}<br>density %{y:.2f}<extra>observational</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: grid, y: lik,
+                    name: 'experiment  N(0.664, se²)',
+                    line: { color: PT.colors.social, width: 2.2, dash: 'dot' },
+                    hovertemplate: 'ROAS %{x:.2f}<br>density %{y:.2f}<extra>experiment</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: grid, y: post,
+                    name: 'combined posterior',
+                    line: { color: PT.colors.search, width: 2.8 },
+                    fill: 'tozeroy', fillcolor: PT.band(PT.colors.search, 0.18),
+                    hovertemplate: 'ROAS %{x:.2f}<br>density %{y:.2f}<extra>posterior</extra>'
+                }
+            ];
+            const layout = PT.layout({
+                xaxis: { title: 'Search ROAS', range: [-0.6, 3.2] },
+                yaxis: { title: 'density' },
+                legend: { orientation: 'h', y: 1.16 },
+                margin: { l: 70, r: 30, t: 40, b: 55 },
+                shapes: [{
+                    type: 'line', x0: TRUTH, x1: TRUTH, y0: 0, y1: 1, yref: 'paper',
+                    line: { color: PT.colors.truth, width: 2, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: TRUTH, y: 1.0, yref: 'paper', yanchor: 'bottom', xanchor: 'left',
+                    text: 'truth 0.664', showarrow: false,
+                    font: { size: 11, color: '#5a6b5a' }
+                }, {
+                    x: 0.98, y: 0.95, xref: 'paper', yref: 'paper', xanchor: 'right',
+                    text: 'posterior: ' + postMu.toFixed(2) + ' ± ' + postSd.toFixed(2) +
+                          '<br>experiment weight: ' + (expWeight * 100).toFixed(0) + '%',
+                    showarrow: false, font: { size: 12, color: '#2d3a2d' },
+                    bgcolor: 'rgba(255,255,255,0.75)', align: 'right'
+                }]
+            });
+            Plotly.react('conjChart', traces, layout, PT.config);
+
+            document.getElementById('seReadout').textContent =
+                'se = ' + se.toFixed(2) + ' → posterior mean ' + postMu.toFixed(2);
+        }
+
+        // ------------------------------------------------------------------
+        // Wiring
+        // ------------------------------------------------------------------
+        function init() {
+            drawEqFit();
+            drawEqDiverge(2.0);
+            drawPriorChart();
+            drawDemoChart();
+            drawContribChart();
+            drawConj(sliderToSe(55));
+
+            document.getElementById('kSlider').addEventListener('input', function() {
+                drawEqDiverge(parseInt(this.value, 10) / 100);
+            });
+            document.getElementById('seSlider').addEventListener('input', function() {
+                drawConj(sliderToSe(parseInt(this.value, 10)));
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

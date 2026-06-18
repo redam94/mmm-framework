@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identification Assumptions | MMM Framework</title>
+    <meta name="description" content="The identification contract: the seven assumptions every causal claim in this framework rests on — stated formally, labeled testable or untestable, priced against the pressure-testing scorecard, and matched to the framework feature that addresses each one.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/identification-assumptions.html">
+    <meta property="og:title" content="Identification Assumptions | MMM Framework">
+    <meta property="og:description" content="The identification contract: seven numbered assumptions behind every causal claim — formal statements, testable/untestable labels, measured failure costs, and the mitigations the framework actually ships.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/identification-assumptions.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        /* Page-specific overrides for narrower content width */
+        .container { max-width: 900px; }
+        section { padding: 3rem 0; }
+        .hero { min-height: auto; padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        .hero::before { display: none; }
+        .cta-section { margin-top: 3rem; }
+
+        /* Testability labels */
+        .testability {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 0.2rem 0.65rem;
+            border-radius: 999px;
+            vertical-align: middle;
+            margin-left: 0.5rem;
+            white-space: nowrap;
+        }
+        .testability.untestable { background: rgba(201, 112, 103, 0.12); border: 1px solid rgba(201, 112, 103, 0.45); color: #a85048; }
+        .testability.testable { background: rgba(106, 191, 138, 0.12); border: 1px solid rgba(106, 191, 138, 0.45); color: #3d8b5a; }
+        .testability.partial { background: rgba(212, 168, 106, 0.14); border: 1px solid rgba(212, 168, 106, 0.5); color: #9a7430; }
+
+        .assumption h2 { margin-top: 0; }
+        .assumption { border-top: 1px solid var(--color-border, rgba(0,0,0,0.08)); }
+        .formal-statement {
+            background: var(--color-bg-alt, #f7f6f2);
+            border-left: 4px solid var(--color-primary);
+            border-radius: 0 8px 8px 0;
+            padding: 1.25rem 1.5rem;
+            margin: 1.25rem 0;
+        }
+        .formal-statement .math-line { margin-bottom: 0.6rem; }
+        .contract-table td:first-child { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>The Identification Contract</h1>
+            <p class="lead">
+                Every causal number this framework produces — every ROI, every contribution, every budget
+                recommendation — rests on the seven assumptions below. This page states each one formally,
+                labels it honestly as testable or untestable, shows what it costs when it breaks (measured,
+                not asserted), and names the framework feature that addresses it.
+            </p>
+        </div>
+    </section>
+
+    <section style="padding-top: 1rem;">
+        <div class="container">
+            <h2>Why a contract</h2>
+            <p>
+                A marketing mix model is not a measurement device; it is an argument. The data plus a set of
+                assumptions <em>identify</em> a causal effect — meaning the effect can be computed at all —
+                and the assumptions do real work: most of them cannot be verified from the data they license
+                conclusions about. The rest of this site demonstrates these ideas in context (the
+                <a href="causal-inference.html">causal inference guide</a>, the
+                <a href="pressure-testing.html">pressure-testing series</a>, the
+                <a href="modeling-guide.html">modeling workflow</a>). This page is the consolidated version:
+                the contract, signed, in one place.
+            </p>
+            <p>
+                The failure costs below are quoted from the recorded stress-matrix scorecard
+                (<code>tests/synth/results/stress_matrix.md</code>, re-recorded 2026-06-10): synthetic worlds
+                with known causal ground truth, each violating exactly one assumption, fit with the
+                framework's defaults. A <strong>silent failure</strong> means attribution was wrong while
+                every check an analyst acts on — convergence and the robustness value — stayed green.
+            </p>
+
+            <table class="contract-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Assumption</th>
+                        <th>Testable?</th>
+                        <th>World that breaks it</th>
+                        <th>Measured cost (worst channel)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><a href="#a1">1</a></td><td>Conditional exchangeability (no unobserved confounding)</td><td>Untestable</td><td><code>unobserved_confounding</code></td><td>+69%, silent</td></tr>
+                    <tr><td><a href="#a2">2</a></td><td>Positivity / overlap</td><td>Partially testable</td><td><code>multicollinearity</code> (nearest)</td><td>+60%, silent</td></tr>
+                    <tr><td><a href="#a3">3</a></td><td>Correct functional form</td><td>Testable vs. alternatives</td><td><code>adstock_misspec</code>, <code>saturation_misspec</code></td><td>96% / +65%</td></tr>
+                    <tr><td><a href="#a4">4</a></td><td>SUTVA / no interference (geo designs)</td><td>Untestable (observational)</td><td>not simulated in the matrix</td><td>design-level risk</td></tr>
+                    <tr><td><a href="#a5">5</a></td><td>Sequential ignorability (mediation)</td><td>Untestable</td><td>stress 04 mediation worlds</td><td>2.6&times; sibling over-credit</td></tr>
+                    <tr><td><a href="#a6">6</a></td><td>Exogeneity of spend (no reverse causality)</td><td>Untestable</td><td><code>reverse_causality</code></td><td>19% (this instance)</td></tr>
+                    <tr><td><a href="#a7">7</a></td><td>Stable structure over the window</td><td>Partially testable</td><td><code>trend_break</code></td><td>-41%, silent</td></tr>
+                </tbody>
+            </table>
+            <p style="font-size: 0.9rem; color: var(--color-text-muted, #777);">
+                Notation throughout: \(Y\) is the KPI, \(X\) media spend (a vector over channels),
+                \(Z\) the declared confounders, \(Y(x)\) the potential outcome under spend level \(x\),
+                and \(\varepsilon\) the outcome disturbance.
+            </p>
+        </div>
+    </section>
+
+    <!-- ================= 1. Conditional exchangeability ================= -->
+    <section class="assumption" id="a1">
+        <div class="container">
+            <h2>1 · Conditional exchangeability <span class="testability untestable">Untestable</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$Y(x) \perp\!\!\!\perp X \mid Z \quad \text{for all spend levels } x$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> once you condition on the declared confounders \(Z\), the
+                    channels' spend is as good as randomly assigned. Nothing unobserved — anticipated demand,
+                    a competitor's collapse, a buzzy product launch — drives both spend and sales. Given
+                    exchangeability, the regression adjustment the model performs equals the causal effect:
+                    \(E[Y \mid \mathrm{do}(x)] = E_Z\!\left[\,E[Y \mid X{=}x, Z]\,\right]\).
+                </p>
+            </div>
+            <p>
+                This is the load-bearing wall, and it is <strong>untestable</strong>: the data cannot tell you
+                about variables that are not in it. No goodness-of-fit statistic, no convergence check, no
+                holdout R&sup2; can detect a confounder you did not measure.
+            </p>
+            <h3>When it fails</h3>
+            <p>
+                In the <code>unobserved_confounding</code> world (budgets set in anticipation of a latent
+                demand driver the model never sees), the worst channel — Search — was over-credited by
+                <strong>+69%</strong>, with 23% median error across channels and 90% intervals covering only
+                75% of the truths. Meanwhile r-hat was 1.01 with zero divergences: a textbook
+                <strong>silent failure</strong>. The companion world <code>confounding_controlled</code> is
+                the subtler trap: the confounder <em>is</em> in the model, but as a noisy proxy — and the
+                worst channel was still off by +50%, again with everything green.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong>Declared causal roles.</strong> Every control enters with an explicit
+                    <code>CausalControlRole</code> (<code>src/mmm_framework/config/enums.py</code>). Confounders
+                    receive a wide, deliberately un-shrunk coefficient prior, precision controls a regularizing
+                    one (<code>model/base.py</code>, <code>_control_prior_sigmas</code>), and variable selection
+                    is structurally forbidden from shrinking a confounder — shrinking one re-opens the back
+                    door (<code>_build_control_betas</code>). Variables marked mediator or collider are refused
+                    as controls outright.
+                </li>
+                <li>
+                    <strong>The causal refutation suite.</strong> Placebo treatment, negative control,
+                    random common cause, and data-subset refutations
+                    (<code>validation/validator.py</code>, configured via <code>CausalRefutationConfig</code>).
+                    Honest caveat from the scorecard: the suite's verdicts have proven config-sensitive across
+                    recordings, so a passing refutation is <em>not</em> treated as an all-clear for the causal
+                    claim — it is excluded from the silent-failure gate.
+                </li>
+                <li>
+                    <strong>The unobserved-confounding robustness value</strong>
+                    (<code>validation/sensitivity_unobserved.py</code>), defined in the box below.
+                </li>
+                <li>
+                    <strong>Experiment calibration</strong> (<code>calibration/</code>,
+                    <code>BayesianMMM.add_experiment_calibration</code>) — the only mechanism on this list that
+                    <em>replaces</em> the assumption rather than stress-testing it. See the
+                    <a href="#not-a-guarantee">closing section</a>.
+                </li>
+            </ul>
+
+            <div class="highlight-box">
+                <h4>Definition: the robustness value (RV)</h4>
+                <p>
+                    Following Cinelli &amp; Hazlett (2020, <em>Making Sense of Sensitivity</em>), the
+                    robustness value \(RV_q\) for a channel is <strong>the share of residual variance an
+                    unobserved confounder would need to explain in <em>both</em> the channel's spend and the
+                    KPI to reduce the channel's estimated effect by a fraction \(q\)</strong> — by default
+                    \(q = 1\), i.e. to zero. With \(f = |t|/\sqrt{\mathrm{dof}}\),
+                </p>
+                <p style="text-align: center;">
+                    $$RV_q = \tfrac{1}{2}\left(\sqrt{f_q^4 + 4 f_q^2}\; - f_q^2\right), \qquad f_q = q f,$$
+                </p>
+                <p>
+                    a value in \([0, 1]\) where larger means more robust. A channel with RV = 0.20 survives any
+                    confounder explaining less than 20% of residual variance on both sides; below the fragility
+                    threshold of <strong>0.10</strong> the framework flags the effect as fragile to a plausible
+                    confounder. Two caveats the module itself insists on: the RV here is an
+                    <em>OLS-analogy</em> computed from posterior mean/sd with deliberately generous degrees of
+                    freedom, so it errs toward flagging fragility; and a high RV does <strong>not</strong> prove
+                    the effect is causal — it only says a confounder would have to be implausibly strong to
+                    explain it away. In the <code>unobserved_confounding</code> world the RVs sat at 0.15–0.22
+                    while attribution was off by +69%: the confounder planted there was simply stronger than
+                    the RV's comfort zone.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= 2. Positivity / overlap ================= -->
+    <section class="assumption" id="a2">
+        <div class="container">
+            <h2>2 · Positivity / overlap <span class="testability partial">Partially testable</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$P(X = x \mid Z = z) > 0 \quad \text{for every } x \text{ your counterfactual queries, at every realistic } z$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> the data must actually contain spend at (or near) the levels
+                    you ask the model about. A channel that has run at roughly constant spend every week of the
+                    window has <em>no data support</em> for \(\mathrm{do}(X{=}0)\) — yet "what would sales have
+                    been without this channel?" is precisely the contribution question. The model will still
+                    answer; the answer is an extrapolation priced by the priors and the assumed saturation
+                    curve, not by evidence.
+                </p>
+            </div>
+            <p>
+                This one is <strong>partially testable</strong>: whether the support exists is checkable from
+                the data; whether the model's extrapolation <em>beyond</em> the support is right is not.
+                Channels that never go dark, channels flighted in lockstep with each other, and geo panels
+                where every region gets the same plan all fail it in different ways.
+            </p>
+            <h3>When it fails</h3>
+            <p>
+                The nearest matrix world is <code>multicollinearity</code> — channels whose spends co-move so
+                tightly that the data cannot separate them: <strong>39% median error, 60% on the worst
+                channel</strong>, with perfect-looking convergence. A <strong>silent failure</strong> — the
+                posterior happily reallocates credit among the entangled channels because no week in the data
+                ever distinguished them.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong>Pre-fit spend-variation checks</strong> in the EDA module: near-constant series are
+                    flagged as unidentifiable from the intercept (<code>eda/validators.py</code>,
+                    <code>check_constant_series</code>), and heavily zero-inflated channels prompt a
+                    "dark or unrecorded?" verification (<code>check_zero_inflation</code>).
+                </li>
+                <li>
+                    <strong>Geo identification diagnostics</strong>
+                    (<code>validation/geo_identification.py</code>): reports per-channel cross-geo spend
+                    dispersion against a coefficient-of-variation threshold (default 0.15) and states its own
+                    limit — the verdict is a <em>necessary</em> condition for geo-level identification, never a
+                    sufficient one, because geo variation that follows local demand is confounded variation.
+                </li>
+                <li>
+                    <strong>Honest framing of extrapolation:</strong> where overlap is missing, the right fix
+                    is not a prior — it is generating the missing variation deliberately, via flighting or a
+                    go-dark experiment (<a href="measurement-calibration.html#test-design">designing the test</a>).
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= 3. Correct functional form ================= -->
+    <section class="assumption" id="a3">
+        <div class="container">
+            <h2>3 · Correct functional form <span class="testability testable">Testable vs. alternatives</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$E[Y \mid \mathrm{do}(x), Z] = f_\theta(x, Z) \;\; \text{for some } \theta \;\; — \text{the true response lives inside the model's parametric family}$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> the real carryover pattern is representable by the chosen
+                    adstock kernel, and the real diminishing-returns curve by the chosen saturation function.
+                    If TV's effect peaks two weeks after airing but the model only allows decay-from-day-one,
+                    or if a channel has a threshold ("S-shaped") response but the model assumes concavity
+                    everywhere, the misfit lands in the causal estimates.
+                </p>
+            </div>
+            <p>
+                Functional form is <strong>testable only against the alternatives you bother to fit</strong>.
+                You can compare a geometric kernel to a delayed one; you cannot certify that no better shape
+                exists outside your menu.
+            </p>
+            <h3>When it fails</h3>
+            <p>
+                The two form worlds are the matrix's most violent. <code>adstock_misspec</code> (true effect
+                peaks late; model assumes immediate decay): <strong>80% median error, 96% on the worst
+                channel, total media contribution off by &minus;68%</strong> — though here the diagnostics did
+                bite: posterior predictive checks failed and two channels' robustness values fell below the
+                fragility threshold, so the matrix scores it <em>flagged</em>, not silent.
+                <code>saturation_misspec</code> (true response has a threshold; model assumes concavity):
+                <strong>43% median error, +65% on the worst channel, 90% intervals covering only 25%</strong>
+                of truths — with PPC and refutations both green. A <strong>silent failure</strong>.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong>Parametric adstock kernels:</strong> geometric, delayed-peak (Jin et&nbsp;al. 2017),
+                    and Weibull, selectable per channel (<code>transforms/adstock.py</code>,
+                    <code>AdstockKind</code>) — the delayed and Weibull families exist precisely because
+                    geometric decay cannot represent a late peak.
+                </li>
+                <li>
+                    <strong>Per-channel <code>SaturationConfig</code></strong>
+                    (<code>config/transforms.py</code>): logistic, Hill, Michaelis&ndash;Menten, tanh, or none,
+                    with optional data-anchored bounds on the Hill half-saturation point
+                    (<code>compute_kappa_bounds_from_data</code>) to keep the curve's elbow inside the region
+                    the data covers.
+                </li>
+                <li>
+                    <strong>Specification sensitivity analysis</strong> in the validation suite
+                    (<code>validation/config.py</code>, <code>SensitivityConfig</code> with
+                    <code>include_specification_tests</code>): refit under alternative forms and report how
+                    much the conclusions move. Robust findings persist across reasonable shapes; fragile ones
+                    are the tell.
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= 4. SUTVA ================= -->
+    <section class="assumption" id="a4">
+        <div class="container">
+            <h2>4 · SUTVA / no interference <span class="testability untestable">Untestable in observational data</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$Y_g(x_1, x_2, \ldots, x_G) = Y_g(x_g) \quad \text{— geo } g\text{'s outcome depends only on geo } g\text{'s treatment}$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> when a geo experiment holds out media in Denver, Denver's
+                    sales respond only to Denver's treatment — no national TV halo bleeding across DMA lines,
+                    no retargeting pools chasing users across markets, no treated-market buzz lifting the
+                    control. If spillover flows from treated to control geos, the contrast is diluted and the
+                    measured lift understates the truth (or worse, if controls are contaminated asymmetrically,
+                    biases it in either direction).
+                </p>
+            </div>
+            <p>
+                In observational data this is <strong>untestable</strong> — you never observe the same geo
+                with and without its neighbors' treatment. The stress matrix does not simulate it; the risk is
+                a property of <em>experiments</em>, and the defense is design-level, not model-level.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong>Matched-pair randomized geo designs</strong>
+                    (<code>planning/design.py</code>, <code>geo_lift_design</code>): geos are residualized on
+                    the model's own baseline structure, paired by residual co-movement via minimum-weight
+                    perfect matching, randomized within pairs, and powered against a placebo simulation run on
+                    actual history — tight pairs and design-based SEs reduce the room interference has to hide in.
+                </li>
+                <li>
+                    <strong>The spillover screen in the geo design memo:</strong> the
+                    <a href="measurement-calibration.html#test-design">calibration loop's design methodology</a>
+                    excludes candidate geos whose cross-geo posterior effect correlation exceeds 0.5 (Step 2)
+                    and runs explicit spillover and contamination diagnostics on the readout (Step 6) — in the
+                    worked example, a market was dropped because its correlation with a treated market hit 0.71.
+                </li>
+                <li>
+                    <strong>Honest scoping:</strong> where geos cannot be isolated (national sponsorships,
+                    spill-heavy upper-funnel media), the framework's design tool recommends budget-neutral
+                    randomized <em>flighting</em> over time instead (<code>planning/design.py</code>,
+                    <code>flighting_design</code>), trading geographic contrast for temporal contrast.
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= 5. Sequential ignorability ================= -->
+    <section class="assumption" id="a5">
+        <div class="container">
+            <h2>5 · Sequential ignorability <span class="testability untestable">Untestable</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$\{Y(x, m),\, M(x')\} \perp\!\!\!\perp X \mid Z, \qquad Y(x, m) \perp\!\!\!\perp M \mid X, Z$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> when a mediated model decomposes TV's effect into
+                    TV&nbsp;&rarr;&nbsp;awareness&nbsp;&rarr;&nbsp;sales versus TV&nbsp;&rarr;&nbsp;sales
+                    directly, it needs no-unobserved-confounding <em>twice</em>: once on the media&rarr;mediator
+                    path and again on the mediator&rarr;outcome path. Anything unobserved that drives both
+                    awareness and sales — PR coverage, word of mouth, distribution wins — corrupts the split.
+                </p>
+            </div>
+            <p>
+                <strong>Untestable</strong>, and strictly harder than assumption 1: randomizing media spend
+                fixes the first condition but not the second, because you cannot randomize awareness. The
+                direct/indirect <em>split</em> is identified only by this assumption plus the priors.
+            </p>
+            <h3>When it fails</h3>
+            <p>
+                The <a href="stress-04-extension-traps.html">extension-traps pressure test</a> measures both
+                edges of the trade. Ignoring mediation is structurally wrong: the base model credits a fully
+                mediated TV channel with ROAS 0.22 against a true 2.14 — the contribution flows to whoever
+                else touches the mediator. But <code>NestedMMM</code> is no free lunch: it recovers the lost
+                channel while <strong>over-crediting its sibling channel 2.6&times;</strong> — a
+                prior-determined split the data cannot identify — and a deliberately <em>wrong</em> mediator
+                fit cleanly, reporting a confident mediated share with green sampling diagnostics throughout.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong><code>NestedMMM</code></strong> (<code>mmm_extensions/models/nested.py</code>)
+                    makes the mediation structure explicit and reports direct vs. mediated decompositions
+                    (<code>MediationEffects</code>) — the assumption is at least declared, not smuggled.
+                </li>
+                <li>
+                    <strong>Prior-sensitivity discipline:</strong> because the split is prior-sensitive, the
+                    honest deliverable is the <em>total</em> effect (which is robust) alongside a
+                    range of splits under varied priors — the pressure-test series demonstrates the workflow.
+                </li>
+                <li>
+                    <strong>Experiment calibration on the total effect</strong>
+                    (<code>calibration/</code>): a lift test anchors the total causal effect even when the
+                    mediation split remains a modeling assumption.
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= 6. Exogeneity of spend ================= -->
+    <section class="assumption" id="a6">
+        <div class="container">
+            <h2>6 · Exogeneity of spend <span class="testability untestable">Untestable</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$\mathrm{Cov}(X_t, \varepsilon_t) = 0 \quad \text{— budgets are not set from concurrent (or anticipated) outcome shocks}$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> this week's spend was not chosen by looking at this week's
+                    sales. When budgets chase performance — spend up because sales are up, cut because sales
+                    dipped — causality runs backwards through the very regression that is supposed to measure
+                    the forward effect. This is assumption 1's most common concrete mechanism in marketing,
+                    called out separately because it is the one analysts can actually interrogate
+                    institutionally: <em>ask how the budget was set</em>.
+                </p>
+            </div>
+            <p>
+                <strong>Untestable</strong> from the time series alone — simultaneity leaves no signature a
+                fit statistic can isolate. It is, however, <em>discoverable</em>: budget-setting processes are
+                documented human decisions.
+            </p>
+            <h3>When it fails</h3>
+            <p>
+                In the matrix's <code>reverse_causality</code> world (spend reacting to recent sales), the
+                fitted model happened to recover within <strong>19% on the worst channel</strong> with full
+                coverage — though the placebo refutation flagged it. Do not read that as safety: the
+                anticipatory variant is exactly the <code>unobserved_confounding</code> world
+                (<strong>+69%</strong>, silent), because budgeting on <em>forecasted</em> demand is reverse
+                causality with a lag. And it happens in the wild: the framework's real-data pressure test on
+                the Lydia Pinkham series (<code>nbs/pinkham_real_data.ipynb</code>, 1907&ndash;1960 — the
+                classic dataset where advertising stood in for a sales force) confronts budget-follows-sales
+                feedback in the historical record itself: advertising tracks revenue across the boom,
+                Depression, and postwar decline, and Hanssens (1980) demonstrated the sales&rarr;advertising
+                feedback formally — which is exactly why that notebook's forecast grade is reported as a
+                measured failure rather than explained away.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong>Declared demand confounders</strong> (assumption 1's machinery): putting the
+                    planning signal — category demand, seasonality, the forecast the budget was set against —
+                    into \(Z\) as a <code>CausalControlRole.CONFOUNDER</code> converts anticipatory budgeting
+                    back into conditional exchangeability.
+                </li>
+                <li>
+                    <strong>The robustness value</strong> (<code>validation/sensitivity_unobserved.py</code>)
+                    quantifies how strong the un-modeled feedback would have to be to zero out each channel.
+                </li>
+                <li>
+                    <strong>Randomized designs break the loop by construction</strong>: a budget set by a coin
+                    flip (<code>planning/design.py</code> — randomized geo assignment, randomized flighting)
+                    cannot have been set by sales.
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= 7. Stable structure ================= -->
+    <section class="assumption" id="a7">
+        <div class="container">
+            <h2>7 · Stable structure over the window <span class="testability partial">Partially testable</span></h2>
+            <div class="formal-statement">
+                <div class="math-line">$$\theta_t = \theta \;\; \text{for all } t \text{ in the window} \quad \text{— no unmodeled breaks in trend, seasonality, or response}$$</div>
+                <p style="margin-bottom: 0;">
+                    <strong>In English:</strong> the baseline the model subtracts before crediting media is
+                    assumed smooth and stationary. A distribution win, a price restructure, a pandemic, an
+                    evolving seasonal pattern — any structural shift the trend term cannot bend around gets
+                    absorbed by whatever <em>can</em> bend, and the most flexible terms in the model are the
+                    media curves.
+                </p>
+            </div>
+            <p>
+                <strong>Partially testable</strong>: out-of-time backtests and split-window refits can detect
+                instability after the fact, but they cannot certify that the next window resembles the last,
+                and in-sample checks barely react at all.
+            </p>
+            <h3>When it fails</h3>
+            <p>
+                The <code>trend_break</code> world (a level shift mid-window under a smooth global trend):
+                <strong>27% median error, &minus;41% on the worst channel</strong>, with 100% interval
+                coverage and clean convergence — a <strong>silent failure</strong>, the misattributed break
+                hiding comfortably inside wide intervals. Its sibling <code>seasonality_misspec</code>
+                (evolving seasonality vs. static low-order Fourier) is worse on the extremes: 37% median,
+                <strong>+104%</strong> on the worst channel, also silent.
+            </p>
+            <h3>What the framework does about it</h3>
+            <ul>
+                <li>
+                    <strong>Piecewise and spline trends</strong> (<code>model/trend_config.py</code>):
+                    Prophet-style piecewise-linear trend with Laplace-shrunk changepoints
+                    (default 10 candidates) and cubic B-spline trends, so a real break has somewhere to go
+                    other than the media coefficients.
+                </li>
+                <li>
+                    <strong>Rolling-origin backtesting</strong> (<code>validation/backtest.py</code>): on the
+                    trend-break world the out-of-time protocol degrades from 3.0% to 11.4% MAPE with 58%
+                    coverage — the backtest sees the misspecification that the green in-sample checks miss.
+                </li>
+                <li>
+                    <strong>Window discipline:</strong> when a known regime change splits the data, fit the
+                    regimes separately or model the break explicitly — and say so in the pre-specification.
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= Closing ================= -->
+    <section id="not-a-guarantee">
+        <div class="container">
+            <h2>What this page is <em>not</em></h2>
+            <p>
+                It is not a guarantee. Listing assumptions does not weaken them, satisfy them, or substitute
+                for them; a signed contract is still a contract whose terms can be breached. Four of the seven
+                clauses above are flatly untestable from observational data, and the scorecard shows what
+                breach costs: worst-channel errors of 50&ndash;100% delivered with immaculate diagnostics.
+            </p>
+            <div class="warning-box">
+                <h4>⚠️ The doctrine line</h4>
+                <p>
+                    Green diagnostics validate the <strong>computation</strong>, not the causal claim. R-hat,
+                    divergences, and posterior predictive checks tell you the sampler faithfully explored the
+                    posterior of the model you wrote down — they are silent on whether the model you wrote
+                    down identifies the effect you care about. Every silent failure in the stress matrix
+                    sampled beautifully.
+                </p>
+            </div>
+            <p>
+                There is exactly one mechanism in this framework that <em>reduces</em> the contract rather than
+                monitoring it: <strong>experiment calibration</strong>. A randomized geo holdout or flighting
+                test manufactures its own exchangeability — assignment by coin flip cannot be confounded,
+                anticipated, or reverse-caused — and folding its result into the model
+                (<code>add_experiment_calibration</code>, prior or likelihood route) replaces an assumption
+                with a measurement for the channels and windows it covers. Everything else on this page makes
+                the assumptions explicit, stress-tested, and priced. Only experiments make them smaller.
+            </p>
+            <p>
+                That loop — which assumption to buy down next, how to design the test, and how the evidence
+                feeds back — is the subject of the
+                <a href="measurement-calibration.html">closed-loop measurement &amp; calibration guide</a>.
+            </p>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Where to go next</h2>
+            <p>See the assumptions broken on purpose, or learn the workflow that holds them up.</p>
+            <div class="cta-buttons">
+                <a href="pressure-testing.html" class="btn btn-white">Pressure-Testing Series</a>
+                <a href="measurement-calibration.html" class="btn btn-outline-white">Calibration Loop</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "\\(", right: "\\)", display: false},
+                    {left: "$", right: "$", display: false}
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,8 +1,10 @@
 [project]
 name = "mmm-framework"
 version = "0.1.0"
-description = "Add your description here"
+description = "Bayesian Marketing Mix Modeling framework with causal calibration, pressure testing, and an adaptive measurement loop"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
     { name = "Matthew Reda", email = "m.reda94@gmail.com" }
 ]
@@ -37,6 +39,8 @@ dependencies = [
     "langchain-openai>=0.1.21",
     "rich>=13.0.0",
     "langchain-google-vertexai>=2.0.0",
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
 ]
 
 [dependency-groups]

@@ -98,6 +98,11 @@
             <ul class="sidebar-nav">
                 <li><a href="#prior-explorer">Distribution Viewer</a></li>
             </ul>
+
+            <h3>Beyond the Core Model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#beyond-core">Newer Subsystems</a></li>
+            </ul>
         </aside>
 
         <main class="main-content">
@@ -339,6 +344,19 @@ results = model.fit()</code></pre>
             </div>
             <p>For $\alpha = 0.7$: half-life ≈ 1.9 periods. For $\alpha = 0.9$: half-life ≈ 6.6 periods.</p>
 
+            <div class="note">
+                <p style="margin-bottom: 0;">
+                    <strong>Reading the posterior:</strong> the default implementation (since June 2026)
+                    estimates the decay rate directly — <code>adstock_alpha_&lt;CHANNEL&gt;</code> <em>is</em>
+                    α and can be read as such. On the legacy blend path
+                    (<code>use_parametric_adstock=False</code>, the pre-change default), the
+                    <code>adstock_&lt;CHANNEL&gt;</code> parameter is a <em>blend weight</em> over a fixed bank of
+                    candidate decay rates, not a decay rate itself — do not interpret that posterior as α directly.
+                    The full derivation and the difference between the two
+                    mechanisms are covered in <a href="math-01-adstock.html">the adstock deep dive</a>.
+                </p>
+            </div>
+
             <h4>Weibull/Delayed Adstock</h4>
             <p>For channels where peak effect is delayed (e.g., brand campaigns, content marketing):</p>
             <div class="math-block">
@@ -457,12 +475,20 @@ digital_channel = (
             <p>Saturation captures diminishing returns—each additional dollar produces less incremental effect.</p>
 
             <div class="definition">
-                <h4>Logistic Saturation (Recommended)</h4>
+                <h4>Exponential Saturation (config name <code>logistic</code> — Recommended default)</h4>
             </div>
             <div class="math-block">
                 <span class="equation-label">(4)</span>
-                $$f_{\text{logistic}}(x) = 1 - \exp(-\lambda x)$$
+                $$f_{\text{sat}}(x) = 1 - \exp(-\lambda x)$$
             </div>
+            <p style="font-size:0.92rem;">
+                Naming note: this curve is <em>exponential saturation</em> — concave, \(f(0)=0\),
+                asymptoting to 1. The framework's config name
+                <code>SaturationConfig.logistic()</code> keeps the historical label, but the
+                function the model fits is Eq. (4), not the logistic sigmoid
+                \(1/(1+e^{-\lambda x})\). All docs pages use Eq. (4); if you see the sigmoid
+                form elsewhere, it is stale.
+            </p>
 
             <h4>Hill Function</h4>
             <div class="math-block">
@@ -723,17 +749,28 @@ model_config = (
 )</code></pre>
 
             <h3 id="standard-priors">Prior Specification</h3>
-            <pre><code># Recommended default priors for standardized data
-beta_media ~ HalfNormal(sigma=0.5)      # Media coefficients
-alpha ~ Beta(alpha=1, beta=3)            # Adstock decay
-kappa ~ Beta(alpha=2, beta=2)            # Hill half-saturation
-slope ~ HalfNormal(sigma=1.5)            # Hill slope
-lambda_sat ~ Gamma(alpha=2, beta=1)      # Logistic saturation rate
-intercept ~ Normal(mu=0, sigma=1)        # Intercept
-gamma ~ Normal(mu=0, sigma=0.5)          # Control coefficients
-sigma ~ HalfNormal(sigma=0.5)            # Noise
-delta ~ Normal(mu=0, sigma=0.1)          # Trend growth
-season_coef ~ Normal(mu=0, sigma=0.3)    # Seasonality</code></pre>
+            <p style="font-size:0.92rem;">
+                These are the priors the model actually builds (read from
+                <code>model/base.py</code> / <code>config/transforms.py</code>, 0.1.0) — on
+                standardized <code>y</code> and per-channel normalized media:
+            </p>
+            <pre><code># Shipped default priors (standardized data)
+beta_media ~ Gamma(mu=1.5, sigma=1.0)    # Media coefficients (positive; replaced
+                                          #   by roi_prior when experiment-calibrated)
+alpha ~ Beta(alpha=1, beta=3)             # DEFAULT (since 2026-06): parametric
+                                          #   in-graph adstock decay, per channel
+adstock_mix ~ Beta(2, 2)                  # LEGACY path (use_parametric_adstock=
+                                          #   False): blend weight over the fixed
+                                          #   decay bank {0, .3, .5, .7, .9}
+kappa ~ Beta(alpha=2, beta=2)             # Hill half-saturation (if Hill configured)
+slope ~ HalfNormal(sigma=1.5)             # Hill slope
+lambda_sat ~ Exponential(lam=0.5)         # Saturation rate, Eq. (4) form
+intercept ~ Normal(mu=0, sigma=0.5)       # Intercept
+gamma ~ Normal(mu=0, sigma=0.5)           # Control coefficients (declared
+                                          #   confounders get a wide, un-shrunk prior)
+sigma ~ HalfNormal(sigma=0.5)             # Noise
+delta ~ Normal(mu=0, sigma=0.5)           # Trend growth (TrendConfig default)
+season_coef ~ Normal(mu=0, sigma=0.3)     # Seasonality (per Fourier coefficient)</code></pre>
 
             <h4>Framework Usage: Prior Configuration</h4>
             <pre><code class="python">from mmm_framework import PriorConfigBuilder, MediaChannelConfigBuilder
@@ -796,6 +833,17 @@ distribution_control = (
             <div class="math-block">
                 $$\text{Proportion Mediated}_c = \frac{\beta^{(M)}_c \cdot \gamma}{\beta^{(D)}_c + \beta^{(M)}_c \cdot \gamma}$$
             </div>
+            <p style="font-size:0.92rem;">
+                Caveat: proportion mediated is only well-behaved when the direct and indirect
+                effects share a sign. With opposite-signed effects the denominator can shrink
+                toward zero, so the ratio can exceed 1 or go negative — report the direct and
+                indirect effects (with intervals) alongside it, and treat the ratio as
+                descriptive, not as a bounded percentage. The mediation decomposition also
+                inherits a <em>sequential ignorability</em> assumption (no unobserved
+                confounding of either the media→mediator or mediator→outcome path) that
+                observational data cannot verify; the pressure-testing series shows the splits
+                are prior-sensitive when the mediator is weakly observed.
+            </p>
 
             <h3 id="nested-mediators">Mediator Types</h3>
             <table>
@@ -1132,6 +1180,18 @@ model_config = (
                 </p>
             </div>
 
+            <p>
+                The classification has a formal basis: variable roles map onto a causal DAG over media, KPI, and
+                covariates. A <strong>confounder</strong> sits on a backdoor path (e.g., underlying demand driving
+                both spend and sales), so including it is an adjustment that blocks that path — shrinking it toward
+                zero reopens the path and biases media coefficients. A <strong>precision control</strong> affects only
+                the outcome, so selection over it trades a little bias for variance reduction without touching
+                identification. Observational adjustment alone, however, cannot resolve equifinality — distinct
+                parameter configurations that fit the data equally well; experiment calibration acts as
+                quasi-instrumental evidence that breaks these ties. See <a href="causal-inference.html">the causal
+                inference guide</a> for the full DAG treatment.
+            </p>
+
             <h3 id="vs-horseshoe">Regularized Horseshoe Prior</h3>
             <div class="math-block">
                 <span class="equation-label">(17)</span>
@@ -1234,21 +1294,43 @@ mff_config = (
                 </tbody>
             </table>
 
-            <h3>Computational Scaling</h3>
+            <h3 id="computational-scaling">Computational Scaling</h3>
+            <p>
+                <strong>Measured (from the baked notebook <code>nbs/runtime_benchmark.ipynb</code>;
+                Apple M3 laptop, 8 cores, 16&nbsp;GB)</strong> — wall-clock for the full
+                <code>fit()</code> call including compilation. The reference fit is the standard
+                national model (parametric adstock, logistic saturation, linear trend, yearly
+                seasonality) on 156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws:
+                <strong>~17&nbsp;s</strong>.
+            </p>
             <table>
-                <thead><tr><th>Component</th><th>Cost Multiplier</th></tr></thead>
+                <thead><tr><th>Configuration</th><th>Measured wall-clock</th><th>vs reference</th></tr></thead>
                 <tbody>
-                    <tr><td>Additional mediator</td><td>~1.3×</td></tr>
-                    <tr><td>Additional outcome</td><td>~1.5×</td></tr>
-                    <tr><td>Cross-effects</td><td>~1.1×</td></tr>
-                    <tr><td>Partial observation</td><td>~1.2×</td></tr>
-                    <tr><td>Hierarchical pooling</td><td>~1.5×</td></tr>
+                    <tr><td>Reference national fit (156w &times; 7ch, NumPyro 4&times;500)</td><td>~17&nbsp;s</td><td>1&times;</td></tr>
+                    <tr><td>Smaller national fits (104&ndash;156w, 3&ndash;7ch)</td><td>8&ndash;17&nbsp;s</td><td>&le;1&times; (compile/warm-up dominates at this size)</td></tr>
+                    <tr><td>Doubling draws (500 &rarr; 1000)</td><td>21&nbsp;s</td><td>~1.3&times; (fixed compile + tune costs dilute it)</td></tr>
+                    <tr><td>Geo panel, 4 geos &times; 130w &times; 4ch (520 rows, partial pooling)</td><td>22&nbsp;s</td><td>~3.1&times; its 130-row national twin — still sub-linear per row (~0.8&times;)</td></tr>
+                    <tr><td>NestedMMM, +1 partially observed mediator (Aurora 104w &times; 4ch, PyMC 2&times;500)</td><td>17&nbsp;s</td><td>~0.6&times; the core model on the same data/budget</td></tr>
+                    <tr><td>MultivariateMMM, 2 outcomes + cross-effect (same data/budget)</td><td>13&nbsp;s</td><td>~0.4&times; the core model</td></tr>
                 </tbody>
             </table>
+            <p>
+                Two corrections to earlier versions of this table, now on the record: the extension
+                models are <em>not</em> meaningfully more expensive than the core model at this
+                scale (previous unsourced multipliers claimed 1.3&ndash;1.5&times;; measured, they run
+                <em>faster</em> than the parametric-adstock core model on the same data), and cost
+                is dominated by sampler choice and draws, not by model family. Absolute seconds are
+                machine-specific; treat the ratios as the transferable part.
+            </p>
 
             <div class="note">
                 <h4>💡 Performance Tip</h4>
-                <p>For complex models, use <code>nuts_sampler="numpyro"</code> for 4-10× speedup via JAX.</p>
+                <p>For complex models, use <code>nuts_sampler="numpyro"</code>.
+                <strong>Measured:</strong> 6.0&times; faster wall-clock than the PyMC sampler at
+                equal draws (104 weeks &times; 7 channels, 4 chains &times; 500 draws, sequential
+                PyMC chains vs NumPyro's vectorized chains — the end-to-end gap a notebook user
+                experiences; <code>nbs/runtime_benchmark.ipynb</code>). With parallel PyMC chains
+                the gap narrows to roughly 2&times; (the walkthrough's robustness study).</p>
             </div>
 
             <!-- Prior Explorer Section -->
@@ -1370,6 +1452,47 @@ mff_config = (
                     <li><strong>Sensitivity check:</strong> If results change dramatically with different reasonable priors, your data is weakly informative</li>
                 </ul>
             </div>
+
+            <h2 id="beyond-core">Beyond the Core Model</h2>
+            <p>
+                The estimation machinery above sits inside a larger measurement system. Each subsystem below has its
+                own page; this section is a map, not a manual.
+            </p>
+            <ul>
+                <li>
+                    <strong>Experiment design &amp; priority engine:</strong> ranks channels by expected information
+                    gain — closed form $0.5\,\ln(1 + \sigma_{\text{post}}^2 / \sigma_{\text{exp}}^2)$ — and expected
+                    value of information (the preposterior dollar value of deciding the budget with vs without the
+                    experiment), then places them in test-now / learn-cheaply / monitor / deprioritize quadrants.
+                    See <a href="measurement-calibration.html">measurement &amp; calibration</a> and
+                    <a href="workflow-calibration-decisions.html">the calibration-decisions workflow</a>.
+                </li>
+                <li>
+                    <strong>Experiment calibration routes:</strong> lift tests enter the model either as a channel
+                    coefficient prior derived via a design factor, or as an in-graph
+                    <code>ExperimentMeasurement</code> likelihood on contribution, ROAS, or mROAS that updates
+                    β, saturation, and adstock jointly. Full math in
+                    <a href="math-05-calibration.html">the calibration deep dive</a>.
+                </li>
+                <li>
+                    <strong>Parameter-learning diagnostics:</strong> prior→posterior contraction, overlap, and shift
+                    metrics that flag prior-dominated posteriors — parameters the data never actually updated.
+                </li>
+                <li>
+                    <strong>EDA &amp; data-quality module:</strong> pre-fit validation, outlier detection and
+                    treatment, and structural checks on the input data before any sampling begins.
+                </li>
+                <li>
+                    <strong>Agent workspace &amp; platform:</strong> the React UI, LLM analyst-assistant, and
+                    measurement-loop surfaces that operate this framework end to end. See
+                    <a href="platform-overview.html">the platform overview</a>.
+                </li>
+                <li>
+                    <strong>Synthetic violation worlds:</strong> data-generating processes with known causal ground
+                    truth — confounding, collinearity, misspecified carryover and saturation, trend breaks — used to
+                    measure where the model silently fails. See <a href="pressure-testing.html">pressure testing</a>.
+                </li>
+            </ul>
 
         </main>
     </div>

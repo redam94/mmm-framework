@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluator's Guide | MMM Framework</title>
+    <meta name="description" content="Procurement facts on one page: license, version, maintainership, API stability, support model, measured evidence, and known limitations of the MMM Framework.">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/evaluator.html">
+    <meta property="og:title" content="Evaluator's Guide | MMM Framework">
+    <meta property="og:description" content="Procurement facts on one page: license, version, maintainership, API stability, support model, measured evidence, and known limitations of the MMM Framework.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/evaluator.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Page-specific overrides for narrower content width */
+        .container { max-width: 900px; }
+        section { padding: 3rem 0; }
+        .hero { min-height: auto; padding-top: 8rem; padding-bottom: 4rem; background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%); }
+        .hero::before { display: none; }
+        .cta-section { margin-top: 3rem; }
+        .comparison-table td:first-child { font-weight: 600; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by shared/components.js -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>Evaluator's Guide</h1>
+            <p class="lead">
+                Procurement facts on one page. If you are deciding whether to adopt this framework, everything you need to weigh&mdash;license, maturity, maintainership, evidence, and limitations&mdash;is below, stated plainly. Where a claim is measured, we link the measurement; where the honest answer is unflattering, we say so anyway.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>At a Glance</h2>
+            <table class="comparison-table">
+                <tbody>
+                    <tr>
+                        <td>License</td>
+                        <td>Apache-2.0 (<code>LICENSE</code> at the repository root). Permissive: commercial use, modification, redistribution, and forking are all allowed, with an explicit patent grant.</td>
+                    </tr>
+                    <tr>
+                        <td>Version</td>
+                        <td>0.1.0 (Beta) &mdash; in development since December 2025, unreleased. Pre-1.0: expect API changes on non-stable modules. See the <a href="changelog.html">versioning &amp; changelog page</a>.</td>
+                    </tr>
+                    <tr>
+                        <td>Packaging</td>
+                        <td>Not on PyPI. Install from source: <code>git clone</code> + <code>uv sync</code>, or pin a commit with <code>pip install git+https://github.com/redam94/mmm-framework@&lt;commit&gt;</code>.</td>
+                    </tr>
+                    <tr>
+                        <td>Maintainer</td>
+                        <td>Matthew Reda, solo maintainer. This is a real risk; see <a href="#team">Team &amp; sustainability</a> for what mitigates it.</td>
+                    </tr>
+                    <tr>
+                        <td>Support</td>
+                        <td><a href="https://github.com/redam94/mmm-framework/issues" target="_blank" rel="noopener">GitHub issues</a>. No SLA. No commercial support contract is currently offered.</td>
+                    </tr>
+                    <tr>
+                        <td>Requirements</td>
+                        <td>Python 3.12+. Core stack: PyMC 5.26+, NumPyro, FastAPI backend, React frontend.</td>
+                    </tr>
+                    <tr>
+                        <td>Test suite</td>
+                        <td>2,098 passing tests (fast suite, measured 2026-06-12).</td>
+                    </tr>
+                    <tr>
+                        <td>Governance</td>
+                        <td>Single-maintainer project; changes land via GitHub. No foundation, no steering committee&mdash;the fork-ability of Apache-2.0 is the governance backstop.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Maturity &amp; API Stability</h2>
+            <p>
+                The framework is pre-1.0 and says so. Different modules have matured at different rates, and the <a href="changelog.html#stability">changelog page</a> maintains the authoritative tier list. In summary:
+            </p>
+            <ul>
+                <li><strong>Stable</strong> &mdash; the core modeling surface: <code>BayesianMMM</code>, results classes, the fluent builders, Pydantic configs, the adstock/saturation/seasonality/trend transforms, and the MFF data loader.</li>
+                <li><strong>Beta</strong> &mdash; the active surface: reporting, analysis, serialization, the FastAPI endpoints, the React web UI, the AI agent workspace, the measurement-loop planning engine, and the pre-fit EDA module.</li>
+                <li><strong>Experimental</strong> &mdash; subject to change: the extension models (NestedMMM, MultivariateMMM, CombinedMMM), the DAG model builder, the Excel config workflow, and the legacy Streamlit UI.</li>
+            </ul>
+            <p>
+                Until 1.0, minor versions (<code>0.x.0</code>) may break experimental modules; stable APIs are preserved on a best-effort basis with deprecation warnings. After 1.0 the project commits to strict <a href="https://semver.org" target="_blank" rel="noopener">SemVer</a>.
+            </p>
+
+            <div class="note">
+                <h4>Roadmap to 1.0 &mdash; criteria, not dates</h4>
+                <p style="margin-bottom: 0;">
+                    There is no promised ship date. 1.0 happens when specific criteria are met: stabilizing the Beta-tier APIs, and publishing to PyPI. Until then, pin a git commit for production use.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>What's Measured vs. What's Claimed</h2>
+            <p>
+                The marketing for most MMM tools is assertion. This project's policy is that every quantitative claim on the docs site traces to a seeded, re-runnable notebook&mdash;so any number you read can be re-derived by re-baking the notebook, not taken on trust. The four proof assets an evaluator should weigh:
+            </p>
+            <ul>
+                <li>
+                    <strong>Pressure-testing scorecard.</strong> The framework is fit to 16 synthetic worlds with known causal ground truth, and every estimate is graded against that truth&mdash;including the 8 worlds where it fails silently. The recorded scorecard, with failures, is public: <a href="pressure-testing.html">pressure-testing</a>.
+                </li>
+                <li>
+                    <strong>Forecast accuracy backtest.</strong> Rolling-origin out-of-sample accuracy is measured, not asserted: <a href="workflow-forecasting.html#backtesting">forecasting workflow &mdash; backtesting</a>.
+                </li>
+                <li>
+                    <strong>Runtime benchmark.</strong> A production-size national fit (156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws) measures <strong>~17&nbsp;s</strong> wall-clock on an Apple M3 laptop, including compilation. Source: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/runtime_benchmark.ipynb" target="_blank" rel="noopener"><code>nbs/runtime_benchmark.ipynb</code></a>; full scaling table in the <a href="technical-guide.html#diagnostics">technical guide's Computational Scaling section</a>. Absolute seconds are machine-specific; treat the ratios as the transferable part.
+                </li>
+                <li>
+                    <strong>Real-data test.</strong> The framework is run on the Lydia Pinkham advertising series (1907&ndash;1960), the most-studied real dataset in advertising econometrics, and graded against decades of published estimates: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb" target="_blank" rel="noopener"><code>nbs/pinkham_real_data.ipynb</code></a>.
+                </li>
+            </ul>
+            <p>
+                The methodology itself is documented in prose&mdash;the <a href="technical-guide.html">technical guide</a> and the <a href="math-00-overview.html">mathematics series</a>&mdash;rather than living only in code, so it can be audited without reading the source.
+            </p>
+        </div>
+    </section>
+
+    <section id="team">
+        <div class="container">
+            <h2>Team &amp; Sustainability</h2>
+            <p>
+                <strong>This framework is built and maintained by one person: Matthew Reda.</strong> That is the single largest risk in adopting it, and you should weigh it as such. If the maintainer is unavailable, there is no team to pick up the work. We are not going to spin that.
+            </p>
+            <p>
+                What genuinely mitigates the bus factor:
+            </p>
+            <ul>
+                <li><strong>Apache-2.0 license.</strong> You can fork the entire codebase and continue without permission. Nothing is held back in a proprietary tier.</li>
+                <li><strong>A test suite of 2,000+ passing tests</strong> that lets a successor (or your own team) modify the code with a safety net.</li>
+                <li><strong>Pre-registered, seeded notebook evidence.</strong> Every measured claim on this site comes from a notebook that can be re-baked&mdash;the evidence base does not depend on the maintainer's memory.</li>
+                <li><strong>A pressure-testing harness with a recorded scorecard</strong> that is re-recorded whenever framework defaults change, so regressions in methodology are visible, not silent.</li>
+                <li><strong>Methodology stated in documentation, not hidden in code.</strong> The technical guide and math series describe what the model does and why, so the design intent survives independently of any individual.</li>
+            </ul>
+            <p>
+                If your procurement process requires a vendor with an organization behind it, this project does not currently meet that bar. If it requires software your own team can own, audit, and extend, the items above are designed for exactly that.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Security &amp; Deployment</h2>
+            <p>
+                The framework is self-hosted: a Python library, a FastAPI backend with a Redis-backed job queue, and a React frontend that you run on your own infrastructure. There is no hosted SaaS offering, which means no client data leaves your environment by default.
+            </p>
+            <p>
+                The AI agent workspace introduces an LLM data flow that deserves separate scrutiny&mdash;which provider sees what, sandboxing of agent-executed code, and the configuration options (including fully local models via LM Studio). That is covered on the dedicated <a href="security.html">security page</a> rather than duplicated here.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Data Requirements &amp; Runtime</h2>
+            <p>
+                Input data uses the MFF (Master Flat File) long format, loaded and validated by <code>MFFLoader</code>. The practical floor and the recommended shape of the data&mdash;granularity, history length, channel coverage&mdash;are documented on the <a href="data-requirements.html">data requirements page</a>. Short version: 104+ weeks of weekly data is the comfortable starting point.
+            </p>
+            <p>
+                Runtime is measured, not estimated: the reference production-size national fit completes in ~17&nbsp;s on a laptop (see <a href="technical-guide.html#diagnostics">Computational Scaling</a>), and geo-panel and extension models scale sub-linearly per row at that size. Model iteration speed is not a procurement risk here.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>How to Evaluate This in 30 (or 120) Minutes</h2>
+            <div class="highlight-box">
+                <h4>30 minutes &mdash; reading only</h4>
+                <p style="margin-bottom: 0;">
+                    Read the <a href="pressure-testing.html">pressure-testing scorecard</a> first, including the failure column&mdash;a tool that publishes where it breaks is showing you its actual epistemics. Then the <a href="workflow-forecasting.html#backtesting">forecast backtest</a> for out-of-sample honesty, and skim <a href="aurora-05-unified-workflow.html">Aurora 05</a> to see the full workflow end to end.
+                </p>
+            </div>
+            <div class="highlight-box">
+                <h4>120 minutes &mdash; hands on</h4>
+                <p style="margin-bottom: 0;">
+                    Do the 30-minute pass, then clone the repository and follow the <a href="getting-started.html">quickstart</a>: install from source, fit a first model on synthetic data with known ground truth, and check the estimates against the answer key yourself. If you want to stress the evidence, re-run <code>nbs/runtime_benchmark.ipynb</code> on your own hardware and compare.
+                </p>
+            </div>
+            <div class="note">
+                <p style="margin-bottom: 0;">
+                    Evaluating it as the engine of a consulting practice? See the
+                    <a href="artifacts/engagement-timeline.html">10&ndash;12 week engagement timeline</a>
+                    and the full set of printable
+                    <a href="artifacts/index.html">consultant artifacts</a> (checklists, pre-registration
+                    memo, executive summary template) the framework generates.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>Known Limitations</h2>
+            <div class="warning-box">
+                <h4>⚠️ Read before depending</h4>
+                <ul style="margin-bottom: 0;">
+                    <li><strong>Not on PyPI.</strong> Source installs only; pin a git commit for anything production-facing.</li>
+                    <li><strong>Solo maintainer.</strong> No SLA, no commercial support, real bus-factor risk (mitigations <a href="#team">above</a>).</li>
+                    <li><strong>Pre-1.0 API churn.</strong> Beta and Experimental modules may change between minor versions; only the core modeling tier is treated as stable.</li>
+                    <li><strong>No SaaS offering.</strong> You operate the stack (FastAPI, Redis, worker, frontend) yourself.</li>
+                    <li><strong>Open methodological findings.</strong> The pressure-testing page records unresolved issues openly&mdash;e.g. a holdout-validation fallback bug for Hill-fit models. (The former headline finding&mdash;the legacy blend adstock underperforming the parametric path&mdash;was resolved in June 2026 by making parametric adstock the default.) See <a href="pressure-testing.html#strengths-weaknesses">known strengths &amp; weaknesses</a>.</li>
+                </ul>
+            </div>
+            <p>
+                None of these are hidden in fine print elsewhere&mdash;this list is the fine print, on purpose. If any item is disqualifying for your context, better to know now.
+            </p>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Questions a Page Can't Answer?</h2>
+            <p>Open an issue, read the methodology, or get in touch directly via the about page.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/redam94/mmm-framework" class="btn btn-white" target="_blank">View on GitHub</a>
+                <a href="about.html" class="btn btn-outline-white">About &amp; Contact</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+{
+  "hardware": {
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "cpu": "Apple M3",
+    "cores": 8,
+    "ram_gb": 16,
+    "python": "3.12.8",
+    "pymc": "5.26.1",
+    "numpyro": "0.19.0",
+    "jax": "0.8.1"
+  },
+  "config": "parametric adstock, logistic saturation, linear trend, yearly seasonality",
+  "grid_numpyro_4x500": [
+    {
+      "weeks": 104,
+      "channels": 3,
+      "seconds": 11.02,
+      "rhat_max": 1.01
+    },
+    {
+      "weeks": 104,
+      "channels": 5,
+      "seconds": 10.13,
+      "rhat_max": 1.01
+    },
+    {
+      "weeks": 104,
+      "channels": 7,
+      "seconds": 13.59,
+      "rhat_max": 1.01
+    },
+    {
+      "weeks": 156,
+      "channels": 3,
+      "seconds": 8.2,
+      "rhat_max": 1.01
+    },
+    {
+      "weeks": 156,
+      "channels": 5,
+      "seconds": 11.35,
+      "rhat_max": 1.01
+    },
+    {
+      "weeks": 156,
+      "channels": 7,
+      "seconds": 16.21,
+      "rhat_max": 1.01
+    },
+    {
+      "weeks": 156,
+      "channels": 7,
+      "seconds": 17.23,
+      "rhat_max": NaN
+    }
+  ],
+  "baseline_156w_7ch_seconds": 16.7,
+  "sampler_comparison_104w_7ch": {
+    "pymc_cores1_seconds": 85.5,
+    "numpyro_seconds": 14.2,
+    "speedup": 6.01
+  },
+  "draws_scaling_156w_7ch": {
+    "500": 16.7,
+    "1000": 21.1,
+    "ratio": 1.26
+  },
+  "geo_panel": {
+    "national_130w_4ch_seconds": 7.0,
+    "geo_4x130w_4ch_seconds": 21.9,
+    "raw_multiplier": 3.13,
+    "per_row_multiplier": 0.78
+  },
+  "extensions_aurora_104w_4ch_pymc_2x500": {
+    "base_seconds": 29.2,
+    "nested_seconds": 17.5,
+    "nested_multiplier": 0.6,
+    "multivariate_seconds": 12.6,
+    "multivariate_multiplier": 0.43
+  },
+  "docs_claims_verdict": [
+    {
+      "claim": "NumPyro '4-10x' speedup (getting-started, technical-guide)",
+      "measured": "6.0x wall-clock at equal draws (104w x 7ch)",
+      "holds": true
+    },
+    {
+      "claim": "scaling table: +1 mediator ~1.3x",
+      "measured": "0.6x (NestedMMM vs base, same data/budget)",
+      "holds": false
+    },
+    {
+      "claim": "scaling table: +1 outcome ~1.5x",
+      "measured": "0.4x (MultivariateMMM, 2 outcomes + cross-effect)",
+      "holds": false
+    },
+    {
+      "claim": "scaling table: hierarchical pooling ~1.5x (no baseline stated)",
+      "measured": "0.8x per row / 3.1x raw (4 geos)",
+      "holds": false
+    }
+  ]
+}

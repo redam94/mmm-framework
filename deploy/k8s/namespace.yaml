@@ -1,0 +1,29 @@
+# 4a — a namespace PER TENANT with hard resource quotas, so one tenant can't
+# starve the cluster (design §5 per-user quotas). Template: substitute TENANT.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mmm-tenant-TENANT
+  labels: { app.kubernetes.io/part-of: mmm-agent, mmm/tenant: "TENANT" }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata: { name: tenant-quota, namespace: mmm-tenant-TENANT }
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 24Gi      # ~ a few fit-capable kernels (§2.1: ~1.5-2Gi each)
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    pods: "12"
+    persistentvolumeclaims: "4"
+---
+apiVersion: v1
+kind: LimitRange
+metadata: { name: kernel-limits, namespace: mmm-tenant-TENANT }
+spec:
+  limits:
+    - type: Container
+      default: { cpu: "4", memory: 2Gi }       # mirrors MMM_KERNEL_MEM/_CPUS
+      defaultRequest: { cpu: "1", memory: 512Mi }
+      max: { cpu: "8", memory: 4Gi }
