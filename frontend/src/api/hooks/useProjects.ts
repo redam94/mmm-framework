@@ -30,6 +30,15 @@ export function useProject(projectId: string | undefined) {
   });
 }
 
+export function useOnboardingStatus(projectId: string | undefined) {
+  return useQuery({
+    queryKey: [...projectKeys.detail(projectId ?? ''), 'onboarding-status'],
+    queryFn: () => projectService.getOnboardingStatus(projectId!),
+    enabled: !!projectId,
+    staleTime: 15000,
+  });
+}
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({

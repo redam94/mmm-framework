@@ -233,8 +233,13 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       (`meta.onboarded`) → data (`data_files`) → fit (`model_run` artifact) →
       review (`report` artifact / `report_path`) → experiment (registry)), with
       `next_step`, `percent`, and per-step hints. Tests: `tests/test_onboarding_status.py` (3).
-- [ ] Front-end guided flow that renders the checklist + inline EDA validation
-      feedback ("first model in 30 min").
+- [x] **Front-end guided flow** — `OnboardingChecklist` on the Program/home page
+      (`useOnboardingStatus` hook + `projectService.getOnboardingStatus`): renders
+      the steps (check/circle), a progress bar, the next step's hint, and a
+      "Continue in the workspace" CTA; auto-hides once `complete`. `tsc` + `vite
+      build` clean.
+- [ ] Inline EDA validation feedback in the flow (data-quality warnings surfaced
+      at the "add data" step).
 
 ---
 

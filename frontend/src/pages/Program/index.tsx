@@ -8,6 +8,7 @@ import {
   useExperimentRegistry,
 } from '../../api/hooks/useMeasurement';
 import { CycleStageRing, type CycleStage } from './CycleStageRing';
+import { OnboardingChecklist } from './OnboardingChecklist';
 import { HeadlineKPIs } from './HeadlineKPIs';
 import { NextBestActions } from './NextBestActions';
 import { CoverageMap } from './CoverageMap';
@@ -71,6 +72,8 @@ export function ProgramPage() {
       />
 
       <CycleStageRing current={stage} reason={reason} />
+
+      <OnboardingChecklist projectId={currentProjectId} />
 
       {!hasRuns ? (
         <EmptyState

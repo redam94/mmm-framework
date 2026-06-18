@@ -66,6 +66,27 @@ export interface ProjectOnboardingResponse {
   brief_status: string;
 }
 
+export interface OnboardingStep {
+  key: string;
+  title: string;
+  done: boolean;
+  hint: string;
+}
+
+/** Path-to-first-model checklist computed from real project state. */
+export interface OnboardingStatus {
+  project_id: string;
+  project_name: string;
+  steps: OnboardingStep[];
+  completed: number;
+  total: number;
+  percent: number;
+  complete: boolean;
+  next_step: string | null;
+  next_hint: string;
+  counts: { data_files: number; model_runs: number; experiments: number };
+}
+
 export const projectService = {
   async listProjects(): Promise<ProjectListResponse> {
     const { data } = await apiClient.get<ProjectListResponse>('/projects');
@@ -98,6 +119,13 @@ export const projectService = {
     const { data } = await apiClient.post<ProjectOnboardingResponse>(
       `/projects/${projectId}/onboarding`,
       request,
+    );
+    return data;
+  },
+
+  async getOnboardingStatus(projectId: string): Promise<OnboardingStatus> {
+    const { data } = await apiClient.get<OnboardingStatus>(
+      `/projects/${projectId}/onboarding-status`,
     );
     return data;
   },
