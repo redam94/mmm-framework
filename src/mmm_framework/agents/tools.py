@@ -472,18 +472,10 @@ def _persist_external_dataset(
 
 
 def _scrub_gcp_error(text: str) -> str:
-    """Redact identifiers that GCP SDK errors echo back (project ids, service-
-    account emails, credential file paths) before they reach the chat."""
-    import re
+    """Redact identifiers GCP SDK errors echo back before they reach the chat."""
+    from ..integrations import scrub_cloud_error
 
-    text = re.sub(r"projects/[\w-]+", "projects/***", text)
-    text = re.sub(
-        r"[\w.+-]+@[\w.-]+\.iam\.gserviceaccount\.com",
-        "***@***.iam.gserviceaccount.com",
-        text,
-    )
-    text = re.sub(r"(?:/[^\s'\"]+)+\.json", "/***.json", text)
-    return text
+    return scrub_cloud_error(text)
 
 
 def _integration_error_command(exc: Exception, tool_call_id: str) -> Command:

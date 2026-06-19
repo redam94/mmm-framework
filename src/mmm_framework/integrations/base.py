@@ -53,6 +53,21 @@ def require_dependency(module: str, *, extra: str = "gcp", purpose: str = "") ->
         ) from exc
 
 
+def scrub_cloud_error(text: str) -> str:
+    """Redact identifiers cloud SDK errors echo back — project ids, service-
+    account emails, credential file paths — before surfacing them to a client."""
+    import re
+
+    text = re.sub(r"projects/[\w-]+", "projects/***", text)
+    text = re.sub(
+        r"[\w.+-]+@[\w.-]+\.iam\.gserviceaccount\.com",
+        "***@***.iam.gserviceaccount.com",
+        text,
+    )
+    text = re.sub(r"(?:/[^\s'\"]+)+\.json", "/***.json", text)
+    return text
+
+
 def dependency_installed(module: str) -> bool:
     """Whether ``module`` can be imported without actually importing it."""
     try:

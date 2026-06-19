@@ -20,6 +20,7 @@ from .base import (
     ObjectInfo,
     dependency_installed,
     require_dependency,
+    scrub_cloud_error,
 )
 from .bigquery import BigQueryConfig, BigQueryDataSource
 from .connections import read_connection_dataframe, probe_connection
@@ -47,4 +48,5 @@ __all__ = [
     "list_data_sources",
     "read_connection_dataframe",
     "probe_connection",
+    "scrub_cloud_error",
 ]

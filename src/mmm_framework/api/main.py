@@ -1747,16 +1747,21 @@ async def test_data_connection_endpoint(project_id: str, connection_id: str):
 
 @app.post(
     "/projects/{project_id}/data-connections/{connection_id}/preview",
-    dependencies=[_proj_read],
+    dependencies=[_proj_write],
 )
 async def preview_data_connection_endpoint(
     project_id: str, connection_id: str, rows: int = 20
 ):
-    """Read the first ``rows`` of a connection (capped) for a UI preview."""
+    """Read the first ``rows`` of a connection (capped) for a UI preview.
+
+    Gated as a write: it executes the connection's (billable) query/read and
+    stamps last_synced.
+    """
     conn = _require_connection(project_id, connection_id)
     from mmm_framework.integrations import (
         IntegrationError,
         read_connection_dataframe,
+        scrub_cloud_error,
     )
 
     n = max(1, min(int(rows), 200))
@@ -1770,7 +1775,10 @@ async def preview_data_connection_endpoint(
     except IntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - surface read/auth failure as 502
-        raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}")
+        # Scrub project ids / SA emails / credential paths from the error.
+        raise HTTPException(
+            status_code=502, detail=scrub_cloud_error(f"{type(exc).__name__}: {exc}")
+        )
     head = df.head(n)
     sessions_store.touch_data_connection_synced(connection_id)
     return JSONResponse(

@@ -331,3 +331,18 @@ def test_connection_test_status_strips_ref():
         "bigquery", {"project": "p", "query": "SELECT 1"}, client=client
     )
     assert status.ok and status.source == "bigquery"
+
+
+def test_scrub_cloud_error_redacts_identifiers():
+    from mmm_framework.integrations import scrub_cloud_error
+
+    raw = (
+        "PermissionDenied: caller projects/acme-prod-1234 lacks access; "
+        "sa svc-loader@acme-prod-1234.iam.gserviceaccount.com; "
+        "key at /home/me/secrets/key.json"
+    )
+    out = scrub_cloud_error(raw)
+    assert "acme-prod-1234" not in out
+    assert "svc-loader@" not in out
+    assert "/home/me/secrets/key.json" not in out
+    assert "projects/***" in out and "/***.json" in out
