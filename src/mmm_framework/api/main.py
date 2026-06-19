@@ -1766,10 +1766,12 @@ async def update_data_connection_schedule_endpoint(
 ):
     """Set or clear a connection's auto-sync interval."""
     _require_connection(project_id, connection_id)
-    if body.sync_interval_minutes is not None and body.sync_interval_minutes <= 0:
+    if body.sync_interval_minutes is not None and not (
+        0 < body.sync_interval_minutes <= 43200  # 1 min .. 30 days
+    ):
         raise HTTPException(
             status_code=422,
-            detail="sync_interval_minutes must be positive (or null to disable)",
+            detail="sync_interval_minutes must be 1..43200 (30 days), or null to disable",
         )
     conn = sessions_store.set_data_connection_schedule(
         connection_id, body.sync_interval_minutes
@@ -1782,7 +1784,16 @@ async def update_data_connection_schedule_endpoint(
     dependencies=[_proj_write],
 )
 async def delete_data_connection_endpoint(project_id: str, connection_id: str):
-    _require_connection(project_id, connection_id)
+    conn = _require_connection(project_id, connection_id)
+    # Best-effort cleanup of the cached snapshot so deletes don't orphan files.
+    snap = conn.get("snapshot_path")
+    if snap:
+        try:
+            from pathlib import Path as _Path
+
+            _Path(snap).unlink(missing_ok=True)
+        except Exception:
+            pass
     sessions_store.delete_data_connection(connection_id)
     return JSONResponse(content={"deleted": True})
 

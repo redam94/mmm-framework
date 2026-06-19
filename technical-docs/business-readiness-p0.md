@@ -314,9 +314,20 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       `sync_data_connection(name)`; Settings → Data connections manager UI
       (add/test/preview/delete). Tests: `tests/test_data_connections.py` (5) +
       connection-helper cases. Commits 922083a/53573ce/c19a90f.
-- [ ] Live ad-platform API clients + **scheduled/automatic** sync (today's
-      connections sync on demand from chat/UI, not on a cron; the stubs raise a
-      guided `AdPlatformNotImplemented`; BigQuery-transfer path documented).
+- [x] **Scheduled auto-sync** — connections refresh on an interval
+      (Manual/Hourly/Daily/Weekly). `data_connections` schedule+freshness columns
+      + store (`set_data_connection_schedule`, `list_due_data_connections`,
+      `record_data_connection_sync`); `api/connection_sync.py:sync_due_connections`
+      writes a per-project snapshot (`workspace.project_data_dir`) + records
+      ok/row-count or a scrubbed error (never raises); a lifespan tick runs it
+      every `MMM_CONNECTION_SYNC_INTERVAL` (default 300s; mirrors the audit
+      shipper); PATCH endpoint + UI selector + freshness line. Tests:
+      `tests/test_connection_sync.py` (4). Commit fa9f9aa.
+- [ ] Live ad-platform API clients (the stubs raise a guided
+      `AdPlatformNotImplemented`; the BigQuery-transfer path is documented).
+      NB: scheduled sync uses the **server's ambient ADC identity** for every
+      tenant (same read surface already exposed by load_from_*/preview) — a
+      per-tenant workload-identity model is a future hosted-posture item.
 
 ### Admin & user management  `[x]`
 - [x] **Org-admin auth endpoints** — `/auth/members` (list), PATCH/DELETE

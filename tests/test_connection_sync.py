@@ -82,8 +82,76 @@ def test_sync_due_records_error_scrubbed(db):
     assert row["last_sync_status"] == "error"
     assert "secret-proj-99" not in (row["last_sync_error"] or "")
     assert "projects/***" in row["last_sync_error"]
-    # Still rescheduled so a transient failure retries next interval.
-    assert row["next_sync_at"] == 5000.0 + 3600.0
+    # Rescheduled with backoff (4x the 60-min interval = 4h) so a broken
+    # connection isn't retried every interval forever.
+    assert row["next_sync_at"] == 5000.0 + 14400.0
+
+
+def test_sync_due_enforces_row_cap(db, monkeypatch):
+    pid = ss.create_project("P")["project_id"]
+    conn = _make(pid)
+    ss.set_data_connection_schedule(conn["id"], 60, now=1000.0)
+    monkeypatch.setattr(connection_sync, "max_rows", lambda: 2)
+
+    big = pd.DataFrame({"a": [1, 2, 3]})  # 3 > cap of 2
+    out = connection_sync.sync_due_connections(
+        5000.0, reader=lambda *a, **k: big, writer=lambda c, d: "x"
+    )
+    assert out == {"attempted": 1, "ok": 0, "failed": 1}
+    row = ss.get_data_connection(conn["id"])
+    assert row["last_sync_status"] == "error" and "cap" in row["last_sync_error"]
+
+
+def test_sync_due_read_timeout(db, monkeypatch):
+    import time as _t
+
+    pid = ss.create_project("P")["project_id"]
+    conn = _make(pid)
+    ss.set_data_connection_schedule(conn["id"], 60, now=1000.0)
+    monkeypatch.setattr(connection_sync, "read_timeout_seconds", lambda: 0.05)
+
+    def slow(*a, **k):
+        _t.sleep(0.4)
+        return pd.DataFrame({"a": [1]})
+
+    out = connection_sync.sync_due_connections(
+        5000.0, reader=slow, writer=lambda c, d: "x"
+    )
+    assert out["failed"] == 1
+    row = ss.get_data_connection(conn["id"])
+    assert row["last_sync_status"] == "error" and "timed out" in row["last_sync_error"]
+
+
+def test_sync_due_writer_failure_is_error_not_ok(db):
+    pid = ss.create_project("P")["project_id"]
+    conn = _make(pid)
+    ss.set_data_connection_schedule(conn["id"], 60, now=1000.0)
+
+    def bad_writer(c, d):
+        raise OSError("disk full")
+
+    out = connection_sync.sync_due_connections(
+        5000.0, reader=lambda *a, **k: pd.DataFrame({"a": [1]}), writer=bad_writer
+    )
+    assert out == {"attempted": 1, "ok": 0, "failed": 1}
+    row = ss.get_data_connection(conn["id"])
+    # A failed snapshot write must NOT be reported as a successful sync.
+    assert row["last_sync_status"] == "error"
+    assert "snapshot write failed" in row["last_sync_error"]
+
+
+def test_default_writer_unique_per_connection(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path))
+    df = pd.DataFrame({"a": [1]})
+    # Two names that sanitize identically must still produce distinct files.
+    p1 = connection_sync._default_writer(
+        {"id": "aaaaaaaa1111", "project_id": "P", "name": "Daily@Report"}, df
+    )
+    p2 = connection_sync._default_writer(
+        {"id": "bbbbbbbb2222", "project_id": "P", "name": "Daily#Report"}, df
+    )
+    assert p1 != p2
+    assert ".." not in p1 and ".." not in p2  # no dot-traversal tokens in names
 
 
 def test_schedule_endpoint(db):
@@ -104,6 +172,15 @@ def test_schedule_endpoint(db):
         asyncio.run(
             M.update_data_connection_schedule_endpoint(
                 pid, conn["id"], M.ConnectionScheduleUpdate(sync_interval_minutes=0)
+            )
+        )
+    assert ei.value.status_code == 422
+
+    # Absurdly large interval is rejected (would overflow next_sync_at -> inf).
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(
+            M.update_data_connection_schedule_endpoint(
+                pid, conn["id"], M.ConnectionScheduleUpdate(sync_interval_minutes=1e9)
             )
         )
     assert ei.value.status_code == 422

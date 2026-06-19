@@ -260,7 +260,10 @@ def init_db() -> None:
             " ON data_connections(project_id, updated_at)"
         )
         # Scheduled-sync + freshness columns (migrate installs that predate them).
+        # org_id mirrors the owning project's org for tenant-level auditability
+        # (the scheduler is server-wide; access control is via project_id).
         for _col, _decl in (
+            ("org_id", "TEXT"),
             ("sync_interval_minutes", "REAL"),
             ("next_sync_at", "REAL"),
             ("last_sync_status", "TEXT"),
@@ -1338,10 +1341,20 @@ def create_data_connection(
     cid = uuid.uuid4().hex
     now = _now()
     with _conn() as c:
+        # Stamp the owning org (best-effort) for tenant-level auditability.
+        org_id = None
+        try:
+            r = c.execute(
+                "SELECT org_id FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            org_id = r["org_id"] if r else None
+        except sqlite3.OperationalError:
+            org_id = None
         c.execute(
-            "INSERT INTO data_connections (id, project_id, name, kind, config_json,"
-            " created_at, updated_at, last_synced) VALUES (?,?,?,?,?,?,?, NULL)",
-            (cid, project_id, name, kind, json.dumps(config or {}), now, now),
+            "INSERT INTO data_connections (id, project_id, org_id, name, kind,"
+            " config_json, created_at, updated_at, last_synced)"
+            " VALUES (?,?,?,?,?,?,?,?, NULL)",
+            (cid, project_id, org_id, name, kind, json.dumps(config or {}), now, now),
         )
     return get_data_connection(cid)
 
@@ -1432,7 +1445,13 @@ def record_data_connection_sync(
     snapshot_path: str | None = None,
     now: float | None = None,
 ) -> None:
-    """Record a sync outcome and advance next_sync_at by the interval."""
+    """Record a sync outcome and advance next_sync_at.
+
+    On ``error`` the next run is backed off (up to 4x the interval, capped so a
+    sub-daily schedule waits at most a day) so a permanently broken connection
+    isn't retried every interval forever — but never sooner than its own
+    interval.
+    """
     ts = _now() if now is None else now
     with _conn() as c:
         row = c.execute(
@@ -1440,7 +1459,13 @@ def record_data_connection_sync(
             (connection_id,),
         ).fetchone()
         interval = row["sync_interval_minutes"] if row else None
-        next_at = (ts + float(interval) * 60.0) if interval else None
+        if interval:
+            secs = float(interval) * 60.0
+            if status == "error":
+                secs = max(secs, min(secs * 4.0, 86400.0))
+            next_at = ts + secs
+        else:
+            next_at = None
         c.execute(
             "UPDATE data_connections SET last_synced = ?, last_sync_status = ?,"
             " last_sync_error = ?, last_row_count = ?, snapshot_path = COALESCE(?, snapshot_path),"
