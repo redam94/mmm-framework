@@ -330,6 +330,16 @@ function getErrorMessage(error: AxiosError): string {
   return error.message || 'An unexpected error occurred';
 }
 
+/**
+ * Extract a user-facing message from a rejected request. The axios interceptor
+ * rejects with `ApiError { status, message, details }` (NOT a raw AxiosError),
+ * so `err.response.data.detail` is the wrong path — read `message`/`details`.
+ */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  const e = err as { message?: string; details?: { detail?: string } };
+  return e?.details?.detail ?? e?.message ?? fallback;
+}
+
 // Validate API key by making a health check request
 export async function validateApiKey(apiKey: string, modelName: string): Promise<boolean> {
   try {

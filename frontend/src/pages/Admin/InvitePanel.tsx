@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, Mail, Trash2, UserPlus } from 'lucide-react';
 import { Button, Card } from '../../components/ui';
+import { apiErrorMessage } from '../../api/client';
 import { useCreateInvite, useInvites, useRevokeInvite } from '../../api/hooks/useAdmin';
 import type { OrgRole } from '../../api/services/accountService';
 import type { InviteResult } from '../../api/services/adminService';
@@ -53,10 +54,7 @@ export function InvitePanel() {
       setResult(res);
       setEmail('');
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : 'Could not create the invite.');
-      setError(detail);
+      setError(apiErrorMessage(err, 'Could not create the invite.'));
     }
   };
 

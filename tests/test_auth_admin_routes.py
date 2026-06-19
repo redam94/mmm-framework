@@ -139,6 +139,72 @@ def test_invites_list_and_revoke(ctx):
     )
 
 
+def test_only_owner_can_grant_or_touch_owner_role(ctx):
+    client, signup, invite_and_accept = (
+        ctx["client"],
+        ctx["signup"],
+        ctx["invite_and_accept"],
+    )
+    owner_tok, owner = signup("Acme", "owner@acme.com")
+    auth_store.set_org_plan(owner["org_id"], "business")  # room for >2 seats
+    # Owner promotes a member to ADMIN (allowed).
+    _t0, admin, _ = invite_and_accept(owner_tok, "admin@acme.com", "analyst")
+    assert (
+        client.patch(
+            f"/auth/members/{admin['user_id']}",
+            json={"role": "admin"},
+            headers=_h(owner_tok),
+        ).status_code
+        == 200
+    )
+    # The role lives in the JWT claim — re-login to get a token that carries admin.
+    admin_tok = client.post(
+        "/auth/login",
+        json={"email": "admin@acme.com", "password": "another-strong-pw"},
+    ).json()["access_token"]
+    # A second ordinary member.
+    _t, member, _i = invite_and_accept(owner_tok, "m@acme.com", "analyst")
+
+    # The ADMIN must NOT be able to grant the OWNER role (privilege escalation).
+    r = client.patch(
+        f"/auth/members/{member['user_id']}",
+        json={"role": "owner"},
+        headers=_h(admin_tok),
+    )
+    assert r.status_code == 403 and "owner" in r.json()["detail"]
+    # ...nor escalate itself to owner.
+    r = client.patch(
+        f"/auth/members/{admin['user_id']}",
+        json={"role": "owner"},
+        headers=_h(admin_tok),
+    )
+    assert r.status_code == 403
+
+    # The OWNER can grant the owner role.
+    r = client.patch(
+        f"/auth/members/{member['user_id']}",
+        json={"role": "owner"},
+        headers=_h(owner_tok),
+    )
+    assert r.status_code == 200 and r.json()["role"] == "owner"
+
+    # Now there are two owners; the ADMIN still can't remove one (owner-scoped).
+    r = client.delete(f"/auth/members/{member['user_id']}", headers=_h(admin_tok))
+    assert r.status_code == 403
+
+
+def test_invites_listing_hides_inviter(ctx):
+    client, signup = ctx["client"], ctx["signup"]
+    owner_tok, _ = signup("Acme", "owner@acme.com")
+    client.post(
+        "/auth/invite",
+        json={"email": "p@acme.com", "role": "analyst"},
+        headers=_h(owner_tok),
+    )
+    invites = client.get("/auth/invites", headers=_h(owner_tok)).json()["invites"]
+    assert invites and "invited_by" not in invites[0]
+
+
 def test_admin_routes_require_admin_role(ctx):
     client, signup, invite_and_accept = (
         ctx["client"],

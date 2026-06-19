@@ -247,6 +247,16 @@ def create_auth_router() -> APIRouter:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Not a member"
             )
+        # Only owners may create owners or change an owner's role — an admin must
+        # not be able to escalate itself (or an ally) to owner, then unseat the
+        # original owner.
+        if (
+            body.role == Role.OWNER or target["role"] == Role.OWNER.value
+        ) and principal.org_role != Role.OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="only an owner can grant or change the owner role",
+            )
         owners = [m for m in members if m["role"] == Role.OWNER.value]
         if (
             target["role"] == Role.OWNER.value
@@ -284,6 +294,12 @@ def create_auth_router() -> APIRouter:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Not a member"
             )
+        # Only an owner can remove an owner.
+        if target["role"] == Role.OWNER.value and principal.org_role != Role.OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="only an owner can remove an owner",
+            )
         owners = [m for m in members if m["role"] == Role.OWNER.value]
         if target["role"] == Role.OWNER.value and len(owners) <= 1:
             raise HTTPException(
@@ -306,7 +322,11 @@ def create_auth_router() -> APIRouter:
     async def list_invites(
         principal: AuthContext = Depends(require_org_role(Role.ADMIN)),
     ) -> dict:
-        return {"invites": store.list_pending_invites(principal.org_id)}
+        # Don't expose the internal inviter user_id in the listing.
+        invites = store.list_pending_invites(principal.org_id)
+        for inv in invites:
+            inv.pop("invited_by", None)
+        return {"invites": invites}
 
     @router.delete("/invites/{token}", status_code=status.HTTP_204_NO_CONTENT)
     async def revoke_invite(

@@ -13,7 +13,7 @@ export interface OrgInvite {
   org_id: string;
   email: string;
   role: OrgRole;
-  invited_by: string | null;
+  invited_by?: string | null; // omitted by the API (not exposed in listings)
   expires_at: number;
   created_at: number;
 }

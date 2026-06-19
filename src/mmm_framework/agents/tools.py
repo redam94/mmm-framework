@@ -401,6 +401,12 @@ def generate_synthetic_data(
     )
 
 
+#: Refuse to materialize an unbounded external pull into the workspace (a
+#: BigQuery query / GCS object can return arbitrarily many rows; this is a
+#: disk-exhaustion guard, not a cost guard).
+_MAX_EXTERNAL_ROWS = 5_000_000
+
+
 def _persist_external_dataset(
     df, *, source_label: str, state: dict, config, tool_call_id: str
 ) -> Command:
@@ -410,6 +416,21 @@ def _persist_external_dataset(
     and a dashboard summary, so an externally-loaded dataset behaves exactly like
     an uploaded or synthetic one downstream.
     """
+    if len(df) > _MAX_EXTERNAL_ROWS:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"Refusing to load {len(df):,} rows (limit "
+                            f"{_MAX_EXTERNAL_ROWS:,}). Narrow the pull — add a date/"
+                            "WHERE filter or a LIMIT — and try again."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
     tid = _activate_thread(config)
     try:
         out_dir = _ws.thread_dir(tid)
@@ -450,16 +471,37 @@ def _persist_external_dataset(
     )
 
 
+def _scrub_gcp_error(text: str) -> str:
+    """Redact identifiers that GCP SDK errors echo back (project ids, service-
+    account emails, credential file paths) before they reach the chat."""
+    import re
+
+    text = re.sub(r"projects/[\w-]+", "projects/***", text)
+    text = re.sub(
+        r"[\w.+-]+@[\w.-]+\.iam\.gserviceaccount\.com",
+        "***@***.iam.gserviceaccount.com",
+        text,
+    )
+    text = re.sub(r"(?:/[^\s'\"]+)+\.json", "/***.json", text)
+    return text
+
+
 def _integration_error_command(exc: Exception, tool_call_id: str) -> Command:
-    from ..integrations import MissingDependencyError
+    from ..integrations import IntegrationAuthError, MissingDependencyError
 
     if isinstance(exc, MissingDependencyError):
         msg = str(exc)
-    else:
+    elif isinstance(exc, IntegrationAuthError):
+        # Never echo the credential path / identity back to the chat.
         msg = (
-            f"{type(exc).__name__}: {exc}. Check the project/credentials "
-            "(GCS/BigQuery use Application Default Credentials — run "
-            "`gcloud auth application-default login` or set MMM_GCP_CREDENTIALS_PATH)."
+            "Authentication failed. GCS/BigQuery use Application Default "
+            "Credentials — run `gcloud auth application-default login`, or set "
+            "MMM_GCP_CREDENTIALS_PATH to a valid service-account JSON."
+        )
+    else:
+        msg = _scrub_gcp_error(f"{type(exc).__name__}: {exc}") + (
+            ". Check the project/credentials (GCS/BigQuery use Application "
+            "Default Credentials)."
         )
     return Command(
         update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}

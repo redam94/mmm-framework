@@ -79,3 +79,7 @@ def test_spend_to_mff_validates_columns():
         spend_to_mff(df, date_col="missing", value_cols={"cost": "X"})
     with pytest.raises(IntegrationError):
         spend_to_mff(df, date_col="date", value_cols={"nope": "X"})
+    # A provided dimension column that isn't in the frame is a clear error,
+    # not a silently-blanked column.
+    with pytest.raises(IntegrationError):
+        spend_to_mff(df, date_col="date", value_cols={"cost": "X"}, geo_col="region")

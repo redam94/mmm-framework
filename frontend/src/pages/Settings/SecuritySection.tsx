@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, LogOut } from 'lucide-react';
 import { Button, Card } from '../../components/ui';
 import { useChangePassword } from '../../api/hooks/useAccount';
+import { apiErrorMessage } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 
 const inputCls =
@@ -31,10 +32,7 @@ export function SecuritySection() {
       setNext('');
       setConfirm('');
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : 'Could not change the password.');
-      setError(detail);
+      setError(apiErrorMessage(err, 'Could not change the password.'));
     }
   };
 

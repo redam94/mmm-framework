@@ -24,7 +24,9 @@ from .base import (
 from .credentials import load_gcp_credentials, resolve_project
 
 # Fully-qualified or dataset.table identifier (BigQuery legal chars only).
-_TABLE_RE = re.compile(r"^[A-Za-z0-9_\-]+(\.[A-Za-z0-9_\-]+){1,2}$")
+# \Z (not $) anchors the END OF STRING — $ would match before a trailing
+# newline, letting "dataset.table\n" slip a newline into the backticked SQL.
+_TABLE_RE = re.compile(r"^[A-Za-z0-9_\-]+(\.[A-Za-z0-9_\-]+){1,2}\Z")
 
 
 class BigQueryConfig(BaseModel):
@@ -156,6 +158,8 @@ class BigQueryDataSource(DataSource):
             return query
         if not ref:
             raise IntegrationError("read_dataframe requires ref=<table> or query=<sql>")
+        if max_rows is not None and max_rows < 0:
+            raise IntegrationError(f"max_rows must be non-negative, got {max_rows}")
         table = ref
         if "." not in table and self.config.dataset:
             table = f"{self.config.dataset}.{table}"

@@ -3606,12 +3606,16 @@ async def metrics_endpoint():
 
 
 @app.get("/integrations/catalog")
-async def integrations_catalog_endpoint():
+async def integrations_catalog_endpoint(principal: PrincipalDep = _DEV_PRINCIPAL):
     """List available data-source + ad-platform integrations (non-secret).
 
     Powers the Settings "Data connections" section: which connectors exist,
     whether their optional SDK is installed, the auth story, and (for ad
     platforms) the recommended ingestion path. No credentials are returned.
+
+    Requires an authenticated principal: the installed-SDK flags reveal
+    deployment topology, so the endpoint is gated like its neighbours rather
+    than left open for reconnaissance.
     """
     from mmm_framework.integrations import list_data_sources
     from mmm_framework.integrations.ad_platforms import list_ad_platforms

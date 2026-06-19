@@ -132,6 +132,14 @@ def spend_to_mff(
     missing = [c for c in value_cols if c not in df.columns]
     if missing:
         raise IntegrationError(f"value_cols not found in DataFrame: {missing}")
+    # A provided dimension column must exist (None = "no such dimension" = blank).
+    missing_dims = [
+        c for c in (geo_col, product_col, campaign_col) if c and c not in df.columns
+    ]
+    if missing_dims:
+        raise IntegrationError(
+            f"dimension columns not found in DataFrame: {missing_dims}"
+        )
 
     frames: list[pd.DataFrame] = []
     for src_col, var_name in value_cols.items():

@@ -214,6 +214,20 @@ def test_bigquery_rejects_both_ref_and_query_and_bad_table():
         src.read_dataframe()  # neither
 
 
+def test_bigquery_rejects_newline_and_negative_limit():
+    src = BigQueryDataSource(
+        BigQueryConfig(dataset="mmm"), client=_FakeBQClient(pd.DataFrame())
+    )
+    # Trailing newline must NOT pass the \Z-anchored regex (SQL-injection vector).
+    with pytest.raises(IntegrationError):
+        src.read_dataframe("mmm.weekly\n")
+    with pytest.raises(IntegrationError):
+        src.read_dataframe("weekly\nUNION SELECT 1")
+    # Negative LIMIT is rejected before it reaches SQL.
+    with pytest.raises(IntegrationError):
+        src.read_dataframe("weekly", max_rows=-1)
+
+
 def test_bigquery_list_tables():
     client = _FakeBQClient(
         pd.DataFrame(), tables=[_FakeTable("weekly", 52), _FakeTable("geo", 520)]

@@ -52,7 +52,12 @@ export const PAGES: PageIdentity[] = [
 /** Least → most privileged org roles (mirrors auth.models.Role ordering). */
 const ROLE_RANK: Record<string, number> = { viewer: 0, analyst: 1, admin: 2, owner: 3 };
 
-/** Whether a page should be shown to a principal with the given org role. */
+/**
+ * Whether a page should be shown to a principal with the given org role.
+ * Unknown/absent caller role → rank -1 (hidden from gated pages). A `minRole`
+ * not present in ROLE_RANK → rank 99 (hidden from everyone) — so any new
+ * `minRole` value MUST be added to ROLE_RANK above, or the page disappears.
+ */
 export function pageVisibleToRole(page: PageIdentity, role: string | undefined): boolean {
   if (!page.minRole) return true;
   return (ROLE_RANK[role ?? ''] ?? -1) >= (ROLE_RANK[page.minRole] ?? 99);
