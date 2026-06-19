@@ -306,8 +306,17 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       `technical-docs/ad-platform-integrations.md`: land spend in BigQuery via
       managed transfers (lowest-effort), direct-API ease Meta>Google/TikTok.
       Tests: `tests/test_ad_platform_stubs.py` (5).
-- [ ] Live ad-platform API clients + scheduled warehouse sync (the stubs raise
-      a guided `AdPlatformNotImplemented`; BigQuery-transfer path documented).
+- [x] **Saved data connections (on-demand sync)** — project-scoped
+      `data_connections` table (config = non-secret reference only; auth ADC) +
+      store CRUD; `integrations/connections.py` (`read_connection_dataframe`,
+      `probe_connection`); RBAC-gated endpoints (list/create/delete, `test`
+      probe [read], `preview` [write — billable, scrubbed errors]); agent tool
+      `sync_data_connection(name)`; Settings → Data connections manager UI
+      (add/test/preview/delete). Tests: `tests/test_data_connections.py` (5) +
+      connection-helper cases. Commits 922083a/53573ce/c19a90f.
+- [ ] Live ad-platform API clients + **scheduled/automatic** sync (today's
+      connections sync on demand from chat/UI, not on a cron; the stubs raise a
+      guided `AdPlatformNotImplemented`; BigQuery-transfer path documented).
 
 ### Admin & user management  `[x]`
 - [x] **Org-admin auth endpoints** — `/auth/members` (list), PATCH/DELETE
