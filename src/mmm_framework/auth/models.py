@@ -133,6 +133,15 @@ class InviteOut(BaseModel):
     expires_at: float
 
 
+class RoleUpdate(BaseModel):
+    role: Role
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str

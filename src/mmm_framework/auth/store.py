@@ -291,6 +291,17 @@ def list_org_members(
     return [dict(r) for r in rows]
 
 
+def remove_org_member(
+    org_id: str, user_id: str, db_path: Path | str | None = None
+) -> bool:
+    """Drop a user's org membership. Returns whether a row was removed."""
+    with _conn(db_path) as c:
+        cur = c.execute(
+            "DELETE FROM org_members WHERE org_id=? AND user_id=?", (org_id, user_id)
+        )
+    return cur.rowcount > 0
+
+
 # ----- project ↔ org ----------------------------------------------------------
 
 
@@ -493,6 +504,35 @@ def get_invite(token: str, db_path: Path | str | None = None) -> dict[str, Any] 
 def mark_invite_accepted(token: str, db_path: Path | str | None = None) -> None:
     with _conn(db_path) as c:
         c.execute("UPDATE invites SET accepted_at=? WHERE token=?", (_now(), token))
+
+
+def list_pending_invites(
+    org_id: str, *, now: float | None = None, db_path: Path | str | None = None
+) -> list[dict[str, Any]]:
+    """Unaccepted, unexpired invites for an org, newest first."""
+    cutoff = _now() if now is None else now
+    with _conn(db_path) as c:
+        rows = c.execute(
+            "SELECT token, org_id, email, role, invited_by, expires_at, created_at"
+            " FROM invites WHERE org_id=? AND accepted_at IS NULL AND expires_at > ?"
+            " ORDER BY created_at DESC",
+            (org_id, cutoff),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_invite(
+    token: str, *, org_id: str | None = None, db_path: Path | str | None = None
+) -> bool:
+    """Revoke a pending invite. Scoped to ``org_id`` when given. Returns removed?"""
+    with _conn(db_path) as c:
+        if org_id is not None:
+            cur = c.execute(
+                "DELETE FROM invites WHERE token=? AND org_id=?", (token, org_id)
+            )
+        else:
+            cur = c.execute("DELETE FROM invites WHERE token=?", (token,))
+    return cur.rowcount > 0
 
 
 # ----- password resets --------------------------------------------------------
