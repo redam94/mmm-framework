@@ -275,14 +275,21 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       `dashboard_data['model_defense']`. Served at `GET /model-defense`
       (`_rep_read`-gated). Tests: `tests/test_model_defense_tool.py` (registered +
       no-model guard). **Model-defense is now end-to-end.**
-### Portfolio benchmarking & governance  `[~]`
+### Portfolio benchmarking & governance  `[x]`
 - [x] **Cross-brand benchmark API** — `api/portfolio_benchmark.py`
       `build_portfolio_benchmark` (pure: per-project latest-run summary + cross-
       channel ROI distribution [median/p25/p75/min/max/n_brands] + per-brand
       `vs_portfolio` percentile rank + governance [n_stale/fresh/calibrated,
       median model age]); `GET /portfolio-benchmark` (org-scoped via the
       principal). Tests: `tests/test_portfolio_benchmark.py` (3).
-- [ ] Front-end portfolio dashboard rendering the benchmark.
+- [x] **Front-end portfolio dashboard** — `frontend/src/pages/Portfolio/`
+      ("Constellation", `/portfolio`): `benchmarkService` + `usePortfolioBenchmark`
+      hook (stale-threshold param), `GovernanceTiles` (brands/fresh/stale/
+      calibrated/median-age), `ChannelBenchmark` (per-channel P25–P75 box +
+      min/max whiskers + median tick + per-brand ROI dots, top/bottom-quartile
+      colored), `BrandTable` (fit recency + stale pill, portfolio mROI, top
+      channel, vs.-portfolio leader/laggard counts, calibration coverage). Nav
+      entry + route wired; `tsc --noEmit` + `vite build` green.
 ### Integrations  `[ ]`
 - [ ] Ad-platform connectors + warehouse sync (auto data ingest).
 
