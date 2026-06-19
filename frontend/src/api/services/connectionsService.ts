@@ -9,6 +9,11 @@ export interface DataConnection {
   created_at: number;
   updated_at: number;
   last_synced: number | null;
+  sync_interval_minutes: number | null;
+  next_sync_at: number | null;
+  last_sync_status: string | null;
+  last_sync_error: string | null;
+  last_row_count: number | null;
 }
 
 export interface ConnectionInput {
@@ -45,6 +50,17 @@ export const connectionsService = {
 
   async remove(projectId: string, id: string): Promise<void> {
     await apiClient.delete(`${base(projectId)}/${id}`);
+  },
+
+  async setSchedule(
+    projectId: string,
+    id: string,
+    syncIntervalMinutes: number | null,
+  ): Promise<DataConnection> {
+    const { data } = await apiClient.patch<DataConnection>(`${base(projectId)}/${id}`, {
+      sync_interval_minutes: syncIntervalMinutes,
+    });
+    return data;
   },
 
   async test(projectId: string, id: string): Promise<ConnectionTestResult> {

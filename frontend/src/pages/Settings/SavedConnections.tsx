@@ -9,12 +9,21 @@ import {
   useCreateConnection,
   useDeleteConnection,
   usePreviewConnection,
+  useSetSchedule,
   useTestConnection,
 } from '../../api/hooks/useConnections';
 import type { DataConnection } from '../../api/services/connectionsService';
 
 const inputCls =
   'w-full rounded-md border border-line-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sage-600';
+
+// Schedule presets (minutes). "" = manual (no scheduled sync).
+const SCHEDULES: { label: string; value: string }[] = [
+  { label: 'Manual', value: '' },
+  { label: 'Hourly', value: '60' },
+  { label: 'Daily', value: '1440' },
+  { label: 'Weekly', value: '10080' },
+];
 
 function summarize(c: DataConnection): string {
   const cfg = c.config as Record<string, string>;
@@ -23,11 +32,26 @@ function summarize(c: DataConnection): string {
   return [cfg.dataset, cfg.table].filter(Boolean).join('.') || '(no table/query)';
 }
 
+function sinceLabel(ts: number | null): string | null {
+  if (!ts) return null;
+  const secs = Date.now() / 1000 - ts;
+  if (secs < 90) return 'just now';
+  if (secs < 5400) return `${Math.round(secs / 60)}m ago`;
+  if (secs < 129600) return `${Math.round(secs / 3600)}h ago`;
+  return `${Math.round(secs / 86400)}d ago`;
+}
+
 function ConnectionRow({ projectId, conn }: { projectId: string; conn: DataConnection }) {
   const test = useTestConnection(projectId);
   const preview = usePreviewConnection(projectId);
   const del = useDeleteConnection(projectId);
+  const schedule = useSetSchedule(projectId);
   const [open, setOpen] = useState(false);
+
+  const curSched = String(conn.sync_interval_minutes ?? '');
+  const schedOpts = SCHEDULES.some((s) => s.value === curSched)
+    ? SCHEDULES
+    : [...SCHEDULES, { label: `${conn.sync_interval_minutes}m`, value: curSched }];
 
   const onDelete = () => {
     if (window.confirm(`Delete the connection “${conn.name}”?`)) del.mutate(conn.id);
@@ -73,6 +97,41 @@ function ConnectionRow({ projectId, conn }: { projectId: string; conn: DataConne
             <Trash2 size={15} />
           </button>
         </div>
+      </div>
+
+      {/* Schedule + freshness */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-400">
+        <label className="flex items-center gap-1.5">
+          Auto-sync
+          <select
+            value={curSched}
+            disabled={schedule.isPending}
+            onChange={(e) =>
+              schedule.mutate({ id: conn.id, interval: e.target.value ? Number(e.target.value) : null })
+            }
+            className="rounded border border-line-300 px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-sage-600"
+          >
+            {schedOpts.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </label>
+        {conn.last_synced && (
+          <span className="flex items-center gap-1">
+            {conn.last_sync_status === 'error' ? (
+              <XCircle size={12} className="text-rust-600" />
+            ) : (
+              <CheckCircle2 size={12} className="text-sage-600" />
+            )}
+            synced {sinceLabel(conn.last_synced)}
+            {conn.last_row_count != null && ` · ${conn.last_row_count.toLocaleString()} rows`}
+          </span>
+        )}
+        {conn.last_sync_status === 'error' && conn.last_sync_error && (
+          <span className="max-w-[18rem] truncate text-rust-600" title={conn.last_sync_error}>
+            {conn.last_sync_error}
+          </span>
+        )}
       </div>
 
       {(test.data || test.isError) && (

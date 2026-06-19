@@ -259,6 +259,23 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_data_connections_project"
             " ON data_connections(project_id, updated_at)"
         )
+        # Scheduled-sync + freshness columns (migrate installs that predate them).
+        for _col, _decl in (
+            ("sync_interval_minutes", "REAL"),
+            ("next_sync_at", "REAL"),
+            ("last_sync_status", "TEXT"),
+            ("last_sync_error", "TEXT"),
+            ("last_row_count", "INTEGER"),
+            ("snapshot_path", "TEXT"),
+        ):
+            try:
+                c.execute(f"ALTER TABLE data_connections ADD COLUMN {_col} {_decl}")
+            except Exception:
+                pass
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_data_connections_due"
+            " ON data_connections(next_sync_at)"
+        )
 
         # Projects: group sessions and own a knowledge base. A session belongs
         # to a project via sessions.project_id. meta_json carries the
@@ -1369,6 +1386,66 @@ def touch_data_connection_synced(connection_id: str) -> None:
         c.execute(
             "UPDATE data_connections SET last_synced = ?, updated_at = ? WHERE id = ?",
             (now, now, connection_id),
+        )
+
+
+def set_data_connection_schedule(
+    connection_id: str,
+    interval_minutes: float | None,
+    *,
+    now: float | None = None,
+) -> dict[str, Any] | None:
+    """Set (or clear, with ``None``) a connection's auto-sync interval.
+
+    Setting an interval schedules the first run one interval out; clearing it
+    (``None``) stops scheduled syncs (manual/on-demand still works).
+    """
+    ts = _now() if now is None else now
+    next_at = (ts + float(interval_minutes) * 60.0) if interval_minutes else None
+    with _conn() as c:
+        c.execute(
+            "UPDATE data_connections SET sync_interval_minutes = ?, next_sync_at = ?,"
+            " updated_at = ? WHERE id = ?",
+            (interval_minutes, next_at, ts, connection_id),
+        )
+    return get_data_connection(connection_id)
+
+
+def list_due_data_connections(now: float, *, limit: int = 100) -> list[dict[str, Any]]:
+    """Scheduled connections whose next_sync_at has arrived (across all projects)."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM data_connections WHERE sync_interval_minutes IS NOT NULL"
+            " AND next_sync_at IS NOT NULL AND next_sync_at <= ?"
+            " ORDER BY next_sync_at ASC LIMIT ?",
+            (now, limit),
+        ).fetchall()
+    return [_data_connection_row(r) for r in rows]
+
+
+def record_data_connection_sync(
+    connection_id: str,
+    *,
+    status: str,
+    row_count: int | None = None,
+    error: str | None = None,
+    snapshot_path: str | None = None,
+    now: float | None = None,
+) -> None:
+    """Record a sync outcome and advance next_sync_at by the interval."""
+    ts = _now() if now is None else now
+    with _conn() as c:
+        row = c.execute(
+            "SELECT sync_interval_minutes FROM data_connections WHERE id = ?",
+            (connection_id,),
+        ).fetchone()
+        interval = row["sync_interval_minutes"] if row else None
+        next_at = (ts + float(interval) * 60.0) if interval else None
+        c.execute(
+            "UPDATE data_connections SET last_synced = ?, last_sync_status = ?,"
+            " last_sync_error = ?, last_row_count = ?, snapshot_path = COALESCE(?, snapshot_path),"
+            " next_sync_at = ?, updated_at = ? WHERE id = ?",
+            (ts, status, error, row_count, snapshot_path, next_at, ts, connection_id),
         )
 
 

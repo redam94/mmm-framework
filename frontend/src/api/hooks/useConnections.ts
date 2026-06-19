@@ -32,6 +32,15 @@ export function useDeleteConnection(projectId: string | null) {
   });
 }
 
+export function useSetSchedule(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, interval }: { id: string; interval: number | null }) =>
+      connectionsService.setSchedule(projectId!, id, interval),
+    onSuccess: () => qc.invalidateQueries({ queryKey: connectionKeys.byProject(projectId) }),
+  });
+}
+
 export function useTestConnection(projectId: string | null) {
   return useMutation({
     mutationFn: (id: string) => connectionsService.test(projectId!, id),

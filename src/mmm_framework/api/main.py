@@ -150,6 +150,7 @@ DB_PATH = Path(__file__).parent / "sessions.db"
 memory: AsyncSqliteSaver | None = None
 _aiosqlite_conn: aiosqlite.Connection | None = None
 _ship_task: "asyncio.Task | None" = None
+_sync_task: "asyncio.Task | None" = None
 
 
 async def _audit_ship_loop(interval: float) -> None:
@@ -164,6 +165,22 @@ async def _audit_ship_loop(interval: float) -> None:
             break
         except Exception:  # pragma: no cover - never let the loop die
             logger.exception("audit off-host ship failed")
+
+
+async def _connection_sync_loop(interval: float) -> None:
+    """Periodically refresh saved data connections whose schedule is due."""
+    import time as _time
+
+    from mmm_framework.api import connection_sync
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await asyncio.to_thread(connection_sync.sync_due_connections, _time.time())
+        except asyncio.CancelledError:
+            break
+        except Exception:  # pragma: no cover - never let the loop die
+            logger.exception("scheduled connection sync failed")
 
 
 @asynccontextmanager
@@ -218,9 +235,23 @@ async def lifespan(app: FastAPI):
             logger.info("audit off-host shipper enabled (every %ss)", interval)
     except Exception:
         logger.exception("audit shipper start failed")
+    # Scheduled data-connection sync: refresh saved connections on their interval
+    # so warehouse data lands automatically. Inert when the interval is 0.
+    global _sync_task
+    try:
+        from mmm_framework.api import connection_sync
+
+        sync_interval = connection_sync.sync_interval_seconds()
+        if sync_interval > 0:
+            _sync_task = asyncio.create_task(_connection_sync_loop(sync_interval))
+            logger.info("scheduled connection sync enabled (every %ss)", sync_interval)
+    except Exception:
+        logger.exception("connection sync start failed")
     yield
     if _ship_task is not None:
         _ship_task.cancel()
+    if _sync_task is not None:
+        _sync_task.cancel()
     try:  # reap any per-session subprocess kernels on graceful shutdown
         from mmm_framework.agents.tools import _KERNELS
 
@@ -1717,6 +1748,31 @@ async def create_data_connection_endpoint(project_id: str, body: DataConnectionC
         raise HTTPException(status_code=422, detail=f"Invalid connection config: {exc}")
     conn = sessions_store.create_data_connection(
         project_id, body.name.strip(), body.kind, body.config or {}
+    )
+    return JSONResponse(content=conn)
+
+
+class ConnectionScheduleUpdate(BaseModel):
+    # minutes between auto-syncs; null disables scheduling (manual still works)
+    sync_interval_minutes: float | None = None
+
+
+@app.patch(
+    "/projects/{project_id}/data-connections/{connection_id}",
+    dependencies=[_proj_write],
+)
+async def update_data_connection_schedule_endpoint(
+    project_id: str, connection_id: str, body: ConnectionScheduleUpdate
+):
+    """Set or clear a connection's auto-sync interval."""
+    _require_connection(project_id, connection_id)
+    if body.sync_interval_minutes is not None and body.sync_interval_minutes <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="sync_interval_minutes must be positive (or null to disable)",
+        )
+    conn = sessions_store.set_data_connection_schedule(
+        connection_id, body.sync_interval_minutes
     )
     return JSONResponse(content=conn)
 
