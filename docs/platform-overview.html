@@ -3,20 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platform Tour | MMM Framework</title>
-    <meta name="description" content="A guided tour of the MMM Framework platform: the Program home, experiment planning, performance tracking, the agent workspace, knowledge base, and team roles — one place to run the whole measurement loop.">
+    <title>Augur — the MMM Framework platform | Platform Tour</title>
+    <meta name="description" content="A guided tour of Augur, the MMM Framework platform: Orrery (program), Auspices (experiments), Chronicle (performance), Constellation (portfolio), the Oracle agent workspace, Codex knowledge base, and the College & Sanctum — one place to run the whole causal measurement loop.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/platform-overview.html">
-    <meta property="og:title" content="Platform Tour | MMM Framework">
-    <meta property="og:description" content="A guided tour of the MMM Framework platform: the Program home, experiment planning, performance tracking, the agent workspace, knowledge base, and team roles.">
+    <meta property="og:title" content="Augur — the MMM Framework platform">
+    <meta property="og:description" content="A guided tour of Augur: read the signs, then move the budget. Orrery, Auspices, Chronicle, Constellation, the Oracle workspace, Codex, and the College — the whole measurement loop in one place.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/platform-overview.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="shared/styles.css">
     <style>
+        /* =====================================================================
+           Augur identity layer — scoped to this page. The shared docs palette is
+           already sage/steel/gold/cream; here we add the Augur display type
+           (Fraunces), the augury page-name treatment, the evidence-tier color key,
+           and the exact Augur token hexes so the tour reads as the product.
+           ===================================================================== */
+        :root {
+            --augur-cream-50:  #faf8f3;
+            --augur-cream-100: #f3f0e6;
+            --augur-ink-900:   #2a3528;
+            --augur-ink-600:   #4a5a48;
+            --augur-sage-300:  #a8c485;
+            --augur-sage-600:  #6d8a4a;
+            --augur-sage-800:  #4a6d2a;
+            --augur-gold-300:  #d4a86a;
+            --augur-gold-600:  #b8860b;
+            --augur-gold-700:  #8a6408;
+            --augur-steel-300: #9db8c9;
+            --augur-steel-600: #4a6d8a;
+            --augur-steel-700: #3a5a75;
+            --augur-rust-600:  #a04535;
+            --augur-rust-700:  #7a3525;
+            --augur-line:      #e8e4d5;
+        }
+
+        /* Hero wordmark */
+        .augur-hero-mark {
+            width: 60px; height: 60px;
+            border-radius: 14px;
+            display: block;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow-md);
+        }
+        .augur-eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--augur-gold-700);
+            display: block;
+            margin-bottom: 0.4rem;
+        }
+        .augur-wordmark {
+            font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+            font-weight: 600;
+            font-size: clamp(2.6rem, 6vw, 4.1rem);
+            line-height: 1.02;
+            letter-spacing: -0.01em;
+            margin: 0 0 0.45rem;
+        }
+
+        /* Augury section heading: creative name + route + plain-language hint */
+        .aug-head { margin-bottom: 1rem; }
+        .aug-head h2 {
+            font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+            display: flex;
+            align-items: baseline;
+            gap: 0.65rem;
+            flex-wrap: wrap;
+            margin: 0;
+        }
+        .aug-head .aug-was {
+            font-family: 'IBM Plex Sans', 'Source Sans 3', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--augur-ink-600);
+            background: var(--augur-cream-100);
+            border: 1px solid var(--augur-line);
+            border-radius: 100px;
+            padding: 0.15rem 0.6rem;
+            align-self: center;
+        }
+        .aug-hint {
+            font-style: italic;
+            color: var(--color-text-muted);
+            margin: 0.3rem 0 0;
+            font-size: 1.02rem;
+        }
+        .route-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--augur-steel-600);
+        }
+
+        /* Lexicon — what the pages are called */
+        .lexicon {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin: 1.75rem 0;
+        }
+        .lex {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.1rem;
+        }
+        .lex .ln {
+            font-family: 'Fraunces', Georgia, serif;
+            font-size: 1.18rem;
+            font-weight: 600;
+            color: var(--augur-ink-900);
+        }
+        .lex .lr {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--augur-steel-600);
+            display: block;
+            margin: 0.1rem 0 0.45rem;
+        }
+        .lex p { font-size: 0.84rem; color: var(--color-text-muted); margin: 0; line-height: 1.5; }
+
+        /* Evidence-tier color key (the same status colors used across the app) */
+        .tiers { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1.25rem 0 0; }
+        .tier {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            font-size: 0.82rem; font-weight: 600;
+            padding: 0.3rem 0.75rem; border-radius: 100px; border: 1px solid;
+        }
+        .tier::before { content: ""; width: 0.62rem; height: 0.62rem; border-radius: 50%; background: currentColor; }
+        .tier-cal   { color: var(--augur-sage-800);  background: #eef2e7; border-color: var(--augur-sage-300); }
+        .tier-run   { color: var(--augur-gold-700);  background: #f5ecd8; border-color: var(--augur-gold-300); }
+        .tier-mod   { color: var(--augur-steel-700); background: #e7eef2; border-color: var(--augur-steel-300); }
+        .tier-stale { color: var(--augur-rust-700);  background: #f5e7e2; border-color: var(--augur-rust-600); }
+
         /* Measurement-loop strip (tokens only, no JS) */
         .loop-strip {
             display: grid;
@@ -35,12 +162,14 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.75rem;
             letter-spacing: 0.08em;
-            color: var(--color-primary-dark);
+            color: var(--augur-sage-600);
             display: block;
             margin-bottom: 0.35rem;
         }
         .loop-stage .stage-verb {
+            font-family: 'Fraunces', Georgia, serif;
             font-weight: 600;
+            font-size: 1.05rem;
             display: block;
             margin-bottom: 0.35rem;
         }
@@ -52,35 +181,32 @@
         .loop-stage .stage-where {
             font-size: 0.75rem;
             font-family: 'JetBrains Mono', monospace;
-            color: var(--color-accent);
+            color: var(--augur-steel-600);
         }
         .loop-stage::after {
             content: "→";
             position: absolute;
             right: -0.72rem;
             top: 1rem;
-            color: var(--color-text-muted);
+            color: var(--augur-gold-600);
             z-index: 1;
         }
-        .loop-stage:last-child::after {
-            content: "↺";
-        }
+        .loop-stage:last-child::after { content: "↺"; }
         @media (max-width: 1000px) {
             .loop-strip { grid-template-columns: repeat(3, 1fr); }
         }
         @media (max-width: 640px) {
             .loop-strip { grid-template-columns: 1fr 1fr; }
             .loop-stage::after { display: none; }
+            .lexicon { grid-template-columns: 1fr; }
         }
+        @media (max-width: 900px) {
+            .lexicon { grid-template-columns: 1fr 1fr; }
+        }
+
         section { padding: 3.5rem 0; }
-        .route-chip {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            color: var(--color-accent);
-        }
-        .screenshot-figure {
-            margin: 1.75rem 0;
-        }
+
+        .screenshot-figure { margin: 1.75rem 0; }
         .screenshot-figure img {
             width: 100%;
             height: auto;
@@ -100,7 +226,7 @@
             font-size: 0.7rem;
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            color: var(--color-primary-dark);
+            color: var(--augur-sage-600);
             margin-right: 0.6em;
         }
     </style>
@@ -111,13 +237,15 @@
     <section class="hero-gradient">
         <div class="container">
             <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Product Tour</span>
-            <h1>The MMM Framework Platform</h1>
+            <img class="augur-hero-mark" src="assets/augur-mark.svg" alt="Augur mark: a lituus, the augur's spiral staff, raised over an omen">
+            <span class="augur-eyebrow">Causal measurement</span>
+            <h1 class="augur-wordmark">Augur</h1>
             <p style="margin: -0.25rem 0 0.75rem;">
                 <span class="tag tag-warning">Beta</span>
                 <span style="font-size: 0.9rem;">Platform status: the web UI, agent workspace, and planning engine are on the Beta tier &mdash; see the <a href="changelog.html#stability">Changelog</a>.</span>
             </p>
             <p class="lead">
-                One place to run the whole measurement loop — from the first data check to calibrated budget decisions. This tour walks through each area of the app and shows where every step of the cycle lives.
+                <strong>Augur</strong> is the application layer of the MMM Framework — one place to run the whole measurement loop, from the first data check to calibrated budget decisions. A Roman augur read the signs to decide whether to act <em>before</em> acting; Augur does the same with causal evidence instead of birds. This tour walks each area of the app and shows where every step of the cycle lives.
             </p>
         </div>
     </section>
@@ -126,12 +254,15 @@
         <nav class="page-toc" aria-label="On this page">
             <span class="page-toc-label">On this page</span>
             <a href="#measurement-loop">The loop</a>
-            <a href="#program">Program</a>
-            <a href="#experiments">Experiments</a>
-            <a href="#performance">Performance</a>
-            <a href="#agent">Agent workspace</a>
-            <a href="#knowledge">Knowledge</a>
-            <a href="#team">Team</a>
+            <a href="#lexicon">The lexicon</a>
+            <a href="#orrery">Orrery</a>
+            <a href="#auspices">Auspices</a>
+            <a href="#chronicle">Chronicle</a>
+            <a href="#constellation">Constellation</a>
+            <a href="#oracle">Oracle</a>
+            <a href="#codex">Codex</a>
+            <a href="#college">College &amp; Curia</a>
+            <a href="#sanctum">Sanctum</a>
             <a href="#under-the-hood">Under the hood</a>
         </nav>
     </div>
@@ -140,7 +271,7 @@
         <div class="container">
             <h2>The measurement loop, end to end</h2>
             <p>
-                Measurement here is a loop, not a one-time report: <strong>fit</strong> the model (T₀) → <strong>find</strong> where uncertainty is most expensive (T₁: expected information gain and expected value of information, in dollars) → <strong>run</strong> the experiment that buys the most learning (T₂: pre-registered geo lift, matched-market, or budget-neutral flighting tests) → <strong>feed the result back</strong> into the model (T₃: calibrated refit) → <strong>reallocate</strong> budget with the sharper answer (T₄) → <strong>re-evaluate</strong> as information decays and the market shifts (T₅, then the cycle repeats).
+                Measurement in Augur is a loop, not a one-time report: <strong>fit</strong> the model (T₀) → <strong>find</strong> where uncertainty is most expensive (T₁: expected information gain and expected value of information, in dollars) → <strong>run</strong> the experiment that buys the most learning (T₂: pre-registered geo lift, matched-market, or budget-neutral flighting tests) → <strong>feed the result back</strong> into the model (T₃: calibrated refit) → <strong>reallocate</strong> budget with the sharper answer (T₄) → <strong>re-evaluate</strong> as information decays and the market shifts (T₅, then the cycle repeats).
             </p>
 
             <div class="loop-strip">
@@ -148,42 +279,42 @@
                     <span class="stage-id">T₀</span>
                     <span class="stage-verb">Fit</span>
                     <p>Validate the data and fit the model.</p>
-                    <span class="stage-where">Agent workspace</span>
+                    <span class="stage-where">Oracle</span>
                 </div>
                 <div class="loop-stage">
                     <span class="stage-id">T₁</span>
                     <span class="stage-verb">Find</span>
                     <p>Rank where learning is worth the most, in dollars.</p>
-                    <span class="stage-where">Experiments</span>
+                    <span class="stage-where">Auspices</span>
                 </div>
                 <div class="loop-stage">
                     <span class="stage-id">T₂</span>
                     <span class="stage-verb">Run</span>
                     <p>Pre-register and run the highest-value test.</p>
-                    <span class="stage-where">Experiments</span>
+                    <span class="stage-where">Auspices</span>
                 </div>
                 <div class="loop-stage">
                     <span class="stage-id">T₃</span>
                     <span class="stage-verb">Calibrate</span>
                     <p>Fold the readout into the next model fit.</p>
-                    <span class="stage-where">Agent workspace</span>
+                    <span class="stage-where">Auspices → Oracle</span>
                 </div>
                 <div class="loop-stage">
                     <span class="stage-id">T₄</span>
                     <span class="stage-verb">Reallocate</span>
                     <p>Move budget with the sharper answer.</p>
-                    <span class="stage-where">Agent workspace</span>
+                    <span class="stage-where">Oracle</span>
                 </div>
                 <div class="loop-stage">
                     <span class="stage-id">T₅</span>
                     <span class="stage-verb">Re-evaluate</span>
                     <p>Watch evidence age and schedule re-tests.</p>
-                    <span class="stage-where">Performance</span>
+                    <span class="stage-where">Chronicle</span>
                 </div>
             </div>
 
             <p>
-                Why the loop matters: a marketing mix model answers a causal question — &ldquo;what would sales have been if we hadn&rsquo;t run this media?&rdquo; — not just &ldquo;what moved together?&rdquo; Lots of things move together: ice cream sales and sunburns rise in the same weeks without one causing the other, and holiday demand lifts both ad spend and sales at the same time. The platform is built to separate coincidence from contribution: it accounts for confounders like underlying demand, locks the model design in before results are seen, and checks its answers against real-world experiments such as regional holdout tests. Each pass around the loop turns one more guess into an estimate of <em>incremental</em> impact — what your media actually caused.
+                Why the loop matters: a marketing mix model answers a causal question — &ldquo;what would sales have been if we hadn&rsquo;t run this media?&rdquo; — not just &ldquo;what moved together?&rdquo; Lots of things move together: ice cream sales and sunburns rise in the same weeks without one causing the other, and holiday demand lifts both ad spend and sales at the same time. Augur is built to separate coincidence from contribution: it accounts for confounders like underlying demand, locks the model design in before results are seen, and checks its answers against real-world experiments such as regional holdout tests. Each pass around the loop turns one more guess into an estimate of <em>incremental</em> impact — what your media actually caused.
             </p>
             <p>
                 The loop in depth — including the math behind it — is covered in <a href="measurement-calibration.html">Measurement &amp; Calibration</a>.
@@ -191,26 +322,98 @@
         </div>
     </section>
 
-    <section id="program" style="background: var(--color-bg-alt);">
+    <section id="lexicon" style="background: var(--color-bg-alt);">
         <div class="container">
-            <h2>Program <span class="route-chip">/program</span></h2>
+            <h2>The lexicon: what the pages are called</h2>
             <p>
-                Program is home base — the page you open Monday morning. A stage ring shows where your measurement program sits in the T₀–T₅ cycle, headline KPIs summarize the current model&rsquo;s view of the business, and a next-best-actions list tells you what the program needs next: a data refresh, an experiment readout, a refit. A coverage map shows which channels have been validated by experiments and which still rest on observational evidence alone — like an account review that flags which line items have receipts. An activity log keeps the recent history of the program in one place.
+                Augur names each page for a piece of the augur&rsquo;s craft — reading signs to decide before committing. The name is on the door; the job is in plain language underneath it. Here is the whole map, in the order the loop runs.
+            </p>
+
+            <div class="lexicon">
+                <div class="lex">
+                    <span class="ln">Orrery</span>
+                    <span class="lr">/program</span>
+                    <p>Home base — the T₀–T₅ measurement cycle, KPIs, and what the program needs next.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Auspices</span>
+                    <span class="lr">/experiments</span>
+                    <p>&ldquo;Bird-watching&rdquo;: take the omens — design, pre-register, run, and calibrate tests.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Chronicle</span>
+                    <span class="lr">/performance</span>
+                    <p>The cycle-over-cycle record of how measurement sharpened and decisions improved.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Constellation</span>
+                    <span class="lr">/portfolio</span>
+                    <p>Every brand benchmarked on the same yardstick across the book of business.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Oracle</span>
+                    <span class="lr">/workspace</span>
+                    <p>Ask questions, get answers: the chat-aided modeling workspace that does the work.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Codex</span>
+                    <span class="lr">/knowledge</span>
+                    <p>The bound reference: briefs, reports, and grounding docs the copilot can cite.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">College</span>
+                    <span class="lr">/team</span>
+                    <p>The College of Augurs: the people on the program, and their roles.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Curia</span>
+                    <span class="lr">/admin</span>
+                    <p>The senate-house: org governance — members, roles, and seats. Admins only.</p>
+                </div>
+                <div class="lex">
+                    <span class="ln">Sanctum</span>
+                    <span class="lr">/settings</span>
+                    <p>Your private space: account, security, the model the agent runs on, and data connections.</p>
+                </div>
+            </div>
+
+            <h4 style="margin-top: 2rem;">Evidence tiers, by color</h4>
+            <p style="margin-bottom: 0;">
+                One color language runs through every page — the priority matrix, the coverage map, the lifecycle board, the portfolio. It encodes how much you can trust a channel&rsquo;s number:
+            </p>
+            <div class="tiers">
+                <span class="tier tier-cal">Calibrated &mdash; experiment-backed</span>
+                <span class="tier tier-run">Running &mdash; experiment in flight</span>
+                <span class="tier tier-mod">Model-only &mdash; observational</span>
+                <span class="tier tier-stale">Stale &mdash; evidence has aged out</span>
+            </div>
+        </div>
+    </section>
+
+    <section id="orrery">
+        <div class="container">
+            <header class="aug-head">
+                <h2><span>Orrery</span> <span class="route-chip">/program</span> <span class="aug-was">was: Program</span></h2>
+                <p class="aug-hint">The measurement cycle, in motion.</p>
+            </header>
+            <p>
+                Orrery is home base — the page you open Monday morning. A stage ring shows where your program sits in the T₀–T₅ cycle (and why), headline KPIs summarize the current model&rsquo;s view of the business — portfolio marginal ROI, a misallocation proxy, share of spend that is experiment-backed, and mean ROI uncertainty — each with a cycle-over-cycle delta. A next-best-actions list tells you what the program needs next: a calibrated refit, a re-test, a data refresh. A calibration coverage map shows which channels have been validated by experiments and which still rest on observational evidence alone — like an account review that flags which line items have receipts — and an activity log keeps the recent history of fits, tests, and decisions in one place.
             </p>
             <figure class="screenshot-figure">
                 <img src="assets/screenshots/platform-program.png" loading="lazy"
-                     alt="Program page: measurement-cycle stage ring (T0–T5), headline KPIs including portfolio marginal ROI and misallocation proxy, next-best-action cards, calibration coverage, and recent activity">
-                <figcaption><span class="shot-tag">Screenshot · /program</span>The seeded
-                demo project (&ldquo;Adaptive Measurement Loop&rdquo;): the T₀&ndash;T₅ cycle
-                strip, headline KPIs with cycle-over-cycle deltas, and the next-best-actions
-                queue — here recommending a calibrated refit and flagging an unvalidated
-                channel for testing. Captured from a local dev build (Beta).</figcaption>
+                     alt="Orrery (/program): the measurement-cycle stage ring T0–T5, a get-started checklist, headline KPIs (portfolio marginal ROI 2.32, misallocation proxy, spend experiment-backed, mean ROI uncertainty), next-best-action cards, a calibration coverage map by channel, recent activity, and the identification contract">
+                <figcaption><span class="shot-tag">Augur · /program</span>The seeded demo
+                project (&ldquo;Adaptive Measurement Loop&rdquo;): the T₀&ndash;T₅ cycle ring,
+                headline KPIs with cycle-over-cycle deltas, and the next-best-actions queue —
+                here recommending a calibrated refit and flagging channels due for a re-test.
+                The coverage map below sorts channels into experiment-backed vs model-only.
+                Captured from a production build of Augur.</figcaption>
             </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
-                    <li>See the current measurement-cycle stage (T₀–T₅) at a glance</li>
-                    <li>Track headline KPIs for the active model</li>
+                    <li>See the current measurement-cycle stage (T₀–T₅) and why, at a glance</li>
+                    <li>Track headline KPIs for the active model with cycle-over-cycle deltas</li>
                     <li>Pick up the next-best action the program recommends</li>
                     <li>Check the coverage map: which channels are experiment-backed</li>
                     <li>Review the activity log of recent fits, tests, and decisions</li>
@@ -219,37 +422,42 @@
         </div>
     </section>
 
-    <section id="experiments">
+    <section id="auspices" style="background: var(--color-bg-alt);">
         <div class="container">
-            <h2>Experiments <span class="route-chip">/experiments</span></h2>
+            <header class="aug-head">
+                <h2><span>Auspices</span> <span class="route-chip">/experiments</span> <span class="aug-was">was: Experiments</span></h2>
+                <p class="aug-hint">Design · run · calibrate tests — take the omens before committing budget.</p>
+            </header>
             <p>
-                Experiments is where the platform spends your research budget wisely. A priority matrix ranks channels by how much an experiment would teach you (expected information gain) and what that learning is worth in dollars (expected value of information) — a research budget for your media plan, spent exactly where it changes the next decision most. A lifecycle board tracks each test from <strong>draft → planned → running → completed → calibrated</strong>, so every experiment is pre-registered before results are seen and folded into the model after. A re-test schedule flags evidence that is going stale as markets shift.
+                Auspices is where Augur spends your research budget wisely. A priority matrix ranks channels by how much an experiment would teach you (expected information gain) and what that learning is worth in dollars (expected value of information) — a research budget for your media plan, spent exactly where it changes the next decision most. A lifecycle board tracks each test from <strong>draft → planned → running → completed → calibrated</strong>, so every experiment is pre-registered before results are seen and folded into the model after. A re-test schedule flags evidence that is going stale as markets shift.
             </p>
             <p>
-                The Design-experiment studio drafts a concrete test plan for you. Three designs are offered: randomized matched-pair geo lift (markets matched on residual co-movement and covariates, with power calibrated by placebo simulation), matched-market difference-in-differences, and budget-neutral randomized flighting for national data where geo splits are not available.
+                The <strong>Design experiment</strong> studio drafts a concrete, runnable plan for you. Three designs are offered: randomized matched-pair geo lift (markets matched on residual co-movement and covariates, power calibrated by placebo simulation), matched-market difference-in-differences, and budget-neutral randomized flighting for national data where geo splits aren&rsquo;t available. It can anchor the design to your fitted model — incremental-ROAS expectations, opportunity cost, and a powered/underpowered verdict — and trace a Pareto front of designs trading minimum detectable effect, power, short-term cost, and duration.
             </p>
             <figure class="screenshot-figure">
                 <img src="assets/screenshots/platform-experiments.png" loading="lazy"
-                     alt="Experiments page: EIG/EVOI priority matrix scatter plot with channels placed by expected information gain and expected value of information, quadrants labeled test now, learn cheaply, monitor, deprioritize">
-                <figcaption><span class="shot-tag">Screenshot · /experiments</span>The
-                EIG/EVOI priority matrix on the demo project: Search sits in
-                &ldquo;test&nbsp;now&rdquo; (high information gain, high dollar value), the
-                small collinear channels cluster near &ldquo;monitor&rdquo;. Marker size
-                tracks spend share; color marks experiment-backed vs model-only evidence.</figcaption>
+                     alt="Auspices priority matrix (/experiments): an EIG/EVOI scatter plot with channels placed by expected information gain (x) and expected value of information (y), quadrants labeled test now, monitor, learn cheaply, deprioritize, markers sized by spend share and colored by evidence tier">
+                <figcaption><span class="shot-tag">Augur · /experiments</span>The EIG/EVOI
+                priority matrix on the demo project: Display and Print sit toward
+                &ldquo;test&nbsp;now&rdquo; (high information gain, high dollar value), Video
+                drops to &ldquo;deprioritize.&rdquo; Marker color marks experiment-backed vs
+                model-only vs re-test-due evidence. Captured from a production build of Augur.</figcaption>
             </figure>
             <figure class="screenshot-figure">
                 <img src="assets/screenshots/platform-lifecycle.png" loading="lazy"
-                     alt="Experiments lifecycle board: kanban columns draft, planned, running, completed, calibrated with experiment cards carrying dates and measured ROAS readouts">
-                <figcaption><span class="shot-tag">Screenshot · /experiments · lifecycle board</span>Every
+                     alt="Auspices lifecycle board (/experiments): kanban columns draft, planned, running, completed, calibrated with experiment cards carrying geo-holdout design, pre-registration locks, run windows, and measured ROAS readouts">
+                <figcaption><span class="shot-tag">Augur · /experiments · lifecycle board</span>Every
                 test moves draft &rarr; planned &rarr; running &rarr; completed &rarr;
-                calibrated — pre-registered before results are seen, carrying its measured
-                readout (ROAS ± SE) once complete, and feeding the next calibrated fit.</figcaption>
+                calibrated — pre-registered before results are seen (note the lock badges),
+                carrying its measured readout (ROAS ± SE) once complete, and feeding the next
+                calibrated fit. Eight tests have already calibrated on this program.</figcaption>
             </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
                     <li>Rank candidate experiments on the EIG/EVOI priority matrix (test now / learn cheaply / monitor / deprioritize)</li>
                     <li>Design a test in the studio: geo lift, matched-market DiD, or budget-neutral flighting</li>
+                    <li>Optimize the design against a Pareto front of MDE, power, cost, and duration</li>
                     <li>Pre-register a test plan, then track it across the lifecycle board</li>
                     <li>Record readouts and watch them flow into the next calibrated fit</li>
                     <li>Check the re-test schedule as older evidence decays</li>
@@ -258,55 +466,94 @@
             <div class="note">
                 <h4>For analysts</h4>
                 <p>
-                    EIG uses the closed form 0.5&middot;ln(1 + &sigma;&sup2;<sub>post</sub>/&sigma;&sup2;<sub>exp</sub>); EVOI is the preposterior dollar value of deciding the budget with versus without the experiment, with EVPI as the perfect-information upper bound. Priority is the geometric mean of normalized EIG&times;EVOI. Information decays as &sigma;&sup2;<sub>eff</sub>(t) = &sigma;&sup2;<sub>post</sub>&middot;e<sup>&lambda;t</sup>; the platform&rsquo;s default decay assumptions set &lambda; to half-lives of 26 weeks for digital and 52 weeks for TV and brand media&mdash;configurable modeling priors, not empirical industry estimates. Deciding which experiment to run is worked through in <a href="workflow-calibration-decisions.html">the calibration-decisions workshop</a>.
+                    EIG uses the closed form 0.5&middot;ln(1 + &sigma;&sup2;<sub>post</sub>/&sigma;&sup2;<sub>exp</sub>) — the current posterior variance acts as the prior for the next experiment; EVOI is the preposterior dollar value of deciding the budget with versus without the experiment, with EVPI as the perfect-information upper bound. Priority is the geometric mean of normalized EIG&times;EVOI. Information decays as &sigma;&sup2;<sub>eff</sub>(t) = &sigma;&sup2;<sub>post</sub>&middot;e<sup>&lambda;t</sup>; the default decay assumptions set &lambda; to half-lives of ~26 weeks for fast-moving digital (search, display) and ~52 weeks for broadcast and brand media (TV, radio, video)&mdash;configurable modeling priors, not empirical industry estimates. Deciding which experiment to run is worked through in <a href="workflow-calibration-decisions.html">the calibration-decisions workshop</a>.
                 </p>
             </div>
         </div>
     </section>
 
-    <section id="performance" style="background: var(--color-bg-alt);">
+    <section id="chronicle">
         <div class="container">
-            <h2>Performance <span class="route-chip">/performance</span></h2>
+            <header class="aug-head">
+                <h2><span>Chronicle</span> <span class="route-chip">/performance</span> <span class="aug-was">was: Performance</span></h2>
+                <p class="aug-hint">The cycle-over-cycle record.</p>
+            </header>
             <p>
-                Performance is the program&rsquo;s scorecard across cycles. Trajectories show how channel estimates have moved and tightened from one fit to the next — uncertainty should narrow as experiments land. The model-vs-experiment agreement log is the honesty check: it records, side by side, what the model predicted and what each real-world test measured, like comparing the recipe to the taste test. A runs timeline keeps every model fit on the record.
+                Chronicle is the program&rsquo;s scorecard across cycles. Trajectories show how channel estimates have moved and tightened from one fit to the next — uncertainty should narrow as experiments land, and budget share should migrate toward the better-evidenced channels. A <strong>Saturation &amp; ROAS</strong> tab plots response curves and return-on-ad-spend over time; the <strong>Agreement</strong> log is the honesty check, recording side by side what the model predicted and what each real-world test measured, like comparing the recipe to the taste test. A <strong>Model health</strong> tab carries the sampler diagnostics (R̂, effective sample size, divergences) and prior→posterior learning verdicts, and a <strong>Runs</strong> timeline keeps every model fit on the record.
             </p>
             <figure class="screenshot-figure">
                 <img src="assets/screenshots/platform-performance.png" loading="lazy"
-                     alt="Performance page: CI contraction line chart per channel across cycles, budget-share migration area chart, misallocation and portfolio marginal ROI trajectories">
-                <figcaption><span class="shot-tag">Screenshot · /performance</span>Cycle-over-cycle
-                trajectories on the demo program: per-channel 90% interval widths falling as
-                experiments calibrate the model (left), and budget share migrating toward the
-                better-evidenced channels (right).</figcaption>
+                     alt="Chronicle (/performance): hero stats for portfolio marginal ROI, misallocation proxy, and mean ROI CI width with deltas; a CI-contraction line chart per channel; a budget-share migration stacked area chart; misallocation and portfolio marginal-ROI trajectories; and a per-channel ROI estimate trajectory">
+                <figcaption><span class="shot-tag">Augur · /performance</span>Cycle-over-cycle
+                trajectories on the demo program: portfolio marginal ROI up to 2.32 and mean
+                CI width down to 0.77, per-channel intervals contracting as experiments
+                calibrate the model, and budget share migrating toward the better-evidenced
+                channels. Captured from a production build of Augur.</figcaption>
             </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
-                    <li>Follow cycle-over-cycle trajectories of channel estimates</li>
+                    <li>Follow cycle-over-cycle trajectories of channel estimates and intervals</li>
+                    <li>Read saturation / ROAS curves as they sharpen across runs</li>
                     <li>Audit the model-vs-experiment agreement log</li>
+                    <li>Check model health: convergence diagnostics and prior→posterior learning</li>
                     <li>Browse the runs timeline of past model fits</li>
                 </ul>
             </div>
         </div>
     </section>
 
-    <section id="agent">
+    <section id="constellation" style="background: var(--color-bg-alt);">
         <div class="container">
-            <h2>Agent workspace <span class="route-chip">/workspace</span></h2>
+            <header class="aug-head">
+                <h2><span>Constellation</span> <span class="route-chip">/portfolio</span> <span class="aug-was">new</span></h2>
+                <p class="aug-hint">Benchmark every brand across the book.</p>
+            </header>
             <p>
-                The agent workspace is a chat with an analyst that does the work as you talk — with EDA, planning, and results dashboard tabs alongside the conversation. Ask it to check a new dataset and it validates the data, runs exploratory analysis, and flags outliers with suggested treatments. Ask it to fit a model and it configures and fits one, then walks you through ROI, the revenue decomposition, and saturation curves. Ask &ldquo;where should the next dollar go?&rdquo; and it runs the budget optimizer, marginal analysis, or a what-if budget scenario. It also plans experiments end to end — computing priorities, recommending lift tests, drafting designs, pre-registering plans, recording readouts, and applying the calibration to the next fit.
+                Constellation puts every brand on the same yardstick. Governance tiles count the book at a glance — brands with a fitted model, how many are fresh versus stale, how many carry at least one calibrated test, the median model age. A channel-ROI benchmark shows the distribution of each channel&rsquo;s return across brands, so an outlier brand stands out against its peers rather than against nothing. A brands table ranks the whole portfolio on last fit, channels, portfolio marginal ROI, top channel, and calibration coverage — the cross-account view a measurement lead needs to see where evidence is strong and where it is thin.
+            </p>
+            <figure class="screenshot-figure">
+                <img src="assets/screenshots/platform-portfolio.png" loading="lazy"
+                     alt="Constellation (/portfolio): governance tiles for brands, fresh models, stale models, calibrated brands, and median age; a channel-ROI distribution chart across brands with P25–P75 boxes and medians; and a brands table with last fit, channels, portfolio marginal ROI, top channel, and calibrated counts">
+                <figcaption><span class="shot-tag">Augur · /portfolio</span>The portfolio view
+                across four brands: governance tiles (4 brands, 3 fresh, 0 stale, 3
+                calibrated, median age 4d), per-channel ROI distributions with quartile boxes,
+                and the brand benchmark table. A staleness threshold (here 90 days) controls
+                what counts as fresh. Captured from a production build of Augur.</figcaption>
+            </figure>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Read governance tiles for the whole book: fitted, fresh, stale, calibrated, median age</li>
+                    <li>Compare each channel&rsquo;s ROI distribution across brands</li>
+                    <li>Rank brands on freshness, marginal ROI, and calibration coverage</li>
+                    <li>Tune the staleness threshold to match your re-fit cadence</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="oracle">
+        <div class="container">
+            <header class="aug-head">
+                <h2><span>Oracle</span> <span class="route-chip">/workspace</span> <span class="aug-was">was: Agent workspace</span></h2>
+                <p class="aug-hint">Chat-aided modeling — ask questions, get answers.</p>
+            </header>
+            <p>
+                Oracle is a chat with an analyst that does the work as you talk — with planning, data/EDA, model-spec, results, experiment, and library tabs alongside the conversation, all sharing one session. Ask it to check a new dataset and it validates the data, runs exploratory analysis, and flags outliers with suggested treatments. Ask it to fit a model and it configures and fits one, then walks you through ROI, the revenue decomposition, and saturation curves. Ask &ldquo;where should the next dollar go?&rdquo; and it runs the budget optimizer, marginal analysis, or a what-if budget scenario. It also plans experiments end to end — computing priorities, recommending lift tests, drafting designs, pre-registering plans, recording readouts, and applying the calibration to the next fit. A scientific-workflow checklist keeps the process honest, from <em>define the question</em> through <em>communicate results</em>.
             </p>
             <p>
-                Two things set it apart from a generic chatbot. First, it can practice on synthetic worlds with known ground truth — simulated markets where the true ROI is on file — including scenarios that deliberately break naive models (hidden confounders, multicollinearity, mis-specified saturation, trend breaks, geo panels), so you can see how the method behaves before trusting it on your data. Second, its Python runs in a sandboxed kernel: code executes in an isolated environment, and tabular results render as sortable dashboard tables rather than walls of text. When the analysis is done, it generates branded HTML client reports in your colors.
+                Two things set it apart from a generic chatbot. First, it can practice on synthetic worlds with known ground truth — simulated markets where the true ROI is on file — including scenarios that deliberately break naive models (hidden confounders, multicollinearity, mis-specified saturation, trend breaks, geo panels), so you can see how the method behaves before trusting it on your data. Second, its Python runs in a managed kernel — in hosted deployments, a sandboxed and isolated one — with code, outputs, and saved snippets collected in the Library tab, and tabular results rendering as sortable dashboard tables rather than walls of text. When the analysis is done, it generates branded HTML client reports in your colors.
             </p>
             <figure class="screenshot-figure">
                 <img src="assets/screenshots/platform-workspace.png" loading="lazy"
-                     alt="Agent workspace: MMM Copilot chat on the left, scientific workflow checklist with stages from define the question through communicate results on the right, causal planner below">
-                <figcaption><span class="shot-tag">Screenshot · /workspace</span>The copilot
-                answering a portfolio question beside the scientific-workflow checklist it
-                walks (define &rarr; EDA &rarr; build &rarr; prior checks &rarr; fit &rarr;
-                diagnostics &rarr; posterior checks &rarr; sensitivity &rarr; communicate)
-                and the causal planner. The chat, plan, data, model, and results tabs share
-                one session.</figcaption>
+                     alt="Oracle (/workspace): the MMM Copilot chat on the left walking through experiment readouts and calibration, and on the right the scientific-workflow checklist (define the question through communicate results) with stage statuses, across Plan / Data / Model / Results / Experiments / Library tabs that share one session">
+                <figcaption><span class="shot-tag">Augur · /workspace</span>The copilot
+                answering a calibration question beside the scientific-workflow checklist it
+                walks (define &rarr; data story &rarr; build &rarr; prior checks &rarr; fit
+                &rarr; diagnostics &rarr; posterior checks &rarr; sensitivity &rarr;
+                communicate). The plan, data, model, results, experiment, and library tabs
+                share one session. Captured from a production build of Augur.</figcaption>
             </figure>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
@@ -324,51 +571,82 @@
             <div class="note">
                 <h4>For analysts</h4>
                 <p>
-                    The tool names, for the curious: <code>validate_data</code>, <code>run_eda</code>, <code>detect_outliers</code>, <code>apply_outlier_treatment</code>; <code>generate_synthetic_data</code> (scenarios including <code>realistic</code>, <code>clean</code>, <code>unobserved_confounding</code>, <code>multicollinearity</code>, <code>saturation_misspec</code>, <code>trend_break</code>, and geo panels); <code>configure_model</code> and <code>fit_mmm_model</code>; <code>get_roi_metrics</code>, <code>get_component_decomposition</code>, <code>get_saturation_curves</code>, <code>run_budget_optimizer</code>, <code>run_marginal_analysis</code>, <code>run_budget_scenario</code>; experiment planning via <code>compute_experiment_priorities</code>, <code>recommend_lift_experiments</code>, <code>design_experiment_plan</code>, <code>plan_experiment</code>, <code>preregister_experiment</code>, <code>record_experiment_readout</code>, <code>apply_experiment_calibration</code>; and <code>execute_python</code> with <code>show_table</code> for sandboxed analysis. Reading the outputs is covered in <a href="interpreting-results.html">Interpreting Results</a>.
+                    The tool names, for the curious: <code>validate_data</code>, <code>run_eda</code>, <code>detect_outliers</code>, <code>apply_outlier_treatment</code>; <code>generate_synthetic_data</code> (scenarios including <code>realistic</code>, <code>clean</code>, <code>unobserved_confounding</code>, <code>multicollinearity</code>, <code>saturation_misspec</code>, <code>trend_break</code>, and geo panels); <code>configure_model</code> and <code>fit_mmm_model</code>; <code>get_roi_metrics</code>, <code>get_component_decomposition</code>, <code>get_saturation_curves</code>, <code>run_budget_optimizer</code>, <code>run_marginal_analysis</code>, <code>run_budget_scenario</code>; experiment planning via <code>compute_experiment_priorities</code>, <code>recommend_lift_experiments</code>, <code>design_experiment_plan</code>, <code>suggest_experiment</code>, <code>plan_experiment</code>, <code>preregister_experiment</code>, <code>record_experiment_readout</code>, <code>apply_experiment_calibration</code>; and <code>execute_python</code> with <code>show_table</code> for sandboxed analysis. Reading the outputs is covered in <a href="interpreting-results.html">Interpreting Results</a>.
                 </p>
             </div>
         </div>
     </section>
 
-    <section id="knowledge" style="background: var(--color-bg-alt);">
+    <section id="codex" style="background: var(--color-bg-alt);">
         <div class="container">
-            <h2>Knowledge <span class="route-chip">/knowledge</span></h2>
+            <header class="aug-head">
+                <h2><span>Codex</span> <span class="route-chip">/knowledge</span> <span class="aug-was">was: Knowledge</span></h2>
+                <p class="aug-hint">The bound reference.</p>
+            </header>
             <p>
-                Knowledge is the project&rsquo;s shared memory. Upload client briefs, planning decks, and reference documents, and the agent retrieves them when it answers — so when you ask &ldquo;does this plan fit the client&rsquo;s goals?&rdquo;, it can quote the brief back rather than guessing. Think of it as the account team&rsquo;s shared drive, except the analyst has actually read everything in it.
+                Codex is the project&rsquo;s shared memory. Upload client briefs, planning decks, and reference documents (txt, markdown, CSV, PDF, Word, Excel), and Augur chunks and embeds them so the Oracle copilot and the project guide retrieve them when they answer — so when you ask &ldquo;does this plan fit the client&rsquo;s goals?&rdquo;, it can quote the brief back rather than guessing. Mark a document as a template and the copilot can reuse its format for the next deliverable. A search box lets you check exactly what the copilot would retrieve for a question. Think of it as the account team&rsquo;s shared drive, except the analyst has actually read everything in it.
             </p>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
-                    <li>Upload briefs, decks, and documents to the knowledge base</li>
-                    <li>Search the knowledge base directly</li>
-                    <li>Get agent answers grounded in your uploaded material</li>
+                    <li>Upload briefs, decks, and documents to the project&rsquo;s knowledge base</li>
+                    <li>Mark report formats as templates the copilot can reuse</li>
+                    <li>Search the knowledge base directly to see what would be retrieved</li>
+                    <li>Get copilot answers grounded in your uploaded material</li>
                 </ul>
             </div>
         </div>
     </section>
 
-    <section id="team">
+    <section id="college">
         <div class="container">
-            <h2>Team <span class="route-chip">/team</span></h2>
+            <header class="aug-head">
+                <h2><span>College</span> &amp; <span>Curia</span> <span class="route-chip">/team · /admin</span> <span class="aug-was">College was: Team</span></h2>
+                <p class="aug-hint">The people who practice, and the senate-house that governs them.</p>
+            </header>
             <p>
-                Team keeps the people on the record alongside the work. A project roster assigns owner, analyst, and viewer roles, used for attribution and sign-off — so a pre-registered experiment or an approved budget shift carries a name, the way a media plan carries an approver&rsquo;s signature. These roles are about accountability for decisions, not gatekeeping logins.
+                <strong>College</strong> keeps the people on the record alongside the work. A project roster assigns owner, analyst, and viewer roles, used for attribution and sign-off — so a pre-registered experiment or an approved budget shift carries a name, the way a media plan carries an approver&rsquo;s signature. These roles are about accountability for decisions, not gatekeeping logins.
+            </p>
+            <p>
+                <strong>Curia</strong> is the org governance surface, shown only to admins and owners: invite teammates, manage organization roles, and track seat usage across the account. Where College is about who owns a <em>project</em>, Curia is about who belongs to the <em>organization</em>.
             </p>
             <div class="highlight-box">
                 <h4>What you can do here</h4>
                 <ul>
-                    <li>Manage the project roster</li>
-                    <li>Assign owner, analyst, and viewer roles</li>
-                    <li>Attribute decisions and sign-offs to named people</li>
+                    <li>Manage the project roster and assign owner / analyst / viewer roles (College)</li>
+                    <li>Attribute decisions and sign-offs to named people (College)</li>
+                    <li>Invite members, manage org roles, and track seat usage (Curia, admins only)</li>
                 </ul>
             </div>
         </div>
     </section>
 
-    <section id="under-the-hood" style="background: var(--color-bg-alt);">
+    <section id="sanctum" style="background: var(--color-bg-alt);">
+        <div class="container">
+            <header class="aug-head">
+                <h2><span>Sanctum</span> <span class="route-chip">/settings</span> <span class="aug-was">new</span></h2>
+                <p class="aug-hint">Your private space.</p>
+            </header>
+            <p>
+                Sanctum is where the account, the model, and the data plumbing live. A profile section holds your identity; a security section manages your password and sign-in; a <strong>Model &amp; API</strong> section chooses the model the agent runs on (and the provider behind it), and is where the API key is set; and a <strong>Data connections</strong> section manages connected data sources and the saved connections the program syncs from (the full list of supported sources is in <a href="data-connections.html">Data Connections</a>). It is the one place to point Augur at a different LLM or a different warehouse without touching a config file.
+            </p>
+            <div class="highlight-box">
+                <h4>What you can do here</h4>
+                <ul>
+                    <li>Manage your profile and account</li>
+                    <li>Change your password and review sign-in security</li>
+                    <li>Choose the model and provider the agent runs on, and rotate the API key</li>
+                    <li>Connect and manage data sources for the project</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="under-the-hood">
         <div class="container">
             <h2>Under the hood</h2>
             <p>
-                For the technically curious: the React interface sits on a FastAPI backend with an ARQ worker and Redis handling long-running jobs, so model fits queue and run without tying up the app. Underneath is the open-source Python library (Python 3.12 or newer) documented across this site — everything the platform does, you can also script directly. Fitted models serialize to disk, so a fit can be saved, reloaded, and re-analyzed later. The agent&rsquo;s LLM is your choice of provider: Anthropic, OpenAI, Google (Gemini), Vertex AI (Anthropic and Gemini models via Application Default Credentials), or a local model through LM Studio for fully on-machine use. A legacy Streamlit UI remains available as a secondary surface.
+                For the technically curious: Augur&rsquo;s React interface sits on a FastAPI backend with an ARQ worker and Redis handling long-running jobs, so model fits queue and run without tying up the app. Underneath is the open-source MMM Framework — the Python library (3.12 or newer) documented across this site. <strong>Augur is the application; the framework is the library it&rsquo;s built on</strong>, so everything the platform does, you can also script directly. Fitted models serialize to disk, so a fit can be saved, reloaded, and re-analyzed later. The agent&rsquo;s LLM is your choice of provider: Anthropic, OpenAI, Google (Gemini), Vertex AI (Anthropic and Gemini models via Application Default Credentials), or a local model through LM Studio for fully on-machine use. A legacy Streamlit UI remains available as a secondary surface.
             </p>
         </div>
     </section>
@@ -376,7 +654,7 @@
     <section class="cta-section">
         <div class="container">
             <h2>Take it for a spin</h2>
-            <p>Set up the platform locally, then run your first cycle of the measurement loop.</p>
+            <p>Set up Augur locally, then run your first cycle of the measurement loop.</p>
             <div class="cta-buttons">
                 <a href="getting-started.html" class="btn btn-white">Get Started</a>
                 <a href="measurement-calibration.html" class="btn btn-outline-white">The Loop in Depth</a>

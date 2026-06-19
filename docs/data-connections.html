@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Connections | MMM Framework</title>
+    <meta name="description" content="How to bring data into Augur: upload a file, or save a live connection to BigQuery or Google Cloud Storage that syncs on demand or on a schedule. Authentication, sync model, security, and the recommended path for ad-platform spend.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/data-connections.html">
+    <meta property="og:title" content="Data Connections | MMM Framework">
+    <meta property="og:description" content="How to bring data into Augur: upload a file, or save a live connection to BigQuery or Google Cloud Storage that syncs on demand or on a schedule.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/data-connections.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        /* Scope chips: how a source reaches the model */
+        .scope {
+            display: inline-block;
+            padding: 0.12rem 0.6rem;
+            border-radius: 100px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .scope.live      { background: rgba(143, 168, 106, 0.18); color: var(--color-primary-dark); }
+        .scope.upload    { background: rgba(106, 143, 168, 0.18); color: var(--color-accent-dark); }
+        .scope.warehouse { background: rgba(212, 168, 106, 0.20); color: #8a6408; }
+        .scope.planned   { background: rgba(120, 106, 154, 0.16); color: #6a5a8a; }
+
+        /* Connector card grid */
+        .conn-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 1.75rem 0;
+        }
+        .conn-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.35rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .conn-card h4 {
+            font-family: 'Fraunces', Georgia, serif;
+            margin: 0 0 0.15rem;
+            display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+        }
+        .conn-card .kindstr {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--color-text-muted);
+        }
+        .conn-card p { font-size: 0.9rem; margin: 0.6rem 0 0; }
+        .conn-card ul { margin: 0.6rem 0 0; padding-left: 1.1rem; }
+        .conn-card li { font-size: 0.86rem; margin: 0.2rem 0; }
+        @media (max-width: 720px) { .conn-grid { grid-template-columns: 1fr; } }
+
+        .conn-table th, .conn-table td { font-size: 0.86rem; vertical-align: top; }
+        .conn-table code { white-space: nowrap; }
+        .status-key { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0 0; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Reference</span>
+            <h1>Data connections</h1>
+            <p style="margin: -0.25rem 0 0.75rem;">
+                <span class="tag tag-warning">Beta</span>
+                <span style="font-size: 0.9rem;">Live connectors are GCP-only today (BigQuery and Google Cloud Storage). Everything else comes in by file upload or through a warehouse — see below.</span>
+            </p>
+            <p class="lead">
+                There are two ways to get your data into <strong>Augur</strong>, the MMM Framework platform: <strong>upload a file</strong>, or <strong>save a live connection</strong> to a warehouse or bucket that syncs on demand or on a schedule. This page covers every connection the app offers, how it authenticates, how syncing works, and the supported path for ad-platform spend.
+            </p>
+        </div>
+    </section>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#two-ways">Two ways to bring data in</a></li>
+                <li><a href="#available">Available connections</a></li>
+                <li><a href="#auth">How authentication works</a></li>
+                <li><a href="#save-test-preview">Save, test, preview</a></li>
+                <li><a href="#sync">Syncing data</a></li>
+                <li><a href="#ad-platforms">Ad-platform spend</a></li>
+                <li><a href="#security">Security &amp; governance</a></li>
+                <li><a href="#reference">Config &amp; tool reference</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <section id="two-ways">
+                <h2>Two ways to bring data in</h2>
+                <p>
+                    Augur draws a clean line between a <em>file</em> you hand it once and a <em>source</em> it can re-read whenever you ask:
+                </p>
+                <div class="conn-grid">
+                    <div class="conn-card">
+                        <h4>Upload a file <span class="scope upload">Upload</span></h4>
+                        <span class="kindstr">Oracle workspace · /workspace</span>
+                        <p>Drop a CSV or Parquet into the agent workspace and it becomes the active dataset for the session — the simplest path, and the one that works regardless of where your data lives. Use this for a one-off extract or a hand-built Master Flat File.</p>
+                    </div>
+                    <div class="conn-card">
+                        <h4>Save a live connection <span class="scope live">Connection</span></h4>
+                        <span class="kindstr">Sanctum · /settings → Data connections</span>
+                        <p>Point Augur at a warehouse table, a query, or a bucket object once. It can then pull fresh data on demand or on a schedule — so a weekly refit reads this week&rsquo;s numbers without anyone re-exporting a file.</p>
+                    </div>
+                </div>
+                <div class="note">
+                    <h4>Not the same as the knowledge base</h4>
+                    <p>
+                        The <strong>Codex</strong> knowledge base (<span class="route" style="font-family:'JetBrains Mono',monospace">/knowledge</span>) is for <em>documents</em> — briefs, decks, reports the copilot can cite. It is not a data connection and does not feed the model. Modeling data comes in through an upload or a saved connection, covered here.
+                    </p>
+                </div>
+            </section>
+
+            <section id="available">
+                <h2>Available connections</h2>
+                <p>
+                    Two live connectors ship today, both on Google Cloud and both authenticated with Application Default Credentials. They require the optional GCP extra:
+                </p>
+                <pre><code class="language-bash">uv sync --extra gcp   # google-cloud-bigquery, google-cloud-storage, pyarrow</code></pre>
+                <p>
+                    If a connector isn&rsquo;t installed, <strong>Sanctum → Data connections</strong> shows the exact <code>uv sync --extra …</code> command on its card under <em>Data warehouses &amp; storage</em>.
+                </p>
+
+                <div class="conn-grid">
+                    <div class="conn-card">
+                        <h4>BigQuery <span class="scope live">Live</span></h4>
+                        <span class="kindstr">kind: <code>bigquery</code></span>
+                        <p>Run a SQL query, or read a table, into a DataFrame.</p>
+                        <ul>
+                            <li><strong>query</strong> — an arbitrary SQL statement, <em>or</em></li>
+                            <li><strong>dataset</strong> + <strong>table</strong> — read a table directly</li>
+                            <li><strong>project</strong> — GCP project (optional; defaults to the ADC project)</li>
+                            <li><strong>location</strong> — e.g. <code>US</code>, <code>EU</code> (optional)</li>
+                            <li>A per-query byte ceiling guards against runaway cost (default <strong>2&nbsp;GiB</strong> billed).</li>
+                        </ul>
+                    </div>
+                    <div class="conn-card">
+                        <h4>Google Cloud Storage <span class="scope live">Live</span></h4>
+                        <span class="kindstr">kind: <code>gcs</code></span>
+                        <p>Read a CSV, Parquet, or TSV object from a bucket.</p>
+                        <ul>
+                            <li><strong>bucket</strong> — bucket name (no <code>gs://</code> prefix) <em>(required)</em></li>
+                            <li><strong>object path</strong> — e.g. <code>exports/mmm.csv</code> <em>(required)</em></li>
+                            <li><strong>prefix</strong> — scope listings to a folder (optional)</li>
+                            <li><strong>project</strong> — GCP project (optional; ADC default)</li>
+                        </ul>
+                    </div>
+                    <div class="conn-card">
+                        <h4>Ad platforms <span class="scope warehouse">Via warehouse</span></h4>
+                        <span class="kindstr">Google Ads · Meta Ads · TikTok Ads</span>
+                        <p>There is no direct ad-platform connector yet. The supported path is to land spend in BigQuery with a managed transfer, then connect BigQuery — see <a href="#ad-platforms">Ad-platform spend</a>.</p>
+                    </div>
+                    <div class="conn-card">
+                        <h4>Anything else <span class="scope upload">Upload</span></h4>
+                        <span class="kindstr">CSV / Parquet</span>
+                        <p>Snowflake, Redshift, Postgres, S3, a spreadsheet export — bring it in as a file upload, or route it through BigQuery / GCS. Direct connectors for other warehouses are not in the current release.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="auth">
+                <h2>How authentication works</h2>
+                <p>
+                    The guiding rule is <strong>no secrets in the connection</strong>. A saved connection stores only non-secret configuration (project, dataset, bucket, query); the credential stays ambient on the server. Both connectors authenticate, in the words of the in-app help, with
+                </p>
+                <blockquote style="border-left: 3px solid var(--color-primary); padding-left: 1rem; color: var(--color-text-muted); font-style: italic;">
+                    &ldquo;Application Default Credentials (ADC) — the same identity used for Vertex AI.&rdquo;
+                </blockquote>
+                <p>Augur resolves credentials in this order:</p>
+                <ol>
+                    <li><strong>Application Default Credentials (ADC)</strong> — the GCP VM&rsquo;s service account, a local <code>gcloud auth application-default login</code>, or <code>GOOGLE_APPLICATION_CREDENTIALS</code>. This is the default and needs no key in the app.</li>
+                    <li><strong>An explicit service-account JSON</strong> — set <code>MMM_GCP_CREDENTIALS_PATH</code> (or a per-connector path) to a key file on the server.</li>
+                </ol>
+                <p>
+                    Because the credential is the server&rsquo;s ADC identity, the service account it runs as must be granted read access to the BigQuery datasets and GCS buckets you connect — typically <code>roles/bigquery.dataViewer</code> + <code>roles/bigquery.jobUser</code> and <code>roles/storage.objectViewer</code>. The same identity already powers the Vertex AI agent, so on a properly configured GCP deployment there is usually nothing extra to set up.
+                </p>
+            </section>
+
+            <section id="save-test-preview">
+                <h2>Save, test, preview</h2>
+                <p>
+                    Saved connections live in <strong>Sanctum → Data connections</strong> (<span style="font-family:'JetBrains Mono',monospace">/settings</span>). To add one, give it a <strong>Name</strong> (e.g. <code>weekly-spend</code>), pick a <strong>Type</strong> (BigQuery or Google Cloud Storage), fill the fields above, and click <strong>Save connection</strong>. Each saved connection then offers three actions:
+                </p>
+                <ul>
+                    <li><strong>Test</strong> — a cheap reachability + auth probe. It returns whether the source was reached and what it reached, with no data read.</li>
+                    <li><strong>Preview</strong> — reads the first ~20 rows (capped at 200) and shows them inline as a small table, so you can confirm the columns before committing to a full sync.</li>
+                    <li><strong>Delete</strong> — removes the connection and its cached snapshot.</li>
+                </ul>
+                <p>
+                    The list shows each connection&rsquo;s type, a summary of its config (the query, <code>dataset.table</code>, or <code>gs://bucket/object</code>), its auto-sync schedule, and its last-sync status. <strong>Preview executes a billable read</strong>, so it is gated to the analyst role and stamps the connection&rsquo;s <em>last synced</em> time.
+                </p>
+            </section>
+
+            <section id="sync">
+                <h2>Syncing data</h2>
+                <p>A saved connection turns into a usable dataset two ways.</p>
+
+                <h3>On demand</h3>
+                <p>
+                    Run a <strong>Preview</strong> from Sanctum, or simply ask the copilot in the <strong>Oracle</strong> workspace — the empty-state hint says it best: &ldquo;in chat say <em>sync my <code>&lt;name&gt;</code> connection</em>.&rdquo; The agent reads the source and makes the result the active dataset for the session, ready to fit. Under the hood the copilot uses <code>sync_data_connection</code>, or reads a source directly with <code>load_from_bigquery</code> / <code>load_from_gcs</code>.
+                </p>
+
+                <h3>On a schedule</h3>
+                <p>
+                    Each connection has an <strong>Auto-sync</strong> control with presets <strong>Manual</strong>, <strong>Hourly</strong>, <strong>Daily</strong>, and <strong>Weekly</strong> (any custom interval from 1 minute to 30 days is allowed via the API). A background scheduler periodically reads every connection that is due, writes a per-project CSV snapshot, and records the outcome on the connection: a green check and row count on success, a red error with a scrubbed message on failure. The status line reads, for example, <em>&ldquo;synced 2h ago · 1,234 rows.&rdquo;</em>
+                </p>
+                <div class="note">
+                    <h4>What scheduled sync is — and isn&rsquo;t</h4>
+                    <p>
+                        Scheduled sync keeps a fresh <em>snapshot</em> on hand; it does not automatically refit your model. You still kick off a refit (the T₃ calibrate / T₀ fit step) from the workspace — the snapshot is simply there waiting, so the refit reads current numbers. Failed syncs back off automatically (up to about a day) and are clearly marked as errors rather than silently reported as &ldquo;ok.&rdquo; Each sync is row-capped (5M rows by default) and time-limited so one slow source can&rsquo;t stall the batch.
+                    </p>
+                </div>
+            </section>
+
+            <section id="ad-platforms">
+                <h2>Ad-platform spend</h2>
+                <p>
+                    Google Ads, Meta Ads, and TikTok Ads are listed in Sanctum (ranked easiest-first) but ship as <strong>stubs</strong> — there is no live, direct pull from their APIs yet. That is deliberate: the robust, supported pattern is to let a purpose-built transfer service land platform spend in your warehouse, then point Augur at the warehouse.
+                </p>
+                <table class="conn-table">
+                    <thead>
+                        <tr><th>Platform</th><th>Recommended ingestion</th><th>Then connect</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Google Ads</td><td>BigQuery Data Transfer Service (first-party, native)</td><td rowspan="3">BigQuery connection (<code>bigquery</code>)</td></tr>
+                        <tr><td>Meta Ads</td><td>Fivetran / Supermetrics → BigQuery</td></tr>
+                        <tr><td>TikTok Ads</td><td>Fivetran / Supermetrics → BigQuery</td></tr>
+                    </tbody>
+                </table>
+                <p>
+                    Once spend is in BigQuery, a single <code>bigquery</code> connection — a query that joins your platforms into one weekly table — feeds the whole model. The rationale and connector contract are spelled out in <code>technical-docs/ad-platform-integrations.md</code>.
+                </p>
+            </section>
+
+            <section id="security">
+                <h2>Security &amp; governance</h2>
+                <ul>
+                    <li><strong>No stored secrets.</strong> Connections persist only non-secret config; authentication is the server&rsquo;s ambient ADC identity (or a service-account file path), never a key pasted into the app.</li>
+                    <li><strong>Errors are scrubbed.</strong> Cloud errors surfaced in previews and sync results have project IDs, service-account emails, and credential paths redacted before they reach the UI.</li>
+                    <li><strong>Role-gated.</strong> Viewers can list and <em>test</em> connections; creating, previewing, syncing, scheduling, and deleting require the analyst role — because preview and sync run billable reads.</li>
+                    <li><strong>Tenant-isolated.</strong> Every connection is scoped to its project; a request for a connection that belongs to another project returns a plain 404, so IDs can&rsquo;t be probed across tenants.</li>
+                </ul>
+                <div class="note">
+                    <h4>Hosted-deployment caveat</h4>
+                    <p>
+                        In the current build, scheduled sync runs under the <em>server&rsquo;s</em> ADC identity for every tenant. On a single-tenant or trusted-team deployment that is fine; true per-tenant credential isolation (workload identity per organization) is a tracked hosted-posture item, not yet shipped. Plan connected sources accordingly.
+                    </p>
+                </div>
+            </section>
+
+            <section id="reference">
+                <h2>Config &amp; tool reference</h2>
+                <p>For analysts and engineers wiring this up directly.</p>
+
+                <h3>Connection config fields</h3>
+                <table class="conn-table">
+                    <thead>
+                        <tr><th>Kind</th><th>Fields</th><th>Example</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>bigquery</code></td>
+                            <td><code>query</code> <em>or</em> <code>dataset</code>+<code>table</code>; <code>project</code>, <code>location</code>, <code>maximum_bytes_billed</code></td>
+                            <td><code>{"project": "acme", "query": "SELECT * FROM mmm.weekly_spend"}</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>gcs</code></td>
+                            <td><code>bucket</code>, object path; <code>prefix</code>, <code>project</code></td>
+                            <td><code>{"bucket": "acme-mmm", "object": "exports/mmm.csv"}</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Server environment variables</h3>
+                <pre><code class="language-bash"># GCP identity / project (shared with the Vertex AI agent)
+MMM_GCP_PROJECT=acme-gcp
+MMM_GCP_CREDENTIALS_PATH=/path/to/service-account.json   # empty = ADC
+
+# BigQuery defaults
+MMM_BIGQUERY_DATASET=marketing
+MMM_BIGQUERY_LOCATION=US
+
+# GCS defaults
+MMM_GCS_BUCKET=acme-mmm
+MMM_GCS_PREFIX=exports/
+
+# Scheduled-sync tuning
+MMM_CONNECTION_SYNC_INTERVAL=300        # scheduler tick, seconds (default 300)
+MMM_CONNECTION_SYNC_MAX_ROWS=5000000    # row cap per sync (default 5M)
+MMM_CONNECTION_SYNC_READ_TIMEOUT=600    # per-connection read timeout, seconds</code></pre>
+
+                <h3>Agent tools &amp; HTTP endpoints</h3>
+                <p>
+                    From chat, the copilot uses <code>load_from_bigquery</code>, <code>load_from_gcs</code>, and <code>sync_data_connection</code>. The REST surface (all under a project) is:
+                </p>
+                <pre><code class="language-python">GET    /projects/{id}/data-connections                      # list (viewer)
+POST   /projects/{id}/data-connections                      # create (analyst)
+PATCH  /projects/{id}/data-connections/{conn}               # set auto-sync interval (analyst)
+DELETE /projects/{id}/data-connections/{conn}               # delete (analyst)
+POST   /projects/{id}/data-connections/{conn}/test          # reachability probe (viewer)
+POST   /projects/{id}/data-connections/{conn}/preview?rows=20 # read sample rows (analyst)
+GET    /integrations/catalog                                # available connectors (auth)</code></pre>
+                <p>
+                    For what the data itself must look like once it&rsquo;s connected, see <a href="data-requirements.html">Data Requirements &amp; Runtime</a> and the <a href="real-data-guide.html">Real-Data Guide</a>. The platform tour covers where this lives in the app: <a href="platform-overview.html#sanctum">Sanctum</a>.
+                </p>
+            </section>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Connect your data</h2>
+            <p>Bring a source in, then run your first cycle of the measurement loop.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Get Started</a>
+                <a href="data-requirements.html" class="btn btn-outline-white">Data Requirements</a>
+                <a href="platform-overview.html" class="btn btn-outline-white">Platform Tour</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared components (nav + footer) -->
+    <script src="shared/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.hljs) hljs.highlightAll();
+        });
+    </script>
+</body>
+</html>
