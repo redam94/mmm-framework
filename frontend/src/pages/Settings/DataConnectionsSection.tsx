@@ -1,7 +1,8 @@
 import { clsx } from 'clsx';
-import { CheckCircle2, Cloud, Database, PlugZap, XCircle } from 'lucide-react';
+import { CheckCircle2, Cloud, Database, Link2, PlugZap, XCircle } from 'lucide-react';
 import { Card } from '../../components/ui';
 import { useIntegrationsCatalog } from '../../api/hooks/useAccount';
+import { SavedConnections } from './SavedConnections';
 import type {
   AdPlatformCatalogEntry,
   DataSourceCatalogEntry,
@@ -86,6 +87,14 @@ export function DataConnectionsSection() {
 
   return (
     <div className="space-y-8">
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Link2 size={16} className="text-ink-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-ink-400">Saved connections</h3>
+        </div>
+        <SavedConnections />
+      </section>
+
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Database size={16} className="text-ink-400" />
