@@ -18,6 +18,10 @@
  *   chat-aided modeling workspace.
  * - **Codex** (/knowledge) — the bound reference: reports and grounding docs.
  * - **College** (/team) — the College of Augurs: the people who practice.
+ * - **Curia** (/admin) — the senate-house: govern the org — members, roles,
+ *   seats. Shown only to admins/owners.
+ * - **Sanctum** (/settings) — one's private space: account, security, the
+ *   model the agent runs on, and connected data sources.
  */
 
 export const APP_NAME = 'Augur';
@@ -29,6 +33,8 @@ export interface PageIdentity {
   name: string;
   /** plain-language function, shown under the nav label and beside the header title */
   hint: string;
+  /** minimum org role to show this in nav (e.g. 'admin'); undefined = everyone */
+  minRole?: string;
 }
 
 export const PAGES: PageIdentity[] = [
@@ -39,7 +45,18 @@ export const PAGES: PageIdentity[] = [
   { path: '/workspace', name: 'Oracle', hint: 'Chat-aided modeling' },
   { path: '/knowledge', name: 'Codex', hint: 'Reports & reference docs' },
   { path: '/team', name: 'College', hint: 'Roster & roles' },
+  { path: '/admin', name: 'Curia', hint: 'Members, roles & seats', minRole: 'admin' },
+  { path: '/settings', name: 'Sanctum', hint: 'Account, security & connections' },
 ];
+
+/** Least → most privileged org roles (mirrors auth.models.Role ordering). */
+const ROLE_RANK: Record<string, number> = { viewer: 0, analyst: 1, admin: 2, owner: 3 };
+
+/** Whether a page should be shown to a principal with the given org role. */
+export function pageVisibleToRole(page: PageIdentity, role: string | undefined): boolean {
+  if (!page.minRole) return true;
+  return (ROLE_RANK[role ?? ''] ?? -1) >= (ROLE_RANK[page.minRole] ?? 99);
+}
 
 export function pageForPath(pathname: string): PageIdentity | undefined {
   return PAGES.find((p) => pathname === p.path || pathname.startsWith(p.path + '/'));

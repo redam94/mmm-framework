@@ -10,6 +10,8 @@ import {
   ExperimentsPage,
   PerformancePage,
   PortfolioPage,
+  SettingsPage,
+  AdminPage,
   TeamPage,
   KnowledgePage,
   AgentPage,
@@ -98,6 +100,8 @@ function App() {
                     <Route path="/portfolio" element={<PortfolioPage />} />
                     <Route path="/knowledge" element={<KnowledgePage />} />
                     <Route path="/team" element={<TeamPage />} />
+                    <Route path="/admin" element={<AdminPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
                     {/* Legacy paths */}
                     <Route path="/dashboard" element={<Navigate to="/program" replace />} />
                     <Route path="/runs" element={<Navigate to="/performance/runs" replace />} />

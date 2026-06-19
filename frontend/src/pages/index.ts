@@ -3,6 +3,8 @@ export { ProgramPage } from './Program';
 export { ExperimentsPage } from './Experiments';
 export { PerformancePage } from './Performance';
 export { PortfolioPage } from './Portfolio';
+export { SettingsPage } from './Settings';
+export { AdminPage } from './Admin';
 export { TeamPage } from './Team';
 export { KnowledgePage } from './Knowledge';
 export { AgentPage } from './Agent';
