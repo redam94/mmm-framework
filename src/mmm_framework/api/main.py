@@ -3605,6 +3605,23 @@ async def metrics_endpoint():
     )
 
 
+@app.get("/integrations/catalog")
+async def integrations_catalog_endpoint():
+    """List available data-source + ad-platform integrations (non-secret).
+
+    Powers the Settings "Data connections" section: which connectors exist,
+    whether their optional SDK is installed, the auth story, and (for ad
+    platforms) the recommended ingestion path. No credentials are returned.
+    """
+    from mmm_framework.integrations import list_data_sources
+    from mmm_framework.integrations.ad_platforms import list_ad_platforms
+
+    return {
+        "data_sources": list_data_sources(),
+        "ad_platforms": list_ad_platforms(),
+    }
+
+
 @app.get("/model-config")
 async def model_config_endpoint():
     """Report the active LLM provider/model (non-secret).

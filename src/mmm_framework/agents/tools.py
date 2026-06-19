@@ -401,6 +401,164 @@ def generate_synthetic_data(
     )
 
 
+def _persist_external_dataset(
+    df, *, source_label: str, state: dict, config, tool_call_id: str
+) -> Command:
+    """Write a fetched DataFrame to the session workspace as the active dataset.
+
+    Mirrors generate_synthetic_data: ABSOLUTE dataset_path, file registration,
+    and a dashboard summary, so an externally-loaded dataset behaves exactly like
+    an uploaded or synthetic one downstream.
+    """
+    tid = _activate_thread(config)
+    try:
+        out_dir = _ws.thread_dir(tid)
+        before = _ws.snapshot_dir(out_dir)
+        output_path = str(out_dir / "external_mff_data.csv")
+    except Exception:
+        before, output_path = {}, "external_mff_data.csv"
+    df.to_csv(output_path, index=False)
+    try:
+        _ws.register_generated_files(tid, before, kind="dataset")
+    except Exception:
+        pass
+
+    cols = ", ".join(map(str, df.columns.tolist()))
+    info = f"Loaded {len(df)} rows from {source_label}. Columns: {cols}"
+    if "VariableName" not in df.columns or "Period" not in df.columns:
+        info += (
+            "\nNote: this is not MFF long format yet (it needs Period + VariableName "
+            "+ VariableValue columns). Use execute_python with "
+            "`from mmm_framework.integrations.ad_platforms import spend_to_mff` to "
+            "reshape it before configuring or fitting a model."
+        )
+
+    dashboard_data = state.get("dashboard_data") or {}
+    try:
+        _, dataset_info = _build_dataset_dashboard(df, output_path)
+        dashboard_data["dataset"] = dataset_info
+    except Exception:
+        pass
+
+    return Command(
+        update={
+            "dataset_path": output_path,
+            "dataset_info": info,
+            "messages": [ToolMessage(content=info, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+def _integration_error_command(exc: Exception, tool_call_id: str) -> Command:
+    from ..integrations import MissingDependencyError
+
+    if isinstance(exc, MissingDependencyError):
+        msg = str(exc)
+    else:
+        msg = (
+            f"{type(exc).__name__}: {exc}. Check the project/credentials "
+            "(GCS/BigQuery use Application Default Credentials — run "
+            "`gcloud auth application-default login` or set MMM_GCP_CREDENTIALS_PATH)."
+        )
+    return Command(
+        update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
+def load_from_bigquery(
+    state: Annotated[dict, InjectedState],
+    query: Optional[str] = None,
+    table: Optional[str] = None,
+    project: Optional[str] = None,
+    dataset: Optional[str] = None,
+    location: Optional[str] = None,
+    max_rows: Optional[int] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load the session dataset from BigQuery — a SQL ``query`` or a ``table`` id.
+
+    The result becomes the active dataset. For modeling it should be (or be
+    reshaped to) MFF long format: Period, VariableName, VariableValue (+ optional
+    Geography/Product/Campaign). Shape it with SQL aliases, or load raw and use
+    ``spend_to_mff`` in execute_python.
+
+    Auth is Application Default Credentials (ADC); requires the optional
+    ``mmm-framework[gcp]`` dependency group.
+
+    Args:
+        query: A SQL query to run (e.g. "SELECT date AS Period, ...").
+        table: A ``dataset.table`` id to read instead of a query (SELECT *).
+        project: GCP project (defaults to the ADC project).
+        dataset: Default dataset for a bare table id.
+        location: BigQuery location (e.g. US, EU).
+        max_rows: Optional LIMIT for a table read.
+
+    Returns:
+        A Command that sets the dataset_path in state.
+    """
+    try:
+        from ..integrations import BigQueryConfig, BigQueryDataSource
+
+        src = BigQueryDataSource(
+            BigQueryConfig(project=project, dataset=dataset, location=location)
+        )
+        df = src.read_dataframe(table, query=query, max_rows=max_rows)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the user as a ToolMessage
+        return _integration_error_command(exc, tool_call_id)
+    label = f"BigQuery ({'query' if query else table})"
+    return _persist_external_dataset(
+        df, source_label=label, state=state, config=config, tool_call_id=tool_call_id
+    )
+
+
+@tool
+def load_from_gcs(
+    state: Annotated[dict, InjectedState],
+    object_path: str,
+    bucket: Optional[str] = None,
+    project: Optional[str] = None,
+    fmt: Optional[str] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load the session dataset from a Google Cloud Storage object (CSV/Parquet).
+
+    The object becomes the active dataset. For modeling it should be (or be
+    reshaped to) MFF long format. Auth is Application Default Credentials (ADC);
+    requires the optional ``mmm-framework[gcp]`` dependency group.
+
+    Args:
+        object_path: Object name within the bucket (e.g. "exports/mmm_2024.csv").
+        bucket: GCS bucket (defaults to the MMM_GCS_BUCKET env var).
+        project: GCP project (defaults to the ADC project).
+        fmt: Force "csv" or "parquet" (otherwise inferred from the extension).
+
+    Returns:
+        A Command that sets the dataset_path in state.
+    """
+    try:
+        from ..integrations import GCSConfig, GCSDataSource, IntegrationError
+
+        cfg = GCSConfig.from_env(bucket=bucket, project=project)
+        if not cfg.bucket:
+            raise IntegrationError(
+                "No GCS bucket given; pass bucket=… or set the MMM_GCS_BUCKET env var."
+            )
+        df = GCSDataSource(cfg).read_dataframe(object_path, fmt=fmt)
+    except Exception as exc:  # noqa: BLE001
+        return _integration_error_command(exc, tool_call_id)
+    return _persist_external_dataset(
+        df,
+        source_label=f"gs://{cfg.bucket}/{object_path}",
+        state=state,
+        config=config,
+        tool_call_id=tool_call_id,
+    )
+
+
 def _commit_spec(
     state: dict,
     candidate: dict,
@@ -4785,6 +4943,8 @@ TOOLS = [
     *[t for t in CAUSAL_TOOLS if t.name == "define_research_question"],
     # Data
     generate_synthetic_data,
+    load_from_bigquery,
+    load_from_gcs,
     inspect_dataset,
     # Step 2 — Data quality (pre-fit): validate_data, run_eda, detect_outliers,
     # apply_outlier_treatment
