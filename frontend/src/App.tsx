@@ -9,6 +9,7 @@ import {
   ProgramPage,
   ExperimentsPage,
   PerformancePage,
+  PortfolioPage,
   TeamPage,
   KnowledgePage,
   AgentPage,
@@ -94,6 +95,7 @@ function App() {
                     <Route path="/experiments/:experimentId" element={<ExperimentsPage />} />
                     <Route path="/performance" element={<PerformancePage />} />
                     <Route path="/performance/:tab" element={<PerformancePage />} />
+                    <Route path="/portfolio" element={<PortfolioPage />} />
                     <Route path="/knowledge" element={<KnowledgePage />} />
                     <Route path="/team" element={<TeamPage />} />
                     {/* Legacy paths */}

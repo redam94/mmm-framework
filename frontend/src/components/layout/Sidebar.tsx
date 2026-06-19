@@ -13,6 +13,7 @@ import {
   Pencil,
   Plus,
   ScrollText,
+  Telescope,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ const NAV_ICONS: Record<string, NavItem['icon']> = {
   '/program': Orbit,
   '/experiments': Bird,
   '/performance': ScrollText,
+  '/portfolio': Telescope,
   '/workspace': MessageSquareText,
   '/knowledge': BookOpen,
   '/team': Users,

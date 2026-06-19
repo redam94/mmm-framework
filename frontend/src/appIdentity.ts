@@ -35,6 +35,7 @@ export const PAGES: PageIdentity[] = [
   { path: '/program', name: 'Orrery', hint: 'The measurement cycle, in motion' },
   { path: '/experiments', name: 'Auspices', hint: 'Design · run · calibrate tests' },
   { path: '/performance', name: 'Chronicle', hint: 'Cycle-over-cycle record' },
+  { path: '/portfolio', name: 'Constellation', hint: 'Benchmark brands across the book' },
   { path: '/workspace', name: 'Oracle', hint: 'Chat-aided modeling' },
   { path: '/knowledge', name: 'Codex', hint: 'Reports & reference docs' },
   { path: '/team', name: 'College', hint: 'Roster & roles' },
