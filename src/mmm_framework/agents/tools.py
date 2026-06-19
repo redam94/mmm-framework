@@ -601,6 +601,72 @@ def load_from_gcs(
     )
 
 
+@tool
+def sync_data_connection(
+    state: Annotated[dict, InjectedState],
+    name: str,
+    max_rows: Optional[int] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load a SAVED data connection by name into the session as the active dataset.
+
+    Connections are set up once in the UI (Settings → Data connections) — a named
+    GCS object or a BigQuery query/table — so you don't re-type the reference.
+    This pulls the latest data and makes it the working dataset. Auth is ADC;
+    requires the optional ``mmm-framework[gcp]`` dependency group.
+
+    Args:
+        name: The saved connection's name (within the current project).
+        max_rows: Optional cap on rows pulled.
+
+    Returns:
+        A Command that sets the dataset_path in state.
+    """
+    from ..api import sessions as _sessions
+
+    def _err(msg: str) -> Command:
+        return Command(
+            update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+        )
+
+    tid = _activate_thread(config)
+    sess = _sessions.get_session(tid) if tid else None
+    pid = (sess or {}).get("project_id")
+    if not pid:
+        return _err(
+            "This session isn't attached to a project, so it has no saved data "
+            "connections. Use load_from_bigquery / load_from_gcs directly, or open "
+            "the session inside a project."
+        )
+    conn = _sessions.get_data_connection_by_name(pid, name)
+    if conn is None:
+        avail = [c["name"] for c in _sessions.list_data_connections(pid)]
+        return _err(
+            f"No saved connection named {name!r}. "
+            + (f"Available: {', '.join(avail)}." if avail else "None are saved yet.")
+        )
+    try:
+        from ..integrations import read_connection_dataframe
+
+        df = read_connection_dataframe(
+            conn["kind"], conn.get("config") or {}, max_rows=max_rows
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _integration_error_command(exc, tool_call_id)
+    try:
+        _sessions.touch_data_connection_synced(conn["id"])
+    except Exception:
+        pass
+    return _persist_external_dataset(
+        df,
+        source_label=f"connection '{name}' ({conn['kind']})",
+        state=state,
+        config=config,
+        tool_call_id=tool_call_id,
+    )
+
+
 def _commit_spec(
     state: dict,
     candidate: dict,
@@ -4987,6 +5053,7 @@ TOOLS = [
     generate_synthetic_data,
     load_from_bigquery,
     load_from_gcs,
+    sync_data_connection,
     inspect_dataset,
     # Step 2 — Data quality (pre-fit): validate_data, run_eda, detect_outliers,
     # apply_outlier_treatment

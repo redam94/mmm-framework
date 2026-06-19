@@ -237,6 +237,29 @@ def init_db() -> None:
             " ON run_metrics(project_id, created_at)"
         )
 
+        # Saved data-source connections (project-scoped). config_json holds ONLY
+        # a non-secret reference (bucket/prefix/object, or project/dataset/query/
+        # table) — NEVER credentials. Auth stays ambient (ADC / the server's
+        # MMM_GCP_CREDENTIALS_PATH), so there is no secret to encrypt at rest.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS data_connections (
+                id          TEXT PRIMARY KEY,
+                project_id  TEXT,
+                name        TEXT NOT NULL,
+                kind        TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                created_at  REAL NOT NULL,
+                updated_at  REAL NOT NULL,
+                last_synced REAL
+            )
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_data_connections_project"
+            " ON data_connections(project_id, updated_at)"
+        )
+
         # Projects: group sessions and own a knowledge base. A session belongs
         # to a project via sessions.project_id. meta_json carries the
         # onboarding profile (client info, goals, KPI/channel context) that
@@ -1274,6 +1297,79 @@ def delete_experiment(experiment_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM experiments WHERE id = ?", (experiment_id,))
         return cur.rowcount > 0
+
+
+# ── Saved data-source connections ────────────────────────────────────────────
+
+
+def _data_connection_row(r: sqlite3.Row | None) -> dict[str, Any] | None:
+    if r is None:
+        return None
+    d = dict(r)
+    try:
+        d["config"] = json.loads(d.pop("config_json") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        d["config"] = {}
+        d.pop("config_json", None)
+    return d
+
+
+def create_data_connection(
+    project_id: str, name: str, kind: str, config: dict[str, Any]
+) -> dict[str, Any]:
+    """Persist a reusable data-source connection (no credentials in config)."""
+    cid = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO data_connections (id, project_id, name, kind, config_json,"
+            " created_at, updated_at, last_synced) VALUES (?,?,?,?,?,?,?, NULL)",
+            (cid, project_id, name, kind, json.dumps(config or {}), now, now),
+        )
+    return get_data_connection(cid)
+
+
+def list_data_connections(project_id: str) -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM data_connections WHERE project_id = ? ORDER BY updated_at DESC",
+            (project_id,),
+        ).fetchall()
+    return [_data_connection_row(r) for r in rows]
+
+
+def get_data_connection(connection_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM data_connections WHERE id = ?", (connection_id,)
+        ).fetchone()
+    return _data_connection_row(row)
+
+
+def get_data_connection_by_name(project_id: str, name: str) -> dict[str, Any] | None:
+    """Resolve a connection by name within a project (newest wins)."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM data_connections WHERE project_id = ? AND name = ?"
+            " ORDER BY updated_at DESC LIMIT 1",
+            (project_id, name),
+        ).fetchone()
+    return _data_connection_row(row)
+
+
+def delete_data_connection(connection_id: str) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM data_connections WHERE id = ?", (connection_id,))
+        return cur.rowcount > 0
+
+
+def touch_data_connection_synced(connection_id: str) -> None:
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "UPDATE data_connections SET last_synced = ?, updated_at = ? WHERE id = ?",
+            (now, now, connection_id),
+        )
 
 
 # ── Run metrics (per-fit history snapshots) ──────────────────────────────────

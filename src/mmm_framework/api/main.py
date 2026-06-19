@@ -1667,6 +1667,123 @@ async def put_preferences_endpoint(body: PreferenceUpdateRequest):
     )
 
 
+class DataConnectionCreate(BaseModel):
+    name: str
+    kind: str  # gcs | bigquery
+    config: dict = {}
+
+
+def _require_connection(project_id: str, connection_id: str) -> dict:
+    conn = sessions_store.get_data_connection(connection_id)
+    if conn is None or conn.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    return conn
+
+
+@app.get("/projects/{project_id}/data-connections", dependencies=[_proj_read])
+async def list_data_connections_endpoint(project_id: str):
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content={"connections": sessions_store.list_data_connections(project_id)}
+    )
+
+
+@app.post("/projects/{project_id}/data-connections", dependencies=[_proj_write])
+async def create_data_connection_endpoint(project_id: str, body: DataConnectionCreate):
+    """Save a reusable data-source connection (a non-secret bucket/query/table
+    reference; credentials stay ambient via ADC)."""
+    from mmm_framework.integrations import IntegrationError, data_source_kinds
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if body.kind not in data_source_kinds():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown kind {body.kind!r}; known: {data_source_kinds()}",
+        )
+    if not (body.name or "").strip():
+        raise HTTPException(status_code=422, detail="name is required")
+    # Build the connector once to catch malformed config early (no network).
+    from mmm_framework.integrations import build_data_source
+    from mmm_framework.integrations.connections import _split_ref
+
+    try:
+        cfg, _ref = _split_ref(body.config or {})
+        build_data_source(body.kind, cfg)
+    except IntegrationError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid connection: {exc}")
+    except Exception as exc:  # pydantic validation, etc.
+        raise HTTPException(status_code=422, detail=f"Invalid connection config: {exc}")
+    conn = sessions_store.create_data_connection(
+        project_id, body.name.strip(), body.kind, body.config or {}
+    )
+    return JSONResponse(content=conn)
+
+
+@app.delete(
+    "/projects/{project_id}/data-connections/{connection_id}",
+    dependencies=[_proj_write],
+)
+async def delete_data_connection_endpoint(project_id: str, connection_id: str):
+    _require_connection(project_id, connection_id)
+    sessions_store.delete_data_connection(connection_id)
+    return JSONResponse(content={"deleted": True})
+
+
+@app.post(
+    "/projects/{project_id}/data-connections/{connection_id}/test",
+    dependencies=[_proj_read],
+)
+async def test_data_connection_endpoint(project_id: str, connection_id: str):
+    conn = _require_connection(project_id, connection_id)
+    from mmm_framework.integrations import probe_connection
+
+    status = await asyncio.to_thread(
+        probe_connection, conn["kind"], conn.get("config") or {}
+    )
+    return JSONResponse(content=status.as_dict())
+
+
+@app.post(
+    "/projects/{project_id}/data-connections/{connection_id}/preview",
+    dependencies=[_proj_read],
+)
+async def preview_data_connection_endpoint(
+    project_id: str, connection_id: str, rows: int = 20
+):
+    """Read the first ``rows`` of a connection (capped) for a UI preview."""
+    conn = _require_connection(project_id, connection_id)
+    from mmm_framework.integrations import (
+        IntegrationError,
+        read_connection_dataframe,
+    )
+
+    n = max(1, min(int(rows), 200))
+    try:
+        df = await asyncio.to_thread(
+            read_connection_dataframe,
+            conn["kind"],
+            conn.get("config") or {},
+            max_rows=n,
+        )
+    except IntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - surface read/auth failure as 502
+        raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}")
+    head = df.head(n)
+    sessions_store.touch_data_connection_synced(connection_id)
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {
+                "columns": [str(c) for c in head.columns],
+                "rows": head.to_dict("records"),
+                "n_preview": int(len(head)),
+            }
+        )
+    )
+
+
 @app.get("/projects/{project_id}/branding", dependencies=[_proj_read])
 async def get_branding_endpoint(project_id: str):
     if sessions_store.get_project(project_id) is None:

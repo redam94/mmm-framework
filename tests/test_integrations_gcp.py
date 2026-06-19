@@ -23,8 +23,10 @@ from mmm_framework.integrations import (
     build_data_source,
     list_data_sources,
     load_gcp_credentials,
+    read_connection_dataframe,
     require_dependency,
     resolve_project,
+    probe_connection,
 )
 
 # ── Fakes ──────────────────────────────────────────────────────────────────────
@@ -286,3 +288,46 @@ def test_require_dependency_helpful_error():
     with pytest.raises(MissingDependencyError) as ei:
         require_dependency("definitely_not_a_real_module_xyz", purpose="do a thing")
     assert "mmm-framework[gcp]" in str(ei.value)
+
+
+# ── Saved connections (read_connection_dataframe / probe_connection) ───────
+
+
+def test_connection_read_bigquery_query_and_table():
+    df = pd.DataFrame({"a": [1]})
+    client = _FakeBQClient(df)
+    out = read_connection_dataframe(
+        "bigquery", {"dataset": "mmm", "query": "SELECT 1"}, client=client
+    )
+    assert client.last_sql == "SELECT 1" and out.equals(df)
+
+    read_connection_dataframe(
+        "bigquery", {"dataset": "mmm", "table": "weekly"}, client=client
+    )
+    assert client.last_sql == "SELECT * FROM `mmm.weekly`"
+
+
+def test_connection_read_gcs_object():
+    csv = b"Period,VariableValue\n2023-01-02,5000\n"
+    client = _FakeStorageClient([_FakeBlob("exports/d.csv", csv)])
+    df = read_connection_dataframe(
+        "gcs", {"bucket": "b", "object": "exports/d.csv"}, client=client
+    )
+    assert df.iloc[0]["VariableValue"] == 5000
+
+
+def test_connection_read_errors():
+    # GCS connection without an object reference.
+    with pytest.raises(IntegrationError):
+        read_connection_dataframe("gcs", {"bucket": "b"}, client=_FakeStorageClient([]))
+    # Unknown kind.
+    with pytest.raises(IntegrationError):
+        read_connection_dataframe("snowflake", {}, client=None)
+
+
+def test_connection_test_status_strips_ref():
+    client = _FakeBQClient(pd.DataFrame({"ok": [1]}))
+    status = probe_connection(
+        "bigquery", {"project": "p", "query": "SELECT 1"}, client=client
+    )
+    assert status.ok and status.source == "bigquery"

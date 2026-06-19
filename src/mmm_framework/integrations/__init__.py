@@ -22,6 +22,7 @@ from .base import (
     require_dependency,
 )
 from .bigquery import BigQueryConfig, BigQueryDataSource
+from .connections import read_connection_dataframe, probe_connection
 from .credentials import load_gcp_credentials, resolve_project
 from .gcs import GCSConfig, GCSDataSource
 from .registry import build_data_source, data_source_kinds, list_data_sources
@@ -44,4 +45,6 @@ __all__ = [
     "build_data_source",
     "data_source_kinds",
     "list_data_sources",
+    "read_connection_dataframe",
+    "probe_connection",
 ]
