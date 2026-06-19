@@ -149,6 +149,38 @@ def _fold_dashboard_update(combined: dict, dd: dict, live_spec: dict) -> dict:
 DB_PATH = Path(__file__).parent / "sessions.db"
 memory: AsyncSqliteSaver | None = None
 _aiosqlite_conn: aiosqlite.Connection | None = None
+_ship_task: "asyncio.Task | None" = None
+_sync_task: "asyncio.Task | None" = None
+
+
+async def _audit_ship_loop(interval: float) -> None:
+    """Periodically forward new audit records off-host (when configured)."""
+    from mmm_framework.agents import audit_shipper
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await asyncio.to_thread(audit_shipper.flush_audit_to_remote)
+        except asyncio.CancelledError:
+            break
+        except Exception:  # pragma: no cover - never let the loop die
+            logger.exception("audit off-host ship failed")
+
+
+async def _connection_sync_loop(interval: float) -> None:
+    """Periodically refresh saved data connections whose schedule is due."""
+    import time as _time
+
+    from mmm_framework.api import connection_sync
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await asyncio.to_thread(connection_sync.sync_due_connections, _time.time())
+        except asyncio.CancelledError:
+            break
+        except Exception:  # pragma: no cover - never let the loop die
+            logger.exception("scheduled connection sync failed")
 
 
 @asynccontextmanager
@@ -190,7 +222,36 @@ async def lifespan(app: FastAPI):
         initialize_auth()
     except Exception:
         logger.exception("auth initialization failed (continuing unauthenticated)")
+    # Off-host audit shipper: a background tick that forwards new hash-chained
+    # audit records to MMM_AUDIT_SHIP_URL so the local log isn't the only copy.
+    # Inert unless that env var is set.
+    global _ship_task
+    try:
+        from mmm_framework.agents import audit_shipper
+
+        if audit_shipper.ship_url():
+            interval = float(os.environ.get("MMM_AUDIT_SHIP_INTERVAL", "60"))
+            _ship_task = asyncio.create_task(_audit_ship_loop(interval))
+            logger.info("audit off-host shipper enabled (every %ss)", interval)
+    except Exception:
+        logger.exception("audit shipper start failed")
+    # Scheduled data-connection sync: refresh saved connections on their interval
+    # so warehouse data lands automatically. Inert when the interval is 0.
+    global _sync_task
+    try:
+        from mmm_framework.api import connection_sync
+
+        sync_interval = connection_sync.sync_interval_seconds()
+        if sync_interval > 0:
+            _sync_task = asyncio.create_task(_connection_sync_loop(sync_interval))
+            logger.info("scheduled connection sync enabled (every %ss)", sync_interval)
+    except Exception:
+        logger.exception("connection sync start failed")
     yield
+    if _ship_task is not None:
+        _ship_task.cancel()
+    if _sync_task is not None:
+        _sync_task.cancel()
     try:  # reap any per-session subprocess kernels on graceful shutdown
         from mmm_framework.agents.tools import _KERNELS
 
@@ -1320,6 +1381,55 @@ async def get_project_endpoint(project_id: str):
     return JSONResponse(content=proj)
 
 
+@app.get("/projects/{project_id}/onboarding-status", dependencies=[_proj_read])
+async def onboarding_status_endpoint(project_id: str):
+    """Self-serve onboarding checklist + next action for a project."""
+    from mmm_framework.api.onboarding import project_onboarding_status
+
+    status = project_onboarding_status(project_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(content=status)
+
+
+@app.get("/projects/{project_id}/data-quality", dependencies=[_proj_read])
+async def data_quality_endpoint(project_id: str):
+    """Latest pre-fit data-quality summary for a project (from the agent's EDA),
+    surfaced inline at the onboarding 'add data' step. Reads the most-recently
+    updated session that has an EDA envelope; returns {found: false} otherwise."""
+    from mmm_framework.api.onboarding import summarize_eda_issues
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    sessions = sorted(
+        sessions_store.list_sessions(project_id=project_id),
+        key=lambda s: s.get("updated_at", 0),
+        reverse=True,
+    )
+    g = _admin_graph()
+    for s in sessions:
+        try:
+            snap = await g.aget_state({"configurable": {"thread_id": s["thread_id"]}})
+            dd = (
+                (snap.values.get("dashboard_data") or {})
+                if snap and snap.values
+                else {}
+            )
+            eda = dd.get("eda") or {}
+            if eda:
+                return JSONResponse(
+                    content={
+                        "found": True,
+                        "thread_id": s["thread_id"],
+                        "updated_at": eda.get("updated_at"),
+                        **summarize_eda_issues(eda.get("issues") or []),
+                    }
+                )
+        except Exception:
+            continue
+    return JSONResponse(content={"found": False})
+
+
 @app.patch("/projects/{project_id}", dependencies=[_proj_write])
 async def update_project_endpoint(project_id: str, body: ProjectUpdateRequest):
     if not sessions_store.update_project(project_id, body.name, body.description):
@@ -1585,6 +1695,167 @@ async def put_preferences_endpoint(body: PreferenceUpdateRequest):
         raise HTTPException(status_code=422, detail="Provide key/value or preferences.")
     return JSONResponse(
         content={"preferences": sessions_store.list_preferences("global")}
+    )
+
+
+class DataConnectionCreate(BaseModel):
+    name: str
+    kind: str  # gcs | bigquery
+    config: dict = {}
+
+
+def _require_connection(project_id: str, connection_id: str) -> dict:
+    conn = sessions_store.get_data_connection(connection_id)
+    if conn is None or conn.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    return conn
+
+
+@app.get("/projects/{project_id}/data-connections", dependencies=[_proj_read])
+async def list_data_connections_endpoint(project_id: str):
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content={"connections": sessions_store.list_data_connections(project_id)}
+    )
+
+
+@app.post("/projects/{project_id}/data-connections", dependencies=[_proj_write])
+async def create_data_connection_endpoint(project_id: str, body: DataConnectionCreate):
+    """Save a reusable data-source connection (a non-secret bucket/query/table
+    reference; credentials stay ambient via ADC)."""
+    from mmm_framework.integrations import IntegrationError, data_source_kinds
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if body.kind not in data_source_kinds():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown kind {body.kind!r}; known: {data_source_kinds()}",
+        )
+    if not (body.name or "").strip():
+        raise HTTPException(status_code=422, detail="name is required")
+    # Build the connector once to catch malformed config early (no network).
+    from mmm_framework.integrations import build_data_source
+    from mmm_framework.integrations.connections import _split_ref
+
+    try:
+        cfg, _ref = _split_ref(body.config or {})
+        build_data_source(body.kind, cfg)
+    except IntegrationError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid connection: {exc}")
+    except Exception as exc:  # pydantic validation, etc.
+        raise HTTPException(status_code=422, detail=f"Invalid connection config: {exc}")
+    conn = sessions_store.create_data_connection(
+        project_id, body.name.strip(), body.kind, body.config or {}
+    )
+    return JSONResponse(content=conn)
+
+
+class ConnectionScheduleUpdate(BaseModel):
+    # minutes between auto-syncs; null disables scheduling (manual still works)
+    sync_interval_minutes: float | None = None
+
+
+@app.patch(
+    "/projects/{project_id}/data-connections/{connection_id}",
+    dependencies=[_proj_write],
+)
+async def update_data_connection_schedule_endpoint(
+    project_id: str, connection_id: str, body: ConnectionScheduleUpdate
+):
+    """Set or clear a connection's auto-sync interval."""
+    _require_connection(project_id, connection_id)
+    if body.sync_interval_minutes is not None and not (
+        0 < body.sync_interval_minutes <= 43200  # 1 min .. 30 days
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="sync_interval_minutes must be 1..43200 (30 days), or null to disable",
+        )
+    conn = sessions_store.set_data_connection_schedule(
+        connection_id, body.sync_interval_minutes
+    )
+    return JSONResponse(content=conn)
+
+
+@app.delete(
+    "/projects/{project_id}/data-connections/{connection_id}",
+    dependencies=[_proj_write],
+)
+async def delete_data_connection_endpoint(project_id: str, connection_id: str):
+    conn = _require_connection(project_id, connection_id)
+    # Best-effort cleanup of the cached snapshot so deletes don't orphan files.
+    snap = conn.get("snapshot_path")
+    if snap:
+        try:
+            from pathlib import Path as _Path
+
+            _Path(snap).unlink(missing_ok=True)
+        except Exception:
+            pass
+    sessions_store.delete_data_connection(connection_id)
+    return JSONResponse(content={"deleted": True})
+
+
+@app.post(
+    "/projects/{project_id}/data-connections/{connection_id}/test",
+    dependencies=[_proj_read],
+)
+async def test_data_connection_endpoint(project_id: str, connection_id: str):
+    conn = _require_connection(project_id, connection_id)
+    from mmm_framework.integrations import probe_connection
+
+    status = await asyncio.to_thread(
+        probe_connection, conn["kind"], conn.get("config") or {}
+    )
+    return JSONResponse(content=status.as_dict())
+
+
+@app.post(
+    "/projects/{project_id}/data-connections/{connection_id}/preview",
+    dependencies=[_proj_write],
+)
+async def preview_data_connection_endpoint(
+    project_id: str, connection_id: str, rows: int = 20
+):
+    """Read the first ``rows`` of a connection (capped) for a UI preview.
+
+    Gated as a write: it executes the connection's (billable) query/read and
+    stamps last_synced.
+    """
+    conn = _require_connection(project_id, connection_id)
+    from mmm_framework.integrations import (
+        IntegrationError,
+        read_connection_dataframe,
+        scrub_cloud_error,
+    )
+
+    n = max(1, min(int(rows), 200))
+    try:
+        df = await asyncio.to_thread(
+            read_connection_dataframe,
+            conn["kind"],
+            conn.get("config") or {},
+            max_rows=n,
+        )
+    except IntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - surface read/auth failure as 502
+        # Scrub project ids / SA emails / credential paths from the error.
+        raise HTTPException(
+            status_code=502, detail=scrub_cloud_error(f"{type(exc).__name__}: {exc}")
+        )
+    head = df.head(n)
+    sessions_store.touch_data_connection_synced(connection_id)
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {
+                "columns": [str(c) for c in head.columns],
+                "rows": head.to_dict("records"),
+                "n_preview": int(len(head)),
+            }
+        )
     )
 
 
@@ -1865,6 +2136,42 @@ async def list_runs_endpoint(
 
 
 # ── Portfolio (home page aggregation) ─────────────────────────────────────────
+
+
+@app.get("/portfolio-benchmark")
+async def portfolio_benchmark_endpoint(
+    stale_after_days: int = 90,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    """Cross-brand benchmarking + governance over the org's projects' run metrics
+    (the agency/holding-co view: rank a brand's channel ROIs against the
+    portfolio, see model freshness + calibration coverage)."""
+    import time as _t
+
+    from mmm_framework.api.portfolio_benchmark import build_portfolio_benchmark
+
+    org_id = None if principal.is_dev else principal.org_id
+    projects = sessions_store.list_projects(org_id=org_id)
+    runs_by_project = {
+        p["project_id"]: sessions_store.list_run_metrics(project_id=p["project_id"])
+        for p in projects
+    }
+    calibrated_by_project = {
+        p["project_id"]: len(
+            sessions_store.list_experiments(
+                project_id=p["project_id"], status="calibrated"
+            )
+        )
+        for p in projects
+    }
+    payload = build_portfolio_benchmark(
+        projects,
+        runs_by_project,
+        now_ts=_t.time(),
+        calibrated_by_project=calibrated_by_project,
+        stale_after_days=stale_after_days,
+    )
+    return JSONResponse(content=safe_json_dumps_load(payload))
 
 
 @app.get("/portfolio")
@@ -3448,6 +3755,15 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.get("/observability")
+async def observability_endpoint():
+    """Reliability signals for operators: audit-chain integrity, off-host ship
+    backlog, and recent fit activity. No tenant data."""
+    from mmm_framework.api.observability import system_health
+
+    return JSONResponse(content=system_health())
+
+
 @app.get("/metrics")
 async def metrics_endpoint():
     """Prometheus metrics (Phase 4d): per-event audit counters, live kernel count,
@@ -3479,6 +3795,27 @@ async def metrics_endpoint():
     return Response(
         "\n".join(lines) + "\n", media_type="text/plain; version=0.0.4; charset=utf-8"
     )
+
+
+@app.get("/integrations/catalog")
+async def integrations_catalog_endpoint(principal: PrincipalDep = _DEV_PRINCIPAL):
+    """List available data-source + ad-platform integrations (non-secret).
+
+    Powers the Settings "Data connections" section: which connectors exist,
+    whether their optional SDK is installed, the auth story, and (for ad
+    platforms) the recommended ingestion path. No credentials are returned.
+
+    Requires an authenticated principal: the installed-SDK flags reveal
+    deployment topology, so the endpoint is gated like its neighbours rather
+    than left open for reconnaissance.
+    """
+    from mmm_framework.integrations import list_data_sources
+    from mmm_framework.integrations.ad_platforms import list_ad_platforms
+
+    return {
+        "data_sources": list_data_sources(),
+        "ad_platforms": list_ad_platforms(),
+    }
 
 
 @app.get("/model-config")
@@ -3663,6 +4000,16 @@ async def view_client_report(thread_id: str | None = None):
         "agent_client_report.html",
         thread_id=thread_id,
         missing="No client report yet. Ask the agent to generate_client_report.",
+    )
+
+
+@app.get("/model-defense", dependencies=[_rep_read])
+async def view_model_defense(thread_id: str | None = None):
+    """Serve the model-defense (causal-rigor) report."""
+    return _serve_report(
+        "agent_model_defense.html",
+        thread_id=thread_id,
+        missing="No model-defense report yet. Ask the agent to generate_model_defense_report.",
     )
 
 

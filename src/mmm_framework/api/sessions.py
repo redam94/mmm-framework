@@ -237,6 +237,49 @@ def init_db() -> None:
             " ON run_metrics(project_id, created_at)"
         )
 
+        # Saved data-source connections (project-scoped). config_json holds ONLY
+        # a non-secret reference (bucket/prefix/object, or project/dataset/query/
+        # table) — NEVER credentials. Auth stays ambient (ADC / the server's
+        # MMM_GCP_CREDENTIALS_PATH), so there is no secret to encrypt at rest.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS data_connections (
+                id          TEXT PRIMARY KEY,
+                project_id  TEXT,
+                name        TEXT NOT NULL,
+                kind        TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                created_at  REAL NOT NULL,
+                updated_at  REAL NOT NULL,
+                last_synced REAL
+            )
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_data_connections_project"
+            " ON data_connections(project_id, updated_at)"
+        )
+        # Scheduled-sync + freshness columns (migrate installs that predate them).
+        # org_id mirrors the owning project's org for tenant-level auditability
+        # (the scheduler is server-wide; access control is via project_id).
+        for _col, _decl in (
+            ("org_id", "TEXT"),
+            ("sync_interval_minutes", "REAL"),
+            ("next_sync_at", "REAL"),
+            ("last_sync_status", "TEXT"),
+            ("last_sync_error", "TEXT"),
+            ("last_row_count", "INTEGER"),
+            ("snapshot_path", "TEXT"),
+        ):
+            try:
+                c.execute(f"ALTER TABLE data_connections ADD COLUMN {_col} {_decl}")
+            except Exception:
+                pass
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_data_connections_due"
+            " ON data_connections(next_sync_at)"
+        )
+
         # Projects: group sessions and own a knowledge base. A session belongs
         # to a project via sessions.project_id. meta_json carries the
         # onboarding profile (client info, goals, KPI/channel context) that
@@ -1276,6 +1319,161 @@ def delete_experiment(experiment_id: str) -> bool:
         return cur.rowcount > 0
 
 
+# ── Saved data-source connections ────────────────────────────────────────────
+
+
+def _data_connection_row(r: sqlite3.Row | None) -> dict[str, Any] | None:
+    if r is None:
+        return None
+    d = dict(r)
+    try:
+        d["config"] = json.loads(d.pop("config_json") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        d["config"] = {}
+        d.pop("config_json", None)
+    return d
+
+
+def create_data_connection(
+    project_id: str, name: str, kind: str, config: dict[str, Any]
+) -> dict[str, Any]:
+    """Persist a reusable data-source connection (no credentials in config)."""
+    cid = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        # Stamp the owning org (best-effort) for tenant-level auditability.
+        org_id = None
+        try:
+            r = c.execute(
+                "SELECT org_id FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            org_id = r["org_id"] if r else None
+        except sqlite3.OperationalError:
+            org_id = None
+        c.execute(
+            "INSERT INTO data_connections (id, project_id, org_id, name, kind,"
+            " config_json, created_at, updated_at, last_synced)"
+            " VALUES (?,?,?,?,?,?,?,?, NULL)",
+            (cid, project_id, org_id, name, kind, json.dumps(config or {}), now, now),
+        )
+    return get_data_connection(cid)
+
+
+def list_data_connections(project_id: str) -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM data_connections WHERE project_id = ? ORDER BY updated_at DESC",
+            (project_id,),
+        ).fetchall()
+    return [_data_connection_row(r) for r in rows]
+
+
+def get_data_connection(connection_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM data_connections WHERE id = ?", (connection_id,)
+        ).fetchone()
+    return _data_connection_row(row)
+
+
+def get_data_connection_by_name(project_id: str, name: str) -> dict[str, Any] | None:
+    """Resolve a connection by name within a project (newest wins)."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM data_connections WHERE project_id = ? AND name = ?"
+            " ORDER BY updated_at DESC LIMIT 1",
+            (project_id, name),
+        ).fetchone()
+    return _data_connection_row(row)
+
+
+def delete_data_connection(connection_id: str) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM data_connections WHERE id = ?", (connection_id,))
+        return cur.rowcount > 0
+
+
+def touch_data_connection_synced(connection_id: str) -> None:
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "UPDATE data_connections SET last_synced = ?, updated_at = ? WHERE id = ?",
+            (now, now, connection_id),
+        )
+
+
+def set_data_connection_schedule(
+    connection_id: str,
+    interval_minutes: float | None,
+    *,
+    now: float | None = None,
+) -> dict[str, Any] | None:
+    """Set (or clear, with ``None``) a connection's auto-sync interval.
+
+    Setting an interval schedules the first run one interval out; clearing it
+    (``None``) stops scheduled syncs (manual/on-demand still works).
+    """
+    ts = _now() if now is None else now
+    next_at = (ts + float(interval_minutes) * 60.0) if interval_minutes else None
+    with _conn() as c:
+        c.execute(
+            "UPDATE data_connections SET sync_interval_minutes = ?, next_sync_at = ?,"
+            " updated_at = ? WHERE id = ?",
+            (interval_minutes, next_at, ts, connection_id),
+        )
+    return get_data_connection(connection_id)
+
+
+def list_due_data_connections(now: float, *, limit: int = 100) -> list[dict[str, Any]]:
+    """Scheduled connections whose next_sync_at has arrived (across all projects)."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM data_connections WHERE sync_interval_minutes IS NOT NULL"
+            " AND next_sync_at IS NOT NULL AND next_sync_at <= ?"
+            " ORDER BY next_sync_at ASC LIMIT ?",
+            (now, limit),
+        ).fetchall()
+    return [_data_connection_row(r) for r in rows]
+
+
+def record_data_connection_sync(
+    connection_id: str,
+    *,
+    status: str,
+    row_count: int | None = None,
+    error: str | None = None,
+    snapshot_path: str | None = None,
+    now: float | None = None,
+) -> None:
+    """Record a sync outcome and advance next_sync_at.
+
+    On ``error`` the next run is backed off (up to 4x the interval, capped so a
+    sub-daily schedule waits at most a day) so a permanently broken connection
+    isn't retried every interval forever — but never sooner than its own
+    interval.
+    """
+    ts = _now() if now is None else now
+    with _conn() as c:
+        row = c.execute(
+            "SELECT sync_interval_minutes FROM data_connections WHERE id = ?",
+            (connection_id,),
+        ).fetchone()
+        interval = row["sync_interval_minutes"] if row else None
+        if interval:
+            secs = float(interval) * 60.0
+            if status == "error":
+                secs = max(secs, min(secs * 4.0, 86400.0))
+            next_at = ts + secs
+        else:
+            next_at = None
+        c.execute(
+            "UPDATE data_connections SET last_synced = ?, last_sync_status = ?,"
+            " last_sync_error = ?, last_row_count = ?, snapshot_path = COALESCE(?, snapshot_path),"
+            " next_sync_at = ?, updated_at = ? WHERE id = ?",
+            (ts, status, error, row_count, snapshot_path, next_at, ts, connection_id),
+        )
+
+
 # ── Run metrics (per-fit history snapshots) ──────────────────────────────────
 
 
@@ -1343,6 +1541,24 @@ def get_run_metrics(run_id: str) -> dict[str, Any] | None:
             "SELECT * FROM run_metrics WHERE run_id = ?", (run_id,)
         ).fetchone()
     return _run_metrics_row_to_dict(row) if row else None
+
+
+def run_metrics_activity(since_ts: float) -> dict[str, Any]:
+    """Deployment-wide fit activity: total fits, fits since ``since_ts``, and the
+    most recent fit time — a lightweight reliability/SLA signal."""
+    with _conn() as c:
+        try:
+            total = c.execute("SELECT COUNT(*) AS n FROM run_metrics").fetchone()["n"]
+            recent = c.execute(
+                "SELECT COUNT(*) AS n FROM run_metrics WHERE created_at >= ?",
+                (since_ts,),
+            ).fetchone()["n"]
+            last = c.execute("SELECT MAX(created_at) AS m FROM run_metrics").fetchone()[
+                "m"
+            ]
+        except sqlite3.OperationalError:
+            return {"total": 0, "recent": 0, "last_at": None}
+    return {"total": int(total or 0), "recent": int(recent or 0), "last_at": last}
 
 
 # ── Projects ────────────────────────────────────────────────────────────────

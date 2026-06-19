@@ -30,6 +30,24 @@ export function useProject(projectId: string | undefined) {
   });
 }
 
+export function useOnboardingStatus(projectId: string | undefined) {
+  return useQuery({
+    queryKey: [...projectKeys.detail(projectId ?? ''), 'onboarding-status'],
+    queryFn: () => projectService.getOnboardingStatus(projectId!),
+    enabled: !!projectId,
+    staleTime: 15000,
+  });
+}
+
+export function useDataQuality(projectId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...projectKeys.detail(projectId ?? ''), 'data-quality'],
+    queryFn: () => projectService.getDataQuality(projectId!),
+    enabled: !!projectId && enabled,
+    staleTime: 15000,
+  });
+}
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({

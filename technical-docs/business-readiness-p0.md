@@ -208,7 +208,7 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
 ---
 
 ## P1 — Make it stick  `[~]` (started 2026-06-18)
-### Reliability & observability  `[~]`
+### Reliability & observability  `[x]`
 - [x] **Structured, queryable audit emission** — `auth/audit.py` now emits via
       `extra={audit_event, audit_fields}` so the hash-chain sink (`agents/audit_sink.py`,
       new `current_log_path()`) stores `org_id`/`user_id` as a top-level `fields`
@@ -218,7 +218,18 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       `read_audit_events(org_id, since, limit)` filters the hash-chained JSONL;
       chain stays `verify()`-able. Closes the SOC 2 "no audit export" gap AND
       monetizes the Business tier. Tests: `tests/test_auth_audit.py` (4).
-- [ ] Off-host audit shipper; customer-facing fit SLAs/retries surfacing.
+- [x] **Off-host audit shipper** — `agents/audit_shipper.py`: `ship_pending`
+      (cursor-based, exactly-once / at-least-once on retry), `http_sink` (stdlib
+      POST), `flush_audit_to_remote()`; a background tick in the agent-app
+      lifespan flushes new records to `MMM_AUDIT_SHIP_URL` (off by default) so the
+      tamper-evident log isn't the only copy. Tests: `tests/test_audit_shipper.py`.
+- [x] **Observability endpoint** — `GET /observability` (`api/observability.py`
+      `system_health`): audit-chain integrity (`verify`), event counts, off-host
+      ship backlog, and recent fit activity (`run_metrics_activity`: total / last
+      24 h / last-fit time). Operator health, no tenant data.
+- [ ] Follow-on (UI, not P0/P1-blocking): a customer-facing fit-SLA dashboard
+      (the experiment-design jobs are already pollable; in-kernel fits run in
+      `/chat`, not as ARQ jobs).
 ### Reference customer + ROI case  `[~]`
 - [x] `technical-docs/design-partner-program.md` — founder-sendable program offer
       (ideal-partner profile, 8–12wk T₀–T₅ timeline, honest risk framing) +
@@ -226,9 +237,108 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       template, not fabricated numbers). Workflow-verified `sound` (no overclaims,
       capabilities real, evidence honestly labeled, 6.0× not 7.9×).
 - [ ] A signed design partner (sales motion) → a named ROI story.
-### Self-serve onboarding  `[ ]`
-- [ ] Guided "first model in 30 min" + validation feedback (EDA + project
-      onboarding seeds exist). Not started.
+### Self-serve onboarding  `[x]`
+- [x] **Onboarding-readiness API** — `api/onboarding.py` `project_onboarding_status`
+      + `GET /projects/{id}/onboarding-status` (gated `_proj_read`): a 6-step
+      path-to-first-model checklist computed from real state (create → brief
+      (`meta.onboarded`) → data (`data_files`) → fit (`model_run` artifact) →
+      review (`report` artifact / `report_path`) → experiment (registry)), with
+      `next_step`, `percent`, and per-step hints. Tests: `tests/test_onboarding_status.py` (3).
+- [x] **Front-end guided flow** — `OnboardingChecklist` on the Program/home page
+      (`useOnboardingStatus` hook + `projectService.getOnboardingStatus`): renders
+      the steps (check/circle), a progress bar, the next step's hint, and a
+      "Continue in the workspace" CTA; auto-hides once `complete`. `tsc` + `vite
+      build` clean.
+- [x] **Inline EDA validation** — `GET /projects/{id}/data-quality` reads the
+      project's latest session EDA envelope (`dashboard_data['eda']`) →
+      `summarize_eda_issues` (n_errors/warnings, `fit_ready`, top issues); the
+      `OnboardingChecklist` renders a green/amber/red verdict banner once data is
+      added ("ready to fit" / "N warnings" / "N issues block fitting"). Tests:
+      `summarize_eda_issues`; `tsc` + `vite build` clean.
+
+---
+
+## P2 — Accelerate growth  `[~]` (started 2026-06-18)
+### "Model-defense" report  `[x]`
+- [x] **Generator** — `reporting/model_defense.py`: `build_model_defense`
+      (pure: refutation + sampler convergence + calibration count → a verdict
+      ladder Robust/Qualified/Needs-scrutiny [non-convergence dominates], per-test
+      plain-English explanations, honest caveats) + `render_model_defense_html`
+      (self-contained, brandable via `apply_branding_html`) + `model_defense_report`
+      one-call convenience. Exported from `mmm_framework.reporting`. Tests:
+      `tests/test_model_defense.py` (9, incl. HTML well-formedness).
+- [x] **One-click agent tool** — `generate_model_defense_report` (agents/tools.py,
+      registered in TOOLS): runs the refutation suite (`ModelValidator.validate`
+      with `run_causal_refutation=True`), reads convergence, counts calibrated
+      experiments from the spec, applies confirmed branding, writes
+      `agent_model_defense.html`, and returns the verdict + sets
+      `dashboard_data['model_defense']`. Served at `GET /model-defense`
+      (`_rep_read`-gated). Tests: `tests/test_model_defense_tool.py` (registered +
+      no-model guard). **Model-defense is now end-to-end.**
+### Portfolio benchmarking & governance  `[x]`
+- [x] **Cross-brand benchmark API** — `api/portfolio_benchmark.py`
+      `build_portfolio_benchmark` (pure: per-project latest-run summary + cross-
+      channel ROI distribution [median/p25/p75/min/max/n_brands] + per-brand
+      `vs_portfolio` percentile rank + governance [n_stale/fresh/calibrated,
+      median model age]); `GET /portfolio-benchmark` (org-scoped via the
+      principal). Tests: `tests/test_portfolio_benchmark.py` (3).
+- [x] **Front-end portfolio dashboard** — `frontend/src/pages/Portfolio/`
+      ("Constellation", `/portfolio`): `benchmarkService` + `usePortfolioBenchmark`
+      hook (stale-threshold param), `GovernanceTiles` (brands/fresh/stale/
+      calibrated/median-age), `ChannelBenchmark` (per-channel P25–P75 box +
+      min/max whiskers + median tick + per-brand ROI dots, top/bottom-quartile
+      colored), `BrandTable` (fit recency + stale pill, portfolio mROI, top
+      channel, vs.-portfolio leader/laggard counts, calibration coverage). Nav
+      entry + route wired; `tsc --noEmit` + `vite build` green.
+### Integrations  `[~]`
+- [x] **GCS + BigQuery data sources** — `src/mmm_framework/integrations/`
+      (`DataSource` ABC, `GCSDataSource`, `BigQueryDataSource`): ADC-first auth
+      (shared with Vertex), lazy SDK via the new `[gcp]` extra, injectable
+      clients for testing. `build_data_source`/`list_data_sources` catalog.
+      Agent tools `load_from_bigquery`/`load_from_gcs` feed the workspace
+      dataset; `GET /integrations/catalog` (auth-gated). Hardened post-review:
+      `\Z`-anchored table regex (no newline injection), per-query byte guard,
+      external-pull row cap, scrubbed error messages. Tests:
+      `tests/test_integrations_gcp.py` (18), `_wiring.py` (5).
+- [x] **Ad-platform connectors (stubs) + recommendation** —
+      `integrations/ad_platforms/` (`AdPlatformConnector`, `spend_to_mff`,
+      Google/Meta/TikTok stubs, `list_ad_platforms` ranked easiest-first).
+      `technical-docs/ad-platform-integrations.md`: land spend in BigQuery via
+      managed transfers (lowest-effort), direct-API ease Meta>Google/TikTok.
+      Tests: `tests/test_ad_platform_stubs.py` (5).
+- [x] **Saved data connections (on-demand sync)** — project-scoped
+      `data_connections` table (config = non-secret reference only; auth ADC) +
+      store CRUD; `integrations/connections.py` (`read_connection_dataframe`,
+      `probe_connection`); RBAC-gated endpoints (list/create/delete, `test`
+      probe [read], `preview` [write — billable, scrubbed errors]); agent tool
+      `sync_data_connection(name)`; Settings → Data connections manager UI
+      (add/test/preview/delete). Tests: `tests/test_data_connections.py` (5) +
+      connection-helper cases. Commits 922083a/53573ce/c19a90f.
+- [x] **Scheduled auto-sync** — connections refresh on an interval
+      (Manual/Hourly/Daily/Weekly). `data_connections` schedule+freshness columns
+      + store (`set_data_connection_schedule`, `list_due_data_connections`,
+      `record_data_connection_sync`); `api/connection_sync.py:sync_due_connections`
+      writes a per-project snapshot (`workspace.project_data_dir`) + records
+      ok/row-count or a scrubbed error (never raises); a lifespan tick runs it
+      every `MMM_CONNECTION_SYNC_INTERVAL` (default 300s; mirrors the audit
+      shipper); PATCH endpoint + UI selector + freshness line. Tests:
+      `tests/test_connection_sync.py` (4). Commit fa9f9aa.
+- [ ] Live ad-platform API clients (the stubs raise a guided
+      `AdPlatformNotImplemented`; the BigQuery-transfer path is documented).
+      NB: scheduled sync uses the **server's ambient ADC identity** for every
+      tenant (same read surface already exposed by load_from_*/preview) — a
+      per-tenant workload-identity model is a future hosted-posture item.
+
+### Admin & user management  `[x]`
+- [x] **Org-admin auth endpoints** — `/auth/members` (list), PATCH/DELETE
+      `/auth/members/{id}` (role change/remove, owner-grant restricted to
+      owners, last-owner protected), `/auth/invites` + DELETE (pending invites),
+      `/auth/change-password` (re-issues tokens). Store/service primitives +
+      audit events. Tests: `tests/test_auth_admin_routes.py` (8).
+- [x] **Frontend Settings (Sanctum) + Admin panel (Curia)** —
+      `frontend/src/pages/Settings/` (Profile/Security/Model&API/Data-connections)
+      + `pages/Admin/` (seat usage, invite-by-email, role management). Role-gated
+      nav (`pageVisibleToRole`). `accountService`/`adminService` + hooks.
 
 ---
 

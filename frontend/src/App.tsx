@@ -9,6 +9,9 @@ import {
   ProgramPage,
   ExperimentsPage,
   PerformancePage,
+  PortfolioPage,
+  SettingsPage,
+  AdminPage,
   TeamPage,
   KnowledgePage,
   AgentPage,
@@ -94,8 +97,11 @@ function App() {
                     <Route path="/experiments/:experimentId" element={<ExperimentsPage />} />
                     <Route path="/performance" element={<PerformancePage />} />
                     <Route path="/performance/:tab" element={<PerformancePage />} />
+                    <Route path="/portfolio" element={<PortfolioPage />} />
                     <Route path="/knowledge" element={<KnowledgePage />} />
                     <Route path="/team" element={<TeamPage />} />
+                    <Route path="/admin" element={<AdminPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
                     {/* Legacy paths */}
                     <Route path="/dashboard" element={<Navigate to="/program" replace />} />
                     <Route path="/runs" element={<Navigate to="/performance/runs" replace />} />

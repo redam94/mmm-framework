@@ -5,6 +5,7 @@ import {
   Bird,
   BookOpen,
   ChevronDown,
+  Landmark,
   LogOut,
   MessageSquareText,
   Orbit,
@@ -13,10 +14,13 @@ import {
   Pencil,
   Plus,
   ScrollText,
+  Settings,
+  Telescope,
   Trash2,
   Users,
 } from 'lucide-react';
-import { APP_NAME, APP_TAGLINE, PAGES } from '../../appIdentity';
+import { APP_NAME, APP_TAGLINE, PAGES, pageVisibleToRole } from '../../appIdentity';
+import { useMe } from '../../api/hooks/useAccount';
 import { useAuthStore } from '../../stores/authStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUiStore } from '../../stores/uiStore';
@@ -44,9 +48,12 @@ const NAV_ICONS: Record<string, NavItem['icon']> = {
   '/program': Orbit,
   '/experiments': Bird,
   '/performance': ScrollText,
+  '/portfolio': Telescope,
   '/workspace': MessageSquareText,
   '/knowledge': BookOpen,
   '/team': Users,
+  '/admin': Landmark,
+  '/settings': Settings,
 };
 
 const navigation: NavItem[] = PAGES.map((p) => ({
@@ -175,6 +182,12 @@ export function Sidebar() {
   const { clearApiKey } = useAuthStore();
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  // Role-gate nav items (e.g. the admin Curia). Backend enforces access too.
+  const role = useMe().data?.org_role;
+  const visibleNav = navigation.filter((item) => {
+    const page = PAGES.find((p) => p.path === item.href);
+    return !page || pageVisibleToRole(page, role);
+  });
   // Sessions auto-expand while working in the workspace; manual toggle elsewhere.
   const onWorkspace = location.pathname.startsWith('/workspace');
   const [sessionsOpen, setSessionsOpen] = useState(false);
@@ -217,7 +230,7 @@ export function Sidebar() {
         )}
       >
         <ul className="flex flex-1 flex-col gap-1">
-          {navigation.map((item) => {
+          {visibleNav.map((item) => {
             const isActive =
               location.pathname === item.href || location.pathname.startsWith(item.href + '/');
             const isWorkspace = item.href === '/workspace';

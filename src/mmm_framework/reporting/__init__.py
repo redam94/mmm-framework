@@ -68,12 +68,21 @@ from .helpers import (
     compute_cross_effects,
     generate_model_summary,
 )
+from .model_defense import (
+    build_model_defense,
+    render_model_defense_html,
+    model_defense_report,
+)
 
 __version__ = "1.0.0"
 __all__ = [
     # Main generator
     "MMMReportGenerator",
     "ReportBuilder",
+    # Model-defense (causal-rigor) report
+    "build_model_defense",
+    "render_model_defense_html",
+    "model_defense_report",
     # Consultant artifacts
     "ARTIFACTS",
     "ArtifactSpec",

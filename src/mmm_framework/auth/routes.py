@@ -17,6 +17,7 @@ from .ratelimit import require_ip_rate_limit
 from .models import (
     AcceptInviteRequest,
     AuthContext,
+    ChangePasswordRequest,
     InviteOut,
     InviteRequest,
     LoginRequest,
@@ -25,6 +26,7 @@ from .models import (
     PasswordResetRequest,
     RefreshRequest,
     Role,
+    RoleUpdate,
     SignupRequest,
     TokenResponse,
     UserOut,
@@ -223,5 +225,144 @@ def create_auth_router() -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Not found"
             )
         service.deactivate_user(user_id, actor=principal.user_id)
+
+    # ----- org administration (members + invites) -----------------------------
+
+    @router.get("/members")
+    async def list_members(
+        principal: AuthContext = Depends(require_org_role(Role.ADMIN)),
+    ) -> dict:
+        # Roster for the admin panel: every member with role/email/name.
+        return {"members": store.list_org_members(principal.org_id)}
+
+    @router.patch("/members/{user_id}")
+    async def set_member_role(
+        user_id: str,
+        body: RoleUpdate,
+        principal: AuthContext = Depends(require_org_role(Role.ADMIN)),
+    ) -> dict:
+        members = store.list_org_members(principal.org_id)
+        target = next((m for m in members if m["user_id"] == user_id), None)
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Not a member"
+            )
+        # Only owners may create owners or change an owner's role — an admin must
+        # not be able to escalate itself (or an ally) to owner, then unseat the
+        # original owner.
+        if (
+            body.role == Role.OWNER or target["role"] == Role.OWNER.value
+        ) and principal.org_role != Role.OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="only an owner can grant or change the owner role",
+            )
+        owners = [m for m in members if m["role"] == Role.OWNER.value]
+        if (
+            target["role"] == Role.OWNER.value
+            and body.role != Role.OWNER
+            and len(owners) <= 1
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="cannot demote the last owner",
+            )
+        store.add_org_member(principal.org_id, user_id, body.role.value)
+        from .audit import audit_event
+
+        audit_event(
+            "auth.role_changed",
+            user_id=user_id,
+            org_id=principal.org_id,
+            actor=principal.user_id,
+        )
+        return {"user_id": user_id, "role": body.role.value}
+
+    @router.delete("/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def remove_member(
+        user_id: str,
+        principal: AuthContext = Depends(require_org_role(Role.ADMIN)),
+    ) -> None:
+        if user_id == principal.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="cannot remove yourself",
+            )
+        members = store.list_org_members(principal.org_id)
+        target = next((m for m in members if m["user_id"] == user_id), None)
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Not a member"
+            )
+        # Only an owner can remove an owner.
+        if target["role"] == Role.OWNER.value and principal.org_role != Role.OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="only an owner can remove an owner",
+            )
+        owners = [m for m in members if m["role"] == Role.OWNER.value]
+        if target["role"] == Role.OWNER.value and len(owners) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="cannot remove the last owner",
+            )
+        store.remove_org_member(principal.org_id, user_id)
+        # Drop their live sessions immediately.
+        store.bump_token_version(user_id)
+        from .audit import audit_event
+
+        audit_event(
+            "auth.member_removed",
+            user_id=user_id,
+            org_id=principal.org_id,
+            actor=principal.user_id,
+        )
+
+    @router.get("/invites")
+    async def list_invites(
+        principal: AuthContext = Depends(require_org_role(Role.ADMIN)),
+    ) -> dict:
+        # Don't expose the internal inviter user_id in the listing.
+        invites = store.list_pending_invites(principal.org_id)
+        for inv in invites:
+            inv.pop("invited_by", None)
+        return {"invites": invites}
+
+    @router.delete("/invites/{token}", status_code=status.HTTP_204_NO_CONTENT)
+    async def revoke_invite(
+        token: str,
+        principal: AuthContext = Depends(require_org_role(Role.ADMIN)),
+    ) -> None:
+        if not store.delete_invite(token, org_id=principal.org_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Not found"
+            )
+
+    @router.post("/change-password", response_model=TokenResponse)
+    async def change_password(
+        body: ChangePasswordRequest,
+        settings: AuthSettings = Depends(get_auth_settings),
+        principal: AuthContext = Depends(get_current_principal),
+    ) -> TokenResponse:
+        try:
+            new_version = service.change_password(
+                user_id=principal.user_id,
+                current_password=body.current_password,
+                new_password=body.new_password,
+                settings=settings,
+            )
+        except service.AuthServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            )
+        # Re-issue tokens stamped with the bumped version so the caller stays in.
+        return service.issue_tokens(
+            user_id=principal.user_id,
+            org_id=principal.org_id,
+            email=principal.email,
+            org_role=principal.org_role.value,
+            token_version=new_version,
+            settings=settings,
+        )
 
     return router

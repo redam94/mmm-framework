@@ -57,6 +57,14 @@ def project_kb_dir(project_id: str) -> Path:
     return d
 
 
+def project_data_dir(project_id: str) -> Path:
+    """Per-project data directory for scheduled-sync snapshots (created on demand)."""
+    pid = _safe_segment(project_id)
+    d = workspace_root() / "projects" / pid / "data"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def uploads_dir(thread_id: str) -> Path:
     """The legacy dataset-upload directory (``uploads/<thread_id>/``)."""
     d = Path("uploads") / _safe_segment(thread_id)

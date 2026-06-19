@@ -44,6 +44,7 @@
                 { href: 'platform-overview.html', label: 'Platform Overview' },
                 { href: 'pricing.html', label: 'Pricing' },
                 { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
+                { href: 'data-connections.html', label: 'Data Connections' },
                 { href: 'trust.html', label: 'Trust & Security' },
                 { href: 'security.html', label: 'Security & AI Governance' },
                 { href: 'responsible-disclosure.html', label: 'Responsible Disclosure' }

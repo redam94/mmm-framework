@@ -401,6 +401,264 @@ def generate_synthetic_data(
     )
 
 
+#: Refuse to materialize an unbounded external pull into the workspace (a
+#: BigQuery query / GCS object can return arbitrarily many rows; this is a
+#: disk-exhaustion guard, not a cost guard).
+_MAX_EXTERNAL_ROWS = 5_000_000
+
+
+def _persist_external_dataset(
+    df, *, source_label: str, state: dict, config, tool_call_id: str
+) -> Command:
+    """Write a fetched DataFrame to the session workspace as the active dataset.
+
+    Mirrors generate_synthetic_data: ABSOLUTE dataset_path, file registration,
+    and a dashboard summary, so an externally-loaded dataset behaves exactly like
+    an uploaded or synthetic one downstream.
+    """
+    if len(df) > _MAX_EXTERNAL_ROWS:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"Refusing to load {len(df):,} rows (limit "
+                            f"{_MAX_EXTERNAL_ROWS:,}). Narrow the pull — add a date/"
+                            "WHERE filter or a LIMIT — and try again."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    tid = _activate_thread(config)
+    try:
+        out_dir = _ws.thread_dir(tid)
+        before = _ws.snapshot_dir(out_dir)
+        output_path = str(out_dir / "external_mff_data.csv")
+    except Exception:
+        before, output_path = {}, "external_mff_data.csv"
+    df.to_csv(output_path, index=False)
+    try:
+        _ws.register_generated_files(tid, before, kind="dataset")
+    except Exception:
+        pass
+
+    cols = ", ".join(map(str, df.columns.tolist()))
+    info = f"Loaded {len(df)} rows from {source_label}. Columns: {cols}"
+    if "VariableName" not in df.columns or "Period" not in df.columns:
+        info += (
+            "\nNote: this is not MFF long format yet (it needs Period + VariableName "
+            "+ VariableValue columns). Use execute_python with "
+            "`from mmm_framework.integrations.ad_platforms import spend_to_mff` to "
+            "reshape it before configuring or fitting a model."
+        )
+
+    dashboard_data = state.get("dashboard_data") or {}
+    try:
+        _, dataset_info = _build_dataset_dashboard(df, output_path)
+        dashboard_data["dataset"] = dataset_info
+    except Exception:
+        pass
+
+    return Command(
+        update={
+            "dataset_path": output_path,
+            "dataset_info": info,
+            "messages": [ToolMessage(content=info, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+def _scrub_gcp_error(text: str) -> str:
+    """Redact identifiers GCP SDK errors echo back before they reach the chat."""
+    from ..integrations import scrub_cloud_error
+
+    return scrub_cloud_error(text)
+
+
+def _integration_error_command(exc: Exception, tool_call_id: str) -> Command:
+    from ..integrations import IntegrationAuthError, MissingDependencyError
+
+    if isinstance(exc, MissingDependencyError):
+        msg = str(exc)
+    elif isinstance(exc, IntegrationAuthError):
+        # Never echo the credential path / identity back to the chat.
+        msg = (
+            "Authentication failed. GCS/BigQuery use Application Default "
+            "Credentials — run `gcloud auth application-default login`, or set "
+            "MMM_GCP_CREDENTIALS_PATH to a valid service-account JSON."
+        )
+    else:
+        msg = _scrub_gcp_error(f"{type(exc).__name__}: {exc}") + (
+            ". Check the project/credentials (GCS/BigQuery use Application "
+            "Default Credentials)."
+        )
+    return Command(
+        update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
+def load_from_bigquery(
+    state: Annotated[dict, InjectedState],
+    query: Optional[str] = None,
+    table: Optional[str] = None,
+    project: Optional[str] = None,
+    dataset: Optional[str] = None,
+    location: Optional[str] = None,
+    max_rows: Optional[int] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load the session dataset from BigQuery — a SQL ``query`` or a ``table`` id.
+
+    The result becomes the active dataset. For modeling it should be (or be
+    reshaped to) MFF long format: Period, VariableName, VariableValue (+ optional
+    Geography/Product/Campaign). Shape it with SQL aliases, or load raw and use
+    ``spend_to_mff`` in execute_python.
+
+    Auth is Application Default Credentials (ADC); requires the optional
+    ``mmm-framework[gcp]`` dependency group.
+
+    Args:
+        query: A SQL query to run (e.g. "SELECT date AS Period, ...").
+        table: A ``dataset.table`` id to read instead of a query (SELECT *).
+        project: GCP project (defaults to the ADC project).
+        dataset: Default dataset for a bare table id.
+        location: BigQuery location (e.g. US, EU).
+        max_rows: Optional LIMIT for a table read.
+
+    Returns:
+        A Command that sets the dataset_path in state.
+    """
+    try:
+        from ..integrations import BigQueryConfig, BigQueryDataSource
+
+        src = BigQueryDataSource(
+            BigQueryConfig(project=project, dataset=dataset, location=location)
+        )
+        df = src.read_dataframe(table, query=query, max_rows=max_rows)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the user as a ToolMessage
+        return _integration_error_command(exc, tool_call_id)
+    label = f"BigQuery ({'query' if query else table})"
+    return _persist_external_dataset(
+        df, source_label=label, state=state, config=config, tool_call_id=tool_call_id
+    )
+
+
+@tool
+def load_from_gcs(
+    state: Annotated[dict, InjectedState],
+    object_path: str,
+    bucket: Optional[str] = None,
+    project: Optional[str] = None,
+    fmt: Optional[str] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load the session dataset from a Google Cloud Storage object (CSV/Parquet).
+
+    The object becomes the active dataset. For modeling it should be (or be
+    reshaped to) MFF long format. Auth is Application Default Credentials (ADC);
+    requires the optional ``mmm-framework[gcp]`` dependency group.
+
+    Args:
+        object_path: Object name within the bucket (e.g. "exports/mmm_2024.csv").
+        bucket: GCS bucket (defaults to the MMM_GCS_BUCKET env var).
+        project: GCP project (defaults to the ADC project).
+        fmt: Force "csv" or "parquet" (otherwise inferred from the extension).
+
+    Returns:
+        A Command that sets the dataset_path in state.
+    """
+    try:
+        from ..integrations import GCSConfig, GCSDataSource, IntegrationError
+
+        cfg = GCSConfig.from_env(bucket=bucket, project=project)
+        if not cfg.bucket:
+            raise IntegrationError(
+                "No GCS bucket given; pass bucket=… or set the MMM_GCS_BUCKET env var."
+            )
+        df = GCSDataSource(cfg).read_dataframe(object_path, fmt=fmt)
+    except Exception as exc:  # noqa: BLE001
+        return _integration_error_command(exc, tool_call_id)
+    return _persist_external_dataset(
+        df,
+        source_label=f"gs://{cfg.bucket}/{object_path}",
+        state=state,
+        config=config,
+        tool_call_id=tool_call_id,
+    )
+
+
+@tool
+def sync_data_connection(
+    state: Annotated[dict, InjectedState],
+    name: str,
+    max_rows: Optional[int] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load a SAVED data connection by name into the session as the active dataset.
+
+    Connections are set up once in the UI (Settings → Data connections) — a named
+    GCS object or a BigQuery query/table — so you don't re-type the reference.
+    This pulls the latest data and makes it the working dataset. Auth is ADC;
+    requires the optional ``mmm-framework[gcp]`` dependency group.
+
+    Args:
+        name: The saved connection's name (within the current project).
+        max_rows: Optional cap on rows pulled.
+
+    Returns:
+        A Command that sets the dataset_path in state.
+    """
+    from ..api import sessions as _sessions
+
+    def _err(msg: str) -> Command:
+        return Command(
+            update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+        )
+
+    tid = _activate_thread(config)
+    sess = _sessions.get_session(tid) if tid else None
+    pid = (sess or {}).get("project_id")
+    if not pid:
+        return _err(
+            "This session isn't attached to a project, so it has no saved data "
+            "connections. Use load_from_bigquery / load_from_gcs directly, or open "
+            "the session inside a project."
+        )
+    conn = _sessions.get_data_connection_by_name(pid, name)
+    if conn is None:
+        avail = [c["name"] for c in _sessions.list_data_connections(pid)]
+        return _err(
+            f"No saved connection named {name!r}. "
+            + (f"Available: {', '.join(avail)}." if avail else "None are saved yet.")
+        )
+    try:
+        from ..integrations import read_connection_dataframe
+
+        df = read_connection_dataframe(
+            conn["kind"], conn.get("config") or {}, max_rows=max_rows
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _integration_error_command(exc, tool_call_id)
+    try:
+        _sessions.touch_data_connection_synced(conn["id"])
+    except Exception:
+        pass
+    return _persist_external_dataset(
+        df,
+        source_label=f"connection '{name}' ({conn['kind']})",
+        state=state,
+        config=config,
+        tool_call_id=tool_call_id,
+    )
+
+
 def _commit_spec(
     state: dict,
     candidate: dict,
@@ -2430,6 +2688,99 @@ def generate_client_report(
     return Command(
         update={
             "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
+def generate_model_defense_report(
+    state: Annotated[dict, InjectedState],
+    report_title: Optional[str] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Generate a one-click "model defense" report — the causal-rigor evidence
+    behind the fitted model, as a CFO-readable "why you can trust this number"
+    HTML artifact.
+
+    Runs the causal refutation suite (placebo / negative-control / random-common-
+    cause / data-subset), reads sampler convergence, counts any calibrated
+    experiments, and renders a verdict (Robust / Qualified / Needs scrutiny) with
+    plain-English per-test explanations and honest caveats. Uses confirmed client
+    branding automatically. Call after `fit_mmm_model`.
+
+    EXPENSIVE: the refutation suite REFITS the model once per test.
+    """
+    from dataclasses import replace
+
+    _activate_thread(config)
+    mmm = _MODEL_CACHE.get("fitted_model")
+    results = _MODEL_CACHE.get("fit_results")
+    if mmm is None:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No fitted model found. Please fit a model first.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    try:
+        from mmm_framework.agents.branding import is_active as _brand_active
+        from mmm_framework.agents.branding import resolve_branding
+        from mmm_framework.reporting import build_model_defense, model_defense_report
+        from mmm_framework.validation.config import ValidationConfig
+        from mmm_framework.validation.validator import ModelValidator
+
+        cfg = replace(ValidationConfig.standard(), run_causal_refutation=True)
+        summary = ModelValidator(mmm, results).validate(cfg)
+        refutation = summary.causal_refutation  # may be None if it couldn't run
+        convergence = summary.convergence
+        n_cal = len(
+            (_normalized_spec(state.get("model_spec")) or {}).get("experiments", [])
+            or []
+        )
+        branding = resolve_branding(get_current_thread())
+        payload = build_model_defense(
+            refutation, convergence=convergence, n_calibrated_experiments=n_cal
+        )
+        html = model_defense_report(
+            refutation,
+            convergence=convergence,
+            n_calibrated_experiments=n_cal,
+            title=report_title or "Model Defense",
+            brand=branding if _brand_active(branding) else None,
+        )
+        report_path = str(_ws.report_path("agent_model_defense.html"))
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Failed to generate model-defense report: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    msg = (
+        f"Model-defense report generated at `{report_path}`. "
+        f"Verdict: {payload['verdict']} "
+        f"({payload['n_passed']}/{payload['n_tests']} refutation tests passed)."
+    )
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["model_defense_path"] = report_path
+    dashboard_data["model_defense"] = payload
+    return Command(
+        update={
+            "messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)],
             "dashboard_data": dashboard_data,
         }
     )
@@ -4692,6 +5043,9 @@ TOOLS = [
     *[t for t in CAUSAL_TOOLS if t.name == "define_research_question"],
     # Data
     generate_synthetic_data,
+    load_from_bigquery,
+    load_from_gcs,
+    sync_data_connection,
     inspect_dataset,
     # Step 2 — Data quality (pre-fit): validate_data, run_eda, detect_outliers,
     # apply_outlier_treatment
@@ -4780,6 +5134,7 @@ TOOLS = [
     # Reporting
     generate_project_report,
     generate_client_report,
+    generate_model_defense_report,
     generate_client_slides,
 ]
 

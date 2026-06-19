@@ -43,6 +43,16 @@ dependencies = [
     "python-docx>=1.1.0",
 ]
 
+[project.optional-dependencies]
+# Google Cloud data integrations (GCS object reads + BigQuery). Lazy-imported;
+# the core framework never requires these. Install with:  uv sync --extra gcp
+gcp = [
+    "google-cloud-storage>=2.14.0",
+    "google-cloud-bigquery>=3.17.0",
+    "db-dtypes>=1.2.0",
+    "pyarrow>=14.0.0",
+]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",

@@ -365,6 +365,36 @@ def confirm_password_reset(
     audit_event("auth.password_reset", user_id=rec["user_id"])
 
 
+def change_password(
+    *,
+    user_id: str,
+    current_password: str,
+    new_password: str,
+    settings: AuthSettings | None = None,
+    db_path: Path | str | None = None,
+) -> int:
+    """Change an authenticated user's password; returns the new token_version.
+
+    Verifies the current password, enforces the length policy, sets the new hash,
+    and bumps the token version (every other outstanding session is killed). The
+    caller should re-issue tokens with the returned version to stay signed in.
+    """
+    settings = settings or get_auth_settings()
+    user = store.get_user(user_id, db_path=db_path)
+    if user is None:
+        raise AuthServiceError("user not found")
+    if not verify_password(current_password, user.get("password_hash")):
+        raise AuthServiceError("current password is incorrect")
+    if len(new_password) < settings.min_password_length:
+        raise AuthServiceError(
+            f"password must be at least {settings.min_password_length} characters"
+        )
+    store.set_password_hash(user_id, hash_password(new_password), db_path=db_path)
+    new_version = store.bump_token_version(user_id, db_path=db_path)
+    audit_event("auth.password_changed", user_id=user_id, org_id=user.get("org_id"))
+    return new_version
+
+
 def deactivate_user(
     user_id: str,
     *,

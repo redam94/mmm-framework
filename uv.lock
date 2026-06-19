@@ -636,6 +636,21 @@ wheels = [
 ]
 
 [[package]]
+name = "db-dtypes"
+version = "1.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/67/9f/5569a989ad23915e51fd1b4a52ecbc7513832c1c7b5e5df262bcecae1b21/db_dtypes-1.7.0.tar.gz", hash = "sha256:30951c7cda9e5455e43636eebe041c9a637ff28bc49a95d82cb68759d7625467", size = 35793 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/be/7a/797ed371bde520223e49dbbe0f8762fa4cc724d0e21fc6af944bb8f82150/db_dtypes-1.7.0-py3-none-any.whl", hash = "sha256:c80a1d9bc7dda3cc63638a3f2cf4ec27af50b809ec2d92b8a94cb9d8438cdc76", size = 17740 },
+]
+
+[[package]]
 name = "debugpy"
 version = "1.8.18"
 source = { registry = "https://pypi.org/simple" }
@@ -2298,6 +2313,14 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
+[package.optional-dependencies]
+gcp = [
+    { name = "db-dtypes" },
+    { name = "google-cloud-bigquery" },
+    { name = "google-cloud-storage" },
+    { name = "pyarrow" },
+]
+
 [package.dev-dependencies]
 app = [
     { name = "plotly" },
@@ -2323,7 +2346,10 @@ docs = [
 requires-dist = [
     { name = "arq", specifier = ">=0.25.0" },
     { name = "cloudpickle", specifier = ">=3.1.2" },
+    { name = "db-dtypes", marker = "extra == 'gcp'", specifier = ">=1.2.0" },
     { name = "fastapi", specifier = ">=0.124.2" },
+    { name = "google-cloud-bigquery", marker = "extra == 'gcp'", specifier = ">=3.17.0" },
+    { name = "google-cloud-storage", marker = "extra == 'gcp'", specifier = ">=2.14.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain-anthropic", specifier = ">=0.1.20" },
     { name = "langchain-core", specifier = ">=0.2.33" },
@@ -2340,6 +2366,7 @@ requires-dist = [
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "plotly", specifier = ">=6.5.0" },
+    { name = "pyarrow", marker = "extra == 'gcp'", specifier = ">=14.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pymc", specifier = ">=5.26.1" },

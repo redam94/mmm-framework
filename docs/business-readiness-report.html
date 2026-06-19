@@ -297,12 +297,12 @@
       <tr><td>Pricing &amp; packaging</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td rowspan="3"><b>P1</b><br><span class="small muted">make it stick</span></td>
         <td>Self-serve onboarding &amp; data validation</td><td><span class="chip partial">Partial</span></td></tr>
-      <tr><td>Reliability &amp; observability (SLAs, retries, surfaced audit)</td><td><span class="chip partial">Partial</span></td></tr>
+      <tr><td>Reliability &amp; observability (SLAs, retries, surfaced audit)</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>Reference customer + ROI case study</td><td><span class="chip partial">Partial</span></td></tr>
       <tr><td rowspan="3"><b>P2</b><br><span class="small muted">accelerate growth</span></td>
-        <td>Data &amp; ad-platform integrations</td><td><span class="chip planned">Planned</span></td></tr>
-      <tr><td>Portfolio benchmarking &amp; governance</td><td><span class="chip partial">Partial</span></td></tr>
-      <tr><td>"Model-defense" explainability collateral</td><td><span class="chip partial">Partial</span></td></tr>
+        <td>Data &amp; ad-platform integrations</td><td><span class="chip partial">Partial</span></td></tr>
+      <tr><td>Portfolio benchmarking &amp; governance</td><td><span class="chip shipped">Shipped</span></td></tr>
+      <tr><td>"Model-defense" explainability collateral</td><td><span class="chip shipped">Shipped</span></td></tr>
     </tbody>
   </table>
 </section>
@@ -344,12 +344,12 @@
   <p class="lede">Once you can sell it, these convert a sale into retention and references.</p>
   <div class="grid c3">
     <div class="card">
-      <h4>Self-serve onboarding <span class="chip partial">Partial</span></h4>
-      <p class="small">A data-quality/EDA module and a project-onboarding brief already exist as the seed. Needed: a guided "first model in 30 minutes" path with validation feedback so a new customer succeeds without hand-holding.</p>
+      <h4>Self-serve onboarding <span class="chip shipped">Shipped</span></h4>
+      <p class="small">A 6-step path-to-first-model checklist — an API computed from real project state (brief → data → fit → review → experiment) <em>and</em> a guided front-end flow on the home page (progress bar, next-step hint, workspace CTA) that auto-hides once complete. Once data is added it surfaces the agent's <b>EDA data-quality verdict inline</b> (ready-to-fit / warnings / blocking errors), so a new user fixes problems before fitting — without an analyst.</p>
     </div>
     <div class="card">
-      <h4>Reliability &amp; observability <span class="chip partial">Partial</span></h4>
-      <p class="small"><b>Shipped:</b> a tamper-evident, hash-chained audit log with <em>structured, queryable</em> events and a per-org <b>audit export</b> (gated to the Business tier — closing a SOC 2 gap and monetizing it); health endpoint; async job queue. <b>Needed:</b> customer-facing fit SLAs/retries surfacing and an off-host audit shipper.</p>
+      <h4>Reliability &amp; observability <span class="chip shipped">Shipped</span></h4>
+      <p class="small">A tamper-evident, hash-chained audit log with structured, queryable events, a Business-tier <b>audit export</b>, and an <b>off-host shipper</b> (background tick → a configurable remote sink, so the log isn't the only copy — closing a SOC 2 gap). A <code>GET /observability</code> endpoint surfaces audit-chain integrity, ship backlog, and recent fit activity. A customer-facing fit-SLA dashboard is the remaining UI follow-on.</p>
     </div>
     <div class="card">
       <h4>Reference customer + ROI case <span class="chip partial">Partial</span></h4>
@@ -363,16 +363,16 @@
   <p class="lede">Compounding levers once the motion exists.</p>
   <div class="grid c3">
     <div class="card">
-      <h4>Integrations <span class="chip planned">Planned</span></h4>
-      <p class="small">Ad-platform connectors and a warehouse sync so data lands automatically — removing the biggest onboarding friction and increasing stickiness.</p>
+      <h4>Integrations <span class="chip partial">Partial</span></h4>
+      <p class="small"><b>Shipped:</b> first-class <b>Google Cloud Storage + BigQuery</b> data sources (read CSV/Parquet objects; run a query or table into the model) authenticating via the same <b>ADC</b> identity already used for Vertex — no new secrets. Usable from chat (<code>load_from_bigquery</code> / <code>load_from_gcs</code>) and surfaced in Settings → Data connections. <b>Ad platforms:</b> a connector contract + stubs (Google/Meta/TikTok) with a documented recommendation — land spend in BigQuery via a managed transfer (lowest-effort, GCP-native), then read it through the BigQuery source. <b>Needed:</b> live ad-platform API clients + a scheduled warehouse sync so data refreshes automatically.</p>
     </div>
     <div class="card">
-      <h4>Portfolio benchmarking &amp; governance <span class="chip partial">Partial</span></h4>
-      <p class="small">Per-run history metrics already persist. Extend to cross-brand benchmarking and governance for agencies/holding-cos running many models — a natural land-and-expand surface.</p>
+      <h4>Portfolio benchmarking &amp; governance <span class="chip shipped">Shipped</span></h4>
+      <p class="small"><b>Shipped:</b> an org-scoped <b>cross-brand benchmark API</b> (<code>GET /portfolio-benchmark</code>) over the per-run history — ranks each brand's channel ROIs against the portfolio (median / p25–p75 / percentile), with governance signals (model freshness/staleness, calibration coverage) — <b>plus a full <i>Constellation</i> dashboard</b> (React) rendering it: governance tiles, a per-channel ROI box-plot with every brand scattered as a dot, and a brand table with fit recency, portfolio mROI, and vs.-portfolio leader/laggard counts. The agency/holding-co land-and-expand view, end to end.</p>
     </div>
     <div class="card">
-      <h4>"Model-defense" collateral <span class="chip partial">Partial</span></h4>
-      <p class="small">The refutation suite exists; package it as a one-click report a buyer hands to their CFO — turning rigor into a sales artifact.</p>
+      <h4>"Model-defense" report <span class="chip shipped">Shipped</span></h4>
+      <p class="small">End-to-end: a <b>one-click agent tool</b> runs the causal refutation suite on the fitted model, reads convergence and any experiment calibration, and emits a CFO-readable verdict (Robust / Qualified / Needs scrutiny) with per-test plain-English explanations and honest caveats — a branded, standalone HTML page (served at <code>/model-defense</code>). Turns the platform's deepest differentiator, causal rigor, into a sales artifact.</p>
     </div>
   </div>
 </section>
