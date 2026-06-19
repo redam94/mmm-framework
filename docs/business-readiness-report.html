@@ -300,7 +300,7 @@
       <tr><td>Reliability &amp; observability (SLAs, retries, surfaced audit)</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>Reference customer + ROI case study</td><td><span class="chip partial">Partial</span></td></tr>
       <tr><td rowspan="3"><b>P2</b><br><span class="small muted">accelerate growth</span></td>
-        <td>Data &amp; ad-platform integrations</td><td><span class="chip planned">Planned</span></td></tr>
+        <td>Data &amp; ad-platform integrations</td><td><span class="chip partial">Partial</span></td></tr>
       <tr><td>Portfolio benchmarking &amp; governance</td><td><span class="chip shipped">Shipped</span></td></tr>
       <tr><td>"Model-defense" explainability collateral</td><td><span class="chip shipped">Shipped</span></td></tr>
     </tbody>
@@ -363,8 +363,8 @@
   <p class="lede">Compounding levers once the motion exists.</p>
   <div class="grid c3">
     <div class="card">
-      <h4>Integrations <span class="chip planned">Planned</span></h4>
-      <p class="small">Ad-platform connectors and a warehouse sync so data lands automatically — removing the biggest onboarding friction and increasing stickiness.</p>
+      <h4>Integrations <span class="chip partial">Partial</span></h4>
+      <p class="small"><b>Shipped:</b> first-class <b>Google Cloud Storage + BigQuery</b> data sources (read CSV/Parquet objects; run a query or table into the model) authenticating via the same <b>ADC</b> identity already used for Vertex — no new secrets. Usable from chat (<code>load_from_bigquery</code> / <code>load_from_gcs</code>) and surfaced in Settings → Data connections. <b>Ad platforms:</b> a connector contract + stubs (Google/Meta/TikTok) with a documented recommendation — land spend in BigQuery via a managed transfer (lowest-effort, GCP-native), then read it through the BigQuery source. <b>Needed:</b> live ad-platform API clients + a scheduled warehouse sync so data refreshes automatically.</p>
     </div>
     <div class="card">
       <h4>Portfolio benchmarking &amp; governance <span class="chip shipped">Shipped</span></h4>

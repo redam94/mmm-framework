@@ -290,8 +290,35 @@ lifecycle. HTML well-formed (0 unclosed), docs-snippet gate 74/74, nav wired.
       colored), `BrandTable` (fit recency + stale pill, portfolio mROI, top
       channel, vs.-portfolio leader/laggard counts, calibration coverage). Nav
       entry + route wired; `tsc --noEmit` + `vite build` green.
-### Integrations  `[ ]`
-- [ ] Ad-platform connectors + warehouse sync (auto data ingest).
+### Integrations  `[~]`
+- [x] **GCS + BigQuery data sources** — `src/mmm_framework/integrations/`
+      (`DataSource` ABC, `GCSDataSource`, `BigQueryDataSource`): ADC-first auth
+      (shared with Vertex), lazy SDK via the new `[gcp]` extra, injectable
+      clients for testing. `build_data_source`/`list_data_sources` catalog.
+      Agent tools `load_from_bigquery`/`load_from_gcs` feed the workspace
+      dataset; `GET /integrations/catalog` (auth-gated). Hardened post-review:
+      `\Z`-anchored table regex (no newline injection), per-query byte guard,
+      external-pull row cap, scrubbed error messages. Tests:
+      `tests/test_integrations_gcp.py` (18), `_wiring.py` (5).
+- [x] **Ad-platform connectors (stubs) + recommendation** —
+      `integrations/ad_platforms/` (`AdPlatformConnector`, `spend_to_mff`,
+      Google/Meta/TikTok stubs, `list_ad_platforms` ranked easiest-first).
+      `technical-docs/ad-platform-integrations.md`: land spend in BigQuery via
+      managed transfers (lowest-effort), direct-API ease Meta>Google/TikTok.
+      Tests: `tests/test_ad_platform_stubs.py` (5).
+- [ ] Live ad-platform API clients + scheduled warehouse sync (the stubs raise
+      a guided `AdPlatformNotImplemented`; BigQuery-transfer path documented).
+
+### Admin & user management  `[x]`
+- [x] **Org-admin auth endpoints** — `/auth/members` (list), PATCH/DELETE
+      `/auth/members/{id}` (role change/remove, owner-grant restricted to
+      owners, last-owner protected), `/auth/invites` + DELETE (pending invites),
+      `/auth/change-password` (re-issues tokens). Store/service primitives +
+      audit events. Tests: `tests/test_auth_admin_routes.py` (8).
+- [x] **Frontend Settings (Sanctum) + Admin panel (Curia)** —
+      `frontend/src/pages/Settings/` (Profile/Security/Model&API/Data-connections)
+      + `pages/Admin/` (seat usage, invite-by-email, role management). Role-gated
+      nav (`pageVisibleToRole`). `accountService`/`adminService` + hooks.
 
 ---
 
