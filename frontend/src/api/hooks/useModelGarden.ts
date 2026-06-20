@@ -78,9 +78,10 @@ export function usePromoteGardenModel() {
       version: number;
       note?: string;
     }) => modelGardenService.promote(name, version, note),
-    onSuccess: (_row, { name }) => {
+    onSuccess: (_row, { name, version }) => {
       qc.invalidateQueries({ queryKey: gardenKeys.lists() });
       qc.invalidateQueries({ queryKey: gardenKeys.versions(name) });
+      qc.invalidateQueries({ queryKey: gardenKeys.version(name, version) });
     },
   });
 }
@@ -119,10 +120,15 @@ export function useGardenTest(name: string | null, version: number | null) {
     refetchInterval: (q) => {
       const s = q.state.data?.status;
       if (s === 'done' || s === 'error') {
-        // Refresh listings once: a pass may have flipped draft→tested.
+        // Refresh listings AND the open detail once: a pass may have flipped
+        // draft→tested, which changes the action bar (Publish appears, Delete
+        // hides) and the status chip.
         if (name) {
           qc.invalidateQueries({ queryKey: gardenKeys.versions(name) });
           qc.invalidateQueries({ queryKey: gardenKeys.lists() });
+          if (version != null) {
+            qc.invalidateQueries({ queryKey: gardenKeys.version(name, version) });
+          }
         }
         return false;
       }
