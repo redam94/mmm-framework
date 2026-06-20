@@ -62,15 +62,24 @@ def test_full_tools_escape_hatch(monkeypatch):
 
 class _StubExpertGraph:
     """Stands in for the compiled expert sub-graph. Records the config it was
-    invoked with and returns a canned final state."""
+    streamed with and yields a canned final state.
+
+    ``delegate_to_expert`` drives the expert with ``graph.stream(..., stream_mode=
+    "values")`` (keeping the LAST full state so partial progress survives a step-
+    limit blowout), so the stub is a generator that yields the canned state once.
+    """
 
     def __init__(self, result):
         self._result = result
         self.invoked_with = None
 
-    def invoke(self, init_state, config=None):
-        self.invoked_with = {"init_state": init_state, "config": config}
-        return self._result
+    def stream(self, init_state, config=None, stream_mode=None):
+        self.invoked_with = {
+            "init_state": init_state,
+            "config": config,
+            "stream_mode": stream_mode,
+        }
+        yield self._result
 
 
 def test_delegate_returns_summary_and_propagates_state(monkeypatch):
@@ -120,7 +129,7 @@ def test_delegate_returns_summary_and_propagates_state(monkeypatch):
 
 def test_delegate_handles_expert_failure_gracefully(monkeypatch):
     class _Boom:
-        def invoke(self, *a, **k):
+        def stream(self, *a, **k):
             raise RuntimeError("kernel exploded")
 
     monkeypatch.setattr(T, "_get_expert_graph", lambda override=None: _Boom())
