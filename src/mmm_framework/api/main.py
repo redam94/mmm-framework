@@ -2727,20 +2727,60 @@ async def get_experiment_simulation(project_id: str, job_id: str):
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
-# ── Model Garden registry (org-scoped governance surface) ────────────────────
-# Authoring/registration is the agent's job (the `register_garden_model` tool,
-# and the future Atelier editor); these endpoints cover discovery, re-testing,
-# the human PUBLISH gate, and retirement.
+# ── Model Garden registry (org-scoped) ───────────────────────────────────────
+# Backs the Atelier UI + governance: register (from the editor), discover,
+# re-test, the human PUBLISH gate, and retirement. Registration shares its core
+# with the agent's `register_garden_model` tool (agents/garden_registry.py).
 
 
 class GardenPromoteRequest(BaseModel):
     note: str = ""
 
 
+class GardenRegisterRequest(BaseModel):
+    source_code: str
+    name: str
+    docs: str = ""
+    version: int | None = None
+    tags: list | None = None
+    dataset_schema: dict | None = None
+    recommended_fit: dict | None = None
+
+
 def _garden_org(principal: AuthContext) -> str:
     """Org that scopes garden visibility — matches the agent-side resolution
     (``sessions_store.resolve_org_id``) so both surfaces see the same models."""
     return principal.org_id or sessions_store.DEFAULT_ORG_ID
+
+
+@app.post("/model-garden")
+async def register_garden_model_endpoint(
+    body: GardenRegisterRequest, principal: PrincipalDep
+):
+    """Register a bespoke model (source defining a BayesianMMM subclass) as a
+    DRAFT. Analyst+ role. The source is AST-validated (never executed here) and
+    stored in the org's garden; POST the test endpoint next to fit + grade it."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Registering a model requires an analyst+ role."
+        )
+    from mmm_framework.agents.garden_registry import register_garden_model_core
+
+    try:
+        row = register_garden_model_core(
+            org_id=_garden_org(principal),
+            source_code=body.source_code,
+            name=body.name,
+            docs=body.docs,
+            version=body.version,
+            tags=body.tags,
+            dataset_schema=body.dataset_schema,
+            recommended_fit=body.recommended_fit,
+            owner_user_id=principal.user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return JSONResponse(status_code=201, content=safe_json_dumps_load(row))
 
 
 @app.get("/model-garden")
@@ -2782,6 +2822,20 @@ async def get_garden_model_endpoint(name: str, version: int, principal: Principa
     if row is None:
         raise HTTPException(status_code=404, detail="Garden model not found.")
     return JSONResponse(content=safe_json_dumps_load(row))
+
+
+@app.get("/model-garden/{name}/{version}/source")
+async def get_garden_source(name: str, version: int, principal: PrincipalDep):
+    """The stored model source text (for the Atelier editor)."""
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    from mmm_framework.agents.garden_registry import read_garden_source
+
+    return JSONResponse(content={"source_code": read_garden_source(row) or ""})
 
 
 def _garden_test_sync(synthetic_tid: str, row: dict) -> dict:

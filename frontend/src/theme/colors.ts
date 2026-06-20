@@ -99,6 +99,19 @@ export const EXPERIMENT_STATUS: Record<
   cancelled: { fg: COLORS.ink400, bg: COLORS.cream200, label: 'Cancelled' },
 };
 
+/** Model Garden lifecycle statuses → chip styling (mirrors EXPERIMENT_STATUS). */
+export type GardenStatus = 'draft' | 'tested' | 'published' | 'deprecated';
+
+export const GARDEN_STATUS: Record<
+  GardenStatus,
+  { fg: string; bg: string; label: string }
+> = {
+  draft: { fg: COLORS.ink600, bg: COLORS.cream200, label: 'Draft' },
+  tested: { fg: COLORS.steel700, bg: COLORS.steel100, label: 'Tested' },
+  published: { fg: COLORS.sage800, bg: COLORS.sage100, label: 'Published' },
+  deprecated: { fg: COLORS.rust700, bg: COLORS.rust100, label: 'Deprecated' },
+};
+
 /**
  * Categorical chart colorway: ≥8 hue-distinct entries anchored in the brand
  * system (sage/steel/gold/rust first), staying readable on cream surfaces.

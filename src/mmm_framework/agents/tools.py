@@ -5080,33 +5080,12 @@ def delegate_to_expert(
 # ── Model Garden: author / version / test / share bespoke models ─────────────
 
 
-def _garden_static_class_name(source_code: str) -> tuple[str | None, str | None]:
-    """Find the garden model class in source WITHOUT executing it (AST only —
-    untrusted code must not run host-side). Returns (class_name, error)."""
-    import ast
-
-    try:
-        tree = ast.parse(source_code)
-    except SyntaxError as e:
-        return None, f"source has a syntax error: {e}"
-    classes = [n.name for n in tree.body if isinstance(n, ast.ClassDef)]
-    explicit = None
-    for n in tree.body:
-        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Name):
-            if any(
-                isinstance(t, ast.Name) and t.id == "GARDEN_MODEL" for t in n.targets
-            ):
-                explicit = n.value.id
-    if explicit:
-        return explicit, None
-    if len(classes) == 1:
-        return classes[0], None
-    if not classes:
-        return None, "source defines no class (expected a BayesianMMM subclass)"
-    return None, (
-        f"source defines multiple classes {classes}; add `GARDEN_MODEL = YourClass` "
-        "to say which one is the model"
-    )
+# Static (AST-only) source validation + the register core are shared with the
+# REST `POST /model-garden` endpoint; re-exported here for the tool + tests.
+from mmm_framework.agents.garden_registry import (  # noqa: E402
+    register_garden_model_core as _register_garden_model_core,
+    static_class_name as _garden_static_class_name,
+)
 
 
 def _garden_org_for(tid: str | None) -> tuple[str, str]:
@@ -5159,54 +5138,17 @@ def register_garden_model(
     (optional) default fit knobs (e.g. {"method": "nuts", "draws": 2000}).
     """
     tid = _activate_thread(config)
-    from mmm_framework.api import sessions as sessions_store
-    from mmm_framework.garden.contract import GARDEN_CONTRACT_VERSION
-
-    class_name, err = _garden_static_class_name(source_code)
-    if err:
-        return Command(
-            update={
-                "messages": [
-                    ToolMessage(
-                        content=f"Could not register model: {err}",
-                        tool_call_id=tool_call_id,
-                        status="error",
-                    )
-                ]
-            }
-        )
-
-    project_id, org_id = _garden_org_for(tid)
-    ver = (
-        int(version)
-        if version is not None
-        else sessions_store.next_garden_version(org_id, name)
-    )
-    manifest = {
-        "contract_version": GARDEN_CONTRACT_VERSION,
-        "class_name": class_name,
-        "dataset_schema": dataset_schema or {},
-        "recommended_fit": recommended_fit or {},
-        "tags": tags or [],
-    }
-    # Persist source + manifest to the org-scoped garden store.
-    gdir = _ws.garden_dir(org_id, name, ver)
-    src_path = gdir / "model.py"
-    src_path.write_text(source_code, encoding="utf-8")
-    import json as _json
-
-    (gdir / "manifest.json").write_text(
-        _json.dumps(manifest, indent=2), encoding="utf-8"
-    )
-
+    _project_id, org_id = _garden_org_for(tid)
     try:
-        row = sessions_store.upsert_garden_model(
+        row = _register_garden_model_core(
             org_id=org_id,
+            source_code=source_code,
             name=name,
-            version=ver,
-            docs=docs or None,
-            manifest=manifest,
-            source_path=str(src_path),
+            docs=docs,
+            version=version,
+            tags=tags,
+            dataset_schema=dataset_schema,
+            recommended_fit=recommended_fit,
         )
     except ValueError as e:
         return Command(
@@ -5221,9 +5163,9 @@ def register_garden_model(
             }
         )
     msg = (
-        f"Registered garden model **{name}** v{row['version']} (class `{class_name}`) "
-        f"as a draft. Run `test_garden_model('{name}')` to check compatibility "
-        "before it can be tested and published."
+        f"Registered garden model **{name}** v{row['version']} "
+        f"(class `{(row.get('manifest') or {}).get('class_name')}`) as a draft. Run "
+        f"`test_garden_model('{name}')` to check compatibility before publishing."
     )
     return Command(
         update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}

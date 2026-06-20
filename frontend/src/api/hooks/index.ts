@@ -102,3 +102,16 @@ export {
   useAnalysisPlans,
 } from './useSessions';
 export type { AnalysisPlanInfo } from './useSessions';
+
+// Model Garden hooks
+export {
+  gardenKeys,
+  useGardenModels,
+  useGardenVersions,
+  useGardenModel,
+  useGardenSource,
+  useRegisterGardenModel,
+  usePromoteGardenModel,
+  useDeleteGardenModel,
+  useGardenTest,
+} from './useModelGarden';

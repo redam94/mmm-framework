@@ -157,3 +157,37 @@ def test_resolve_org_id_fallback(store):
     # Unknown project -> the dev-posture default org (matches the dev principal).
     assert store.resolve_org_id(None) == store.DEFAULT_ORG_ID
     assert store.resolve_org_id("no-such-project") == store.DEFAULT_ORG_ID
+
+
+class TestRegisterCore:
+    """The shared registration core (agents/garden_registry) used by both the
+    agent tool and the REST POST /model-garden endpoint."""
+
+    @pytest.fixture()
+    def reg(self, store, tmp_path, monkeypatch):
+        monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+        from mmm_framework.agents import garden_registry
+
+        return garden_registry
+
+    def test_register_writes_source_and_row(self, store, reg):
+        src = "from mmm_framework.garden import CustomMMM\nclass M(CustomMMM): pass\nGARDEN_MODEL = M\n"
+        row = reg.register_garden_model_core(
+            org_id="orgA", source_code=src, name="cool-model", docs="does X"
+        )
+        assert row["version"] == 1 and row["status"] == "draft"
+        assert row["manifest"]["class_name"] == "M"
+        # source round-trips via read_garden_source
+        assert "class M(CustomMMM)" in reg.read_garden_source(row)
+
+    def test_register_rejects_bad_source(self, store, reg):
+        with pytest.raises(ValueError, match="multiple classes"):
+            reg.register_garden_model_core(
+                org_id="orgA", source_code="class A: pass\nclass B: pass", name="x"
+            )
+
+    def test_register_autoincrements(self, store, reg):
+        src = "class M: pass\nGARDEN_MODEL = M\n"
+        r1 = reg.register_garden_model_core(org_id="orgA", source_code=src, name="m")
+        r2 = reg.register_garden_model_core(org_id="orgA", source_code=src, name="m")
+        assert (r1["version"], r2["version"]) == (1, 2)
