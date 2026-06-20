@@ -262,11 +262,22 @@ def _canonical_trend_type(trend_spec: dict) -> str:
     )
 
 
-def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
+def build_model(
+    spec: dict, dataset_path: str, *, model_cls: type | None = None
+) -> BayesianMMM:
     """Build an UNFITTED ``BayesianMMM`` from a normalized spec + dataset —
     the panel/config/trend stages of ``build_and_fit`` without any sampling.
     The PyMC graph builds lazily on first use, so this is cheap enough for
-    pre-fit prior predictive checks. Raises on failure."""
+    pre-fit prior predictive checks. Raises on failure.
+
+    ``model_cls`` (Model Garden): construct a bespoke ``BayesianMMM`` SUBCLASS
+    instead of the base class — the entire spec→config→trend→experiment pipeline
+    is reused, only the class is swapped. Resolution order: an explicit
+    ``model_cls`` arg wins; else ``spec["garden_ref"]`` (``{source_path,
+    class_name, ...}``) is imported kernel-side via the garden loader; else
+    plain ``BayesianMMM``. The resolved ``garden_ref`` is stamped onto the
+    instance (``mmm._garden_ref``) so serialization records the model's identity
+    and a cold kernel can reload the right class."""
     # 1. MFFConfig + panel
     mff_config = _mff_config_from_spec(spec)
     try:
@@ -394,7 +405,28 @@ def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
         )
     trend_config = tb.build()
 
-    mmm = BayesianMMM(panel, model_config, trend_config)
+    # Model Garden: resolve a bespoke subclass (explicit arg or spec.garden_ref),
+    # falling back to the base BayesianMMM. The garden source is imported here —
+    # i.e. kernel-side when this runs inside the session kernel — so untrusted
+    # expert code never executes in the host API process.
+    garden_ref = spec.get("garden_ref") or None
+    resolved_cls = model_cls
+    if resolved_cls is None and garden_ref:
+        from mmm_framework.garden.loader import load_garden_class_from_path
+
+        resolved_cls = load_garden_class_from_path(
+            garden_ref.get("source_path"), garden_ref.get("class_name")
+        )
+    if resolved_cls is None:
+        resolved_cls = BayesianMMM
+
+    mmm = resolved_cls(panel, model_config, trend_config)
+    if garden_ref:
+        # Provenance for the serializer + cold-kernel reload (best-effort attr).
+        try:
+            mmm._garden_ref = dict(garden_ref)
+        except Exception:  # noqa: BLE001
+            pass
 
     # 4. Experiment calibration (closes the measurement loop): the spec carries
     # completed lift readouts as ExperimentMeasurement dicts; they become

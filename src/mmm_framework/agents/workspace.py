@@ -65,6 +65,44 @@ def project_data_dir(project_id: str) -> Path:
     return d
 
 
+def garden_dir(org_id: str, name: str, version: str | int) -> Path:
+    """Canonical, ORG-scoped store for a registered Model Garden model's
+    artifacts (``model.py`` source + ``manifest.json`` + optional reference fit).
+
+    Lives outside any thread (``<root>/garden/<org>/<name>/<version>/``) so it is
+    shared across a tenant's projects by construction. ``workspace_root()`` is
+    already an allowed download/read root, so no allow-list change is needed.
+    """
+    d = (
+        workspace_root()
+        / "garden"
+        / _safe_segment(org_id)
+        / _safe_segment(name)
+        / _safe_segment(str(version))
+    )
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def garden_loaded_dir(
+    name: str, version: str | int, thread_id: str | None = None
+) -> Path:
+    """Per-session copy of a loaded garden model's source.
+
+    ``load_garden_model`` copies the canonical source here so the kernel can
+    import it — including the container kernel, which only mounts the thread
+    workspace, never the org-level :func:`garden_dir`.
+    """
+    d = (
+        thread_dir(thread_id)
+        / "garden_loaded"
+        / _safe_segment(name)
+        / _safe_segment(str(version))
+    )
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def uploads_dir(thread_id: str) -> Path:
     """The legacy dataset-upload directory (``uploads/<thread_id>/``)."""
     d = Path("uploads") / _safe_segment(thread_id)

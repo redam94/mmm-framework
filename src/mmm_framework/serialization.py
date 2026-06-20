@@ -38,8 +38,10 @@ class MMMSerializer:
     >>> model = MMMSerializer.load("models/my_mmm", panel)
     """
 
-    # Version for saved model format
-    _FORMAT_VERSION = "1.0"
+    # Version for saved model format. "1.1" adds `garden_ref` /
+    # `model_class_qualname` (Model Garden: a saved model may be a bespoke
+    # BayesianMMM subclass, so `load()` reconstructs THAT class, not the base).
+    _FORMAT_VERSION = "1.1"
 
     @classmethod
     def save(
@@ -69,35 +71,69 @@ class MMMSerializer:
         ValueError
             If the model has no trace and save_trace is True.
         """
-        path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
+        final = Path(path)
+        final.parent.mkdir(parents=True, exist_ok=True)
 
-        # 1. Save metadata
-        metadata = cls._collect_metadata(model)
-        with open(path / "metadata.json", "w") as f:
-            json.dump(metadata, f, indent=2)
+        # Write everything into a temp sibling dir, then atomically swap it in.
+        # A crash mid-save leaves the PREVIOUS model intact rather than a
+        # half-written directory — important now that models are shared
+        # cross-project through the Model Garden registry.
+        work = final.parent / f".{final.name}.tmp"
+        if work.exists():
+            shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True)
+        try:
+            # 1. Save metadata
+            metadata = cls._collect_metadata(model)
+            with open(work / "metadata.json", "w") as f:
+                json.dump(metadata, f, indent=2)
 
-        # 2. Save configurations
-        configs = cls._collect_configs(model)
-        with open(path / "configs.json", "w") as f:
-            json.dump(configs, f, indent=2, default=str)
+            # 2. Save configurations
+            configs = cls._collect_configs(model)
+            with open(work / "configs.json", "w") as f:
+                json.dump(configs, f, indent=2, default=str)
 
-        # 3. Save scaling parameters
-        scaling_params = cls._collect_scaling_params(model)
-        with open(path / "scaling_params.json", "w") as f:
-            json.dump(scaling_params, f, indent=2)
+            # 3. Save scaling parameters
+            scaling_params = cls._collect_scaling_params(model)
+            with open(work / "scaling_params.json", "w") as f:
+                json.dump(scaling_params, f, indent=2)
 
-        # 4. Save trace (if fitted and requested)
-        if save_trace and model._trace is not None:
-            cls._save_trace(model._trace, path, compress)
+            # 4. Save trace (if fitted and requested)
+            if save_trace and model._trace is not None:
+                cls._save_trace(model._trace, work, compress)
 
-        # 5. Save trend features if they exist
-        cls._save_trend_features(model, path)
+            # 5. Save trend features if they exist
+            cls._save_trend_features(model, work)
 
-        # 6. Save seasonality features
-        cls._save_seasonality_features(model, path)
+            # 6. Save seasonality features
+            cls._save_seasonality_features(model, work)
 
-        print(f"Model saved to {path}")
+            cls._atomic_swap(work, final)
+        finally:
+            if work.exists():
+                shutil.rmtree(work, ignore_errors=True)
+
+        print(f"Model saved to {final}")
+
+    @staticmethod
+    def _atomic_swap(work: Path, final: Path) -> None:
+        """Promote the fully-written temp dir ``work`` to ``final``, preserving
+        the prior model on failure (rename-based, atomic within one filesystem)."""
+        backup = final.parent / f".{final.name}.bak"
+        if backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+        had_prior = final.exists()
+        if had_prior:
+            os.replace(final, backup)  # move the old model aside
+        try:
+            os.replace(work, final)  # promote the new model
+        except Exception:
+            if had_prior and backup.exists():
+                os.replace(backup, final)  # roll back
+            raise
+        finally:
+            if backup.exists():
+                shutil.rmtree(backup, ignore_errors=True)
 
     @classmethod
     def load(
@@ -171,13 +207,21 @@ class MMMSerializer:
                 ExperimentMeasurement.from_dict(e) for e in metadata["experiments"]
             ]
 
-        instance = BayesianMMM(
+        # Model Garden: reconstruct the bespoke subclass recorded at save time
+        # (falls back to BayesianMMM if its source can't be resolved).
+        model_cls = cls._resolve_model_class(metadata, BayesianMMM)
+        instance = model_cls(
             panel=panel,
             model_config=model_config,
             trend_config=trend_config,
             adstock_alphas=adstock_alphas,
             experiments=experiments,
         )
+        if metadata.get("garden_ref"):
+            try:
+                instance._garden_ref = dict(metadata["garden_ref"])
+            except Exception:  # noqa: BLE001
+                pass
 
         # 5. Load scaling parameters
         with open(path / "scaling_params.json", "r") as f:
@@ -319,6 +363,16 @@ class MMMSerializer:
         if model.has_product:
             metadata["product_names"] = model.product_names
 
+        # Model Garden provenance: when the model is a bespoke BayesianMMM
+        # subclass, record the registry ref + qualified class name so load()
+        # rebuilds the SAME class (and a cold kernel can find its source).
+        garden_ref = getattr(model, "_garden_ref", None)
+        if garden_ref:
+            metadata["garden_ref"] = dict(garden_ref)
+        cls = type(model)
+        if cls.__name__ != "BayesianMMM":
+            metadata["model_class_qualname"] = f"{cls.__module__}.{cls.__qualname__}"
+
         # Experiment calibration likelihoods (so a reloaded model can be re-fit
         # with the same incrementality anchoring it was originally built with).
         if getattr(model, "experiments", None):
@@ -394,6 +448,32 @@ class MMMSerializer:
         if season_features_to_save:
             with open(path / "seasonality_features.json", "w") as f:
                 json.dump(season_features_to_save, f, indent=2)
+
+    @classmethod
+    def _resolve_model_class(cls, metadata: dict[str, Any], default: type) -> type:
+        """Resolve the class to reconstruct on load.
+
+        Model Garden models are bespoke ``BayesianMMM`` subclasses; their source
+        is imported from the ``garden_ref`` recorded at save time. If the source
+        can't be found (e.g. loaded in a different session), fall back to the
+        base class with a warning — the trace + scaling still load for read-only
+        inspection, the custom build hooks are just not reapplied.
+        """
+        ref = metadata.get("garden_ref")
+        if not ref:
+            return default
+        try:
+            from .garden.loader import load_garden_class_from_path
+
+            return load_garden_class_from_path(
+                ref.get("source_path"), ref.get("class_name")
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(
+                f"Could not load garden model class {ref.get('name')!r} "
+                f"({exc}); falling back to {default.__name__} for trace inspection."
+            )
+            return default
 
     @classmethod
     def _check_version(cls, metadata: dict[str, Any]) -> None:

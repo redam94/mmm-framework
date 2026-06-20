@@ -2727,6 +2727,213 @@ async def get_experiment_simulation(project_id: str, job_id: str):
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
+# ── Model Garden registry (org-scoped governance surface) ────────────────────
+# Authoring/registration is the agent's job (the `register_garden_model` tool,
+# and the future Atelier editor); these endpoints cover discovery, re-testing,
+# the human PUBLISH gate, and retirement.
+
+
+class GardenPromoteRequest(BaseModel):
+    note: str = ""
+
+
+def _garden_org(principal: AuthContext) -> str:
+    """Org that scopes garden visibility — matches the agent-side resolution
+    (``sessions_store.resolve_org_id``) so both surfaces see the same models."""
+    return principal.org_id or sessions_store.DEFAULT_ORG_ID
+
+
+@app.get("/model-garden")
+async def list_garden_models_endpoint(
+    principal: PrincipalDep,
+    status: str | None = None,
+    name: str | None = None,
+    all_versions: bool = False,
+):
+    """List the org's Model Garden models (latest version per name by default)."""
+    org_id = _garden_org(principal)
+    rows = sessions_store.list_garden_models(
+        org_id,
+        name=name,
+        status=status,
+        latest_only=(name is None and not all_versions),
+    )
+    return JSONResponse(content=safe_json_dumps_load({"models": rows}))
+
+
+@app.get("/model-garden/{name}/versions")
+async def list_garden_versions_endpoint(name: str, principal: PrincipalDep):
+    """Every version of one garden model, newest first."""
+    org_id = _garden_org(principal)
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {"versions": sessions_store.list_garden_versions(org_id, name)}
+        )
+    )
+
+
+@app.get("/model-garden/{name}/{version}")
+async def get_garden_model_endpoint(name: str, version: int, principal: PrincipalDep):
+    """One garden model version (incl. its manifest + compatibility report)."""
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    return JSONResponse(content=safe_json_dumps_load(row))
+
+
+def _garden_test_sync(synthetic_tid: str, row: dict) -> dict:
+    """One asyncio.to_thread context (per the ContextVar rule): stage the source
+    into the session workspace and run the compatibility suite via the kernel —
+    sandboxed in the hosted profile, so untrusted source never imports in the
+    host process."""
+    from mmm_framework.agents import tools as _tools
+    from mmm_framework.agents.runtime import set_current_thread
+
+    set_current_thread(synthetic_tid)
+    dest = _tools._garden_copy_source_to_session(row, synthetic_tid)
+    return _tools._KERNELS.get_or_spawn(synthetic_tid).run_model_op(
+        "garden_compat",
+        {
+            "source_path": dest,
+            "class_name": (row.get("manifest") or {}).get("class_name"),
+        },
+    )
+
+
+async def _run_garden_test_job(job_id: str, synthetic_tid: str, model_id: str) -> None:
+    try:
+        _sim_job_patch(job_id, status="running")
+        row = sessions_store.get_garden_model(model_id=model_id)
+        if not row:
+            _sim_job_patch(job_id, status="error", error="garden model not found")
+            return
+        res = await asyncio.to_thread(_garden_test_sync, synthetic_tid, row)
+        if res.get("error"):
+            _sim_job_patch(job_id, status="error", error=res["error"])
+            return
+        report = res.get("compat_report") or (res.get("dashboard") or {}).get(
+            "garden_compat"
+        )
+        if report:
+            sessions_store.set_garden_compat_report(model_id, report)
+        promoted = False
+        if report and report.get("blocking_passed") and row["status"] == "draft":
+            try:
+                sessions_store.transition_garden_model(model_id, "tested")
+                promoted = True
+            except ValueError:
+                pass
+        _sim_job_patch(
+            job_id,
+            status="done",
+            result=safe_json_dumps_load(
+                {
+                    "blocking_passed": bool(report and report.get("blocking_passed")),
+                    "score": (report or {}).get("score"),
+                    "promoted": promoted,
+                    "summary": (report or {}).get("summary"),
+                    "tiers": (report or {}).get("tiers"),
+                }
+            ),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("garden test job failed: %s", job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+@app.post("/model-garden/{name}/{version}/test", dependencies=[_rl_heavy])
+async def start_garden_test(name: str, version: int, principal: PrincipalDep):
+    """Start a NON-BLOCKING compatibility test; on pass the model is promoted
+    draft→tested. Returns a job_id to poll."""
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    synthetic_tid = f"__gardenjobs__{org_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "garden_test_job",
+        {
+            "status": "pending",
+            "org_id": org_id,
+            "model_id": row["id"],
+            "name": name,
+            "version": int(version),
+            "result": None,
+            "error": None,
+        },
+    )
+    _spawn_job_task(_run_garden_test_job(job["id"], synthetic_tid, row["id"]))
+    return JSONResponse(
+        status_code=202, content={"job_id": job["id"], "status": "pending"}
+    )
+
+
+@app.get("/model-garden/{name}/{version}/test/{job_id}")
+async def get_garden_test(
+    name: str, version: int, job_id: str, principal: PrincipalDep
+):
+    """Poll a garden test job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    org_id = _garden_org(principal)
+    if art is None or (art.get("payload") or {}).get("org_id") != org_id:
+        raise HTTPException(status_code=404, detail="Test job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+@app.post("/model-garden/{name}/{version}/promote")
+async def promote_garden_model(
+    name: str, version: int, body: GardenPromoteRequest, principal: PrincipalDep
+):
+    """Human publish gate: promote a TESTED model to PUBLISHED so every project
+    in the org can load it. Org admin/owner only; the model must be `tested`."""
+    if not principal.has_role(Role.ADMIN):
+        raise HTTPException(
+            status_code=403, detail="Publishing requires an org admin/owner role."
+        )
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    try:
+        updated = sessions_store.transition_garden_model(
+            row["id"], "published", note=body.note or None
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load(updated))
+
+
+@app.delete("/model-garden/{name}/{version}")
+async def delete_garden_model_endpoint(
+    name: str, version: int, principal: PrincipalDep
+):
+    """Delete a draft/deprecated garden model (org admin/owner only). Published
+    history is immutable — deprecate instead."""
+    if not principal.has_role(Role.ADMIN):
+        raise HTTPException(
+            status_code=403, detail="Deleting requires an org admin/owner role."
+        )
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    try:
+        ok = sessions_store.delete_garden_model(row["id"])
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return JSONResponse(content={"deleted": bool(ok)})
+
+
 class ExperimentOptimizeRequest(BaseModel):
     channel: str
     margin: float | None = None

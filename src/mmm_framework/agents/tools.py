@@ -4866,6 +4866,7 @@ HEAVY_TOOL_NAMES: frozenset[str] = frozenset(
         "run_marginal_analysis",
         "run_budget_optimizer",
         "run_budget_scenario",
+        "test_garden_model",  # fits the candidate on synthetic worlds
     }
 )
 
@@ -5076,6 +5077,522 @@ def delegate_to_expert(
     return Command(update=update)
 
 
+# ── Model Garden: author / version / test / share bespoke models ─────────────
+
+
+def _garden_static_class_name(source_code: str) -> tuple[str | None, str | None]:
+    """Find the garden model class in source WITHOUT executing it (AST only —
+    untrusted code must not run host-side). Returns (class_name, error)."""
+    import ast
+
+    try:
+        tree = ast.parse(source_code)
+    except SyntaxError as e:
+        return None, f"source has a syntax error: {e}"
+    classes = [n.name for n in tree.body if isinstance(n, ast.ClassDef)]
+    explicit = None
+    for n in tree.body:
+        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Name):
+            if any(
+                isinstance(t, ast.Name) and t.id == "GARDEN_MODEL" for t in n.targets
+            ):
+                explicit = n.value.id
+    if explicit:
+        return explicit, None
+    if len(classes) == 1:
+        return classes[0], None
+    if not classes:
+        return None, "source defines no class (expected a BayesianMMM subclass)"
+    return None, (
+        f"source defines multiple classes {classes}; add `GARDEN_MODEL = YourClass` "
+        "to say which one is the model"
+    )
+
+
+def _garden_org_for(tid: str | None) -> tuple[str, str]:
+    """(project_id, org_id) for the active session."""
+    from mmm_framework.api import sessions as sessions_store
+
+    project_id = sessions_store.resolve_project_id(tid)
+    return project_id, sessions_store.resolve_org_id(project_id)
+
+
+def _garden_copy_source_to_session(row: dict, tid: str | None) -> str:
+    """Copy a registered model's source into the session workspace so the kernel
+    (incl. the container kernel, which only mounts the thread dir) can import it.
+    Returns the thread-local source path."""
+    import shutil
+
+    dest_dir = _ws.garden_loaded_dir(row["name"], row["version"], tid)
+    dest = dest_dir / "model.py"
+    shutil.copyfile(row["source_path"], dest)
+    return str(dest)
+
+
+@tool
+def register_garden_model(
+    state: Annotated[dict, InjectedState],
+    source_code: str,
+    name: str,
+    docs: str = "",
+    version: int | None = None,
+    tags: list | None = None,
+    dataset_schema: dict | None = None,
+    recommended_fit: dict | None = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Register a bespoke MMM model into the org's Model Garden as a DRAFT.
+
+    ``source_code`` is the full Python source defining a `BayesianMMM` subclass
+    (recommended: subclass `mmm_framework.garden.CustomMMM`). The source is
+    validated statically (parsed, the model class located) and saved to the
+    org's garden store — it is NOT executed here. Call `test_garden_model` next
+    to run the compatibility suite (which fits it in the sandbox) and, on pass,
+    promote it to `tested`; then `publish_garden_model` shares it org-wide.
+
+    Use this when an expert has authored or finalized a custom model they want
+    versioned, documented, and reusable across projects. ``name`` is the stable
+    model name (versions auto-increment); ``docs`` documents what it does and
+    when to use it; ``dataset_schema`` (optional) declares data requirements
+    (e.g. {"requires_geo": true, "min_channels": 2}); ``recommended_fit``
+    (optional) default fit knobs (e.g. {"method": "nuts", "draws": 2000}).
+    """
+    tid = _activate_thread(config)
+    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.garden.contract import GARDEN_CONTRACT_VERSION
+
+    class_name, err = _garden_static_class_name(source_code)
+    if err:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not register model: {err}",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+
+    project_id, org_id = _garden_org_for(tid)
+    ver = (
+        int(version)
+        if version is not None
+        else sessions_store.next_garden_version(org_id, name)
+    )
+    manifest = {
+        "contract_version": GARDEN_CONTRACT_VERSION,
+        "class_name": class_name,
+        "dataset_schema": dataset_schema or {},
+        "recommended_fit": recommended_fit or {},
+        "tags": tags or [],
+    }
+    # Persist source + manifest to the org-scoped garden store.
+    gdir = _ws.garden_dir(org_id, name, ver)
+    src_path = gdir / "model.py"
+    src_path.write_text(source_code, encoding="utf-8")
+    import json as _json
+
+    (gdir / "manifest.json").write_text(
+        _json.dumps(manifest, indent=2), encoding="utf-8"
+    )
+
+    try:
+        row = sessions_store.upsert_garden_model(
+            org_id=org_id,
+            name=name,
+            version=ver,
+            docs=docs or None,
+            manifest=manifest,
+            source_path=str(src_path),
+        )
+    except ValueError as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not register model: {e}",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+    msg = (
+        f"Registered garden model **{name}** v{row['version']} (class `{class_name}`) "
+        f"as a draft. Run `test_garden_model('{name}')` to check compatibility "
+        "before it can be tested and published."
+    )
+    return Command(
+        update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
+def list_garden_models(
+    state: Annotated[dict, InjectedState],
+    status: str | None = None,
+    name: str | None = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """List Model Garden models available to this project's organization.
+
+    Shows bespoke models authored anywhere in the org that can be loaded and
+    re-fit here. Optionally filter by ``status`` ('draft'|'tested'|'published'|
+    'deprecated') or ``name`` (to see every version of one model). Use this to
+    discover reusable models before loading one with `load_garden_model`.
+    """
+    tid = _activate_thread(config)
+    from mmm_framework.api import sessions as sessions_store
+
+    _project_id, org_id = _garden_org_for(tid)
+    rows = sessions_store.list_garden_models(
+        org_id, name=name, status=status, latest_only=(name is None)
+    )
+    if not rows:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No garden models found for this organization yet. "
+                        "Author one with `register_garden_model`.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    lines = [
+        "### Model Garden",
+        "",
+        "| Model | Version | Status | Score | Docs |",
+        "|---|---|---|---|---|",
+    ]
+    records = []
+    for r in rows:
+        report = r.get("compat_report") or {}
+        score = report.get("score")
+        score_s = "—" if score is None else f"{score}"
+        docs = (r.get("docs") or "").replace("\n", " ")[:60]
+        lines.append(
+            f"| {r['name']} | v{r['version']} | {r['status']} | {score_s} | {docs} |"
+        )
+        records.append(
+            {
+                "name": r["name"],
+                "version": r["version"],
+                "status": r["status"],
+                "score": score,
+                "docs": docs,
+            }
+        )
+    update: dict[str, Any] = {
+        "messages": [ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)]
+    }
+    return Command(update=update)
+
+
+def _garden_schema_warnings(schema: dict, spec: dict, dataset_path: str | None) -> str:
+    """Advisory check that the consuming project's data can satisfy a model's
+    declared requirements. Channels are project-specific (the model is
+    channel-agnostic), so this checks SHAPE not exact names."""
+    notes: list[str] = []
+    if not isinstance(schema, dict) or not schema:
+        return ""
+    n_channels = len(spec.get("media_channels") or [])
+    min_ch = int(schema.get("min_channels", 0) or 0)
+    if min_ch and n_channels < min_ch:
+        notes.append(
+            f"this model expects ≥{min_ch} media channels but the current spec has {n_channels}"
+        )
+    if schema.get("requires_geo"):
+        has_geo = bool(spec.get("geo") or spec.get("has_geo"))
+        if not has_geo:
+            notes.append(
+                "this model expects a geo panel — confirm the dataset has a Geography dimension"
+            )
+    if schema.get("expects_controls") and not (spec.get("control_variables") or []):
+        notes.append("this model expects control variables but none are configured")
+    return (" ⚠️ Data-fit notes: " + "; ".join(notes) + ".") if notes else ""
+
+
+@tool
+def load_garden_model(
+    state: Annotated[dict, InjectedState],
+    name: str,
+    version: int | None = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Load a garden model into this session so the NEXT fit re-fits it on this
+    project's data.
+
+    Resolves the model (a specific ``version`` or the latest published), copies
+    its source into the session workspace, and stages it into the model spec
+    (``garden_ref`` + the model's recommended fit settings). After loading, call
+    `fit_mmm_model` to re-fit the bespoke model on the current dataset, then the
+    usual analysis tools (`get_roi_metrics`, etc.) work as normal. This is how a
+    model authored in one project is reused in another.
+    """
+    tid = _activate_thread(config)
+    from mmm_framework.api import sessions as sessions_store
+
+    _project_id, org_id = _garden_org_for(tid)
+    if version is not None:
+        row = sessions_store.get_garden_model(
+            org_id=org_id, name=name, version=int(version)
+        )
+    else:
+        row = sessions_store.get_latest_garden_model(
+            org_id, name, status="published"
+        ) or sessions_store.get_latest_garden_model(org_id, name)
+    if not row:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Garden model **{name}** not found in this org. "
+                        "Use `list_garden_models` to see what's available.",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+
+    try:
+        dest = _garden_copy_source_to_session(row, tid)
+    except Exception as e:  # noqa: BLE001
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not stage model source: {e}",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+
+    manifest = row.get("manifest") or {}
+    garden_ref = {
+        "name": name,
+        "version": row["version"],
+        "source_path": dest,
+        "class_name": manifest.get("class_name"),
+        "contract_version": manifest.get("contract_version"),
+    }
+    spec = dict(state.get("model_spec") or {}) if isinstance(state, dict) else {}
+    spec["garden_ref"] = garden_ref
+    rec = manifest.get("recommended_fit") or {}
+    if rec:
+        inf = dict(spec.get("inference") or {})
+        for k in ("method", "draws", "tune", "chains", "target_accept", "random_seed"):
+            if k in rec:
+                inf[k] = rec[k]
+        spec["inference"] = inf
+
+    warn = _garden_schema_warnings(
+        manifest.get("dataset_schema") or {},
+        spec,
+        state.get("dataset_path") if isinstance(state, dict) else None,
+    )
+    status_note = (
+        ""
+        if row["status"] == "published"
+        else f" (note: this model is '{row['status']}', not yet published)"
+    )
+    msg = (
+        f"Loaded garden model **{name}** v{row['version']}{status_note}. The next "
+        "`fit_mmm_model` will re-fit it on this project's data." + warn
+    )
+    return Command(
+        update={
+            "model_spec": spec,
+            "messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)],
+        }
+    )
+
+
+@tool
+def test_garden_model(
+    state: Annotated[dict, InjectedState],
+    name: str,
+    version: int | None = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Run the compatibility suite on a registered garden model (in the sandbox)
+    and, if its blocking tiers pass, promote it from `draft` to `tested`.
+
+    The suite fits the model on synthetic worlds with known causal truth and
+    checks the contract the oracle relies on (build, fit, scaling, trace naming,
+    every read-op, and accuracy vs ground truth). Call this after
+    `register_garden_model`. Heavy (it fits models) — runs in the session kernel.
+    """
+    tid = _activate_thread(config)
+    from mmm_framework.api import sessions as sessions_store
+
+    _project_id, org_id = _garden_org_for(tid)
+    if version is not None:
+        row = sessions_store.get_garden_model(
+            org_id=org_id, name=name, version=int(version)
+        )
+    else:
+        row = sessions_store.get_latest_garden_model(org_id, name)
+    if not row:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Garden model **{name}** not found.",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+
+    try:
+        dest = _garden_copy_source_to_session(row, tid)
+    except Exception as e:  # noqa: BLE001
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not stage model source for testing: {e}",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "garden_compat",
+        {
+            "source_path": dest,
+            "class_name": (row.get("manifest") or {}).get("class_name"),
+        },
+    )
+    if res.get("error"):
+        return _modelop_command(res, state, tool_call_id)
+
+    report = res.get("compat_report") or (res.get("dashboard") or {}).get(
+        "garden_compat"
+    )
+    if report:
+        sessions_store.set_garden_compat_report(row["id"], report)
+
+    note = ""
+    if report and report.get("blocking_passed") and row["status"] == "draft":
+        try:
+            sessions_store.transition_garden_model(row["id"], "tested")
+            note = (
+                f"\n\n✅ Promoted **{name}** v{row['version']} to **tested**. "
+                "Use `publish_garden_model` to share it across the org."
+            )
+        except ValueError:
+            pass
+    elif report and not report.get("blocking_passed"):
+        note = "\n\n❌ Blocking tiers failed — fix the issues above, re-register, and test again."
+
+    if res.get("content"):
+        res = dict(res)
+        res["content"] = res["content"] + note
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def publish_garden_model(
+    state: Annotated[dict, InjectedState],
+    name: str,
+    version: int,
+    note: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Publish a TESTED garden model (`tested` -> `published`) so every project
+    in the organization can load it.
+
+    This is the human approval gate: only call it when the user explicitly asks
+    to publish/share a model. The model must already be `tested` (its
+    compatibility suite passed). Published versions are immutable — to change a
+    published model, register a new version.
+    """
+    tid = _activate_thread(config)
+    from mmm_framework.api import sessions as sessions_store
+
+    _project_id, org_id = _garden_org_for(tid)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if not row:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Garden model **{name}** v{version} not found.",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+    try:
+        updated = sessions_store.transition_garden_model(
+            row["id"], "published", note=note or None
+        )
+    except ValueError as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not publish: {e}",
+                        tool_call_id=tool_call_id,
+                        status="error",
+                    )
+                ]
+            }
+        )
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"📦 Published **{name}** v{updated['version']} — it is "
+                    "now available to every project in the org via `load_garden_model`.",
+                    tool_call_id=tool_call_id,
+                )
+            ]
+        }
+    )
+
+
+@tool
+def suggest_model_improvements(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Analyze the currently fitted model's diagnostics and suggest concrete
+    changes to improve FITTING TIME and ACCURACY.
+
+    Reads convergence (divergences / R-hat / ESS) and parameter-learning
+    (prior-dominated parameters) signals and returns ranked, actionable advice
+    (raise target_accept, add tune/draws, switch sampler, tighten priors, add
+    calibrating experiments, etc.). Call after a fit, especially when the model
+    sampled poorly or the user asks how to make it better/faster.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "garden_tune_suggestions", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
 # List of all tools
 TOOLS = [
     # Step 1 — Define the question (pre-registration)
@@ -5148,6 +5665,13 @@ TOOLS = [
         for t in CAUSAL_TOOLS
         if t.name in ("record_assumption", "list_assumptions", "mark_workflow_step")
     ],
+    # Model Garden — author / version / test / share bespoke models
+    register_garden_model,
+    list_garden_models,
+    load_garden_model,
+    test_garden_model,
+    publish_garden_model,
+    suggest_model_improvements,
     # Session
     get_session_status,
     # Library discovery (reach ALL features)

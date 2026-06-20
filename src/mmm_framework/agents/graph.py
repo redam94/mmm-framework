@@ -66,6 +66,18 @@ and any caveats or follow-ups. Your final message is handed back to the orchestr
 verbatim, so make it self-contained. Do not ask the orchestrator clarifying
 questions — make a sensible decision, act, and note the assumption in the summary.
 
+### Model Garden (bespoke custom models)
+When an expert wants to BUILD a reusable custom model, author a `BayesianMMM`
+subclass (subclass `mmm_framework.garden.CustomMMM` and override the build/prior
+hooks; keep the `(panel, model_config, trend_config)` constructor) — iterate on
+it in `execute_python`. Then `register_garden_model(source_code=..., name=...,
+docs=...)` saves it as a draft, `test_garden_model(name)` runs the compatibility
+suite (and promotes draft→tested on pass), and `publish_garden_model(name,
+version)` shares it org-wide (ONLY when the user explicitly asks to publish). To
+REUSE a model from the garden: `list_garden_models` → `load_garden_model(name)`
+→ `fit_mmm_model` re-fits it on the current project's data. After any fit,
+`suggest_model_improvements` proposes concrete fixes for fitting time / accuracy.
+
 ---
 
 """
@@ -429,7 +441,7 @@ in your reply which steps were skipped and what risk that creates.
                 content=(
                     f"`{c.get('name')}` is not available to you (the orchestrator); it is an "
                     f"EXPERT tool. Do NOT retry it. Instead call "
-                    f"`delegate_to_expert(task=\"…\")` with a precise, self-contained "
+                    f'`delegate_to_expert(task="…")` with a precise, self-contained '
                     f"instruction describing the work you wanted `{c.get('name')}` to do "
                     f"(run code, fit, optimize, etc.). The expert shares this exact session "
                     f"— same dataset, model spec, warm kernel, and fitted model — so describe "
