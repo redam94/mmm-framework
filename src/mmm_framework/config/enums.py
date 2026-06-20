@@ -108,6 +108,27 @@ class InferenceMethod(str, Enum):
     FREQUENTIST_CVXPY = "frequentist_cvxpy"
 
 
+class FitMethod(str, Enum):
+    """How the posterior is obtained at fit time.
+
+    ``NUTS`` is full MCMC (the default, the only one suitable for final
+    inference). The remaining methods are *approximate* and exist to fit a
+    model in seconds so you can spot problems — bad priors, broken geometry,
+    pathological saturation/adstock — before paying for a full sample. Treat
+    their uncertainty as unreliable.
+    """
+
+    NUTS = "nuts"
+    MAP = "map"
+    ADVI = "advi"
+    FULLRANK_ADVI = "fullrank_advi"
+    PATHFINDER = "pathfinder"
+
+    @property
+    def is_approximate(self) -> bool:
+        return self is not FitMethod.NUTS
+
+
 class ModelSpecification(str, Enum):
     """Model functional form."""
 

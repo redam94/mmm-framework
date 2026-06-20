@@ -2,7 +2,7 @@ import json
 import os
 from typing import Literal
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
@@ -404,8 +404,61 @@ in your reply which steps were skipped and what risk that creates.
     # Build the graph
     workflow = StateGraph(AgentState)
 
+    # The orchestrator runs a fast/weak model that sometimes ignores the
+    # "delegate, don't call heavy tools" instruction and calls an expert-only
+    # tool directly (e.g. `execute_python`). The stock ToolNode then answers with
+    # a generic "not a valid tool, try one of [60 names]" list, which a weak
+    # model flails against. Wrap it so an out-of-toolset call gets a crisp,
+    # corrective ToolMessage that names `delegate_to_expert` as the fix.
+    _stock_tool_node = ToolNode(bound_tools)
+    _valid_tool_names = {getattr(t, "name", None) for t in bound_tools}
+
+    def tools_node(state: AgentState):
+        if role != "orchestrator":
+            return _stock_tool_node.invoke(state)
+        last = state["messages"][-1]
+        calls = list(getattr(last, "tool_calls", None) or [])
+        invalid = [c for c in calls if c.get("name") not in _valid_tool_names]
+        if not invalid:
+            return _stock_tool_node.invoke(state)
+
+        corrections = [
+            ToolMessage(
+                tool_call_id=c.get("id", ""),
+                name=c.get("name", "unknown"),
+                content=(
+                    f"`{c.get('name')}` is not available to you (the orchestrator); it is an "
+                    f"EXPERT tool. Do NOT retry it. Instead call "
+                    f"`delegate_to_expert(task=\"…\")` with a precise, self-contained "
+                    f"instruction describing the work you wanted `{c.get('name')}` to do "
+                    f"(run code, fit, optimize, etc.). The expert shares this exact session "
+                    f"— same dataset, model spec, warm kernel, and fitted model — so describe "
+                    f"the task, don't pass data."
+                ),
+            )
+            for c in invalid
+        ]
+
+        valid = [c for c in calls if c.get("name") in _valid_tool_names]
+        if not valid:
+            return {"messages": corrections}
+
+        # Mixed batch: run the valid calls through the stock node on a shimmed
+        # message (so it never sees the invalid ones), then append corrections so
+        # every original tool_call_id is answered exactly once.
+        try:
+            shim = last.model_copy(update={"tool_calls": valid})
+            sub_state = {**state, "messages": state["messages"][:-1] + [shim]}
+            result = _stock_tool_node.invoke(sub_state)
+            result_msgs = result["messages"] if isinstance(result, dict) else result
+            return {"messages": list(result_msgs) + corrections}
+        except Exception:
+            # Never break the happy path: fall back to the stock node, which
+            # still answers every call (with its generic error for invalid ones).
+            return _stock_tool_node.invoke(state)
+
     workflow.add_node("agent", agent_node)
-    workflow.add_node("tools", ToolNode(bound_tools))
+    workflow.add_node("tools", tools_node)
 
     workflow.add_edge(START, "agent")
     workflow.add_conditional_edges("agent", should_continue)

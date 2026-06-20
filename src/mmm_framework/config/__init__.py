@@ -25,6 +25,7 @@ from .enums import (
     AllocationMethod,
     CausalControlRole,
     DimensionType,
+    FitMethod,
     InferenceMethod,
     ModelSpecification,
     PriorType,
@@ -67,6 +68,7 @@ __all__ = [
     "SaturationType",
     "PriorType",
     "AllocationMethod",
+    "FitMethod",
     "InferenceMethod",
     "ModelSpecification",
     # Prior / transform configs

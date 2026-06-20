@@ -336,6 +336,14 @@ export function ModelSwitcher({ theme = 'light' }: ModelSwitcherProps) {
             ? getStoredKeyForProvider(metaFor(expert.provider)!.ui!) || ''
             : '')
         : null;
+    // Mirror the chat-tier guard: an expert override that selects a key-based
+    // provider must carry a key, otherwise expertHeaders() silently omits
+    // X-Expert-Api-Key and the backend builds the expert LLM with no key.
+    if (!serverVertexLocked && xModel && xNeeds === 'key' && !xKey) {
+      setSaving(false);
+      setError('The expert provider needs an API key.');
+      return;
+    }
     setExpert({
       model: xModel || null,
       provider: serverVertexLocked ? null : xModel ? expert.provider : null,

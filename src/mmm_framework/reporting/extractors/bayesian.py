@@ -2198,8 +2198,6 @@ class BayesianMMMExtractor(
 
         This is used when sample_prior_predictive wasn't called during fitting.
         """
-        import pymc as pm
-
         prior_samples = {}
 
         try:
@@ -2211,10 +2209,10 @@ class BayesianMMMExtractor(
                 return {}
 
             # Sample from prior
+            from ...utils import arviz_compat
+
             with model:
-                prior_trace = pm.sample_prior_predictive(
-                    samples=n_samples, random_seed=42
-                )
+                prior_trace = arviz_compat.sample_prior_predictive(n_samples, 42)
 
             if hasattr(prior_trace, "prior"):
                 prior_data = prior_trace.prior

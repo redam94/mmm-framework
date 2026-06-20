@@ -431,6 +431,9 @@ def build_and_fit(spec: dict, dataset_path: str):
     tune = int(inf.get("tune", 1000))
     target_accept = float(inf.get("target_accept", 0.85))
     random_seed = int(inf.get("random_seed", 42))
+    # Approximate methods (map/advi/fullrank_advi/pathfinder) fit in seconds for
+    # quick model checks; "nuts" (default) is full MCMC for real inference.
+    method = str(inf.get("method", "nuts")).lower()
     season = spec.get("seasonality", {})
     yearly = int(season.get("yearly", 0))
     monthly = int(season.get("monthly", 0))
@@ -438,15 +441,24 @@ def build_and_fit(spec: dict, dataset_path: str):
     trend_type = _canonical_trend_type(spec.get("trend", {}))
 
     # 4. Fit
-    results = mmm.fit(random_seed=random_seed)
+    results = mmm.fit(method=method, random_seed=random_seed)
 
     # 5. Summary
-    summary = (
-        f"Model fitted successfully! "
-        f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
-        f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}, "
-        f"Inference: {chains} chains × {draws} draws."
-    )
+    if getattr(results, "approximate", False):
+        summary = (
+            f"Model fitted with the **{method}** approximate method (fast check — "
+            f"uncertainty is NOT calibrated; re-fit with NUTS before trusting "
+            f"intervals/decisions). "
+            f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
+            f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}."
+        )
+    else:
+        summary = (
+            f"Model fitted successfully! "
+            f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
+            f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}, "
+            f"Inference: {chains} chains × {draws} draws."
+        )
 
     # 6. Report (best-effort)
     report_path = "agent_mmm_report.html"
@@ -487,6 +499,7 @@ def build_and_fit(spec: dict, dataset_path: str):
         "trend": trend_type,
         "seasonality": {"yearly": yearly, "monthly": monthly, "weekly": weekly},
         "inference": {
+            "method": method,
             "chains": chains,
             "draws": draws,
             "tune": tune,

@@ -31,6 +31,11 @@ class MMMResults:
     diagnostics: dict = field(default_factory=dict)
     y_mean: float = 0.0
     y_std: float = 1.0
+    # Approximate fits (MAP / ADVI / Pathfinder) set this to True. The posterior
+    # is a fast approximation: convergence diagnostics (R-hat/ESS) do not apply
+    # and the uncertainty is not calibrated. Use for model checking, not for
+    # final inference. ``diagnostics["fit_method"]`` records which method ran.
+    approximate: bool = False
 
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""

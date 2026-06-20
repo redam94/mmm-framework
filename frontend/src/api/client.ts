@@ -167,7 +167,16 @@ export function getStoredKeyForProvider(provider: string): string | null {
   return getStoredProviderKeys()[provider] ?? null;
 }
 
+// Sentinel "keys" that mean "the server manages credentials" (LM Studio / Vertex
+// / a server-side env key). They must NEVER enter a per-provider bucket: an
+// LM Studio chat model is often namespaced like `google/gemma-…`, so
+// getProviderForModel() maps it to the `google` bucket — writing the sentinel
+// there would clobber a real Gemini key, which the server then strips as a
+// sentinel, leaving the expert tier keyless.
+const _SENTINEL_PROVIDER_KEYS = new Set(['', 'server-managed', '__server_managed__']);
+
 export function setStoredKeyForProvider(provider: string, key: string): void {
+  if (!key || _SENTINEL_PROVIDER_KEYS.has(key.trim().toLowerCase())) return;
   const keys = getStoredProviderKeys();
   keys[provider] = key;
   localStorage.setItem(PROVIDER_KEYS_STORAGE_KEY, JSON.stringify(keys));

@@ -15,6 +15,7 @@ from .config import (
     PriorType,
     AllocationMethod,
     InferenceMethod,
+    FitMethod,
     ModelSpecification,
     # Config classes
     PriorConfig,
@@ -153,6 +154,7 @@ __all__ = [
     "PriorType",
     "AllocationMethod",
     "InferenceMethod",
+    "FitMethod",
     "ModelSpecification",
     "TrendType",
     # Config classes

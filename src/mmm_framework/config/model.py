@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .enums import InferenceMethod, ModelSpecification, PriorType
+from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
 from .priors import PriorConfig
 
 
@@ -100,6 +100,12 @@ class ModelConfig(BaseModel):
     n_draws: int = 1000
     n_tune: int = 1000
     target_accept: float = 0.9
+
+    # Default fit method when ``fit()`` is called without an explicit ``method``.
+    # NUTS (full MCMC) is the default; the approximate methods (MAP / ADVI /
+    # full-rank ADVI / Pathfinder) trade calibrated uncertainty for speed and
+    # are meant for fast model checks, not final inference.
+    fit_method: FitMethod = FitMethod.NUTS
 
     # Hierarchical structure
     hierarchical: HierarchicalConfig = Field(default_factory=HierarchicalConfig)

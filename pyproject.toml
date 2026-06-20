@@ -52,6 +52,12 @@ gcp = [
     "db-dtypes>=1.2.0",
     "pyarrow>=14.0.0",
 ]
+# NOTE: Pathfinder VI (fit(method="pathfinder")) needs `pymc-extras` + `blackjax`.
+# It is intentionally NOT declared as an extra here: the current `pymc-extras`
+# requires pymc>=6, so locking it would force-upgrade the whole core stack
+# (pymc/pytensor/arviz) for every install. Pathfinder is lazy-imported with a
+# clear install hint; install it manually if you want it (and accept the pymc
+# upgrade in that environment). MAP + ADVI need no extra deps.
 
 [dependency-groups]
 dev = [

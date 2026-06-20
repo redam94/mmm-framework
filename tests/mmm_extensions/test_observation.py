@@ -739,7 +739,7 @@ class TestObservationIntegration:
             )
 
             # Should be able to sample from prior
-            prior = pm.sample_prior_predictive(samples=10, random_seed=42)
+            prior = pm.sample_prior_predictive(draws=10, random_seed=42)
             assert "y_sigma" in prior.prior
 
     def test_multivariate_with_prior_sampling(self, sample_multivariate_data):
@@ -756,7 +756,7 @@ class TestObservationIntegration:
             )
 
             # Should be able to sample from prior
-            prior = pm.sample_prior_predictive(samples=10, random_seed=42)
+            prior = pm.sample_prior_predictive(draws=10, random_seed=42)
             assert "y_correlation" in prior.prior
 
     def test_survey_observation_with_varying_sample_sizes(self):

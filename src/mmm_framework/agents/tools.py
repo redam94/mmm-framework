@@ -831,6 +831,7 @@ def configure_model(
 def fit_mmm_model(
     state: Annotated[dict, InjectedState],
     dataset_path: str | None = None,
+    method: str | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
@@ -845,6 +846,15 @@ def fit_mmm_model(
     Args:
         dataset_path: Optional override for the dataset path. Defaults to the
             dataset already loaded into the session state.
+        method: Fit method. Defaults to ``"nuts"`` (full MCMC — use this for
+            real inference). Pass an *approximate* method to fit in seconds when
+            you just want to check whether a model is sensible (catch bad priors,
+            divergent geometry, broken saturation/adstock) before paying for a
+            full sample: ``"map"`` (fastest, point estimate), ``"advi"`` /
+            ``"fullrank_advi"`` (variational), or ``"pathfinder"`` (needs the
+            optional ``pymc_extras`` package). Approximate fits have UNCALIBRATED
+            uncertainty — always re-fit with NUTS before reporting intervals or
+            making spend decisions.
 
     Returns:
         A Command that updates the model_status and fit_results_summary in the state.
@@ -869,6 +879,8 @@ def fit_mmm_model(
             raise ValueError("No dataset is loaded. Load a dataset before fitting.")
         spec = copy.deepcopy(dict(spec))
         _normalize_spec_vars(spec)  # accept bare-string channel/control lists
+        if method is not None:
+            spec.setdefault("inference", {})["method"] = str(method).lower()
         info = _KERNELS.get_or_spawn(get_current_thread()).fit(spec, path)
     except Exception as e:
         info = {"error": f"Error fitting model: {str(e)}"}
@@ -4997,15 +5009,31 @@ def delegate_to_expert(
         "context_summary_count": 0,
     }
 
+    # Stream the expert (values mode) so we keep the LAST full state even if it
+    # blows the step budget — that lets us salvage partial progress and a useful
+    # steer instead of discarding everything as a bare "delegation failed".
+    from langgraph.errors import GraphRecursionError
+
+    last_state: dict | None = None
+    hit_limit = False
     try:
         expert_graph = _get_expert_graph(expert_override)
-        result = expert_graph.invoke(
+        for chunk in expert_graph.stream(
             init_state,
             config={
                 "configurable": {"thread_id": thread_id},
                 "recursion_limit": recursion_limit,
             },
+            stream_mode="values",
+        ):
+            last_state = chunk
+    except GraphRecursionError:
+        logger.warning(
+            "delegate_to_expert hit recursion limit (%s) for thread %s",
+            recursion_limit,
+            thread_id,
         )
+        hit_limit = True
     except Exception as e:
         logger.exception("delegate_to_expert failed for thread %s", thread_id)
         err = f"Expert delegation failed: {e}"
@@ -5017,13 +5045,24 @@ def delegate_to_expert(
             }
         )
 
+    result = last_state or {}
     summary = _final_message_text(result.get("messages") or [])
-    if not summary:
+    if hit_limit:
+        note = (
+            "⚠️ The expert reached its step limit before producing a final answer "
+            "(it most likely looped on a tool). Hand it a narrower, single-step "
+            "task, or call the dedicated tool instead of free-form `execute_python` "
+            "— e.g. `prior_predictive_check` for a prior predictive trace, "
+            "`fit_mmm_model` to fit, `get_model_diagnostics` for R-hat/ESS."
+        )
+        summary = f"{note}\n\nPartial progress:\n{summary}".strip() if summary else note
+    elif not summary:
         summary = "The expert completed the task but returned no summary text."
 
-    update: dict[str, Any] = {
-        "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
-    }
+    msg_kwargs: dict[str, Any] = {"content": summary, "tool_call_id": tool_call_id}
+    if hit_limit:
+        msg_kwargs["status"] = "error"
+    update: dict[str, Any] = {"messages": [ToolMessage(**msg_kwargs)]}
     # Fold back the session-level state the expert may have mutated. model_spec is
     # a full dict (not a patch envelope), so _merge_spec replaces it; dashboard
     # plot/table refs union via _merge_dashboard.

@@ -39,6 +39,7 @@ from ..config import (
     AdstockConfig,
     AdstockType,
     CausalControlRole,
+    FitMethod,
     ModelConfig,
     PriorConfig,
     PriorType,
@@ -46,7 +47,7 @@ from ..config import (
     SaturationType,
 )
 from ..data_loader import PanelDataset
-from ..utils import compute_hdi_bounds
+from ..utils import arviz_compat, compute_hdi_bounds
 from ..transforms import (
     adstock_weights,
     geometric_adstock_2d,
@@ -72,6 +73,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from ..calibration.likelihood import ExperimentMeasurement
+
 
 # Map an AdstockType to the kernel name used by the parametric adstock kernels.
 _ADSTOCK_KIND = {
@@ -1737,9 +1739,7 @@ class BayesianMMM:
     ) -> az.InferenceData:
         """Sample from the prior distribution of the model."""
         with self.model:
-            prior_trace = pm.sample_prior_predictive(
-                samples=samples, random_seed=random_seed
-            )
+            prior_trace = arviz_compat.sample_prior_predictive(samples, random_seed)
         return prior_trace
 
     def fit(
@@ -1749,68 +1749,193 @@ class BayesianMMM:
         chains: int | None = None,
         target_accept: float | None = None,
         random_seed: int | None = None,
+        method: FitMethod | str | None = None,
         **kwargs,
     ) -> MMMResults:
         """
-        Fit the model using MCMC.
+        Fit the model.
+
+        By default this runs full NUTS MCMC. Pass ``method`` to use an
+        *approximate* algorithm instead — these fit in seconds and are intended
+        for quickly checking a model (bad priors, broken geometry, pathological
+        saturation/adstock) before committing to a full sample. Their
+        uncertainty is **not** calibrated and convergence diagnostics
+        (R-hat / ESS) do not apply, so do not use them for final inference.
 
         Args:
-            draws: Number of posterior draws per chain. Default from config.
-            tune: Number of tuning samples. Default from config.
-            chains: Number of MCMC chains. Default from config.
+            draws: Posterior draws per chain (NUTS) or number of approximate
+                draws to take from the fitted approximation. Default from config.
+            tune: Number of tuning samples (NUTS only). Default from config.
+            chains: Number of MCMC chains (NUTS only). Default from config.
             target_accept: Target acceptance rate for NUTS. Default 0.9.
             random_seed: Random seed for reproducibility.
-            **kwargs: Additional arguments passed to pm.sample().
+            method: Fit method — ``"nuts"`` (default, full MCMC), ``"map"``
+                (maximum a posteriori point), ``"advi"`` / ``"fullrank_advi"``
+                (variational inference), or ``"pathfinder"`` (requires the
+                optional ``pymc_extras`` package). Defaults to
+                ``model_config.fit_method``.
+            **kwargs: Additional arguments passed to the underlying sampler
+                (``pm.sample`` for NUTS).
 
         Returns:
-            Fitted model results with diagnostics.
+            Fitted model results with diagnostics. For approximate methods
+            ``MMMResults.approximate`` is ``True``.
         """
-        draws = draws or self.model_config.n_draws
-        tune = tune or self.model_config.n_tune
-        chains = chains or self.model_config.n_chains
-        target_accept = target_accept or 0.9
+        method = (
+            FitMethod(method) if method is not None else self.model_config.fit_method
+        )
+
         random_seed = random_seed or self.model_config.optim_seed
 
-        nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
+        if method is FitMethod.NUTS:
+            draws = draws or self.model_config.n_draws
+            tune = tune or self.model_config.n_tune
+            chains = chains or self.model_config.n_chains
+            target_accept = target_accept or 0.9
 
-        prior = self.get_prior(samples=1000, random_seed=random_seed)
+            nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
 
-        with self.model:
-            trace: az.InferenceData = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                nuts_sampler=nuts_sampler,
-                init="adapt_diag",
-                **kwargs,
+            prior = self.get_prior(samples=1000, random_seed=random_seed)
+
+            with self.model:
+                trace: az.InferenceData = pm.sample(
+                    draws=draws,
+                    tune=tune,
+                    chains=chains,
+                    target_accept=target_accept,
+                    random_seed=random_seed,
+                    nuts_sampler=nuts_sampler,
+                    init="adapt_diag",
+                    **kwargs,
+                )
+            trace = arviz_compat.attach_prior(trace, prior)
+
+            self._trace = trace
+
+            try:
+                div_count = int(trace.sample_stats.diverging.sum().values)
+            except Exception:
+                div_count = 0
+
+            diagnostics = {
+                "fit_method": method.value,
+                "approximate": False,
+                "divergences": div_count,
+                "rhat_max": float(arviz_compat.dataset_extremum(az.rhat(trace), "max")),
+                "ess_bulk_min": float(
+                    arviz_compat.dataset_extremum(az.ess(trace, method="bulk"), "min")
+                ),
+            }
+
+            return MMMResults(
+                trace=trace,
+                model=self.model,
+                panel=self.panel,
+                diagnostics=diagnostics,
+                y_mean=self.y_mean,
+                y_std=self.y_std,
+                approximate=False,
             )
-        trace.extend(prior)
+
+        # ---- Approximate inference (MAP / ADVI / full-rank ADVI / Pathfinder) ----
+        draws = draws or self.model_config.n_draws
+        trace, extra_diagnostics = self._fit_approx(
+            method=method,
+            draws=draws,
+            random_seed=random_seed,
+            **kwargs,
+        )
+
+        # Attach the prior so prior-vs-posterior tooling still works.
+        try:
+            prior = self.get_prior(samples=1000, random_seed=random_seed)
+            trace = arviz_compat.attach_prior(trace, prior)
+        except Exception:  # noqa: BLE001 - prior is best-effort for approx fits
+            pass
 
         self._trace = trace
 
-        try:
-            div_count = int(trace.sample_stats.diverging.sum().values)
-        except Exception:
-            div_count = 0
-
         diagnostics = {
-            "divergences": div_count,
-            "rhat_max": float(az.rhat(trace).max().to_array().max()),
-            "ess_bulk_min": float(az.ess(trace, method="bulk").min().to_array().min()),
+            "fit_method": method.value,
+            "approximate": True,
+            # R-hat / ESS are undefined for a single-path approximation.
+            "rhat_max": None,
+            "ess_bulk_min": None,
         }
+        diagnostics.update(extra_diagnostics)
 
-        results = MMMResults(
+        return MMMResults(
             trace=trace,
             model=self.model,
             panel=self.panel,
             diagnostics=diagnostics,
             y_mean=self.y_mean,
             y_std=self.y_std,
+            approximate=True,
         )
 
-        return results
+    def _fit_approx(
+        self,
+        method: FitMethod,
+        draws: int,
+        random_seed: int | None,
+        **kwargs,
+    ) -> tuple[az.InferenceData, dict]:
+        """Run an approximate fit and return ``(idata, extra_diagnostics)``.
+
+        The returned ``InferenceData`` always carries a ``posterior`` group with
+        ``chain``/``draw`` dims and the model's deterministics, so it is a
+        drop-in for the NUTS trace everywhere downstream (summaries, ArviZ,
+        ``predict``, reporting).
+        """
+        if method is FitMethod.MAP:
+            with self.model:
+                point = pm.find_MAP(seed=random_seed, **kwargs)
+            return arviz_compat.point_to_idata(point), {"map": True}
+
+        if method in (FitMethod.ADVI, FitMethod.FULLRANK_ADVI):
+            advi_method = "advi" if method is FitMethod.ADVI else "fullrank_advi"
+            # n = number of optimization iterations; allow override via kwargs.
+            n_iter = int(kwargs.pop("n", 30000))
+            with self.model:
+                approx = pm.fit(
+                    n=n_iter,
+                    method=advi_method,
+                    random_seed=random_seed,
+                    progressbar=kwargs.pop("progressbar", False),
+                    **kwargs,
+                )
+                idata = approx.sample(draws)
+            final_elbo = None
+            try:
+                final_elbo = float(-approx.hist[-1])
+            except Exception:  # noqa: BLE001
+                pass
+            return idata, {"vi_iterations": n_iter, "elbo": final_elbo}
+
+        if method is FitMethod.PATHFINDER:
+            try:
+                import pymc_extras as pmx
+            except ImportError as exc:  # pragma: no cover - optional dep
+                raise ImportError(
+                    "Pathfinder requires the optional 'pymc_extras' package "
+                    "(and 'blackjax' for the fast path), which is not a declared "
+                    "dependency because it currently pins pymc>=6 and would "
+                    "force-upgrade the core stack. Install it manually with "
+                    "`pip install pymc-extras blackjax` (note: this upgrades "
+                    "pymc/pytensor/arviz in that environment). MAP and ADVI "
+                    "need no extra dependencies."
+                ) from exc
+            with self.model:
+                idata = pmx.fit(
+                    method="pathfinder",
+                    num_draws=draws,
+                    random_seed=random_seed,
+                    **kwargs,
+                )
+            return idata, {"pathfinder": True}
+
+        raise ValueError(f"Unsupported approximate fit method: {method}")
 
     def predict(
         self,
@@ -2318,7 +2443,7 @@ class BayesianMMM:
     ) -> az.InferenceData:
         """Sample from prior predictive distribution."""
         with self.model:
-            return pm.sample_prior_predictive(samples=samples, random_seed=random_seed)
+            return arviz_compat.sample_prior_predictive(samples, random_seed)
 
     def compute_parameter_learning(
         self,

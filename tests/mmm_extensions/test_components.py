@@ -301,7 +301,7 @@ class TestCreateAdstockPrior:
             )
 
             # Sample to check it works
-            prior = pm.sample_prior_predictive(samples=10)
+            prior = pm.sample_prior_predictive(draws=10)
             vals = prior.prior["alpha_digital"].values.flatten()
 
             assert all(vals >= 0) and all(vals <= 1)
@@ -363,7 +363,7 @@ class TestCreateEffectPrior:
         with pm.Model() as model:
             beta = create_effect_prior("beta_media", constrained="positive", sigma=0.5)
 
-            prior = pm.sample_prior_predictive(samples=100)
+            prior = pm.sample_prior_predictive(draws=100)
             vals = prior.prior["beta_media"].values.flatten()
 
             assert all(vals >= 0)
@@ -373,7 +373,7 @@ class TestCreateEffectPrior:
         with pm.Model() as model:
             beta = create_effect_prior("beta_cannib", constrained="negative", sigma=0.3)
             pm.Deterministic("neg_beta_cannib", beta)
-            prior = pm.sample_prior_predictive(samples=100)
+            prior = pm.sample_prior_predictive(draws=100)
             # The variable name might be different due to negation
             # Check that all sampled values are <= 0
             for var_name in prior.prior.data_vars:
@@ -390,7 +390,7 @@ class TestCreateEffectPrior:
             )
 
             # Should have shape matching dims
-            prior = pm.sample_prior_predictive(samples=10)
+            prior = pm.sample_prior_predictive(draws=10)
             assert prior.prior["beta_media"].shape[-1] == 2
 
 

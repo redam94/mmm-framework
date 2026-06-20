@@ -438,10 +438,10 @@ class BaseExtendedMMM:
         self, samples: int = 500, random_seed: int | None = None
     ) -> az.InferenceData:
         """Sample from the prior predictive distribution."""
-        import pymc as pm
+        from ...utils import arviz_compat
 
         with self.model:
-            return pm.sample_prior_predictive(samples=samples, random_seed=random_seed)
+            return arviz_compat.sample_prior_predictive(samples, random_seed)
 
     def compute_parameter_learning(
         self,
