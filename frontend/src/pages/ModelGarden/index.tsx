@@ -1,6 +1,23 @@
-import { useMemo, useState } from 'react';
-import Editor from '@monaco-editor/react';
-import { FlaskConical, Loader2, Plus, Sprout, Trash2, UploadCloud } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import Editor, { type OnMount } from '@monaco-editor/react';
+import {
+  AlignLeft,
+  CircleCheck,
+  FlaskConical,
+  Loader2,
+  Map as MapIcon,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Sparkles,
+  Sprout,
+  Trash2,
+  UploadCloud,
+  WrapText,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import {
   Button,
   Card,
@@ -22,6 +39,8 @@ import {
   useRegisterGardenModel,
 } from '../../api/hooks';
 import type { CompatTier, GardenModel } from '../../api/services/modelGardenService';
+import { CopilotPanel } from '../../components/modelGarden/CopilotPanel';
+import { copilotService, type LintProblem } from '../../api/services/copilotService';
 
 const STARTER_TEMPLATE = `from mmm_framework.garden import CustomMMM
 
@@ -59,6 +78,158 @@ function errMessage(e: unknown): string {
   return any?.response?.data?.detail ?? any?.message ?? 'Something went wrong.';
 }
 
+// ── IDE: framework-aware autocomplete snippets ──────────────────────────────
+const GARDEN_SNIPPETS: { label: string; detail: string; doc: string; insert: string }[] = [
+  {
+    label: 'custommmm',
+    detail: 'CustomMMM subclass skeleton',
+    doc: 'Minimal garden model: subclass CustomMMM and override _build_model.',
+    insert: [
+      'from mmm_framework.garden import CustomMMM',
+      'import pymc as pm',
+      'import pytensor.tensor as pt',
+      '',
+      '',
+      'class ${1:MyMMM}(CustomMMM):',
+      '    """${2:What makes this model bespoke and when to use it.}"""',
+      '',
+      '    def _build_model(self) -> pm.Model:',
+      '        coords = self._build_coords()',
+      '        x_media = self._prepare_raw_media_for_model()',
+      '        with pm.Model(coords=coords) as model:',
+      '            $0',
+      '        return model',
+      '',
+      '',
+      'GARDEN_MODEL = ${1:MyMMM}',
+    ].join('\n'),
+  },
+  {
+    label: 'build_model',
+    detail: 'override _build_model (contract-complete)',
+    doc: 'A _build_model registering every deterministic the read-ops consume.',
+    insert: [
+      'def _build_model(self) -> pm.Model:',
+      '    coords = self._build_coords()',
+      '    x_media_norm = self._prepare_raw_media_for_model()',
+      '    n_obs = self.n_obs',
+      '    with pm.Model(coords=coords) as model:',
+      '        x_media = pm.Data("X_media_raw", x_media_norm, dims=("obs", "channel"))',
+      '        intercept = pm.Normal("intercept", mu=0.0, sigma=0.5)',
+      '        pm.Deterministic("intercept_component", intercept + pt.zeros(n_obs), dims="obs")',
+      '        contribs = []',
+      '        for c, ch in enumerate(self.channel_names):',
+      '            sat_kind, sat_params = self._build_channel_saturation(ch)',
+      '            x_sat = _apply_saturation_pt(x_media[:, c], sat_kind, sat_params)',
+      '            beta = pm.Gamma(f"beta_{ch}", mu=1.5, sigma=1.0)',
+      '            contribs.append(beta * x_sat)',
+      '        channels = pt.stack(contribs, axis=1)',
+      '        pm.Deterministic("channel_contributions", channels, dims=("obs", "channel"))',
+      '        media_total = channels.sum(axis=1)',
+      '        pm.Deterministic("media_total", media_total)',
+      '        sigma = pm.HalfNormal("sigma", sigma=0.5)',
+      '        y_obs = pm.Normal("y_obs", mu=intercept + media_total, sigma=sigma, observed=self.y, dims="obs")',
+      '        pm.Deterministic("y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs")',
+      '    return model',
+    ].join('\n'),
+  },
+  {
+    label: 'vectorized_adstock',
+    detail: 'geometric carryover WITHOUT pytensor.scan',
+    doc: 'Lower-triangular Toeplitz matmul: Sₜ = Σ ρ^(t-τ)·xₜ. Compiles instantly.',
+    insert: [
+      'import numpy as np',
+      '',
+      't = np.arange(n_obs)',
+      'lag = t[:, None] - t[None, :]',
+      'decay = pt.where(',
+      '    pt.as_tensor_variable(lag >= 0),',
+      '    ${1:rho} ** pt.as_tensor_variable(np.maximum(lag, 0)),',
+      '    0.0,',
+      ')',
+      '${2:carryover} = decay @ ${3:media_inflow}  # (n_obs, n_channel), no scan',
+    ].join('\n'),
+  },
+  {
+    label: 'deterministic_channels',
+    detail: 'register channel_contributions + media_total',
+    doc: 'The two deterministics ROI/decomposition reporting needs.',
+    insert: [
+      'pm.Deterministic("channel_contributions", ${1:channels}, dims=("obs", "channel"))',
+      'pm.Deterministic("media_total", ${1:channels}.sum(axis=1))',
+    ].join('\n'),
+  },
+  {
+    label: 'prior_normal',
+    detail: 'pm.Normal prior',
+    doc: 'Normal prior.',
+    insert: 'pm.Normal("${1:name}", mu=${2:0.0}, sigma=${3:1.0})',
+  },
+  {
+    label: 'prior_retention',
+    detail: 'pm.Beta carryover/retention prior',
+    doc: 'Beta(6, 2) ≈ mean 0.75 — a sticky carryover rate on (0, 1).',
+    insert: 'pm.Beta("${1:adstock_alpha_channel}", alpha=${2:6.0}, beta=${3:2.0})',
+  },
+];
+
+// Register framework completions once for the whole app lifetime.
+let gardenCompletionsRegistered = false;
+const registerGardenCompletions: OnMount = (_editor, monaco) => {
+  if (gardenCompletionsRegistered) return;
+  gardenCompletionsRegistered = true;
+  monaco.languages.registerCompletionItemProvider('python', {
+    provideCompletionItems(model, position) {
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn,
+      };
+      return {
+        suggestions: GARDEN_SNIPPETS.map((s) => ({
+          label: s.label,
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: s.insert,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          detail: s.detail,
+          documentation: s.doc,
+          range,
+        })),
+      };
+    },
+  });
+};
+
+function ToolButton({
+  active,
+  title,
+  disabled,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  title: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center rounded px-1.5 py-1 transition-colors disabled:opacity-40 ${
+        active ? 'bg-sage-100 text-sage-800' : 'text-ink-500 hover:bg-cream-100 hover:text-ink-800'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ModelGardenPage() {
   // Selection + editor state
   const [selName, setSelName] = useState<string | null>(null);
@@ -68,6 +239,16 @@ export function ModelGardenPage() {
   const [draftName, setDraftName] = useState('');
   const [draftDocs, setDraftDocs] = useState('');
   const [rightTab, setRightTab] = useState('compat');
+
+  // IDE + copilot state
+  const [fullscreen, setFullscreen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [wrap, setWrap] = useState(false);
+  const [minimap, setMinimap] = useState(false);
+  const [fontSize, setFontSize] = useState(13);
+  const [problems, setProblems] = useState<LintProblem[]>([]);
+  const [showProblems, setShowProblems] = useState(false);
+  const [ideBusy, setIdeBusy] = useState<null | 'lint' | 'format'>(null);
 
   // Data
   const { data: listData, isLoading: listLoading } = useGardenModels();
@@ -124,6 +305,64 @@ export function ModelGardenPage() {
     setDraftName(selName ?? '');
     setDraftDocs(detail?.docs ?? '');
     test.reset();
+  };
+
+  // Esc exits fullscreen.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
+
+  // Apply a copilot-proposed code block: drop into authoring (a new draft seeded
+  // from the current selection) if we were viewing a read-only version.
+  const applyCode = (newCode: string) => {
+    if (!authoring) {
+      setAuthoring(true);
+      setDraftName((p) => p || (selName ?? ''));
+      setDraftDocs((p) => p || (detail?.docs ?? ''));
+      test.reset();
+    }
+    setCode(newCode);
+  };
+
+  const runFormat = async () => {
+    if (!authoring || ideBusy) return;
+    setIdeBusy('format');
+    try {
+      const r = await copilotService.format(code);
+      if (r.formatted != null) {
+        setCode(r.formatted);
+        setProblems([]);
+        setShowProblems(false);
+      } else {
+        setProblems([{ severity: 'error', message: `Format failed: ${r.error ?? 'unknown error'}`, line: null }]);
+        setShowProblems(true);
+      }
+    } catch (e) {
+      setProblems([{ severity: 'error', message: errMessage(e), line: null }]);
+      setShowProblems(true);
+    } finally {
+      setIdeBusy(null);
+    }
+  };
+
+  const runLint = async () => {
+    if (ideBusy) return;
+    setIdeBusy('lint');
+    try {
+      const r = await copilotService.lint(editorValue);
+      setProblems(r.problems ?? []);
+      setShowProblems(true);
+    } catch (e) {
+      setProblems([{ severity: 'error', message: errMessage(e), line: null }]);
+      setShowProblems(true);
+    } finally {
+      setIdeBusy(null);
+    }
   };
 
   // The compat report shown on the right: a live test job (if running) else the
@@ -240,10 +479,16 @@ export function ModelGardenPage() {
           )}
         </Card>
 
-        {/* ── Center: editor ── */}
-        <div className="flex flex-col min-h-0">
+        {/* ── Center: editor + IDE tools ── */}
+        <div
+          className={
+            fullscreen
+              ? 'fixed inset-0 z-40 flex flex-col gap-2 bg-cream-50 p-4'
+              : 'flex flex-col min-h-0'
+          }
+        >
           {authoring && (
-            <div className="mb-2 grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-2">
               <input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
@@ -259,24 +504,107 @@ export function ModelGardenPage() {
             </div>
           )}
 
-          <div className="overflow-hidden rounded-md border border-line-200 bg-white">
-            <Editor
-              height="58vh"
-              defaultLanguage="python"
-              language="python"
-              value={editorValue}
-              onChange={(v) => authoring && setCode(v ?? '')}
-              theme="vs"
-              options={{
-                readOnly: !authoring,
-                minimap: { enabled: false },
-                fontSize: 13,
-                scrollBeyondLastLine: false,
-                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                renderLineHighlight: 'line',
-                automaticLayout: true,
-              }}
-            />
+          {/* IDE toolbar */}
+          <div className="flex items-center gap-0.5 rounded-md border border-line-200 bg-white px-1.5 py-1">
+            <ToolButton title="Format (ruff)" disabled={!authoring || ideBusy !== null} onClick={runFormat}>
+              {ideBusy === 'format' ? <Loader2 size={15} className="animate-spin" /> : <AlignLeft size={15} />}
+            </ToolButton>
+            <ToolButton title="Validate (Problems)" disabled={ideBusy !== null} onClick={runLint}>
+              {ideBusy === 'lint' ? <Loader2 size={15} className="animate-spin" /> : <CircleCheck size={15} />}
+            </ToolButton>
+            <span className="mx-1 h-4 w-px bg-line-200" />
+            <ToolButton title="Word wrap" active={wrap} onClick={() => setWrap((v) => !v)}>
+              <WrapText size={15} />
+            </ToolButton>
+            <ToolButton title="Minimap" active={minimap} onClick={() => setMinimap((v) => !v)}>
+              <MapIcon size={15} />
+            </ToolButton>
+            <ToolButton title="Smaller font" onClick={() => setFontSize((s) => Math.max(10, s - 1))}>
+              <ZoomOut size={15} />
+            </ToolButton>
+            <ToolButton title="Larger font" onClick={() => setFontSize((s) => Math.min(22, s + 1))}>
+              <ZoomIn size={15} />
+            </ToolButton>
+            <div className="ml-auto flex items-center gap-0.5">
+              <ToolButton title="Modeling copilot" active={copilotOpen} onClick={() => setCopilotOpen((v) => !v)}>
+                <Sparkles size={15} className="mr-1" />
+                <span className="text-xs font-medium">Copilot</span>
+              </ToolButton>
+              <ToolButton
+                title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+                onClick={() => setFullscreen((v) => !v)}
+              >
+                {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              </ToolButton>
+            </div>
+          </div>
+
+          {/* Problems */}
+          {showProblems && problems.length > 0 && (
+            <div className="rounded-md border border-line-200 bg-white px-3 py-2 text-xs">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="font-semibold uppercase tracking-wide text-ink-400">Problems</span>
+                <button onClick={() => setShowProblems(false)} className="text-ink-300 hover:text-ink-600">
+                  <X size={13} />
+                </button>
+              </div>
+              <ul className="max-h-28 space-y-1 overflow-y-auto">
+                {problems.map((p, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span
+                      className={
+                        p.severity === 'error'
+                          ? 'font-medium text-rust-700'
+                          : p.severity === 'warning'
+                            ? 'font-medium text-gold-700'
+                            : 'font-medium text-sage-700'
+                      }
+                    >
+                      {p.severity}
+                    </span>
+                    <span className="text-ink-600">
+                      {p.line ? `L${p.line}: ` : ''}
+                      {p.message}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Editor + copilot */}
+          <div className={`flex gap-2 ${fullscreen ? 'flex-1 min-h-0' : 'h-[58vh]'}`}>
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-line-200 bg-white">
+              <Editor
+                height="100%"
+                defaultLanguage="python"
+                language="python"
+                value={editorValue}
+                onChange={(v) => authoring && setCode(v ?? '')}
+                onMount={registerGardenCompletions}
+                theme="vs"
+                options={{
+                  readOnly: !authoring,
+                  minimap: { enabled: minimap },
+                  fontSize,
+                  wordWrap: wrap ? 'on' : 'off',
+                  scrollBeyondLastLine: false,
+                  fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                  renderLineHighlight: 'line',
+                  automaticLayout: true,
+                }}
+              />
+            </div>
+            {copilotOpen && (
+              <div className="w-[23rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white">
+                <CopilotPanel
+                  sourceCode={editorValue}
+                  onApplyCode={applyCode}
+                  onClose={() => setCopilotOpen(false)}
+                  className="h-full"
+                />
+              </div>
+            )}
           </div>
 
           {/* Action bar */}

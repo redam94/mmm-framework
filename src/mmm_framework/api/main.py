@@ -2747,6 +2747,25 @@ class GardenRegisterRequest(BaseModel):
     recommended_fit: dict | None = None
 
 
+class GardenSourceRequest(BaseModel):
+    """A bare source payload for the editor's IDE tools (lint / format)."""
+
+    source_code: str = ""
+
+
+class CopilotTurn(BaseModel):
+    role: str = "user"  # "user" | "assistant"
+    content: str = ""
+
+
+class GardenCopilotRequest(BaseModel):
+    """A modeling-copilot turn: the running chat plus the current editor source
+    so the assistant grounds its answer in the user's actual code."""
+
+    messages: list[CopilotTurn] = []
+    source_code: str = ""
+
+
 def _garden_org(principal: AuthContext) -> str:
     """Org that scopes garden visibility — matches the agent-side resolution
     (``sessions_store.resolve_org_id``) so both surfaces see the same models."""
@@ -2781,6 +2800,110 @@ async def register_garden_model_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return JSONResponse(status_code=201, content=safe_json_dumps_load(row))
+
+
+@app.post("/model-garden/lint")
+async def garden_lint_endpoint(body: GardenSourceRequest, principal: PrincipalDep):
+    """Static (AST-only, never executed) "Problems" check for the Atelier editor:
+    syntax, the garden class, and the contract conventions. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Linting requires an analyst+ role."
+        )
+    from mmm_framework.agents.garden_authoring import static_authoring_lint
+
+    class_name, problems = static_authoring_lint(body.source_code)
+    return JSONResponse(
+        content={
+            "class_name": class_name,
+            "problems": problems,
+            "ok": not any(p["severity"] == "error" for p in problems),
+        }
+    )
+
+
+@app.post("/model-garden/format")
+async def garden_format_endpoint(body: GardenSourceRequest, principal: PrincipalDep):
+    """Format the editor source (ruff, black fallback) for the IDE *Format*
+    button. Returns the formatted source or a one-line error. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Formatting requires an analyst+ role."
+        )
+    from mmm_framework.agents.garden_authoring import format_source
+
+    formatted, error = format_source(body.source_code)
+    return JSONResponse(content={"formatted": formatted, "error": error})
+
+
+@app.post("/model-garden/copilot", dependencies=[_rl_chat])
+async def garden_copilot_endpoint(
+    body: GardenCopilotRequest,
+    raw_request: Request,
+    x_api_key: str | None = Header(None),
+    x_model_name: str | None = Header(None),
+    x_base_url: str | None = Header(None),
+    x_provider: str | None = Header(None),
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    """Stream a Bayesian-modeling copilot answer (SSE) for the Atelier editor.
+
+    Stateless: the client sends the running chat + the current editor source each
+    turn; the server grounds a focused expert system prompt (the oracle contract
+    + PyMC/MMM authoring knowledge) on that source and streams the model's tokens
+    using the SAME ``data: {...}\\n\\n`` / ``[DONE]`` framing as ``/chat``.
+    Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="The modeling copilot requires an analyst+ role."
+        )
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    from mmm_framework.agents.garden_authoring import build_copilot_system_prompt
+
+    system_prompt = build_copilot_system_prompt(body.source_code)
+    lc_messages: list = [SystemMessage(content=system_prompt)]
+    # Keep the last dozen turns; drop empties.
+    for turn in [t for t in body.messages if (t.content or "").strip()][-12:]:
+        if turn.role == "assistant":
+            lc_messages.append(AIMessage(content=turn.content))
+        else:
+            lc_messages.append(HumanMessage(content=turn.content))
+    if len(lc_messages) == 1:
+        raise HTTPException(status_code=400, detail="No message to answer.")
+
+    async def event_generator():
+        try:
+            llm = get_llm(x_model_name, x_api_key, x_base_url, x_provider)
+            async for chunk in llm.astream(lc_messages):
+                if await raw_request.is_disconnected():
+                    break
+                text = _copilot_chunk_text(getattr(chunk, "content", ""))
+                if text:
+                    payload = {"type": "token", "content": text}
+                    yield f"data: {safe_json_dumps(payload)}\n\n"
+        except Exception as e:  # noqa: BLE001 — surface as an in-stream error event
+            logger.exception("garden copilot stream failed")
+            yield f"data: {safe_json_dumps({'type': 'error', 'content': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+def _copilot_chunk_text(content: Any) -> str:
+    """Flatten a streamed chunk's content to text — handles a plain string or
+    Anthropic-style lists of content blocks (``{"type": "text", "text": ...}``)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        out = []
+        for block in content:
+            if isinstance(block, str):
+                out.append(block)
+            elif isinstance(block, dict):
+                out.append(block.get("text") or block.get("content") or "")
+        return "".join(out)
+    return ""
 
 
 @app.get("/model-garden")
