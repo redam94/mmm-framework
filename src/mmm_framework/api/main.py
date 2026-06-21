@@ -2753,17 +2753,38 @@ class GardenSourceRequest(BaseModel):
     source_code: str = ""
 
 
+class GardenDocsRequest(BaseModel):
+    """In-place docs (markdown) edit for a non-published garden version."""
+
+    docs: str = ""
+
+
 class CopilotTurn(BaseModel):
     role: str = "user"  # "user" | "assistant"
     content: str = ""
 
 
+class NotebookCopilotContext(BaseModel):
+    """Notebook context attached to a copilot turn so the assistant can diagnose
+    a failed cell: the cell's code + traceback, the dataset preview, and the
+    sibling cells (variables flow between cells in one shared kernel)."""
+
+    cell_code: str = ""
+    traceback: str = ""
+    dataset_preview: str | None = None
+    other_cells: list[str] = []
+    is_error: bool = False
+
+
 class GardenCopilotRequest(BaseModel):
     """A modeling-copilot turn: the running chat plus the current editor source
-    so the assistant grounds its answer in the user's actual code."""
+    so the assistant grounds its answer in the user's actual code. When invoked
+    from the Atelier notebook, ``notebook`` carries the failing/active cell so the
+    same copilot diagnoses cell-execution errors and rewrites the cell."""
 
     messages: list[CopilotTurn] = []
     source_code: str = ""
+    notebook: NotebookCopilotContext | None = None
 
 
 def _garden_org(principal: AuthContext) -> str:
@@ -2861,7 +2882,10 @@ async def garden_copilot_endpoint(
 
     from mmm_framework.agents.garden_authoring import build_copilot_system_prompt
 
-    system_prompt = build_copilot_system_prompt(body.source_code)
+    system_prompt = build_copilot_system_prompt(
+        body.source_code,
+        notebook=body.notebook.model_dump() if body.notebook else None,
+    )
     lc_messages: list = [SystemMessage(content=system_prompt)]
     # Keep the last dozen turns; drop empties.
     for turn in [t for t in body.messages if (t.content or "").strip()][-12:]:
@@ -2904,6 +2928,408 @@ def _copilot_chunk_text(content: Any) -> str:
                 out.append(block.get("text") or block.get("content") or "")
         return "".join(out)
     return ""
+
+
+# ── Atelier notebook ──────────────────────────────────────────────────────────
+# A Jupyter-like demo/test space scoped to one bespoke model: upload a dataset,
+# run free-form Python cells against the model (the LIVE editor buffer or a
+# registered version), and track plot/table/markdown outputs. Cells execute in
+# the same sandboxed session kernel the compatibility suite uses (so untrusted
+# author source never imports in the host), via the existing non-blocking job
+# machinery (mirrors the garden-test pattern). NB: these routes are registered
+# BEFORE the parametric ``/model-garden/{name}/...`` routes so ``notebook`` is
+# never captured as a ``{name}``.
+
+# Per-notebook source revision last staged+imported into the kernel — lets us
+# skip the (re)import setup cell when the author hasn't edited the model.
+_NOTEBOOK_SOURCE_REV: dict[str, str] = {}
+
+
+class NotebookCellRequest(BaseModel):
+    """Run one code cell against the model. ``version=None`` => the live editor
+    buffer in ``source_code`` (re-imported when ``source_rev`` changes); else a
+    registered version (source resolved from the registry)."""
+
+    name: str = "untitled"
+    version: int | None = None
+    source_code: str | None = None
+    source_rev: str = ""
+    code: str = ""
+    dataset_path: str | None = None
+
+
+class NotebookSaveRequest(BaseModel):
+    name: str = "untitled"
+    version: int | None = None
+    cells: list[dict] = []
+    dataset: dict | None = None
+
+
+def _notebook_tid(org_id: str, name: str, version: int | None) -> str:
+    """Deterministic synthetic thread id for a notebook (one warm kernel +
+    workspace per (org, model, source)). Consistent with the existing
+    ``__gardenjobs__{org}`` synthetic-context pattern."""
+    import re
+
+    raw = f"{name}__v{version}" if version is not None else f"{name}__draft"
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)[:80]
+    return f"__atelier_nb__{org_id}__{safe}"
+
+
+# The staged model source is written as a NON-``.py`` file so a dev server run
+# with ``uvicorn --reload`` (which watches ``*.py`` under the repo) does NOT
+# restart on every cell — a restart wipes the warm in-process kernel mid-session
+# (the `data` from an earlier cell would vanish). We import it via an explicit
+# ``SourceFileLoader``, which reads Python source regardless of extension.
+_NOTEBOOK_SRC_FILE = "notebook_model_source.txt"
+
+
+def _notebook_stage_source(name: str, ver_seg: str, tid: str, text: str) -> str:
+    """Write the model source into the notebook workspace as a non-``.py`` file.
+    Content-aware: skips the write when the file is already identical (avoids
+    disk churn and any reload watcher firing). Returns the staged path."""
+    from mmm_framework.agents import workspace as _ws
+
+    dest = _ws.garden_loaded_dir(name, ver_seg, tid) / _NOTEBOOK_SRC_FILE
+    try:
+        if dest.exists() and dest.read_text(encoding="utf-8") == (text or ""):
+            return str(dest)
+    except Exception:
+        pass
+    dest.write_text(text or "", encoding="utf-8")
+    return str(dest)
+
+
+def _notebook_setup_code(staged_path: str, rev: str) -> str:
+    """Kernel-side cell that (re)imports the staged model source under a fresh
+    module name and binds ``GardenModel`` to the resolved class. Runs ONLY in the
+    session kernel — untrusted source never imports in the host. Uses an explicit
+    ``SourceFileLoader`` so the non-``.py`` staged file still imports as Python."""
+    import re
+
+    mod = "garden_user_model_" + (re.sub(r"[^A-Za-z0-9_]+", "_", rev or "") or "x")
+    return (
+        "import importlib.util as _ilu, importlib.machinery as _ilm, sys as _sys\n"
+        f"_loader = _ilm.SourceFileLoader({mod!r}, {staged_path!r})\n"
+        f"_spec = _ilu.spec_from_loader({mod!r}, _loader)\n"
+        "_mod = _ilu.module_from_spec(_spec)\n"
+        f"_sys.modules[{mod!r}] = _mod\n"
+        "_loader.exec_module(_mod)\n"
+        "from mmm_framework.garden.contract import find_garden_class as _fgc\n"
+        "GardenModel = _fgc(_mod)\n"
+        "print('Loaded garden model class:', GardenModel.__name__)\n"
+    )
+
+
+def _notebook_cell_sync(req: dict) -> dict:
+    """SYNC worker (ONE asyncio.to_thread per the ContextVar rule): set the
+    thread, (re)stage+import the model source if it changed, then run the user
+    cell in the session kernel and map its ExecuteResult to JSON-safe output
+    refs (the same content-addressing ``execute_python`` uses)."""
+    from mmm_framework.agents import tools as _tools
+    from mmm_framework.agents import workspace as _ws
+    from mmm_framework.agents.kernels import KernelContext
+    from mmm_framework.agents.runtime import set_current_thread
+    from mmm_framework.agents.tables import publish_tables
+
+    tid = req["tid"]
+    set_current_thread(tid)
+    work_dir = str(_ws.thread_dir(tid))
+    kernel = _tools._KERNELS.get_or_spawn(tid)
+
+    # 1. (Re)stage + import the model source when the buffer/version changed.
+    # Resolve the source TEXT: the live editor buffer, or the registered
+    # version's file read off disk.
+    src_text = req.get("source_code")
+    if src_text is None and req.get("source_path"):
+        try:
+            with open(req["source_path"], "r", encoding="utf-8") as _f:
+                src_text = _f.read()
+        except Exception:
+            src_text = None
+    if src_text is not None and _NOTEBOOK_SOURCE_REV.get(tid) != req.get("source_rev"):
+        staged = _notebook_stage_source(req["name"], req["ver_seg"], tid, src_text)
+        setup = kernel.execute(
+            _notebook_setup_code(staged, req.get("source_rev") or ""),
+            KernelContext(
+                thread_id=tid,
+                work_dir=work_dir,
+                dataset_path=req.get("dataset_path"),
+            ),
+        )
+        if setup.is_error:
+            # The model source itself failed to import — that IS the test
+            # result the author needs. Don't cache the rev (retry next run).
+            return {
+                "stdout": setup.stdout,
+                "plots": [],
+                "tables": [],
+                "is_error": True,
+                "setup_error": True,
+            }
+        _NOTEBOOK_SOURCE_REV[tid] = req.get("source_rev") or ""
+
+    # 2. Run the user cell.
+    result = kernel.execute(
+        req.get("code") or "",
+        KernelContext(
+            thread_id=tid, work_dir=work_dir, dataset_path=req.get("dataset_path")
+        ),
+    )
+
+    # 3. Content-address plots/tables; keep only lightweight refs.
+    plot_refs: list[dict] = []
+    for fig in result.plots or []:
+        try:
+            pid = _ws.store_plot(fig, tid)
+        except Exception:  # noqa: BLE001 — oversize/invalid figure: drop it
+            continue
+        layout = fig.get("layout") or {}
+        t = layout.get("title")
+        title = (
+            t.get("text") if isinstance(t, dict) else (t if isinstance(t, str) else "")
+        )
+        plot_refs.append({"id": pid, "title": title or ""})
+    table_refs: list[dict] = []
+    if result.tables:
+        table_refs, _dropped = publish_tables(result.tables, {}, tid)
+
+    return {
+        "stdout": result.stdout,
+        "plots": plot_refs,
+        "tables": table_refs,
+        "is_error": bool(result.is_error),
+    }
+
+
+async def _run_notebook_cell_job(job_id: str, req: dict) -> None:
+    try:
+        _sim_job_patch(job_id, status="running")
+        res = await asyncio.to_thread(_notebook_cell_sync, req)
+        _sim_job_patch(job_id, status="done", result=safe_json_dumps_load(res))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("notebook cell job failed: %s", job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+def _notebook_starter(name: str) -> list[dict]:
+    """A runnable starter notebook: it fits the model on a labelled synthetic
+    world out of the box, and points the author at their uploaded data."""
+    intro = (
+        f"# Demo & test: **{name}**\n\n"
+        "Run the cells below to fit your model and inspect what it recovers. "
+        "Upload an **MFF long-format** CSV with the control above to test it on "
+        "your own data — otherwise it runs on a labelled synthetic world. "
+        "`GardenModel` is your model class (the live editor source); `df` is your "
+        "uploaded data; `show_table(...)` and `fig.show()` render into this notebook."
+    )
+    load = (
+        "# Use your uploaded dataset if present, else a labelled synthetic world\n"
+        "# (so this notebook runs out of the box).\n"
+        "try:\n"
+        "    data, src = df, dataset_path\n"
+        "    kpi, channels = 'Sales', None  # set/edit `channels` below if not MFF\n"
+        "except NameError:\n"
+        "    from mmm_framework.synth import generate_mff\n"
+        "    data, _ans = generate_mff('realistic')\n"
+        "    src = 'demo.csv'; data.to_csv(src, index=False)\n"
+        "    kpi, channels = 'Sales', list(_ans.get('channels') or [])\n"
+        "show_table(data.head(20), title='Input data (first 20 rows)')\n"
+        "print('rows:', len(data), '| variables:', "
+        "list(dict.fromkeys(data['VariableName'])) if 'VariableName' in data else list(data.columns))\n"
+    )
+    fit = (
+        "# Build a spec from the data's MFF structure and fit your model (fast MAP).\n"
+        "# Edit `channels`/`controls` to map your columns if it isn't standard MFF.\n"
+        "all_vars = list(dict.fromkeys(data['VariableName'].tolist()))\n"
+        "if not channels:\n"
+        "    channels = [v for v in all_vars if v != kpi][: max(1, len(all_vars) // 2)]\n"
+        "controls = [v for v in all_vars if v != kpi and v not in channels]\n"
+        "spec = {\n"
+        "    'kpi': kpi,\n"
+        "    'media_channels': [{'name': c} for c in channels],\n"
+        "    'control_variables': [{'name': c} for c in controls],\n"
+        "    'trend': {'type': 'linear'},\n"
+        "    'seasonality': {'yearly': 0, 'monthly': 0, 'weekly': 0},\n"
+        "    'inference': {'method': 'map', 'chains': 1, 'draws': 200, 'tune': 200},\n"
+        "}\n"
+        "from mmm_framework.agents.fitting import build_model\n"
+        "mmm = build_model(spec, src, model_cls=GardenModel)\n"
+        "results = mmm.fit(method='map')\n"
+        "print('Fitted', GardenModel.__name__, 'on channels:', channels)\n"
+    )
+    roi = (
+        "# Recovered ROI by channel (with uncertainty) + a quick bar chart.\n"
+        "from mmm_framework.reporting.helpers import compute_roi_with_uncertainty\n"
+        "roi = compute_roi_with_uncertainty(mmm, hdi_prob=0.9)\n"
+        "show_table(roi, title='Recovered ROI by channel')\n"
+        "import plotly.express as px\n"
+        "cols = list(roi.columns)\n"
+        "ycol = next((c for c in cols if 'roi' in c.lower() or 'roas' in c.lower()), cols[1])\n"
+        "fig = px.bar(roi, x=cols[0], y=ycol, title='Recovered ROI by channel')\n"
+        "fig.show()\n"
+    )
+    return [
+        {"id": "c1", "type": "markdown", "source": intro, "outputs": None},
+        {"id": "c2", "type": "code", "source": load, "outputs": None},
+        {"id": "c3", "type": "code", "source": fit, "outputs": None},
+        {"id": "c4", "type": "code", "source": roi, "outputs": None},
+    ]
+
+
+@app.post("/model-garden/notebook/dataset", dependencies=[_rl_heavy])
+async def notebook_upload_dataset(
+    name: str,
+    principal: PrincipalDep,
+    file: UploadFile = File(...),
+    version: int | None = None,
+):
+    """Stage a dataset into the notebook's workspace (so cells auto-bind it as
+    ``df``). Analyst+ role; org-scoped synthetic thread (not a session, so no
+    ``_sess_write``)."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Uploading requires an analyst+ role."
+        )
+    from mmm_framework.agents import workspace as _ws
+
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, name, version)
+    upload_dir = str(_ws.thread_dir(tid))
+    safe_name = _safe_upload_name(file.filename, "data.csv")
+    dest = str(_ws.safe_join(Path(upload_dir), safe_name))
+    with open(dest, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    preview: str | None = None
+    kind = "upload"
+    if safe_name.lower().endswith((".csv", ".tsv", ".txt")):
+        kind = "dataset"
+        try:
+            import itertools
+
+            with open(dest, "r", errors="ignore") as f:
+                preview = "".join(itertools.islice(f, 6))  # EOF-safe (short files)
+        except Exception:
+            preview = None
+    elif safe_name.lower().endswith((".xlsx", ".xls", ".parquet")):
+        kind = "dataset"
+    return {
+        "path": dest,
+        "filename": safe_name,
+        "kind": kind,
+        "preview": preview,
+        "size_bytes": os.path.getsize(dest),
+    }
+
+
+@app.post("/model-garden/notebook/cell", dependencies=[_rl_heavy])
+async def start_notebook_cell(body: NotebookCellRequest, principal: PrincipalDep):
+    """Start a NON-BLOCKING run of one code cell against the model. Returns a
+    ``job_id`` to poll. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Running cells requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, body.name, body.version)
+    req: dict = {
+        "tid": tid,
+        "name": body.name,
+        "ver_seg": "draft" if body.version is None else str(body.version),
+        "source_code": body.source_code,
+        "source_path": None,
+        "source_rev": body.source_rev or "",
+        "dataset_path": body.dataset_path,
+        "code": body.code,
+    }
+    if body.version is not None:
+        row = sessions_store.get_garden_model(
+            org_id=org_id, name=body.name, version=int(body.version)
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=404, detail="Garden model version not found."
+            )
+        req["source_code"] = None
+        req["source_path"] = row["source_path"]
+        req["source_rev"] = f"v{body.version}"
+    job = sessions_store.add_artifact(
+        tid,
+        "notebook_cell_job",
+        {"status": "pending", "org_id": org_id, "result": None, "error": None},
+    )
+    _spawn_job_task(_run_notebook_cell_job(job["id"], req))
+    return JSONResponse(
+        status_code=202, content={"job_id": job["id"], "status": "pending"}
+    )
+
+
+@app.get("/model-garden/notebook/cell/{job_id}")
+async def get_notebook_cell(job_id: str, principal: PrincipalDep):
+    """Poll a notebook cell run: {status, result|null, error|null}. result =
+    {stdout, plots:[{id,title}], tables:[{id,title,...}], is_error}."""
+    art = sessions_store.get_artifact(job_id)
+    org_id = _garden_org(principal)
+    if art is None or (art.get("payload") or {}).get("org_id") != org_id:
+        raise HTTPException(status_code=404, detail="Cell job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+@app.get("/model-garden/notebook")
+async def get_notebook(name: str, principal: PrincipalDep, version: int | None = None):
+    """The persisted notebook doc for this (model, source), or a seeded starter
+    when none exists yet. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="The notebook requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, name, version)
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == "atelier_notebook"
+    ]
+    if docs:
+        return JSONResponse(content=safe_json_dumps_load(docs[-1]["payload"]))
+    return JSONResponse(
+        content={
+            "cells": _notebook_starter(name),
+            "dataset": None,
+            "name": name,
+            "version": version,
+            "seeded": True,
+        }
+    )
+
+
+@app.put("/model-garden/notebook")
+async def save_notebook(body: NotebookSaveRequest, principal: PrincipalDep):
+    """Upsert the notebook doc (one ``atelier_notebook`` artifact per notebook).
+    Outputs are stored as content-addressed refs, so they survive. Analyst+."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(status_code=403, detail="Saving requires an analyst+ role.")
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, body.name, body.version)
+    payload = {
+        "cells": body.cells,
+        "dataset": body.dataset,
+        "name": body.name,
+        "version": body.version,
+        "org_id": org_id,
+    }
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == "atelier_notebook"
+    ]
+    if docs:
+        sessions_store.update_artifact_payload(docs[-1]["id"], payload)
+        art_id = docs[-1]["id"]
+    else:
+        art_id = sessions_store.add_artifact(tid, "atelier_notebook", payload)["id"]
+    return JSONResponse(content={"saved": True, "id": art_id})
 
 
 @app.get("/model-garden")
@@ -2959,6 +3385,33 @@ async def get_garden_source(name: str, version: int, principal: PrincipalDep):
     from mmm_framework.agents.garden_registry import read_garden_source
 
     return JSONResponse(content={"source_code": read_garden_source(row) or ""})
+
+
+@app.patch("/model-garden/{name}/{version}")
+async def update_garden_docs_endpoint(
+    name: str, version: int, body: GardenDocsRequest, principal: PrincipalDep
+):
+    """Edit a garden version's docs (markdown) IN PLACE — no new version. Analyst+
+    role. Docs are metadata, so this does not touch the source, manifest, or
+    compatibility status. PUBLISHED versions are immutable (the store rejects the
+    edit -> 409); use "Edit as new version" to change a published model's docs."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Editing docs requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    try:
+        updated = sessions_store.upsert_garden_model(
+            org_id=org_id, name=name, model_id=row["id"], docs=body.docs
+        )
+    except ValueError as e:  # published versions are immutable
+        raise HTTPException(status_code=409, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load(updated))
 
 
 def _garden_test_sync(synthetic_tid: str, row: dict) -> dict:

@@ -129,6 +129,15 @@ export const modelGardenService = {
     return data;
   },
 
+  /** PATCH /model-garden/{name}/{version} — edit docs in place (non-published). */
+  async updateDocs(name: string, version: number, docs: string): Promise<GardenModel> {
+    const { data } = await apiClient.patch<GardenModel>(
+      `/model-garden/${encodeURIComponent(name)}/${version}`,
+      { docs },
+    );
+    return data;
+  },
+
   /** POST /model-garden/{name}/{version}/promote — the human publish gate. */
   async promote(name: string, version: number, note = ''): Promise<GardenModel> {
     const { data } = await apiClient.post<GardenModel>(

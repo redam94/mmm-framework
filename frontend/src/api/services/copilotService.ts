@@ -39,6 +39,16 @@ export interface CopilotTurn {
   content: string;
 }
 
+/** Notebook context attached to a copilot turn so it can diagnose a failed cell.
+ * Mirrors api/main.py NotebookCopilotContext. */
+export interface NotebookCopilotContext {
+  cell_code: string;
+  traceback: string;
+  dataset_preview?: string | null;
+  other_cells: string[];
+  is_error: boolean;
+}
+
 /** Per-request auth/model headers — mirrors the axios interceptor so the SSE
  * fetch (which bypasses axios) still carries the user's key + model choice. */
 function copilotHeaders(): Record<string, string> {
@@ -74,13 +84,63 @@ export const copilotService = {
     messages: CopilotTurn[],
     sourceCode: string,
     signal: AbortSignal,
+    notebook?: NotebookCopilotContext | null,
   ): Promise<Response> {
     const base = apiClient.defaults.baseURL ?? '';
     return fetch(`${base}/model-garden/copilot`, {
       method: 'POST',
       headers: copilotHeaders(),
-      body: JSON.stringify({ messages, source_code: sourceCode }),
+      body: JSON.stringify({
+        messages,
+        source_code: sourceCode,
+        notebook: notebook ?? null,
+      }),
       signal,
     });
   },
 };
+
+/**
+ * Read a copilot SSE stream (`data: {type:'token'|'error', content}` / `[DONE]`).
+ * Calls `onToken` with the ACCUMULATED text on each token and `onError` with the
+ * message on an in-stream error. Throws on a non-OK response (mapped to a 403 /
+ * generic message) so callers can surface it as an error bubble.
+ */
+export async function readCopilotStream(
+  res: Response,
+  onToken: (acc: string) => void,
+  onError: (msg: string) => void,
+): Promise<void> {
+  if (!res.ok || !res.body) {
+    throw new Error(
+      res.status === 403 ? 'Analyst role required.' : `Copilot error (${res.status}).`,
+    );
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let acc = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6);
+      if (payload === '[DONE]') continue;
+      try {
+        const data = JSON.parse(payload);
+        if (data.type === 'token' && data.content) {
+          acc += data.content;
+          onToken(acc);
+        } else if (data.type === 'error') {
+          onError(data.content);
+        }
+      } catch {
+        /* ignore partial / malformed frames */
+      }
+    }
+  }
+}

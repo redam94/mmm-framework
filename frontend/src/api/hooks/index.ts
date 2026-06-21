@@ -112,6 +112,10 @@ export {
   useGardenSource,
   useRegisterGardenModel,
   usePromoteGardenModel,
+  useUpdateGardenDocs,
   useDeleteGardenModel,
   useGardenTest,
 } from './useModelGarden';
+
+// Atelier notebook hooks
+export { notebookKeys, useNotebookDoc, useSaveNotebook } from './useAtelierNotebook';

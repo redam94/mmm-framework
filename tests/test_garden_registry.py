@@ -191,3 +191,78 @@ class TestRegisterCore:
         r1 = reg.register_garden_model_core(org_id="orgA", source_code=src, name="m")
         r2 = reg.register_garden_model_core(org_id="orgA", source_code=src, name="m")
         assert (r1["version"], r2["version"]) == (1, 2)
+
+
+class TestDocsUpdateEndpoint:
+    """PATCH /model-garden/{name}/{version}: edit docs in place (no new version),
+    published immutability (409), missing version (404). Calls the handler
+    directly with the dev principal, like the other endpoint unit tests."""
+
+    @pytest.fixture()
+    def main(self, store, tmp_path, monkeypatch):
+        monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+        from mmm_framework.api import main as M
+
+        return M
+
+    def _draft(self, store, main, name="docs-edit"):
+        org = main._garden_org(main._DEV_PRINCIPAL)
+        row = store.upsert_garden_model(
+            org_id=org,
+            name=name,
+            manifest={"class_name": "X"},
+            source_path="/tmp/x.py",
+            docs="old docs",
+        )
+        return org, row
+
+    @pytest.mark.asyncio
+    async def test_edit_docs_in_place(self, store, main):
+        import json
+
+        org, row = self._draft(store, main)
+        resp = await main.update_garden_docs_endpoint(
+            row["name"],
+            row["version"],
+            main.GardenDocsRequest(docs="# new docs"),
+            main._DEV_PRINCIPAL,
+        )
+        body = json.loads(resp.body)
+        assert body["docs"] == "# new docs"
+        assert body["status"] == "draft"  # status untouched
+        assert body["version"] == row["version"]  # no new version minted
+        # persisted to the store
+        got = store.get_garden_model(
+            org_id=org, name=row["name"], version=row["version"]
+        )
+        assert got["docs"] == "# new docs"
+
+    @pytest.mark.asyncio
+    async def test_published_is_immutable_409(self, store, main):
+        from fastapi import HTTPException
+
+        _org, row = self._draft(store, main, name="docs-pub")
+        store.set_garden_compat_report(row["id"], {"blocking_passed": True})
+        store.transition_garden_model(row["id"], "tested")
+        store.transition_garden_model(row["id"], "published")
+        with pytest.raises(HTTPException) as ei:
+            await main.update_garden_docs_endpoint(
+                row["name"],
+                row["version"],
+                main.GardenDocsRequest(docs="x"),
+                main._DEV_PRINCIPAL,
+            )
+        assert ei.value.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_missing_version_404(self, store, main):
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as ei:
+            await main.update_garden_docs_endpoint(
+                "no-such-model",
+                9,
+                main.GardenDocsRequest(docs="x"),
+                main._DEV_PRINCIPAL,
+            )
+        assert ei.value.status_code == 404

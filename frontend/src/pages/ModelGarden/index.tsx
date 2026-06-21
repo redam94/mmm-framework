@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import Editor from '@monaco-editor/react';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   AlignLeft,
   CircleCheck,
@@ -8,6 +10,10 @@ import {
   Map as MapIcon,
   Maximize2,
   Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Sparkles,
   Sprout,
@@ -22,6 +28,7 @@ import {
   Button,
   Card,
   DataTable,
+  Drawer,
   EmptyState,
   SectionHeader,
   Tabs,
@@ -37,9 +44,12 @@ import {
   useGardenVersions,
   usePromoteGardenModel,
   useRegisterGardenModel,
+  useUpdateGardenDocs,
 } from '../../api/hooks';
 import type { CompatTier, GardenModel } from '../../api/services/modelGardenService';
 import { CopilotPanel } from '../../components/modelGarden/CopilotPanel';
+import { AtelierNotebook } from '../../components/modelGarden/AtelierNotebook';
+import { registerGardenCompletions } from '../../components/modelGarden/gardenCompletions';
 import { copilotService, type LintProblem } from '../../api/services/copilotService';
 
 const STARTER_TEMPLATE = `from mmm_framework.garden import CustomMMM
@@ -78,128 +88,51 @@ function errMessage(e: unknown): string {
   return any?.response?.data?.detail ?? any?.message ?? 'Something went wrong.';
 }
 
-// ── IDE: framework-aware autocomplete snippets ──────────────────────────────
-const GARDEN_SNIPPETS: { label: string; detail: string; doc: string; insert: string }[] = [
-  {
-    label: 'custommmm',
-    detail: 'CustomMMM subclass skeleton',
-    doc: 'Minimal garden model: subclass CustomMMM and override _build_model.',
-    insert: [
-      'from mmm_framework.garden import CustomMMM',
-      'import pymc as pm',
-      'import pytensor.tensor as pt',
-      '',
-      '',
-      'class ${1:MyMMM}(CustomMMM):',
-      '    """${2:What makes this model bespoke and when to use it.}"""',
-      '',
-      '    def _build_model(self) -> pm.Model:',
-      '        coords = self._build_coords()',
-      '        x_media = self._prepare_raw_media_for_model()',
-      '        with pm.Model(coords=coords) as model:',
-      '            $0',
-      '        return model',
-      '',
-      '',
-      'GARDEN_MODEL = ${1:MyMMM}',
-    ].join('\n'),
+// Compact markdown renderer for the model's docs in the About panel — model docs
+// are authored as markdown (headings, lists, code), so render them, not the raw text.
+const DOCS_MD: Components = {
+  h1: ({ children }) => (
+    <h3 className="mb-1.5 mt-3 first:mt-0 font-display text-base font-semibold text-ink-900">{children}</h3>
+  ),
+  h2: ({ children }) => (
+    <h4 className="mb-1 mt-3 font-display text-sm font-semibold text-ink-900">{children}</h4>
+  ),
+  h3: ({ children }) => <h5 className="mb-1 mt-2 text-sm font-semibold text-ink-800">{children}</h5>,
+  p: ({ children }) => <p className="mb-2 leading-relaxed text-ink-700">{children}</p>,
+  ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1 text-ink-700">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1 text-ink-700">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-sage-700 underline">
+      {children}
+    </a>
+  ),
+  strong: ({ children }) => <strong className="font-semibold text-ink-900">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  blockquote: ({ children }) => (
+    <blockquote className="my-2 border-l-2 border-line-300 pl-3 italic text-ink-500">{children}</blockquote>
+  ),
+  pre: ({ children }) => <pre className="mb-2">{children}</pre>,
+  code: ({ className, children }: { className?: string; children?: ReactNode }) => {
+    const raw = String(children ?? '').replace(/\n$/, '');
+    const isBlock = !!/language-(\w+)/.exec(className || '') || raw.includes('\n');
+    return isBlock ? (
+      <code className="my-2 block overflow-x-auto rounded-md bg-ink-900/95 p-3 font-mono text-xs leading-relaxed text-cream-100">
+        {children}
+      </code>
+    ) : (
+      <code className="rounded bg-cream-200 px-1 py-0.5 font-mono text-[0.85em] text-ink-800">{children}</code>
+    );
   },
-  {
-    label: 'build_model',
-    detail: 'override _build_model (contract-complete)',
-    doc: 'A _build_model registering every deterministic the read-ops consume.',
-    insert: [
-      'def _build_model(self) -> pm.Model:',
-      '    coords = self._build_coords()',
-      '    x_media_norm = self._prepare_raw_media_for_model()',
-      '    n_obs = self.n_obs',
-      '    with pm.Model(coords=coords) as model:',
-      '        x_media = pm.Data("X_media_raw", x_media_norm, dims=("obs", "channel"))',
-      '        intercept = pm.Normal("intercept", mu=0.0, sigma=0.5)',
-      '        pm.Deterministic("intercept_component", intercept + pt.zeros(n_obs), dims="obs")',
-      '        contribs = []',
-      '        for c, ch in enumerate(self.channel_names):',
-      '            sat_kind, sat_params = self._build_channel_saturation(ch)',
-      '            x_sat = _apply_saturation_pt(x_media[:, c], sat_kind, sat_params)',
-      '            beta = pm.Gamma(f"beta_{ch}", mu=1.5, sigma=1.0)',
-      '            contribs.append(beta * x_sat)',
-      '        channels = pt.stack(contribs, axis=1)',
-      '        pm.Deterministic("channel_contributions", channels, dims=("obs", "channel"))',
-      '        media_total = channels.sum(axis=1)',
-      '        pm.Deterministic("media_total", media_total)',
-      '        sigma = pm.HalfNormal("sigma", sigma=0.5)',
-      '        y_obs = pm.Normal("y_obs", mu=intercept + media_total, sigma=sigma, observed=self.y, dims="obs")',
-      '        pm.Deterministic("y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs")',
-      '    return model',
-    ].join('\n'),
-  },
-  {
-    label: 'vectorized_adstock',
-    detail: 'geometric carryover WITHOUT pytensor.scan',
-    doc: 'Lower-triangular Toeplitz matmul: Sₜ = Σ ρ^(t-τ)·xₜ. Compiles instantly.',
-    insert: [
-      'import numpy as np',
-      '',
-      't = np.arange(n_obs)',
-      'lag = t[:, None] - t[None, :]',
-      'decay = pt.where(',
-      '    pt.as_tensor_variable(lag >= 0),',
-      '    ${1:rho} ** pt.as_tensor_variable(np.maximum(lag, 0)),',
-      '    0.0,',
-      ')',
-      '${2:carryover} = decay @ ${3:media_inflow}  # (n_obs, n_channel), no scan',
-    ].join('\n'),
-  },
-  {
-    label: 'deterministic_channels',
-    detail: 'register channel_contributions + media_total',
-    doc: 'The two deterministics ROI/decomposition reporting needs.',
-    insert: [
-      'pm.Deterministic("channel_contributions", ${1:channels}, dims=("obs", "channel"))',
-      'pm.Deterministic("media_total", ${1:channels}.sum(axis=1))',
-    ].join('\n'),
-  },
-  {
-    label: 'prior_normal',
-    detail: 'pm.Normal prior',
-    doc: 'Normal prior.',
-    insert: 'pm.Normal("${1:name}", mu=${2:0.0}, sigma=${3:1.0})',
-  },
-  {
-    label: 'prior_retention',
-    detail: 'pm.Beta carryover/retention prior',
-    doc: 'Beta(6, 2) ≈ mean 0.75 — a sticky carryover rate on (0, 1).',
-    insert: 'pm.Beta("${1:adstock_alpha_channel}", alpha=${2:6.0}, beta=${3:2.0})',
-  },
-];
-
-// Register framework completions once for the whole app lifetime.
-let gardenCompletionsRegistered = false;
-const registerGardenCompletions: OnMount = (_editor, monaco) => {
-  if (gardenCompletionsRegistered) return;
-  gardenCompletionsRegistered = true;
-  monaco.languages.registerCompletionItemProvider('python', {
-    provideCompletionItems(model, position) {
-      const word = model.getWordUntilPosition(position);
-      const range = {
-        startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        endColumn: word.endColumn,
-      };
-      return {
-        suggestions: GARDEN_SNIPPETS.map((s) => ({
-          label: s.label,
-          kind: monaco.languages.CompletionItemKind.Snippet,
-          insertText: s.insert,
-          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          detail: s.detail,
-          documentation: s.doc,
-          range,
-        })),
-      };
-    },
-  });
+  table: ({ children }) => (
+    <div className="my-2 overflow-x-auto">
+      <table className="min-w-full border-collapse text-xs">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-line-200 px-2 py-1 text-left font-semibold text-ink-800">{children}</th>
+  ),
+  td: ({ children }) => <td className="border border-line-200 px-2 py-1 text-ink-700">{children}</td>,
 };
 
 function ToolButton({
@@ -239,6 +172,18 @@ export function ModelGardenPage() {
   const [draftName, setDraftName] = useState('');
   const [draftDocs, setDraftDocs] = useState('');
   const [rightTab, setRightTab] = useState('compat');
+  // Center editor tab: edit the model source ('code') or its docs ('docs').
+  const [editorTab, setEditorTab] = useState<'code' | 'docs' | 'notebook'>('code');
+  // In-place docs edit buffer for a registered version (null = mirror the
+  // fetched docs); while authoring, docs live in `draftDocs` instead.
+  const [docsDraft, setDocsDraft] = useState<string | null>(null);
+
+  // Collapsible side panels (desktop) — give the editor/copilot room when needed.
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  // Expanded docs reading view (slide-over drawer).
+  const [docsExpanded, setDocsExpanded] = useState(false);
 
   // IDE + copilot state
   const [fullscreen, setFullscreen] = useState(false);
@@ -260,6 +205,7 @@ export function ModelGardenPage() {
   const register = useRegisterGardenModel();
   const promote = usePromoteGardenModel();
   const remove = useDeleteGardenModel();
+  const updateDocs = useUpdateGardenDocs();
   const test = useGardenTest(selName, selVersion);
 
   const models = listData?.models ?? [];
@@ -269,6 +215,21 @@ export function ModelGardenPage() {
   // source — derived (no effect) to avoid a setState-in-effect cascade.
   const editorValue = authoring ? code : sourceData?.source_code ?? '';
 
+  // Docs editing mirrors the code editor: the editable draft while authoring,
+  // else an in-place buffer over the fetched docs (null = mirror unchanged).
+  const isPublished = detail?.status === 'published';
+  const docsValue = authoring ? draftDocs : docsDraft ?? detail?.docs ?? '';
+  const docsDirty =
+    !authoring && docsDraft != null && docsDraft !== (detail?.docs ?? '');
+
+  const saveDocs = () => {
+    if (authoring || !selName || selVersion == null || docsDraft == null) return;
+    updateDocs.mutate(
+      { name: selName, version: selVersion, docs: docsDraft },
+      { onSuccess: () => setDocsDraft(null) },
+    );
+  };
+
   const startAuthoring = () => {
     setAuthoring(true);
     setSelName(null);
@@ -276,6 +237,7 @@ export function ModelGardenPage() {
     setCode(STARTER_TEMPLATE);
     setDraftName('');
     setDraftDocs('');
+    setDocsDraft(null);
     test.reset();
   };
 
@@ -283,6 +245,8 @@ export function ModelGardenPage() {
     setAuthoring(false);
     setSelName(m.name);
     setSelVersion(m.version);
+    setDocsDraft(null);
+    updateDocs.reset();
     test.reset();
   };
 
@@ -304,6 +268,7 @@ export function ModelGardenPage() {
     setAuthoring(true);
     setDraftName(selName ?? '');
     setDraftDocs(detail?.docs ?? '');
+    setDocsDraft(null);
     test.reset();
   };
 
@@ -316,6 +281,14 @@ export function ModelGardenPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [fullscreen]);
+
+  // The copilot is an inline panel that shares the right side with the
+  // compatibility report; opening it collapses that panel so the editor keeps
+  // usable width (and re-expands it on close).
+  const toggleCopilot = (open: boolean) => {
+    setCopilotOpen(open);
+    setRightCollapsed(open);
+  };
 
   // Apply a copilot-proposed code block: drop into authoring (a new draft seeded
   // from the current selection) if we were viewing a read-only version.
@@ -414,12 +387,48 @@ export function ModelGardenPage() {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[19rem_1fr_23rem] gap-4 flex-1 min-h-0">
-        {/* ── Left: registry browser ── */}
-        <Card tone="cream" padding="sm" className="overflow-y-auto max-h-[72vh]">
-          <h2 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
-            Garden
-          </h2>
+      <div
+        className="grid grid-cols-1 gap-4 flex-1 min-h-0 xl:grid-cols-[var(--mg-cols)] xl:transition-[grid-template-columns] xl:duration-200 xl:ease-out"
+        style={
+          {
+            '--mg-cols': `${leftCollapsed ? '3rem' : '19rem'} minmax(0, 1fr) ${
+              rightCollapsed ? '3rem' : '23rem'
+            }`,
+          } as CSSProperties
+        }
+      >
+        {/* ── Left: registry browser (collapsible) ── */}
+        <div className="min-w-0">
+          {leftCollapsed && (
+            <button
+              type="button"
+              title="Expand garden"
+              onClick={() => setLeftCollapsed(false)}
+              className="hidden h-full max-h-[72vh] w-full flex-col items-center gap-3 rounded-lg border border-line-200 bg-cream-100 py-3 text-ink-400 transition hover:bg-cream-200 hover:text-ink-700 xl:flex"
+            >
+              <PanelLeftOpen size={16} />
+              <Sprout size={15} />
+              <span className="rotate-180 text-xs font-semibold uppercase tracking-wide [writing-mode:vertical-rl]">
+                Garden
+              </span>
+            </button>
+          )}
+          <Card
+            tone="cream"
+            padding="sm"
+            className={`h-full overflow-y-auto max-h-[72vh] ${leftCollapsed ? 'xl:hidden' : ''}`}
+          >
+            <div className="flex items-center justify-between px-1 pb-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Garden</h2>
+              <button
+                type="button"
+                title="Collapse garden"
+                onClick={() => setLeftCollapsed(true)}
+                className="hidden text-ink-300 transition hover:text-ink-700 xl:inline-flex"
+              >
+                <PanelLeftClose size={14} />
+              </button>
+            </div>
           {listLoading ? (
             <div className="flex justify-center py-8 text-ink-300">
               <Loader2 size={18} className="animate-spin" />
@@ -477,39 +486,53 @@ export function ModelGardenPage() {
               </ul>
             </div>
           )}
-        </Card>
+          </Card>
+        </div>
 
         {/* ── Center: editor + IDE tools ── */}
         <div
           className={
             fullscreen
-              ? 'fixed inset-0 z-40 flex flex-col gap-2 bg-cream-50 p-4'
-              : 'flex flex-col min-h-0'
+              ? // z-[60] keeps the overlay above the app sidebar (z-50) so the
+                // editor's left edge isn't covered by the navbar.
+                'fixed inset-0 z-[60] flex flex-col gap-2 bg-cream-50 p-4'
+              : 'flex flex-col min-h-0 min-w-0'
           }
         >
           {authoring && (
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-2">
-              <input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                placeholder="model name (e.g. tight-adstock-prior)"
-                className="rounded-md border border-line-300 bg-white px-3 py-2 text-sm focus:border-sage-600 focus:outline-none"
-              />
-              <input
-                value={draftDocs}
-                onChange={(e) => setDraftDocs(e.target.value)}
-                placeholder="docs — what it does & when to use it"
-                className="rounded-md border border-line-300 bg-white px-3 py-2 text-sm focus:border-sage-600 focus:outline-none"
-              />
-            </div>
+            <input
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              placeholder="model name (e.g. tight-adstock-prior)"
+              className="w-full rounded-md border border-line-300 bg-white px-3 py-2 text-sm focus:border-sage-600 focus:outline-none"
+            />
           )}
+
+          {/* Center editor: Code (source) | Docs (markdown). */}
+          <Tabs
+            tabs={[
+              { id: 'code', label: 'Code' },
+              { id: 'docs', label: 'Docs' },
+              { id: 'notebook', label: 'Notebook' },
+            ]}
+            active={editorTab}
+            onChange={(id) => setEditorTab(id as 'code' | 'docs' | 'notebook')}
+          />
 
           {/* IDE toolbar */}
           <div className="flex items-center gap-0.5 rounded-md border border-line-200 bg-white px-1.5 py-1">
-            <ToolButton title="Format (ruff)" disabled={!authoring || ideBusy !== null} onClick={runFormat}>
+            <ToolButton
+              title="Format (ruff)"
+              disabled={!authoring || ideBusy !== null || editorTab !== 'code'}
+              onClick={runFormat}
+            >
               {ideBusy === 'format' ? <Loader2 size={15} className="animate-spin" /> : <AlignLeft size={15} />}
             </ToolButton>
-            <ToolButton title="Validate (Problems)" disabled={ideBusy !== null} onClick={runLint}>
+            <ToolButton
+              title="Validate (Problems)"
+              disabled={ideBusy !== null || editorTab !== 'code'}
+              onClick={runLint}
+            >
               {ideBusy === 'lint' ? <Loader2 size={15} className="animate-spin" /> : <CircleCheck size={15} />}
             </ToolButton>
             <span className="mx-1 h-4 w-px bg-line-200" />
@@ -526,10 +549,12 @@ export function ModelGardenPage() {
               <ZoomIn size={15} />
             </ToolButton>
             <div className="ml-auto flex items-center gap-0.5">
-              <ToolButton title="Modeling copilot" active={copilotOpen} onClick={() => setCopilotOpen((v) => !v)}>
-                <Sparkles size={15} className="mr-1" />
-                <span className="text-xs font-medium">Copilot</span>
-              </ToolButton>
+              {editorTab === 'code' && (
+                <ToolButton title="Modeling copilot" active={copilotOpen} onClick={() => toggleCopilot(!copilotOpen)}>
+                  <Sparkles size={15} className="mr-1" />
+                  <span className="text-xs font-medium">Copilot</span>
+                </ToolButton>
+              )}
               <ToolButton
                 title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
                 onClick={() => setFullscreen((v) => !v)}
@@ -572,40 +597,138 @@ export function ModelGardenPage() {
             </div>
           )}
 
-          {/* Editor + copilot */}
-          <div className={`flex gap-2 ${fullscreen ? 'flex-1 min-h-0' : 'h-[58vh]'}`}>
-            <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-line-200 bg-white">
-              <Editor
-                height="100%"
-                defaultLanguage="python"
-                language="python"
-                value={editorValue}
-                onChange={(v) => authoring && setCode(v ?? '')}
-                onMount={registerGardenCompletions}
-                theme="vs"
-                options={{
-                  readOnly: !authoring,
-                  minimap: { enabled: minimap },
-                  fontSize,
-                  wordWrap: wrap ? 'on' : 'off',
-                  scrollBeyondLastLine: false,
-                  fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                  renderLineHighlight: 'line',
-                  automaticLayout: true,
-                }}
-              />
-            </div>
-            {copilotOpen && (
-              <div className="w-[23rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white">
-                <CopilotPanel
-                  sourceCode={editorValue}
-                  onApplyCode={applyCode}
-                  onClose={() => setCopilotOpen(false)}
-                  className="h-full"
+          {/* Editor: code (source + copilot) or docs (markdown + live preview) */}
+          {editorTab === 'code' ? (
+            <div className={`flex gap-2 ${fullscreen ? 'flex-1 min-h-0' : 'h-[58vh]'}`}>
+              <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-line-200 bg-white">
+                <Editor
+                  height="100%"
+                  defaultLanguage="python"
+                  language="python"
+                  value={editorValue}
+                  onChange={(v) => authoring && setCode(v ?? '')}
+                  onMount={registerGardenCompletions}
+                  theme="vs"
+                  options={{
+                    readOnly: !authoring,
+                    minimap: { enabled: minimap },
+                    fontSize,
+                    wordWrap: wrap ? 'on' : 'off',
+                    scrollBeyondLastLine: false,
+                    fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                    renderLineHighlight: 'line',
+                    automaticLayout: true,
+                  }}
                 />
               </div>
-            )}
-          </div>
+              {copilotOpen && (
+                <div className="w-[23rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white">
+                  <CopilotPanel
+                    sourceCode={editorValue}
+                    onApplyCode={applyCode}
+                    onClose={() => toggleCopilot(false)}
+                    className="h-full"
+                  />
+                </div>
+              )}
+            </div>
+          ) : editorTab === 'docs' ? (
+            <div className={`flex flex-col min-h-0 ${fullscreen ? 'flex-1' : ''}`}>
+              <div className={`flex gap-2 ${fullscreen ? 'flex-1 min-h-0' : 'h-[58vh]'}`}>
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-line-200 bg-white">
+                  <Editor
+                    height="100%"
+                    defaultLanguage="markdown"
+                    language="markdown"
+                    value={docsValue}
+                    onChange={(v) => {
+                      if (authoring) setDraftDocs(v ?? '');
+                      else if (!isPublished) setDocsDraft(v ?? '');
+                    }}
+                    theme="vs"
+                    options={{
+                      readOnly: !authoring && isPublished,
+                      minimap: { enabled: minimap },
+                      fontSize,
+                      wordWrap: wrap ? 'on' : 'off',
+                      scrollBeyondLastLine: false,
+                      fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                      renderLineHighlight: 'line',
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
+                <div className="min-h-0 w-[45%] shrink-0 overflow-y-auto rounded-md border border-line-200 bg-cream-50 p-4">
+                  {docsValue.trim() ? (
+                    <div className="text-sm text-ink-700">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOCS_MD}>
+                        {docsValue}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm italic text-ink-300">
+                      Live preview — write markdown on the left.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {/* Docs save bar */}
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                {authoring ? (
+                  <span className="italic text-ink-400">
+                    Docs are saved with the draft when you Register.
+                  </span>
+                ) : isPublished ? (
+                  <span className="italic text-ink-400">
+                    Published versions are immutable — use “Edit as new version” to change docs.
+                  </span>
+                ) : (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={saveDocs}
+                      disabled={!docsDirty || updateDocs.isPending}
+                    >
+                      {updateDocs.isPending ? (
+                        <Loader2 size={14} className="mr-1.5 animate-spin" />
+                      ) : null}
+                      Save docs
+                    </Button>
+                    {docsDirty ? (
+                      <span className="text-gold-700">Unsaved changes</span>
+                    ) : updateDocs.isSuccess ? (
+                      <span className="text-sage-700">Saved ✓</span>
+                    ) : null}
+                    {updateDocs.isError && (
+                      <span className="text-rust-700">{errMessage(updateDocs.error)}</span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Notebook: a Jupyter-like demo/test space for the model in the
+            // editor — upload data, run cells against the LIVE buffer, track
+            // plots/tables/markdown. Runs the source currently in the editor.
+            <div className={`${fullscreen ? 'flex-1 min-h-0' : ''}`}>
+              {editorValue.trim() ? (
+                <AtelierNotebook
+                  name={(authoring ? draftName : selName) || 'untitled'}
+                  liveSource={editorValue}
+                  onApplyToEditor={applyCode}
+                  fill={fullscreen}
+                />
+              ) : (
+                <div
+                  className={`flex items-center justify-center rounded-md border border-dashed border-line-300 text-center text-sm text-ink-300 ${
+                    fullscreen ? 'h-full' : 'h-[58vh]'
+                  }`}
+                >
+                  Author a new model or select a version to open its demo notebook.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action bar */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -686,9 +809,38 @@ export function ModelGardenPage() {
           </div>
         </div>
 
-        {/* ── Right: compatibility + diagnostics ── */}
-        <Card tone="white" padding="sm" className="overflow-y-auto max-h-[72vh]">
-          {!detail && !authoring ? (
+        {/* ── Right: compatibility + diagnostics (collapsible) ── */}
+        <div className="min-w-0">
+          {rightCollapsed && (
+            <button
+              type="button"
+              title="Expand compatibility"
+              onClick={() => setRightCollapsed(false)}
+              className="hidden h-full max-h-[72vh] w-full flex-col items-center gap-3 rounded-lg border border-line-200 bg-white py-3 text-ink-400 shadow-sm transition hover:bg-cream-50 hover:text-ink-700 xl:flex"
+            >
+              <PanelRightOpen size={16} />
+              <FlaskConical size={15} />
+              <span className="text-xs font-semibold uppercase tracking-wide [writing-mode:vertical-rl]">
+                Compatibility
+              </span>
+            </button>
+          )}
+          <Card
+            tone="white"
+            padding="sm"
+            className={`h-full overflow-y-auto max-h-[72vh] ${rightCollapsed ? 'xl:hidden' : ''}`}
+          >
+            <div className="flex justify-end pb-1">
+              <button
+                type="button"
+                title="Collapse compatibility"
+                onClick={() => setRightCollapsed(true)}
+                className="hidden text-ink-300 transition hover:text-ink-700 xl:inline-flex"
+              >
+                <PanelRightClose size={14} />
+              </button>
+            </div>
+            {!detail && !authoring ? (
             <EmptyState
               icon={Sprout}
               title="Pick a model"
@@ -768,8 +920,28 @@ export function ModelGardenPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-ink-400">Docs</dt>
-                    <dd className="text-ink-700">{detail!.docs || '—'}</dd>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-ink-400">Docs</dt>
+                      {detail!.docs && (
+                        <button
+                          type="button"
+                          title="Expand docs"
+                          onClick={() => setDocsExpanded(true)}
+                          className="inline-flex items-center gap-1 text-xs text-ink-400 transition hover:text-ink-700"
+                        >
+                          <Maximize2 size={12} /> Expand
+                        </button>
+                      )}
+                    </div>
+                    <dd className="mt-1 text-sm text-ink-700">
+                      {detail!.docs ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOCS_MD}>
+                          {detail!.docs}
+                        </ReactMarkdown>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-ink-400">History</dt>
@@ -783,8 +955,26 @@ export function ModelGardenPage() {
               )}
             </>
           )}
-        </Card>
+          </Card>
+        </div>
       </div>
+
+      <Drawer
+        open={docsExpanded}
+        onClose={() => setDocsExpanded(false)}
+        title={detail ? `${detail.name} · docs` : 'Docs'}
+        width="max-w-3xl"
+      >
+        {detail?.docs ? (
+          <div className="text-sm text-ink-700">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOCS_MD}>
+              {detail.docs}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <p className="italic text-ink-400">No docs for this model.</p>
+        )}
+      </Drawer>
     </div>
   );
 }

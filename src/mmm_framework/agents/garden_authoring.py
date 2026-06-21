@@ -109,10 +109,149 @@ sanity check before paying for NUTS.
 """
 
 
-def build_copilot_system_prompt(source_code: str | None = None) -> str:
+#: Failure-mode knowledge for diagnosing a broken Atelier-NOTEBOOK cell. Used only
+#: when the copilot is invoked with notebook context (a failing cell + traceback).
+#: Grounded in the real ways a PyMC/MMM cell breaks in this framework's kernel.
+NOTEBOOK_DIAGNOSIS_KNOWLEDGE = """\
+# Diagnosing a failed notebook cell
+
+The user runs free-form Python cells against their bespoke model in ONE warm
+kernel (cells run top-to-bottom and share state — `mmm`, `results`, `df`, `data`,
+`spec` persist between cells). `GardenModel` is bound to their model class; an
+uploaded dataset binds as `df`; render with `show_table(df, title=...)` /
+`fig.show()`. The most common failures and the fix to lead with:
+
+## "Initial evaluation of model at starting point failed!" / a logp is `-inf`
+PyMC could not evaluate the model at its start point. Read the per-variable logp
+table in the error — the culprit is whichever entry is `-inf` (or wildly negative):
+- **`y_obs: -inf`** → the observation distribution cannot reach the data at the
+  start point. Almost always a **support / link mismatch** or a **scaling** bug:
+  - A positive-only or bounded likelihood (Gamma/NegativeBinomial/Beta — look for
+    a `kappa`/dispersion param) was given a mean `mu` that is ≤ 0 (or outside
+    (0,1)). Put the right inverse link on the mean so it stays in support
+    (`pm.math.exp` / `pt.softplus` for positive, `pm.math.sigmoid` for (0,1));
+    do NOT feed a standardized (mean-0) quantity straight into a positive-only mean.
+  - KPI/spend **scale**: feeding RAW spend or KPI where the model expects this
+    framework's standardized space. Build media via
+    `self._prepare_raw_media_for_model()` (normalized [0,1]); components live in
+    standardized KPI space (× `y_std`, + `y_mean` for the level to read originals).
+  - A deterministic that hits `log(≤0)` / divide-by-zero at the init values.
+- **One latent param very negative (not -inf)** (e.g. an awareness innovation at
+  ~ -143) → a too-tight prior fighting a centered parameterization. Reparameterize
+  **non-centered** (`z ~ N(0,1)`; `x = mu + sigma * z`) so the start point is feasible.
+- Fast confirm: `mmm.model.debug()` lists the offending point; a `method='map'`
+  fit (`mmm.fit(method='map')`) is the cheap loop while you fix the link/priors.
+
+## `NameError: name '...' is not defined` (`data`, `spec`, `mmm`, `df`)
+Cells share one kernel and run in order. Either an earlier cell that defines it
+hasn't run (use **Run all**, or run that cell first), or that earlier cell errored
+so the name was never bound. `df` only exists when a dataset was uploaded.
+
+## Slow / frozen fit, `pytensor.scan` warnings
+A `scan`-based adstock/state recursion compiles a slow gradient graph and can hang
+the in-process kernel. Vectorize to the lower-triangular Toeplitz matmul (see the
+authoring knowledge above) — same math, compiles instantly.
+
+## Shape / broadcast errors ("could not be broadcast", dim mismatch)
+A registered deterministic has the wrong dims. `channel_contributions` is
+`(n_obs, n_channel)` with `dims=("obs","channel")`; `media_total` =
+`channel_contributions.sum(axis=1)` is `(n_obs,)`. Align coords with
+`self._build_coords()` instead of hard-coding shapes.
+
+## "No garden class found" / read-ops return empty
+The source must expose exactly ONE `BayesianMMM` subclass (or set `GARDEN_MODEL`).
+Empty ROI/decomposition usually means a missing `beta_<channel>` (register a
+`pm.Deterministic("beta_<ch>", ...)` even for a fixed coefficient) or missing
+`sat_*` / `adstock_alpha_*` registrations.
+
+## Data / MFF binding
+The uploaded file binds as `df`. MFF long-format has `VariableName` + a value
+column (one row per variable × period); map `kpi` / `media_channels` /
+`control_variables` in the `spec` to those variable names before `build_model`.
+"""
+
+
+def _clip(text: str, limit: int) -> str:
+    """Length-cap a context blob with a visible truncation marker."""
+    text = text or ""
+    return text if len(text) <= limit else text[:limit] + "\n… (truncated)\n"
+
+
+#: Hard cap on sibling cells folded into the prompt context. Bounds peak memory
+#: regardless of the client payload — the join below would otherwise materialize
+#: the whole (untrusted, unbounded) ``other_cells`` list before ``_clip`` slices it.
+_MAX_OTHER_CELLS = 40
+
+
+def _notebook_context_section(notebook: dict[str, Any]) -> list[str]:
+    """Render the failing-cell / notebook context block appended to the copilot
+    prompt when the panel is invoked from the notebook (diagnose or chat)."""
+    cell_code = _clip(str(notebook.get("cell_code") or "").strip(), 8000)
+    traceback = _clip(str(notebook.get("traceback") or "").strip(), 6000)
+    preview = _clip(str(notebook.get("dataset_preview") or "").strip(), 2000)
+    # Slice BEFORE the comprehension/join so an oversized payload can't force an
+    # O(N) pass or a giant intermediate string just to be truncated to 8000 chars.
+    raw_others = (notebook.get("other_cells") or [])[:_MAX_OTHER_CELLS]
+    others = [c for c in raw_others if str(c or "").strip()]
+    is_error = bool(notebook.get("is_error"))
+
+    out: list[str] = ["", "## The user's notebook cell"]
+    if is_error:
+        # Diagnose framing is gated on is_error ALONE (not is_error AND traceback)
+        # so an errored cell with no captured output still gets the fix-it prompt.
+        out += [
+            "The user ran this cell against the model (above) and it FAILED. "
+            "Diagnose the ROOT CAUSE in a sentence or two, give a couple of tight, "
+            "specific tips, then return the COMPLETE corrected cell in a single "
+            "```python fenced block so they can apply it in one click. If the real "
+            "bug is in the MODEL SOURCE above (not the cell), say so plainly and "
+            "return the corrected model class instead. Do not pad with generic "
+            "advice.",
+        ]
+    else:
+        out += [
+            "The user is working in this notebook cell. Help with their question; "
+            "when code is the answer, return a COMPLETE, runnable cell in a single "
+            "```python fenced block so they can apply it in one click.",
+        ]
+    if cell_code:
+        out += ["", "Cell:", "```python", cell_code, "```"]
+    if traceback:
+        out += ["", "Error / traceback:", "```", traceback, "```"]
+    if preview:
+        out += [
+            "",
+            "Dataset preview (binds as `df`):",
+            "```",
+            preview,
+            "```",
+        ]
+    if others:
+        joined = _clip("\n\n# ── next cell ──\n".join(_clip(c, 1500) for c in others), 8000)
+        out += [
+            "",
+            "Other code cells in the notebook (context — variables may come from "
+            "these; cells run top-to-bottom in one shared kernel):",
+            "```python",
+            joined,
+            "```",
+        ]
+    return out
+
+
+def build_copilot_system_prompt(
+    source_code: str | None = None,
+    *,
+    notebook: dict[str, Any] | None = None,
+) -> str:
     """Assemble the modeling-copilot system prompt: expert persona + the live
     contract + the authoring knowledge pack + (optionally) the user's current
-    editor source so suggestions are grounded in their actual code."""
+    editor source so suggestions are grounded in their actual code.
+
+    When ``notebook`` is given (a failing/active notebook cell + traceback +
+    dataset preview + sibling cells), the prompt gains a cell-diagnosis knowledge
+    pack and a focused "fix this cell" instruction so the same copilot doubles as
+    the notebook's debugging assistant."""
     try:
         from mmm_framework.garden.contract import describe_contract
 
@@ -120,10 +259,21 @@ def build_copilot_system_prompt(source_code: str | None = None) -> str:
     except Exception:  # noqa: BLE001 — never let a contract import break the copilot
         contract = ""
 
-    parts = [
+    diagnosing = notebook is not None
+    role_line = (
         "You are the Atelier's modeling copilot: a senior Bayesian statistician "
         "and PyMC expert who helps users author bespoke Marketing Mix Models "
-        "(MMMs) for this codebase's Model Garden.",
+        "(MMMs) for this codebase's Model Garden"
+        + (
+            " — and debug the cells they run against those models in the Atelier "
+            "notebook."
+            if diagnosing
+            else "."
+        )
+    )
+
+    parts = [
+        role_line,
         "",
         "Your expertise: Bayesian workflow (priors, identifiability, "
         "reparameterization, prior/posterior predictive checks, divergences, "
@@ -134,9 +284,10 @@ def build_copilot_system_prompt(source_code: str | None = None) -> str:
         "",
         "How to help:",
         "- Be concrete and correct. Prefer a working, minimal code change to a "
-        "lecture. When you propose code, return a COMPLETE, runnable module (or "
-        "the full class) in a single ```python fenced block so the user can apply "
-        "it to the editor in one click.",
+        "lecture. When you propose code, return a COMPLETE, runnable "
+        + ("cell" if diagnosing else "module (or the full class)")
+        + " in a single ```python fenced block so the user can apply it in one "
+        "click.",
         "- Honor the contract below EXACTLY — register the deterministics the "
         "read-ops need and the `beta_<channel>` / `sat_*` / `adstock_alpha_*` "
         "naming, or reporting silently breaks. Explain WHY a prior or structure "
@@ -148,25 +299,31 @@ def build_copilot_system_prompt(source_code: str | None = None) -> str:
         "unidentified latent level competing with media), say so and offer the "
         "safer default.",
         "- Keep prose tight; use short paragraphs and lists. You cannot run code "
-        "or fit models — reason from the contract and the user's source.",
+        "or fit models — reason from the contract, the user's source, and any "
+        "traceback provided.",
         "",
         contract,
         "",
         GARDEN_AUTHORING_KNOWLEDGE,
     ]
+    if diagnosing:
+        parts += ["", NOTEBOOK_DIAGNOSIS_KNOWLEDGE]
 
     src = (source_code or "").strip()
     if src:
-        clipped = src if len(src) <= 16000 else src[:16000] + "\n# … (truncated)\n"
+        clipped = _clip(src, 16000)
         parts += [
             "",
-            "## The user's current editor source",
+            "## The user's current editor source (their model)",
             "Ground your suggestions in this code (edit it, don't restart from "
             "scratch unless asked):",
             "```python",
             clipped,
             "```",
         ]
+
+    if diagnosing:
+        parts += _notebook_context_section(notebook)
     return "\n".join(parts)
 
 
@@ -378,6 +535,7 @@ def format_source(source_code: str) -> tuple[str | None, str | None]:
 
 __all__ = [
     "GARDEN_AUTHORING_KNOWLEDGE",
+    "NOTEBOOK_DIAGNOSIS_KNOWLEDGE",
     "build_copilot_system_prompt",
     "static_authoring_lint",
     "format_source",
