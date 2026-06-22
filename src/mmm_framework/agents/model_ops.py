@@ -347,6 +347,89 @@ def marginal_analysis(
         return _err(f"Marginal analysis failed: {e}")
 
 
+def compute_estimands(
+    mmm: Any, results: Any = None, *, estimands=None, random_seed=None
+) -> dict:
+    """Realize the model's declarative estimands (the counterfactual causal lens).
+
+    Uses the model's ``declared_estimands`` if any, else the capability defaults
+    (``contribution_roi`` / ``marginal_roas`` / ``contribution``). Returns one row
+    per realized estimand (wildcard-channel estimands expand per channel) with
+    mean + HDI + units; unsupported estimands are reported, not dropped. This is
+    the registry-driven surface that subsumes the framework's scattered estimand
+    logic — ``get_roi_metrics`` is left as-is.
+    """
+    try:
+        out = mmm.evaluate_estimands(estimands=estimands, random_seed=random_seed)
+        rows = []
+        for key, r in out.items():
+            name, _, channel = key.partition(":")
+            extra = r.extra or {}
+            rows.append(
+                {
+                    "estimand": name,
+                    "channel": channel or "—",
+                    "kind": r.kind,
+                    "status": r.status,
+                    "mean": None if r.mean is None else float(r.mean),
+                    "hdi_low": None if r.hdi_low is None else float(r.hdi_low),
+                    "hdi_high": None if r.hdi_high is None else float(r.hdi_high),
+                    "units": r.units,
+                    "prob_positive": extra.get("prob_positive"),
+                    "prob_profitable": extra.get("prob_profitable"),
+                }
+            )
+        if not rows:
+            return _err(
+                "No estimands to compute (model declares none and the "
+                "capability defaults are empty)."
+            )
+
+        content = (
+            "### Estimands\n\n"
+            "| Estimand | Channel | Mean | 94% HDI | Units | Status |\n"
+            "|---|---|---|---|---|---|\n"
+        )
+        for row in rows:
+            if row["status"] != "ok" or row["mean"] is None:
+                ci = "—"
+                mean = "—"
+            else:
+                mean = f"{row['mean']:.3f}"
+                lo, hi = row["hdi_low"], row["hdi_high"]
+                ci = (
+                    f"[{lo:.3f}, {hi:.3f}]"
+                    if lo is not None and hi is not None
+                    else "—"
+                )
+            content += (
+                f"| {row['estimand']} | {row['channel']} | {mean} | {ci} | "
+                f"{row['units']} | {row['status']} |\n"
+            )
+
+        res = _ok(content, {"estimands": rows})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Estimands",
+                source="compute_estimands",
+                group="results",
+                columns=[
+                    {"key": "estimand", "label": "Estimand", "type": "string"},
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "mean", "label": "Mean", "type": "number"},
+                    {"key": "hdi_low", "label": "HDI Low", "type": "number"},
+                    {"key": "hdi_high", "label": "HDI High", "type": "number"},
+                    {"key": "units", "label": "Units", "type": "string"},
+                    {"key": "prob_positive", "label": "P(>0)", "type": "percent"},
+                ],
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error computing estimands: {e}")
+
+
 def prior_predictive_check(
     mmm: Any,
     results: Any = None,
@@ -1876,6 +1959,7 @@ def garden_tune_suggestions(mmm: Any, results: Any = None) -> dict:
 
 OPS = {
     "roi_metrics": roi_metrics,
+    "compute_estimands": compute_estimands,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,
     "component_decomposition": component_decomposition,

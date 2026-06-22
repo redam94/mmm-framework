@@ -73,6 +73,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from ..calibration.likelihood import ExperimentMeasurement
+    from ..estimands.spec import Estimand, EstimandResult, Intervention
 
 
 # Map an AdstockType to the kernel name used by the parametric adstock kernels.
@@ -261,6 +262,12 @@ class BayesianMMM:
         self.experiments: list["ExperimentMeasurement"] = (
             list(experiments) if experiments else []
         )
+
+        # Declarative estimands associated with this model. Populated from a
+        # spec (agents.fitting), a reloaded model (serialization), or left empty
+        # -- in which case evaluate_estimands() falls back to the capability
+        # defaults. See mmm_framework.estimands.
+        self.declared_estimands: list["Estimand"] = []
 
         self._model: pm.Model | None = None
         self._trace: az.InferenceData | None = None
@@ -1827,14 +1834,16 @@ class BayesianMMM:
                 ),
             }
 
-            return MMMResults(
-                trace=trace,
-                model=self.model,
-                panel=self.panel,
-                diagnostics=diagnostics,
-                y_mean=self.y_mean,
-                y_std=self.y_std,
-                approximate=False,
+            return self._attach_declared_estimands(
+                MMMResults(
+                    trace=trace,
+                    model=self.model,
+                    panel=self.panel,
+                    diagnostics=diagnostics,
+                    y_mean=self.y_mean,
+                    y_std=self.y_std,
+                    approximate=False,
+                )
             )
 
         # ---- Approximate inference (MAP / ADVI / full-rank ADVI / Pathfinder) ----
@@ -1864,15 +1873,36 @@ class BayesianMMM:
         }
         diagnostics.update(extra_diagnostics)
 
-        return MMMResults(
-            trace=trace,
-            model=self.model,
-            panel=self.panel,
-            diagnostics=diagnostics,
-            y_mean=self.y_mean,
-            y_std=self.y_std,
-            approximate=True,
+        return self._attach_declared_estimands(
+            MMMResults(
+                trace=trace,
+                model=self.model,
+                panel=self.panel,
+                diagnostics=diagnostics,
+                y_mean=self.y_mean,
+                y_std=self.y_std,
+                approximate=True,
+            )
         )
+
+    def _attach_declared_estimands(self, results: MMMResults) -> MMMResults:
+        """Best-effort populate ``results.estimands`` from ``declared_estimands``.
+
+        Only runs when estimands are explicitly declared (so a default fit pays
+        no extra posterior-predictive passes), and never lets an estimand failure
+        break a fit -- the estimands are a convenience layer over the trace.
+        """
+        if not self.declared_estimands:
+            return results
+        try:
+            results.estimands = self.evaluate_estimands(self.declared_estimands)
+        except Exception:  # noqa: BLE001 - estimands must never break a fit
+            warnings.warn(
+                "Declared estimands could not be evaluated at fit time; "
+                "call model.evaluate_estimands() to see the error.",
+                stacklevel=2,
+            )
+        return results
 
     def _fit_approx(
         self,
@@ -2331,6 +2361,108 @@ class BayesianMMM:
             results.append(row)
 
         return pd.DataFrame(results)
+
+    # ------------------------------------------------------------------
+    # Declarative estimands (counterfactual causal lens)
+    # ------------------------------------------------------------------
+
+    def _intervention_to_X_media(
+        self, intervention: "Intervention"
+    ) -> np.ndarray | None:
+        """Materialize an :class:`Intervention` as a media matrix for ``predict``.
+
+        Returns ``None`` for the factual world (``Observed``) so ``predict``
+        reuses the training media; otherwise a transformed copy of
+        ``X_media_raw``. ``predict`` already routes the raw matrix through the
+        per-channel normalization / adstock path, so these are raw-scale edits.
+        """
+        kind = getattr(intervention, "type", None)
+        if kind == "observed":
+            return None
+        X = self.X_media_raw.copy()
+        target = getattr(intervention, "target", None)
+        if kind in ("zero_input", "scale_input", "set_input"):
+            if target not in self.channel_names:
+                raise ValueError(f"Unknown intervention target: {target!r}")
+            idx = self.channel_names.index(target)
+            if kind == "zero_input":
+                X[:, idx] = 0.0
+            elif kind == "scale_input":
+                X[:, idx] *= float(intervention.factor)
+            else:  # set_input
+                X[:, idx] = float(intervention.value)
+            return X
+        if kind == "custom":
+            from ..estimands.interventions import apply_custom_intervention
+
+            return apply_custom_intervention(self, intervention, X)
+        raise ValueError(f"Unsupported intervention: {intervention!r}")
+
+    def predict_under(
+        self,
+        intervention: "Intervention",
+        time_period: tuple[int, int] | None = None,
+        random_seed: int | None = None,
+    ) -> PredictionResults:
+        """Posterior-predictive outcome under a counterfactual ``intervention``.
+
+        A thin wrapper over :meth:`predict` that transforms ``X_media_raw`` per
+        the intervention. ``time_period`` is accepted for interface symmetry
+        (:class:`mmm_framework.estimands.spec.SupportsEstimands`); windowing is
+        applied by the estimand reducer, so the full series is returned here.
+        """
+        X = self._intervention_to_X_media(intervention)
+        return self.predict(
+            X_media=X, return_original_scale=True, random_seed=random_seed
+        )
+
+    def model_capabilities(self) -> set[str]:
+        """Capability flags used to gate which estimands this model supports."""
+        from ..estimands.capabilities import model_capabilities as _caps
+
+        return _caps(self)
+
+    def _default_estimands(self) -> list["Estimand"]:
+        """Estimands to evaluate when none are declared on the instance.
+
+        A garden subclass can set a class-level ``DEFAULT_ESTIMANDS`` (list of
+        :class:`Estimand` or serialized dicts); otherwise the framework defaults
+        filtered by this model's capabilities are used.
+        """
+        from ..estimands import registry
+        from ..estimands.spec import Estimand
+
+        cls_defaults = getattr(type(self), "DEFAULT_ESTIMANDS", None)
+        if cls_defaults:
+            return [
+                e if isinstance(e, Estimand) else Estimand.from_dict(e)
+                for e in cls_defaults
+            ]
+        return registry.defaults_for(self.model_capabilities())
+
+    def evaluate_estimands(
+        self,
+        estimands: "list[Estimand] | None" = None,
+        *,
+        random_seed: int | None = None,
+    ) -> "dict[str, EstimandResult]":
+        """Realize estimands from the fitted posterior as mean + HDI.
+
+        With ``estimands=None`` uses :attr:`declared_estimands` if non-empty,
+        else :meth:`_default_estimands`. Returns a dict keyed by estimand name
+        (wildcard-channel estimands expand to ``"{name}:{channel}"``). Never
+        raises for an unsupported estimand -- it is returned with
+        ``status="unsupported"``.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        from ..estimands.evaluate import EstimandEvaluator
+
+        if estimands is None:
+            estimands = self.declared_estimands or self._default_estimands()
+        return EstimandEvaluator(self, random_seed=random_seed).evaluate(
+            list(estimands)
+        )
 
     def what_if_scenario(
         self,

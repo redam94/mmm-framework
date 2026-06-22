@@ -1053,6 +1053,29 @@ def get_roi_metrics(
 
 
 @tool
+def get_estimands(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Compute the model's declarative estimands — the counterfactual causal lens.
+
+    Returns each estimand the model declares (or the capability defaults:
+    contribution_roi, marginal_roas, contribution — per channel) as a mean + 94%
+    HDI, plus any user-declared estimands (e.g. awareness_lift,
+    cost_per_conversion). Call this when the user asks for ROI/ROAS/contribution
+    "estimands", a named or custom causal contrast, or the full set of declared
+    measures. For the standard ROI table specifically, get_roi_metrics is fine.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "compute_estimands", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def get_component_decomposition(
     state: Annotated[dict, InjectedState],
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
@@ -5572,6 +5595,7 @@ TOOLS = [
     list_saved_models,
     # Analysis
     get_roi_metrics,
+    get_estimands,
     get_component_decomposition,
     get_model_diagnostics,
     get_adstock_weights,

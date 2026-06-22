@@ -404,40 +404,12 @@ def lognormal_sigma_from_moments(value: float, se: float) -> float:
 # In-graph attachment (PyMC -- imported lazily so this module stays light)
 # =============================================================================
 
-
-def build_estimand_expr(
-    estimand: ExperimentEstimand,
-    *,
-    contrib_window: "pt.TensorVariable",
-    spend_window: float,
-    scale: float = 1.0,
-    contrib_window_pert: "pt.TensorVariable | None" = None,
-    lift: float | None = None,
-) -> "pt.TensorVariable":
-    """Assemble a model-implied estimand from a window's contribution.
-
-    Shared by the extension models (the core model has its own assembly with
-    adstock). ``contrib_window`` is the summed per-obs contribution over the
-    experiment window in *model* units; ``scale`` converts it to the estimand's
-    natural scale (``y_std`` for a standardized model, ``1.0`` for a raw-``y``
-    model). ``spend_window`` is the observed window spend (the denominator for
-    ROAS / marginal spend for mROAS).
-
-    For ``MROAS``, ``contrib_window_pert`` is the contribution under spend scaled
-    by ``(1 + lift)`` within the window, and the result is the incremental KPI per
-    incremental dollar.
-    """
-    contribution = contrib_window * scale
-    if estimand is ExperimentEstimand.CONTRIBUTION:
-        return contribution
-    if estimand is ExperimentEstimand.ROAS:
-        return contribution / spend_window
-    if estimand is ExperimentEstimand.MROAS:
-        if contrib_window_pert is None or lift is None:
-            raise ValueError("MROAS estimand requires contrib_window_pert and lift")
-        delta = (contrib_window_pert - contrib_window) * scale
-        return delta / (lift * spend_window)
-    raise ValueError(f"Unknown estimand: {estimand!r}")
+# ``build_estimand_expr`` (the in-graph contribution/ROAS/mROAS algebra) now
+# lives in mmm_framework.estimands.graph -- the single home of in-graph estimand
+# realization -- and is re-exported here so existing callers keep working. The
+# graph module imports nothing from mmm_framework at load (it normalizes the
+# estimand to its .value), so this is cycle-free.
+from ..estimands.graph import build_estimand_expr  # noqa: E402,F401
 
 
 def attach_experiment_likelihood(

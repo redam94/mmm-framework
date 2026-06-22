@@ -445,6 +445,23 @@ def build_model(
             ) from e
         mmm.add_experiment_calibration(measurements)
 
+    # 5. Declarative estimands (the counterfactual causal lens): the spec may
+    # carry named Estimand dicts to associate with the model; they are realized
+    # from the posterior at fit time and round-tripped by the serializer. Same
+    # from_dict + try/except shape as the experiments block above.
+    est_spec = spec.get("estimands") or []
+    if est_spec:
+        from mmm_framework.estimands.spec import Estimand
+
+        try:
+            mmm.declared_estimands = [Estimand.from_dict(e) for e in est_spec]
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Invalid estimand entry in spec.estimands: {e}. Each entry must "
+                "be a serialized Estimand (see mmm_framework.estimands.registry "
+                "for the built-in shapes)."
+            ) from e
+
     return mmm
 
 
