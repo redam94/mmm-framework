@@ -285,13 +285,48 @@ class EstimandEvaluator:
         )
 
     def _eval_latent_contrast(self, contrast, quantity, baseline, mask) -> _NodeValue:
-        # A latent-variable contrast requires a predict_under that also returns
-        # the latent path; not implemented for the base MMM (declared via
-        # required_capabilities), so report unsupported rather than guess.
-        raise _SkipChannel(
-            f"latent quantity {quantity.name!r} not realizable post-hoc on this model",
-            skip=False,
-        )
+        """A latent-variable contrast: the named deterministic ``quantity.name``
+        re-evaluated under the intervention vs the baseline (via the model's
+        :meth:`~mmm_framework.model.base.BayesianMMM.sample_latent_under`), reduced
+        over the window and combined by the contrast op. The latent is in its
+        native (model) scale; the contrast cancels any constant scaling."""
+        model = self.model
+        if not callable(getattr(model, "sample_latent_under", None)):
+            raise _SkipChannel(
+                f"model cannot realize latent contrasts for {quantity.name!r} "
+                "(no sample_latent_under)",
+                skip=False,
+            )
+        seed_i, seed_b = self._seeds_for(contrast)
+        try:
+            di = np.asarray(
+                model.sample_latent_under(
+                    quantity.name, contrast.intervention, random_seed=seed_i
+                )
+            )
+            db = np.asarray(
+                model.sample_latent_under(quantity.name, baseline, random_seed=seed_b)
+            )
+        except Exception as exc:  # noqa: BLE001 — degrade, never crash the engine
+            raise _SkipChannel(
+                f"latent contrast for {quantity.name!r} failed: {exc}", skip=False
+            ) from exc
+
+        def _collapse(d: np.ndarray) -> np.ndarray:
+            if d.ndim == 1:  # scalar-per-draw latent
+                return d
+            if d.ndim == 2 and d.shape[1] == len(mask):  # obs-indexed
+                return _reduce(d[:, mask], contrast.reduce, axis=1)
+            raise _SkipChannel(
+                f"latent {quantity.name!r} has trailing shape {d.shape[1:]}; latent "
+                "contrasts support a scalar or obs-indexed (n_obs,) deterministic — "
+                "target a named scalar element for higher dims",
+                skip=False,
+            )
+
+        si, sb = _collapse(di), _collapse(db)
+        samples = _apply_op(si, sb, contrast.op)
+        return float(np.mean(samples)), samples
 
     def _eval_quantity(
         self, quantity, mask: np.ndarray, marginal_factor: float | None
@@ -324,7 +359,8 @@ class EstimandEvaluator:
         loading) → mean + HDI directly; an **obs-indexed** latent → mean over the
         window. A vector/matrix latent (e.g. a full loadings matrix) is *not* a
         single estimand — it is surfaced as a table — so it returns ``unsupported``.
-        Latent *contrasts* remain unsupported (:meth:`_eval_latent_contrast`)."""
+        A latent used in a *contrast* (intervention vs baseline) is realized by
+        :meth:`_eval_latent_contrast` instead."""
         from mmm_framework.reporting.helpers.utils import _get_posterior
 
         posterior = _get_posterior(self.model)

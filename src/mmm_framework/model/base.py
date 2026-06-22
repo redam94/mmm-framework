@@ -2689,6 +2689,41 @@ class BayesianMMM:
         contrib = contrib.reshape(-1, *contrib.shape[2:])  # (draws, obs, channel)
         return contrib * self.y_std  # contributions scale by y_std (no mean shift)
 
+    def sample_latent_under(
+        self,
+        var_name: str,
+        intervention: "Intervention | None" = None,
+        random_seed: int | None = None,
+    ) -> np.ndarray:
+        """Posterior draws of a named deterministic ``var_name`` under a
+        counterfactual ``intervention`` on the media inputs.
+
+        Generalizes :meth:`sample_channel_contributions` to *any* registered
+        deterministic: ``set_data`` swaps in the intervention-transformed media
+        (training media for ``Observed`` / ``None``), then re-evaluates
+        ``var_name`` via posterior-predictive. Returned shape is
+        ``(n_draws, *var_shape)`` in the deterministic's **native (model) scale**
+        — the engine forms latent *contrasts* (intervention − baseline) from this,
+        so any constant scale cancels. This is what powers latent-variable
+        estimand contrasts (see :mod:`mmm_framework.estimands.evaluate`)."""
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        X_media = self._intervention_to_X_media(intervention) if intervention else None
+        with self.model:
+            if self.use_parametric_adstock:
+                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
+            else:
+                X_low, X_high = self._prepare_media_data_for_model(X_media)
+                pm.set_data({"X_media_low": X_low, "X_media_high": X_high})
+            pp = pm.sample_posterior_predictive(
+                self._trace,
+                var_names=[var_name],
+                random_seed=random_seed,
+                progressbar=False,
+            )
+        vals = pp.posterior_predictive[var_name].values
+        return vals.reshape(-1, *vals.shape[2:])  # (draws, *var_shape)
+
     def sample_prior_predictive(
         self, samples: int = 500, random_seed: int | None = None
     ) -> az.InferenceData:

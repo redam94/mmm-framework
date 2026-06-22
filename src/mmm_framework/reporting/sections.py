@@ -1014,16 +1014,28 @@ class DiagnosticsSection(Section):
         if self.data.diagnostics:
             diag = self.data.diagnostics
 
-            # Determine status
+            # Determine status. R-hat/ESS are ``None`` for an approximate
+            # (MAP/ADVI) fit — render those as N/A rather than crashing.
             divergences = diag.get("divergences", 0)
-            rhat_max = diag.get("rhat_max", 1.0)
-            ess_min = diag.get("ess_bulk_min", 400)
+            rhat_max = diag.get("rhat_max")
+            ess_min = diag.get("ess_bulk_min")
 
+            div_val = "N/A" if divergences is None else f"{divergences}"
             divergence_status = (
-                "✅ Pass" if divergences == 0 else f"⚠️ {divergences} divergences"
+                "—"
+                if divergences is None
+                else ("✅ Pass" if divergences == 0 else f"⚠️ {divergences} divergences")
             )
-            rhat_status = "✅ Pass" if rhat_max < 1.01 else f"⚠️ {rhat_max:.3f}"
-            ess_status = "✅ Pass" if ess_min > 400 else f"⚠️ {ess_min:.0f}"
+            if rhat_max is None:
+                rhat_val, rhat_status = "N/A", "— (approximate fit)"
+            else:
+                rhat_val = f"{rhat_max:.4f}"
+                rhat_status = "✅ Pass" if rhat_max < 1.01 else f"⚠️ {rhat_max:.3f}"
+            if ess_min is None:
+                ess_val, ess_status = "N/A", "— (approximate fit)"
+            else:
+                ess_val = f"{ess_min:.0f}"
+                ess_status = "✅ Pass" if ess_min > 400 else f"⚠️ {ess_min:.0f}"
 
             content_parts.append(
                 f"""
@@ -1031,9 +1043,9 @@ class DiagnosticsSection(Section):
                 <table class="data-table" style="max-width: 500px;">
                     <thead><tr><th>Diagnostic</th><th>Value</th><th>Status</th></tr></thead>
                     <tbody>
-                        <tr><td>Divergences</td><td class="mono">{divergences}</td><td>{divergence_status}</td></tr>
-                        <tr><td>R-hat (max)</td><td class="mono">{rhat_max:.4f}</td><td>{rhat_status}</td></tr>
-                        <tr><td>ESS bulk (min)</td><td class="mono">{ess_min:.0f}</td><td>{ess_status}</td></tr>
+                        <tr><td>Divergences</td><td class="mono">{div_val}</td><td>{divergence_status}</td></tr>
+                        <tr><td>R-hat (max)</td><td class="mono">{rhat_val}</td><td>{rhat_status}</td></tr>
+                        <tr><td>ESS bulk (min)</td><td class="mono">{ess_val}</td><td>{ess_status}</td></tr>
                     </tbody>
                 </table>
             """
@@ -1563,8 +1575,81 @@ class CannibalizationSection(Section):
 
 
 # Registry of available sections
+class FactorAnalysisSection(Section):
+    """Confirmatory factor analysis: loadings table + fit-index cards.
+
+    Renders for a non-MMM CFA model (its bundle carries ``factor_loadings`` /
+    ``cfa_fit_indices``); empty otherwise."""
+
+    section_id: str = "factor-analysis"
+    default_title: str = "Confirmatory Factor Analysis"
+
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        loadings = self.data.factor_loadings
+        indices = self.data.cfa_fit_indices
+        if not loadings and not indices:
+            return ""
+
+        parts: list[str] = []
+        if indices:
+            parts.append("<h3>Fit indices</h3>")
+            parts.append(self._render_fit_cards(indices))
+        if loadings:
+            parts.append("<h3>Factor loadings</h3>")
+            parts.append(self._render_loadings_table(loadings))
+        return self._render_section_wrapper("\n".join(parts))
+
+    def _render_fit_cards(self, indices: dict[str, dict[str, float]]) -> str:
+        cards = []
+        for name, v in indices.items():
+            mean = v.get("mean", float("nan"))
+            lo, hi = v.get("lower", mean), v.get("upper", mean)
+            ci_html = f'<div class="ci">[{lo:.3f}, {hi:.3f}]</div>' if hi != lo else ""
+            cards.append(
+                f"""
+                <div class="metric-card">
+                    <div class="value">{mean:.3f}</div>
+                    <div class="label">{name.upper()}</div>
+                    {ci_html}
+                </div>
+                """
+            )
+        return f'<div class="metrics-grid">{"".join(cards)}</div>'
+
+    def _render_loadings_table(self, loadings: list[dict]) -> str:
+        rows = []
+        for r in loadings:
+            mean = r.get("loading", float("nan"))
+            lo, hi = r.get("hdi_low", mean), r.get("hdi_high", mean)
+            ci = f"[{lo:.3f}, {hi:.3f}]" if hi != lo else "—"
+            strong = "positive" if abs(mean) >= 0.5 else "uncertain"
+            rows.append(
+                f"""
+                <tr>
+                    <td>{r.get("indicator", "")}</td>
+                    <td>{r.get("factor", "")}</td>
+                    <td class="mono">{mean:.3f}</td>
+                    <td class="mono">{ci}</td>
+                    <td class="{strong}">{"strong" if strong == "positive" else "weak"}</td>
+                </tr>
+                """
+            )
+        return f"""
+            <table class="data-table">
+                <thead>
+                    <tr><th>Indicator</th><th>Factor</th><th>Loading</th>
+                        <th>HDI</th><th>Strength</th></tr>
+                </thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+        """
+
+
 SECTION_REGISTRY: dict[str, type[Section]] = {
     "executive_summary": ExecutiveSummarySection,
+    "factor_analysis": FactorAnalysisSection,
     "model_fit": ModelFitSection,
     "channel_roi": ChannelROISection,
     "decomposition": DecompositionSection,

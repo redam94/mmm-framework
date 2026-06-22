@@ -199,6 +199,8 @@ class ReportConfig:
     geographic: SectionConfig = field(default_factory=SectionConfig)
     mediators: SectionConfig = field(default_factory=SectionConfig)
     cannibalization: SectionConfig = field(default_factory=SectionConfig)
+    # Non-MMM family sections
+    factor_analysis: SectionConfig = field(default_factory=SectionConfig)
 
     # Output settings
     include_plotly_js: bool = True  # Embed Plotly.js (larger file, fully portable)

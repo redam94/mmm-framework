@@ -44,9 +44,11 @@ to the sample axis, and
 - **vector/matrix** latent (e.g. a full loadings matrix) → `status="unsupported"` (surfaced as a
   table instead).
 
-Latent *contrasts* remain unsupported. `registry.latent_scalar(name)` / `fit_index(name)` /
-`factor_loading(name)` build these estimands, gated by `HAS_LATENT:<var>`, so they cleanly return
-`unsupported` on a model that doesn't carry the variable.
+`registry.latent_scalar(name)` / `fit_index(name)` / `factor_loading(name)` build these estimands,
+gated by `HAS_LATENT:<var>`, so they cleanly return `unsupported` on a model that doesn't carry the
+variable. A latent used in a **contrast** (intervention vs baseline) is realized by
+`_eval_latent_contrast` via the model's `sample_latent_under(var, intervention)` (e.g. an MMM's
+goodwill stock under media-on vs a channel off) — see [estimands.md](./estimands.md).
 
 ## Authoring a non-MMM family (the CFA example)
 
@@ -81,11 +83,17 @@ structure and asserts it **recovers the loadings** (≈ the planted value), the 
 trace pass). `tests/test_non_mmm_families.py` covers the contract/compat gating + the estimand
 extension in isolation.
 
+## Shipped follow-ons
+
+- **Latent-variable contrasts** — a `LatentVar` in a counterfactual `Contrast` is realized via
+  `BayesianMMM.sample_latent_under(var, intervention)` + `evaluate.py::_eval_latent_contrast` (e.g.
+  an MMM's goodwill stock under media-on vs a channel off). `tests/test_latent_contrasts.py`.
+- **CFA HTML report section** — `FactorAnalysisSection` (loadings table + fit-index cards) +
+  `FactorAnalysisExtractor`; `MMMReportGenerator` gates the channel/ROI sections off and the
+  factor-analysis section on via `bundle.model_kind`. `tests/test_cfa_report.py`.
+
 ## Out of scope (deferred)
 
 - **LCA** (label-switching ordering constraint) and **EFA** (rotation indeterminacy) — CFA proves
   the path first; both are now slot-ins on the same contract.
-- A polished CFA **report section** in the HTML report (channel sections degrade to empty; loadings
-  / fit indices are shown via estimands + `factor_loadings_summary`).
-- Latent-variable **contrasts** in the estimand engine (only bare latent *quantities* so far).
 - A dedicated non-MMM data container (the CFA reuses `PanelDataset`).

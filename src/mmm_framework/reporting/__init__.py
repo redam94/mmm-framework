@@ -27,6 +27,7 @@ from .data_extractors import (
 from .sections import (
     Section,
     ExecutiveSummarySection,
+    FactorAnalysisSection,
     ModelFitSection,
     ChannelROISection,
     DecompositionSection,
@@ -104,6 +105,7 @@ __all__ = [
     # Sections
     "Section",
     "ExecutiveSummarySection",
+    "FactorAnalysisSection",
     "ModelFitSection",
     "ChannelROISection",
     "DecompositionSection",

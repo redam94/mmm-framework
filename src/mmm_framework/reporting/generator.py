@@ -24,6 +24,7 @@ from .data_extractors import (
 from .sections import (
     Section,
     ExecutiveSummarySection,
+    FactorAnalysisSection,
     ModelFitSection,
     ChannelROISection,
     DecompositionSection,
@@ -109,20 +110,42 @@ class MMMReportGenerator:
 
     def _initialize_sections(self):
         """Initialize report sections based on configuration."""
+        # MMM-specific sections (channels/ROI/decomposition/saturation/geo/
+        # mediators/cannibalization) gate OFF for a non-MMM family (e.g. a CFA);
+        # the factor-analysis section gates ON only for non-MMM. Detected from the
+        # bundle's model_kind (set by the extractor).
+        is_mmm = getattr(self.data, "model_kind", "mmm") == "mmm"
+        _off = SectionConfig(enabled=False)
+
+        def _mmm(cfg: SectionConfig) -> SectionConfig:
+            return cfg if is_mmm else _off
+
+        def _non_mmm(cfg: SectionConfig) -> SectionConfig:
+            return cfg if not is_mmm else _off
+
         section_configs = [
             (
                 "executive_summary",
                 ExecutiveSummarySection,
                 self.config.executive_summary,
             ),
+            (
+                "factor_analysis",
+                FactorAnalysisSection,
+                _non_mmm(self.config.factor_analysis),
+            ),
             ("model_fit", ModelFitSection, self.config.model_fit),
-            ("channel_roi", ChannelROISection, self.config.channel_roi),
-            ("geographic", GeographicSection, self.config.geographic),
-            ("decomposition", DecompositionSection, self.config.decomposition),
-            ("mediators", MediatorSection, self.config.mediators),
-            ("cannibalization", CannibalizationSection, self.config.cannibalization),
-            ("saturation", SaturationSection, self.config.saturation),
-            ("sensitivity", SensitivitySection, self.config.sensitivity),
+            ("channel_roi", ChannelROISection, _mmm(self.config.channel_roi)),
+            ("geographic", GeographicSection, _mmm(self.config.geographic)),
+            ("decomposition", DecompositionSection, _mmm(self.config.decomposition)),
+            ("mediators", MediatorSection, _mmm(self.config.mediators)),
+            (
+                "cannibalization",
+                CannibalizationSection,
+                _mmm(self.config.cannibalization),
+            ),
+            ("saturation", SaturationSection, _mmm(self.config.saturation)),
+            ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

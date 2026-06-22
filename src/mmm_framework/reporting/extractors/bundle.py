@@ -184,6 +184,16 @@ class MMMDataBundle:
     # Model specification info
     model_specification: dict[str, Any] | None = None
 
+    # Model family ("mmm" by default; e.g. "cfa" for a confirmatory factor
+    # analysis). Drives section gating: channel/ROI sections are MMM-only.
+    model_kind: str = "mmm"
+
+    # Non-MMM: confirmatory factor analysis (CFA) results.
+    # factor_loadings: ordered rows {indicator, factor, loading, hdi_low, hdi_high}.
+    factor_loadings: list[dict[str, Any]] | None = None
+    # cfa_fit_indices: {name: {"mean", "lower", "upper"}} (e.g. srmr, cov_fit).
+    cfa_fit_indices: dict[str, dict[str, float]] | None = None
+
     # MCMC diagnostics
     diagnostics: dict[str, Any] | None = (
         None  # {"divergences", "rhat_max", "ess_bulk_min"}
