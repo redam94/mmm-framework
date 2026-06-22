@@ -4,8 +4,9 @@ The final axis of the modeling-system rework. After estimands ([estimands.md](./
 and per-model config + likelihood ([custom-model-config.md](./custom-model-config.md)) made the
 spine pluggable, this removes the last "everything is an MMM" assumption: a genuinely **non-MMM
 Bayesian family** can be authored as a Model Garden model and ride the existing build → fit →
-serialize → estimand → report pipeline instead of forking it. The first concrete family is a
-**Bayesian confirmatory factor analysis (CFA)**; `BayesianMMM` is unchanged (byte-identical).
+serialize → estimand → report pipeline instead of forking it. Two concrete families ship — a
+**Bayesian confirmatory factor analysis (CFA)** and a **Bayesian latent class analysis (LCA)**;
+`BayesianMMM` is unchanged (byte-identical).
 
 ## The contract: `__garden_model_kind__` + `is_mmm_model`
 
@@ -83,17 +84,33 @@ structure and asserts it **recovers the loadings** (≈ the planted value), the 
 trace pass). `tests/test_non_mmm_families.py` covers the contract/compat gating + the estimand
 extension in isolation.
 
+## A second family — Bayesian LCA
+
+`examples/garden_models/bayesian_lca.py` is a **latent class analysis** — a mixture model over
+**binary indicators** with `K` discrete latent classes (segments), declaring
+`__garden_model_kind__ = "latent_class"`. The discrete labels are **integrated out** (no discrete
+latent sampling): each observation's log-likelihood is a `logsumexp` log-mixture of products of
+Bernoullis, added with a `pm.Potential`. Mixing proportions `π` are a softmax of an **ordered** logit
+(pins class order by size → resolves label-switching); per-class item probabilities `θₖⱼ` are `Beta`.
+Estimands are the **class sizes** (`class_size_k`, via an overridden `_default_estimands` since they
+scale with `n_classes`); `class_profile_summary()` is the interpretable per-(class, item) table. It
+recovers a planted 2-class structure end-to-end. `tests/test_lca_garden_model.py`. The same recipe
+(override `_prepare_data` + `_build_model`, declare estimands + a summary table) extends to EFA, etc.
+
 ## Shipped follow-ons
 
 - **Latent-variable contrasts** — a `LatentVar` in a counterfactual `Contrast` is realized via
   `BayesianMMM.sample_latent_under(var, intervention)` + `evaluate.py::_eval_latent_contrast` (e.g.
   an MMM's goodwill stock under media-on vs a channel off). `tests/test_latent_contrasts.py`.
-- **CFA HTML report section** — `FactorAnalysisSection` (loadings table + fit-index cards) +
-  `FactorAnalysisExtractor`; `MMMReportGenerator` gates the channel/ROI sections off and the
-  factor-analysis section on via `bundle.model_kind`. `tests/test_cfa_report.py`.
+- **Family-agnostic latent-structure report** — `FactorAnalysisSection` + `FactorAnalysisExtractor`
+  render ANY non-MMM family: a summary table (CFA loadings via `factor_loadings_summary`, LCA class
+  profiles via `class_profile_summary`) + the declared estimands as cards, with per-family headings
+  from the bundle (`latent_section_title` / `latent_table_title` / `latent_estimands_title`) and a
+  column-agnostic table renderer. `MMMReportGenerator` gates the channel/ROI sections off and this
+  section on via `bundle.model_kind`. `tests/test_cfa_report.py`.
 
 ## Out of scope (deferred)
 
-- **LCA** (label-switching ordering constraint) and **EFA** (rotation indeterminacy) — CFA proves
-  the path first; both are now slot-ins on the same contract.
+- **EFA** (exploratory factor analysis) — rotation/sign indeterminacy needs a post-hoc rotation;
+  a slot-in on the same contract once added.
 - A dedicated non-MMM data container (the CFA reuses `PanelDataset`).

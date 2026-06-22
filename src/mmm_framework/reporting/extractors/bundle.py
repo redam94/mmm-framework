@@ -188,11 +188,16 @@ class MMMDataBundle:
     # analysis). Drives section gating: channel/ROI sections are MMM-only.
     model_kind: str = "mmm"
 
-    # Non-MMM: confirmatory factor analysis (CFA) results.
-    # factor_loadings: ordered rows {indicator, factor, loading, hdi_low, hdi_high}.
+    # Non-MMM latent-structure results (CFA / LCA / …). ``factor_loadings`` holds
+    # the summary table as a list of column dicts (CFA: indicator/factor/loading/…;
+    # LCA: class/item/prob/…); ``cfa_fit_indices`` holds the declared estimands
+    # ({name: {"mean","lower","upper"}}). The titles drive the section's headings
+    # so one section serves every latent family.
     factor_loadings: list[dict[str, Any]] | None = None
-    # cfa_fit_indices: {name: {"mean", "lower", "upper"}} (e.g. srmr, cov_fit).
     cfa_fit_indices: dict[str, dict[str, float]] | None = None
+    latent_section_title: str | None = None
+    latent_table_title: str | None = None
+    latent_estimands_title: str | None = None
 
     # MCMC diagnostics
     diagnostics: dict[str, Any] | None = (

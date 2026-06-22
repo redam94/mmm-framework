@@ -1576,34 +1576,47 @@ class CannibalizationSection(Section):
 
 # Registry of available sections
 class FactorAnalysisSection(Section):
-    """Confirmatory factor analysis: loadings table + fit-index cards.
-
-    Renders for a non-MMM CFA model (its bundle carries ``factor_loadings`` /
-    ``cfa_fit_indices``); empty otherwise."""
+    """Latent-structure section for a non-MMM model — a CFA's loadings, an LCA's
+    class profiles, etc. Renders a summary **table** + the model's declared
+    **estimands** as cards, with family-specific headings supplied by the bundle
+    (``latent_section_title`` / ``latent_table_title`` / ``latent_estimands_title``).
+    Empty unless the bundle carries ``factor_loadings`` or ``cfa_fit_indices``."""
 
     section_id: str = "factor-analysis"
-    default_title: str = "Confirmatory Factor Analysis"
+    default_title: str = "Latent Structure"
+
+    @property
+    def title(self) -> str:
+        return (
+            self.section_config.title
+            or getattr(self.data, "latent_section_title", None)
+            or self.default_title
+        )
 
     def render(self) -> str:
         if not self.is_enabled:
             return ""
-        loadings = self.data.factor_loadings
-        indices = self.data.cfa_fit_indices
-        if not loadings and not indices:
+        table_rows = self.data.factor_loadings
+        estimands = self.data.cfa_fit_indices
+        if not table_rows and not estimands:
             return ""
 
         parts: list[str] = []
-        if indices:
-            parts.append("<h3>Fit indices</h3>")
-            parts.append(self._render_fit_cards(indices))
-        if loadings:
-            parts.append("<h3>Factor loadings</h3>")
-            parts.append(self._render_loadings_table(loadings))
+        if estimands:
+            est_title = (
+                getattr(self.data, "latent_estimands_title", None) or "Estimands"
+            )
+            parts.append(f"<h3>{est_title}</h3>")
+            parts.append(self._render_estimand_cards(estimands))
+        if table_rows:
+            tbl_title = getattr(self.data, "latent_table_title", None) or "Summary"
+            parts.append(f"<h3>{tbl_title}</h3>")
+            parts.append(self._render_table(table_rows))
         return self._render_section_wrapper("\n".join(parts))
 
-    def _render_fit_cards(self, indices: dict[str, dict[str, float]]) -> str:
+    def _render_estimand_cards(self, estimands: dict[str, dict[str, float]]) -> str:
         cards = []
-        for name, v in indices.items():
+        for name, v in estimands.items():
             mean = v.get("mean", float("nan"))
             lo, hi = v.get("lower", mean), v.get("upper", mean)
             ci_html = f'<div class="ci">[{lo:.3f}, {hi:.3f}]</div>' if hi != lo else ""
@@ -1618,31 +1631,26 @@ class FactorAnalysisSection(Section):
             )
         return f'<div class="metrics-grid">{"".join(cards)}</div>'
 
-    def _render_loadings_table(self, loadings: list[dict]) -> str:
-        rows = []
-        for r in loadings:
-            mean = r.get("loading", float("nan"))
-            lo, hi = r.get("hdi_low", mean), r.get("hdi_high", mean)
-            ci = f"[{lo:.3f}, {hi:.3f}]" if hi != lo else "—"
-            strong = "positive" if abs(mean) >= 0.5 else "uncertain"
-            rows.append(
-                f"""
-                <tr>
-                    <td>{r.get("indicator", "")}</td>
-                    <td>{r.get("factor", "")}</td>
-                    <td class="mono">{mean:.3f}</td>
-                    <td class="mono">{ci}</td>
-                    <td class="{strong}">{"strong" if strong == "positive" else "weak"}</td>
-                </tr>
-                """
-            )
+    def _render_table(self, rows: list[dict]) -> str:
+        """Column-agnostic table: renders whatever columns the summary rows carry
+        (so one renderer serves CFA loadings, LCA class profiles, …)."""
+        if not rows:
+            return ""
+        cols = list(rows[0].keys())
+        header = "".join(f"<th>{c.replace('_', ' ').title()}</th>" for c in cols)
+        body = []
+        for r in rows:
+            cells = []
+            for c in cols:
+                v = r.get(c, "")
+                cell = f"{v:.3f}" if isinstance(v, float) else str(v)
+                klass = ' class="mono"' if isinstance(v, float) else ""
+                cells.append(f"<td{klass}>{cell}</td>")
+            body.append(f"<tr>{''.join(cells)}</tr>")
         return f"""
             <table class="data-table">
-                <thead>
-                    <tr><th>Indicator</th><th>Factor</th><th>Loading</th>
-                        <th>HDI</th><th>Strength</th></tr>
-                </thead>
-                <tbody>{"".join(rows)}</tbody>
+                <thead><tr>{header}</tr></thead>
+                <tbody>{"".join(body)}</tbody>
             </table>
         """
 

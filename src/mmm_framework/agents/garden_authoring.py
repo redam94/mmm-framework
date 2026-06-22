@@ -123,7 +123,9 @@ tiers are then not required. Such a model:
 - declares `DEFAULT_ESTIMANDS` over those latents (e.g. `fit_index("srmr")`); the
   estimand engine auto-exposes every posterior var as `HAS_LATENT:<var>` and a
   **bare `LatentVar`** scalar realizes as mean+HDI.
-See `examples/garden_models/bayesian_cfa.py` (a confirmatory factor analysis) and
+See `examples/garden_models/bayesian_cfa.py` (confirmatory factor analysis) and
+`examples/garden_models/bayesian_lca.py` (latent class analysis — a mixture over
+binary items, discrete classes integrated out via a logsumexp `pm.Potential`) and
 `technical-docs/non-mmm-families.md`.
 
 ## PERFORMANCE — avoid pytensor.scan for recursions
