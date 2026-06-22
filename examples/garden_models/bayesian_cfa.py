@@ -306,3 +306,22 @@ if __name__ == "__main__":
     print("\nFit indices:")
     for name, r in est.items():
         print(f"  {name:10s} mean={r.mean:.3f}  ({r.status})")
+
+    # HTML report: a non-MMM (CFA) model auto-routes to a Factor Analysis section
+    # (loadings table + fit-index cards) and gates the channel/ROI sections off.
+    import tempfile
+    from pathlib import Path
+
+    from mmm_framework.reporting import MMMReportGenerator
+
+    gen = MMMReportGenerator(model=mmm)
+    html = gen.render()
+    assert 'id="factor-analysis"' in html, "CFA report missing Factor Analysis section"
+    assert (
+        'id="channel-roi"' not in html
+    ), "CFA report should gate the channel/ROI section off"
+    report_path = gen.to_html(Path(tempfile.gettempdir()) / "bayesian_cfa_report.html")
+    print(
+        f"\nHTML report written to {report_path} — "
+        "contains the 'Confirmatory Factor Analysis' section; channel/ROI gated off."
+    )

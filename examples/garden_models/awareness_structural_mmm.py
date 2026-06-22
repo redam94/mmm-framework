@@ -67,6 +67,14 @@ import pytensor.tensor as pt
 from pydantic import BaseModel, Field
 
 from mmm_framework.config import LikelihoodFamily
+from mmm_framework.estimands.spec import (
+    ALL_CHANNELS,
+    Contrast,
+    Estimand,
+    LatentVar,
+    Observed,
+    ZeroInput,
+)
 from mmm_framework.garden import CustomMMM
 
 # These two live in the same module as BayesianMMM and are the single source of
@@ -128,8 +136,36 @@ class AwarenessStructuralMMM(CustomMMM):
     CONFIG_SCHEMA = AwarenessParams
 
     #: Estimands this model surfaces by default (the agent/UI fall back to these
-    #: when the spec declares none): mean per-period awareness lift + ROI.
-    DEFAULT_ESTIMANDS = ["awareness_lift", "contribution_roi"]
+    #: when the spec declares none): mean per-period awareness lift + ROI, plus a
+    #: per-channel **latent-variable contrast** on the goodwill stock. The third
+    #: estimand is a first-class, model-declared latent contrast: it diffs the
+    #: latent ``media_total`` awareness stock between the observed world and a
+    #: channel-off world (``ZeroInput`` over ``ALL_CHANNELS`` → one result per
+    #: channel, keyed ``goodwill_stock:<channel>``), realized through
+    #: :meth:`~mmm_framework.BayesianMMM.sample_latent_under`. It is gated on the
+    #: auto-exposed ``HAS_LATENT:media_total`` capability, so the engine returns
+    #: ``unsupported`` (never raises) on a model lacking that latent var.
+    DEFAULT_ESTIMANDS = [
+        "awareness_lift",
+        "contribution_roi",
+        Estimand(
+            name="goodwill_stock",
+            kind="latent_lift",
+            numerator=Contrast(
+                quantity=LatentVar(name="media_total"),
+                intervention=Observed(),
+                baseline=ZeroInput(target=ALL_CHANNELS),
+                op="difference",
+                reduce="mean",
+            ),
+            denominator=None,
+            required_capabilities=["HAS_LATENT:media_total"],
+            units="awareness (std)",
+            causal_assumptions=(
+                "Mean per-period goodwill stock attributable to the channel."
+            ),
+        ),
+    ]
 
     def _build_model(self) -> pm.Model:
         """Build the awareness state-space graph (overrides the base MMM build)."""
@@ -375,3 +411,14 @@ if __name__ == "__main__":
                 index=False
             )
         )
+
+        # The model's DEFAULT_ESTIMANDS — realized straight from the fitted
+        # posterior. evaluate_estimands() with no args uses the declared list, so
+        # this surfaces awareness_lift + contribution_roi AND the per-channel
+        # goodwill_stock latent contrast (the LatentVar diff on media_total under
+        # ZeroInput(ALL_CHANNELS), realized via sample_latent_under). The wildcard
+        # baseline expands to one result per channel, keyed "goodwill_stock:<ch>".
+        print("\nDeclared estimands (model-realized):")
+        for key, res in mmm.evaluate_estimands().items():
+            mean = "—" if res.mean is None else f"{res.mean:+.3f}"
+            print(f"  {key:<28} mean={mean:>8}  status={res.status}")

@@ -3169,11 +3169,32 @@ def _notebook_starter(name: str) -> list[dict]:
         "fig = px.bar(roi, x=cols[0], y=ycol, title='Recovered ROI by channel')\n"
         "fig.show()\n"
     )
+    estimands = (
+        "# Declarative estimands: the counterfactual quantities your model declares\n"
+        "# (DEFAULT_ESTIMANDS) or its built-in defaults, realized as mean + HDI.\n"
+        "# Each is a pre-specified causal contrast (not a post-hoc summary).\n"
+        "import pandas as pd\n"
+        "res = mmm.evaluate_estimands()  # dict[name -> EstimandResult]\n"
+        "rows = []\n"
+        "for nm, r in res.items():\n"
+        "    if r.status != 'ok':\n"
+        "        # Still surface unsupported estimands with the reason (missing capability).\n"
+        "        rows.append({'estimand': nm, 'mean': None, 'hdi_low': None,\n"
+        "                     'hdi_high': None, 'status': r.status,\n"
+        "                     'units': r.reason or r.units})\n"
+        "        continue\n"
+        "    rows.append({'estimand': nm, 'mean': r.mean, 'hdi_low': r.hdi_low,\n"
+        "                 'hdi_high': r.hdi_high, 'status': r.status, 'units': r.units})\n"
+        "df_est = pd.DataFrame(rows, columns=['estimand', 'mean', 'hdi_low',\n"
+        "                                     'hdi_high', 'status', 'units'])\n"
+        "show_table(df_est, title='Declared estimands (counterfactual quantities of interest)')\n"
+    )
     return [
         {"id": "c1", "type": "markdown", "source": intro, "outputs": None},
         {"id": "c2", "type": "code", "source": load, "outputs": None},
         {"id": "c3", "type": "code", "source": fit, "outputs": None},
         {"id": "c4", "type": "code", "source": roi, "outputs": None},
+        {"id": "c5", "type": "code", "source": estimands, "outputs": None},
     ]
 
 

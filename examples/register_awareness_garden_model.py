@@ -73,10 +73,20 @@ compatibility test never bogs the app down.
 
 ## Tuning per brand
 
-- `RETENTION_PRIOR` — `Beta(6, 2)` (mean 0.75) suits sticky categories
-  (insurance, autos). Lower the mean for impulse/promotional brands.
-- `LEVEL_INNOVATION_SIGMA` — kept tight (0.15) so media, not the latent level,
+Bespoke params live in the model's `CONFIG_SCHEMA` (`AwarenessParams`), settable
+per-fit via `spec["model_params"]` (no longer hidden class attributes):
+
+- `retention_prior_alpha` / `retention_prior_beta` — the `Beta` prior on the
+  awareness retention ρ. The default `Beta(6, 2)` (mean 0.75) suits sticky
+  categories (insurance, autos); lower the mean for impulse/promotional brands.
+- `level_innovation_sigma` — kept tight (0.15) so media, not the latent level,
   explains the swings and channel effects stay identified.
+- `number_of_trials` — the survey sample size; set `spec["likelihood"] =
+  {"family": "binomial"}` to fit a Binomial survey-count awareness KPI instead
+  of the default Normal awareness index.
+
+The model declares default estimands (`awareness_lift`, `contribution_roi`,
+`goodwill_stock`), so `evaluate_estimands()` with no args returns those.
 
 ## Scope & assumptions
 
@@ -135,6 +145,7 @@ def main() -> None:
     from mmm_framework.agents.garden_registry import (
         register_garden_model_core,
         static_class_name,
+        static_model_kind,
     )
     from mmm_framework.api import sessions
     from mmm_framework.garden.contract import GARDEN_CONTRACT_VERSION
@@ -146,12 +157,27 @@ def main() -> None:
     class_name, err = static_class_name(source_code)
     if err:
         raise SystemExit(f"Cannot register: {err}")
+
+    # Import the model class to read its CONFIG_SCHEMA (AwarenessParams) as a JSON
+    # Schema — host registration is AST-only, so the demo supplies the schema for
+    # the UI params form. These new manifest fields are advisory metadata.
+    sys.path.insert(0, str(MODEL_SOURCE.parent))
+    from awareness_structural_mmm import AwarenessStructuralMMM
+
+    config_schema = AwarenessStructuralMMM.CONFIG_SCHEMA.model_json_schema()
+    DEFAULT_ESTIMANDS = ["awareness_lift", "contribution_roi", "goodwill_stock"]
+    CAPABILITIES = ["HAS_CHANNELS", "HAS_CONTRIBUTIONS", "HAS_LATENT:media_total"]
+
     manifest = {
         "contract_version": GARDEN_CONTRACT_VERSION,
         "class_name": class_name,
+        "model_kind": static_model_kind(source_code, class_name),
         "dataset_schema": DATASET_SCHEMA,
         "recommended_fit": RECOMMENDED_FIT,
         "tags": TAGS,
+        "config_schema": config_schema,
+        "default_estimands": DEFAULT_ESTIMANDS,
+        "capabilities": CAPABILITIES,
     }
 
     existing = sessions.list_garden_models(org_id, name=MODEL_NAME, latest_only=True)
@@ -195,6 +221,9 @@ def main() -> None:
             tags=TAGS,
             dataset_schema=DATASET_SCHEMA,
             recommended_fit=RECOMMENDED_FIT,
+            config_schema=config_schema,
+            default_estimands=DEFAULT_ESTIMANDS,
+            capabilities=CAPABILITIES,
         )
         print(
             f"  ✓ registered v{row['version']} as DRAFT "
