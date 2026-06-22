@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -93,6 +94,31 @@ CAPABILITIES = ["HAS_LATENT:class_size_1", "HAS_LATENT:class_size_2"]
 
 def _cell(cid: str, ctype: str, source: str) -> dict:
     return {"id": cid, "type": ctype, "source": source, "outputs": None}
+
+
+def _reset_atelier_notebook(sessions, org_id: str) -> None:
+    """Overwrite the model's Atelier **draft** notebook with the curated
+    DEMO_NOTEBOOK (the GET handler only auto-seeds when no doc exists). ``tid``
+    mirrors ``api.main._notebook_tid(org, name, None)``."""
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"{MODEL_NAME}__draft")[:80]
+    tid = f"__atelier_nb__{org_id}__{safe}"
+    payload = {
+        "cells": DEMO_NOTEBOOK,
+        "dataset": None,
+        "name": MODEL_NAME,
+        "version": None,
+        "org_id": org_id,
+    }
+    docs = [
+        a for a in sessions.list_artifacts(tid) if a.get("kind") == "atelier_notebook"
+    ]
+    if docs:
+        sessions.update_artifact_payload(docs[-1]["id"], payload)
+    else:
+        sessions.add_artifact(tid, "atelier_notebook", payload)
+    print(
+        f"  ✓ reset the Atelier notebook to the curated {len(DEMO_NOTEBOOK)}-cell demo"
+    )
 
 
 # Curated segmentation walkthrough seeded into the Atelier notebook on first open.
@@ -292,6 +318,9 @@ def main() -> None:
 
     model_id = row["id"]
     status_now = row["status"]
+
+    # Refresh the Atelier notebook to the curated walkthrough.
+    _reset_atelier_notebook(sessions, org_id)
 
     if args.skip_test:
         print(

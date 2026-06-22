@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -130,6 +131,33 @@ TAGS = [
 
 def _cell(cid: str, ctype: str, source: str) -> dict:
     return {"id": cid, "type": ctype, "source": source, "outputs": None}
+
+
+def _reset_atelier_notebook(sessions, org_id: str) -> None:
+    """Overwrite the model's Atelier **draft** notebook with the curated
+    DEMO_NOTEBOOK. The GET handler only AUTO-seeds the demo when no persisted doc
+    exists, so a model opened before this demo existed keeps a stale notebook —
+    re-running this script corrects it. (``tid`` mirrors
+    ``api.main._notebook_tid(org, name, None)``.)"""
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"{MODEL_NAME}__draft")[:80]
+    tid = f"__atelier_nb__{org_id}__{safe}"
+    payload = {
+        "cells": DEMO_NOTEBOOK,
+        "dataset": None,
+        "name": MODEL_NAME,
+        "version": None,
+        "org_id": org_id,
+    }
+    docs = [
+        a for a in sessions.list_artifacts(tid) if a.get("kind") == "atelier_notebook"
+    ]
+    if docs:
+        sessions.update_artifact_payload(docs[-1]["id"], payload)
+    else:
+        sessions.add_artifact(tid, "atelier_notebook", payload)
+    print(
+        f"  ✓ reset the Atelier notebook to the curated {len(DEMO_NOTEBOOK)}-cell demo"
+    )
 
 
 # A curated, runnable walkthrough seeded into the Atelier notebook the first time
@@ -355,6 +383,10 @@ def main() -> None:
 
     model_id = row["id"]
     status_now = row["status"]
+
+    # Refresh the Atelier notebook to the curated walkthrough (corrects a stale
+    # doc that would otherwise block the demo from seeding).
+    _reset_atelier_notebook(sessions, org_id)
 
     if args.skip_test:
         print(
