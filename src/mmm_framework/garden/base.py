@@ -36,6 +36,31 @@ class CustomMMM(BayesianMMM):
     construction, transforms) is how you customise. Keeping the standard
     constructor signature ``(panel, model_config, trend_config=...)`` is what
     lets the agent fit your model on any project's data by swapping the class.
+
+    Bespoke configuration
+    ---------------------
+    To give your model its own **settable, defaulted, validated** parameters
+    (instead of hard-coded class attributes) — e.g. a binomial awareness model's
+    ``number_of_trials`` — set the class attribute ``CONFIG_SCHEMA`` to a
+    ``pydantic.BaseModel`` subclass::
+
+        class AwarenessParams(BaseModel):
+            number_of_trials: int = Field(default=500, gt=0)
+            awareness_retention: float = 0.75
+
+        class MyAwarenessMMM(CustomMMM):
+            CONFIG_SCHEMA = AwarenessParams
+            def _build_model(self):
+                n = self.model_params.number_of_trials  # validated + defaulted
+                ...
+
+    The agent/spec layer validates ``spec["model_params"]`` against the schema
+    (applying defaults), passes it to the constructor, and the serializer
+    round-trips it; its JSON Schema (``CONFIG_SCHEMA.model_json_schema()``) drives
+    a params form in the UI. Likewise, declare a non-default observation family
+    via ``model_config.likelihood`` (``spec["likelihood"]``) and read it in
+    ``_build_model`` (e.g. ``pm.Binomial(n=n, p=sigmoid(mu), observed=self.y)``).
+    See ``technical-docs/custom-model-config.md``.
     """
 
     #: Recorded into the registry manifest + serialized metadata so a consumer

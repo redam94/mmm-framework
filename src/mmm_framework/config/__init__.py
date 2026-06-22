@@ -27,11 +27,14 @@ from .enums import (
     DimensionType,
     FitMethod,
     InferenceMethod,
+    LikelihoodFamily,
+    LinkFunction,
     ModelSpecification,
     PriorType,
     SaturationType,
     VariableRole,
 )
+from .likelihood import LikelihoodConfig
 from .factories import (
     create_geo_media_config,
     create_national_media_config,
@@ -71,8 +74,11 @@ __all__ = [
     "FitMethod",
     "InferenceMethod",
     "ModelSpecification",
+    "LikelihoodFamily",
+    "LinkFunction",
     # Prior / transform configs
     "PriorConfig",
+    "LikelihoodConfig",
     "AdstockConfig",
     "SaturationConfig",
     # Pre-spec lock + diff

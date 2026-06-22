@@ -1859,6 +1859,20 @@ def garden_tune_suggestions(mmm: Any, results: Any = None) -> dict:
 
     conv = diag.get("convergence") or {}
     learn = diag.get("learning") or {}
+    # A non-fitted model yields an all-null convergence block (ok=true) and a
+    # learning_error — which would otherwise read as "fit looks healthy". Treat
+    # "no usable convergence metric AND no learning block" as un-diagnosable and
+    # return the failure as data. (A MAP fit has null convergence metrics but a
+    # real learning block, so it is not caught here.)
+    conv_has_metrics = any(
+        conv.get(k) is not None for k in ("divergences", "rhat_max", "ess_bulk_min")
+    )
+    if not learn and not conv_has_metrics:
+        detail = diag.get("learning_error") or diag.get("convergence_error") or ""
+        return _err(
+            "Could not compute fit diagnostics — pass a fitted model"
+            + (f" ({detail})" if detail else ".")
+        )
     suggestions: list[dict] = []  # {area, priority, issue, action}
 
     if bool(getattr(results, "approximate", False)):

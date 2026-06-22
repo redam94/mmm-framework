@@ -343,6 +343,21 @@ def build_model(
         if weekly > 0:
             sb.with_weekly(order=weekly, prior_sigma=_seas_sigma("weekly"))
         model_config_builder.with_seasonality_builder(sb)
+    # Observation model: the spec may declare a non-default likelihood family
+    # (e.g. binomial for an awareness model). Default is normal/identity.
+    lik_spec = spec.get("likelihood")
+    if lik_spec:
+        from mmm_framework.config import LikelihoodConfig
+
+        try:
+            model_config_builder.with_likelihood(
+                LikelihoodConfig.model_validate(lik_spec)
+            )
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Invalid spec.likelihood: {e}. Expected {{family, link?, params?}} "
+                "— e.g. {'family': 'binomial', 'params': {'n_trials': 1000}}."
+            ) from e
     model_config = model_config_builder.build()
 
     # 3. Trend config
@@ -420,7 +435,24 @@ def build_model(
     if resolved_cls is None:
         resolved_cls = BayesianMMM
 
-    mmm = resolved_cls(panel, model_config, trend_config)
+    # Bespoke per-model parameters: validate spec["model_params"] against the
+    # resolved class's declared CONFIG_SCHEMA (defaults + validators applied),
+    # then hand the result to the constructor. Same clear-error shape as the
+    # experiments/estimands blocks below. When the class declares no schema, the
+    # value is passed through untouched (the base model ignores it).
+    model_params = spec.get("model_params")
+    config_schema = getattr(resolved_cls, "CONFIG_SCHEMA", None)
+    if config_schema is not None:
+        try:
+            model_params = config_schema.model_validate(model_params or {})
+        except Exception as e:  # noqa: BLE001
+            fields = ", ".join(config_schema.model_fields)
+            raise ValueError(
+                f"Invalid model_params for {resolved_cls.__name__}: {e}. "
+                f"Expected a subset of: {fields}."
+            ) from e
+
+    mmm = resolved_cls(panel, model_config, trend_config, model_params=model_params)
     if garden_ref:
         # Provenance for the serializer + cold-kernel reload (best-effort attr).
         try:

@@ -210,12 +210,16 @@ class MMMSerializer:
         # Model Garden: reconstruct the bespoke subclass recorded at save time
         # (falls back to BayesianMMM if its source can't be resolved).
         model_cls = cls._resolve_model_class(metadata, BayesianMMM)
+        # Bespoke per-model params: the constructor re-validates the saved dict
+        # against the resolved class's CONFIG_SCHEMA (defaults/validators applied),
+        # so a schema added/relaxed since save still loads. None for base models.
         instance = model_cls(
             panel=panel,
             model_config=model_config,
             trend_config=trend_config,
             adstock_alphas=adstock_alphas,
             experiments=experiments,
+            model_params=metadata.get("model_params"),
         )
         if metadata.get("garden_ref"):
             try:
@@ -392,6 +396,22 @@ class MMMSerializer:
             metadata["declared_estimands"] = [
                 e.to_dict() for e in model.declared_estimands
             ]
+
+        # Bespoke per-model parameters (validated against the model's
+        # CONFIG_SCHEMA). Stored as a plain dict so the reloaded model re-validates
+        # it against the (possibly evolved) schema. ``schema_version`` makes drift
+        # visible; the model class owns its CONFIG_SCHEMA shape.
+        mp = getattr(model, "model_params", None)
+        if mp is not None:
+            from pydantic import BaseModel as _BaseModel
+
+            metadata["model_params"] = (
+                mp.model_dump() if isinstance(mp, _BaseModel) else dict(mp)
+            )
+            schema = getattr(type(model), "CONFIG_SCHEMA", None)
+            metadata["model_params_schema_version"] = (
+                getattr(schema, "SCHEMA_VERSION", 1) if schema is not None else None
+            )
 
         return metadata
 

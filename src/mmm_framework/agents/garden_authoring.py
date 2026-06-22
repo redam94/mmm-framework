@@ -85,6 +85,30 @@ Inputs/outputs are standardized: `self.y = (y_raw - y_mean) / y_std`. Components
 live in standardized space; to read in original units multiply by `y_std`
 (and add `y_mean` for the intercept/level). `y_obs_scaled` already un-scales.
 
+## Bespoke configuration (settable params + non-default likelihood)
+Don't hard-code tuning as class attributes — declare a **`CONFIG_SCHEMA`** (a
+`pydantic.BaseModel` subclass) so your params are settable, defaulted, validated,
+serialized, and rendered as a UI form. Read them via `self.model_params.<field>`
+in `_build_model`:
+
+    from pydantic import BaseModel, Field
+    class AwarenessParams(BaseModel):
+        number_of_trials: int = Field(default=500, gt=0)
+        awareness_retention: float = 0.75
+    class MyAwarenessMMM(CustomMMM):
+        CONFIG_SCHEMA = AwarenessParams
+        def _build_model(self):
+            n = self.model_params.number_of_trials  # validated + defaulted
+
+The spec carries overrides under `spec["model_params"]`. For a non-Gaussian KPI,
+declare the family via `model_config.likelihood` (`spec["likelihood"]`, e.g.
+`{"family": "binomial", "params": {"n_trials": …}}`) and WRITE the observation
+node yourself in `_build_model` — the built-in additive dispatch only fits
+normal/student_t (its priors assume standardized-Normal y). For a binomial
+awareness model: `p = pm.math.sigmoid(mu)` then
+`pm.Binomial("y_obs", n=self.model_params.number_of_trials, p=p, observed=self.y, dims="obs")`
+(binomial KPIs are NOT standardized — `self.y` is the raw success count, `y_std==1`).
+
 ## PERFORMANCE — avoid pytensor.scan for recursions
 A `pytensor.scan` (adstock/state-space recursion) builds a slow, GIL-holding
 gradient graph; under the in-process kernel it can make a MAP/NUTS fit crawl and
@@ -227,7 +251,9 @@ def _notebook_context_section(notebook: dict[str, Any]) -> list[str]:
             "```",
         ]
     if others:
-        joined = _clip("\n\n# ── next cell ──\n".join(_clip(c, 1500) for c in others), 8000)
+        joined = _clip(
+            "\n\n# ── next cell ──\n".join(_clip(c, 1500) for c in others), 8000
+        )
         out += [
             "",
             "Other code cells in the notebook (context — variables may come from "

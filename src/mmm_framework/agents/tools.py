@@ -5138,7 +5138,7 @@ def register_garden_model(
     name: str,
     docs: str = "",
     version: int | None = None,
-    tags: list | None = None,
+    tags: list[str] | None = None,
     dataset_schema: dict | None = None,
     recommended_fit: dict | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,

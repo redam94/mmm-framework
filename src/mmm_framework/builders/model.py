@@ -15,6 +15,7 @@ from ..config import (
     FitMethod,
     HierarchicalConfig,
     InferenceMethod,
+    LikelihoodConfig,
     ModelConfig,
     ModelSpecification,
     PriorConfig,
@@ -286,6 +287,7 @@ class ModelConfigBuilder:
         self._optim_seed: int | None = 42
         self._use_parametric_adstock: bool = True
         self._fit_method: FitMethod = FitMethod.NUTS
+        self._likelihood: LikelihoodConfig | None = None
 
     # Model specification
     def additive(self) -> Self:
@@ -383,6 +385,11 @@ class ModelConfigBuilder:
         self._fit_method = FitMethod.PATHFINDER
         return self
 
+    def with_likelihood(self, likelihood: LikelihoodConfig) -> Self:
+        """Set the observation (likelihood) family. Default is normal/identity."""
+        self._likelihood = likelihood
+        return self
+
     def with_intercept_prior(self, mu: float = 0.0, sigma: float = 0.5) -> Self:
         """Set the intercept prior: Normal(mu, sigma) on standardized y.
 
@@ -471,6 +478,7 @@ class ModelConfigBuilder:
             optim_seed=self._optim_seed,
             use_parametric_adstock=self._use_parametric_adstock,
             fit_method=self._fit_method,
+            **({"likelihood": self._likelihood} if self._likelihood else {}),
         )
 
 

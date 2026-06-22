@@ -64,7 +64,9 @@ import warnings
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pydantic import BaseModel, Field
 
+from mmm_framework.config import LikelihoodFamily
 from mmm_framework.garden import CustomMMM
 
 # These two live in the same module as BayesianMMM and are the single source of
@@ -74,24 +76,60 @@ from mmm_framework.garden import CustomMMM
 from mmm_framework.model.base import _apply_saturation_pt, _sample_from_prior_config
 
 
+class AwarenessParams(BaseModel):
+    """Bespoke, settable, defaulted configuration for :class:`AwarenessStructuralMMM`.
+
+    Declared as the model's ``CONFIG_SCHEMA`` so these are real config (validated,
+    defaulted, settable per-fit via ``spec["model_params"]``, serialized, and
+    rendered as a UI form) instead of invisible class attributes. Tune per brand:
+    a slow-decay category (insurance, autos) wants a higher-mean retention prior;
+    an impulse category (promotions) a lower one.
+    """
+
+    #: ``Beta(α, β)`` prior on the awareness retention ``ρ``. ``Beta(6, 2)`` has
+    #: mean 0.75 (≈ 2.4-period half-life on weekly data) — awareness is sticky.
+    retention_prior_alpha: float = Field(default=6.0, gt=0)
+    retention_prior_beta: float = Field(default=2.0, gt=0)
+
+    #: Prior scale of the organic level's weekly innovation. Tight on purpose:
+    #: the random-walk baseline should drift slowly so media (not the latent
+    #: level) explains the swings and channel effects stay identified.
+    level_innovation_sigma: float = Field(default=0.15, gt=0)
+
+    #: Binomial denominator — the survey sample size behind each awareness
+    #: reading. Used ONLY when the KPI is a binomial awareness count and the
+    #: likelihood family is ``binomial`` (set ``spec["likelihood"]`` accordingly);
+    #: ignored for the default Normal awareness-index KPI.
+    number_of_trials: int = Field(default=1000, gt=0)
+
+    model_config = {"extra": "forbid"}
+
+
 class AwarenessStructuralMMM(CustomMMM):
     """MMM whose KPI is a *persistent awareness stock* built by media.
 
     The persistence ``ρ`` is shared by the organic level and every channel's
     goodwill stock, so the model has ONE interpretable "brand memory" knob whose
-    half-life is reported directly. Tune the priors below per brand: a slow-decay
-    category (insurance, autos) wants a higher-mean ``RETENTION_PRIOR``; an
-    impulse category (promotions) a lower one.
+    half-life is reported directly. Its bespoke parameters live in
+    :class:`AwarenessParams` (the ``CONFIG_SCHEMA``) and are read off
+    ``self.model_params``.
+
+    Two observation modes (the likelihood is configurable — :data:`spec["likelihood"]`):
+
+    * default **Normal** — the KPI is a continuous awareness *index* (brand
+      tracker score), fit on standardized ``y`` like the base model;
+    * **Binomial** (``{"family": "binomial"}``) — the KPI is an awareness
+      *count* (e.g. ``#`` aware out of a survey of ``number_of_trials``); the
+      model writes its own ``pm.Binomial`` with a logit link on the awareness
+      state. ``y`` is then the raw success count (not standardized).
     """
 
-    #: ``Beta(α, β)`` prior on the awareness retention ``ρ``. ``Beta(6, 2)`` has
-    #: mean 0.75 (≈ 2.4-period half-life on weekly data) — awareness is sticky.
-    RETENTION_PRIOR: tuple[float, float] = (6.0, 2.0)
+    #: Bespoke, defaulted, validated configuration (read via ``self.model_params``).
+    CONFIG_SCHEMA = AwarenessParams
 
-    #: Prior scale of the organic level's weekly innovation. Tight on purpose:
-    #: the random-walk baseline should drift slowly so media (not the latent
-    #: level) explains the swings and channel effects stay identified.
-    LEVEL_INNOVATION_SIGMA: float = 0.15
+    #: Estimands this model surfaces by default (the agent/UI fall back to these
+    #: when the spec declares none): mean per-period awareness lift + ROI.
+    DEFAULT_ESTIMANDS = ["awareness_lift", "contribution_roi"]
 
     def _build_model(self) -> pm.Model:
         """Build the awareness state-space graph (overrides the base MMM build)."""
@@ -141,10 +179,11 @@ class AwarenessStructuralMMM(CustomMMM):
             )
 
             # --- Awareness persistence ρ — THE structural knob -----------------
+            params = self.model_params  # AwarenessParams (defaults applied)
             rho = pm.Beta(
                 "awareness_retention",
-                alpha=self.RETENTION_PRIOR[0],
-                beta=self.RETENTION_PRIOR[1],
+                alpha=params.retention_prior_alpha,
+                beta=params.retention_prior_beta,
             )
 
             # --- Per-period media increments into the goodwill stock -----------
@@ -171,7 +210,7 @@ class AwarenessStructuralMMM(CustomMMM):
 
             # --- Organic structural level innovations εₜ ~ N(0, σ_level) -------
             sigma_level = pm.HalfNormal(
-                "awareness_level_sigma", sigma=self.LEVEL_INNOVATION_SIGMA
+                "awareness_level_sigma", sigma=params.level_innovation_sigma
             )
             level_innovation = pm.Normal(
                 "awareness_innovation", mu=0.0, sigma=sigma_level, dims="obs"
@@ -238,6 +277,9 @@ class AwarenessStructuralMMM(CustomMMM):
             pm.Deterministic("controls_total", control_contribution, dims="obs")
 
             # --- Observed awareness = full state + seasonality + controls ------
+            # ``mu`` is the awareness state: in KPI standard deviations for the
+            # Normal index KPI, or the logit of the aware-rate for the Binomial
+            # count KPI (the family decides — see below).
             mu = (
                 intercept
                 + organic_level
@@ -245,9 +287,34 @@ class AwarenessStructuralMMM(CustomMMM):
                 + media_total
                 + control_contribution
             )
-            if sigma is None:
-                sigma = pm.HalfNormal("sigma", sigma=0.5)
-            y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+
+            # Observation model is configurable (this is a garden model that owns
+            # its own likelihood — the built-in additive dispatch only fits
+            # Gaussian families). The family drives BOTH the standardization (done
+            # upstream in _prepare_data) and the node written here.
+            if self._likelihood_config.family is LikelihoodFamily.BINOMIAL:
+                # Awareness as a survey COUNT: y is the raw #-aware out of
+                # ``number_of_trials`` (a bespoke model_param). A logit link maps
+                # the unbounded awareness state to the aware-rate p ∈ (0, 1).
+                aware_rate = pm.Deterministic(
+                    "awareness_rate", pm.math.sigmoid(mu), dims="obs"
+                )
+                y_obs = pm.Binomial(
+                    "y_obs",
+                    n=params.number_of_trials,
+                    p=aware_rate,
+                    observed=self.y,
+                    dims="obs",
+                )
+            else:
+                # Awareness as a continuous INDEX (the default): standardized
+                # Gaussian observation, identical to the base stack.
+                if sigma is None:
+                    sigma = pm.HalfNormal("sigma", sigma=0.5)
+                y_obs = pm.Normal(
+                    "y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs"
+                )
+            # y_std==1, y_mean==0 in binomial mode -> this is an identity no-op.
             pm.Deterministic(
                 "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
             )

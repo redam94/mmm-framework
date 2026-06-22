@@ -55,6 +55,7 @@ def register_garden_model_core(
     recommended_fit: dict | None = None,
     default_estimands: list | None = None,
     capabilities: list | None = None,
+    config_schema: dict | None = None,
     owner_user_id: str | None = None,
 ) -> dict[str, Any]:
     """Statically validate source, persist it + a manifest to the org-scoped
@@ -91,6 +92,12 @@ def register_garden_model_core(
         manifest["default_estimands"] = list(default_estimands)
     if capabilities:
         manifest["capabilities"] = list(capabilities)
+    # Bespoke per-model config schema (JSON Schema of the model's CONFIG_SCHEMA),
+    # for rendering a dynamic params form in the UI — same way dataset_schema is
+    # rendered. Additive: absent for models without bespoke params. Provided by
+    # the caller (host registration is AST-only and cannot import the class).
+    if config_schema:
+        manifest["config_schema"] = dict(config_schema)
     gdir = ws.garden_dir(org_id, name, ver)
     src_path = gdir / "model.py"
     src_path.write_text(source_code, encoding="utf-8")

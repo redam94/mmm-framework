@@ -35,11 +35,14 @@ import pandas as pd
 import pymc as pm
 import pytensor.tensor as pt
 
+from pydantic import BaseModel
+
 from ..config import (
     AdstockConfig,
     AdstockType,
     CausalControlRole,
     FitMethod,
+    LikelihoodFamily,
     ModelConfig,
     PriorConfig,
     PriorType,
@@ -237,6 +240,17 @@ class BayesianMMM:
 
     _VERSION = "1.0.0"
 
+    #: Per-model config schema (Pydantic) declaring bespoke fields + defaults.
+    #: ``None`` on the base model (it is fully configured by ``ModelConfig``).
+    #: A subclass / garden ``CustomMMM`` sets this to a ``BaseModel`` subclass so
+    #: it can declare its own settable, defaulted, validated parameters (e.g. a
+    #: binomial awareness model's ``number_of_trials``); the agent/spec layer
+    #: validates ``spec["model_params"]`` against it and passes the result to the
+    #: ``model_params`` constructor argument, where the model reads
+    #: ``self.model_params.<field>`` in ``_build_model``. See
+    #: ``technical-docs/custom-model-config.md``.
+    CONFIG_SCHEMA: "type[BaseModel] | None" = None
+
     def __init__(
         self,
         panel: PanelDataset,
@@ -244,11 +258,20 @@ class BayesianMMM:
         trend_config: TrendConfig | None = None,
         adstock_alphas: list[float] | None = None,
         experiments: "Sequence[ExperimentMeasurement] | None" = None,
+        model_params: "BaseModel | dict | None" = None,
     ):
         self.panel = panel
         self.model_config = model_config
         self.trend_config = trend_config or TrendConfig()
         self.adstock_alphas = adstock_alphas or [0.0, 0.3, 0.5, 0.7, 0.9]
+
+        # Bespoke per-model parameters (validated against ``CONFIG_SCHEMA`` by
+        # the caller, or supplied directly). A plain dict is coerced through the
+        # schema when one is declared so defaults/validators always apply; with
+        # no schema the dict is kept as-is. ``None`` -> the schema's defaults
+        # (when declared) or ``None`` (base model). Read via ``self.model_params``
+        # in ``_build_model``.
+        self.model_params = self._coerce_model_params(model_params)
 
         self.mff_config = panel.config
         self.hierarchical_config = model_config.hierarchical
@@ -277,6 +300,34 @@ class BayesianMMM:
 
         self._prepare_data()
 
+    def _coerce_model_params(
+        self, model_params: "BaseModel | dict | None"
+    ) -> "BaseModel | dict | None":
+        """Resolve bespoke ``model_params`` against this model's ``CONFIG_SCHEMA``.
+
+        With no schema declared (the base model), the value is kept verbatim
+        (``None`` or a passthrough dict). With a schema declared, a dict / other
+        ``BaseModel`` is validated through it so the schema's defaults and
+        validators always apply, and ``None`` yields the schema's defaults — so a
+        garden model can rely on ``self.model_params.<field>`` being present and
+        typed regardless of how it was constructed.
+        """
+        schema = type(self).CONFIG_SCHEMA
+        if schema is None:
+            return model_params
+        if isinstance(model_params, schema):
+            return model_params
+        if model_params is None:
+            return schema()
+        if isinstance(model_params, BaseModel):
+            return schema.model_validate(model_params.model_dump())
+        if isinstance(model_params, dict):
+            return schema.model_validate(model_params)
+        raise TypeError(
+            f"model_params must be a dict, a {schema.__name__}, or None; got "
+            f"{type(model_params).__name__}"
+        )
+
     def add_experiment_calibration(
         self, experiments: "Sequence[ExperimentMeasurement]"
     ) -> "BayesianMMM":
@@ -289,6 +340,20 @@ class BayesianMMM:
         self.experiments = list(experiments)
         self._model = None  # force a rebuild that includes the new likelihoods
         return self
+
+    @property
+    def _likelihood_config(self):
+        """The model's :class:`LikelihoodConfig` (defaults to normal/identity for
+        a ``model_config`` predating the field or lacking it)."""
+        from ..config.likelihood import LikelihoodConfig
+
+        return getattr(self.model_config, "likelihood", None) or LikelihoodConfig()
+
+    @property
+    def _standardizes_y(self) -> bool:
+        """Whether ``y`` is z-scored before entering the graph (Gaussian-scale
+        families). Count/bounded families keep the natural scale."""
+        return self._likelihood_config.standardizes_y
 
     def _prepare_data(self):
         """Prepare and standardize all data."""
@@ -313,10 +378,21 @@ class BayesianMMM:
             list(self.panel.coords.controls) if self.n_controls > 0 else []
         )
 
-        # === Standardize target ===
-        self.y_mean = float(self.y_raw.mean())
-        self.y_std = float(self.y_raw.std()) + 1e-8
-        self.y = (self.y_raw - self.y_mean) / self.y_std
+        # === Target: standardize (Gaussian) or keep natural scale (else) ===
+        # Gaussian-scale families (normal/student_t/lognormal) z-score ``y`` so
+        # the component priors — all calibrated in KPI standard deviations — apply
+        # regardless of units. Count/bounded families (binomial/poisson/beta) work
+        # in their natural scale and are NOT standardized; ``y_mean=0, y_std=1``
+        # then makes ``y_obs_scaled`` and every downstream ``* y_std`` bridge an
+        # identity no-op. Default likelihood is normal -> byte-identical to before.
+        if self._standardizes_y:
+            self.y_mean = float(self.y_raw.mean())
+            self.y_std = float(self.y_raw.std()) + 1e-8
+            self.y = (self.y_raw - self.y_mean) / self.y_std
+        else:
+            self.y_mean = 0.0
+            self.y_std = 1.0
+            self.y = self.y_raw
 
         # Store scaling parameters
         self._scaling_params["y_mean"] = self.y_mean
@@ -1389,12 +1465,44 @@ class BayesianMMM:
             # the selection path it was already created above for the horseshoe.
             if sigma is None:
                 sigma = pm.HalfNormal("sigma", sigma=0.5)
-            y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+            y_obs = self._build_likelihood(mu, sigma)
             pm.Deterministic(
                 "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
             )
 
         return model
+
+    def _build_likelihood(self, mu, sigma):
+        """Create the observation node ``y_obs`` for the configured likelihood.
+
+        The built-in additive model fits only the **Gaussian** families on its
+        standardized, identity-link scale: ``normal`` (the historical default —
+        this branch is byte-identical to the old hard-coded ``pm.Normal``) and
+        ``student_t`` (a heavier-tailed drop-in; same priors, just a robust
+        observation). Non-Gaussian families change the observation scale and need
+        a link the additive model's standardized component priors are not
+        calibrated for, so they are **not** fit here — a model that wants one
+        (e.g. a binomial awareness model) defines its own observation block by
+        overriding ``_build_model`` and reading ``self.model_config.likelihood`` /
+        ``self.model_params`` itself. Called inside the ``pm.Model`` context.
+        """
+        family = self._likelihood_config.family
+        if family is LikelihoodFamily.NORMAL:
+            return pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+        if family is LikelihoodFamily.STUDENT_T:
+            nu = float(self._likelihood_config.params.get("nu", 4.0))
+            return pm.StudentT(
+                "y_obs", nu=nu, mu=mu, sigma=sigma, observed=self.y, dims="obs"
+            )
+        raise NotImplementedError(
+            f"the built-in additive model does not fit the {family.value!r} "
+            "likelihood directly: its component priors are calibrated for "
+            "standardized-Normal y on an identity link. A model that needs a "
+            f"{family.value!r} observation must define its own observation block "
+            "— override `_build_model` (subclass `mmm_framework.garden.CustomMMM`) "
+            "and write the likelihood there, reading `self.model_config.likelihood`"
+            " and `self.model_params`. See technical-docs/custom-model-config.md."
+        )
 
     # =====================================================================
     # Experiment (incrementality / lift / ROAS) calibration likelihoods
@@ -2422,34 +2530,46 @@ class BayesianMMM:
 
         return _caps(self)
 
+    @staticmethod
+    def _resolve_estimand(e: "Estimand | str | dict") -> "Estimand":
+        """Coerce an estimand reference to an :class:`Estimand`: a built-in name
+        (resolved via the registry), a serialized dict, or an instance."""
+        from ..estimands import registry
+        from ..estimands.spec import Estimand
+
+        if isinstance(e, Estimand):
+            return e
+        if isinstance(e, str):
+            return registry.get(e)
+        return Estimand.from_dict(e)
+
     def _default_estimands(self) -> list["Estimand"]:
         """Estimands to evaluate when none are declared on the instance.
 
         A garden subclass can set a class-level ``DEFAULT_ESTIMANDS`` (list of
-        :class:`Estimand` or serialized dicts); otherwise the framework defaults
-        filtered by this model's capabilities are used.
+        built-in names, serialized dicts, or :class:`Estimand` instances);
+        otherwise the framework defaults filtered by this model's capabilities
+        are used.
         """
         from ..estimands import registry
-        from ..estimands.spec import Estimand
 
         cls_defaults = getattr(type(self), "DEFAULT_ESTIMANDS", None)
         if cls_defaults:
-            return [
-                e if isinstance(e, Estimand) else Estimand.from_dict(e)
-                for e in cls_defaults
-            ]
+            return [self._resolve_estimand(e) for e in cls_defaults]
         return registry.defaults_for(self.model_capabilities())
 
     def evaluate_estimands(
         self,
-        estimands: "list[Estimand] | None" = None,
+        estimands: "list[Estimand | str | dict] | None" = None,
         *,
         random_seed: int | None = None,
     ) -> "dict[str, EstimandResult]":
         """Realize estimands from the fitted posterior as mean + HDI.
 
-        With ``estimands=None`` uses :attr:`declared_estimands` if non-empty,
-        else :meth:`_default_estimands`. Returns a dict keyed by estimand name
+        ``estimands`` items may be :class:`Estimand` instances, built-in names
+        (resolved via the registry), or serialized dicts. With ``estimands=None``
+        uses :attr:`declared_estimands` if non-empty, else
+        :meth:`_default_estimands`. Returns a dict keyed by estimand name
         (wildcard-channel estimands expand to ``"{name}:{channel}"``). Never
         raises for an unsupported estimand -- it is returned with
         ``status="unsupported"``.
@@ -2460,9 +2580,8 @@ class BayesianMMM:
 
         if estimands is None:
             estimands = self.declared_estimands or self._default_estimands()
-        return EstimandEvaluator(self, random_seed=random_seed).evaluate(
-            list(estimands)
-        )
+        resolved = [self._resolve_estimand(e) for e in estimands]
+        return EstimandEvaluator(self, random_seed=random_seed).evaluate(resolved)
 
     def what_if_scenario(
         self,
