@@ -223,6 +223,14 @@ class MMMSerializer:
             except Exception:  # noqa: BLE001
                 pass
 
+        # Declarative estimands (mirrors the experiments round-trip above).
+        if metadata.get("declared_estimands"):
+            from .estimands.spec import Estimand
+
+            instance.declared_estimands = [
+                Estimand.from_dict(e) for e in metadata["declared_estimands"]
+            ]
+
         # 5. Load scaling parameters
         with open(path / "scaling_params.json", "r") as f:
             scaling_params = json.load(f)
@@ -377,6 +385,13 @@ class MMMSerializer:
         # with the same incrementality anchoring it was originally built with).
         if getattr(model, "experiments", None):
             metadata["experiments"] = [e.to_dict() for e in model.experiments]
+
+        # Declarative estimands associated with the model (the counterfactual
+        # causal lens); round-tripped with a schema_version so drift is visible.
+        if getattr(model, "declared_estimands", None):
+            metadata["declared_estimands"] = [
+                e.to_dict() for e in model.declared_estimands
+            ]
 
         return metadata
 

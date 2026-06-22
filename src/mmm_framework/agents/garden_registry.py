@@ -53,6 +53,8 @@ def register_garden_model_core(
     tags: list | None = None,
     dataset_schema: dict | None = None,
     recommended_fit: dict | None = None,
+    default_estimands: list | None = None,
+    capabilities: list | None = None,
     owner_user_id: str | None = None,
 ) -> dict[str, Any]:
     """Statically validate source, persist it + a manifest to the org-scoped
@@ -81,6 +83,14 @@ def register_garden_model_core(
         "recommended_fit": recommended_fit or {},
         "tags": tags or [],
     }
+    # Advisory estimand metadata (additive — readers use .get(..., default)). The
+    # authoritative capability detection is runtime (model_capabilities); these
+    # are for discovery + a model's declared default estimands. A garden model
+    # also declares defaults directly via a class-level DEFAULT_ESTIMANDS attr.
+    if default_estimands:
+        manifest["default_estimands"] = list(default_estimands)
+    if capabilities:
+        manifest["capabilities"] = list(capabilities)
     gdir = ws.garden_dir(org_id, name, ver)
     src_path = gdir / "model.py"
     src_path.write_text(source_code, encoding="utf-8")
