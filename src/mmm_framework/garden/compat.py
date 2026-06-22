@@ -20,6 +20,7 @@ from typing import Any
 from .contract import (
     GARDEN_CONTRACT_VERSION,
     is_bayesian_mmm_subclass,
+    is_mmm_model,
     validate_class,
     validate_fitted,
     validate_instance,
@@ -221,20 +222,42 @@ def run_compatibility_check(
                     )
                 )
 
+            # Tiers 6–9 below are MMM-specific (they assume an original-scale KPI,
+            # channel read-ops, and a media answer key). A non-MMM family (e.g. a
+            # CFA) marks them skipped — its validity is `fit` + `instance` + `trace`
+            # + its own family estimands, not channel ROI/scale.
+            mmm_shaped = mmm is None or is_mmm_model(mmm)
+            fitted = mmm is not None and getattr(mmm, "_trace", None) is not None
+
             # Tier 6 — scaling round-trip: predict() in original KPI scale.
-            if mmm is not None and getattr(mmm, "_trace", None) is not None:
-                tiers.append(_scaling_tier(mmm))
+            if fitted:
+                if mmm_shaped:
+                    tiers.append(_scaling_tier(mmm))
+                else:
+                    tiers.append(
+                        _tier("scaling", True, "skipped (non-MMM model)", skipped=True)
+                    )
 
             # Tier 7 — read-ops smoke test (the oracle's surface).
-            if mmm is not None and getattr(mmm, "_trace", None) is not None:
-                tiers.append(_ops_smoke_tier(mmm, results))
+            if fitted:
+                if mmm_shaped:
+                    tiers.append(_ops_smoke_tier(mmm, results))
+                else:
+                    tiers.append(
+                        _tier(
+                            "ops_smoke",
+                            True,
+                            "skipped (non-MMM model — channel read-ops N/A)",
+                            skipped=True,
+                        )
+                    )
 
             # Tier 8 — geo carryover (advisory; only for geo-capable models).
-            if check_carryover and mmm is not None:
+            if check_carryover and mmm is not None and mmm_shaped:
                 tiers.append(_carryover_tier(cls, seed, n_weeks, tmpdir, fit_method))
 
-            # Tier 9 — accuracy vs ground truth (advisory).
-            if mmm is not None and getattr(mmm, "_trace", None) is not None and answer:
+            # Tier 9 — accuracy vs ground truth (advisory, MMM-only).
+            if fitted and answer and mmm_shaped:
                 score, score_detail = _accuracy_score(mmm, answer)
                 tiers.append(
                     _tier(

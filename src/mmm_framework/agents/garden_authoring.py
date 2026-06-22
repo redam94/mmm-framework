@@ -109,6 +109,23 @@ awareness model: `p = pm.math.sigmoid(mu)` then
 `pm.Binomial("y_obs", n=self.model_params.number_of_trials, p=p, observed=self.y, dims="obs")`
 (binomial KPIs are NOT standardized — `self.y` is the raw success count, `y_std==1`).
 
+## Non-MMM families (CFA / latent-class / …)
+A garden model need not be an MMM. Declare `__garden_model_kind__ = "cfa"` (or
+your kind) on the class to **opt out of the MMM-specific gates** — channel
+attributes, the `beta_<channel>` convention, and the channel read-ops/compat
+tiers are then not required. Such a model:
+- overrides `_prepare_data` to build its own observed data and set the agnostic
+  attrs the inherited fit/serializer read: `channel_names = []`, `n_obs`,
+  `y_mean=0`/`y_std=1`, `_media_raw_max={}`, `_media_max={}`, `X_controls_raw=None`,
+  `time_idx`, `n_periods`, `trend_features={}`, `seasonality_features={}`;
+- overrides `_build_model` with its own graph + per-draw deterministics for its
+  quantities of interest (fit indices, loadings, class sizes);
+- declares `DEFAULT_ESTIMANDS` over those latents (e.g. `fit_index("srmr")`); the
+  estimand engine auto-exposes every posterior var as `HAS_LATENT:<var>` and a
+  **bare `LatentVar`** scalar realizes as mean+HDI.
+See `examples/garden_models/bayesian_cfa.py` (a confirmatory factor analysis) and
+`technical-docs/non-mmm-families.md`.
+
 ## PERFORMANCE — avoid pytensor.scan for recursions
 A `pytensor.scan` (adstock/state-space recursion) builds a slow, GIL-holding
 gradient graph; under the in-process kernel it can make a MAP/NUTS fit crawl and

@@ -25,12 +25,14 @@ from __future__ import annotations
 from .capabilities import (
     HAS_CONTRIBUTION_DETERMINISTIC,
     HAS_CONTRIBUTIONS,
+    HAS_LATENT,
 )
 from .spec import (
     ALL_CHANNELS,
     Contrast,
     Contribution,
     Estimand,
+    LatentVar,
     MarginalSpend,
     Observed,
     ObservedInput,
@@ -197,6 +199,65 @@ def _cost_per_conversion() -> Estimand:
     )
 
 
+# =============================================================================
+# Latent-scalar estimands — for non-MMM families (CFA/LCA/…)
+# =============================================================================
+# A bare ``LatentVar`` quantity summarizing a per-draw scalar posterior variable
+# (a fit index, a class size, a named scalar loading) as mean + HDI. Gated by the
+# auto-exposed ``HAS_LATENT:<var>`` capability, so it cleanly returns
+# ``unsupported`` on a model that doesn't carry that variable.
+
+
+def latent_scalar(
+    name: str,
+    *,
+    var: str | None = None,
+    kind: str = "latent",
+    units: str = "",
+    hdi_prob: float = 0.94,
+    causal_assumptions: str = "Posterior summary of a fitted latent quantity.",
+) -> Estimand:
+    """A declarative estimand that summarizes the scalar posterior variable
+    ``var`` (default: ``name``). Used by non-MMM families to surface fit indices,
+    factor loadings, class sizes, etc. through the estimand engine."""
+    v = var or name
+    return Estimand(
+        name=name,
+        kind=kind,
+        numerator=LatentVar(name=v),
+        denominator=None,
+        realization=Realization(point_rule="mean_of_samples", hdi_method="percentile"),
+        required_capabilities=[f"{HAS_LATENT}:{v}"],
+        units=units,
+        causal_assumptions=causal_assumptions,
+    )
+
+
+def fit_index(name: str, *, var: str | None = None) -> Estimand:
+    """A model fit index (e.g. ``cfi``, ``tli``, ``srmr``) read per draw."""
+    return latent_scalar(
+        name,
+        var=var,
+        kind="fit_index",
+        units="index",
+        causal_assumptions=(
+            "Per-draw model fit index from the fitted posterior (model-implied vs "
+            "observed moments)."
+        ),
+    )
+
+
+def factor_loading(name: str, *, var: str | None = None) -> Estimand:
+    """A single (named, scalar) factor loading read per draw."""
+    return latent_scalar(
+        name,
+        var=var,
+        kind="factor_loading",
+        units="loading",
+        causal_assumptions="Posterior of a fitted factor loading.",
+    )
+
+
 #: name -> zero-arg factory returning a fresh ``Estimand`` (avoids shared
 #: mutable state across callers).
 BUILTINS = {
@@ -244,4 +305,7 @@ __all__ = [
     "get",
     "all_builtins",
     "defaults_for",
+    "latent_scalar",
+    "fit_index",
+    "factor_loading",
 ]

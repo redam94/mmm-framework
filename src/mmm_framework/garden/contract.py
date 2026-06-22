@@ -26,16 +26,24 @@ GARDEN_CONTRACT_VERSION = "1.0"
 # Instance attributes every oracle-compatible model exposes (present after
 # __init__, and — for ``_trace`` — after fit). Used to unstandardize metrics,
 # normalize spend, and locate the panel/posterior in every downstream op.
-REQUIRED_ATTRS: tuple[str, ...] = (
-    "channel_names",
+#
+# Split into a model-agnostic base (every Bayesian garden model) and an
+# MMM-specific group (channels + spend maxima) that is required only of MMM-kind
+# models — a non-MMM family (e.g. a CFA) is exempt via ``is_mmm_model``.
+REQUIRED_ATTRS_BASE: tuple[str, ...] = (
     "y_mean",
     "y_std",
-    "_media_raw_max",
     "panel",
     "model_config",
     "has_geo",
     "has_product",
 )
+REQUIRED_ATTRS_MMM: tuple[str, ...] = (
+    "channel_names",
+    "_media_raw_max",
+)
+#: Union, kept for backward compatibility (importers + ``describe_contract``).
+REQUIRED_ATTRS: tuple[str, ...] = REQUIRED_ATTRS_BASE + REQUIRED_ATTRS_MMM
 
 #: Methods every model must define (fit is the one true requirement; everything
 #: else is inherited from BayesianMMM or duck-typed).
@@ -94,6 +102,39 @@ def is_bayesian_mmm_subclass(cls: Any) -> bool:
     )
 
 
+#: Default model kind when a class/instance does not declare one — the historical
+#: MMM behaviour (channels, spend, ``beta_<channel>`` parameters, channel read-ops).
+DEFAULT_MODEL_KIND = "mmm"
+
+
+def model_kind(obj: Any) -> str:
+    """The Garden ``model_kind`` of a class **or** instance.
+
+    A model declares its kind with the class attribute ``__garden_model_kind__``
+    (e.g. ``"cfa"``, ``"latent_class"``). Absent that, anything in the
+    ``BayesianMMM`` MRO is ``"mmm"``; otherwise ``"unknown"`` so a structurally
+    non-MMM class is not silently treated as an MMM."""
+    declared = getattr(obj, "__garden_model_kind__", None)
+    if isinstance(declared, str) and declared:
+        return declared
+    cls = obj if isinstance(obj, type) else type(obj)
+    return DEFAULT_MODEL_KIND if is_bayesian_mmm_subclass(cls) else "unknown"
+
+
+def is_mmm_model(obj: Any) -> bool:
+    """Whether the MMM-specific gates apply to ``obj`` (class or instance).
+
+    True unless the model **explicitly** declares a non-``"mmm"``
+    ``__garden_model_kind__``. A duck-typed / unknown model with no declaration is
+    treated as MMM — the historical default, so its channel attributes,
+    ``beta_<channel>`` posterior convention, and channel read-ops are still
+    checked. Only a declared non-MMM family (e.g. a CFA) opts out."""
+    declared = getattr(obj, "__garden_model_kind__", None)
+    if isinstance(declared, str) and declared and declared != DEFAULT_MODEL_KIND:
+        return False
+    return True
+
+
 def _fit_signature_ok(cls: Any) -> bool:
     """``fit`` should accept the standard knobs (method / random_seed) — either
     explicitly or via ``**kwargs``. Lenient: a bad signature is a warning-tier
@@ -132,15 +173,20 @@ def validate_class(cls: Any) -> list[str]:
             "agent can request an approximate vs NUTS fit"
         )
 
-    # A garden model either subclasses BayesianMMM (and inherits the full,
-    # serializable contract) OR must define the read surface itself.
-    if not is_bayesian_mmm_subclass(cls):
+    # A garden MMM either subclasses BayesianMMM (and inherits the full,
+    # serializable contract) OR must define the channel read surface itself. A
+    # model that declares a non-MMM ``__garden_model_kind__`` (e.g. a CFA) is
+    # exempt — it has no channels, so it only needs ``fit()`` + a posterior and
+    # its own family-specific estimands/report.
+    declared_non_mmm = model_kind(cls) not in (DEFAULT_MODEL_KIND, "unknown")
+    if not is_bayesian_mmm_subclass(cls) and not declared_non_mmm:
         for meth in ("predict", "sample_channel_contributions"):
             if not callable(getattr(cls, meth, None)):
                 problems.append(
                     f"non-BayesianMMM class is missing {meth}(); subclass "
-                    "`mmm_framework.BayesianMMM` (recommended) or implement the "
-                    "full read surface"
+                    "`mmm_framework.BayesianMMM` (recommended), implement the "
+                    "full read surface, or declare a non-MMM "
+                    "`__garden_model_kind__`"
                 )
     return problems
 
@@ -153,22 +199,26 @@ def validate_instance(mmm: Any) -> list[str]:
     serializer raises on a mismatch).
     """
     problems: list[str] = []
-    for attr in REQUIRED_ATTRS:
+    mmm_kind = is_mmm_model(mmm)
+    required = REQUIRED_ATTRS if mmm_kind else REQUIRED_ATTRS_BASE
+    for attr in required:
         if not hasattr(mmm, attr):
             problems.append(f"missing required attribute: {attr}")
 
-    names = getattr(mmm, "channel_names", None)
-    if names is not None and (not isinstance(names, (list, tuple)) or not names):
-        problems.append("channel_names must be a non-empty ordered list")
+    # Channel + spend-maxima sanity is MMM-only (a CFA has no channels).
+    if mmm_kind:
+        names = getattr(mmm, "channel_names", None)
+        if names is not None and (not isinstance(names, (list, tuple)) or not names):
+            problems.append("channel_names must be a non-empty ordered list")
 
-    raw_max = getattr(mmm, "_media_raw_max", None)
-    if isinstance(names, (list, tuple)) and isinstance(raw_max, dict):
-        missing = [c for c in names if c not in raw_max]
-        if missing:
-            problems.append(
-                f"_media_raw_max is missing channels {missing} (predict() will "
-                "produce NaNs for them)"
-            )
+        raw_max = getattr(mmm, "_media_raw_max", None)
+        if isinstance(names, (list, tuple)) and isinstance(raw_max, dict):
+            missing = [c for c in names if c not in raw_max]
+            if missing:
+                problems.append(
+                    f"_media_raw_max is missing channels {missing} (predict() will "
+                    "produce NaNs for them)"
+                )
 
     for attr in ("y_mean", "y_std"):
         val = getattr(mmm, attr, None)
@@ -194,17 +244,19 @@ def validate_fitted(mmm: Any) -> list[str]:
         return ["trace has no `posterior` group"]
 
     post_vars = set(getattr(posterior, "data_vars", {}))
-    names = list(getattr(mmm, "channel_names", []) or [])
-    # At least one channel should carry a beta_<channel> coefficient — the ROI /
-    # decomposition helpers extract contributions by this convention.
-    has_beta = any(v.startswith("beta_") for v in post_vars) or any(
-        f"beta_{c}" in post_vars for c in names
-    )
-    if names and not has_beta:
-        problems.append(
-            "posterior has no `beta_<channel>` parameters — ROI / decomposition "
-            f"helpers will return empty (saw vars: {sorted(post_vars)[:8]}…)"
+    # The ``beta_<channel>`` convention is MMM-only — the ROI / decomposition
+    # helpers extract contributions by it. A non-MMM family (CFA) carries its own
+    # parameters (loadings, fit indices) and is exempt.
+    if is_mmm_model(mmm):
+        names = list(getattr(mmm, "channel_names", []) or [])
+        has_beta = any(v.startswith("beta_") for v in post_vars) or any(
+            f"beta_{c}" in post_vars for c in names
         )
+        if names and not has_beta:
+            problems.append(
+                "posterior has no `beta_<channel>` parameters — ROI / decomposition "
+                f"helpers will return empty (saw vars: {sorted(post_vars)[:8]}…)"
+            )
 
     # Posterior must be a well-formed arviz group (chain/draw sample axes) so
     # az.summary / rhat / ess and the contribution extractors can index it.
@@ -275,13 +327,22 @@ def describe_contract() -> str:
         + ".\n\n**Posterior naming:** channel params follow `beta_<channel>`, "
         "`adstock_alpha_<channel>`, `sat_half_<channel>`, `sat_slope_<channel>`; "
         "per-observation deterministics are registered in the **original** KPI scale; "
-        "`MMMResults.approximate=True` for MAP/ADVI/Pathfinder fits."
+        "`MMMResults.approximate=True` for MAP/ADVI/Pathfinder fits.\n\n"
+        "**Non-MMM families:** set the class attr `__garden_model_kind__` (e.g. "
+        "'cfa', 'latent_class') to opt out of the MMM-specific gates — the channel "
+        "attributes (`channel_names`, `_media_raw_max`), the `beta_<channel>` "
+        "posterior convention, and the channel read-ops/compat tiers are then not "
+        "required. Such a model needs only `fit()` + a posterior trace and its own "
+        "family-specific estimands (declared via `DEFAULT_ESTIMANDS`)."
     )
 
 
 __all__ = [
     "GARDEN_CONTRACT_VERSION",
+    "DEFAULT_MODEL_KIND",
     "REQUIRED_ATTRS",
+    "REQUIRED_ATTRS_BASE",
+    "REQUIRED_ATTRS_MMM",
     "REQUIRED_METHODS",
     "RECOMMENDED_METHODS",
     "PARAM_PREFIXES",
@@ -289,6 +350,8 @@ __all__ = [
     "HasScaling",
     "HasMediaMeta",
     "is_bayesian_mmm_subclass",
+    "model_kind",
+    "is_mmm_model",
     "validate_class",
     "validate_instance",
     "validate_fitted",

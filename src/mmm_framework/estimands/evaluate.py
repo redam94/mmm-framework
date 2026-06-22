@@ -310,9 +310,51 @@ class EstimandEvaluator:
                 float(pred.y_pred_mean[mask].sum()),
                 pred.y_pred_samples[:, mask].sum(axis=1),
             )
+        if isinstance(quantity, LatentVar):
+            return self._latent_quantity(quantity, mask)
         raise _SkipChannel(
             f"quantity {getattr(quantity, 'type', quantity)!r} unsupported", skip=False
         )
+
+    def _latent_quantity(self, q: LatentVar, mask: np.ndarray) -> _NodeValue:
+        """Realize a **bare** latent posterior variable as (mean, per-draw samples).
+
+        Reads ``posterior[name]`` and collapses chain×draw to the sample axis. A
+        per-draw **scalar** (e.g. a fit index ``cfi``/``srmr``, or a named scalar
+        loading) → mean + HDI directly; an **obs-indexed** latent → mean over the
+        window. A vector/matrix latent (e.g. a full loadings matrix) is *not* a
+        single estimand — it is surfaced as a table — so it returns ``unsupported``.
+        Latent *contrasts* remain unsupported (:meth:`_eval_latent_contrast`)."""
+        from mmm_framework.reporting.helpers.utils import _get_posterior
+
+        posterior = _get_posterior(self.model)
+        if posterior is None or q.name not in getattr(posterior, "data_vars", {}):
+            raise _SkipChannel(
+                f"latent variable {q.name!r} is not in the posterior", skip=False
+            )
+        arr = np.asarray(posterior[q.name].values)
+        if arr.ndim < 2:  # arviz posterior vars are (chain, draw, *rest)
+            raise _SkipChannel(
+                f"latent variable {q.name!r} posterior is not (chain, draw, …)",
+                skip=False,
+            )
+        rest = arr.shape[2:]
+        values = arr.reshape(arr.shape[0] * arr.shape[1], *rest)  # (n_samples, *rest)
+        if len(rest) == 0:
+            samples = values
+        elif len(rest) == 1 and rest[0] == 1:
+            samples = values[:, 0]
+        elif len(rest) == 1 and rest[0] == len(mask):
+            samples = values[:, mask].mean(axis=1)  # obs-indexed -> window mean
+        else:
+            raise _SkipChannel(
+                f"latent variable {q.name!r} is array-valued (shape {rest}) — "
+                "matrix/vector latents (e.g. a loadings matrix) are surfaced as a "
+                "table, not a single estimand; target a named scalar element",
+                skip=False,
+            )
+        samples = np.asarray(samples, dtype=float).ravel()
+        return float(np.mean(samples)), samples
 
     # -- quantity helpers -----------------------------------------------------
 

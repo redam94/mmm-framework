@@ -43,6 +43,36 @@ def static_class_name(source_code: str) -> tuple[str | None, str | None]:
     )
 
 
+def static_model_kind(source_code: str, class_name: str | None) -> str:
+    """Find a class's ``__garden_model_kind__`` literal WITHOUT executing the
+    source (AST only). Returns the declared kind, or ``"mmm"`` when absent — the
+    historical default. A non-MMM family (CFA, latent-class, …) declares e.g.
+    ``__garden_model_kind__ = "cfa"`` in its class body to opt out of the
+    MMM-specific contract gates."""
+    try:
+        tree = ast.parse(source_code)
+    except SyntaxError:
+        return "mmm"
+    classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+    target = None
+    if class_name:
+        target = next((c for c in classes if c.name == class_name), None)
+    elif len(classes) == 1:
+        target = classes[0]
+    if target is None:
+        return "mmm"
+    for node in target.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "__garden_model_kind__"
+            for t in node.targets
+        ):
+            if isinstance(node.value, ast.Constant) and isinstance(
+                node.value.value, str
+            ):
+                return node.value.value
+    return "mmm"
+
+
 def register_garden_model_core(
     *,
     org_id: str,
@@ -80,6 +110,10 @@ def register_garden_model_core(
     manifest = {
         "contract_version": GARDEN_CONTRACT_VERSION,
         "class_name": class_name,
+        # Model family kind (AST-detected from ``__garden_model_kind__``; "mmm"
+        # by default). Advisory metadata for discovery / UI — the authoritative
+        # kind is read from the loaded class at fit time.
+        "model_kind": static_model_kind(source_code, class_name),
         "dataset_schema": dataset_schema or {},
         "recommended_fit": recommended_fit or {},
         "tags": tags or [],
@@ -128,4 +162,9 @@ def read_garden_source(row: dict | None) -> str | None:
         return None
 
 
-__all__ = ["static_class_name", "register_garden_model_core", "read_garden_source"]
+__all__ = [
+    "static_class_name",
+    "static_model_kind",
+    "register_garden_model_core",
+    "read_garden_source",
+]

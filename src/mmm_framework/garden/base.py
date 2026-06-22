@@ -67,5 +67,15 @@ class CustomMMM(BayesianMMM):
     #: can detect the contract a model was authored against.
     GARDEN_CONTRACT_VERSION: str = GARDEN_CONTRACT_VERSION
 
+    #: Model family kind, recorded in the manifest and used by the contract/compat
+    #: to decide which gates apply. Default ``"mmm"`` (channels, spend,
+    #: ``beta_<channel>`` params, channel read-ops). A **non-MMM** family (a CFA,
+    #: latent-class model, …) overrides this to its own kind (e.g. ``"cfa"``) and
+    #: is then exempt from the MMM-specific contract checks + compat tiers — it
+    #: only needs to override ``_prepare_data`` / ``_build_model``, set
+    #: ``channel_names = []``, expose a fitted posterior, and declare its own
+    #: estimands via ``DEFAULT_ESTIMANDS``. See ``technical-docs/non-mmm-families.md``.
+    __garden_model_kind__: str = "mmm"
+
 
 __all__ = ["CustomMMM"]
