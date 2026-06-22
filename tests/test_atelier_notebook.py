@@ -338,3 +338,83 @@ class TestNotebookDoc:
 
         docs = [a for a in S.list_artifacts(tid) if a["kind"] == "atelier_notebook"]
         assert len(docs) == 1  # never duplicated
+
+
+class TestDemoNotebookSeeding:
+    """A model's curated ``manifest["demo_notebook"]`` seeds the Atelier notebook
+    in preference to the generic starter; absent, the starter is used; a persisted
+    user doc always wins."""
+
+    def _register(self, demo_notebook):
+        from mmm_framework.agents.garden_registry import register_garden_model_core
+
+        return register_garden_model_core(
+            org_id="dev-org",
+            source_code=GOOD_SRC,
+            name="DemoModel",
+            demo_notebook=demo_notebook,
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_seeds_model_demo_notebook(self, main):
+        demo = [
+            {
+                "id": "d1",
+                "type": "markdown",
+                "source": "# Curated demo",
+                "outputs": None,
+            },
+            {"id": "d2", "type": "code", "source": "print('hi')", "outputs": None},
+        ]
+        self._register(demo)
+        resp = await main.get_notebook("DemoModel", main._DEV_PRINCIPAL, None)
+        doc = json.loads(resp.body)
+        assert doc.get("seeded") is True
+        assert doc["cells"] == demo  # the curated cells, not the generic starter
+
+    @pytest.mark.asyncio
+    async def test_get_falls_back_to_starter_without_demo(self, main):
+        self._register(None)  # registered, but no demo_notebook
+        resp = await main.get_notebook("DemoModel", main._DEV_PRINCIPAL, None)
+        doc = json.loads(resp.body)
+        assert doc.get("seeded") is True
+        assert doc["cells"][0]["type"] == "markdown" and len(doc["cells"]) > 1
+        assert all("Curated demo" not in c.get("source", "") for c in doc["cells"])
+
+    @pytest.mark.asyncio
+    async def test_persisted_doc_wins_over_demo(self, main):
+        self._register([{"id": "d1", "type": "code", "source": "x=1", "outputs": None}])
+        cells = [{"id": "c1", "type": "code", "source": "print(2)", "outputs": None}]
+        await main.save_notebook(
+            main.NotebookSaveRequest(name="DemoModel", version=None, cells=cells),
+            main._DEV_PRINCIPAL,
+        )
+        resp = await main.get_notebook("DemoModel", main._DEV_PRINCIPAL, None)
+        doc = json.loads(resp.body)
+        assert not doc.get("seeded")
+        assert doc["cells"] == cells  # the user's saved doc, not the demo
+
+
+class TestDemoNotebookCellsCompile:
+    """The curated walkthrough notebooks shipped by the register scripts are
+    syntax-valid Python (a cheap guard against authoring typos)."""
+
+    @pytest.mark.parametrize(
+        "module_name",
+        ["register_awareness_garden_model", "register_lca_garden_model"],
+    )
+    def test_demo_cells_compile(self, module_name):
+        import importlib
+        import os
+        import sys
+
+        sys.path.insert(
+            0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples"))
+        )
+        mod = importlib.import_module(module_name)
+        nb = mod.DEMO_NOTEBOOK
+        assert nb and nb[0]["type"] == "markdown"
+        for cell in nb:
+            assert cell["type"] in ("markdown", "code")
+            if cell["type"] == "code":
+                compile(cell["source"], cell["id"], "exec")  # valid Python

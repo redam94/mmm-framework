@@ -1,21 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   atelierNotebookService,
   type NotebookCell,
   type NotebookDataset,
   type NotebookDoc,
-} from '../services/atelierNotebookService';
+} from "../services/atelierNotebookService";
 
 export const notebookKeys = {
-  all: ['atelierNotebook'] as const,
+  all: ["atelierNotebook"] as const,
   doc: (name: string, version?: number | null) =>
-    [...notebookKeys.all, name, version ?? 'draft'] as const,
+    [...notebookKeys.all, name, version ?? "draft"] as const,
 };
 
 /** Load the persisted notebook doc for a model (or a seeded starter). */
 export function useNotebookDoc(name: string | null, version?: number | null) {
   return useQuery({
-    queryKey: notebookKeys.doc(name ?? '', version),
+    queryKey: notebookKeys.doc(name ?? "", version),
     queryFn: () => atelierNotebookService.getNotebook(name!, version),
     enabled: !!name,
     // The doc is the source of truth on mount; the component owns it after that,
@@ -35,16 +35,22 @@ export function useSaveNotebook() {
       cells: NotebookCell[];
       dataset?: NotebookDataset | null;
     }) => atelierNotebookService.saveNotebook(req),
-    onSuccess: (_res, req) => {
-      // Keep the cached doc in step so a later remount restores the saved cells.
-      qc.setQueryData<NotebookDoc>(notebookKeys.doc(req.name, req.version), (prev) => ({
-        ...(prev ?? { cells: [] }),
-        cells: req.cells,
-        dataset: req.dataset ?? null,
-        name: req.name,
-        version: req.version ?? null,
-        seeded: false,
-      }));
+    // Update the cached doc OPTIMISTICALLY (synchronously, before the network
+    // round-trip). This is what makes a flush-on-unmount race-safe: when the
+    // notebook unmounts on a tab switch it fires this mutation, and a remount
+    // immediately reads the fresh cells from the cache rather than the stale doc.
+    onMutate: (req) => {
+      qc.setQueryData<NotebookDoc>(
+        notebookKeys.doc(req.name, req.version),
+        (prev) => ({
+          ...(prev ?? { cells: [] }),
+          cells: req.cells,
+          dataset: req.dataset ?? null,
+          name: req.name,
+          version: req.version ?? null,
+          seeded: false,
+        }),
+      );
     },
   });
 }

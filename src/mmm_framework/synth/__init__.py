@@ -26,6 +26,7 @@ from .mff import (
     MIN_WEEKS,
     generate_mff,
     geo_scenario_to_mff,
+    make_awareness_survey,
     scenario_to_mff,
     truth_summary,
 )
@@ -45,4 +46,5 @@ __all__ = [
     "scenario_to_mff",
     "geo_scenario_to_mff",
     "truth_summary",
+    "make_awareness_survey",
 ]

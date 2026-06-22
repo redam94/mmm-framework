@@ -1,27 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileSpreadsheet, Loader2, Play, Plus, Sparkles, UploadCloud } from 'lucide-react';
-import { Button } from '../../components/ui';
-import { NotebookCell, type CellStatus } from './NotebookCell';
-import { NotebookCopilotPanel, type DiagnoseRequest } from './NotebookCopilotPanel';
-import { useNotebookDoc, useSaveNotebook } from '../../api/hooks';
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  FileSpreadsheet,
+  Loader2,
+  Play,
+  Plus,
+  Save,
+  Sparkles,
+  UploadCloud,
+} from "lucide-react";
+import { Button } from "../../components/ui";
+import { NotebookCell, type CellStatus } from "./NotebookCell";
+import {
+  NotebookCopilotPanel,
+  type DiagnoseRequest,
+} from "./NotebookCopilotPanel";
+import { useNotebookDoc, useSaveNotebook } from "../../api/hooks";
 import {
   atelierNotebookService,
   hashSource,
   runCellToCompletion,
   type NotebookCell as Cell,
   type NotebookDataset,
-} from '../../api/services/atelierNotebookService';
+} from "../../api/services/atelierNotebookService";
 
 function uid(): string {
   try {
     return crypto.randomUUID();
   } catch {
-    return 'c' + Math.random().toString(36).slice(2, 10);
+    return "c" + Math.random().toString(36).slice(2, 10);
   }
 }
 
-function newCell(type: 'code' | 'markdown'): Cell {
-  return { id: uid(), type, source: '', outputs: null };
+function newCell(type: "code" | "markdown"): Cell {
+  return { id: uid(), type, source: "", outputs: null };
 }
 
 /**
@@ -48,7 +59,7 @@ export function AtelierNotebook({
    * `xl:h-auto` would otherwise let the notebook grow past the screen unscrollably. */
   fill?: boolean;
 }) {
-  const nbName = name?.trim() || 'untitled';
+  const nbName = name?.trim() || "untitled";
   const docQuery = useNotebookDoc(nbName, version);
   const save = useSaveNotebook();
 
@@ -69,12 +80,14 @@ export function AtelierNotebook({
   const loadedKeyRef = useRef<string | null>(null);
   const readyRef = useRef(false);
   useEffect(() => {
-    const key = `${nbName}__v${version ?? 'draft'}`;
+    const key = `${nbName}__v${version ?? "draft"}`;
     if (loadedKeyRef.current === key) return;
     if (!docQuery.data) return;
     loadedKeyRef.current = key;
     readyRef.current = false;
-    setCells(docQuery.data.cells?.length ? docQuery.data.cells : [newCell('code')]);
+    setCells(
+      docQuery.data.cells?.length ? docQuery.data.cells : [newCell("code")],
+    );
     setDataset(docQuery.data.dataset ?? null);
     setStatus({});
     // Allow autosave to fire only after this load settles.
@@ -83,15 +96,36 @@ export function AtelierNotebook({
     });
   }, [nbName, version, docQuery.data]);
 
+  // The latest editor state + whether it has unsaved changes — kept in refs so the
+  // unmount cleanup can flush WITHOUT a stale closure (fixes edits lost when the
+  // user switches Atelier tabs before the 1s debounce fires).
+  const latestRef = useRef({ name: nbName, version, cells, dataset });
+  const dirtyRef = useRef(false);
+  latestRef.current = { name: nbName, version, cells, dataset };
+
+  const flushSave = useCallback(() => {
+    if (!dirtyRef.current) return;
+    dirtyRef.current = false;
+    save.mutate(latestRef.current);
+  }, [save]);
+
   // Debounced autosave whenever cells/dataset change post-load.
   useEffect(() => {
     if (!readyRef.current) return;
-    const t = setTimeout(() => {
-      save.mutate({ name: nbName, version, cells, dataset });
-    }, 1000);
+    dirtyRef.current = true;
+    const t = setTimeout(flushSave, 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cells, dataset, nbName, version]);
+
+  // Flush a pending save on UNMOUNT (e.g. switching center tabs). Empty deps so
+  // the cleanup runs only when the notebook is torn down, never mid-edit.
+  useEffect(() => {
+    return () => {
+      if (dirtyRef.current) save.mutate(latestRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const patchCell = useCallback((id: string, patch: Partial<Cell>) => {
     setCells((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -99,8 +133,8 @@ export function AtelierNotebook({
 
   const runCell = useCallback(
     async (cell: Cell) => {
-      if (cell.type !== 'code') return;
-      setStatus((s) => ({ ...s, [cell.id]: 'running' }));
+      if (cell.type !== "code") return;
+      setStatus((s) => ({ ...s, [cell.id]: "running" }));
       try {
         const out = await runCellToCompletion({
           name: nbName,
@@ -111,7 +145,10 @@ export function AtelierNotebook({
           dataset_path: dataset?.path ?? null,
         });
         patchCell(cell.id, { outputs: out });
-        setStatus((s) => ({ ...s, [cell.id]: out.is_error ? 'error' : 'done' }));
+        setStatus((s) => ({
+          ...s,
+          [cell.id]: out.is_error ? "error" : "done",
+        }));
         return out.is_error;
       } catch (e) {
         patchCell(cell.id, {
@@ -122,7 +159,7 @@ export function AtelierNotebook({
             is_error: true,
           },
         });
-        setStatus((s) => ({ ...s, [cell.id]: 'error' }));
+        setStatus((s) => ({ ...s, [cell.id]: "error" }));
         return true;
       }
     },
@@ -132,7 +169,7 @@ export function AtelierNotebook({
   const runAll = useCallback(async () => {
     setRunningAll(true);
     try {
-      for (const cell of cells.filter((c) => c.type === 'code')) {
+      for (const cell of cells.filter((c) => c.type === "code")) {
         const failed = await runCell(cell);
         if (failed) break; // cells share kernel state — stop at the first error
       }
@@ -142,20 +179,17 @@ export function AtelierNotebook({
   }, [cells, runCell]);
 
   // Open the copilot and ask it to diagnose a failed cell (its code + traceback).
-  const requestDiagnosis = useCallback(
-    (cell: Cell, index: number) => {
-      setCopilotOpen(true);
-      diagnoseNonce.current += 1;
-      setDiagnose({
-        nonce: diagnoseNonce.current,
-        cellId: cell.id,
-        cellIndex: index,
-        code: cell.source,
-        traceback: cell.outputs?.stdout ?? '',
-      });
-    },
-    [],
-  );
+  const requestDiagnosis = useCallback((cell: Cell, index: number) => {
+    setCopilotOpen(true);
+    diagnoseNonce.current += 1;
+    setDiagnose({
+      nonce: diagnoseNonce.current,
+      cellId: cell.id,
+      cellIndex: index,
+      code: cell.source,
+      traceback: cell.outputs?.stdout ?? "",
+    });
+  }, []);
 
   // Apply a copilot code block: into the targeted cell, else as a new cell at end.
   // When patching a cell, also clear its (now-stale) error output + status so the
@@ -164,15 +198,15 @@ export function AtelierNotebook({
     (code: string, targetCellId: string | null) => {
       if (targetCellId && cells.some((c) => c.id === targetCellId)) {
         patchCell(targetCellId, { source: code, outputs: null });
-        setStatus((s) => ({ ...s, [targetCellId]: 'idle' }));
+        setStatus((s) => ({ ...s, [targetCellId]: "idle" }));
         return;
       }
-      setCells((cs) => [...cs, { ...newCell('code'), source: code }]);
+      setCells((cs) => [...cs, { ...newCell("code"), source: code }]);
     },
     [cells, patchCell],
   );
 
-  const addCell = (type: 'code' | 'markdown', afterIdx?: number) => {
+  const addCell = (type: "code" | "markdown", afterIdx?: number) => {
     setCells((cs) => {
       const next = [...cs];
       const at = afterIdx == null ? cs.length : afterIdx + 1;
@@ -180,7 +214,8 @@ export function AtelierNotebook({
       return next;
     });
   };
-  const deleteCell = (id: string) => setCells((cs) => cs.filter((c) => c.id !== id));
+  const deleteCell = (id: string) =>
+    setCells((cs) => cs.filter((c) => c.id !== id));
   const moveCell = (id: string, dir: -1 | 1) =>
     setCells((cs) => {
       const i = cs.findIndex((c) => c.id === id);
@@ -195,13 +230,22 @@ export function AtelierNotebook({
     if (!file) return;
     setUploading(true);
     try {
-      const ds = await atelierNotebookService.uploadDataset(nbName, file, version);
-      setDataset({ path: ds.path, filename: ds.filename, preview: ds.preview, kind: ds.kind });
+      const ds = await atelierNotebookService.uploadDataset(
+        nbName,
+        file,
+        version,
+      );
+      setDataset({
+        path: ds.path,
+        filename: ds.filename,
+        preview: ds.preview,
+        kind: ds.kind,
+      });
     } catch {
       /* surfaced by the next cell run if the path is unusable */
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -209,13 +253,18 @@ export function AtelierNotebook({
     <div
       className={
         fill
-          ? 'flex h-full min-h-0 flex-col gap-2'
-          : 'flex h-[58vh] flex-col gap-2 xl:h-auto xl:min-h-[58vh]'
+          ? "flex h-full min-h-0 flex-col gap-2"
+          : "flex h-[58vh] flex-col gap-2 xl:h-auto xl:min-h-[58vh]"
       }
     >
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-line-200 bg-white px-2.5 py-1.5">
-        <Button size="sm" variant="primary" onClick={runAll} disabled={runningAll}>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={runAll}
+          disabled={runningAll}
+        >
           {runningAll ? (
             <Loader2 size={14} className="mr-1 animate-spin" />
           ) : (
@@ -223,10 +272,10 @@ export function AtelierNotebook({
           )}
           Run all
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => addCell('code')}>
+        <Button size="sm" variant="secondary" onClick={() => addCell("code")}>
           <Plus size={14} className="mr-1" /> Code
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => addCell('markdown')}>
+        <Button size="sm" variant="ghost" onClick={() => addCell("markdown")}>
           <Plus size={14} className="mr-1" /> Markdown
         </Button>
 
@@ -261,7 +310,8 @@ export function AtelierNotebook({
           </span>
         ) : (
           <span className="text-xs italic text-ink-300">
-            No dataset — runs on a synthetic world. Upload an MFF CSV to test on your data.
+            No dataset — runs on a synthetic world. Upload an MFF CSV to test on
+            your data.
           </span>
         )}
 
@@ -269,14 +319,35 @@ export function AtelierNotebook({
 
         <Button
           size="sm"
-          variant={copilotOpen ? 'primary' : 'ghost'}
+          variant="secondary"
+          onClick={() => {
+            dirtyRef.current = false;
+            save.mutate({ name: nbName, version, cells, dataset });
+          }}
+          disabled={save.isPending}
+          title="Save the notebook now"
+        >
+          {save.isPending ? (
+            <Loader2 size={14} className="mr-1 animate-spin" />
+          ) : (
+            <Save size={14} className="mr-1" />
+          )}
+          Save
+        </Button>
+
+        <Button
+          size="sm"
+          variant={copilotOpen ? "primary" : "ghost"}
           onClick={() => setCopilotOpen((v) => !v)}
           title="Notebook copilot — diagnose errors & rewrite cells"
         >
           <Sparkles size={14} className="mr-1" /> Copilot
         </Button>
         <span className="text-[11px] text-ink-300">
-          source: <span className="text-ink-500">{version != null ? `v${version}` : 'live editor'}</span>
+          source:{" "}
+          <span className="text-ink-500">
+            {version != null ? `v${version}` : "live editor"}
+          </span>
         </span>
       </div>
 
@@ -288,7 +359,7 @@ export function AtelierNotebook({
               key={cell.id}
               cell={cell}
               index={i}
-              status={status[cell.id] ?? 'idle'}
+              status={status[cell.id] ?? "idle"}
               isFirst={i === 0}
               isLast={i === cells.length - 1}
               onChange={(source) => patchCell(cell.id, { source })}
@@ -311,8 +382,8 @@ export function AtelierNotebook({
         <div
           className={
             copilotOpen
-              ? 'w-[21rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white'
-              : 'hidden'
+              ? "w-[21rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white"
+              : "hidden"
           }
         >
           <NotebookCopilotPanel

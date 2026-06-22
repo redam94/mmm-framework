@@ -86,6 +86,7 @@ def register_garden_model_core(
     default_estimands: list | None = None,
     capabilities: list | None = None,
     config_schema: dict | None = None,
+    demo_notebook: list | None = None,
     owner_user_id: str | None = None,
 ) -> dict[str, Any]:
     """Statically validate source, persist it + a manifest to the org-scoped
@@ -132,6 +133,12 @@ def register_garden_model_core(
     # the caller (host registration is AST-only and cannot import the class).
     if config_schema:
         manifest["config_schema"] = dict(config_schema)
+    # Curated demo/walkthrough notebook (a list of cell dicts) seeded by the
+    # Atelier the FIRST time this model's notebook is opened, in preference to the
+    # generic starter. Authored at registration since the host can't import the
+    # untrusted class. Additive; absent models fall back to the generic starter.
+    if demo_notebook:
+        manifest["demo_notebook"] = list(demo_notebook)
     gdir = ws.garden_dir(org_id, name, ver)
     src_path = gdir / "model.py"
     src_path.write_text(source_code, encoding="utf-8")

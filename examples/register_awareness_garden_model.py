@@ -128,6 +128,127 @@ TAGS = [
 ]
 
 
+def _cell(cid: str, ctype: str, source: str) -> dict:
+    return {"id": cid, "type": ctype, "source": source, "outputs": None}
+
+
+# A curated, runnable walkthrough seeded into the Atelier notebook the first time
+# this model is opened (`manifest["demo_notebook"]`). It fits the model on a
+# synthetic AWARENESS SURVEY and shows how to pass the model's bespoke specs
+# (binomial likelihood + number_of_trials / retention priors via `model_params`).
+DEMO_NOTEBOOK = [
+    _cell(
+        "c1",
+        "markdown",
+        "# Demo: Persistent-Awareness Structural MMM\n\n"
+        "This model treats the KPI as a **latent brand-awareness stock** built by "
+        "media, not contemporaneous sales. Its headline parameter is the "
+        "**retention** ρ — the share of awareness carried over each week — whose "
+        "**half-life `ln 0.5 / ln ρ`** answers *how long brand memory lasts after "
+        "the spend stops*.\n\n"
+        "Run the cells to fit it on a synthetic **awareness survey** (or upload your "
+        "own MFF data). **Cell 3** shows how to pass this model's *bespoke "
+        "specifications* — the binomial survey-count likelihood and "
+        "`number_of_trials` / retention priors via `model_params`.",
+    ),
+    _cell(
+        "c2",
+        "code",
+        "# Synthetic brand-awareness survey, or your uploaded `df`. KPI 'Awareness'\n"
+        "# is a weekly COUNT of aware respondents out of `n_trials` surveyed;\n"
+        "# awareness is a media goodwill stock that decays at a retention rho.\n"
+        "n_trials = 500\n"
+        "try:\n"
+        "    data, src, kpi, channels = df, dataset_path, 'Awareness', None\n"
+        "except NameError:\n"
+        "    from mmm_framework.synth import make_awareness_survey\n"
+        "    data, answer = make_awareness_survey(n_weeks=104, n_trials=n_trials,\n"
+        "                                         retention=0.8, seed=7)\n"
+        "    src = 'awareness.csv'; data.to_csv(src, index=False)\n"
+        "    kpi, channels = 'Awareness', answer['channels']\n"
+        "    print('Planted retention rho =', answer['true_retention'],\n"
+        "          '-> half-life', round(answer['true_half_life_weeks'], 1), 'weeks')\n"
+        "show_table(data.head(20), title='Awareness survey (MFF long-format)')\n",
+    ),
+    _cell(
+        "c3",
+        "code",
+        "# Pass this model's BESPOKE specs from the spec dict:\n"
+        "#   likelihood.family='binomial'   -> awareness is a survey COUNT (logit link)\n"
+        "#   model_params.number_of_trials  -> the binomial denominator (survey size)\n"
+        "#   model_params.retention_prior_* -> the Beta prior on the retention rho\n"
+        "# (model_params maps to the model's CONFIG_SCHEMA — edit them and re-run.)\n"
+        "all_vars = list(dict.fromkeys(data['VariableName'].tolist()))\n"
+        "if not channels:\n"
+        "    channels = [v for v in all_vars if v != kpi]\n"
+        "spec = {\n"
+        "    'kpi': kpi,\n"
+        "    'media_channels': [{'name': c} for c in channels],\n"
+        "    'trend': {'type': 'none'},  # the awareness state IS the trend\n"
+        "    'seasonality': {'yearly': 0, 'monthly': 0, 'weekly': 0},\n"
+        "    'likelihood': {'family': 'binomial'},\n"
+        "    'model_params': {\n"
+        "        'number_of_trials': n_trials,\n"
+        "        'retention_prior_alpha': 6.0,\n"
+        "        'retention_prior_beta': 2.0,\n"
+        "    },\n"
+        "    'inference': {'method': 'map'},\n"
+        "}\n"
+        "from mmm_framework.agents.fitting import build_model\n"
+        "mmm = build_model(spec, src, model_cls=GardenModel)\n"
+        "results = mmm.fit(method='map')\n"
+        "print('Fitted', GardenModel.__name__, '(binomial awareness) on:', channels)\n",
+    ),
+    _cell(
+        "c4",
+        "code",
+        "# Recovered retention + half-life, and observed vs fitted aware-rate.\n"
+        "import numpy as np, plotly.graph_objects as go\n"
+        "rho = float(mmm._trace.posterior['awareness_retention'].values.mean())\n"
+        "half_life = float(np.log(0.5) / np.log(rho)) if 0 < rho < 1 else float('inf')\n"
+        "print('Recovered retention rho =', round(rho, 3),\n"
+        "      '-> half-life', round(half_life, 1), 'weeks')\n"
+        "obs = (data[data['VariableName'] == kpi].sort_values('Period')['VariableValue']\n"
+        "       .values / n_trials)\n"
+        "post = mmm._trace.posterior\n"
+        "fig = go.Figure()\n"
+        "fig.add_scatter(y=obs, name='observed aware-rate', mode='lines')\n"
+        "if 'awareness_rate' in post:\n"
+        "    fig.add_scatter(y=post['awareness_rate'].mean(('chain', 'draw')).values,\n"
+        "                    name='fitted aware-rate', mode='lines')\n"
+        "fig.update_layout(title='Brand awareness: observed vs fitted',\n"
+        "                  yaxis_title='aware-rate')\n"
+        "fig.show()\n",
+    ),
+    _cell(
+        "c5",
+        "code",
+        "# Declared estimands: mean awareness lift + per-channel goodwill-stock\n"
+        "# latent contrasts (latent media_total under media-on vs each channel off).\n"
+        "import pandas as pd\n"
+        "res = mmm.evaluate_estimands()\n"
+        "rows = [{'estimand': k, 'mean': r.mean, 'hdi_low': r.hdi_low,\n"
+        "         'hdi_high': r.hdi_high, 'status': r.status, 'units': r.units}\n"
+        "        for k, r in res.items()]\n"
+        "show_table(pd.DataFrame(rows),\n"
+        "           title='Awareness estimands (counterfactual quantities)')\n",
+    ),
+    _cell(
+        "c6",
+        "markdown",
+        "## Try it\n\n"
+        "- **Edit the bespoke specs in cell 3** and re-run: raise `number_of_trials` "
+        "(a larger survey → a tighter binomial), or shift "
+        "`retention_prior_alpha/beta` to encode a stickier or more impulsive "
+        "category.\n"
+        "- Swap `likelihood.family` to `'normal'` to treat the KPI as a continuous "
+        "awareness *index* instead of a survey count.\n"
+        "- Upload your own MFF survey data with the control above to fit on real "
+        "awareness.",
+    ),
+]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -178,6 +299,7 @@ def main() -> None:
         "config_schema": config_schema,
         "default_estimands": DEFAULT_ESTIMANDS,
         "capabilities": CAPABILITIES,
+        "demo_notebook": DEMO_NOTEBOOK,
     }
 
     existing = sessions.list_garden_models(org_id, name=MODEL_NAME, latest_only=True)
@@ -224,6 +346,7 @@ def main() -> None:
             config_schema=config_schema,
             default_estimands=DEFAULT_ESTIMANDS,
             capabilities=CAPABILITIES,
+            demo_notebook=DEMO_NOTEBOOK,
         )
         print(
             f"  ✓ registered v{row['version']} as DRAFT "

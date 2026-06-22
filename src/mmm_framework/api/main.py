@@ -3314,15 +3314,34 @@ async def get_notebook(name: str, principal: PrincipalDep, version: int | None =
     ]
     if docs:
         return JSONResponse(content=safe_json_dumps_load(docs[-1]["payload"]))
+    # No persisted doc yet: seed the model's CURATED demo notebook from its
+    # manifest (a registration-time walkthrough), else the generic starter.
+    cells = _model_demo_notebook(org_id, name, version) or _notebook_starter(name)
     return JSONResponse(
         content={
-            "cells": _notebook_starter(name),
+            "cells": cells,
             "dataset": None,
             "name": name,
             "version": version,
             "seeded": True,
         }
     )
+
+
+def _model_demo_notebook(org_id: str, name: str, version: int | None) -> list | None:
+    """A model's curated demo notebook (``manifest["demo_notebook"]``) if it
+    declared one at registration, else ``None`` (use the generic starter)."""
+    try:
+        if version is not None:
+            row = sessions_store.get_garden_model(
+                org_id=org_id, name=name, version=int(version)
+            )
+        else:
+            row = sessions_store.get_latest_garden_model(org_id, name)
+    except Exception:  # noqa: BLE001 — never block the notebook on lookup
+        return None
+    cells = (row or {}).get("manifest", {}).get("demo_notebook")
+    return cells if isinstance(cells, list) and cells else None
 
 
 @app.put("/model-garden/notebook")
