@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Boxes, Check, RotateCcw, Sliders } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { DashWidget } from '../common/DashWidget';
 import { Badge } from '../common/Badge';
 import { FLabel, iCls, sCls } from '../common/form';
+import { mdComponents } from '../common/markdown';
 import { SchemaForm, type JsonSchema } from './SchemaForm';
 import type { GardenModel } from '../../../../api/services/modelGardenService';
 import type { ModelSpec } from '../../types';
@@ -33,6 +36,7 @@ export function GardenModelConfigWidget({
   gardenModel,
   modelKind,
   editable,
+  fitted,
   onApplySpec,
   showInference,
 }: {
@@ -40,10 +44,12 @@ export function GardenModelConfigWidget({
   gardenModel: GardenModel | undefined;
   modelKind: string;
   editable: boolean;
+  fitted: boolean;
   onApplySpec: (newSpec: ModelSpec) => void;
   showInference: boolean;
 }) {
   const manifest = gardenModel?.manifest;
+  const mdComps = useMemo(() => mdComponents(), []);
   const ref = spec.garden_ref;
   const configSchema = (manifest?.config_schema as JsonSchema | undefined) || undefined;
   const hasParams = !!configSchema?.properties && Object.keys(configSchema.properties).length > 0;
@@ -106,7 +112,11 @@ export function GardenModelConfigWidget({
         )}
       </div>
       {gardenModel?.docs && (
-        <p className="text-xs text-ink-500 mb-3 leading-snug line-clamp-3">{gardenModel.docs}</p>
+        <div className="prose prose-sm max-w-none text-xs text-ink-600 mb-3 max-h-48 overflow-y-auto rounded-lg border border-line-200 bg-cream-50 px-3 py-2">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComps}>
+            {gardenModel.docs}
+          </ReactMarkdown>
+        </div>
       )}
 
       {/* Bespoke model parameters (from CONFIG_SCHEMA JSON Schema) */}
@@ -199,6 +209,11 @@ export function GardenModelConfigWidget({
           >
             <RotateCcw size={13} /> Reset
           </button>
+          {fitted && (
+            <span className="text-[10px] text-ink-400 ml-1">
+              Re-fit (<span className="font-mono">fit_mmm_model</span>) to apply.
+            </span>
+          )}
         </div>
       )}
     </DashWidget>

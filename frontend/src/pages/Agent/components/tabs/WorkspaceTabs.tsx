@@ -287,7 +287,11 @@ export function WorkspaceTabs({
                       spec={modelSpec as ModelSpec}
                       gardenModel={gardenModel}
                       modelKind={modelKind}
-                      editable={!modelCompleted}
+                      // A bespoke model can be reconfigured + re-fit even after a
+                      // fit (unlike the MMM widgets, which lock post-fit); only a
+                      // streaming turn disables editing.
+                      editable={!chatLoading}
+                      fitted={modelCompleted}
                       onApplySpec={onApplySpec}
                       showInference={!showMmmConfig}
                     />
