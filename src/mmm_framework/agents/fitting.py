@@ -278,27 +278,36 @@ def build_model(
     plain ``BayesianMMM``. The resolved ``garden_ref`` is stamped onto the
     instance (``mmm._garden_ref``) so serialization records the model's identity
     and a cold kernel can reload the right class."""
-    # 1. MFFConfig + panel
-    mff_config = _mff_config_from_spec(spec)
-    try:
-        panel = load_mff(dataset_path, mff_config)
-    except Exception as e:
-        msg = str(e)
-        latent = [
-            c.get("name")
-            for c in spec.get("control_variables", [])
-            if str(c.get("name", "")).strip().lower()
-            in ("trend", "seasonality", "season")
-        ]
-        if "Missing expected variables" in msg and latent:
-            raise ValueError(
-                f"{msg} — Hint: {', '.join(repr(n) for n in latent)} in "
-                "control_variables look like latent baseline components, not "
-                "dataset variables. Remove them from control_variables and use "
-                "the built-in `trend` / `seasonality` settings instead "
-                "(e.g. update_model_setting('seasonality.yearly', 4))."
-            ) from e
-        raise
+    # 1. Data: a native role-tagged dataset (spec["dataset"]) loads as a wide table
+    # directly (the non-MMM path — CFA/LCA indicators, surveys); otherwise the MFF
+    # loader builds the MMM panel. The native branch is resolved after the model
+    # class is known (its DATASET_SCHEMA validates the role mapping), so only build
+    # the MMM panel here when no native dataset is declared.
+    native_dataset = bool(spec.get("dataset"))
+    panel = None
+    if not native_dataset:
+        # The MFF config requires a kpi/media classification; a native dataset
+        # (which may have neither) skips it entirely.
+        mff_config = _mff_config_from_spec(spec)
+        try:
+            panel = load_mff(dataset_path, mff_config)
+        except Exception as e:
+            msg = str(e)
+            latent = [
+                c.get("name")
+                for c in spec.get("control_variables", [])
+                if str(c.get("name", "")).strip().lower()
+                in ("trend", "seasonality", "season")
+            ]
+            if "Missing expected variables" in msg and latent:
+                raise ValueError(
+                    f"{msg} — Hint: {', '.join(repr(n) for n in latent)} in "
+                    "control_variables look like latent baseline components, not "
+                    "dataset variables. Remove them from control_variables and use "
+                    "the built-in `trend` / `seasonality` settings instead "
+                    "(e.g. update_model_setting('seasonality.yearly', 4))."
+                ) from e
+            raise
 
     # 2. Inference + model config
     inf = spec.get("inference", {})
@@ -472,16 +481,22 @@ def build_model(
                 f"Expected a subset of: {fields}."
             ) from e
 
-    mmm = resolved_cls(panel, model_config, trend_config, model_params=model_params)
-    if resolved_dataset_schema is not None and resolved_dataset_schema.bindings:
-        # Re-tag the loaded columns with the explicit role mapping (clear error
-        # when the spec's column names don't match the data).
+    # Resolve the data to hand the constructor: a native role-tagged dataset loads
+    # the wide table directly (no MMM kpi/media classification); otherwise the MFF
+    # panel built above is used.
+    if native_dataset and resolved_dataset_schema is not None:
+        from mmm_framework.dataset_loader import load_dataset
+
         try:
-            mmm.dataset = mmm.dataset.retag(resolved_dataset_schema)
-        except ValueError as e:
+            data = load_dataset(dataset_path, resolved_dataset_schema)
+        except Exception as e:  # noqa: BLE001
             raise ValueError(
-                f"spec.dataset role mapping does not match the loaded data: {e}"
+                f"Could not load spec.dataset for {resolved_cls.__name__}: {e}."
             ) from e
+    else:
+        data = panel
+
+    mmm = resolved_cls(data, model_config, trend_config, model_params=model_params)
     if garden_ref:
         # Provenance for the serializer + cold-kernel reload (best-effort attr).
         try:

@@ -337,15 +337,20 @@ class AwarenessStructuralMMM(CustomMMM):
             # Gaussian families). The family drives BOTH the standardization (done
             # upstream in _prepare_data) and the node written here.
             if self._likelihood_config.family is LikelihoodFamily.BINOMIAL:
-                # Awareness as a survey COUNT: y is the raw #-aware out of
-                # ``number_of_trials`` (a bespoke model_param). A logit link maps
-                # the unbounded awareness state to the aware-rate p ∈ (0, 1).
+                # Awareness as a survey COUNT: y is the raw #-aware out of the
+                # trial count. The denominator is read PER-OBSERVATION from a
+                # dataset ``TRIALS`` column when one is provided (so the survey
+                # sample size can vary by period), else the scalar config field
+                # ``number_of_trials``. A logit link maps the unbounded awareness
+                # state to the aware-rate p ∈ (0, 1).
+                trials = self.dataset.trials()
+                n_trials = trials if trials is not None else params.number_of_trials
                 aware_rate = pm.Deterministic(
                     "awareness_rate", pm.math.sigmoid(mu), dims="obs"
                 )
                 y_obs = pm.Binomial(
                     "y_obs",
-                    n=params.number_of_trials,
+                    n=n_trials,
                     p=aware_rate,
                     observed=self.y,
                     dims="obs",

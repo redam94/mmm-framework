@@ -52,8 +52,24 @@ a `PanelDataset`; the model constructor still accepts a `panel`; reporting/analy
 read the same MMM surface. `Dataset` exposes that surface as views, so it is
 duck-type-droppable wherever a panel is read.
 
+## Native loading (A3)
+
+`Dataset.from_wide(table, schema)` and `dataset_loader.load_dataset(source, schema)`
+load a **wide, role-tagged table** (CSV/parquet/DataFrame) into a `Dataset`
+*directly* — no kpi/media/control classification. This is how a genuinely non-MMM
+family brings its own data shape: a CFA/LCA indicator matrix or a survey is loaded
+with INDICATOR-tagged columns and fits without ever constructing an MMM panel.
+Scope: a flat / cross-sectional table (one row per observation), with optional
+`time_col` / `group_cols` for the coordinate axes; geo/product panels keep using
+`load_mff`. The agent's `build_model` takes this native path whenever `spec["dataset"]`
+is present (skipping the MFF kpi requirement entirely). `Dataset.trials()` exposes a
+`TRIALS`-role column so a count family reads the binomial denominator **per
+observation** from the data (the awareness model prefers it over the scalar
+`number_of_trials`). Tests: `tests/test_dataset_native.py`.
+
 ## Roadmap
 
 - **A1 (done):** the three modules + adapters + model declaration + kill the CFA/LCA concat hack. (`tests/test_dataset.py`.)
-- **A2:** thread an optional `spec["dataset"]` `DatasetSchema` through `agents/fitting.build_model` (validated against `DATASET_SCHEMA`, like `model_params`); round-trip `dataset_schema` in the serializer; populate the garden manifest `dataset_schema` field (AST + `model_json_schema()`); teach `_garden_schema_warnings` about `required_roles`.
-- **A3:** `synth/mff.py` emits a `DatasetSchema` (TRIALS role for binomial worlds); make `Dataset` the primary internal read in `_prepare_data`; optionally route TRIALS/OFFSET/WEIGHT into the base likelihood block.
+- **A2 (done):** `spec["dataset"]` validated through `build_model`; serializer round-trips `dataset_schema`; garden manifest `dataset_schema` populated (AST `static_dataset_requirements`); `_garden_schema_warnings` understands `required_roles`. (`tests/test_dataset_threading.py`.)
+- **A3 (done):** native `Dataset.from_wide` / `load_dataset` + the `build_model` native path + `TRIALS` per-observation likelihood hook. (`tests/test_dataset_native.py`.)
+- **Deferred:** make `Dataset` the primary internal read in the base `_prepare_data` (architectural; the MMM hot path currently reads `self.panel`); `synth/mff.py` emitting a `DatasetSchema` answer-key; OFFSET/WEIGHT routing into the base likelihood; a long-format / geo-panel native loader.

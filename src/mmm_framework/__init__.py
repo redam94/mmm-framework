@@ -75,6 +75,7 @@ from .data_loader import (
 )
 
 from .dataset import Dataset
+from .dataset_loader import load_dataset
 
 from .model import (
     # Model classes
@@ -206,6 +207,7 @@ __all__ = [
     "PanelCoordinates",
     "PanelDataset",
     "Dataset",
+    "load_dataset",
     "MFFLoader",
     "load_mff",
     "mff_from_wide_format",

@@ -131,6 +131,15 @@ class Dataset:
     def is_panel(self) -> bool:
         return self.coords.has_geo or self.coords.has_product
 
+    def trials(self) -> np.ndarray | None:
+        """The per-observation ``TRIALS`` column (binomial denominator), or ``None``.
+
+        Lets a count/bounded family read ``n`` from the data instead of a scalar
+        config field. Returns the first ``TRIALS``-bound column as ``float64``.
+        """
+        cols = self.columns_for(DatasetRole.TRIALS)
+        return self.table[cols[0]].to_numpy(np.float64) if cols else None
+
     # ---- adapters ---------------------------------------------------------
     def as_panel(self) -> PanelDataset:
         """View this dataset through the MMM ``PanelDataset`` surface.
@@ -168,6 +177,68 @@ class Dataset:
             coords=self.coords,
             config=self.config,
             stats=self.stats,
+        )
+
+    @classmethod
+    def from_wide(cls, table: pd.DataFrame, schema: DatasetSchema) -> "Dataset":
+        """Build a :class:`Dataset` natively from a **wide** role-tagged table.
+
+        This is the non-MFF entry point: columns are tagged by ``schema`` (no
+        kpi/media/control classification), so a genuinely non-MMM dataset — a CFA /
+        LCA indicator matrix, a survey — loads without riding an MMM panel. Scope:
+        a flat / cross-sectional table (one row per observation), with optional
+        ``time_col`` / ``group_cols`` for the coordinate axes. Geo / product panels
+        keep using the MFF loader.
+        """
+        cols = set(table.columns)
+        missing = [b.name for b in schema.bindings if b.name not in cols]
+        if missing:
+            raise ValueError(
+                f"DatasetSchema names not present in the table columns: {missing}; "
+                f"available columns are {list(table.columns)}."
+            )
+        n = len(table)
+
+        # Time axis: parse the declared time column, else synthesize one of length n
+        # (a cross-sectional family only reads ``n_periods`` for trend/seasonality,
+        # which it does not use).
+        periods: pd.DatetimeIndex
+        if schema.time_col and schema.time_col in cols:
+            parsed = pd.to_datetime(table[schema.time_col], errors="coerce")
+            uniq = pd.DatetimeIndex(parsed.dropna().unique()).sort_values()
+            periods = (
+                uniq
+                if len(uniq) > 0
+                else pd.date_range("2000-01-01", periods=n, freq="W")
+            )
+        else:
+            periods = pd.date_range("2000-01-01", periods=n, freq="W")
+
+        # Optional grouping: first group col → geographies, second → products.
+        geographies = products = None
+        gc = [g for g in schema.group_cols if g in cols]
+        if len(gc) >= 1:
+            geographies = sorted(table[gc[0]].astype(str).unique().tolist())
+        if len(gc) >= 2:
+            products = sorted(table[gc[1]].astype(str).unique().tolist())
+
+        coords = PanelCoordinates(
+            periods=periods,
+            geographies=geographies,
+            products=products,
+            channels=[c for c in schema.predictor_names if c in cols],
+            controls=[c for c in schema.control_names if c in cols],
+        )
+        # The stored table holds exactly the bound columns (structural time/group
+        # columns are reflected in coords, not re-read as data).
+        bound = [b.name for b in schema.bindings]
+        return cls(
+            table=table[bound].copy(),
+            schema=schema,
+            index=table.index,
+            coords=coords,
+            config=None,
+            stats={},
         )
 
     @classmethod
