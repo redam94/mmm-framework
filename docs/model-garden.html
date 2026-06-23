@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Garden &amp; Atelier — grow a library of bespoke Bayesian models | MMM Framework</title>
+    <meta name="description" content="The Model Garden turns a methodologist's bespoke Bayesian model into a named, versioned, org-shared asset. Author it once in the Atelier, prove it against the compatibility suite, publish it — and every analyst fits, interrogates, and reports on it through the agent without touching the kernel.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/model-garden.html">
+    <meta property="og:title" content="Model Garden &amp; Atelier — a growing library of bespoke Bayesian models">
+    <meta property="og:description" content="Author a custom Bayesian model once, prove it against an oracle compatibility suite, publish it to your org — and let every analyst use it through the agent without ever touching the kernel.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/model-garden.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for the occasional formula -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* =====================================================================
+           Model Garden page-scoped layer. The shared docs palette (sage / steel /
+           gold / cream) is unchanged; here we add a few small components the page
+           needs: a lifecycle pipeline, role badges, a kind pill, and an
+           audience-split intro. Everything else reuses shared classes.
+           ===================================================================== */
+
+        /* Audience split at the top of the page */
+        .mg-audience {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.25rem;
+            margin: 1.75rem 0 0.5rem;
+        }
+        .mg-audience .card { margin: 0; }
+        .mg-audience .card h3 {
+            margin-top: 0;
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .mg-audience .card .mg-eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--color-primary, #4a6d2a);
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+
+        /* Lifecycle pipeline: draft -> tested -> published (+ deprecated) */
+        .mg-lifecycle {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+        }
+        .mg-stage {
+            flex: 1 1 150px;
+            border: 1px solid var(--color-border, #e8e4d5);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            background: var(--color-surface, #faf8f3);
+            position: relative;
+        }
+        .mg-stage h4 {
+            margin: 0 0 0.2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .mg-stage p { margin: 0; font-size: 0.86rem; line-height: 1.4; }
+        .mg-stage.is-draft     { border-left: 4px solid #9db8c9; }
+        .mg-stage.is-tested    { border-left: 4px solid #d4a86a; }
+        .mg-stage.is-published { border-left: 4px solid #6d8a4a; }
+        .mg-stage.is-deprecated{ border-left: 4px solid #a04535; opacity: 0.85; }
+        .mg-arrow {
+            align-self: center;
+            font-size: 1.3rem;
+            color: var(--color-text-muted, #6d7a6a);
+            padding: 0 0.1rem;
+        }
+        .mg-gate {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.66rem;
+            letter-spacing: 0.04em;
+            margin-top: 0.45rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 5px;
+            background: rgba(109,138,74,0.12);
+            color: #4a6d2a;
+        }
+        .mg-gate.human { background: rgba(184,134,11,0.14); color: #8a6408; }
+
+        /* Inline role + kind badges */
+        .mg-role {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 0.04em;
+            padding: 0.08rem 0.45rem;
+            border-radius: 5px;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        .mg-role.analyst { background: rgba(74,109,138,0.14); color: #3a5a75; }
+        .mg-role.admin   { background: rgba(160,69,53,0.13);  color: #7a3525; }
+        .mg-kind {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.08rem 0.45rem;
+            border-radius: 5px;
+            background: rgba(168,196,133,0.22);
+            color: #4a6d2a;
+        }
+
+        /* Compact "what the analyst never has to do" list + chat mock */
+        .mg-chat {
+            border: 1px solid var(--color-border, #e8e4d5);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 1.25rem 0;
+            background: #fff;
+        }
+        .mg-chat .mg-turn { padding: 0.7rem 1rem; border-top: 1px solid var(--color-border, #eee); }
+        .mg-chat .mg-turn:first-child { border-top: none; }
+        .mg-chat .mg-who {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--color-text-muted, #6d7a6a);
+            display: block;
+            margin-bottom: 0.2rem;
+        }
+        .mg-chat .mg-turn.user { background: var(--color-surface, #faf8f3); }
+        .mg-chat .mg-tool {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: #3a5a75;
+        }
+
+        /* Worked-example cards */
+        .mg-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1.25rem 0; }
+        .mg-examples .card { margin: 0; }
+        .mg-examples .card code { font-size: 0.8rem; }
+
+        table .mg-yes { color: #4a6d2a; font-weight: 600; }
+        table .mg-no  { color: #a04535; }
+        table.mg-tight td, table.mg-tight th { padding: 0.5rem 0.7rem; }
+    </style>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">What the Model Garden is</a></li>
+                <li><a href="#why-garden">Why a Model Garden</a></li>
+                <li><a href="#value">Business value</a></li>
+            </ul>
+
+            <h3>Use a model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#consume-chat">Using a model with the agent</a></li>
+                <li><a href="#atelier-ui">The Atelier IDE</a></li>
+            </ul>
+
+            <h3>Build a model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#authoring">The authoring recipe</a></li>
+                <li class="sub-item"><a href="#config-likelihood">Config &amp; likelihood</a></li>
+                <li class="sub-item"><a href="#estimands">Declaring estimands</a></li>
+                <li class="sub-item"><a href="#non-mmm">Non-MMM families</a></li>
+                <li><a href="#examples">Worked examples</a></li>
+            </ul>
+
+            <h3>Prove &amp; ship</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#test-contract">The compatibility contract</a></li>
+                <li><a href="#document">Documenting a model</a></li>
+                <li><a href="#govern">Governance &amp; security</a></li>
+                <li><a href="#ecosystem">The growing ecosystem</a></li>
+            </ul>
+
+            <h3>Start</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#get-started">Get started</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Model Garden &amp; Atelier</h1>
+            <p class="lead">
+                Author a custom Bayesian model <em>once</em>, prove it against an oracle compatibility
+                suite, publish it to your organization — and let every analyst fit, interrogate, and
+                report on it through the agent without ever touching the kernel.
+            </p>
+
+            <p>
+                Most bespoke marketing-science work dies in a notebook. A methodologist builds a clever
+                structural model for a particular client question, it produces one result deck, and the
+                code is never reused — there is no safe way to put a hand-rolled PyMC model into a shared
+                application, and no guarantee it behaves like a first-class model once it gets there.
+                The <strong>Model Garden</strong> is the answer to that: a governed, versioned registry of
+                custom Bayesian models, and the <strong>Atelier</strong> is the in-app IDE where you write,
+                test, document, and publish them. A published model becomes a named asset that any project
+                in your org can re-fit on its own data — through the same agent, the same reports, the same
+                estimands as the built-in MMM.
+            </p>
+
+            <div class="mg-audience">
+                <div class="card">
+                    <span class="mg-eyebrow">If you consume models</span>
+                    <h3>📊 Analysts &amp; consultants</h3>
+                    <p>
+                        You never write Python. Ask the agent which models exist, pick one, point it at
+                        your data, and fit. You get the model's headline estimands, ROI, decomposition,
+                        diagnostics, and a report — exactly as you would for a built-in model.
+                        Jump to <a href="#consume-chat">Using a model with the agent</a>.
+                    </p>
+                </div>
+                <div class="card">
+                    <span class="mg-eyebrow">If you build models</span>
+                    <h3>🛠️ Authors &amp; methodologists</h3>
+                    <p>
+                        Subclass one base class, override one or two hooks, declare your parameters and
+                        estimands, and let the compatibility suite prove the model is well-behaved before
+                        it ships. Jump to <a href="#authoring">The authoring recipe</a>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 Where this fits</h4>
+                <p>
+                    The Atelier is one surface of the platform tour in the
+                    <a href="platform-overview.html">Platform Overview</a>. For the modelling concepts
+                    underneath a garden model — priors, adstock, saturation, identification — see the
+                    <a href="modeling-guide.html">Modeling Guide</a> and
+                    <a href="identification-assumptions.html">Identification Assumptions</a>. This page is
+                    about the <em>ecosystem</em>: how a custom model is made, governed, shared, and used.
+                </p>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="why-garden">Why a Model Garden</h2>
+            <p>
+                Three problems sit between a good idea in a notebook and a model an organization can rely on:
+            </p>
+            <ul>
+                <li><strong>Deployment.</strong> Putting new model code into a running application
+                    normally means a code review, a release, and a redeploy of the runtime. That is far too
+                    much friction for a one-question structural model.</li>
+                <li><strong>Trust.</strong> A hand-rolled model might sample badly, mis-scale its outputs,
+                    or silently break the read-side metrics (ROI, decomposition) that downstream tools
+                    expect. Without a quality bar, nobody can safely reuse it.</li>
+                <li><strong>Reuse.</strong> Even a <em>good</em> model is stranded if there's no catalog,
+                    no versioning, and no way for a teammate on another project to find and run it.</li>
+            </ul>
+            <p>
+                The Model Garden removes all three. A model is loaded <strong>by reference</strong>, not by
+                redeploying code; it must pass a <strong>compatibility suite</strong> before it can be marked
+                tested; and it lives in an <strong>org-scoped, versioned registry</strong> that the agent can
+                search. The mechanism that makes the first point work is a small piece of provenance called
+                the <code>garden_ref</code>:
+            </p>
+
+            <!-- doc-snippet: skip -->
+            <pre><code class="python"># A garden_ref — embedded in a session spec and in saved-model metadata.
+# It is just enough to reconstruct the exact authored class on load.
+garden_ref = {
+    "name": "awareness_structural_mmm",
+    "version": 3,
+    "source_path": "…/garden/awareness_structural_mmm/v3/model.py",
+    "class_name": "AwarenessStructuralMMM",
+    "contract_version": "1.0",
+}</code></pre>
+
+            <p>
+                When the agent fits a model, it reads <code>spec["garden_ref"]</code>, the kernel imports the
+                exact authored class from <code>source_path</code>, and the fit proceeds. The application
+                runtime never needs the model's code baked in — <strong>authors ship science, not
+                infrastructure</strong>. If the source is ever missing, the loader degrades gracefully to the
+                base <code>BayesianMMM</code> rather than failing the session.
+            </p>
+
+            <!-- ============================================================ -->
+            <h2 id="value">The business value of a growing library</h2>
+            <p>
+                Every model that clears the bar and gets published is a permanent, governed, documented
+                asset — and because the agent can discover and run it, the value of authoring one accrues to
+                every future analyst session. The library compounds.
+            </p>
+
+            <div class="feature-grid">
+                <div class="card">
+                    <h3>Ship without a redeploy</h3>
+                    <p>
+                        Loading by <code>garden_ref</code> means the runtime never needs new code to use a
+                        new model. Registering and publishing <em>is</em> the release — turnaround is minutes,
+                        not a deploy cycle.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>One author, every project</h3>
+                    <p>
+                        Models are <strong>org-scoped</strong>, so a methodologist's awareness model, CFA, or
+                        latent-class model is reusable across every project in the tenant with a single
+                        <code>load_garden_model</code> call.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Reproducible &amp; auditable</h3>
+                    <p>
+                        Monotonic per-(org, name) versioning, <strong>immutable published versions</strong>,
+                        an append-only status history, and serialized <code>garden_ref</code> provenance mean
+                        a saved result can always be traced back to the exact class that produced it.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>A real quality bar</h3>
+                    <p>
+                        The compatibility suite fits each candidate on synthetic worlds with known ground
+                        truth and gates <code>draft → tested</code> automatically. Pathological priors,
+                        geometry, or scaling are caught <em>before</em> a model touches client data.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Host-safe contributions</h3>
+                    <p>
+                        Registration validates source with AST only — it is <strong>never executed on the
+                        host</strong>. Untrusted author code runs solely in the sandboxed kernel during test
+                        and fit, so an org can accept models from many authors without trusting their code on
+                        the API process.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Beyond marketing mix</h3>
+                    <p>
+                        Non-MMM families — factor analysis, latent-class segmentation, structural awareness
+                        models — register, test, fit, expose estimands, serialize, and report through the
+                        <em>same</em> pipeline. The catalog grows in scope without a parallel system.
+                    </p>
+                </div>
+            </div>
+
+            <div class="takeaway">
+                <h4>The compounding loop</h4>
+                <p>
+                    Author → prove → publish → <em>every analyst can use it in one chat turn</em>. Each model
+                    raises the leverage of every future session, and the Atelier's copilot lowers the cost of
+                    contributing so more methodologists can add to the library safely.
+                </p>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="consume-chat">Using a registered model with the agent</h2>
+            <p>
+                For an analyst, a custom model is no different from a built-in one. You talk to the agent in
+                plain language; it calls the right tools; the model fits and reports. Here is the whole flow.
+            </p>
+
+            <div class="mg-chat">
+                <div class="mg-turn user">
+                    <span class="mg-who">You</span>
+                    What custom models do we have for awareness studies?
+                </div>
+                <div class="mg-turn">
+                    <span class="mg-who">Agent</span>
+                    <span class="mg-tool">→ list_garden_models()</span><br>
+                    Three published models match. <em>awareness_structural_mmm</em> (v3, published,
+                    compatibility 0.94) models a latent goodwill stock with a survey-count or index KPI…
+                </div>
+                <div class="mg-turn user">
+                    <span class="mg-who">You</span>
+                    Use that one and fit it on the brand-tracker data I uploaded.
+                </div>
+                <div class="mg-turn">
+                    <span class="mg-who">Agent</span>
+                    <span class="mg-tool">→ load_garden_model("awareness_structural_mmm")</span><br>
+                    <span class="mg-tool">→ fit_mmm_model(…)</span><br>
+                    Fitted. The model's declared estimands are ready — awareness lift and contribution ROI.
+                </div>
+                <div class="mg-turn user">
+                    <span class="mg-who">You</span>
+                    Show me the headline numbers and build a report.
+                </div>
+                <div class="mg-turn">
+                    <span class="mg-who">Agent</span>
+                    <span class="mg-tool">→ get_estimands()</span> · <span class="mg-tool">→ generate report</span><br>
+                    Awareness lift +6.2pp (89% HDI 3.1–9.4), contribution ROI 2.3× … report attached.
+                </div>
+            </div>
+
+            <p>What is actually happening under those tool calls:</p>
+            <ol>
+                <li><strong>Discover</strong> — <code>list_garden_models</code> returns the org's catalog
+                    (name, version, status, compatibility score, docs).</li>
+                <li><strong>Load</strong> — <code>load_garden_model</code> stages the model into the session:
+                    it copies the source into the workspace, sets <code>spec["garden_ref"]</code>, and
+                    applies the model's <code>recommended_fit</code> to the inference settings.</li>
+                <li><strong>Fit</strong> — <code>fit_mmm_model</code> reads the spec and dispatches to the
+                    kernel, where the build step resolves the garden class from <code>garden_ref</code>,
+                    validates any <code>model_params</code> against the model's config schema, wires the
+                    declared likelihood and estimands, and fits the bespoke subclass.</li>
+                <li><strong>Interrogate</strong> — <code>get_estimands</code> realizes the model's declared
+                    estimands post-fit (mean, HDI, units, probability of being positive/profitable). Standard
+                    read-ops — ROI, decomposition, adstock, saturation, diagnostics — work on a garden model
+                    with no special-casing.</li>
+                <li><strong>Report</strong> — reporting is family-aware: an MMM model gets the full marketing
+                    report; a non-MMM family gets its family-specific section (factor loadings, class
+                    profiles) plus its declared estimands, chosen automatically by the model's kind.</li>
+            </ol>
+
+            <h3>Agent tools at a glance</h3>
+            <table class="mg-tight">
+                <thead>
+                    <tr><th>Tool</th><th>Role</th><th>What it does</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>list_garden_models</code></td><td><span class="mg-role analyst">any</span></td><td>Browse the org's catalog (name, version, status, compatibility, docs).</td></tr>
+                    <tr><td><code>load_garden_model</code></td><td><span class="mg-role analyst">any</span></td><td>Stage a model into the session spec via <code>garden_ref</code> + recommended fit.</td></tr>
+                    <tr><td><code>fit_mmm_model</code></td><td><span class="mg-role analyst">any</span></td><td>Fit the staged model (resolves the garden class kernel-side).</td></tr>
+                    <tr><td><code>get_estimands</code></td><td><span class="mg-role analyst">any</span></td><td>Realize the model's declared estimands (mean + HDI + units).</td></tr>
+                    <tr><td><code>register_garden_model</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Register new source as a draft (AST-validated, not executed).</td></tr>
+                    <tr><td><code>test_garden_model</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Run the compatibility suite; auto-promote <code>draft → tested</code> on a clean pass.</td></tr>
+                    <tr><td><code>publish_garden_model</code></td><td><span class="mg-role admin">admin/owner</span></td><td>Promote <code>tested → published</code> so every project can load it.</td></tr>
+                </tbody>
+            </table>
+
+            <div class="info">
+                <h4>What the analyst never has to do</h4>
+                <p>
+                    Write the model, install anything, or know its internals. The model's assumptions live in
+                    its docstring and docs page; its measurable outputs live in its declared estimands; the
+                    agent handles the rest.
+                </p>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="atelier-ui">The Atelier — an IDE for models</h2>
+            <p>
+                The Atelier is a Jupyter-like workspace for authoring, testing, and publishing models,
+                opened from the Model Garden page. The layout is a three-column grid:
+            </p>
+            <ul>
+                <li><strong>Left (collapsible) — the registry.</strong> Every model your org has, with a
+                    version picker and lifecycle status chips.</li>
+                <li><strong>Center — three tabs.</strong> <em>Code</em> (a Monaco editor with framework
+                    completions and a copilot side-panel), <em>Docs</em> (a markdown editor with live
+                    preview), and <em>Notebook</em> (Jupyter-like cells you run against real data).</li>
+                <li><strong>Right (collapsible) — two tabs.</strong> <em>Compatibility</em> (the tier-by-tier
+                    test report and fit-quality score) and <em>About</em> (class name, contract version,
+                    docs, and status history).</li>
+            </ul>
+
+            <h3>The authoring loop in the UI</h3>
+            <ol>
+                <li><strong>New model.</strong> The Code editor seeds a <code>CustomMMM</code> starter; name
+                    the model.</li>
+                <li><strong>Write &amp; check.</strong> Edit the subclass; use <em>Format</em> (Ruff) and
+                    <em>Validate</em> (a static AST lint that surfaces Problems) from the toolbar — alongside
+                    Wrap, Minimap, font zoom, fullscreen, and the Copilot toggle.</li>
+                <li><strong>Ask the copilot.</strong> The inline Bayesian-modelling assistant streams answers;
+                    <em>Apply to editor</em> merges a suggested code block straight into the buffer.</li>
+                <li><strong>Document.</strong> Write the model's markdown docs in the Docs tab with live
+                    preview.</li>
+                <li><strong>Register.</strong> <em>Register draft</em> stores the source (AST-validated, not
+                    executed) as version&nbsp;1, status <code>draft</code>.</li>
+                <li><strong>Demo on real data.</strong> In the Notebook tab, upload a CSV (it auto-binds as
+                    <code>df</code>), add code cells, and run them against the <em>live editor buffer</em> to
+                    sanity-check the model. An errored cell offers <em>Diagnose with copilot</em>, which
+                    rewrites the failing cell — or the model source — for you.</li>
+                <li><strong>Prove.</strong> <em>Run compatibility test</em> streams the tier report; on a
+                    clean blocking pass the model auto-promotes to <code>tested</code> and a
+                    <em>Publish</em> button appears.</li>
+                <li><strong>Publish.</strong> An admin/owner clicks <em>Publish</em>; the version becomes
+                    immutable and loadable by every project in the org.</li>
+            </ol>
+
+            <p>The lifecycle is always visible as status chips:</p>
+            <div class="mg-lifecycle">
+                <div class="mg-stage is-draft">
+                    <h4>Draft</h4>
+                    <p>Registered. Source stored, AST-validated. Editable.</p>
+                    <span class="mg-gate">auto · compatibility pass</span>
+                </div>
+                <div class="mg-arrow">→</div>
+                <div class="mg-stage is-tested">
+                    <h4>Tested</h4>
+                    <p>All blocking tiers pass on synthetic worlds. Editable docs.</p>
+                    <span class="mg-gate human">human · publish gate</span>
+                </div>
+                <div class="mg-arrow">→</div>
+                <div class="mg-stage is-published">
+                    <h4>Published</h4>
+                    <p>Org-wide, immutable, loadable by every project.</p>
+                </div>
+                <div class="mg-arrow">→</div>
+                <div class="mg-stage is-deprecated">
+                    <h4>Deprecated</h4>
+                    <p>Retired but preserved in history (never deleted).</p>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 The Notebook runs your live edits</h4>
+                <p>
+                    The Notebook executes cells against the source currently in the Code editor, not against a
+                    saved snapshot. That makes the loop tight: change a prior, re-run the cell, see the new
+                    posterior — all before you register a draft. Notebook state is persisted per
+                    model + version, so a model carries its own demo.
+                </p>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="authoring">Building a model</h2>
+            <p>
+                For authors, the contract is deliberately small. You subclass one base class, override the
+                graph, and declare what the model measures. Everything else — fitting, serialization, estimand
+                evaluation, reporting — is inherited.
+            </p>
+
+            <h3>The minimal skeleton</h3>
+            <p>
+                Subclass <code>CustomMMM</code> (a thin, documented marker over <code>BayesianMMM</code> that
+                stamps the contract version). The one method you almost always override is
+                <code>_build_model</code>; keep the standard constructor signature so the agent can swap your
+                class in for the built-in one.
+            </p>
+
+            <!-- doc-snippet: skip -->
+            <pre><code class="python">from mmm_framework.garden import CustomMMM
+
+
+class MyStructuralMMM(CustomMMM):
+    """One-paragraph statement of WHAT this model assumes and WHY.
+
+    State the identification strategy here: the priors, any sign
+    constraints, and the fixed structural pattern. A consumer who fits
+    this model on their data is inheriting these assumptions.
+    """
+
+    def _build_model(self):
+        # Your PyMC graph. Register every reported quantity as a named
+        # Deterministic, in ORIGINAL KPI scale. For MMM models, alias
+        # coefficients / carryover / saturation to the PARAM_PREFIXES
+        # (beta_<channel>, adstock_alpha_<channel>, sat_half_<channel>,
+        # sat_slope_<channel>) so the reporting helpers can find them.
+        ...</code></pre>
+
+            <p>
+                Before you register, you can prove the structure statically — no PyMC, no fit — and then run
+                the full suite. These are the real, importable entry points an author uses locally:
+            </p>
+
+            <pre><code class="python">from mmm_framework.garden import CustomMMM, validate_class, run_compatibility_check
+
+# Static, PyMC-free structural check (empty list == OK):
+problems = validate_class(MyStructuralMMM)
+
+# Full nine-tier suite — fits on synthetic worlds, never raises:
+report = run_compatibility_check(MyStructuralMMM)</code></pre>
+
+            <h3 id="config-likelihood">Config &amp; likelihood</h3>
+            <p>
+                Two axes let a model carry its own settings and its own observation model without forking the
+                framework.
+            </p>
+            <p>
+                <strong>Settable parameters.</strong> Instead of magic numbers, declare a class attribute
+                <code>CONFIG_SCHEMA</code> — a <code>pydantic.BaseModel</code> of defaulted, constrained,
+                described fields. The agent validates the caller's <code>model_params</code> against it,
+                passes them to your constructor, and reads them as <code>self.model_params</code>; the
+                serializer round-trips them; and the schema is exported as JSON Schema to drive a UI form.
+            </p>
+            <p>
+                <strong>Observation model.</strong> A model declares its likelihood family and reads it in
+                <code>_build_model</code>. The built-in additive dispatch handles Gaussian families
+                (<code>NORMAL</code>, <code>STUDENT_T</code>) byte-identically; a non-Gaussian KPI (a survey
+                count, a bounded rate) <em>owns its observation node</em> — the additive base raises
+                <code>NotImplementedError</code> for non-Gaussian on purpose, so count/bounded models write
+                their own.
+            </p>
+
+            <pre><code class="python">from mmm_framework.config import LikelihoodConfig
+from mmm_framework.config.enums import LikelihoodFamily, LinkFunction</code></pre>
+
+            <p>
+                Available families: <code>NORMAL</code>, <code>STUDENT_T</code>, <code>LOGNORMAL</code>,
+                <code>BINOMIAL</code>, <code>BETA_BINOMIAL</code>, <code>POISSON</code>,
+                <code>NEGATIVE_BINOMIAL</code>, and <code>BETA</code>.
+            </p>
+
+            <h3 id="estimands">Declaring estimands</h3>
+            <p>
+                A model's <code>DEFAULT_ESTIMANDS</code> are the named quantities it surfaces through the
+                estimand engine — what the agent reports and what the report renders. They are the model's
+                <em>measurement contract</em>: document what the model measures with declared estimands, not
+                just prose.
+            </p>
+            <p>
+                For MMM channel quantities you reference the built-ins <strong>by name</strong> — e.g.
+                <code>"contribution_roi"</code>, <code>"marginal_roas"</code>, <code>"contribution"</code>.
+                For latent quantities (a fit index, a named scalar, a class size) you build an
+                <code>Estimand</code> with a public registry helper:
+            </p>
+
+            <pre><code class="python">from mmm_framework.estimands.registry import latent_scalar, fit_index, factor_loading</code></pre>
+
+            <p>
+                Each is gated by a <code>HAS_LATENT:&lt;var&gt;</code> capability, so it cleanly returns an
+                <em>unsupported</em> status (never an exception) on a model that doesn't carry the variable.
+                If your estimands scale with config — say one class-size estimand per class — override
+                <code>_default_estimands()</code> to build them dynamically.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Posterior names and scale are conventions, not suggestions</h4>
+                <p>
+                    The MMM reporting helpers key off the <code>PARAM_PREFIXES</code>
+                    (<code>beta_&lt;channel&gt;</code>, <code>adstock_alpha_&lt;channel&gt;</code>,
+                    <code>sat_half_&lt;channel&gt;</code>, <code>sat_slope_&lt;channel&gt;</code>). Use a
+                    different name — <code>coef_&lt;channel&gt;</code> — and the ROI/decomposition helpers
+                    silently return empty. And per-observation deterministics must be in
+                    <strong>original KPI scale</strong>: standardized-scale predictions fail the
+                    <em>scaling</em> compatibility tier.
+                </p>
+            </div>
+
+            <h3 id="non-mmm">Non-MMM families</h3>
+            <p>
+                The same pipeline supports genuinely non-marketing-mix Bayesian families. A model opts out of
+                the MMM-only gates by declaring a non-<code>"mmm"</code> kind:
+            </p>
+
+            <!-- doc-snippet: skip -->
+            <pre><code class="python">class BayesianCFA(CustomMMM):
+    __garden_model_kind__ = "cfa"          # opt out of channel / beta / scaling gates
+
+    def _prepare_data(self):
+        # Assemble your observed indicators; then set the model-agnostic
+        # attributes the inherited fit + serializer read:
+        self.channel_names = []            # empty list (not None) signals "no channels"
+        # … n_obs, y_mean=0, y_std=1, _media_raw_max={}, time_idx, etc.
+        ...
+
+    def _build_model(self):
+        ...                                # your latent-variable graph</code></pre>
+
+            <p>
+                With <code>channel_names = []</code> the contract recognizes the family and skips the
+                channel, <code>beta_&lt;channel&gt;</code>, scaling, and ops-smoke checks; the core
+                requirements (a real fit, a posterior with <code>chain</code>/<code>draw</code> dims, your
+                own declared estimands) still apply. The estimand engine auto-exposes every posterior
+                variable as a <code>HAS_LATENT:&lt;var&gt;</code> capability, so <code>fit_index(…)</code>,
+                <code>latent_scalar(…)</code>, and <code>factor_loading(…)</code> just work, and the
+                family-agnostic report renders your summary table plus your declared estimands.
+            </p>
+
+            <h3 id="examples">Worked examples to fork</h3>
+            <p>Three complete, tested models ship in the repository under
+                <code>examples/garden_models/</code>. Each is a good starting point:</p>
+
+            <div class="mg-examples">
+                <div class="card">
+                    <h3><span class="mg-kind">mmm</span></h3>
+                    <p><code>awareness_structural_mmm.py</code></p>
+                    <p>
+                        A latent goodwill-stock model with a <code>CONFIG_SCHEMA</code> and a pluggable
+                        likelihood: a Normal index KPI <em>or</em> a Binomial survey-count KPI. Declares
+                        <code>awareness_lift</code> + <code>contribution_roi</code>, and demonstrates a latent
+                        <em>contrast</em> (goodwill under media-on vs a channel off).
+                    </p>
+                </div>
+                <div class="card">
+                    <h3><span class="mg-kind">cfa</span></h3>
+                    <p><code>bayesian_cfa.py</code></p>
+                    <p>
+                        A confirmatory factor analysis. A marginal multivariate-normal likelihood
+                        \( y_i \sim \mathcal{N}(0,\ \Lambda\Lambda^\top + \Psi) \) with positive loadings on a
+                        fixed simple structure; per-draw <code>srmr</code>/<code>cov_fit</code> fit-index
+                        estimands; a <code>factor_loadings_summary()</code> table.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3><span class="mg-kind">latent_class</span></h3>
+                    <p><code>bayesian_lca.py</code></p>
+                    <p>
+                        A latent-class (mixture) model over binary indicators. Discrete labels integrated out
+                        with a <code>logsumexp</code> log-mixture; an ordered logit pins class order;
+                        dynamic per-class <code>class_size_k</code> estimands and a
+                        <code>class_profile_summary()</code> table.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                The deep specifications live in <code>technical-docs/</code>:
+                <code>custom-model-config.md</code> (config + likelihood),
+                <code>estimands.md</code> (the estimand subsystem), and
+                <code>non-mmm-families.md</code> (the CFA/LCA contract).
+            </p>
+
+            <!-- ============================================================ -->
+            <h2 id="test-contract">The compatibility contract</h2>
+            <p>
+                A garden model has to behave like a first-class model, so it is checked at three points and
+                then exercised end-to-end on synthetic worlds with known ground truth.
+            </p>
+
+            <h3>Three validation stages</h3>
+            <table class="mg-tight">
+                <thead>
+                    <tr><th>Stage</th><th>When</th><th>Checks</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>validate_class</code></td><td>Static (host-side, PyMC-free)</td><td>Class structure, required methods, the <code>fit</code> signature, and either a <code>BayesianMMM</code> subclass or an explicit non-MMM kind. Runs before the registry write.</td></tr>
+                    <tr><td><code>validate_instance</code></td><td>Post-init</td><td>Required attributes are present and sane; for MMM models, <code>channel_names</code> is a non-empty ordered list and <code>_media_raw_max</code> covers every channel.</td></tr>
+                    <tr><td><code>validate_fitted</code></td><td>Post-fit</td><td>The trace is set with a posterior group and <code>chain</code>/<code>draw</code> dims; MMM models carry <code>beta_&lt;channel&gt;</code> parameters.</td></tr>
+                </tbody>
+            </table>
+
+            <p>
+                The one truly <strong>required</strong> method is <code>fit()</code> — it must run and leave a
+                fitted trace (an ArviZ <code>InferenceData</code> with a posterior group). The
+                <strong>recommended</strong> methods (<code>predict</code>,
+                <code>sample_channel_contributions</code>, <code>compute_component_decomposition</code>) each
+                unlock read-ops; their absence must degrade gracefully, not raise. Required attributes are
+                split into a model-agnostic base set and an MMM-only set, so non-MMM families carry only the
+                base.
+            </p>
+
+            <h3>The nine tiers</h3>
+            <p>
+                <code>run_compatibility_check</code> runs nine tiers and <strong>never raises</strong> — each
+                tier reports passed / skipped / detail independently. Seven are <strong>blocking</strong>:
+                a clean pass on all of them is what auto-promotes <code>draft → tested</code>.
+            </p>
+
+            <table class="mg-tight">
+                <thead>
+                    <tr><th>Tier</th><th>Blocking</th><th>What it proves</th><th>Non-MMM</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>static</code></td><td><span class="mg-yes">yes</span></td><td><code>validate_class</code> passes (structure, methods, fit signature).</td><td>runs</td></tr>
+                    <tr><td><code>build</code></td><td><span class="mg-yes">yes</span></td><td>The class instantiates on a synthetic world via the agent's build step.</td><td>runs</td></tr>
+                    <tr><td><code>fit</code></td><td><span class="mg-yes">yes</span></td><td>A MAP fit completes and sets the trace.</td><td>runs</td></tr>
+                    <tr><td><code>instance</code></td><td><span class="mg-yes">yes</span></td><td><code>validate_instance</code> passes (attributes, channel/media coverage).</td><td>runs</td></tr>
+                    <tr><td><code>trace</code></td><td><span class="mg-yes">yes</span></td><td><code>validate_fitted</code> passes (posterior structure).</td><td>runs</td></tr>
+                    <tr><td><code>scaling</code></td><td><span class="mg-yes">yes</span></td><td>Original-scale predictions are finite and within 0.01–100× of the KPI mean.</td><td><span class="mg-no">skipped</span></td></tr>
+                    <tr><td><code>ops_smoke</code></td><td><span class="mg-yes">yes</span></td><td>Five oracle read-ops (ROI, decomposition, diagnostics, adstock, saturation) smoke-test cleanly.</td><td><span class="mg-no">skipped</span></td></tr>
+                    <tr><td><code>carryover</code></td><td class="mg-no">optional</td><td>On a 2-geo panel, a spend spike in one geo does not bleed to the other (per-cell adstock).</td><td>optional</td></tr>
+                    <tr><td><code>accuracy</code></td><td class="mg-no">optional</td><td>Recovered ROI agrees directionally with the synthetic answer key.</td><td><span class="mg-no">skipped</span></td></tr>
+                </tbody>
+            </table>
+
+            <p>
+                The gate that decides which checks apply is <code>is_mmm_model()</code>: a model is treated
+                as an MMM <strong>unless</strong> it explicitly declares a non-<code>"mmm"</code>
+                <code>__garden_model_kind__</code>. Promotion to <code>tested</code> is automatic on a clean
+                blocking pass; promotion to <code>published</code> is always a deliberate human decision.
+            </p>
+
+            <div class="info">
+                <h4>Test the spec you intend to ship</h4>
+                <p>
+                    A model can pass on one configuration and fail on another — a non-Gaussian likelihood
+                    builds a different graph than a Normal one. Treat the compatibility suite as the merge
+                    gate and run it against the exact spec you mean to publish.
+                </p>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="document">Documenting a model — best practices</h2>
+            <p>
+                A garden model is a scientific claim that other people will inherit. Documentation is not an
+                afterthought; several surfaces carry it, and the agent and reports read them directly.
+            </p>
+            <ul>
+                <li><strong>The class docstring</strong> states the <em>why</em> and the identification
+                    strategy — priors, sign constraints, fixed structural patterns. A consumer fitting your
+                    model is accepting these assumptions, so name them.</li>
+                <li><strong><code>CONFIG_SCHEMA</code> field metadata</strong> (defaults, constraints,
+                    descriptions) becomes validated params, a serialized round-trip, and the UI's params
+                    form. Put every tunable here rather than in magic numbers.</li>
+                <li><strong><code>DEFAULT_ESTIMANDS</code></strong> is the machine-readable statement of what
+                    the model measures — it is what the agent surfaces and the report renders.</li>
+                <li><strong>The markdown docs page</strong> (the Docs tab) is the human narrative. It is
+                    editable in place on a draft or tested version, and <em>immutable once published</em> —
+                    to change a published model's docs or source, register a new version.</li>
+                <li><strong>A summary method</strong> for any matrix-valued quantity (e.g.
+                    <code>factor_loadings_summary()</code>, <code>class_profile_summary()</code>) gives the
+                    family-agnostic report a table to render.</li>
+            </ul>
+
+            <div class="takeaway">
+                <h4>Author's checklist</h4>
+                <ul>
+                    <li>State the identification strategy in the docstring.</li>
+                    <li>Put every tunable in <code>CONFIG_SCHEMA</code> with defaults + constraints.</li>
+                    <li>Name posterior params on-convention (<code>beta_&lt;channel&gt;</code>, …) and emit
+                        per-observation deterministics in original KPI scale.</li>
+                    <li>For non-MMM families, set <code>channel_names = []</code> and declare family estimands
+                        via the registry helpers.</li>
+                    <li>Declare what the model measures with <code>DEFAULT_ESTIMANDS</code>.</li>
+                    <li>Run the compatibility suite on the spec you intend to ship — all blocking tiers green.</li>
+                    <li>Publish deliberately; revise by registering a new version; deprecate rather than
+                        delete to preserve history.</li>
+                </ul>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="govern">Governance &amp; security</h2>
+            <p>
+                The registry is built so an organization can accept models from many authors without trusting
+                their code on the application process, and so published results stay reproducible.
+            </p>
+            <ul>
+                <li><strong>Host-safe registration.</strong> Registering a model AST-validates the source
+                    (it detects the class name and the declared kind) and <strong>never executes it</strong>
+                    on the host. Untrusted author code runs only kernel-side — a sandboxed subprocess or
+                    container in the hosted profile — during test and fit.</li>
+                <li><strong>Roles.</strong> Registering, linting, and testing are
+                    <span class="mg-role analyst">analyst+</span>; publishing and deleting are
+                    <span class="mg-role admin">admin/owner</span>. Publishing is the one human gate that
+                    matters.</li>
+                <li><strong>Org scoping.</strong> Models are shared across all projects in an org (the
+                    sharing boundary is the org, not the project), so a published model is immediately
+                    reusable everywhere in the tenant.</li>
+                <li><strong>Immutability &amp; audit.</strong> Versions are monotonic per (org, name);
+                    a published version is frozen; a status history is appended (never overwritten); and a
+                    saved model carries its <code>garden_ref</code>, so any result traces back to the exact
+                    class. To change a published model, register a new version. Retire with
+                    <em>deprecate</em>, which preserves history — deletion is only for drafts and deprecated
+                    versions.</li>
+            </ul>
+
+            <h3>The REST governance surface</h3>
+            <p>
+                The Atelier UI and the agent tools share one governed REST surface. The blocks below are
+                illustrative routes, not a runnable client.
+            </p>
+
+            <table class="mg-tight">
+                <thead>
+                    <tr><th>Method &amp; path</th><th>Role</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>POST /model-garden</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Register source as a draft (AST-validated, not executed).</td></tr>
+                    <tr><td><code>POST /model-garden/lint</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Static Problems check for the editor (syntax, class, conventions).</td></tr>
+                    <tr><td><code>POST /model-garden/format</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Ruff/Black format the editor buffer.</td></tr>
+                    <tr><td><code>POST /model-garden/copilot</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Streaming (SSE) Bayesian-modelling copilot; stateless.</td></tr>
+                    <tr><td><code>GET /model-garden</code></td><td><span class="mg-role analyst">any</span></td><td>List the org's models (latest per name by default).</td></tr>
+                    <tr><td><code>GET /model-garden/{name}/versions</code></td><td><span class="mg-role analyst">any</span></td><td>Every version of one model, newest first.</td></tr>
+                    <tr><td><code>GET /model-garden/{name}/{version}</code></td><td><span class="mg-role analyst">any</span></td><td>One version, with manifest + compatibility report.</td></tr>
+                    <tr><td><code>GET /model-garden/{name}/{version}/source</code></td><td><span class="mg-role analyst">any</span></td><td>Stored source text for the Atelier editor.</td></tr>
+                    <tr><td><code>PATCH /model-garden/{name}/{version}</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Edit docs in place (409 if published).</td></tr>
+                    <tr><td><code>POST /model-garden/{name}/{version}/test</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Start a non-blocking compatibility job; auto-promotes on pass.</td></tr>
+                    <tr><td><code>GET .../test/{job_id}</code></td><td><span class="mg-role analyst">analyst+</span></td><td>Poll the test job for the tier report + score.</td></tr>
+                    <tr><td><code>POST /model-garden/{name}/{version}/promote</code></td><td><span class="mg-role admin">admin/owner</span></td><td>Human publish gate (<code>tested → published</code>).</td></tr>
+                    <tr><td><code>DELETE /model-garden/{name}/{version}</code></td><td><span class="mg-role admin">admin/owner</span></td><td>Delete a draft or deprecated version only.</td></tr>
+                </tbody>
+            </table>
+            <p>
+                A parallel set of notebook routes backs the Atelier's Notebook tab — get/put the notebook
+                doc, upload a dataset (auto-binds as <code>df</code>), and run cells as non-blocking jobs.
+            </p>
+
+            <h3>The manifest</h3>
+            <p>
+                Each registered version carries a manifest of advisory, additive discovery metadata. It powers
+                the UI and the catalog; the authoritative source of a model's capabilities is always the
+                runtime model itself, not the manifest.
+            </p>
+            <table class="mg-tight">
+                <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>contract_version</code></td><td>The garden contract the model was written against.</td></tr>
+                    <tr><td><code>class_name</code></td><td>The authored class to reconstruct (AST-detected).</td></tr>
+                    <tr><td><code>model_kind</code></td><td>The family (<code>mmm</code>, <code>cfa</code>, <code>latent_class</code>, …) for discovery/filtering.</td></tr>
+                    <tr><td><code>config_schema</code></td><td>JSON Schema of <code>CONFIG_SCHEMA</code> for the dynamic params form.</td></tr>
+                    <tr><td><code>default_estimands</code></td><td>What the model claims to measure.</td></tr>
+                    <tr><td><code>recommended_fit</code></td><td>Inference settings <code>load_garden_model</code> applies by default.</td></tr>
+                    <tr><td><code>capabilities</code> · <code>tags</code> · <code>dataset_schema</code></td><td>Discovery hints, search tags, and the expected data shape.</td></tr>
+                    <tr><td><code>demo_notebook</code></td><td>Optional curated cells, seeded the first time the model's Notebook is opened.</td></tr>
+                </tbody>
+            </table>
+
+            <!-- ============================================================ -->
+            <h2 id="ecosystem">The growing ecosystem</h2>
+            <p>
+                Put the pieces together and you get a flywheel. A methodologist authors a model in the Atelier
+                with copilot assistance; the compatibility suite proves it is well-behaved; an admin publishes
+                it; and from that moment it is one chat turn away from being fitted, interrogated, and reported
+                on by any analyst on any project in the org — on their own data, with full provenance.
+            </p>
+            <p>
+                Because non-MMM families ride the same contract, the catalog is not limited to marketing mix:
+                factor models, segmentation models, and structural awareness models extend it without a second
+                system. Every published model raises the leverage of every future session, and the lower the
+                authoring cost — copilot, notebook diagnosis, a small contract — the more experts can
+                contribute. That is the point of the garden: a library that gets more valuable the more it
+                grows.
+            </p>
+
+            <!-- ============================================================ -->
+            <h2 id="get-started">Get started</h2>
+            <p>The fastest path from curiosity to a published model:</p>
+            <ol>
+                <li>Read the three example models under <code>examples/garden_models/</code> —
+                    <code>awareness_structural_mmm.py</code>, <code>bayesian_cfa.py</code>,
+                    <code>bayesian_lca.py</code> — and fork the closest one.</li>
+                <li>Open the Atelier, paste it into the Code tab, and tweak the structure with the copilot.</li>
+                <li>Upload a dataset in the Notebook tab and sanity-check the fit on real data.</li>
+                <li>Run the compatibility test; fix anything that isn't green.</li>
+                <li>Write the docs, register, and — once tested — ask an admin to publish.</li>
+            </ol>
+
+            <div class="note">
+                <h4>💡 See it pre-populated</h4>
+                <p>
+                    A seeder ships the three example models <em>already published</em> and a demo
+                    project that shows the agent using each one in the Oracle (discover → load → fit →
+                    estimands), with the real fitted numbers:
+                </p>
+                <pre><code class="language-bash">uv run python scripts/seed_atelier_demo.py          # real MAP fits (~10s)
+uv run python scripts/seed_atelier_demo.py --fast   # no MCMC (seconds)</code></pre>
+                <p>
+                    Then open the Atelier to browse the published registry, and select
+                    <em>“Demo: Atelier Custom Models”</em> in the project switcher to read the seeded
+                    Oracle sessions.
+                </p>
+            </div>
+
+            <section class="cta-section">
+                <div class="container">
+                    <h2>Bring your model in from the cold</h2>
+                    <p>See where the Atelier lives in the platform, then dig into the modelling concepts behind a good garden model.</p>
+                    <div class="cta-buttons">
+                        <a href="platform-overview.html" class="btn btn-white">Platform Overview</a>
+                        <a href="modeling-guide.html" class="btn btn-outline-white">Modeling Guide</a>
+                        <a href="getting-started.html" class="btn btn-outline-white">Getting Started</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- KaTeX init -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

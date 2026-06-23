@@ -42,6 +42,7 @@
             label: 'Platform',
             items: [
                 { href: 'platform-overview.html', label: 'Platform Overview' },
+                { href: 'model-garden.html', label: 'Model Garden & Atelier' },
                 { href: 'pricing.html', label: 'Pricing' },
                 { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
                 { href: 'data-connections.html', label: 'Data Connections' },
