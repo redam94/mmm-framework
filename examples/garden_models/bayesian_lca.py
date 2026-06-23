@@ -74,19 +74,16 @@ class BayesianLCA(CustomMMM):
     # -- data ----------------------------------------------------------------
 
     def _prepare_data(self) -> None:
-        """Assemble the binary indicator matrix from the panel (all observed
-        columns: KPI + media + controls), and set the model-agnostic attributes
-        the contract / fit / estimand surface reads."""
-        import pandas as pd
+        """Read and binarize the indicator matrix from the role-tagged dataset
+        (every measured column), then set the model-agnostic attributes via
+        :meth:`CustomMMM._set_non_mmm_defaults`.
 
-        frames = [self.panel.y.to_frame()]
-        if self.panel.X_media is not None and self.panel.X_media.shape[1] > 0:
-            frames.append(self.panel.X_media)
-        if self.panel.X_controls is not None and self.panel.X_controls.shape[1] > 0:
-            frames.append(self.panel.X_controls)
-        observed = pd.concat(frames, axis=1)
+        ``self.dataset.observed()`` replaces the old ``pd.concat([y, X_media,
+        X_controls])`` hack with one role-aware call (same columns, same order).
+        """
+        observed = self.dataset.observed()
         self.item_names = [str(c) for c in observed.columns]
-        Y = observed.values.astype(np.float64)
+        Y = observed.to_numpy(dtype=np.float64)
 
         thr = self.model_params.binarize_threshold
         if thr is not None:
@@ -98,23 +95,7 @@ class BayesianLCA(CustomMMM):
         self.n_obs, self.n_items = Y.shape
 
         # Model-agnostic attributes the base contract / estimand engine read.
-        self.channel_names = []  # non-MMM: no channels
-        self.control_names = []
-        self.n_channels = 0
-        self.n_controls = 0
-        self._media_raw_max = {}
-        self._media_max = {}
-        self.X_controls_raw = None
-        self.y = None
-        self.y_mean = 0.0
-        self.y_std = 1.0
-        self._scaling_params = {"y_mean": 0.0, "y_std": 1.0}
-        self.time_idx = np.arange(self.n_obs)
-        self.trend_features = {}
-        self.seasonality_features = {}
-        self.n_periods = int(getattr(self.panel.coords, "n_periods", self.n_obs))
-        self.has_geo = bool(getattr(self.panel.coords, "has_geo", False))
-        self.has_product = bool(getattr(self.panel.coords, "has_product", False))
+        self._set_non_mmm_defaults()
 
     # -- model ---------------------------------------------------------------
 

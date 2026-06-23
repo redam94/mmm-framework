@@ -114,6 +114,11 @@ class AgentState(TypedDict):
     # Status of the modeling process
     model_status: Annotated[str, _last]
 
+    # Active modeling mode (see ``agents.modes``): selects the system-prompt
+    # framing + bound tool set. Unset reads as "mmm" (historical behavior). Seeded
+    # per request from the session's stored mode; the expert sub-agent inherits it.
+    modeling_mode: Annotated[str, _last]
+
     # Optional generated outputs
     fit_results_summary: Annotated[str | None, _last]
     report_path: Annotated[str | None, _last]

@@ -2219,8 +2219,42 @@ def get_session_status(
     Return a comprehensive status report for the current session:
     dataset, model config, fit status, saved configs, and saved models.
     """
-    _activate_thread(config)
+    tid = _activate_thread(config)
     lines = ["### Session Status\n"]
+
+    # Modeling mode (selects the prompt framing + available tools). Surface a mode
+    # ↔ loaded-model reconcile suggestion when a non-MMM family is loaded.
+    try:
+        from mmm_framework.agents.modes import (
+            MODE_LABELS,
+            normalize_mode,
+            reconcile_mode_with_model,
+        )
+        from mmm_framework.api import sessions as _sessions_store
+
+        _mode = normalize_mode(
+            (_sessions_store.get_session(tid) or {}).get("modeling_mode")
+        )
+        lines.append(f"🧭 **Mode**: {MODE_LABELS.get(_mode, _mode)}")
+        _gref = (
+            (state.get("model_spec") or {}).get("garden_ref")
+            if isinstance(state, dict)
+            else None
+        )
+        if _gref and _gref.get("name"):
+            try:
+                _pid, _org = _garden_org_for(tid)
+                _row = _sessions_store.get_garden_model(
+                    org_id=_org, name=_gref["name"], version=_gref.get("version")
+                )
+                _kind = ((_row or {}).get("manifest") or {}).get("model_kind", "mmm")
+                _recon = reconcile_mode_with_model(_mode, {"model_kind": _kind})
+                if _recon.get("note"):
+                    lines.append(f"   💡 {_recon['note']}")
+            except Exception:  # noqa: BLE001
+                pass
+    except Exception:  # noqa: BLE001
+        pass
 
     # Dataset
     ds_path = state.get("dataset_path")
@@ -4893,14 +4927,15 @@ HEAVY_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
-# Lazily-built, cached expert sub-agent graph (strong model, full toolset, NO
-# checkpointer). Building reads the server model config once; the server config
-# is static for the process, so a single cached instance is correct.
-_EXPERT_GRAPH = None
+# Lazily-built, cached expert sub-agent graphs (strong model, mode-gated toolset,
+# NO checkpointer), keyed by modeling mode. Building reads the server model config
+# once; the server config is static for the process, so a per-mode cached instance
+# is correct. The mode also drives the prompt (read from state in agent_node).
+_EXPERT_GRAPHS: dict[str, Any] = {}
 _EXPERT_GRAPH_LOCK = threading.Lock()
 
 
-def _get_expert_graph(override: dict | None = None):
+def _get_expert_graph(override: dict | None = None, mode: str | None = None):
     """Build (and, for the server default, cache) the expert sub-agent graph.
 
     Imports are function-local to break the ``graph`` ↔ ``tools`` module cycle
@@ -4918,6 +4953,10 @@ def _get_expert_graph(override: dict | None = None):
     """
     from mmm_framework.agents.graph import create_agent_graph
     from mmm_framework.agents.llm import build_expert_llm
+    from mmm_framework.agents.modes import normalize_mode
+
+    mode = normalize_mode(mode)
+    expert_tools = get_tools_for_mode(mode, role="expert")
 
     override = {k: v for k, v in (override or {}).items() if v}
     if override:
@@ -4928,19 +4967,27 @@ def _get_expert_graph(override: dict | None = None):
             base_url=override.get("base_url"),
         )
         return create_agent_graph(
-            expert_llm, checkpointer=None, tools=EXPERT_TOOLS, role="expert"
+            expert_llm,
+            checkpointer=None,
+            tools=expert_tools,
+            role="expert",
+            mode=mode,
         )
 
-    global _EXPERT_GRAPH
-    if _EXPERT_GRAPH is not None:
-        return _EXPERT_GRAPH
+    cached = _EXPERT_GRAPHS.get(mode)
+    if cached is not None:
+        return cached
     with _EXPERT_GRAPH_LOCK:
-        if _EXPERT_GRAPH is None:
+        if mode not in _EXPERT_GRAPHS:
             expert_llm = build_expert_llm()
-            _EXPERT_GRAPH = create_agent_graph(
-                expert_llm, checkpointer=None, tools=EXPERT_TOOLS, role="expert"
+            _EXPERT_GRAPHS[mode] = create_agent_graph(
+                expert_llm,
+                checkpointer=None,
+                tools=expert_tools,
+                role="expert",
+                mode=mode,
             )
-    return _EXPERT_GRAPH
+    return _EXPERT_GRAPHS[mode]
 
 
 def _final_message_text(messages: list) -> str:
@@ -5010,6 +5057,9 @@ def delegate_to_expert(
         "api_key": configurable.get("expert_api_key"),
         "base_url": configurable.get("expert_base_url"),
     }
+    # The modeling mode rides in `configurable` (set by /chat) and on the
+    # orchestrator state; the expert inherits it so its prompt + tool set match.
+    expert_mode = configurable.get("modeling_mode") or state.get("modeling_mode")
     try:
         recursion_limit = int(os.environ.get("MMM_AGENT_EXPERT_RECURSION_LIMIT", "60"))
     except ValueError:
@@ -5031,6 +5081,7 @@ def delegate_to_expert(
         "dashboard_data": {},
         "context_summary": None,
         "context_summary_count": 0,
+        "modeling_mode": expert_mode or "mmm",
     }
 
     # Stream the expert (values mode) so we keep the LAST full state even if it
@@ -5041,7 +5092,7 @@ def delegate_to_expert(
     last_state: dict | None = None
     hit_limit = False
     try:
-        expert_graph = _get_expert_graph(expert_override)
+        expert_graph = _get_expert_graph(expert_override, mode=expert_mode)
         for chunk in expert_graph.stream(
             init_state,
             config={
@@ -5280,6 +5331,30 @@ def _garden_schema_warnings(schema: dict, spec: dict, dataset_path: str | None) 
             )
     if schema.get("expects_controls") and not (spec.get("control_variables") or []):
         notes.append("this model expects control variables but none are configured")
+
+    # Flexible data layer: a model may declare role requirements (DatasetRole) and
+    # data capabilities. These are read from the manifest's dataset_schema, merged
+    # AST-side at registration. Advisory shape checks only.
+    required_roles = schema.get("required_roles") or []
+    if "indicator" in required_roles:
+        notes.append(
+            "this model reads its inputs as latent-measurement INDICATORS (every "
+            "measured column), not as media channels — so ROI/budget/experiment "
+            "tools do not apply to it"
+        )
+    if "predictor" in required_roles and n_channels == 0:
+        notes.append(
+            "this model needs at least one predictor/media column but the spec has none"
+        )
+    req_caps = schema.get("required_capabilities") or []
+    if "GEO_PANEL" in req_caps and not (spec.get("geo") or spec.get("has_geo")):
+        notes.append(
+            "this model expects a geo panel — confirm the dataset has a Geography dimension"
+        )
+    if "HAS_TRIALS" in req_caps:
+        notes.append(
+            "this model needs a trials/denominator column (a binomial-count outcome)"
+        )
     return (" ⚠️ Data-fit notes: " + "; ".join(notes) + ".") if notes else ""
 
 
@@ -5370,9 +5445,18 @@ def load_garden_model(
         if row["status"] == "published"
         else f" (note: this model is '{row['status']}', not yet published)"
     )
+    # Mode reconcile (auto-SUGGEST, never auto-switch): if the loaded family's kind
+    # doesn't fit the session's modeling mode, surface a one-line switch suggestion.
+    from mmm_framework.agents.modes import reconcile_mode_with_model
+
+    _sess = sessions_store.get_session(tid) or {}
+    _recon = reconcile_mode_with_model(
+        _sess.get("modeling_mode"), {"model_kind": manifest.get("model_kind")}
+    )
+    mode_note = f"\n\n💡 {_recon['note']}" if _recon.get("note") else ""
     msg = (
         f"Loaded garden model **{name}** v{row['version']}{status_note}. The next "
-        "`fit_mmm_model` will re-fit it on this project's data." + warn
+        "`fit_mmm_model` will re-fit it on this project's data." + warn + mode_note
     )
     return Command(
         update={
@@ -5681,3 +5765,99 @@ if os.environ.get("MMM_AGENT_ORCHESTRATOR_FULL_TOOLS") == "1":
     ORCHESTRATOR_TOOLS = list(TOOLS)
 else:
     ORCHESTRATOR_TOOLS = [t for t in TOOLS if t.name not in HEAVY_TOOL_NAMES]
+
+
+# ===========================================================================
+# Mode-aware tool gating (the oracle now spans more than MMM)
+# ===========================================================================
+#
+# The modeling mode (see ``agents.modes``) selects which tools are bound. MMM is
+# the full surface (today's behavior); the other modes drop the MMM-specific
+# ROI/budget/experiment tools, keep the causal-identification tools where they
+# apply, and always keep the generalizable spine (data/EDA, config/fit/diagnostics,
+# estimands, garden, kernel/workspace/KB, reporting). Composed with the existing
+# role filter (orchestrator drops HEAVY tools + keeps delegate; expert keeps the
+# heavy tools, no delegate). ``mmm`` reproduces ORCHESTRATOR_TOOLS / EXPERT_TOOLS
+# exactly (golden-tested).
+
+#: MMM-only — meaningful only with media channels / spend.
+_MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "get_roi_metrics",
+        "get_adstock_weights",
+        "get_saturation_curves",
+        "run_budget_scenario",
+        "run_marginal_analysis",
+        "run_budget_optimizer",
+        "recommend_lift_experiments",
+        "compute_experiment_priorities",
+        "design_experiment_plan",
+        "simulate_experiment",
+        "suggest_experiment",
+        "identify_structural_parameters",
+        "plan_experiment",
+        "preregister_experiment",
+        "record_experiment_readout",
+        "apply_experiment_calibration",
+        "log_experiment",
+        "list_experiment_log",
+    }
+)
+
+#: Causal-identification tools — central in mmm / causal, available in general,
+#: dropped only in the purely descriptive (measurement) mode.
+_CAUSAL_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "propose_dag",
+        "validate_causal_identification",
+        "build_model_from_dag",
+        "leave_one_out_decomposition",
+    }
+)
+
+#: Every non-delegate tool that is NOT MMM-only and NOT causal — the spine present
+#: in EVERY mode (data/EDA, pre-registration, config/fit/diagnostics, estimands,
+#: garden, kernel/workspace/KB, reporting).
+_ALL_TOOL_NAMES: frozenset[str] = frozenset(t.name for t in EXPERT_TOOLS)
+_SPINE_TOOL_NAMES: frozenset[str] = (
+    _ALL_TOOL_NAMES - _MMM_ONLY_TOOL_NAMES - _CAUSAL_TOOL_NAMES
+)
+
+_MODE_TOOL_NAMES: dict[str, frozenset[str]] = {
+    "mmm": _ALL_TOOL_NAMES,  # full surface — identical to today
+    "causal_inference": _SPINE_TOOL_NAMES | _CAUSAL_TOOL_NAMES,
+    "general_bayes": _SPINE_TOOL_NAMES | _CAUSAL_TOOL_NAMES,
+    "descriptive": _SPINE_TOOL_NAMES,
+}
+
+
+def get_tools_for_mode(
+    mode: str = "mmm",
+    role: str | None = None,
+    *,
+    full_orchestrator: bool | None = None,
+) -> list:
+    """The tools to bind for ``(mode, role)``.
+
+    ``mode='mmm'`` + ``role='orchestrator'`` reproduces ``ORCHESTRATOR_TOOLS``
+    exactly, and ``mode='mmm'`` + ``role='expert'`` reproduces ``EXPERT_TOOLS``
+    (golden-tested). Non-MMM modes drop the MMM-only tools (and, for descriptive,
+    the causal tools); the orchestrator additionally drops ``HEAVY_TOOL_NAMES``
+    (unless ``MMM_AGENT_ORCHESTRATOR_FULL_TOOLS`` / ``full_orchestrator``) and keeps
+    ``delegate_to_expert``; the expert keeps the heavy tools and never gets delegate.
+    """
+    allowed = _MODE_TOOL_NAMES.get(mode, _MODE_TOOL_NAMES["mmm"])
+    pool = EXPERT_TOOLS if role == "expert" else TOOLS  # TOOLS carries delegate
+    base = [t for t in pool if t.name in allowed or t.name == "delegate_to_expert"]
+    if role == "expert":
+        return [t for t in base if t.name != "delegate_to_expert"]
+    if role == "orchestrator":
+        full = (
+            full_orchestrator
+            if full_orchestrator is not None
+            else os.environ.get("MMM_AGENT_ORCHESTRATOR_FULL_TOOLS") == "1"
+        )
+        if not full:
+            base = [t for t in base if t.name not in HEAVY_TOOL_NAMES]
+        return base  # delegate_to_expert retained
+    return [t for t in base if t.name != "delegate_to_expert"]

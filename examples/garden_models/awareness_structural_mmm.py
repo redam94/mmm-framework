@@ -67,6 +67,7 @@ import pytensor.tensor as pt
 from pydantic import BaseModel, Field
 
 from mmm_framework.config import LikelihoodFamily
+from mmm_framework.config.roles import DatasetRole
 from mmm_framework.estimands.spec import (
     ALL_CHANNELS,
     Contrast,
@@ -134,6 +135,13 @@ class AwarenessStructuralMMM(CustomMMM):
 
     #: Bespoke, defaulted, validated configuration (read via ``self.model_params``).
     CONFIG_SCHEMA = AwarenessParams
+
+    #: Data contract: this is still an MMM-kind family (it has media), so it needs
+    #: an outcome + at least one media predictor. Declaring the roles lets the
+    #: runtime fail fast with a clear error if a dataset can't satisfy them. The
+    #: binomial denominator is a config field (``AwarenessParams.number_of_trials``),
+    #: not a dataset column, so no ``TRIALS`` role is required here.
+    REQUIRED_ROLES = (DatasetRole.TARGET, DatasetRole.PREDICTOR)
 
     #: Estimands this model surfaces by default (the agent/UI fall back to these
     #: when the spec declares none): mean per-period awareness lift + ROI, plus a

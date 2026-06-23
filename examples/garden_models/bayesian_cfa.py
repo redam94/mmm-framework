@@ -77,19 +77,17 @@ class BayesianCFA(CustomMMM):
     # -- data ----------------------------------------------------------------
 
     def _prepare_data(self) -> None:
-        """Assemble the observed indicator matrix from the panel (all observed
-        columns: KPI + media + controls), standardize it, and set the minimal
-        model-agnostic attributes the contract/fit/estimand surface reads."""
-        frames = [self.panel.y.to_frame()]
-        if self.panel.X_media is not None and self.panel.X_media.shape[1] > 0:
-            frames.append(self.panel.X_media)
-        if self.panel.X_controls is not None and self.panel.X_controls.shape[1] > 0:
-            frames.append(self.panel.X_controls)
-        import pandas as pd
+        """Read the observed indicator matrix from the role-tagged dataset (every
+        measured column — target / predictor / control / indicator), standardize
+        it, and set the model-agnostic attributes via
+        :meth:`CustomMMM._set_non_mmm_defaults`.
 
-        observed = pd.concat(frames, axis=1)
+        ``self.dataset.observed()`` replaces the old ``pd.concat([y, X_media,
+        X_controls])`` hack with one role-aware call (same columns, same order).
+        """
+        observed = self.dataset.observed()
         self.indicator_names = [str(c) for c in observed.columns]
-        Y = observed.values.astype(np.float64)
+        Y = observed.to_numpy(dtype=np.float64)
 
         self._ind_mean = Y.mean(axis=0)
         self._ind_std = Y.std(axis=0) + 1e-8
@@ -99,25 +97,7 @@ class BayesianCFA(CustomMMM):
         self.n_obs, self.n_indicators = Y.shape
 
         # Model-agnostic attributes the base contract / estimand engine read.
-        self.channel_names = []  # non-MMM: no channels
-        self.control_names = []
-        self.n_channels = 0
-        self.n_controls = 0
-        self._media_raw_max = {}
-        self._media_max = {}  # serializer reads this (empty: no channels)
-        self.X_controls_raw = None
-        self.y = None
-        self.y_mean = 0.0
-        self.y_std = 1.0
-        self._scaling_params = {"y_mean": 0.0, "y_std": 1.0}
-        self.time_idx = np.arange(self.n_obs)
-        # Trend/seasonality are unused by the CFA; empty so the (inherited)
-        # serializer + base helpers have something to read.
-        self.trend_features = {}
-        self.seasonality_features = {}
-        self.n_periods = int(getattr(self.panel.coords, "n_periods", self.n_obs))
-        self.has_geo = bool(getattr(self.panel.coords, "has_geo", False))
-        self.has_product = bool(getattr(self.panel.coords, "has_product", False))
+        self._set_non_mmm_defaults()
 
     def _factor_assignment(self) -> np.ndarray:
         cfg = self.model_params

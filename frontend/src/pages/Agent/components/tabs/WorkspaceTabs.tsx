@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity, BarChart2, BookOpen, Database, Download,
   ExternalLink, Layers, Maximize2, Minimize2, Network,
@@ -25,8 +25,10 @@ import { PriorConfigWidget } from '../widgets/PriorConfigWidget';
 import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
 import { WorkspaceFilesWidget } from '../widgets/WorkspaceFilesWidget';
 import { ExperimentsTab } from '../widgets/ExperimentsTab';
+import { ModeSwitcher } from '../widgets/ModeSwitcher';
 import { useExperimentRegistry } from '../../../../api/hooks/useMeasurement';
 import { EdaTab } from './EdaTab';
+import type { ModelingMode } from '../../../../api/services/sessionService';
 import type { Artifact, DashboardData, OutlierAction, PythonOutput } from '../../types';
 
 export function WorkspaceTabs({
@@ -62,6 +64,14 @@ export function WorkspaceTabs({
   onResolveOutlierAction: (action: OutlierAction) => Promise<string | null>;
 }) {
   const [brandingOpen, setBrandingOpen] = useState(false);
+  // Modeling mode (hydrated from the session by ModeSwitcher). MMM keeps the full
+  // ROI/experiment surface; non-MMM modes hide the Experiments tab.
+  const [modelingMode, setModelingMode] = useState<ModelingMode>('mmm');
+  const isMmm = modelingMode === 'mmm';
+  // If the Experiments tab is hidden by a mode switch while it's active, fall back.
+  useEffect(() => {
+    if (!isMmm && activeTab === 'experiments') onTabChange('results');
+  }, [isMmm, activeTab, onTabChange]);
   // Experiment registry (read-only here; lifecycle work is chat- or /experiments-driven)
   const { data: registryExperiments = [] } = useExperimentRegistry(projectId);
   const activeExperiments = registryExperiments.filter(
@@ -111,9 +121,11 @@ export function WorkspaceTabs({
             { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
               badge: (dashboardData.plots?.length || 0) > 0 ? String(dashboardData.plots.length) : null,
               dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
-            { id: 'experiments', label: 'Experiments', icon: <TestTubes size={14} />,
+            // Experiments are an MMM-only surface (lift tests on media channels);
+            // hidden in the general / causal / descriptive modes.
+            ...(isMmm ? [{ id: 'experiments', label: 'Experiments', icon: <TestTubes size={14} />,
               badge: activeExperiments.length > 0 ? String(activeExperiments.length) : null,
-              dot: activeExperiments.some(e => e.status === 'completed') },
+              dot: activeExperiments.some(e => e.status === 'completed') }] : []),
             { id: 'library',   label: 'Library',   icon: <BookOpen size={14} />,
               badge: (artifacts.length + pythonOutputs.length) > 0
                 ? String(artifacts.length + pythonOutputs.length) : null },
@@ -150,7 +162,8 @@ export function WorkspaceTabs({
             </div>
           );
         })()}
-        <div className="flex items-center gap-1 pb-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 pb-1.5 shrink-0">
+          <ModeSwitcher threadId={threadId} value={modelingMode} onChange={setModelingMode} />
           <button
             onClick={() => setBrandingOpen(true)}
             title="Branding & preferences"

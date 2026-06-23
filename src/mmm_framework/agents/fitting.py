@@ -452,7 +452,36 @@ def build_model(
                 f"Expected a subset of: {fields}."
             ) from e
 
+    # Optional explicit dataset role mapping (the flexible data layer). Validated
+    # against the resolved class's DATASET_SCHEMA when one is declared (clear error,
+    # mirroring model_params), else against the base DatasetSchema. Applied to the
+    # constructed model's dataset below. Absent on the common MMM path, where roles
+    # are auto-derived from the MFFConfig.
+    dataset_spec = spec.get("dataset")
+    resolved_dataset_schema = None
+    if dataset_spec is not None:
+        dataset_schema_cls = getattr(resolved_cls, "DATASET_SCHEMA", None)
+        if dataset_schema_cls is None:
+            from mmm_framework.config.dataset import DatasetSchema as dataset_schema_cls
+        try:
+            resolved_dataset_schema = dataset_schema_cls.model_validate(dataset_spec)
+        except Exception as e:  # noqa: BLE001
+            fields = ", ".join(dataset_schema_cls.model_fields)
+            raise ValueError(
+                f"Invalid spec.dataset for {resolved_cls.__name__}: {e}. "
+                f"Expected a subset of: {fields}."
+            ) from e
+
     mmm = resolved_cls(panel, model_config, trend_config, model_params=model_params)
+    if resolved_dataset_schema is not None and resolved_dataset_schema.bindings:
+        # Re-tag the loaded columns with the explicit role mapping (clear error
+        # when the spec's column names don't match the data).
+        try:
+            mmm.dataset = mmm.dataset.retag(resolved_dataset_schema)
+        except ValueError as e:
+            raise ValueError(
+                f"spec.dataset role mapping does not match the loaded data: {e}"
+            ) from e
     if garden_ref:
         # Provenance for the serializer + cold-kernel reload (best-effort attr).
         try:

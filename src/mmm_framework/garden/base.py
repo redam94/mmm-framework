@@ -24,6 +24,8 @@ Example
 
 from __future__ import annotations
 
+import numpy as np
+
 from ..model import BayesianMMM
 from .contract import GARDEN_CONTRACT_VERSION
 
@@ -66,6 +68,37 @@ class CustomMMM(BayesianMMM):
     #: Recorded into the registry manifest + serialized metadata so a consumer
     #: can detect the contract a model was authored against.
     GARDEN_CONTRACT_VERSION: str = GARDEN_CONTRACT_VERSION
+
+    def _set_non_mmm_defaults(self) -> None:
+        """Fill the model-agnostic attributes the base contract / serializer /
+        estimand engine read, for a **non-MMM** family that has no channels or
+        controls (a CFA, latent-class model, …).
+
+        Call this from a subclass's ``_prepare_data`` *after* setting ``self.n_obs``.
+        It replaces the ~15 lines of boilerplate such models used to hand-write,
+        and reads the panel structure from the role-tagged ``self.dataset.coords``.
+        """
+        self.channel_names = []
+        self.control_names = []
+        self.n_channels = 0
+        self.n_controls = 0
+        self._media_raw_max = {}
+        self._media_max = {}
+        self.X_controls_raw = None
+        self.y = None
+        self.y_mean = 0.0
+        self.y_std = 1.0
+        self._scaling_params = {"y_mean": 0.0, "y_std": 1.0}
+        self.time_idx = np.arange(self.n_obs)
+        # Trend / seasonality are unused by these families; empty so the inherited
+        # serializer + base helpers have something to read.
+        self.trend_features = {}
+        self.seasonality_features = {}
+        coords = getattr(self, "dataset", None)
+        coords = getattr(coords, "coords", None)
+        self.n_periods = int(getattr(coords, "n_periods", self.n_obs))
+        self.has_geo = bool(getattr(coords, "has_geo", False))
+        self.has_product = bool(getattr(coords, "has_product", False))
 
     #: Model family kind, recorded in the manifest and used by the contract/compat
     #: to decide which gates apply. Default ``"mmm"`` (channels, spend,

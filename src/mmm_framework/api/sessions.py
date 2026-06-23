@@ -58,13 +58,19 @@ def init_db() -> None:
                 name       TEXT NOT NULL,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
-                project_id TEXT
+                project_id TEXT,
+                modeling_mode TEXT
             )
             """
         )
         # Migrate existing installs that predate the project_id column
         try:
             c.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+        except Exception:
+            pass
+        # Migrate installs that predate the modeling_mode column (NULL == "mmm")
+        try:
+            c.execute("ALTER TABLE sessions ADD COLUMN modeling_mode TEXT")
         except Exception:
             pass
         c.execute(
@@ -431,16 +437,19 @@ def init_db() -> None:
 
 def list_sessions(project_id: str | None = None) -> list[dict[str, Any]]:
     with _conn() as c:
+        _cols = (
+            "thread_id, name, created_at, updated_at, project_id,"
+            " COALESCE(modeling_mode, 'mmm') AS modeling_mode"
+        )
         if project_id is not None:
             rows = c.execute(
-                "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions"
+                f"SELECT {_cols} FROM sessions"
                 " WHERE project_id = ? ORDER BY updated_at DESC",
                 (project_id,),
             ).fetchall()
         else:
             rows = c.execute(
-                "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions"
-                " ORDER BY updated_at DESC"
+                f"SELECT {_cols} FROM sessions ORDER BY updated_at DESC"
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -449,7 +458,9 @@ def get_session(thread_id: str) -> dict[str, Any] | None:
     """Return a single session row with artifact_count, or None if not found."""
     with _conn() as c:
         row = c.execute(
-            "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions WHERE thread_id = ?",
+            "SELECT thread_id, name, created_at, updated_at, project_id,"
+            " COALESCE(modeling_mode, 'mmm') AS modeling_mode"
+            " FROM sessions WHERE thread_id = ?",
             (thread_id,),
         ).fetchone()
         if row is None:
@@ -463,17 +474,21 @@ def get_session(thread_id: str) -> dict[str, Any] | None:
 
 
 def create_session(
-    name: str | None = None, project_id: str | None = None
+    name: str | None = None,
+    project_id: str | None = None,
+    modeling_mode: str | None = None,
 ) -> dict[str, Any]:
     thread_id = uuid.uuid4().hex
     now = _now()
     display_name = (
         name or f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}"
     )
+    mode = modeling_mode or "mmm"
     with _conn() as c:
         c.execute(
-            "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, ?)",
-            (thread_id, display_name, now, now, project_id),
+            "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id,"
+            " modeling_mode) VALUES (?, ?, ?, ?, ?, ?)",
+            (thread_id, display_name, now, now, project_id, mode),
         )
     return {
         "thread_id": thread_id,
@@ -481,13 +496,17 @@ def create_session(
         "created_at": now,
         "updated_at": now,
         "project_id": project_id,
+        "modeling_mode": mode,
     }
 
 
 def update_session(
-    thread_id: str, name: str | None = None, project_id: str | None = None
+    thread_id: str,
+    name: str | None = None,
+    project_id: str | None = None,
+    modeling_mode: str | None = None,
 ) -> bool:
-    """Update session name and/or project_id. Returns True if session was found."""
+    """Update session name, project_id and/or modeling_mode. Returns True if found."""
     updates = []
     params: list[Any] = []
     if name is not None:
@@ -496,6 +515,9 @@ def update_session(
     if project_id is not None:
         updates.append("project_id = ?")
         params.append(project_id)
+    if modeling_mode is not None:
+        updates.append("modeling_mode = ?")
+        params.append(modeling_mode)
     if not updates:
         return False
     updates.append("updated_at = ?")

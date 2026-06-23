@@ -74,6 +74,8 @@ from .data_loader import (
     load_ragged_mff,
 )
 
+from .dataset import Dataset
+
 from .model import (
     # Model classes
     TrendType,
@@ -203,6 +205,7 @@ __all__ = [
     "validate_variable_dimensions",
     "PanelCoordinates",
     "PanelDataset",
+    "Dataset",
     "MFFLoader",
     "load_mff",
     "mff_from_wide_format",

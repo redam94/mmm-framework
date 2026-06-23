@@ -538,12 +538,20 @@ async def chat_endpoint(
         if _sess is not None and _sess.get("project_id"):
             ensure_project_access(principal, _sess["project_id"], Role.ANALYST)
 
-    # The expert override rides in `configurable` alongside thread_id; LangGraph
-    # propagates it to delegate_to_expert via the injected RunnableConfig, where it
-    # builds the expert sub-agent's LLM (X-Expert-* headers, chat-tier precedence).
+    # The session's modeling mode selects the prompt framing + tool set. Unset /
+    # legacy sessions read as "mmm" (historical behavior).
+    from mmm_framework.agents.modes import normalize_mode
+
+    _mode = normalize_mode(
+        (sessions_store.get_session(request.thread_id) or {}).get("modeling_mode")
+    )
+    # The expert override + modeling mode ride in `configurable` alongside thread_id;
+    # LangGraph propagates them to delegate_to_expert via the injected RunnableConfig,
+    # where the expert sub-agent's LLM (X-Expert-* headers) and mode-gated tools are built.
     config = {
         "configurable": {
             "thread_id": request.thread_id,
+            "modeling_mode": _mode,
             "expert_model": x_expert_model,
             "expert_provider": x_expert_provider,
             "expert_api_key": x_expert_api_key,
@@ -560,10 +568,14 @@ async def chat_endpoint(
     # code-gen tools removed) and must delegate hard work to the expert tier via
     # the delegate_to_expert tool. The expert sub-agent (strong model, full
     # toolset) is built lazily inside that tool, sharing this thread's session.
-    from mmm_framework.agents.tools import ORCHESTRATOR_TOOLS
+    from mmm_framework.agents.tools import get_tools_for_mode
 
     agent_graph = create_agent_graph(
-        llm, checkpointer=memory, tools=ORCHESTRATOR_TOOLS, role="orchestrator"
+        llm,
+        checkpointer=memory,
+        tools=get_tools_for_mode(_mode, role="orchestrator"),
+        role="orchestrator",
+        mode=_mode,
     )
 
     # The "400 => corrupted history => hard reset" recovery is an Anthropic
@@ -1053,10 +1065,15 @@ async def rewind(thread_id: str, body: RewindRequest):
 class CreateSessionRequest(BaseModel):
     name: str | None = None
     project_id: str | None = None
+    modeling_mode: str | None = None
 
 
 class RenameSessionRequest(BaseModel):
     name: str
+
+
+class SetSessionModeRequest(BaseModel):
+    modeling_mode: str
 
 
 @app.get("/sessions")
@@ -1088,8 +1105,14 @@ async def create_session_endpoint(
     # Can't plant a session inside another org's project.
     if not principal.is_dev and body.project_id is not None:
         ensure_project_access(principal, body.project_id, Role.ANALYST)
+    from mmm_framework.agents.modes import normalize_mode
+
     return JSONResponse(
-        content=sessions_store.create_session(body.name, project_id=body.project_id)
+        content=sessions_store.create_session(
+            body.name,
+            project_id=body.project_id,
+            modeling_mode=normalize_mode(body.modeling_mode),
+        )
     )
 
 
@@ -1116,6 +1139,19 @@ async def rename_session_endpoint(thread_id: str, body: RenameSessionRequest):
     if not sessions_store.rename_session(thread_id, body.name):
         raise HTTPException(status_code=404, detail="session not found")
     return JSONResponse(content={"status": "ok"})
+
+
+@app.patch("/sessions/{thread_id}/mode", dependencies=[_sess_write])
+async def set_session_mode_endpoint(thread_id: str, body: SetSessionModeRequest):
+    """Switch a session's modeling mode (mmm | causal_inference | general_bayes |
+    descriptive). The next /chat turn reads it to select the prompt framing + tools."""
+    from mmm_framework.agents.modes import is_valid_mode
+
+    if not is_valid_mode(body.modeling_mode):
+        raise HTTPException(status_code=400, detail="invalid modeling_mode")
+    if not sessions_store.update_session(thread_id, modeling_mode=body.modeling_mode):
+        raise HTTPException(status_code=404, detail="session not found")
+    return JSONResponse(content={"status": "ok", "modeling_mode": body.modeling_mode})
 
 
 @app.delete("/sessions/{thread_id}", dependencies=[_sess_write])

@@ -73,6 +73,75 @@ def static_model_kind(source_code: str, class_name: str | None) -> str:
     return "mmm"
 
 
+def _literal_role_names(node: "ast.AST") -> list[str]:
+    """Resolve a ``(DatasetRole.TARGET, ...)`` / ``("target", ...)`` literal to
+    role *value* strings, AST-only. Unknown members are lowercased best-effort."""
+    if not isinstance(node, (ast.Tuple, ast.List)):
+        return []
+    from ..config.roles import DatasetRole
+
+    roles: list[str] = []
+    for el in node.elts:
+        member: str | None = None
+        if isinstance(el, ast.Attribute):  # DatasetRole.TARGET -> "TARGET"
+            member = el.attr
+        elif isinstance(el, ast.Constant) and isinstance(el.value, str):
+            member = el.value
+        if not member:
+            continue
+        try:
+            roles.append(DatasetRole[member].value)  # by enum name
+        except KeyError:
+            try:
+                roles.append(DatasetRole(member).value)  # by enum value
+            except ValueError:
+                roles.append(member.lower())
+    return roles
+
+
+def static_dataset_requirements(source_code: str, class_name: str | None) -> dict:
+    """Read a class's declared **data** contract WITHOUT executing the source (AST
+    only): the ``REQUIRED_ROLES`` / ``REQUIRED_DATASET_CAPABILITIES`` tuples and
+    whether a ``DATASET_SCHEMA`` is declared. Returns an advisory dict (empty when
+    nothing is declared) merged into the manifest's ``dataset_schema``. The
+    authoritative JSON Schema of ``DATASET_SCHEMA`` is supplied kernel-side by the
+    caller when the class can be imported (host registration is AST-only)."""
+    out: dict[str, Any] = {}
+    try:
+        tree = ast.parse(source_code)
+    except SyntaxError:
+        return out
+    classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+    target = None
+    if class_name:
+        target = next((c for c in classes if c.name == class_name), None)
+    elif len(classes) == 1:
+        target = classes[0]
+    if target is None:
+        return out
+    for node in target.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if "REQUIRED_ROLES" in names:
+            roles = _literal_role_names(node.value)
+            if roles:
+                out["required_roles"] = roles
+        if "REQUIRED_DATASET_CAPABILITIES" in names:
+            caps = [
+                el.value
+                for el in getattr(node.value, "elts", [])
+                if isinstance(el, ast.Constant) and isinstance(el.value, str)
+            ]
+            if caps:
+                out["required_capabilities"] = caps
+        if "DATASET_SCHEMA" in names:
+            is_none = isinstance(node.value, ast.Constant) and node.value.value is None
+            if not is_none:
+                out["has_dataset_schema"] = True
+    return out
+
+
 def register_garden_model_core(
     *,
     org_id: str,
@@ -115,7 +184,14 @@ def register_garden_model_core(
         # by default). Advisory metadata for discovery / UI — the authoritative
         # kind is read from the loaded class at fit time.
         "model_kind": static_model_kind(source_code, class_name),
-        "dataset_schema": dataset_schema or {},
+        # Data contract: the caller's explicit fields (e.g. the JSON Schema of
+        # DATASET_SCHEMA, supplied kernel-side) win; AST-detected requirements
+        # (required_roles / required_capabilities / has_dataset_schema) fill gaps
+        # host-side. Advisory — the authoritative contract is read at fit time.
+        "dataset_schema": {
+            **static_dataset_requirements(source_code, class_name),
+            **(dataset_schema or {}),
+        },
         "recommended_fit": recommended_fit or {},
         "tags": tags or [],
     }

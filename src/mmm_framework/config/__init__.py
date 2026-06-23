@@ -35,6 +35,8 @@ from .enums import (
     VariableRole,
 )
 from .likelihood import LikelihoodConfig
+from .dataset import DATASET_SCHEMA_VERSION, DatasetSchema, RoleBinding
+from .roles import DatasetRole
 from .factories import (
     create_geo_media_config,
     create_national_media_config,
@@ -76,6 +78,11 @@ __all__ = [
     "ModelSpecification",
     "LikelihoodFamily",
     "LinkFunction",
+    # Dataset role taxonomy + schema
+    "DatasetRole",
+    "DatasetSchema",
+    "RoleBinding",
+    "DATASET_SCHEMA_VERSION",
     # Prior / transform configs
     "PriorConfig",
     "LikelihoodConfig",

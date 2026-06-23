@@ -49,6 +49,8 @@ from ..config import (
     SaturationConfig,
     SaturationType,
 )
+from ..config.dataset import DatasetSchema
+from ..config.roles import DatasetRole
 from ..data_loader import PanelDataset
 from ..utils import arviz_compat, compute_hdi_bounds
 from ..transforms import (
@@ -76,6 +78,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from ..calibration.likelihood import ExperimentMeasurement
+    from ..dataset import Dataset
     from ..estimands.spec import Estimand, EstimandResult, Intervention
 
 
@@ -251,16 +254,41 @@ class BayesianMMM:
     #: ``technical-docs/custom-model-config.md``.
     CONFIG_SCHEMA: "type[BaseModel] | None" = None
 
+    #: Per-model **data** schema (a :class:`DatasetSchema` subclass) declaring the
+    #: role mapping a bespoke family expects, mirroring ``CONFIG_SCHEMA`` for
+    #: params. ``None`` on the base model (the default MMM roles: kpi→target,
+    #: media→predictor, control→control). See ``technical-docs/flexible-dataset.md``.
+    DATASET_SCHEMA: "type[DatasetSchema] | None" = None
+
+    #: Dataset roles this model *requires* the data to provide. Enforced at
+    #: construction (a clear ``ValueError`` when missing) **only when non-empty** —
+    #: the base model leaves it empty so existing flows are never gated. A family
+    #: that genuinely needs e.g. a target + predictors declares
+    #: ``REQUIRED_ROLES = (DatasetRole.TARGET, DatasetRole.PREDICTOR)``.
+    REQUIRED_ROLES: "tuple[DatasetRole, ...]" = ()
+
+    #: Optional duck-typed data-capability needs (e.g. ``"HAS_INDICATORS"``,
+    #: ``"GEO_PANEL"``), checked against :meth:`dataset_capabilities`. Enforced only
+    #: when non-empty. Mirrors an estimand's ``required_capabilities`` gating.
+    REQUIRED_DATASET_CAPABILITIES: "tuple[str, ...]" = ()
+
     def __init__(
         self,
-        panel: PanelDataset,
+        panel: "PanelDataset | Dataset",
         model_config: ModelConfig,
         trend_config: TrendConfig | None = None,
         adstock_alphas: list[float] | None = None,
         experiments: "Sequence[ExperimentMeasurement] | None" = None,
         model_params: "BaseModel | dict | None" = None,
     ):
-        self.panel = panel
+        # Generalized data layer: keep ``self.panel`` a ``PanelDataset`` (every
+        # existing reader is unchanged) and expose the role-tagged ``self.dataset``
+        # for families that read by role (CFA/LCA indicators). ``_coerce_dataset``
+        # validates the data against this model's declared needs.
+        self.dataset = self._coerce_dataset(panel)
+        self.panel = (
+            panel if isinstance(panel, PanelDataset) else self.dataset.as_panel()
+        )
         self.model_config = model_config
         self.trend_config = trend_config or TrendConfig()
         self.adstock_alphas = adstock_alphas or [0.0, 0.3, 0.5, 0.7, 0.9]
@@ -273,7 +301,7 @@ class BayesianMMM:
         # in ``_build_model``.
         self.model_params = self._coerce_model_params(model_params)
 
-        self.mff_config = panel.config
+        self.mff_config = self.panel.config
         self.hierarchical_config = model_config.hierarchical
         self.seasonality_config = model_config.seasonality
         self.use_parametric_adstock = getattr(
@@ -327,6 +355,60 @@ class BayesianMMM:
             f"model_params must be a dict, a {schema.__name__}, or None; got "
             f"{type(model_params).__name__}"
         )
+
+    def _coerce_dataset(self, data: "PanelDataset | Dataset") -> "Dataset":
+        """Normalize the constructor's data argument to a :class:`Dataset` and
+        validate it against this model's declared needs.
+
+        A ``PanelDataset`` is wrapped (no data motion); a ``Dataset`` is taken as
+        is. ``REQUIRED_ROLES`` / ``REQUIRED_DATASET_CAPABILITIES`` are enforced
+        only when the class declares them (non-empty), so the base model — which
+        declares neither — never raises and existing flows are byte-for-byte
+        unchanged. Mirrors :meth:`_coerce_model_params`.
+        """
+        from ..dataset import Dataset
+
+        ds = data if isinstance(data, Dataset) else Dataset.from_panel(data)
+
+        required = type(self).REQUIRED_ROLES
+        if required:
+            present = {b.role for b in ds.schema.bindings}
+            missing = [r.value for r in required if r not in present]
+            if missing:
+                have = sorted({r.value for r in present})
+                raise ValueError(
+                    f"{type(self).__name__} requires dataset roles {missing}; the "
+                    f"provided data only has roles {have}. Map the needed columns "
+                    f"to those roles in the dataset schema."
+                )
+
+        req_caps = type(self).REQUIRED_DATASET_CAPABILITIES
+        if req_caps:
+            caps = self.dataset_capabilities(ds)
+            miss = [c for c in req_caps if c not in caps]
+            if miss:
+                raise ValueError(
+                    f"{type(self).__name__} requires dataset capabilities {miss}; "
+                    f"the provided data has {sorted(caps)}."
+                )
+        return ds
+
+    @staticmethod
+    def dataset_capabilities(ds: "Dataset") -> set[str]:
+        """Cheap, duck-typed flags about the *data* (no graph build).
+
+        Mirrors ``estimands.capabilities.model_capabilities`` but for the dataset:
+        ``GEO_PANEL`` (geo/product dimensions), ``HAS_INDICATORS`` (indicator
+        columns), ``HAS_TRIALS`` (a binomial-denominator column).
+        """
+        caps: set[str] = set()
+        if ds.coords.has_geo or ds.coords.has_product:
+            caps.add("GEO_PANEL")
+        if ds.columns_for(DatasetRole.INDICATOR):
+            caps.add("HAS_INDICATORS")
+        if ds.columns_for(DatasetRole.TRIALS):
+            caps.add("HAS_TRIALS")
+        return caps
 
     def add_experiment_calibration(
         self, experiments: "Sequence[ExperimentMeasurement]"

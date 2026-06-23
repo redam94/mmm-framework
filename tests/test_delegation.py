@@ -96,7 +96,7 @@ def test_delegate_returns_summary_and_propagates_state(monkeypatch):
         "report_path": "/ws/report.html",
     }
     stub = _StubExpertGraph(result_state)
-    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None: stub)
+    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None, mode=None: stub)
 
     cfg = {"configurable": {"thread_id": "thread-abc"}}
     cmd = T.delegate_to_expert.func(
@@ -132,7 +132,9 @@ def test_delegate_handles_expert_failure_gracefully(monkeypatch):
         def stream(self, *a, **k):
             raise RuntimeError("kernel exploded")
 
-    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None: _Boom())
+    monkeypatch.setattr(
+        T, "_get_expert_graph", lambda override=None, mode=None: _Boom()
+    )
     cmd = T.delegate_to_expert.func(
         state={},
         task="do something hard",
@@ -147,7 +149,7 @@ def test_delegate_handles_expert_failure_gracefully(monkeypatch):
 def test_delegate_empty_summary_falls_back(monkeypatch):
     # Expert ended without any assistant text (e.g. hit the recursion limit).
     stub = _StubExpertGraph({"messages": [ToolMessage(content="x", tool_call_id="y")]})
-    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None: stub)
+    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None, mode=None: stub)
     cmd = T.delegate_to_expert.func(
         state={},
         task="t",
@@ -206,9 +208,10 @@ def test_get_expert_graph_no_override_uses_singleton(monkeypatch):
         "create_agent_graph",
         lambda llm, **k: calls.update(n=calls["n"] + 1) or object(),
     )
-    monkeypatch.setattr(T, "_EXPERT_GRAPH", None)
+    # Per-mode cache (default mode "mmm"): built once, then served from the cache.
+    monkeypatch.setattr(T, "_EXPERT_GRAPHS", {})
     g1 = T._get_expert_graph(None)
-    g2 = T._get_expert_graph({})  # all-empty override → still the singleton path
+    g2 = T._get_expert_graph({})  # all-empty override → still the cached path
     assert g1 is g2
     assert calls["n"] == 1  # built once, cached
 

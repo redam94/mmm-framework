@@ -235,6 +235,22 @@ class MMMSerializer:
                 Estimand.from_dict(e) for e in metadata["declared_estimands"]
             ]
 
+        # Dataset role-mapping schema: re-validate the saved role contract against
+        # the resolved class's DATASET_SCHEMA (drift-visible, mirroring the
+        # model_params re-validation) and re-tag the loaded dataset when the saved
+        # column names match. Best-effort: the panel-derived schema is the
+        # fallback, so a missing/incompatible saved schema never blocks a load.
+        saved_schema = metadata.get("dataset_schema")
+        if saved_schema:
+            try:
+                from .config.dataset import DatasetSchema
+
+                schema_cls = getattr(model_cls, "DATASET_SCHEMA", None) or DatasetSchema
+                validated = schema_cls.model_validate(saved_schema)
+                instance.dataset = instance.dataset.retag(validated)
+            except Exception:  # noqa: BLE001
+                pass
+
         # 5. Load scaling parameters
         with open(path / "scaling_params.json", "r") as f:
             scaling_params = json.load(f)
@@ -423,6 +439,24 @@ class MMMSerializer:
             metadata["model_params_schema_version"] = (
                 getattr(schema, "SCHEMA_VERSION", 1) if schema is not None else None
             )
+
+        # Dataset role-mapping schema (the flexible data layer): record the role
+        # contract the model actually used so a reloaded — or garden-listed —
+        # model carries its data needs, re-validated on load against the class's
+        # DATASET_SCHEMA. Present for every model (auto-derived for plain MMM).
+        ds = getattr(model, "dataset", None)
+        ds_schema = getattr(ds, "schema", None)
+        if ds_schema is not None:
+            try:
+                metadata["dataset_schema"] = ds_schema.model_dump(mode="json")
+                dsc = getattr(type(model), "DATASET_SCHEMA", None)
+                metadata["dataset_schema_version"] = getattr(
+                    ds_schema,
+                    "SCHEMA_VERSION",
+                    getattr(dsc, "SCHEMA_VERSION", "1.0"),
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         return metadata
 
