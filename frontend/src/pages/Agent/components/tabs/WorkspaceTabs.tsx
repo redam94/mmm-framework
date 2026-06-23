@@ -26,10 +26,13 @@ import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
 import { WorkspaceFilesWidget } from '../widgets/WorkspaceFilesWidget';
 import { ExperimentsTab } from '../widgets/ExperimentsTab';
 import { ModeSwitcher } from '../widgets/ModeSwitcher';
+import { GardenModelConfigWidget } from '../widgets/GardenModelConfigWidget';
+import { DatasetRolesWidget } from '../widgets/DatasetRolesWidget';
 import { useExperimentRegistry } from '../../../../api/hooks/useMeasurement';
+import { useGardenModel } from '../../../../api/hooks/useModelGarden';
 import { EdaTab } from './EdaTab';
 import type { ModelingMode } from '../../../../api/services/sessionService';
-import type { Artifact, DashboardData, OutlierAction, PythonOutput } from '../../types';
+import type { Artifact, DashboardData, ModelSpec, OutlierAction, PythonOutput } from '../../types';
 
 export function WorkspaceTabs({
   rightExpanded, onToggleExpand, activeTab, onTabChange,
@@ -78,8 +81,18 @@ export function WorkspaceTabs({
     (e) => !['abandoned', 'cancelled'].includes(e.status),
   );
   const modelCompleted = dashboardData.model_status === 'completed';
-  const hasSpec = !!dashboardData.model_spec;
+  const modelSpec = dashboardData.model_spec as ModelSpec | undefined;
+  const hasSpec = !!modelSpec;
   const hasDecomp = dashboardData.decomposition?.length > 0;
+
+  // A loaded garden model carries a garden_ref; its manifest (fetched here) tells
+  // us the family kind + its config_schema / required roles. model_kind drives
+  // whether the MMM config widgets apply (an awareness model is still mmm-kind +
+  // has bespoke params; a CFA/LCA is non-MMM, so the channel/adstock widgets hide).
+  const gardenRef = modelSpec?.garden_ref;
+  const { data: gardenModel } = useGardenModel(gardenRef?.name ?? null, gardenRef?.version ?? null);
+  const modelKind = (gardenModel?.manifest?.model_kind as string) ?? 'mmm';
+  const showMmmConfig = modelKind === 'mmm';
 
   // Structured tables, bucketed by group (unknown groups fall into "repl").
   const edaTables = selectTables(dashboardData.tables, 'eda');
@@ -222,6 +235,7 @@ export function WorkspaceTabs({
                 modelName={modelName}
                 refreshKey={workspaceRefreshKey}
               />
+              <DatasetRolesWidget spec={modelSpec} gardenModel={gardenModel} />
               {dashboardData.dataset ? (
                 <DatasetPanel dataset={dashboardData.dataset} threadId={threadId} />
               ) : (
@@ -264,23 +278,41 @@ export function WorkspaceTabs({
             <>
               {hasSpec ? (
                 <>
-                  <ModelSpecWidget
-                    spec={dashboardData.model_spec}
-                    editable={!modelCompleted}
-                    onApplySpec={onApplySpec}
-                    lockedFields={dashboardData.locked_fields || []}
-                    onUnlock={modelCompleted ? undefined : onUnlockField}
-                  />
-                  <SeasonalityTrendWidget
-                    spec={dashboardData.model_spec}
-                    onQuickAction={onQuickAction}
-                    modelCompleted={modelCompleted}
-                  />
-                  <PriorConfigWidget
-                    spec={dashboardData.model_spec}
-                    editable={!modelCompleted}
-                    onApplySpec={onApplySpec}
-                  />
+                  {/* A bespoke garden model: show its identity + model_params +
+                      likelihood. For non-MMM kinds this REPLACES the MMM widgets;
+                      for an mmm-kind garden model (e.g. awareness) it sits above
+                      them and the inference section stays with the MMM widget. */}
+                  {gardenRef && (
+                    <GardenModelConfigWidget
+                      spec={modelSpec as ModelSpec}
+                      gardenModel={gardenModel}
+                      modelKind={modelKind}
+                      editable={!modelCompleted}
+                      onApplySpec={onApplySpec}
+                      showInference={!showMmmConfig}
+                    />
+                  )}
+                  {showMmmConfig && (
+                    <>
+                      <ModelSpecWidget
+                        spec={dashboardData.model_spec}
+                        editable={!modelCompleted}
+                        onApplySpec={onApplySpec}
+                        lockedFields={dashboardData.locked_fields || []}
+                        onUnlock={modelCompleted ? undefined : onUnlockField}
+                      />
+                      <SeasonalityTrendWidget
+                        spec={dashboardData.model_spec}
+                        onQuickAction={onQuickAction}
+                        modelCompleted={modelCompleted}
+                      />
+                      <PriorConfigWidget
+                        spec={dashboardData.model_spec}
+                        editable={!modelCompleted}
+                        onApplySpec={onApplySpec}
+                      />
+                    </>
+                  )}
                   {modelCompleted && (
                     <DashWidget title="Model Successfully Fit" dotColor="bg-green-500 animate-pulse" color="green">
                       <p className="text-sm text-ink-700">{dashboardData.summary}</p>

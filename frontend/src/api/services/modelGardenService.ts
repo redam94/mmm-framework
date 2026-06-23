@@ -12,7 +12,16 @@ export interface GardenModel {
   manifest: {
     contract_version?: string;
     class_name?: string;
+    /** Model family kind — "mmm" (default) | "cfa" | "latent_class" | ... */
+    model_kind?: string;
+    /** Advisory data contract: { required_roles?, required_capabilities?, has_dataset_schema? } + optional JSON Schema. */
     dataset_schema?: Record<string, unknown>;
+    /** JSON Schema of the model's CONFIG_SCHEMA — drives the model_params form. */
+    config_schema?: Record<string, unknown>;
+    /** Estimands the model surfaces by default (advisory). */
+    default_estimands?: string[];
+    /** Capability flags advertised by the model (advisory). */
+    capabilities?: string[];
     recommended_fit?: Record<string, unknown>;
     tags?: string[];
   };

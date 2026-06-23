@@ -92,6 +92,45 @@ export interface DatasetInfo {
   active_dimensions?: string[];
 }
 
+// ─── Model spec + flexible dataset roles ─────────────────────────────────────
+
+export type DatasetRole =
+  | 'target' | 'predictor' | 'control' | 'indicator'
+  | 'group' | 'time' | 'offset' | 'weight' | 'trials' | 'auxiliary';
+
+export interface RoleBinding {
+  name: string;
+  role: DatasetRole;
+  dimensions?: string[];
+}
+
+export interface DatasetSchemaSpec {
+  bindings?: RoleBinding[];
+  time_col?: string;
+  group_cols?: string[];
+}
+
+export interface GardenRef {
+  name?: string;
+  version?: number;
+  class_name?: string;
+  contract_version?: string;
+  source_path?: string;
+}
+
+/** The agent's evolving model spec (a superset; most fields are optional). */
+export interface ModelSpec {
+  kpi?: string;
+  media_channels?: { name: string }[];
+  control_variables?: { name: string; role?: string }[];
+  garden_ref?: GardenRef;
+  model_params?: Record<string, unknown>;
+  likelihood?: { family?: string; link?: string; params?: Record<string, unknown> };
+  dataset?: DatasetSchemaSpec;
+  inference?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 // ─── Tables + EDA (additive — not wired into the UI yet) ─────────────────────
 
 export interface TableColumn { key: string; label: string; type?: 'number' | 'string' | 'percent' | 'currency' | 'date' }
