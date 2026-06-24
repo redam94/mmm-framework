@@ -1,8 +1,13 @@
 # MMM Framework
 
+[![PyPI version](https://img.shields.io/pypi/v/mmm-framework.svg)](https://pypi.org/project/mmm-framework/)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://pypi.org/project/mmm-framework/)
+[![License](https://img.shields.io/pypi/l/mmm-framework.svg)](https://github.com/redam94/mmm-framework/blob/main/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-online-8fa86a.svg)](https://redam94.github.io/mmm-framework/)
+
 A modular Marketing Mix Model framework built on PyMC-Marketing with full Bayesian uncertainty quantification, async model fitting, and interactive visualization.
 
-📖 **[Read the documentation →](https://redam94.github.io/mmm-framework/)**
+📖 **[Read the documentation →](https://redam94.github.io/mmm-framework/)** &nbsp;·&nbsp; 📦 **[Install from PyPI →](https://pypi.org/project/mmm-framework/)**
 
 ## Overview
 
@@ -85,11 +90,20 @@ This framework is designed around different principles:
 
 ### Prerequisites
 
-- Python 3.12+
-- Redis server
-- uv (recommended) or pip
+- **Python 3.12+** — all that's needed for the library (`pip install mmm-framework`)
+- **Redis** and **uv** — only required to run the full application (API + worker + UI) or to develop the framework
 
 ### Quick Install
+
+Install the modeling library from PyPI:
+
+```bash
+pip install mmm-framework
+```
+
+That's everything you need to build, fit, and analyze models in Python. To run the
+full application (FastAPI backend + ARQ worker + Streamlit/React UI) or to develop
+the framework, install from source instead:
 
 ```bash
 # Clone the repository
@@ -97,13 +111,8 @@ git clone https://github.com/redam94/mmm-framework.git
 cd mmm-framework
 
 # Install with uv (recommended)
-uv sync
-
-# Or with pip
-pip install -e .
-
-# Install app dependencies for Streamlit frontend
-uv sync --group app
+uv sync                  # core library
+uv sync --group app      # + app (Streamlit/React) dependencies
 ```
 
 ### Development Install
